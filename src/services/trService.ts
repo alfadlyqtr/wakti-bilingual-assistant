@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { TRServiceCache } from "./trServiceCache";
 
 export interface TRTask {
   id: string;
@@ -66,9 +67,20 @@ export class TRService {
     return sanitized;
   }
 
-  // Task operations - Updated to filter by user ID
+  // Task operations - Updated with caching for instant loading
   static async getTasks(): Promise<TRTask[]> {
     console.log('TRService.getTasks: Starting to fetch tasks');
+    
+    // Try to get cached data first for instant loading
+    const cachedTasks = TRServiceCache.getTasks();
+    if (cachedTasks) {
+      console.log('TRService.getTasks: Returning cached tasks:', cachedTasks.length);
+      
+      // Still fetch fresh data in background and update cache
+      this.refreshTasksInBackground();
+      
+      return cachedTasks;
+    }
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
@@ -87,7 +99,7 @@ export class TRService {
     const { data, error } = await supabase
       .from('tr_tasks')
       .select('*')
-      .eq('user_id', user.id)  // Only fetch tasks belonging to the current user
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -95,8 +107,34 @@ export class TRService {
       throw error;
     }
 
-    console.log('TRService.getTasks: Fetched tasks count:', data?.length || 0);
-    return data || [];
+    const tasks = data || [];
+    console.log('TRService.getTasks: Fetched tasks count:', tasks.length);
+    
+    // Cache the fresh data
+    TRServiceCache.setTasks(tasks);
+    
+    return tasks;
+  }
+
+  // Background refresh for cached data
+  private static async refreshTasksInBackground(): Promise<void> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('tr_tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        TRServiceCache.setTasks(data);
+        console.log('TRService: Background refresh completed for tasks');
+      }
+    } catch (error) {
+      console.error('TRService: Background refresh failed for tasks:', error);
+    }
   }
 
   static async createTask(task: Omit<TRTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'share_link' | 'completed' | 'completed_at' | 'snoozed_until'>): Promise<TRTask> {
@@ -123,7 +161,6 @@ export class TRService {
       completed: false 
     };
 
-    // Sanitize the data before sending to database
     const sanitizedData = this.sanitizeTaskData(taskData);
 
     console.log('TRService.createTask: Final sanitized data being inserted:', sanitizedData);
@@ -146,11 +183,14 @@ export class TRService {
     }
 
     console.log('TRService.createTask: Task created successfully:', data);
+    
+    // Clear cache to force refresh
+    TRServiceCache.clearTasks();
+    
     return data;
   }
 
   static async updateTask(id: string, updates: Partial<TRTask>): Promise<TRTask> {
-    // Sanitize update data as well
     const sanitizedUpdates = this.sanitizeTaskData(updates);
     
     const { data, error } = await supabase
@@ -161,6 +201,10 @@ export class TRService {
       .single();
     
     if (error) throw error;
+    
+    // Clear cache to force refresh
+    TRServiceCache.clearTasks();
+    
     return data;
   }
 
@@ -171,6 +215,9 @@ export class TRService {
       .eq('id', id);
     
     if (error) throw error;
+    
+    // Clear cache to force refresh
+    TRServiceCache.clearTasks();
   }
 
   static async getTaskByShareLink(shareLink: string): Promise<TRTask | null> {
@@ -241,9 +288,20 @@ export class TRService {
     if (error) throw error;
   }
 
-  // Reminder operations - FIXED to include user authentication and filtering
+  // Reminder operations - Updated with caching for instant loading
   static async getReminders(): Promise<TRReminder[]> {
     console.log('TRService.getReminders: Starting to fetch reminders');
+    
+    // Try to get cached data first for instant loading
+    const cachedReminders = TRServiceCache.getReminders();
+    if (cachedReminders) {
+      console.log('TRService.getReminders: Returning cached reminders:', cachedReminders.length);
+      
+      // Still fetch fresh data in background and update cache
+      this.refreshRemindersInBackground();
+      
+      return cachedReminders;
+    }
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
@@ -262,7 +320,7 @@ export class TRService {
     const { data, error } = await supabase
       .from('tr_reminders')
       .select('*')
-      .eq('user_id', user.id)  // Only fetch reminders belonging to the current user
+      .eq('user_id', user.id)
       .order('due_date', { ascending: true });
     
     if (error) {
@@ -270,15 +328,40 @@ export class TRService {
       throw error;
     }
 
-    console.log('TRService.getReminders: Fetched reminders count:', data?.length || 0);
-    return data || [];
+    const reminders = data || [];
+    console.log('TRService.getReminders: Fetched reminders count:', reminders.length);
+    
+    // Cache the fresh data
+    TRServiceCache.setReminders(reminders);
+    
+    return reminders;
+  }
+
+  // Background refresh for cached reminders
+  private static async refreshRemindersInBackground(): Promise<void> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('tr_reminders')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('due_date', { ascending: true });
+      
+      if (!error && data) {
+        TRServiceCache.setReminders(data);
+        console.log('TRService: Background refresh completed for reminders');
+      }
+    } catch (error) {
+      console.error('TRService: Background refresh failed for reminders:', error);
+    }
   }
 
   static async createReminder(reminder: Omit<TRReminder, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'snoozed_until'>): Promise<TRReminder> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Sanitize reminder data too
     const sanitizedReminder = this.sanitizeTaskData(reminder);
 
     const { data, error } = await supabase
@@ -288,6 +371,10 @@ export class TRService {
       .single();
     
     if (error) throw error;
+    
+    // Clear cache to force refresh
+    TRServiceCache.clearReminders();
+    
     return data;
   }
 
@@ -302,6 +389,10 @@ export class TRService {
       .single();
     
     if (error) throw error;
+    
+    // Clear cache to force refresh
+    TRServiceCache.clearReminders();
+    
     return data;
   }
 
@@ -319,6 +410,10 @@ export class TRService {
       .single();
     
     if (error) throw error;
+    
+    // Clear cache to force refresh
+    TRServiceCache.clearReminders();
+    
     return data;
   }
 
@@ -329,6 +424,9 @@ export class TRService {
       .eq('id', id);
     
     if (error) throw error;
+    
+    // Clear cache to force refresh
+    TRServiceCache.clearReminders();
   }
 
   // Shared access operations

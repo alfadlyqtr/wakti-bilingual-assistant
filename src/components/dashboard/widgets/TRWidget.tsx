@@ -1,12 +1,11 @@
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
-import { TRService, TRTask, TRReminder } from "@/services/trService";
 import { Hand, CheckSquare, Bell, Calendar, Plus, RefreshCw } from "lucide-react";
-import { toast } from 'sonner';
+import { useTRData } from "@/hooks/useTRData";
 
 interface TRWidgetProps {
   language: 'en' | 'ar';
@@ -14,43 +13,7 @@ interface TRWidgetProps {
 
 export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<TRTask[]>([]);
-  const [reminders, setReminders] = useState<TRReminder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      console.log('T&R Widget - Fetching data...');
-      const [tasksData, remindersData] = await Promise.all([
-        TRService.getTasks(),
-        TRService.getReminders()
-      ]);
-      
-      console.log('T&R Widget - Data fetched successfully:', {
-        tasksCount: tasksData.length,
-        remindersCount: remindersData.length
-      });
-      
-      setTasks(tasksData);
-      setReminders(remindersData);
-    } catch (error) {
-      console.error('T&R Widget - Error fetching data:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
-      setError(errorMessage);
-      setTasks([]);
-      setReminders([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { tasks, reminders, loading, error } = useTRData();
 
   const pendingTasks = tasks.filter(task => !task.completed);
   const todayReminders = reminders.filter(reminder => {
@@ -79,7 +42,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={fetchData}
+            onClick={() => window.location.reload()}
             className="bg-white/10 backdrop-blur-sm border-white/20"
           >
             <RefreshCw className="h-4 w-4 mr-2" />

@@ -5,77 +5,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { TRService, TRTask, TRReminder } from '@/services/trService';
+import { TRTask, TRReminder } from '@/services/trService';
 import { TaskForm } from '@/components/tr/TaskForm';
 import { ReminderForm } from '@/components/tr/ReminderForm';
 import { TaskList } from '@/components/tr/TaskList';
 import { ReminderList } from '@/components/tr/ReminderList';
 import { ActivityMonitor } from '@/components/tr/ActivityMonitor';
-import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { useTRData } from '@/hooks/useTRData';
 
 export default function TasksReminders() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState('tasks');
-  const [tasks, setTasks] = useState<TRTask[]>([]);
-  const [reminders, setReminders] = useState<TRReminder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { tasks, reminders, loading, error, refresh } = useTRData();
   
   // Form states
   const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [reminderFormOpen, setReminderFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TRTask | null>(null);
   const [editingReminder, setEditingReminder] = useState<TRReminder | null>(null);
-
-  useEffect(() => {
-    loadData();
-    
-    // Check authentication status
-    checkAuthStatus();
-  }, []);
-
-  const checkAuthStatus = async () => {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    console.log('T&R Page - Auth check:', { user: user?.id, error });
-    
-    if (error) {
-      console.error('T&R Page - Auth error:', error);
-      setError(t('error', language) + ': Authentication error. Please refresh the page.');
-    } else if (!user) {
-      console.error('T&R Page - No user authenticated');
-      setError('Please log in to view your tasks and reminders.');
-    }
-  };
-
-  const loadData = async () => {
-    console.log('T&R Page - Starting data load');
-    setLoading(true);
-    setError(null);
-    
-    try {
-      console.log('T&R Page - Fetching tasks and reminders...');
-      const [tasksData, remindersData] = await Promise.all([
-        TRService.getTasks(),
-        TRService.getReminders()
-      ]);
-      
-      console.log('T&R Page - Data loaded successfully:', {
-        tasksCount: tasksData.length,
-        remindersCount: remindersData.length
-      });
-      
-      setTasks(tasksData);
-      setReminders(remindersData);
-    } catch (error) {
-      console.error('T&R Page - Error loading data:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
-      setError(errorMessage);
-      toast.error(`${t('error', language)}: ${errorMessage}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleCreateTask = () => {
     setEditingTask(null);
@@ -108,8 +55,8 @@ export default function TasksReminders() {
   };
 
   const handleDataChanged = () => {
-    console.log('T&R Page - Data changed, reloading...');
-    loadData();
+    console.log('T&R Page - Data changed, refreshing...');
+    refresh();
   };
 
   // Show error state if there's an authentication or loading error
@@ -120,7 +67,7 @@ export default function TasksReminders() {
           <div className="text-center py-8">
             <div className="text-red-500 mb-4">{t('error', language)}</div>
             <p className="text-muted-foreground mb-4">{error}</p>
-            <Button onClick={loadData} variant="outline">
+            <Button onClick={refresh} variant="outline">
               {t('retry', language)}
             </Button>
           </div>
@@ -196,7 +143,7 @@ export default function TasksReminders() {
           <TabsContent value="activity" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">{t('activityMonitor', language)}</h2>
-              <Button onClick={loadData} variant="outline" size="sm">
+              <Button onClick={refresh} variant="outline" size="sm">
                 {t('refresh', language)}
               </Button>
             </div>
