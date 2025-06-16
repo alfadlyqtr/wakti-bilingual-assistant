@@ -1,14 +1,37 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-/**
- * Map profile.settings.widgets DB fields to dashboard widget IDs
- * @param widgetsDbPrefs settings.widgets from DB, or fallback
- */
+// Simple localStorage-based widget order management
+export const getWidgetOrder = () => {
+  try {
+    const storedOrder = localStorage.getItem('widgetOrder');
+    if (storedOrder) {
+      const parsed = JSON.parse(storedOrder);
+      console.log('Loaded widget order from localStorage:', parsed);
+      return parsed;
+    }
+  } catch (error) {
+    console.error('Error loading widget order:', error);
+  }
+  
+  // Default order
+  const defaultOrder = ['calendar', 'tr', 'maw3d', 'quote'];
+  console.log('Using default widget order:', defaultOrder);
+  return defaultOrder;
+};
+
+export const saveWidgetOrder = async (newOrder: string[]) => {
+  try {
+    // Save to localStorage immediately
+    localStorage.setItem('widgetOrder', JSON.stringify(newOrder));
+    console.log('Widget order saved to localStorage:', newOrder);
+  } catch (error) {
+    console.error('Error saving widget order:', error);
+  }
+};
+
+// Legacy functions - simplified for compatibility
 export function getWidgetVisibilityFromProfile(widgetsDbPrefs: any) {
-  // Dashboard widget IDs: calendar, tr, maw3d, quote
-  // DB fields: calendarWidget, tasksWidget, remindersWidget, maw3dWidget, quoteWidget
-  // 'tr' is true if either tasksWidget or remindersWidget is true
   return {
     calendar: widgetsDbPrefs?.calendarWidget !== false,
     tr: (widgetsDbPrefs?.tasksWidget !== false) || (widgetsDbPrefs?.remindersWidget !== false),
@@ -17,173 +40,77 @@ export function getWidgetVisibilityFromProfile(widgetsDbPrefs: any) {
   };
 }
 
-/** Get widget prefs from remote Supabase profile for the signed-in user (id = in JWT) */
 export async function fetchRemoteWidgetPrefs() {
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("settings")
-    .maybeSingle();
+  try {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("settings")
+      .maybeSingle();
 
-  if (error) {
-    console.error("Error fetching profile settings:", error);
+    if (error) {
+      console.error("Error fetching profile settings:", error);
+      return null;
+    }
+    return profile?.settings?.widgets ?? null;
+  } catch (error) {
+    console.error("Error in fetchRemoteWidgetPrefs:", error);
     return null;
   }
-  return profile?.settings?.widgets ?? null;
 }
 
-/**
- * Save widget prefs to Supabase profiles.settings.widgets for the signed-in user
- * @param widgetsDbPrefs Object like {calendarWidget:true, tasksWidget:false, ...}
- */
 export async function saveRemoteWidgetPrefs(widgetsDbPrefs: any) {
-  // Fix: Await supabase.auth.getUser() before accessing .data.user.id
-  const { data } = await supabase.auth.getUser();
-  const userId = data?.user?.id;
-  if (!userId) {
-    console.error("No authenticated user found when saving widget prefs.");
-    return;
-  }
+  try {
+    const { data } = await supabase.auth.getUser();
+    const userId = data?.user?.id;
+    if (!userId) {
+      console.error("No authenticated user found when saving widget prefs.");
+      return;
+    }
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      settings: {
-        widgets: widgetsDbPrefs
-      }
-    })
-    .eq("id", userId);
-  if (error) {
-    console.error("Error saving profile widget settings:", error);
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        settings: {
+          widgets: widgetsDbPrefs
+        }
+      })
+      .eq("id", userId);
+    if (error) {
+      console.error("Error saving profile widget settings:", error);
+    }
+  } catch (error) {
+    console.error("Error in saveRemoteWidgetPrefs:", error);
   }
 }
 
 export const getUserPreferences = () => {
   try {
     const storedPreferences = localStorage.getItem('widgetVisibility');
-    console.log('Raw stored preferences:', storedPreferences);
-    
     if (storedPreferences) {
-      const parsed = JSON.parse(storedPreferences);
-      console.log('Parsed preferences:', parsed);
-      return parsed;
+      return JSON.parse(storedPreferences);
     }
   } catch (error) {
     console.error('Error loading widget preferences:', error);
   }
   
-  // Default preferences if nothing is stored - all widgets visible by default
-  const defaultPrefs = {
+  // Default preferences - all visible
+  return {
     calendar: true,
     tr: true,
     maw3d: true,
-    dailyQuote: true,
+    quote: true,
   };
-  
-  console.log('Using default preferences:', defaultPrefs);
-  return defaultPrefs;
 };
 
 export const saveUserPreferences = (preferences: any) => {
   try {
-    console.log('Saving user preferences:', preferences);
     localStorage.setItem('widgetVisibility', JSON.stringify(preferences));
   } catch (error) {
     console.error('Error saving widget preferences:', error);
   }
 };
 
-export const getWidgetOrder = () => {
-  try {
-    const storedOrder = localStorage.getItem('widgetOrder');
-    console.log('Raw stored order:', storedOrder);
-    
-    if (storedOrder) {
-      const parsed = JSON.parse(storedOrder);
-      console.log('Parsed order:', parsed);
-      return parsed;
-    }
-  } catch (error) {
-    console.error('Error loading widget order:', error);
-  }
-  
-  // Default order if nothing is stored
-  const defaultOrder = ['calendar', 'tr', 'maw3d', 'quote'];
-  console.log('Using default order:', defaultOrder);
-  return defaultOrder;
-};
-
-export const saveWidgetOrder = async (newOrder: string[]) => {
-  try {
-    // Save to localStorage first for immediate feedback
-    localStorage.setItem('widgetOrder', JSON.stringify(newOrder));
-    console.log('Saving widget order (local):', newOrder);
-
-    // Save to Supabase profiles.settings.widgets.widgetOrder
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user?.id) {
-      // Get the current settings so we don't overwrite unrelated settings
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("settings")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      const currentSettings = profile?.settings ?? {};
-      const widgetsDbPrefs = currentSettings.widgets ?? {};
-
-      const newWidgetsPrefs = {
-        ...widgetsDbPrefs,
-        widgetOrder: newOrder,
-      };
-
-      const updatedSettings = {
-        ...currentSettings,
-        widgets: newWidgetsPrefs,
-      };
-
-      const { error } = await supabase
-        .from("profiles")
-        .update({ settings: updatedSettings })
-        .eq("id", user.id);
-
-      if (error) {
-        console.error("Error updating widget order in remote profile:", error);
-      } else {
-        console.log("Widget order updated in remote profile:", newOrder);
-      }
-    }
-  } catch (error) {
-    console.error('Error saving widget order:', error);
-  }
-};
-
-/**
- * Get widget order from remote storage, fallback to local
- */
 export const getRemoteWidgetOrder = async (): Promise<string[]> => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.id) {
-      return getWidgetOrder(); // Fallback to local
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("settings")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    const remoteOrder = profile?.settings?.widgets?.widgetOrder;
-    
-    if (remoteOrder && Array.isArray(remoteOrder)) {
-      console.log('Retrieved remote widget order:', remoteOrder);
-      return remoteOrder;
-    }
-    
-    // Fallback to local storage
-    return getWidgetOrder();
-  } catch (error) {
-    console.error('Error getting remote widget order:', error);
-    return getWidgetOrder();
-  }
+  // Simplified - just use local storage
+  return getWidgetOrder();
 };

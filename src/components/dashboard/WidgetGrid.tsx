@@ -1,5 +1,5 @@
 
-import React, { useEffect } from "react";
+import React from "react";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { Card, CardContent } from "@/components/ui/card";
 import { TranslationKey } from "@/utils/translationTypes";
@@ -18,23 +18,13 @@ interface WidgetGridProps {
 }
 
 export const WidgetGrid: React.FC<WidgetGridProps> = ({ widgets, isDragging, onDragEnd }) => {
+  // Only show visible widgets
   const visibleWidgets = widgets.filter(widget => widget.visible);
 
-  // Debug logging for WidgetGrid
-  useEffect(() => {
-    console.log('WidgetGrid: Received widgets:', widgets.length);
-    console.log('WidgetGrid: Widget order:', widgets.map(w => w.id));
-    console.log('WidgetGrid: Visible widgets after filter:', visibleWidgets.length);
-    console.log('WidgetGrid: Visible widget details:', visibleWidgets.map(w => ({ id: w.id, title: w.title })));
-  }, [widgets, visibleWidgets.length]);
-
-  const handleDragEnd = (result: any) => {
-    console.log('WidgetGrid: Drag ended with result:', result);
-    onDragEnd(result);
-  };
+  console.log('WidgetGrid: Rendering', visibleWidgets.length, 'visible widgets');
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
+    <DragDropContext onDragEnd={onDragEnd}>
       <Droppable droppableId="widgets">
         {(provided) => (
           <div 
@@ -66,27 +56,6 @@ export const WidgetGrid: React.FC<WidgetGridProps> = ({ widgets, isDragging, onD
               </Draggable>
             ))}
             {provided.placeholder}
-            
-            {/* Debug info for development */}
-            {process.env.NODE_ENV === 'development' && visibleWidgets.length === 0 && widgets.length > 0 && (
-              <div className="p-4 bg-yellow-100 border border-yellow-300 rounded text-sm">
-                <div className="font-medium text-yellow-800">Debug: No visible widgets</div>
-                <div className="text-yellow-700">
-                  Total widgets: {widgets.length}, 
-                  All widget visibility: {widgets.map(w => `${w.id}:${w.visible}`).join(', ')}
-                </div>
-              </div>
-            )}
-
-            {/* Widget order debug info */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="p-2 bg-blue-100 border border-blue-300 rounded text-xs">
-                <div className="font-medium text-blue-800">Widget Order Debug:</div>
-                <div className="text-blue-700">
-                  Current order: {widgets.map(w => w.id).join(' → ')}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </Droppable>
