@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generatePDF } from "@/utils/pdfUtils";
 import { Logo3D } from "@/components/Logo3D";
+import { t } from "@/utils/translations";
 import {
   Mic, 
   StopCircle, 
@@ -179,7 +180,7 @@ const Tasjeel: React.FC = () => {
   const { user } = useAuth();
   const { theme, language } = useTheme();
   const navigate = useNavigate();
-  const t = translations[language];
+  const translationTexts = translations[language];
 
   // State variables
   const [isRecording, setIsRecording] = useState(false);
@@ -290,7 +291,7 @@ const Tasjeel: React.FC = () => {
       if (!showPulse) {
         setShowPulse(true);
         // Show final minute warning
-        toast(t.finalMinuteWarning);
+        toast(translationTexts.finalMinuteWarning);
       }
     } else if (remaining <= WARNING_TIME_1) {
       // Warning - yellow (5 minutes or less)
@@ -372,18 +373,18 @@ const Tasjeel: React.FC = () => {
         
         // Show warning at 5 minutes remaining
         if (remaining === WARNING_TIME_1) {
-          toast(t.warningTimeApproaching);
+          toast(translationTexts.warningTimeApproaching);
         }
         
         // Auto-stop recording when time limit is reached
         if (seconds >= MAX_RECORDING_TIME) {
-          toast(t.timeLimit);
+          toast(translationTexts.timeLimit);
           stopRecording();
         }
       }, 1000);
     } catch (error) {
       console.error("Error accessing microphone:", error);
-      toast(t.noMicrophoneAccess);
+      toast(translationTexts.noMicrophoneAccess);
     }
   };
   
@@ -525,10 +526,10 @@ const Tasjeel: React.FC = () => {
       // Transcribe the uploaded audio
       await transcribeAudio(audioUrl);
       
-      toast(t.uploadSuccess);
+      toast(translationTexts.uploadSuccess);
     } catch (error) {
       console.error("Error uploading file:", error);
-      toast(t.uploadError);
+      toast(translationTexts.uploadError);
       setRecordingStatus("idle");
     } finally {
       setUploadingFile(false);
@@ -606,7 +607,7 @@ const Tasjeel: React.FC = () => {
       setSummary(response.summary);
     } catch (error) {
       console.error("Error summarizing text:", error);
-      toast(t.error + ": " + (error.message || "An error occurred while summarizing the text"));
+      toast(translationTexts.error + ": " + (error.message || "An error occurred while summarizing the text"));
     } finally {
       setIsSummarizing(false);
     }
@@ -673,7 +674,7 @@ const Tasjeel: React.FC = () => {
         const audio = new Audio(jsonData.audioUrl);
         summaryAudioPlayerRef.current = audio;
         
-        toast(t.audioGenerationComplete);
+        toast(translationTexts.audioGenerationComplete);
       } else {
         throw new Error('No audio URL returned');
       }
@@ -714,11 +715,11 @@ const Tasjeel: React.FC = () => {
         source_type: 'recording' // Add missing source_type property
       });
 
-      toast(t.recordingSaved);
+      toast(translationTexts.recordingSaved);
       setActiveTab("saved"); // Switch to saved tab automatically
     } catch (error) {
       console.error("Error saving recording:", error);
-      toast(t.recordingSaveError);
+      toast(translationTexts.recordingSaveError);
     } finally {
       setIsSaving(false);
     }
@@ -727,7 +728,7 @@ const Tasjeel: React.FC = () => {
   // Copy to clipboard function
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast(t.copiedToClipboard);
+    toast(translationTexts.copiedToClipboard);
   };
   
   // Play/pause original audio
@@ -767,7 +768,7 @@ const Tasjeel: React.FC = () => {
   const downloadAudio = (isSummary: boolean = false) => {
     const blob = isSummary ? summaryAudioBlob : audioBlob;
     if (blob) {
-      toast(t.preparingDownload);
+      toast(translationTexts.preparingDownload);
       
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -778,7 +779,7 @@ const Tasjeel: React.FC = () => {
       // Clean up the URL object after the download starts
       setTimeout(() => URL.revokeObjectURL(url), 100);
       
-      toast(t.downloadComplete);
+      toast(translationTexts.downloadComplete);
     }
   };
   
@@ -789,7 +790,7 @@ const Tasjeel: React.FC = () => {
       if (!content) return;
       
       const pdfBlob = await generatePDF({
-        title: isTranscription ? t.transcriptionLabel : t.summaryLabel,
+        title: isTranscription ? translationTexts.transcriptionLabel : translationTexts.summaryLabel,
         content: { text: content },
         metadata: {
           createdAt: new Date().toISOString(),
@@ -809,7 +810,7 @@ const Tasjeel: React.FC = () => {
       // Clean up the URL object after the download starts
       setTimeout(() => URL.revokeObjectURL(url), 100);
       
-      toast(t.pdfExported);
+      toast(translationTexts.pdfExported);
     } catch (error) {
       console.error("Error exporting to PDF:", error);
       toast(error.message || "An error occurred while exporting to PDF");
@@ -830,26 +831,26 @@ const Tasjeel: React.FC = () => {
     
     // Validate file type (MP3)
     if (!file.type.includes('audio/')) {
-      toast(t.uploadError + ": " + "Please upload an audio file");
+      toast(translationTexts.uploadError + ": " + "Please upload an audio file");
       return;
     }
     
     // Validate file size (25MB max)
     const maxSize = 25 * 1024 * 1024; // 25MB in bytes
     if (file.size > maxSize) {
-      toast(t.uploadError + ": " + "File size exceeds 25MB limit");
+      toast(translationTexts.uploadError + ": " + "File size exceeds 25MB limit");
       return;
     }
     
     setQuickAudioFile(file);
     setQuickSummaryStatus("uploading");
-    toast(t.uploadSuccess);
+    toast(translationTexts.uploadSuccess);
   };
   
   // New function to process quick summary
   const processQuickSummary = async () => {
     if (!quickAudioFile) {
-      toast(t.uploadError);
+      toast(translationTexts.uploadError);
       return;
     }
     
@@ -894,7 +895,7 @@ const Tasjeel: React.FC = () => {
   // New function to save quick summary - Updated to add placeholder for original_recording_path
   const saveQuickSummary = async () => {
     if (!quickSummaryTitle || !quickSummaryText) {
-      toast(t.error);
+      toast(translationTexts.error);
       return;
     }
     
@@ -913,7 +914,7 @@ const Tasjeel: React.FC = () => {
         source_type: 'quick_summary'
       });
       
-      toast(t.recordingSaved);
+      toast(translationTexts.recordingSaved);
       setActiveTab("saved"); // Switch to saved tab automatically
       
       // Reset quick summary states
@@ -929,28 +930,28 @@ const Tasjeel: React.FC = () => {
       
     } catch (error) {
       console.error("Error saving quick summary:", error);
-      toast(t.recordingSaveError);
+      toast(translationTexts.recordingSaveError);
     } finally {
       setIsSaving(false);
     }
   };
   
   return (
-    <PageContainer title={t.pageTitle} showBackButton={true} showHeader={false}>
+    <PageContainer title={translationTexts.pageTitle} showBackButton={true} showHeader={false}>
       <div className="container py-4 space-y-6">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved" | "quick")}>
           <TabsList className="grid grid-cols-3 w-full mb-6">
             <TabsTrigger value="record" className="flex items-center gap-2">
               <Mic className="h-4 w-4" />
-              {t.newRecording}
+              {translationTexts.newRecording}
             </TabsTrigger>
             <TabsTrigger value="quick" className="flex items-center gap-2">
               <Zap className="h-4 w-4" />
-              {t.quickSummary}
+              {translationTexts.quickSummary}
             </TabsTrigger>
             <TabsTrigger value="saved" className="flex items-center gap-2">
               <Save className="h-4 w-4" />
-              {t.savedRecordings}
+              {translationTexts.savedRecordings}
             </TabsTrigger>
           </TabsList>
           
@@ -958,7 +959,7 @@ const Tasjeel: React.FC = () => {
             {/* Recording section */}
             <Card>
               <CardContent className="pt-6">
-                <h2 className="text-lg font-semibold mb-4">{t.recordLabel}</h2>
+                <h2 className="text-lg font-semibold mb-4">{translationTexts.recordLabel}</h2>
                 
                 {recordingStatus === "recording" ? (
                   <div className="space-y-4">
@@ -971,21 +972,21 @@ const Tasjeel: React.FC = () => {
                     {/* Updated timer display with both elapsed and remaining time */}
                     <div className="flex justify-between items-center">
                       <div className="text-center flex-1">
-                        <div className="text-sm text-muted-foreground">{t.elapsedTime}</div>
+                        <div className="text-sm text-muted-foreground">{translationTexts.elapsedTime}</div>
                         <div className="text-xl font-bold">{formatTime(recordingTime)}</div>
                       </div>
                       
                       <div className="mx-2 h-8 w-px bg-gray-200"></div>
                       
                       <div className="text-center flex-1">
-                        <div className="text-sm text-muted-foreground">{t.timeRemaining}</div>
+                        <div className="text-sm text-muted-foreground">{translationTexts.timeRemaining}</div>
                         <div className={`text-xl font-bold px-3 py-1 rounded-md ${getTimerBackgroundColor()}`}>
                           {formatTime(remainingTime)}
                         </div>
                       </div>
                     </div>
                     
-                    <div className="text-sm text-center text-muted-foreground">{t.recording}</div>
+                    <div className="text-sm text-center text-muted-foreground">{translationTexts.recording}</div>
                     
                     <Button 
                       variant="destructive" 
@@ -993,7 +994,7 @@ const Tasjeel: React.FC = () => {
                       onClick={stopRecording}
                     >
                       <StopCircle className="mr-2" />
-                      {t.stopRecording}
+                      {translationTexts.stopRecording}
                     </Button>
                   </div>
                 ) : recordingStatus === "processing" || recordingStatus === "uploading" ? (
@@ -1001,8 +1002,8 @@ const Tasjeel: React.FC = () => {
                     <RefreshCw className="h-8 w-8 animate-spin" />
                     <p className="mt-4">
                       {recordingStatus === "uploading" 
-                        ? t.uploading 
-                        : (isTranscribing ? t.transcribingAudio : t.processingRecording)}
+                        ? translationTexts.uploading 
+                        : (isTranscribing ? translationTexts.transcribingAudio : translationTexts.processingRecording)}
                     </p>
                   </div>
                 ) : (
@@ -1012,7 +1013,7 @@ const Tasjeel: React.FC = () => {
                       onClick={startRecording}
                     >
                       <Mic className="mr-2" />
-                      {t.startRecording}
+                      {translationTexts.startRecording}
                     </Button>
                     
                     {/* Recording limit info box */}
@@ -1034,7 +1035,7 @@ const Tasjeel: React.FC = () => {
               <Card>
                 <CardContent className="pt-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">{t.transcriptionLabel}</h2>
+                    <h2 className="text-lg font-semibold">{translationTexts.transcriptionLabel}</h2>
                     <div className="flex gap-2">
                       <Button 
                         variant="outline" 
@@ -1042,7 +1043,7 @@ const Tasjeel: React.FC = () => {
                         onClick={() => copyToClipboard(transcript)}
                       >
                         <ClipboardCopy className="h-4 w-4 mr-1" />
-                        {t.copy}
+                        {translationTexts.copy}
                       </Button>
                       
                       {/* Export transcription to PDF button */}
@@ -1061,21 +1062,21 @@ const Tasjeel: React.FC = () => {
                     value={transcript} 
                     onChange={(e) => setTranscript(e.target.value)}
                     className="min-h-[200px] mb-4"
-                    placeholder={t.editTranscription}
+                    placeholder={translationTexts.editTranscription}
                   />
                   
                   {/* Original audio player */}
                   {audioBlob && (
                     <div className="flex flex-col space-y-3 mb-4">
                       <div className="flex justify-between items-center">
-                        <div className="text-sm font-medium">{t.audioPlayer}</div>
+                        <div className="text-sm font-medium">{translationTexts.audioPlayer}</div>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => downloadAudio(false)}
                         >
                           <Download className="h-4 w-4 mr-1" />
-                          {t.downloadOriginalAudio}
+                          {translationTexts.downloadOriginalAudio}
                         </Button>
                       </div>
                       <div className="flex justify-center gap-4">
@@ -1110,6 +1111,14 @@ const Tasjeel: React.FC = () => {
                     </div>
                   )}
                   
+                  {/* Reminder text above Summarize button */}
+                  <div className="flex items-center gap-2 p-3 mb-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-sm text-amber-700 dark:text-amber-300">
+                      {t("reviewTranscriptReminder", language)}
+                    </span>
+                  </div>
+                  
                   <Button
                     className="w-full"
                     onClick={summarizeText}
@@ -1118,12 +1127,12 @@ const Tasjeel: React.FC = () => {
                     {isSummarizing ? (
                       <>
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        {t.summarizingText}
+                        {translationTexts.summarizingText}
                       </>
                     ) : (
                       <>
                         <FileText className="mr-2 h-4 w-4" />
-                        {t.summarize}
+                        {translationTexts.summarize}
                       </>
                     )}
                   </Button>
@@ -1136,7 +1145,7 @@ const Tasjeel: React.FC = () => {
               <Card>
                 <CardContent className="pt-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">{t.summaryLabel}</h2>
+                    <h2 className="text-lg font-semibold">{translationTexts.summaryLabel}</h2>
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
@@ -1144,7 +1153,7 @@ const Tasjeel: React.FC = () => {
                         onClick={() => copyToClipboard(summary)}
                       >
                         <ClipboardCopy className="h-4 w-4 mr-1" />
-                        {t.copy}
+                        {translationTexts.copy}
                       </Button>
                       
                       {/* Export summary to PDF button */}
@@ -1167,23 +1176,31 @@ const Tasjeel: React.FC = () => {
                   
                   <div className="space-y-4">
                     <div className="flex flex-col space-y-2">
-                      <label className="font-medium">{t.selectVoice}</label>
+                      <label className="font-medium">{translationTexts.selectVoice}</label>
                       <div className="flex gap-2">
                         <Button
                           variant={selectedVoice === "male" ? "default" : "outline"}
                           className="flex-1"
                           onClick={() => setSelectedVoice("male")}
                         >
-                          {t.male}
+                          {translationTexts.male}
                         </Button>
                         <Button
                           variant={selectedVoice === "female" ? "default" : "outline"}
                           className="flex-1"
                           onClick={() => setSelectedVoice("female")}
                         >
-                          {t.female}
+                          {translationTexts.female}
                         </Button>
                       </div>
+                    </div>
+                    
+                    {/* Reminder text above Generate Audio button */}
+                    <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                      <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-sm text-blue-700 dark:text-blue-300">
+                        {t("reviewSummaryReminder", language)}
+                      </span>
                     </div>
                     
                     <Button
@@ -1194,12 +1211,12 @@ const Tasjeel: React.FC = () => {
                       {isGeneratingAudio ? (
                         <>
                           <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          {t.generatingAudio}
+                          {translationTexts.generatingAudio}
                         </>
                       ) : (
                         <>
                           <Volume2 className="mr-2 h-4 w-4" />
-                          {t.generateAudio}
+                          {translationTexts.generateAudio}
                         </>
                       )}
                     </Button>
@@ -1214,9 +1231,9 @@ const Tasjeel: React.FC = () => {
                 <CardContent className="pt-6">
                   <div className="space-y-4">
                     <div>
-                      <h3 className="text-lg font-semibold">{t.saveRecordingDesc}</h3>
+                      <h3 className="text-lg font-semibold">{translationTexts.saveRecordingDesc}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {t.saveRecordingDesc}
+                        {translationTexts.saveRecordingDesc}
                       </p>
                     </div>
                     
@@ -1228,12 +1245,12 @@ const Tasjeel: React.FC = () => {
                       {isSaving ? (
                         <>
                           <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          {t.savingRecording}
+                          {translationTexts.savingRecording}
                         </>
                       ) : (
                         <>
                           <Save className="mr-2 h-4 w-4" />
-                          {t.saveRecording}
+                          {translationTexts.saveRecording}
                         </>
                       )}
                     </Button>
@@ -1246,8 +1263,8 @@ const Tasjeel: React.FC = () => {
           <TabsContent value="quick" className="space-y-6">
             <Card>
               <CardContent className="pt-6">
-                <h2 className="text-lg font-semibold mb-2">{t.quickSummary}</h2>
-                <p className="text-sm text-muted-foreground mb-4">{t.quickSummaryDesc}</p>
+                <h2 className="text-lg font-semibold mb-2">{translationTexts.quickSummary}</h2>
+                <p className="text-sm text-muted-foreground mb-4">{translationTexts.quickSummaryDesc}</p>
                 
                 {quickSummaryStatus === "idle" && (
                   <div>
@@ -1264,7 +1281,7 @@ const Tasjeel: React.FC = () => {
                       onClick={() => quickFileInputRef.current?.click()}
                     >
                       <Upload className="mr-2 h-4 w-4" />
-                      {t.uploadQuickAudio}
+                      {translationTexts.uploadQuickAudio}
                     </Button>
                   </div>
                 )}
@@ -1285,7 +1302,7 @@ const Tasjeel: React.FC = () => {
                       onClick={processQuickSummary}
                     >
                       <FileText className="mr-2 h-4 w-4" />
-                      {t.generateSummary}
+                      {translationTexts.generateSummary}
                     </Button>
                   </div>
                 )}
@@ -1293,7 +1310,7 @@ const Tasjeel: React.FC = () => {
                 {quickSummaryStatus === "processing" && (
                   <div className="flex flex-col items-center justify-center py-8">
                     <RefreshCw className="h-8 w-8 animate-spin" />
-                    <p className="mt-4">{t.summaryProcessing}</p>
+                    <p className="mt-4">{translationTexts.summaryProcessing}</p>
                   </div>
                 )}
                 
@@ -1302,12 +1319,12 @@ const Tasjeel: React.FC = () => {
                     <div>
                       <h3 className="font-medium text-lg">{quickSummaryTitle}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {t.summaryDate}: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
+                        {translationTexts.summaryDate}: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
                       </p>
                     </div>
                     
                     <div className="bg-muted p-3 rounded-md">
-                      <p>{t.summaryReady}</p>
+                      <p>{translationTexts.summaryReady}</p>
                     </div>
                     
                     <Button 
@@ -1318,12 +1335,12 @@ const Tasjeel: React.FC = () => {
                       {isSaving ? (
                         <>
                           <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          {t.savingRecording}
+                          {translationTexts.savingRecording}
                         </>
                       ) : (
                         <>
                           <Save className="mr-2 h-4 w-4" />
-                          {t.saveRecording}
+                          {translationTexts.saveRecording}
                         </>
                       )}
                     </Button>

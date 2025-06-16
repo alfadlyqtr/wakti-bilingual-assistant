@@ -1,6 +1,8 @@
 
 import { en } from "./translations/en";
 import { ar } from "./translations/ar";
+import { legal as legalEn } from "./translations/modules/legal";
+import { legal as legalAr } from "./translations/modules/ar/legal";
 import { TranslationKey, SupportedLanguage } from "./translationTypes";
 
 export type Translation = {
@@ -8,13 +10,16 @@ export type Translation = {
   ar: string;
 };
 
-// We're using the simpler approach now, importing directly from en.ts and ar.ts
+// Combined translation objects
+const enTranslations = { ...en, ...legalEn };
+const arTranslations = { ...ar, ...legalAr };
+
 // This function gets the translation for the given key and language
 export const t = (key: TranslationKey, language: SupportedLanguage | string): string => {
   if (language === 'ar') {
-    return ar[key] || en[key] || key;
+    return arTranslations[key] || enTranslations[key] || key;
   }
-  return en[key] || key;
+  return enTranslations[key] || key;
 };
 
 // Helper function for quota-specific messages

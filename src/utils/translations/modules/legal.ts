@@ -139,5 +139,9 @@ export const legal = {
   subscriptionRefunds: "Subscription Refunds",
   subscriptionRefundsText: "We offer refunds according to our refund policy",
   contactInfoText: "For any legal or technical inquiries, please contact us",
-  sending: "Sending"
+  sending: "Sending",
+
+  // New reminder texts for Tasjeel
+  reviewTranscriptReminder: "Please review transcript before summarizing",
+  reviewSummaryReminder: "Please review summary before generating audio"
 };
