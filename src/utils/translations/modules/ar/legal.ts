@@ -1,5 +1,13 @@
-
 export const legalAr = {
+  // Audio player labels
+  englishAudio: "🎧 صوتي بالإنجليزية",
+  arabicAudio: "🎧 صوتي بالعربية",
+  audioPlay: "تشغيل",
+  audioPause: "إيقاف مؤقت",
+  audioStop: "إيقاف",
+  audioRewind: "الترجع 10 ثواني",
+  audioError: "خطأ في تحميل الصوت",
+
   // Header
   privacyPolicyHeader: "🔐 سياسة الخصوصية وشروط الاستخدام لمنصة WAKTI",
   lastUpdated: "آخر تحديث",

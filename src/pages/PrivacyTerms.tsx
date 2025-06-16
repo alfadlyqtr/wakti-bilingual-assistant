@@ -1,10 +1,10 @@
-
 import { useTheme } from "@/providers/ThemeProvider";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
+import AudioControls from "@/components/tasjeel/AudioControls";
 
 export default function PrivacyTerms() {
   const { language } = useTheme();
@@ -22,6 +22,19 @@ export default function PrivacyTerms() {
     ));
   };
 
+  // Audio URLs from Supabase storage
+  const englishAudioUrl = "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/admin-uploads/mp3/WAKTI%20Privacy%20Policy%20%26%20Terms%20of%20Use%20english.mp3";
+  const arabicAudioUrl = "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/admin-uploads/mp3/praviacy%20and%20terms%20-%20arabic.mp3";
+
+  // Audio control labels
+  const audioLabels = {
+    play: t("audioPlay", language),
+    pause: t("audioPause", language),
+    rewind: t("audioRewind", language),
+    stop: t("audioStop", language),
+    error: t("audioError", language)
+  };
+
   return (
     <div className="mobile-container">
       <MobileHeader 
@@ -34,6 +47,33 @@ export default function PrivacyTerms() {
       
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-6 space-y-8">
+          {/* Audio Players - placed just above the title */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* English Audio Player */}
+              <div className="bg-gradient-card border border-accent/20 rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-primary text-center">
+                  {t("englishAudio", language)}
+                </h3>
+                <AudioControls
+                  audioUrl={englishAudioUrl}
+                  labels={audioLabels}
+                />
+              </div>
+
+              {/* Arabic Audio Player */}
+              <div className="bg-gradient-card border border-accent/20 rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-primary text-center">
+                  {t("arabicAudio", language)}
+                </h3>
+                <AudioControls
+                  audioUrl={arabicAudioUrl}
+                  labels={audioLabels}
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="text-center space-y-4">
             <h1 className="text-2xl font-bold text-center">
