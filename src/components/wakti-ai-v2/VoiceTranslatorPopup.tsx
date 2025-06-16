@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Mic, Square, Copy, Loader2, AlertTriangle, Clock, PlayCircle, Volume2, ChevronDown, VolumeX } from 'lucide-react';
+import { Mic, Square, Copy, Loader2, AlertTriangle, Clock, PlayCircle, Volume2, ChevronDown, VolumeX, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceTranslatorPopupProps {

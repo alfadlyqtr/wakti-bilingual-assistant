@@ -199,10 +199,6 @@ export function QuickActionsPanel({
         <VoiceTranslatorPopup
           open={showVoiceTranslator}
           onOpenChange={setShowVoiceTranslator}
-          onTranslated={(translatedText) => {
-            onSendMessage(translatedText, 'voice');
-            console.log('🔄 Voice translation completed:', translatedText);
-          }}
         />
 
         {/* Voice Clone Popup */}
