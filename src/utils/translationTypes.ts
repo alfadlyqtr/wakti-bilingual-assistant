@@ -1337,4 +1337,14 @@ export type TranslationKey =
   | "errorSavingImage"
   
   // Messages auto-delete notification - NEW ADDITION
-  | "messagesAutoDelete";
+  | "messagesAutoDelete"
+
+  // Audio player specific keys - NEW ADDITIONS FOR AUDIO CONTROLS
+  | "audioPlay"
+  | "audioPause"
+  | "audioStop"
+  | "audioRewind"
+  | "audioError"
+  | "englishAudio"
+  | "arabicAudio";
+
