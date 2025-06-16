@@ -23,12 +23,18 @@ export const WidgetGrid: React.FC<WidgetGridProps> = ({ widgets, isDragging, onD
   // Debug logging for WidgetGrid
   useEffect(() => {
     console.log('WidgetGrid: Received widgets:', widgets.length);
+    console.log('WidgetGrid: Widget order:', widgets.map(w => w.id));
     console.log('WidgetGrid: Visible widgets after filter:', visibleWidgets.length);
     console.log('WidgetGrid: Visible widget details:', visibleWidgets.map(w => ({ id: w.id, title: w.title })));
   }, [widgets, visibleWidgets.length]);
 
+  const handleDragEnd = (result: any) => {
+    console.log('WidgetGrid: Drag ended with result:', result);
+    onDragEnd(result);
+  };
+
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
+    <DragDropContext onDragEnd={handleDragEnd}>
       <Droppable droppableId="widgets">
         {(provided) => (
           <div 
@@ -68,6 +74,16 @@ export const WidgetGrid: React.FC<WidgetGridProps> = ({ widgets, isDragging, onD
                 <div className="text-yellow-700">
                   Total widgets: {widgets.length}, 
                   All widget visibility: {widgets.map(w => `${w.id}:${w.visible}`).join(', ')}
+                </div>
+              </div>
+            )}
+
+            {/* Widget order debug info */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="p-2 bg-blue-100 border border-blue-300 rounded text-xs">
+                <div className="font-medium text-blue-800">Widget Order Debug:</div>
+                <div className="text-blue-700">
+                  Current order: {widgets.map(w => w.id).join(' → ')}
                 </div>
               </div>
             )}

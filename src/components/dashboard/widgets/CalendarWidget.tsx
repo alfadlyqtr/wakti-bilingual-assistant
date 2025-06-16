@@ -19,14 +19,33 @@ interface CalendarWidgetProps {
 
 export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, events, language }) => {
   const navigate = useNavigate();
-  // Use shared calendar data (live syncs)
-  const { loading, entries, refresh } = useCalendarData();
+  // Use shared calendar data (live syncs) - this ensures sync with Wakti calendar
+  const { loading: calendarLoading, entries, refresh } = useCalendarData();
+
+  // Force refresh calendar data when widget mounts or becomes visible
+  useEffect(() => {
+    refresh();
+    console.log('CalendarWidget: Refreshing calendar data for sync');
+  }, [refresh]);
+
+  // Auto-refresh every 30 seconds to keep sync
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refresh();
+      console.log('CalendarWidget: Auto-refreshing calendar data');
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [refresh]);
 
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
 
   const todayEntries = entries.filter(entry => entry.date === today);
   const tomorrowEntries = entries.filter(entry => entry.date === tomorrow);
+
+  console.log('CalendarWidget: Today entries:', todayEntries.length);
+  console.log('CalendarWidget: Tomorrow entries:', tomorrowEntries.length);
 
   const getTodayItemsText = () => {
     if (todayEntries.length === 0) {
@@ -64,6 +83,8 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     return itemTypes.join(', ');
   };
 
+  const isLoaderActive = isLoading || calendarLoading;
+
   return (
     <div
       className="relative calendar-widget overflow-visible rounded-xl border shadow-glow"
@@ -75,8 +96,6 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
         // Remove extra blur, keep slight shadow/glow for separation
       }}
     >
-      {/* Remove: extra glassy/frosted overlay/blurs */}
-      {/* Remove: subtle glow highlight. Widget looks cleaner without unnecessary overlays */}
       {/* Drag handle */}
       <div className="absolute top-2 left-2 z-20 p-2 rounded-lg bg-accent-blue/10 border border-accent-blue/20 cursor-grab active:cursor-grabbing">
         <Hand className="h-3 w-3 text-accent-blue" />
@@ -116,7 +135,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
             <div className="font-bold text-center text-lg text-white">{format(new Date(), "d")}</div>
             <div className="text-xs text-center mb-2 text-white/90 font-semibold">{t("today", language)}</div>
             <div className="text-xs text-white/90">
-              {isLoading || loading ? (
+              {isLoaderActive ? (
                 <Skeleton className="h-3 w-full bg-white/40" />
               ) : (
                 <div className="truncate leading-relaxed">{getTodayItemsText()}</div>
@@ -140,7 +159,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
               {t("tomorrow", language)}
             </div>
             <div className="text-xs" style={{ color: "hsl(var(--accent-blue) / 0.9)" }}>
-              {isLoading || loading ? (
+              {isLoaderActive ? (
                 <Skeleton className="h-3 w-full bg-accent-blue/20" />
               ) : (
                 <div className="truncate leading-relaxed">{getTomorrowItemsText()}</div>
