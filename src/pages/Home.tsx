@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -273,7 +272,6 @@ export default function Home() {
           </motion.div>
           
           <motion.div
-            key={`${pricingPlan}-${currency}`}
             variants={itemVariants}
             className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/50 dark:border-slate-700/50 max-w-sm mx-auto"
           >
