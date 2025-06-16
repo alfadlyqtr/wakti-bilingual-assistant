@@ -32,10 +32,8 @@ serve(async (req) => {
       );
     }
 
-    // Use provided voice or default to 'alloy' (as required)
+    // Use provided voice or default to 'alloy'
     const selectedVoice = voice || 'alloy';
-    
-    // Ensure we always use the correct voice (alloy)
     const finalVoice = selectedVoice === 'alloy' ? 'alloy' : 'alloy';
 
     console.log(`🔊 Voice Translator TTS: Generating speech for text length: ${text.length}, voice: ${finalVoice}`);
@@ -49,9 +47,9 @@ serve(async (req) => {
       );
     }
 
-    // Call OpenAI TTS API with timeout and retry logic
+    // Reduced timeout from 30s to 10s for faster failures
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
     try {
       const response = await fetch('https://api.openai.com/v1/audio/speech', {
@@ -61,8 +59,8 @@ serve(async (req) => {
           'Authorization': `Bearer ${openaiApiKey}`,
         },
         body: JSON.stringify({
-          model: 'tts-1', // Always use tts-1 as required
-          voice: finalVoice, // Always use alloy voice
+          model: 'tts-1',
+          voice: finalVoice,
           input: text,
           response_format: 'mp3',
           speed: 1.0
@@ -76,7 +74,6 @@ serve(async (req) => {
         const errorText = await response.text();
         console.error('🔊 Voice Translator TTS: OpenAI API error:', response.status, errorText);
         
-        // Return a more specific error based on status code
         let errorMessage = 'Text-to-speech failed';
         if (response.status === 429) {
           errorMessage = 'Rate limit exceeded. Please try again in a moment.';
@@ -106,7 +103,7 @@ serve(async (req) => {
       // Convert to base64 efficiently
       const uint8Array = new Uint8Array(audioBuffer);
       let binaryString = '';
-      const chunkSize = 8192; // Process in chunks to avoid stack overflow
+      const chunkSize = 8192;
       
       for (let i = 0; i < uint8Array.length; i += chunkSize) {
         const chunk = uint8Array.slice(i, i + chunkSize);
@@ -117,7 +114,6 @@ serve(async (req) => {
       
       console.log(`🔊 Voice Translator TTS: Audio generated successfully, size: ${audioBuffer.byteLength} bytes`);
 
-      // Return base64 audio for immediate playback
       return new Response(
         JSON.stringify({ 
           audioContent: base64Audio,
@@ -135,9 +131,9 @@ serve(async (req) => {
       clearTimeout(timeoutId);
       
       if (fetchError.name === 'AbortError') {
-        console.error('🔊 Voice Translator TTS: Request timeout');
+        console.error('🔊 Voice Translator TTS: Request timeout (10s)');
         return new Response(
-          JSON.stringify({ error: 'Request timeout. Please try again.' }),
+          JSON.stringify({ error: 'Audio generation timed out. Please try again.' }),
           { status: 408, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

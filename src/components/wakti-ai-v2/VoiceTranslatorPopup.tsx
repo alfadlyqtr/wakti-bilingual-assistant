@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,7 +35,7 @@ interface CachedAudio {
   };
 }
 
-// Simplified audio manager that doesn't block on AudioContext
+// Simplified audio manager
 class AudioManager {
   private currentAudio: HTMLAudioElement | null = null;
   private isPlaying: boolean = false;
@@ -73,7 +74,6 @@ class AudioManager {
           reject(new Error('Audio playback failed'));
         };
 
-        // Start playing immediately
         this.isPlaying = true;
         const playPromise = audio.play();
         
@@ -144,7 +144,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const { language } = useTheme();
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   
-  // Use the quota management hook
   const {
     userQuota,
     isLoadingQuota,
@@ -168,12 +167,12 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [translationHistory, setTranslationHistory] = useState<TranslationItem[]>([]);
   const [audioCache, setAudioCache] = useState<CachedAudio>({});
   const [audioUnlockAttempted, setAudioUnlockAttempted] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Memoize the audio manager to prevent recreation on every render
   const audioManager = useMemo(() => new AudioManager(), []);
 
   // Clear translation when language changes
@@ -293,7 +292,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.log('🔊 Attempting to unlock audio context...');
       setAudioUnlockAttempted(true);
       
-      // Try playing a silent audio to unlock the context
       const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA');
       await silentAudio.play();
       silentAudio.pause();
@@ -308,6 +306,59 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setAudioUnlockAttempted(true);
     }
   }, [language]);
+
+  // Background audio pre-generation
+  const preGenerateAudio = useCallback(async (text: string) => {
+    const cacheKey = `${text}_${selectedLanguage}`;
+    
+    // Don't pre-generate if already cached or currently generating
+    if (audioCache[cacheKey] || isGeneratingAudio) {
+      return;
+    }
+
+    try {
+      setIsGeneratingAudio(true);
+      console.log('🔊 Pre-generating audio for:', text.substring(0, 30) + '...');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator-tts', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          voice: 'alloy'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const audioContent = result.audioContent;
+        
+        if (audioContent) {
+          const newCache = { 
+            ...audioCache, 
+            [cacheKey]: {
+              data: audioContent,
+              timestamp: Date.now(),
+              size: result.size || 0
+            }
+          };
+          setAudioCache(newCache);
+          saveAudioCache(newCache);
+          console.log('🔊 Audio pre-generated and cached successfully');
+        }
+      }
+    } catch (error) {
+      console.log('🔊 Background audio pre-generation failed (non-critical):', error);
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  }, [selectedLanguage, audioCache, saveAudioCache, isGeneratingAudio]);
 
   const startRecording = useCallback(async () => {
     if (!quotaError && !canTranslate) {
@@ -492,8 +543,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           : `Translation to ${targetLangName} completed successfully`,
       });
 
+      // Background pre-generate audio immediately after translation
       if (playbackEnabled) {
-        playTranslatedText(result.translatedText);
+        preGenerateAudio(result.translatedText);
       }
 
     } catch (error) {
@@ -509,9 +561,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsProcessing(false);
       setRecordingTime(0);
     }
-  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled]);
+  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, preGenerateAudio]);
 
-  const playTranslatedText = useCallback(async (text: string, retryAttempt: number = 0) => {
+  const playTranslatedText = useCallback(async (text: string) => {
     console.log('🔊 Play button clicked, text:', text);
     
     if (audioManager.isAudioPlaying()) {
@@ -581,21 +633,12 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       } else {
         const errorText = await response.text();
         console.error('🔊 TTS error:', response.status, errorText);
-        
-        if (response.status >= 500 && retryAttempt < 2) {
-          console.log(`🔊 Retrying TTS request (attempt ${retryAttempt + 1})`);
-          setTimeout(() => {
-            playTranslatedText(text, retryAttempt + 1);
-          }, 1000 * (retryAttempt + 1));
-          return;
-        }
-        
         throw new Error(`TTS failed: ${errorText}`);
       }
     } catch (error) {
       console.error('🔊 Error playing TTS:', error);
       
-      let errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio';
+      let errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Audio generation timed out. Please try again.';
       if (error.message.includes('Rate limit')) {
         errorMessage = language === 'ar' ? 'تم تجاوز الحد المسموح، حاول مرة أخرى' : 'Rate limit exceeded, please try again';
       } else if (error.message.includes('timeout')) {
@@ -663,8 +706,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     });
   }, [language]);
 
-  // Only show daily reset info if needed
   const showDailyResetInfo = !quotaError && (isAtSoftLimit || isAtHardLimit);
+  const needsAudioUnlock = !audioUnlockAttempted && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   if (isLoadingQuota) {
     return (
@@ -677,9 +720,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       </Dialog>
     );
   }
-
-  // Check if we need audio unlock (only show if not attempted and on mobile)
-  const needsAudioUnlock = !audioUnlockAttempted && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -710,7 +750,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Audio unlock button for mobile - only show if needed */}
+          {/* Audio unlock button for mobile */}
           {needsAudioUnlock && (
             <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <VolumeX className="h-4 w-4 text-blue-600" />
@@ -893,7 +933,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </p>
           </div>
 
-          {/* Translation Results with buttons */}
+          {/* Translation Results with instant loading state */}
           {translatedText && (
             <div className="space-y-3">
               <div className="p-4 bg-muted rounded-lg text-center relative">
@@ -935,7 +975,12 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                     className="h-10 w-20 flex items-center justify-center gap-2"
                   >
                     {isPlaying ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-xs">
+                          {language === 'ar' ? 'جاري...' : 'Playing...'}
+                        </span>
+                      </>
                     ) : (
                       <>
                         <Volume2 className="h-4 w-4" />
