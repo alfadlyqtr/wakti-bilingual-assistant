@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -45,52 +46,72 @@ serve(async (req) => {
       for (let i = conversationHistory.length - 1; i >= 0; i--) {
         const message = conversationHistory[i];
         if (message.role === 'user') {
-          const taskData = extractTaskDataFromMessage(message.content);
-          if (taskData && (taskData.title || taskData.hasTaskKeywords)) {
-            console.log("Found previous task request, creating confirmation");
-            
-            return new Response(
-              JSON.stringify({
-                response: `I'll create this task for you:\n\n**${taskData.title}**\n${taskData.subtasks.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskData.due_date ? `Due: ${taskData.due_date}` : ''}\n${taskData.due_time ? ` at ${taskData.due_time}` : ''}\n\nPlease confirm if you'd like me to create this task.`,
-                intent: "parse_task",
-                intentData: {
-                  pendingTask: taskData
-                }
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+          // Use the imported analyzeTaskIntent function instead of the local one
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) continue;
+          
+          const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/wakti-ai-v2-brain`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: message.content,
+              action: 'analyze_task_intent',
+              language: 'en'
+            })
+          });
+          
+          if (response.ok) {
+            const taskAnalysis = await response.json();
+            if (taskAnalysis.isTask && taskAnalysis.taskData) {
+              console.log("Found previous task request, creating confirmation");
+              
+              return new Response(
+                JSON.stringify({
+                  response: `I'll create this task for you:\n\n**${taskAnalysis.taskData.title}**\n${taskAnalysis.taskData.subtasks.length > 0 ? `\nSubtasks:\n${taskAnalysis.taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskAnalysis.taskData.due_date ? `Due: ${taskAnalysis.taskData.due_date}` : ''}\n${taskAnalysis.taskData.due_time ? ` at ${taskAnalysis.taskData.due_time}` : ''}\n\nPlease confirm if you'd like me to create this task.`,
+                  intent: "parse_task",
+                  intentData: {
+                    pendingTask: taskAnalysis.taskData
+                  }
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
           }
         }
       }
     }
 
-    // UPDATED: Enhanced task detection patterns - more specific and explicit
-    const taskPatterns = [
-      // UPDATED: More explicit task creation patterns
-      /\b(create|add|make|new)\s+(a\s+)?task\b/i,
-      /\b(help\s+(me\s+)?)?(create|add|make)\s+(a\s+)?task\b/i,
-      /\b(i\s+want\s+to|need\s+to|can\s+you)\s+(create|add|make)\s+(a\s+)?task\b/i,
-      /\b(please\s+)?(create|add|make)\s+(a\s+)?task\b/i,
-      /\btask\s+(creation|creator|maker)\b/i,
-      /\bnew\s+task\b/i,
-      /\btodo\s+(list|item|entry)\b/i,
-      /\b(create|add|make)\s+(a\s+)?(todo|reminder)\b/i,
-      // Arabic patterns
-      /\b(أنشئ|اصنع|أضف)\s+(مهمة|تذكير)\b/i,
-      /\b(ساعدني|أريد|أحتاج)\s+(في\s+)?(إنشاء|عمل|إضافة)\s+(مهمة|تذكير)\b/i
-    ];
+    // Use the proper task analysis by calling the wakti-ai-v2-brain function
+    // which has the correct analyzeTaskIntent implementation
+    const taskAnalysisResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/wakti-ai-v2-brain`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: text,
+        action: 'analyze_task_intent',
+        language: 'en'
+      })
+    });
 
-    // REMOVED: Overly broad shopping and action verb patterns that caused false positives
-    // These were too aggressive and interpreted casual conversation as task requests
+    let isTaskRequest = false;
+    let taskData = null;
 
-    // Check if this is a task creation request with explicit patterns only
-    const isTaskRequest = taskPatterns.some(pattern => pattern.test(text));
-    
-    if (isTaskRequest) {
-      console.log("Detected explicit task creation request");
+    if (taskAnalysisResponse.ok) {
+      const analysis = await taskAnalysisResponse.json();
+      isTaskRequest = analysis.isTask;
+      taskData = analysis.taskData;
       
-      // Extract task details from the current message
-      const taskData = extractTaskDataFromMessage(text);
+      console.log("Task analysis result:", { isTask: isTaskRequest, hasTaskData: !!taskData });
+    }
+    
+    if (isTaskRequest && taskData) {
+      console.log("Detected explicit task creation request");
       
       // Check if we need to ask for clarification
       if (!taskData.due_date || !taskData.priority) {
@@ -265,140 +286,6 @@ serve(async (req) => {
     );
   }
 });
-
-// UPDATED: Enhanced task data extraction with more specific detection
-function extractTaskDataFromMessage(text: string) {
-  const lowerText = text.toLowerCase();
-  
-  // Initialize task data
-  let title = "";
-  let subtasks: string[] = [];
-  let due_date = null;
-  let due_time = null;
-  let priority = "normal";
-  let hasTaskKeywords = false;
-
-  // UPDATED: Check for explicit task keywords only
-  const explicitTaskPhrases = [
-    'create task', 'create a task', 'add task', 'add a task', 'make task', 'make a task',
-    'new task', 'help me create task', 'i want to create task', 'can you create task',
-    'please create task', 'task creation'
-  ];
-  
-  if (explicitTaskPhrases.some(phrase => lowerText.includes(phrase))) {
-    hasTaskKeywords = true;
-  }
-
-  // Extract shopping list format: "shopping list lulu" or "shopping at lulu"
-  const shoppingMatch = text.match(/\b(shopping\s+list|shop\s+at|shopping\s+at)\s+([^,\.\s]+)/i);
-  if (shoppingMatch) {
-    const location = shoppingMatch[2].trim();
-    title = `Shopping at ${location.charAt(0).toUpperCase() + location.slice(1)}`;
-  }
-
-  // Extract title from "create a task" format
-  const taskMatch = text.match(/\b(create|add|make|new)\s+(a\s+)?task\s+(.+?)(\s+due|\s+sub\s+tasks?|$)/i);
-  if (taskMatch && !title) {
-    title = taskMatch[3].trim();
-  }
-
-  // Extract title from "task due" format
-  const taskDueMatch = text.match(/\btask\s+due\s+.+?\s+(.+?)(\s+sub\s+tasks?|$)/i);
-  if (taskDueMatch && !title) {
-    // Extract everything after the date/time part
-    const fullText = text;
-    const afterDue = fullText.substring(fullText.toLowerCase().indexOf('due') + 3);
-    // Look for the part after date/time that might be the title
-    const titleMatch = afterDue.match(/\w+\s+\w+\s+(.+?)(\s+sub\s+tasks?|$)/i);
-    if (titleMatch) {
-      title = titleMatch[1].trim();
-    }
-  }
-
-  // If no title found but has shopping keywords, make a generic shopping title
-  if (!title && (lowerText.includes('shopping') || lowerText.includes('shop'))) {
-    title = "Shopping";
-  }
-
-  // If still no title but has task keywords, make a generic title
-  if (!title && hasTaskKeywords) {
-    title = "New task";
-  }
-
-  // Extract subtasks from "sub tasks rice milk water" format
-  const subtaskMatch = text.match(/\bsub\s+tasks?\s+(.+?)(\s+due|$)/i);
-  if (subtaskMatch) {
-    const itemsText = subtaskMatch[1];
-    // Split by spaces and common separators
-    subtasks = itemsText
-      .split(/\s+(?:and\s+)?|,\s*|\s*&\s*/)
-      .map(item => item.trim())
-      .filter(item => item && item.length > 0 && !item.match(/\b(due|at|to|in|from|for|on|when|where|why|how)\b/i))
-      .slice(0, 10); // Limit to 10 subtasks
-  }
-
-  // Extract due date - enhanced patterns for your format
-  const datePatterns = [
-    /\bdue\s+(tomorrow|today|tonight)\b/i,
-    /\bdue\s+(tomorrow)\s+(morning|afternoon|evening|noon|night)/i,
-    /\bdue\s+(next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
-    /\b(tomorrow|today|tonight)\b/i,
-    /\bdue\s+(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})/i
-  ];
-
-  for (const pattern of datePatterns) {
-    const dateMatch = text.match(pattern);
-    if (dateMatch) {
-      due_date = dateMatch[1] || dateMatch[0];
-      break;
-    }
-  }
-
-  // Extract due time - enhanced patterns
-  const timePatterns = [
-    /\b(noon|midnight)\b/i,
-    /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
-    /\b(\d{1,2}):(\d{2})\b/i,
-    /\b(morning|afternoon|evening|night)\b/i
-  ];
-
-  for (const pattern of timePatterns) {
-    const timeMatch = text.match(pattern);
-    if (timeMatch) {
-      if (timeMatch[0].toLowerCase() === 'noon') {
-        due_time = '12:00 PM';
-      } else if (timeMatch[0].toLowerCase() === 'midnight') {
-        due_time = '12:00 AM';
-      } else {
-        due_time = timeMatch[0];
-      }
-      break;
-    }
-  }
-
-  // Extract priority
-  const priorityRegex = /\b(high|medium|low|urgent|critical)\b\s*priority/i;
-  const priorityMatch = text.match(priorityRegex);
-  
-  if (priorityMatch) {
-    priority = priorityMatch[1].toLowerCase();
-  } else if (lowerText.includes("urgent") || lowerText.includes("asap") || lowerText.includes("immediately")) {
-    priority = "urgent";
-  } else if (lowerText.includes("important") || lowerText.includes("soon")) {
-    priority = "high";
-  }
-  
-  return {
-    title: title || "New task",
-    description: "",
-    subtasks: subtasks,
-    due_date: due_date,
-    due_time: due_time,
-    priority: priority as 'normal' | 'high' | 'urgent',
-    task_type: 'one-time' as const,
-    hasTaskKeywords
-  };
-}
 
 // Generate clarification questions for missing task details
 function generateClarificationQuestions(taskData: any, originalText: string) {
