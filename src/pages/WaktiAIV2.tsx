@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -906,7 +907,7 @@ const WaktiAIV2 = () => {
         />
       </div>
       {/* Main scrollable chat/msgs area */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[140px]">
         <ChatMessages
           sessionMessages={allDisplayMessages}
           isLoading={isLoading}
@@ -922,8 +923,8 @@ const WaktiAIV2 = () => {
           onCancelTaskConfirmation={handleCancelTaskConfirmation}
         />
       </div>
-      {/* Fixed Input at bottom */}
-      <div className="sticky bottom-0 z-40 bg-background">
+      {/* Fixed Input at bottom with higher z-index */}
+      <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-t border-border">
         <ChatInput
           message={message}
           setMessage={setMessage}

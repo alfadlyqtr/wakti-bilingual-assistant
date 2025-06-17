@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -140,224 +141,208 @@ export function ChatInput({
     setShowCameraPreview(false);
   };
 
-  // --- NEW: Reworked Visual Arrangement Below ---
-
   // Layout & Mode highlighting classes
   const containerHighlight = modeHighlightStyles(activeTrigger);
   const textareaHighlightClass = textareaHighlight(activeTrigger);
 
-  // Responsive classes
-  // Move input just above bottom nav (h-16 = 64px, so bottom-16)
-  const mobileFixed =
-    "fixed bottom-16 left-0 right-0 z-[101] bg-background bg-opacity-90 backdrop-blur-xl border-t border-border";
-
-  // Wrapper to detect mobile, or just always apply on all screens if this is a mobile-only app.
-  // Per your specs, mobile only, so we apply always.
-
   return (
-    <>
-      {/* Height-spacer to prevent overlap with pinned input and bottom nav */}
-      <div className="h-[154px] w-full flex-shrink-0" />
-      <div className={mobileFixed}>
-        <div className="w-full">
-          <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
-            {/* Camera Preview Modal */}
-            {showCameraPreview && cameraPreviewUrl && (
-              <div className="fixed inset-0 z-50 bg-black/70 flex flex-col items-center justify-center">
-                <div className="bg-background rounded-2xl p-4 shadow-2xl w-80 flex flex-col items-center gap-4">
-                  <img
-                    src={cameraPreviewUrl}
-                    alt="Camera preview"
-                    className="w-full h-60 object-contain rounded-xl bg-black/10"
-                  />
-                  <div className="flex gap-2 mt-2 w-full">
-                    <Button
-                      className="flex-1"
-                      variant="default"
-                      onClick={handleSendCameraPhoto}
-                      disabled={isLoading}
-                    >
-                      {language === 'ar' ? 'إرسال' : 'Send'}
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      variant="ghost"
-                      onClick={handleCancelCamera}
-                    >
-                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Uploaded Files Display */}
-            {uploadedFiles.length > 0 && (
-              <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
-                <div className="max-w-4xl mx-auto">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-medium text-foreground/70">
-                      {language === 'ar' ? 'ملفات:' : 'Files:'}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                      {uploadedFiles.length}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
-                    {uploadedFiles.map((file, index) => (
-                      <FilePreview
-                        key={index}
-                        file={file}
-                        index={index}
-                        onRemove={removeFile}
-                        size="sm"
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Main Input Area */}
-            <div className="px-2 pb-2">
-              <div className="max-w-4xl mx-auto">
-                <div
-                  className={`
-                    relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
-                    ${containerHighlight}
-                    shadow-xl rounded-2xl backdrop-blur-2xl
-                    p-0 transition-all duration-300
-                    shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
-                    border-[2.5px] min-h-[70px] max-w-full
-                  `}
-                  style={{ willChange: "box-shadow,border-color" }}
+    <div className="w-full">
+      <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
+        {/* Camera Preview Modal */}
+        {showCameraPreview && cameraPreviewUrl && (
+          <div className="fixed inset-0 z-[200] bg-black/70 flex flex-col items-center justify-center">
+            <div className="bg-background rounded-2xl p-4 shadow-2xl w-80 flex flex-col items-center gap-4">
+              <img
+                src={cameraPreviewUrl}
+                alt="Camera preview"
+                className="w-full h-60 object-contain rounded-xl bg-black/10"
+              />
+              <div className="flex gap-2 mt-2 w-full">
+                <Button
+                  className="flex-1"
+                  variant="default"
+                  onClick={handleSendCameraPhoto}
+                  disabled={isLoading}
                 >
-                  {/* TOP ROW: [Plus] [💬 Conversations] [⚡ Quick Actions] [Mode Badge] */}
-                  <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
-                    <PlusMenu
-                      onCamera={triggerCamera}
-                      onUpload={triggerUpload}
-                      isLoading={isLoading}
-                    />
-                    <button
-                      onClick={handleOpenConversationsDrawer}
-                      aria-label={language === "ar" ? "المحادثات" : "Conversations"}
-                      className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
-                      disabled={isLoading}
-                      type="button"
-                      tabIndex={0}
-                    >
-                      <span className="text-lg" role="img" aria-label="Conversations">💬</span>
-                      <span className="text-xs font-medium text-foreground/80">
-                        {language === 'ar' ? 'المحادثات' : 'Conversations'}
-                      </span>
-                    </button>
-                    <button
-                      onClick={handleOpenQuickActionsDrawer}
-                      aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
-                      className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
-                      disabled={isLoading}
-                      type="button"
-                      tabIndex={0}
-                    >
-                      <span className="text-lg" role="img" aria-label="Quick Actions">⚡</span>
-                      <span className="text-xs font-medium text-foreground/80">
-                        {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
-                      </span>
-                    </button>
-                    <ActiveModeIndicator activeTrigger={activeTrigger} />
-                    {/* Hidden file/camera inputs */}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*,.txt"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                    <input
-                      ref={cameraInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleCameraChange}
-                      className="hidden"
-                    />
-                  </div>
-                  {/* INPUT ROW: Textarea + Send */}
-                  <div className="relative flex items-end gap-1 px-3 pb-2 pt-0.5">
-                    <div className="flex-1 flex items-end">
-                      <Textarea
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
-                        className={`
-                          flex-1 border-[2.5px]
-                          bg-white/95 dark:bg-black/50
-                          ${textareaHighlightClass}
-                          shadow-inner shadow-primary/10
-                          backdrop-blur-[3px] resize-none
-                          focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
-                          py-3 px-3 min-h-[36px] max-h-32 text-base
-                          placeholder:text-foreground/50
-                          rounded-xl
-                          outline-none transition-all duration-200
-                        `}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSend();
-                          }
-                        }}
-                        disabled={isLoading}
-                        aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
-                      />
-                    </div>
-                    {(message.trim() || uploadedFiles.length > 0) && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              onClick={handleSend}
-                              disabled={isLoading || isUploading}
-                              className={`
-                                h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
-                                border-0 shadow-2xl backdrop-blur-md
-                                transition-all duration-200 hover:scale-110 hover:shadow-2xl
-                                shadow-lg
-                              `}
-                              size="icon"
-                              aria-label={language === 'ar' ? 'إرسال' : 'Send'}
-                            >
-                              {isLoading ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                              ) : (
-                                <Send className="h-5 w-5" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                            {language === 'ar' ? 'إرسال' : 'Send'}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
+                  {language === 'ar' ? 'إرسال' : 'Send'}
+                </Button>
+                <Button
+                  className="flex-1"
+                  variant="ghost"
+                  onClick={handleCancelCamera}
+                >
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Uploaded Files Display */}
+        {uploadedFiles.length > 0 && (
+          <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-medium text-foreground/70">
+                  {language === 'ar' ? 'ملفات:' : 'Files:'}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                  {uploadedFiles.length}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
+                {uploadedFiles.map((file, index) => (
+                  <FilePreview
+                    key={index}
+                    file={file}
+                    index={index}
+                    onRemove={removeFile}
+                    size="sm"
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Input Area */}
+        <div className="px-2 pb-2">
+          <div className="max-w-4xl mx-auto">
+            <div
+              className={`
+                relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
+                ${containerHighlight}
+                shadow-xl rounded-2xl backdrop-blur-2xl
+                p-0 transition-all duration-300
+                shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
+                border-[2.5px] min-h-[70px] max-w-full
+              `}
+              style={{ willChange: "box-shadow,border-color" }}
+            >
+              {/* TOP ROW: [Plus] [💬 Conversations] [⚡ Quick Actions] [Mode Badge] */}
+              <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
+                <PlusMenu
+                  onCamera={triggerCamera}
+                  onUpload={triggerUpload}
+                  isLoading={isLoading}
+                />
+                <button
+                  onClick={handleOpenConversationsDrawer}
+                  aria-label={language === "ar" ? "المحادثات" : "Conversations"}
+                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
+                  disabled={isLoading}
+                  type="button"
+                  tabIndex={0}
+                >
+                  <span className="text-lg" role="img" aria-label="Conversations">💬</span>
+                  <span className="text-xs font-medium text-foreground/80">
+                    {language === 'ar' ? 'المحادثات' : 'Conversations'}
+                  </span>
+                </button>
+                <button
+                  onClick={handleOpenQuickActionsDrawer}
+                  aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
+                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
+                  disabled={isLoading}
+                  type="button"
+                  tabIndex={0}
+                >
+                  <span className="text-lg" role="img" aria-label="Quick Actions">⚡</span>
+                  <span className="text-xs font-medium text-foreground/80">
+                    {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
+                  </span>
+                </button>
+                <ActiveModeIndicator activeTrigger={activeTrigger} />
+                {/* Hidden file/camera inputs */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.txt"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleCameraChange}
+                  className="hidden"
+                />
+              </div>
+              {/* INPUT ROW: Textarea + Send */}
+              <div className="relative flex items-end gap-1 px-3 pb-2 pt-0.5">
+                <div className="flex-1 flex items-end">
+                  <Textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
+                    className={`
+                      flex-1 border-[2.5px]
+                      bg-white/95 dark:bg-black/50
+                      ${textareaHighlightClass}
+                      shadow-inner shadow-primary/10
+                      backdrop-blur-[3px] resize-none
+                      focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
+                      py-3 px-3 min-h-[36px] max-h-32 text-base
+                      placeholder:text-foreground/50
+                      rounded-xl
+                      outline-none transition-all duration-200
+                    `}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    disabled={isLoading}
+                    aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
+                  />
                 </div>
-                {/* Status Indicators */}
-                {isUploading && (
-                  <div className="mt-2 flex justify-center">
-                    <div className="inline-flex items-center gap-2 px-2 py-1.5 bg-blue-500/10 backdrop-blur-xl text-blue-500 rounded-2xl border border-blue-500/20 text-xs font-medium">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      {language === 'ar' ? 'رفع...' : 'Uploading...'}
-                    </div>
-                  </div>
+                {(message.trim() || uploadedFiles.length > 0) && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleSend}
+                          disabled={isLoading || isUploading}
+                          className={`
+                            h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
+                            border-0 shadow-2xl backdrop-blur-md
+                            transition-all duration-200 hover:scale-110 hover:shadow-2xl
+                            shadow-lg
+                          `}
+                          size="icon"
+                          aria-label={language === 'ar' ? 'إرسال' : 'Send'}
+                        >
+                          {isLoading ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <Send className="h-5 w-5" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                        {language === 'ar' ? 'إرسال' : 'Send'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
             </div>
-          </DragDropUpload>
+            {/* Status Indicators */}
+            {isUploading && (
+              <div className="mt-2 flex justify-center">
+                <div className="inline-flex items-center gap-2 px-2 py-1.5 bg-blue-500/10 backdrop-blur-xl text-blue-500 rounded-2xl border border-blue-500/20 text-xs font-medium">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {language === 'ar' ? 'رفع...' : 'Uploading...'}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </>
+      </DragDropUpload>
+    </div>
   );
 }
