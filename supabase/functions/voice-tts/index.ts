@@ -10,7 +10,7 @@ const corsHeaders = {
 
 const ELEVENLABS_API_KEY = "sk_7b19e76d94655f74d81063f3dd7b39cf9460ea743d40a532";
 
-// Voice style configurations matching the frontend
+// Voice style configurations with more extreme differences matching the frontend
 const VOICE_STYLES = {
   neutral: {
     stability: 0.5,
@@ -18,29 +18,29 @@ const VOICE_STYLES = {
     style: 0.0
   },
   report: {
-    stability: 0.75,
-    similarity_boost: 0.8,
-    style: 0.3
+    stability: 0.9,
+    similarity_boost: 0.9,
+    style: 0.1
   },
   storytelling: {
-    stability: 0.3,
-    similarity_boost: 0.6,
-    style: 0.8
+    stability: 0.1,
+    similarity_boost: 0.3,
+    style: 1.0
   },
   poetry: {
-    stability: 0.2,
-    similarity_boost: 0.4,
-    style: 0.9
+    stability: 0.0,
+    similarity_boost: 0.2,
+    style: 1.0
   },
   teacher: {
-    stability: 0.8,
-    similarity_boost: 0.7,
-    style: 0.2
+    stability: 1.0,
+    similarity_boost: 1.0,
+    style: 0.0
   },
   sports: {
-    stability: 0.4,
-    similarity_boost: 0.6,
-    style: 0.7
+    stability: 0.2,
+    similarity_boost: 0.4,
+    style: 1.0
   }
 };
 
@@ -73,7 +73,7 @@ serve(async (req) => {
     console.log('🎵 Generating TTS for user:', user.id);
     console.log('🎵 Voice ID:', voice_id);
     console.log('🎵 Text length:', text.length);
-    console.log('🎵 Style:', style);
+    console.log('🎵 Style requested:', style);
 
     // Check character usage
     const { data: usage, error: usageError } = await supabase
@@ -94,7 +94,7 @@ serve(async (req) => {
 
     console.log('🎵 Calling ElevenLabs TTS API...');
 
-    // Get voice settings for the selected style
+    // Get voice settings for the selected style with more extreme differences
     const styleSettings = VOICE_STYLES[style as keyof typeof VOICE_STYLES] || VOICE_STYLES.neutral;
     console.log('🎵 Using style settings:', styleSettings);
 
@@ -111,15 +111,16 @@ serve(async (req) => {
         voice_settings: {
           stability: styleSettings.stability,
           similarity_boost: styleSettings.similarity_boost,
-          style: styleSettings.style
+          style: styleSettings.style,
+          use_speaker_boost: true
         },
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('🎵 ElevenLabs TTS API error:', errorText);
-      throw new Error(`Failed to generate speech: ${errorText}`);
+      console.error('🎵 ElevenLabs TTS API error:', response.status, errorText);
+      throw new Error(`Failed to generate speech: ${response.status} - ${errorText}`);
     }
 
     console.log('🎵 ElevenLabs API successful, processing audio...');

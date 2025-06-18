@@ -8,6 +8,7 @@ import { Play, Download, Loader2, Volume2, Mic } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
+import EnhancedAudioControls from '@/components/tasjeel/EnhancedAudioControls';
 
 interface VoiceClone {
   id: string;
@@ -19,7 +20,7 @@ interface VoiceCloneScreen3Props {
   onBack: () => void;
 }
 
-// Voice style configurations with Arabic translations
+// Voice style configurations with more extreme differences and Arabic translations
 const VOICE_STYLES = {
   neutral: {
     name: { en: 'Neutral', ar: 'عادي' },
@@ -33,41 +34,41 @@ const VOICE_STYLES = {
     name: { en: 'Report', ar: 'تقرير إخباري' },
     description: { en: 'Professional news reporting style', ar: 'أسلوب التقارير الإخبارية المهنية' },
     icon: '📰',
-    stability: 0.75,
-    similarity_boost: 0.8,
-    style: 0.3
+    stability: 0.9,
+    similarity_boost: 0.9,
+    style: 0.1
   },
   storytelling: {
     name: { en: 'Storytelling', ar: 'سرد القصص' },
     description: { en: 'Engaging narrative voice', ar: 'صوت سردي جذاب' },
     icon: '📚',
-    stability: 0.3,
-    similarity_boost: 0.6,
-    style: 0.8
+    stability: 0.1,
+    similarity_boost: 0.3,
+    style: 1.0
   },
   poetry: {
     name: { en: 'Poetry', ar: 'شعر' },
     description: { en: 'Expressive poetic delivery', ar: 'إلقاء شعري معبر' },
     icon: '🎭',
-    stability: 0.2,
-    similarity_boost: 0.4,
-    style: 0.9
+    stability: 0.0,
+    similarity_boost: 0.2,
+    style: 1.0
   },
   teacher: {
     name: { en: 'Teacher', ar: 'معلم' },
     description: { en: 'Clear educational presentation', ar: 'عرض تعليمي واضح' },
     icon: '👨‍🏫',
-    stability: 0.8,
-    similarity_boost: 0.7,
-    style: 0.2
+    stability: 1.0,
+    similarity_boost: 1.0,
+    style: 0.0
   },
   sports: {
     name: { en: 'Sports Announcer', ar: 'معلق رياضي' },
     description: { en: 'Dynamic sports commentary', ar: 'تعليق رياضي ديناميكي' },
     icon: '🏆',
-    stability: 0.4,
-    similarity_boost: 0.6,
-    style: 0.7
+    stability: 0.2,
+    similarity_boost: 0.4,
+    style: 1.0
   }
 };
 
@@ -132,6 +133,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       console.log('🎵 Text length:', text.trim().length);
       console.log('🎵 Voice ID:', selectedVoiceId);
       console.log('🎵 Style:', selectedStyle);
+      console.log('🎵 Style settings:', VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES]);
 
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
@@ -218,17 +220,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'));
     } finally {
       setIsGenerating(false);
-    }
-  };
-
-  const playAudio = () => {
-    if (audioUrl) {
-      console.log('🎵 Playing audio from URL:', audioUrl);
-      const audio = new Audio(audioUrl);
-      audio.play().catch(error => {
-        console.error('🎵 Error playing audio:', error);
-        toast.error(language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio');
-      });
     }
   };
 
@@ -405,18 +396,25 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         )}
       </Button>
 
-      {/* Audio Player */}
+      {/* Enhanced Audio Player */}
       {audioUrl && (
         <div className="p-4 border rounded-lg space-y-4">
           <h3 className="font-medium">
             {language === 'ar' ? 'الصوت المُنشأ' : 'Generated Audio'}
           </h3>
-          <audio controls src={audioUrl} className="w-full" />
-          <div className="flex gap-2">
-            <Button onClick={playAudio} variant="outline" size="sm">
-              <Play className="h-3 w-3 mr-1" />
-              {language === 'ar' ? 'تشغيل' : 'Play'}
-            </Button>
+          
+          <EnhancedAudioControls
+            audioUrl={audioUrl}
+            labels={{
+              play: language === 'ar' ? 'تشغيل' : 'Play',
+              pause: language === 'ar' ? 'إيقاف مؤقت' : 'Pause',
+              rewind: language === 'ar' ? 'إرجاع' : 'Rewind',
+              stop: language === 'ar' ? 'إيقاف' : 'Stop',
+              error: language === 'ar' ? 'خطأ في تشغيل الصوت' : 'Error playing audio'
+            }}
+          />
+          
+          <div className="flex gap-2 justify-center">
             <Button onClick={downloadAudio} variant="outline" size="sm">
               <Download className="h-3 w-3 mr-1" />
               {language === 'ar' ? 'تحميل' : 'Download'}
