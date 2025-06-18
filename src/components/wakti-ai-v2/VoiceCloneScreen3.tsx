@@ -19,51 +19,51 @@ interface VoiceCloneScreen3Props {
   onBack: () => void;
 }
 
-// Voice style configurations
+// Voice style configurations with Arabic translations
 const VOICE_STYLES = {
   neutral: {
-    name: 'Neutral',
-    description: 'Natural conversational tone',
+    name: { en: 'Neutral', ar: 'عادي' },
+    description: { en: 'Natural conversational tone', ar: 'نبرة محادثة طبيعية' },
     icon: '💬',
     stability: 0.5,
     similarity_boost: 0.5,
     style: 0.0
   },
   report: {
-    name: 'Report',
-    description: 'Professional news reporting style',
+    name: { en: 'Report', ar: 'تقرير إخباري' },
+    description: { en: 'Professional news reporting style', ar: 'أسلوب التقارير الإخبارية المهنية' },
     icon: '📰',
     stability: 0.75,
     similarity_boost: 0.8,
     style: 0.3
   },
   storytelling: {
-    name: 'Storytelling',
-    description: 'Engaging narrative voice',
+    name: { en: 'Storytelling', ar: 'سرد القصص' },
+    description: { en: 'Engaging narrative voice', ar: 'صوت سردي جذاب' },
     icon: '📚',
     stability: 0.3,
     similarity_boost: 0.6,
     style: 0.8
   },
   poetry: {
-    name: 'Poetry',
-    description: 'Expressive poetic delivery',
+    name: { en: 'Poetry', ar: 'شعر' },
+    description: { en: 'Expressive poetic delivery', ar: 'إلقاء شعري معبر' },
     icon: '🎭',
     stability: 0.2,
     similarity_boost: 0.4,
     style: 0.9
   },
   teacher: {
-    name: 'Teacher',
-    description: 'Clear educational presentation',
+    name: { en: 'Teacher', ar: 'معلم' },
+    description: { en: 'Clear educational presentation', ar: 'عرض تعليمي واضح' },
     icon: '👨‍🏫',
     stability: 0.8,
     similarity_boost: 0.7,
     style: 0.2
   },
   sports: {
-    name: 'Sports Announcer',
-    description: 'Dynamic sports commentary',
+    name: { en: 'Sports Announcer', ar: 'معلق رياضي' },
+    description: { en: 'Dynamic sports commentary', ar: 'تعليق رياضي ديناميكي' },
     icon: '🏆',
     stability: 0.4,
     similarity_boost: 0.6,
@@ -335,7 +335,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </Select>
       </div>
 
-      {/* Voice Style Selector */}
+      {/* Voice Style Selector with Arabic support */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
           {language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}
@@ -350,8 +350,8 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
                 <div className="flex items-center gap-2">
                   <span>{style.icon}</span>
                   <div className="flex flex-col">
-                    <span className="font-medium">{style.name}</span>
-                    <span className="text-xs text-muted-foreground">{style.description}</span>
+                    <span className="font-medium">{style.name[language]}</span>
+                    <span className="text-xs text-muted-foreground">{style.description[language]}</span>
                   </div>
                 </div>
               </SelectItem>
@@ -359,11 +359,11 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          {language === 'ar' ? VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description : VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description}
+          {VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description[language]}
         </p>
       </div>
 
-      {/* Text Input */}
+      {/* Text Input with Arabic support */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
           {language === 'ar' ? 'النص' : 'Text'}
@@ -371,9 +371,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بصوتك...' : 'Type what you want to hear in your voice...'}
+          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بصوتك... يدعم العربية والإنجليزية' : 'Type what you want to hear in your voice... Supports Arabic and English'}
           className="min-h-32 resize-none"
           maxLength={totalAvailableCharacters}
+          dir="auto"
         />
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{text.length} / {totalAvailableCharacters}</span>
