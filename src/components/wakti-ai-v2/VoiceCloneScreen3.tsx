@@ -4,7 +4,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Download, Loader2, Volume2 } from 'lucide-react';
+import { Play, Download, Loader2, Volume2, Mic } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -19,10 +19,63 @@ interface VoiceCloneScreen3Props {
   onBack: () => void;
 }
 
+// Voice style configurations
+const VOICE_STYLES = {
+  neutral: {
+    name: 'Neutral',
+    description: 'Natural conversational tone',
+    icon: '💬',
+    stability: 0.5,
+    similarity_boost: 0.5,
+    style: 0.0
+  },
+  report: {
+    name: 'Report',
+    description: 'Professional news reporting style',
+    icon: '📰',
+    stability: 0.75,
+    similarity_boost: 0.8,
+    style: 0.3
+  },
+  storytelling: {
+    name: 'Storytelling',
+    description: 'Engaging narrative voice',
+    icon: '📚',
+    stability: 0.3,
+    similarity_boost: 0.6,
+    style: 0.8
+  },
+  poetry: {
+    name: 'Poetry',
+    description: 'Expressive poetic delivery',
+    icon: '🎭',
+    stability: 0.2,
+    similarity_boost: 0.4,
+    style: 0.9
+  },
+  teacher: {
+    name: 'Teacher',
+    description: 'Clear educational presentation',
+    icon: '👨‍🏫',
+    stability: 0.8,
+    similarity_boost: 0.7,
+    style: 0.2
+  },
+  sports: {
+    name: 'Sports Announcer',
+    description: 'Dynamic sports commentary',
+    icon: '🏆',
+    stability: 0.4,
+    similarity_boost: 0.6,
+    style: 0.7
+  }
+};
+
 export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const { language } = useTheme();
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
+  const [selectedStyle, setSelectedStyle] = useState('neutral');
   const [voices, setVoices] = useState<VoiceClone[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -78,13 +131,14 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       console.log('🎵 Starting TTS generation...');
       console.log('🎵 Text length:', text.trim().length);
       console.log('🎵 Voice ID:', selectedVoiceId);
+      console.log('🎵 Style:', selectedStyle);
 
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
         throw new Error('User not authenticated');
       }
 
-      // Make direct fetch call to the edge function
+      // Make direct fetch call to the edge function with style parameter
       const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-tts`, {
         method: 'POST',
         headers: {
@@ -94,6 +148,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         body: JSON.stringify({
           text: text.trim(),
           voice_id: selectedVoiceId,
+          style: selectedStyle,
         })
       });
 
@@ -224,7 +279,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           {language === 'ar' ? 'تحويل النص إلى كلام' : 'Text to Speech'}
         </h2>
         <p className="text-sm text-muted-foreground">
-          {language === 'ar' ? 'اكتب أي نص بأي لغة' : 'Type any text in any language'}
+          {language === 'ar' ? 'اكتب أي نص بأي لغة واختر الأسلوب' : 'Type any text in any language and choose a style'}
         </p>
       </div>
 
@@ -280,6 +335,34 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </Select>
       </div>
 
+      {/* Voice Style Selector */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          {language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}
+        </label>
+        <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(VOICE_STYLES).map(([key, style]) => (
+              <SelectItem key={key} value={key}>
+                <div className="flex items-center gap-2">
+                  <span>{style.icon}</span>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{style.name}</span>
+                    <span className="text-xs text-muted-foreground">{style.description}</span>
+                  </div>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {language === 'ar' ? VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description : VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description}
+        </p>
+      </div>
+
       {/* Text Input */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
@@ -315,7 +398,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </>
         ) : (
           <>
-            <Volume2 className="h-4 w-4 mr-2" />
+            <Mic className="h-4 w-4 mr-2" />
             {language === 'ar' ? 'تحدث بهذا' : 'Speak This'}
           </>
         )}

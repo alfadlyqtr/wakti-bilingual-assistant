@@ -10,6 +10,40 @@ const corsHeaders = {
 
 const ELEVENLABS_API_KEY = "sk_7b19e76d94655f74d81063f3dd7b39cf9460ea743d40a532";
 
+// Voice style configurations matching the frontend
+const VOICE_STYLES = {
+  neutral: {
+    stability: 0.5,
+    similarity_boost: 0.5,
+    style: 0.0
+  },
+  report: {
+    stability: 0.75,
+    similarity_boost: 0.8,
+    style: 0.3
+  },
+  storytelling: {
+    stability: 0.3,
+    similarity_boost: 0.6,
+    style: 0.8
+  },
+  poetry: {
+    stability: 0.2,
+    similarity_boost: 0.4,
+    style: 0.9
+  },
+  teacher: {
+    stability: 0.8,
+    similarity_boost: 0.7,
+    style: 0.2
+  },
+  sports: {
+    stability: 0.4,
+    similarity_boost: 0.6,
+    style: 0.7
+  }
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -30,7 +64,7 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { text, voice_id } = await req.json();
+    const { text, voice_id, style = 'neutral' } = await req.json();
 
     if (!text || !voice_id) {
       throw new Error('Text and voice_id are required');
@@ -39,6 +73,7 @@ serve(async (req) => {
     console.log('🎵 Generating TTS for user:', user.id);
     console.log('🎵 Voice ID:', voice_id);
     console.log('🎵 Text length:', text.length);
+    console.log('🎵 Style:', style);
 
     // Check character usage
     const { data: usage, error: usageError } = await supabase
@@ -52,14 +87,18 @@ serve(async (req) => {
       throw new Error('Failed to check character usage');
     }
 
-    const remainingChars = usage.characters_limit - usage.characters_used;
+    const remainingChars = usage.characters_limit + usage.extra_characters - usage.characters_used;
     if (text.length > remainingChars) {
       throw new Error(`Not enough characters remaining. You have ${remainingChars} characters left.`);
     }
 
     console.log('🎵 Calling ElevenLabs TTS API...');
 
-    // Call ElevenLabs TTS API
+    // Get voice settings for the selected style
+    const styleSettings = VOICE_STYLES[style as keyof typeof VOICE_STYLES] || VOICE_STYLES.neutral;
+    console.log('🎵 Using style settings:', styleSettings);
+
+    // Call ElevenLabs TTS API with style-specific settings
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
       method: 'POST',
       headers: {
@@ -70,8 +109,9 @@ serve(async (req) => {
         text: text,
         model_id: 'eleven_multilingual_v2',
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.5,
+          stability: styleSettings.stability,
+          similarity_boost: styleSettings.similarity_boost,
+          style: styleSettings.style
         },
       }),
     });
