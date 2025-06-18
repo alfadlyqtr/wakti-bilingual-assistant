@@ -4,7 +4,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Download, Loader2, Volume2, Mic } from 'lucide-react';
+import { Play, Download, Loader2, Volume2, Mic, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -20,55 +20,49 @@ interface VoiceCloneScreen3Props {
   onBack: () => void;
 }
 
-// Voice style configurations with more extreme differences and Arabic translations
+// Enhanced voice style configurations with extreme differences and detailed descriptions
 const VOICE_STYLES = {
   neutral: {
     name: { en: 'Neutral', ar: 'عادي' },
-    description: { en: 'Natural conversational tone', ar: 'نبرة محادثة طبيعية' },
+    description: { en: 'Balanced, natural conversational tone', ar: 'نبرة محادثة طبيعية ومتوازنة' },
+    technicalDesc: { en: 'Moderate stability & similarity', ar: 'ثبات واعتدال متوسط' },
     icon: '💬',
-    stability: 0.5,
-    similarity_boost: 0.5,
-    style: 0.0
+    settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0 }
   },
   report: {
-    name: { en: 'Report', ar: 'تقرير إخباري' },
-    description: { en: 'Professional news reporting style', ar: 'أسلوب التقارير الإخبارية المهنية' },
+    name: { en: 'News Report', ar: 'تقرير إخباري' },
+    description: { en: 'Professional, clear news reporting style', ar: 'أسلوب التقارير الإخبارية المهنية والواضحة' },
+    technicalDesc: { en: 'Maximum stability & clarity', ar: 'أقصى ثبات ووضوح' },
     icon: '📰',
-    stability: 0.9,
-    similarity_boost: 0.9,
-    style: 0.1
+    settings: { stability: 1.0, similarity_boost: 1.0, style: 0.0 }
   },
   storytelling: {
     name: { en: 'Storytelling', ar: 'سرد القصص' },
-    description: { en: 'Engaging narrative voice', ar: 'صوت سردي جذاب' },
+    description: { en: 'Dramatic, engaging narrative voice with emotion', ar: 'صوت سردي درامي وجذاب مع العاطفة' },
+    technicalDesc: { en: 'Low stability, high expressiveness', ar: 'ثبات منخفض وتعبيرية عالية' },
     icon: '📚',
-    stability: 0.1,
-    similarity_boost: 0.3,
-    style: 1.0
+    settings: { stability: 0.1, similarity_boost: 0.2, style: 1.0 }
   },
   poetry: {
     name: { en: 'Poetry', ar: 'شعر' },
-    description: { en: 'Expressive poetic delivery', ar: 'إلقاء شعري معبر' },
+    description: { en: 'Highly expressive, artistic poetic delivery', ar: 'إلقاء شعري فني معبر للغاية' },
+    technicalDesc: { en: 'Minimum stability, maximum expression', ar: 'أدنى ثبات وأقصى تعبير' },
     icon: '🎭',
-    stability: 0.0,
-    similarity_boost: 0.2,
-    style: 1.0
+    settings: { stability: 0.0, similarity_boost: 0.1, style: 1.0 }
   },
   teacher: {
     name: { en: 'Teacher', ar: 'معلم' },
-    description: { en: 'Clear educational presentation', ar: 'عرض تعليمي واضح' },
+    description: { en: 'Clear, authoritative educational presentation', ar: 'عرض تعليمي واضح وموثوق' },
+    technicalDesc: { en: 'High stability, clear articulation', ar: 'ثبات عالي ونطق واضح' },
     icon: '👨‍🏫',
-    stability: 1.0,
-    similarity_boost: 1.0,
-    style: 0.0
+    settings: { stability: 0.9, similarity_boost: 0.9, style: 0.1 }
   },
   sports: {
     name: { en: 'Sports Announcer', ar: 'معلق رياضي' },
-    description: { en: 'Dynamic sports commentary', ar: 'تعليق رياضي ديناميكي' },
+    description: { en: 'Dynamic, energetic sports commentary', ar: 'تعليق رياضي ديناميكي ونشيط' },
+    technicalDesc: { en: 'Low stability, high energy variation', ar: 'ثبات منخفض وتنوع طاقة عالي' },
     icon: '🏆',
-    stability: 0.2,
-    similarity_boost: 0.4,
-    style: 1.0
+    settings: { stability: 0.2, similarity_boost: 0.3, style: 0.9 }
   }
 };
 
@@ -81,6 +75,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showStyleDetails, setShowStyleDetails] = useState(false);
 
   // Use the extended quota management hook to get voice quota data
   const { 
@@ -129,11 +124,17 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     setAudioUrl(null);
 
     try {
-      console.log('🎵 Starting TTS generation...');
+      const selectedStyleConfig = VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES];
+      
+      console.log('🎵 === Frontend TTS Request ===');
       console.log('🎵 Text length:', text.trim().length);
       console.log('🎵 Voice ID:', selectedVoiceId);
       console.log('🎵 Style:', selectedStyle);
-      console.log('🎵 Style settings:', VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES]);
+      console.log('🎵 Style config:', selectedStyleConfig);
+      console.log('🎵 Settings to be applied:', selectedStyleConfig.settings);
+
+      // Show user what style is being applied
+      toast.info(`${language === 'ar' ? 'تطبيق أسلوب' : 'Applying style'}: ${selectedStyleConfig.name[language]} (${selectedStyleConfig.technicalDesc[language]})`);
 
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
@@ -154,25 +155,25 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         })
       });
 
-      console.log('🎵 Response status:', response.status);
-      console.log('🎵 Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('🎵 Frontend response status:', response.status);
+      console.log('🎵 Frontend response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('🎵 Response error:', errorText);
+        console.error('🎵 Frontend response error:', errorText);
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
       // Check content type to determine how to handle the response
       const contentType = response.headers.get('content-type');
-      console.log('🎵 Content-Type:', contentType);
+      console.log('🎵 Frontend Content-Type:', contentType);
 
       let audioBlob: Blob;
 
       if (contentType?.includes('application/json')) {
         // Response is JSON - might contain base64 encoded audio or error
         const jsonData = await response.json();
-        console.log('🎵 JSON response received:', Object.keys(jsonData));
+        console.log('🎵 Frontend JSON response received:', Object.keys(jsonData));
         
         if (jsonData.error) {
           throw new Error(jsonData.error);
@@ -180,7 +181,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         
         if (jsonData.audioContent) {
           // Base64 encoded audio
-          console.log('🎵 Converting base64 to blob...');
+          console.log('🎵 Frontend converting base64 to blob...');
           const binaryString = atob(jsonData.audioContent);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
@@ -192,31 +193,31 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         }
       } else if (contentType?.includes('audio/mpeg')) {
         // Response is audio data
-        console.log('🎵 Processing audio response...');
+        console.log('🎵 Frontend processing audio response...');
         const arrayBuffer = await response.arrayBuffer();
-        console.log('🎵 Audio buffer size:', arrayBuffer.byteLength);
+        console.log('🎵 Frontend audio buffer size:', arrayBuffer.byteLength);
         audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
       } else {
         throw new Error(`Unexpected content type: ${contentType}`);
       }
 
-      console.log('🎵 Final blob size:', audioBlob.size);
+      console.log('🎵 Frontend final blob size:', audioBlob.size);
       
       if (audioBlob.size === 0) {
         throw new Error('Received empty audio data');
       }
 
       const url = URL.createObjectURL(audioBlob);
-      console.log('🎵 Created object URL:', url);
+      console.log('🎵 Frontend created object URL:', url);
       setAudioUrl(url);
 
       // Reload voice quota after successful generation
       await loadUserVoiceQuota();
 
-      toast.success(language === 'ar' ? 'تم إنشاء الصوت بنجاح' : 'Speech generated successfully');
+      toast.success(`${language === 'ar' ? 'تم إنشاء الصوت بنجاح بأسلوب' : 'Speech generated successfully with'} ${selectedStyleConfig.name[language]} ${language === 'ar' ? '' : 'style'}`);
 
     } catch (error: any) {
-      console.error('🎵 Error generating speech:', error);
+      console.error('🎵 Frontend error generating speech:', error);
       toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'));
     } finally {
       setIsGenerating(false);
@@ -270,7 +271,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           {language === 'ar' ? 'تحويل النص إلى كلام' : 'Text to Speech'}
         </h2>
         <p className="text-sm text-muted-foreground">
-          {language === 'ar' ? 'اكتب أي نص بأي لغة واختر الأسلوب' : 'Type any text in any language and choose a style'}
+          {language === 'ar' ? 'اكتب أي نص بأي لغة واختر الأسلوب المناسب' : 'Type any text in any language and choose the appropriate style'}
         </p>
       </div>
 
@@ -326,11 +327,22 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </Select>
       </div>
 
-      {/* Voice Style Selector with Arabic support */}
+      {/* Enhanced Voice Style Selector */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">
-          {language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">
+            {language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}
+          </label>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowStyleDetails(!showStyleDetails)}
+            className="h-auto p-1"
+          >
+            <Info className="h-3 w-3" />
+          </Button>
+        </div>
+        
         <Select value={selectedStyle} onValueChange={setSelectedStyle}>
           <SelectTrigger>
             <SelectValue />
@@ -349,9 +361,19 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">
-          {VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description[language]}
-        </p>
+        
+        <div className="text-xs text-muted-foreground space-y-1">
+          <p>{VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description[language]}</p>
+          {showStyleDetails && (
+            <div className="bg-muted/50 p-2 rounded text-xs">
+              <p className="font-medium mb-1">{language === 'ar' ? 'الإعدادات التقنية:' : 'Technical Settings:'}</p>
+              <p>{VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].technicalDesc[language]}</p>
+              <div className="mt-1 font-mono text-xs">
+                {JSON.stringify(VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].settings, null, 2)}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Text Input with Arabic support */}
@@ -362,7 +384,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بصوتك... يدعم العربية والإنجليزية' : 'Type what you want to hear in your voice... Supports Arabic and English'}
+          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بصوتك... يدعم العربية والإنجليزية. جرب نصوص مختلفة لتجربة الأساليب المتنوعة!' : 'Type what you want to hear in your voice... Supports Arabic and English. Try different texts to experience the various styles!'}
           className="min-h-32 resize-none"
           maxLength={totalAvailableCharacters}
           dir="auto"
@@ -391,7 +413,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         ) : (
           <>
             <Mic className="h-4 w-4 mr-2" />
-            {language === 'ar' ? 'تحدث بهذا' : 'Speak This'}
+            {language === 'ar' ? `تحدث بأسلوب ${VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]}` : `Speak with ${VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]} Style`}
           </>
         )}
       </Button>
@@ -399,9 +421,14 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       {/* Enhanced Audio Player */}
       {audioUrl && (
         <div className="p-4 border rounded-lg space-y-4">
-          <h3 className="font-medium">
-            {language === 'ar' ? 'الصوت المُنشأ' : 'Generated Audio'}
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium">
+              {language === 'ar' ? 'الصوت المُنشأ' : 'Generated Audio'}
+            </h3>
+            <div className="text-xs text-muted-foreground">
+              {language === 'ar' ? 'أسلوب:' : 'Style:'} {VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]}
+            </div>
+          </div>
           
           <EnhancedAudioControls
             audioUrl={audioUrl}

@@ -10,37 +10,49 @@ const corsHeaders = {
 
 const ELEVENLABS_API_KEY = "sk_7b19e76d94655f74d81063f3dd7b39cf9460ea743d40a532";
 
-// Voice style configurations with more extreme differences matching the frontend
+// Enhanced voice style configurations with extreme differences for maximum audibility
 const VOICE_STYLES = {
   neutral: {
     stability: 0.5,
-    similarity_boost: 0.5,
-    style: 0.0
+    similarity_boost: 0.75,
+    style: 0.0,
+    use_speaker_boost: true,
+    model: 'eleven_multilingual_v2'
   },
   report: {
-    stability: 0.9,
-    similarity_boost: 0.9,
-    style: 0.1
+    stability: 1.0,
+    similarity_boost: 1.0,
+    style: 0.0,
+    use_speaker_boost: true,
+    model: 'eleven_multilingual_v2'
   },
   storytelling: {
     stability: 0.1,
-    similarity_boost: 0.3,
-    style: 1.0
+    similarity_boost: 0.2,
+    style: 1.0,
+    use_speaker_boost: false,
+    model: 'eleven_multilingual_v2'
   },
   poetry: {
     stability: 0.0,
-    similarity_boost: 0.2,
-    style: 1.0
+    similarity_boost: 0.1,
+    style: 1.0,
+    use_speaker_boost: false,
+    model: 'eleven_multilingual_v2'
   },
   teacher: {
-    stability: 1.0,
-    similarity_boost: 1.0,
-    style: 0.0
+    stability: 0.9,
+    similarity_boost: 0.9,
+    style: 0.1,
+    use_speaker_boost: true,
+    model: 'eleven_multilingual_v2'
   },
   sports: {
     stability: 0.2,
-    similarity_boost: 0.4,
-    style: 1.0
+    similarity_boost: 0.3,
+    style: 0.9,
+    use_speaker_boost: false,
+    model: 'eleven_multilingual_v2'
   }
 };
 
@@ -70,7 +82,14 @@ serve(async (req) => {
       throw new Error('Text and voice_id are required');
     }
 
-    console.log('🎵 Generating TTS for user:', user.id);
+    // Validate style exists
+    if (!VOICE_STYLES[style as keyof typeof VOICE_STYLES]) {
+      console.error('🎵 Invalid style requested:', style);
+      throw new Error(`Invalid style: ${style}. Available styles: ${Object.keys(VOICE_STYLES).join(', ')}`);
+    }
+
+    console.log('🎵 === TTS Generation Start ===');
+    console.log('🎵 User ID:', user.id);
     console.log('🎵 Voice ID:', voice_id);
     console.log('🎵 Text length:', text.length);
     console.log('🎵 Style requested:', style);
@@ -92,34 +111,49 @@ serve(async (req) => {
       throw new Error(`Not enough characters remaining. You have ${remainingChars} characters left.`);
     }
 
-    console.log('🎵 Calling ElevenLabs TTS API...');
+    // Get voice settings for the selected style with extreme differences
+    const styleSettings = VOICE_STYLES[style as keyof typeof VOICE_STYLES];
+    console.log('🎵 === Style Configuration ===');
+    console.log('🎵 Style name:', style);
+    console.log('🎵 Stability:', styleSettings.stability);
+    console.log('🎵 Similarity boost:', styleSettings.similarity_boost);
+    console.log('🎵 Style intensity:', styleSettings.style);
+    console.log('🎵 Speaker boost:', styleSettings.use_speaker_boost);
+    console.log('🎵 Model:', styleSettings.model);
 
-    // Get voice settings for the selected style with more extreme differences
-    const styleSettings = VOICE_STYLES[style as keyof typeof VOICE_STYLES] || VOICE_STYLES.neutral;
-    console.log('🎵 Using style settings:', styleSettings);
+    // Prepare request body for ElevenLabs
+    const requestBody = {
+      text: text,
+      model_id: styleSettings.model,
+      voice_settings: {
+        stability: styleSettings.stability,
+        similarity_boost: styleSettings.similarity_boost,
+        style: styleSettings.style,
+        use_speaker_boost: styleSettings.use_speaker_boost
+      },
+    };
 
-    // Call ElevenLabs TTS API with style-specific settings
+    console.log('🎵 === ElevenLabs Request ===');
+    console.log('🎵 Request body:', JSON.stringify(requestBody, null, 2));
+    console.log('🎵 API endpoint:', `https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`);
+
+    // Call ElevenLabs TTS API with enhanced style-specific settings
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'xi-api-key': ELEVENLABS_API_KEY,
       },
-      body: JSON.stringify({
-        text: text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: {
-          stability: styleSettings.stability,
-          similarity_boost: styleSettings.similarity_boost,
-          style: styleSettings.style,
-          use_speaker_boost: true
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
+
+    console.log('🎵 === ElevenLabs Response ===');
+    console.log('🎵 Response status:', response.status);
+    console.log('🎵 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('🎵 ElevenLabs TTS API error:', response.status, errorText);
+      console.error('🎵 ElevenLabs API error:', response.status, errorText);
       throw new Error(`Failed to generate speech: ${response.status} - ${errorText}`);
     }
 
@@ -141,7 +175,10 @@ serve(async (req) => {
 
     // Return audio as ArrayBuffer
     const audioBuffer = await response.arrayBuffer();
+    console.log('🎵 === Generation Complete ===');
     console.log('🎵 Audio buffer size:', audioBuffer.byteLength);
+    console.log('🎵 Style applied:', style);
+    console.log('🎵 Settings used:', JSON.stringify(styleSettings, null, 2));
     
     return new Response(audioBuffer, {
       headers: {
@@ -152,7 +189,10 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('🎵 Error in voice-tts function:', error);
+    console.error('🎵 === Error in voice-tts function ===');
+    console.error('🎵 Error details:', error);
+    console.error('🎵 Error message:', error.message);
+    console.error('🎵 Error stack:', error.stack);
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Unknown error occurred' 
