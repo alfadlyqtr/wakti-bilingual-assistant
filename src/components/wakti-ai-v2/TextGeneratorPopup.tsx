@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PenTool, MessageSquare, Loader2, Brain, CheckCircle, AlertTriangle, Copy, Send } from 'lucide-react';
+import { PenTool, MessageSquare, Loader2, Brain, CheckCircle, AlertTriangle, Copy, Send, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -56,6 +56,7 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
   const [messageAnalysis, setMessageAnalysis] = useState<MessageAnalysis | null>(null);
   const [generatedText, setGeneratedText] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('compose');
+  const [copySuccess, setCopySuccess] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     mode: 'compose',
     contentType: '',
@@ -343,6 +344,8 @@ USER PREFERENCES:`;
   const handleCopyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(generatedText);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
       toast.success(language === 'ar' ? 'تم نسخ النص' : 'Text copied to clipboard');
     } catch (error) {
       toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
@@ -648,15 +651,45 @@ USER PREFERENCES:`;
           {generatedText && (
             <TabsContent value="generated" className="space-y-4">
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  <h3 className="font-medium">
-                    {language === 'ar' ? 'النص المُولد' : 'Generated Text'}
-                  </h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <h3 className="font-medium">
+                      {language === 'ar' ? 'النص المُولد' : 'Generated Text'}
+                    </h3>
+                  </div>
+                  
+                  {/* Small Copy Button - Positioned at top right */}
+                  <Button
+                    onClick={handleCopyToClipboard}
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 hover:bg-muted/50 transition-colors"
+                  >
+                    {copySuccess ? (
+                      <Check className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
                 </div>
                 
-                <div className="p-4 bg-muted/30 rounded-lg border">
-                  <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                <div className="relative p-4 bg-muted/30 rounded-lg border">
+                  {/* Another small copy button inside the text area */}
+                  <Button
+                    onClick={handleCopyToClipboard}
+                    variant="ghost"
+                    size="sm"
+                    className="absolute top-2 right-2 h-6 w-6 p-0 opacity-70 hover:opacity-100 transition-opacity"
+                  >
+                    {copySuccess ? (
+                      <Check className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </Button>
+                  
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed pr-8">
                     {generatedText}
                   </div>
                 </div>
@@ -667,8 +700,17 @@ USER PREFERENCES:`;
                     variant="outline" 
                     className="flex-1"
                   >
-                    <Copy className="h-4 w-4 mr-2" />
-                    {language === 'ar' ? 'نسخ النص' : 'Copy Text'}
+                    {copySuccess ? (
+                      <>
+                        <Check className="h-4 w-4 mr-2 text-green-500" />
+                        {language === 'ar' ? 'تم النسخ!' : 'Copied!'}
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4 mr-2" />
+                        {language === 'ar' ? 'نسخ النص' : 'Copy Text'}
+                      </>
+                    )}
                   </Button>
                   <Button 
                     onClick={handleUseInChat}
