@@ -54,11 +54,17 @@ export default function Signup() {
     setIsLoading(true);
     
     try {
-      // Create the user in Supabase Auth
+      // Get the redirect URL for email confirmation
+      const redirectUrl = `${window.location.origin}/confirmed`;
+      
+      console.log('Attempting signup with redirect URL:', redirectUrl);
+      
+      // Create the user in Supabase Auth with email confirmation
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: {
             full_name: name,
             username,
@@ -72,12 +78,26 @@ export default function Signup() {
         setErrorMsg(error.message);
         toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
       } else if (data?.user) {
-        // Instead of navigating immediately, show dialog
-        setIsEmailConfirmationDialogOpen(true);
+        console.log('Signup successful:', data);
+        
+        // Check if user needs email confirmation
+        if (!data.user.email_confirmed_at) {
+          console.log('Email confirmation required');
+          toast.success(language === 'en' 
+            ? 'Please check your email and click the confirmation link to verify your account.' 
+            : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
+          );
+          setIsEmailConfirmationDialogOpen(true);
+        } else {
+          // User is already confirmed (shouldn't happen with email confirmations enabled)
+          console.log('User already confirmed, redirecting to dashboard');
+          navigate("/dashboard");
+        }
       }
     } catch (err) {
       console.error("Unexpected error during signup:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+      toast.error(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
     } finally {
       setIsLoading(false);
     }
