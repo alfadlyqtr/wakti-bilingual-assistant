@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -140,7 +139,7 @@ export function BillingTab() {
       const accessToken = session.session?.access_token || '';
       
       const res = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/link-paypal-subscription`,
+        'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/link-paypal-subscription',
         {
           method: 'POST',
           headers: {
