@@ -36,8 +36,21 @@ export const ProfileImageUpload = () => {
       }
       
       const file = event.target.files[0];
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(language === 'ar' ? 'حجم الملف كبير جداً (الحد الأقصى 5 ميجابايت)' : 'File size too large (max 5MB)');
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error(language === 'ar' ? 'يرجى اختيار ملف صورة' : 'Please select an image file');
+        return;
+      }
+      
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
       
       console.log('Uploading avatar file:', { fileName, fileSize: file.size, fileType: file.type });
@@ -45,7 +58,10 @@ export const ProfileImageUpload = () => {
       // Upload the file to Supabase storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
         
       if (uploadError) {
         console.error('Upload error:', uploadError);
@@ -82,22 +98,29 @@ export const ProfileImageUpload = () => {
       
       if (profileError) {
         console.error('Error updating profile avatar:', profileError);
-        throw profileError;
+        // Don't throw here, as auth update was successful
+        console.log('Profile update failed but auth update succeeded');
       } else {
         console.log('Successfully updated profile avatar in both auth and profiles table');
       }
       
+      // Update local state immediately for better UX
+      setAvatarUrl(newAvatarUrl);
+      setImageError(false);
+      
       // Force refresh the auth session to get the latest user metadata
       await refreshSession();
       
-      setAvatarUrl(newAvatarUrl);
-      setImageError(false);
       toast.success(t("profileImageUpdated", language));
     } catch (error: any) {
       console.error('Avatar upload failed:', error);
       toast.error(`${t("error", language)}: ${error.message}`);
     } finally {
       setUploading(false);
+      // Clear the input to allow re-upload of the same file
+      if (event.target) {
+        event.target.value = '';
+      }
     }
   };
 
@@ -130,22 +153,16 @@ export const ProfileImageUpload = () => {
     setImageError(true);
   };
 
-  // Add cache-busting to avatar URL
-  const getCacheBustedAvatarUrl = (url: string) => {
-    if (!url) return url;
-    const timestamp = Date.now();
-    return `${url}?t=${timestamp}`;
-  };
-
-  const shouldShowImage = avatarUrl && !imageError;
-  const displayAvatarUrl = shouldShowImage ? getCacheBustedAvatarUrl(avatarUrl) : "";
+  // Use the latest avatar URL from user metadata or local state
+  const currentAvatarUrl = user?.user_metadata?.avatar_url || avatarUrl;
+  const shouldShowImage = currentAvatarUrl && !imageError;
 
   return (
     <div className="flex flex-col items-center space-y-4">
       <Avatar className="w-24 h-24">
         {shouldShowImage ? (
           <AvatarImage 
-            src={displayAvatarUrl} 
+            src={currentAvatarUrl} 
             alt={t("profileImage", language)}
             onError={handleImageError}
           />
