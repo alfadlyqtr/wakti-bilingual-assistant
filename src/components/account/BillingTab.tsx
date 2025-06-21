@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,13 +47,17 @@ export function BillingTab() {
   const loadSubscription = async () => {
     setLoading(true);
     try {
-      // 1. Try to fetch latest subscription from subscriptions table; Fallback to profiles if none.
+      console.log('Loading subscription data...');
+      
+      // 1. Try to fetch latest subscription from subscriptions table first
       const { data: subRows, error: subErr } = await supabase
         .from('subscriptions')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      console.log('Subscriptions table data:', subRows);
 
       let sub: UserSubscription | null = null;
 
@@ -64,12 +69,16 @@ export function BillingTab() {
           billing_start_date: subRows.start_date,
           next_billing_date: subRows.next_billing_date,
         };
+        console.log('Using subscription from subscriptions table:', sub);
       } else {
         // fallback to profiles (legacy)
+        console.log('No active subscription in subscriptions table, checking profiles...');
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('is_subscribed, subscription_status, plan_name, billing_start_date, next_billing_date')
           .maybeSingle();
+
+        console.log('Profile data:', profile);
 
         if (error) {
           console.error('Error fetching user subscription:', error);
@@ -90,6 +99,7 @@ export function BillingTab() {
               billing_start_date: null,
               next_billing_date: null,
             };
+        console.log('Using subscription from profiles table:', sub);
       }
       setSubscription(sub);
     } catch (error) {
@@ -126,13 +136,16 @@ export function BillingTab() {
     }
     setLinking(true);
     try {
+      const { data: session } = await supabase.auth.getSession();
+      const accessToken = session.session?.access_token || '';
+      
       const res = await fetch(
-        '/functions/v1/link-paypal-subscription',
+        `${supabase.supabaseUrl}/functions/v1/link-paypal-subscription`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await supabase.auth.getSession().then(r => r.data.session?.access_token || '')}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ paypal_subscription_id: linkPayPalId }),
         }
