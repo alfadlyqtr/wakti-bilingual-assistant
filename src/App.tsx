@@ -36,6 +36,11 @@ import Help from "@/pages/Help";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminSettings from "@/pages/AdminSettings";
+import AdminUsers from "@/pages/AdminUsers";
+import AdminMessages from "@/pages/AdminMessages";
+import AdminSubscriptions from "@/pages/AdminSubscriptions";
+import AdminQuotas from "@/pages/AdminQuotas";
+import AdminAnalytics from "@/pages/AdminAnalytics";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 
 const queryClient = new QueryClient();
