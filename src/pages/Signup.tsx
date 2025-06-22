@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -19,7 +20,9 @@ import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validatePassword, validateConfirmPassword } from "@/utils/validations";
 
 export default function Signup() {
-  console.log("🚀 Signup component rendering - START");
+  // CACHE BUSTER - Force fresh component load
+  console.log("🔥 SIGNUP COMPONENT LOADED - CACHE BUSTER:", Date.now());
+  console.log("🚀 Signup component rendering - START - Version 2.0");
   
   const navigate = useNavigate();
   const { language } = useTheme();
@@ -240,326 +243,325 @@ export default function Signup() {
     navigate("/login");
   };
 
-  console.log("🎨 About to render signup page");
+  console.log("🎨 About to render signup page - Version 2.0");
 
-  try {
-    return (
-      <>
-        {/* Original signup page */}
-        <div className="min-h-screen bg-background text-foreground w-full max-w-md mx-auto">
-          <header className="sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-1 mr-2"
-                onClick={() => navigate("/home")}
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span className="text-xs">{t.backToHome}</span>
-              </Button>
-            </div>
-            <ThemeLanguageToggle />
-          </header>
+  return (
+    <>
+      {/* CACHE BUSTER HEADER */}
+      <div className="w-full bg-red-500 text-white text-center py-1 text-xs font-bold">
+        🔥 SIGNUP V2.0 - CACHE CLEARED - {Date.now()}
+      </div>
+      
+      {/* Original signup page */}
+      <div className="min-h-screen bg-background text-foreground w-full max-w-md mx-auto">
+        <header className="sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-1 mr-2"
+              onClick={() => navigate("/home")}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="text-xs">{t.backToHome}</span>
+            </Button>
+          </div>
+          <ThemeLanguageToggle />
+        </header>
 
-          <div className="flex-1 overflow-y-auto">
-            <div className="flex min-h-[80vh] flex-col justify-center py-6 px-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="w-full max-w-md mx-auto"
-              >
-                <div className="mb-6 text-center">
-                  {/* App logo with navigation to home */}
-                  <div 
-                    className="inline-block cursor-pointer mb-4"
-                    onClick={() => navigate("/home")}
-                  >
-                    <Logo3D size="lg" />
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex min-h-[80vh] flex-col justify-center py-6 px-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="w-full max-w-md mx-auto"
+            >
+              <div className="mb-6 text-center">
+                {/* App logo with navigation to home */}
+                <div 
+                  className="inline-block cursor-pointer mb-4"
+                  onClick={() => navigate("/home")}
+                >
+                  <Logo3D size="lg" />
+                </div>
+                <h1 className="text-2xl font-bold">{t.createAccount}</h1>
+                
+                {errorMsg && (
+                  <div className="mt-3 text-sm text-red-500">
+                    {errorMsg}
                   </div>
-                  <h1 className="text-2xl font-bold">{t.createAccount}</h1>
-                  
-                  {errorMsg && (
-                    <div className="mt-3 text-sm text-red-500">
-                      {errorMsg}
+                )}
+              </div>
+
+              <form onSubmit={handleSignup} className="space-y-6">
+                {/* Name Field */}
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-base">{t.name}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <User className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="name"
+                      placeholder={t.namePlaceholder}
+                      type="text"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      disabled={isLoading}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="pl-10 py-6 text-base shadow-sm"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                {/* Username Field */}
+                <div className="space-y-2">
+                  <Label htmlFor="username" className="text-base">{t.username}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <User className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="username"
+                      placeholder={t.usernamePlaceholder}
+                      type="text"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      disabled={isLoading}
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="pl-10 py-6 text-base shadow-sm"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                {/* Email Field */}
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-base">{t.email}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Mail className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="email"
+                      placeholder={t.emailPlaceholder}
+                      type="email"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      autoCorrect="off"
+                      disabled={isLoading}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10 py-6 text-base shadow-sm"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                {/* Password Field */}
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-base">{t.password}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Lock className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder={t.passwordPlaceholder}
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      disabled={isLoading}
+                      value={password}
+                      onChange={(e) => handlePasswordChange(e.target.value)}
+                      className={cn(
+                        "pl-10 pr-10 py-6 text-base shadow-sm",
+                        passwordError && "border-red-500"
+                      )}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                  {passwordError && (
+                    <div className="text-sm text-red-500 mt-1">
+                      {passwordError}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {language === 'en' 
+                      ? "Password must be at least 6 characters with 1 uppercase, 1 lowercase, and 1 digit"
+                      : "يجب أن تحتوي كلمة المرور على 6 أحرف على الأقل مع حرف كبير وحرف صغير ورقم"
+                    }
+                  </div>
+                </div>
+                
+                {/* CONFIRM PASSWORD FIELD - MUST BE VISIBLE */}
+                <div className="space-y-2 bg-yellow-100 p-4 border-4 border-yellow-500 rounded-lg">
+                  <div className="bg-yellow-300 text-black p-2 rounded text-center font-bold">
+                    🔍 CONFIRM PASSWORD FIELD - SHOULD BE VISIBLE
+                  </div>
+                  <Label htmlFor="confirmPassword" className="text-base font-bold text-yellow-800">{t.confirmPassword}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Lock className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder={t.confirmPasswordPlaceholder}
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      disabled={isLoading}
+                      value={confirmPassword}
+                      onChange={(e) => handleConfirmPasswordChange(e.target.value)}
+                      className={cn(
+                        "pl-10 pr-10 py-6 text-base shadow-sm border-yellow-500",
+                        confirmPasswordError && "border-red-500"
+                      )}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                  {confirmPasswordError && (
+                    <div className="text-sm text-red-500 mt-1">
+                      {confirmPasswordError}
                     </div>
                   )}
                 </div>
-
-                <form onSubmit={handleSignup} className="space-y-6">
-                  {/* Name Field */}
+                
+                {/* DATE OF BIRTH FIELD - MUST BE VISIBLE */}
+                <div className="space-y-2 bg-green-100 p-4 border-4 border-green-500 rounded-lg">
+                  <div className="bg-green-300 text-black p-2 rounded text-center font-bold">
+                    🗓️ DATE OF BIRTH FIELD - SHOULD BE VISIBLE
+                  </div>
+                  <Label htmlFor="dateOfBirth" className="text-base font-bold text-green-800">{t.dateOfBirth}</Label>
                   <div className="space-y-2">
-                    <Label htmlFor="name" className="text-base">{t.name}</Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <User className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Input
-                        id="name"
-                        placeholder={t.namePlaceholder}
-                        type="text"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        disabled={isLoading}
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="pl-10 py-6 text-base shadow-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Username Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="username" className="text-base">{t.username}</Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <User className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Input
-                        id="username"
-                        placeholder={t.usernamePlaceholder}
-                        type="text"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        disabled={isLoading}
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        className="pl-10 py-6 text-base shadow-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Email Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-base">{t.email}</Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Input
-                        id="email"
-                        placeholder={t.emailPlaceholder}
-                        type="email"
-                        autoCapitalize="none"
-                        autoComplete="email"
-                        autoCorrect="off"
-                        disabled={isLoading}
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 py-6 text-base shadow-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* DEBUG: Date of Birth Field - SHOULD BE VISIBLE */}
-                  <div className="space-y-2 border-2 border-red-500 p-2">
-                    <Label htmlFor="dateOfBirth" className="text-base text-red-500">{t.dateOfBirth} (DEBUG: THIS SHOULD BE VISIBLE)</Label>
-                    <div className="space-y-2">
-                      <Input
-                        id="dob"
-                        type="date"
-                        value={dobInputValue}
-                        onChange={handleDobInputChange}
-                        max={new Date().toISOString().split('T')[0]}
-                        min="1900-01-01"
-                        className="w-full text-base border-red-500"
-                        disabled={isLoading}
-                        placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
-                      />
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal py-6 text-base shadow-sm border-red-500",
-                              !dateOfBirth && "text-muted-foreground"
-                            )}
-                            disabled={isLoading}
-                          >
-                            <CalendarIcon className="mr-2 h-5 w-5" />
-                            {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={dateOfBirth}
-                            onSelect={handleCalendarDateSelect}
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
-                            }
-                            initialFocus
-                            className="p-3 pointer-events-auto"
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-                  
-                  {/* Password Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="text-base">{t.password}</Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <Lock className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder={t.passwordPlaceholder}
-                        autoCapitalize="none"
-                        autoComplete="new-password"
-                        disabled={isLoading}
-                        value={password}
-                        onChange={(e) => handlePasswordChange(e.target.value)}
-                        className={cn(
-                          "pl-10 pr-10 py-6 text-base shadow-sm",
-                          passwordError && "border-red-500"
-                        )}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3"
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-5 w-5 text-muted-foreground" />
-                        ) : (
-                          <Eye className="h-5 w-5 text-muted-foreground" />
-                        )}
-                      </button>
-                    </div>
-                    {passwordError && (
-                      <div className="text-sm text-red-500 mt-1">
-                        {passwordError}
-                      </div>
-                    )}
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {language === 'en' 
-                        ? "Password must be at least 6 characters with 1 uppercase, 1 lowercase, and 1 digit"
-                        : "يجب أن تحتوي كلمة المرور على 6 أحرف على الأقل مع حرف كبير وحرف صغير ورقم"
-                      }
-                    </div>
-                  </div>
-                  
-                  {/* DEBUG: Confirm Password Field - SHOULD BE VISIBLE */}
-                  <div className="space-y-2 border-2 border-blue-500 p-2">
-                    <Label htmlFor="confirmPassword" className="text-base text-blue-500">{t.confirmPassword} (DEBUG: THIS SHOULD BE VISIBLE)</Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <Lock className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Input
-                        id="confirmPassword"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder={t.confirmPasswordPlaceholder}
-                        autoCapitalize="none"
-                        autoComplete="new-password"
-                        disabled={isLoading}
-                        value={confirmPassword}
-                        onChange={(e) => handleConfirmPasswordChange(e.target.value)}
-                        className={cn(
-                          "pl-10 pr-10 py-6 text-base shadow-sm border-blue-500",
-                          confirmPasswordError && "border-red-500"
-                        )}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3"
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-5 w-5 text-muted-foreground" />
-                        ) : (
-                          <Eye className="h-5 w-5 text-muted-foreground" />
-                        )}
-                      </button>
-                    </div>
-                    {confirmPasswordError && (
-                      <div className="text-sm text-red-500 mt-1">
-                        {confirmPasswordError}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Privacy and Terms Checkbox */}
-                  <div className="flex items-start space-x-3">
-                    <Checkbox
-                      id="terms"
-                      checked={agreedToTerms}
-                      onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                    <Input
+                      id="dob"
+                      type="date"
+                      value={dobInputValue}
+                      onChange={handleDobInputChange}
+                      max={new Date().toISOString().split('T')[0]}
+                      min="1900-01-01"
+                      className="w-full text-base border-green-500"
                       disabled={isLoading}
-                      className="mt-1"
+                      placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
                     />
-                    <div className="text-sm leading-relaxed">
-                      <label htmlFor="terms" className="cursor-pointer">
-                        {t.agreeToTerms}{" "}
-                        <button
-                          type="button"
-                          onClick={() => navigate("/privacy-terms")}
-                          className="text-primary hover:underline font-medium"
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm border-green-500",
+                            !dateOfBirth && "text-muted-foreground"
+                          )}
+                          disabled={isLoading}
                         >
-                          {t.privacyPolicy}
-                        </button>
-                        {" "}{t.and}{" "}
-                        <button
-                          type="button"
-                          onClick={() => navigate("/privacy-terms")}
-                          className="text-primary hover:underline font-medium"
-                        >
-                          {t.termsOfService}
-                        </button>
-                      </label>
-                    </div>
+                          <CalendarIcon className="mr-2 h-5 w-5" />
+                          {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={dateOfBirth}
+                          onSelect={handleCalendarDateSelect}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                  
-                  <Button
-                    type="submit"
-                    className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
-                    disabled={isLoading || !agreedToTerms || !!passwordError || !!confirmPasswordError}
-                  >
-                    {isLoading ? t.loading : t.signup}
-                  </Button>
-                </form>
-
-                <div className="mt-6 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    {t.alreadyHaveAccount}{" "}
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() => navigate("/login")}
-                    >
-                      {t.login}
-                    </Button>
-                  </p>
                 </div>
-              </motion.div>
-            </div>
+                
+                {/* Privacy and Terms Checkbox */}
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="terms"
+                    checked={agreedToTerms}
+                    onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                    disabled={isLoading}
+                    className="mt-1"
+                  />
+                  <div className="text-sm leading-relaxed">
+                    <label htmlFor="terms" className="cursor-pointer">
+                      {t.agreeToTerms}{" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/privacy-terms")}
+                        className="text-primary hover:underline font-medium"
+                      >
+                        {t.privacyPolicy}
+                      </button>
+                      {" "}{t.and}{" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/privacy-terms")}
+                        className="text-primary hover:underline font-medium"
+                      >
+                        {t.termsOfService}
+                      </button>
+                    </label>
+                  </div>
+                </div>
+                
+                <Button
+                  type="submit"
+                  className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
+                  disabled={isLoading || !agreedToTerms || !!passwordError || !!confirmPasswordError}
+                >
+                  {isLoading ? t.loading : t.signup}
+                </Button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {t.alreadyHaveAccount}{" "}
+                  <Button
+                    variant="link"
+                    className="px-0"
+                    onClick={() => navigate("/login")}
+                  >
+                    {t.login}
+                  </Button>
+                </p>
+              </div>
+            </motion.div>
           </div>
         </div>
-        {/* Email Confirmation Dialog */}
-        <EmailConfirmationDialog
-          open={isEmailConfirmationDialogOpen}
-          onClose={handleDialogClose}
-        />
-      </>
-    );
-  } catch (error) {
-    console.error("Error rendering Signup component:", error);
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-xl font-bold mb-4">Something went wrong</h1>
-          <p className="text-muted-foreground">Please try refreshing the page</p>
-        </div>
       </div>
-    );
-  }
+      {/* Email Confirmation Dialog */}
+      <EmailConfirmationDialog
+        open={isEmailConfirmationDialogOpen}
+        onClose={handleDialogClose}
+      />
+    </>
+  );
 }
