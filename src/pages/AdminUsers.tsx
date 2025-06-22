@@ -52,8 +52,10 @@ export default function AdminUsers() {
 
   const loadUsers = async () => {
     try {
-      // Load profiles with basic user info
-      const { data: profilesData, error: profilesError } = await supabase
+      setIsLoading(true);
+      
+      // Use a single query with JOIN to get both profile and subscription data
+      const { data: usersData, error } = await supabase
         .from('profiles')
         .select(`
           id,
@@ -65,38 +67,62 @@ export default function AdminUsers() {
           email_confirmed,
           is_suspended,
           suspended_at,
-          suspension_reason
+          suspension_reason,
+          subscriptions!inner(
+            id,
+            status,
+            plan_name
+          )
         `)
         .order('created_at', { ascending: false });
 
-      if (profilesError) throw profilesError;
+      if (error) {
+        console.error('Error loading users with subscriptions:', error);
+        // Fallback to loading profiles without subscriptions
+        const { data: profilesOnly, error: profilesError } = await supabase
+          .from('profiles')
+          .select(`
+            id,
+            email,
+            display_name,
+            avatar_url,
+            created_at,
+            is_logged_in,
+            email_confirmed,
+            is_suspended,
+            suspended_at,
+            suspension_reason
+          `)
+          .order('created_at', { ascending: false });
 
-      // Get subscription data separately to avoid join issues
-      const userIds = profilesData?.map(user => user.id) || [];
-      const { data: subscriptionsData, error: subscriptionsError } = await supabase
-        .from('subscriptions')
-        .select('user_id, status')
-        .in('user_id', userIds)
-        .eq('status', 'active');
+        if (profilesError) throw profilesError;
 
-      if (subscriptionsError) {
-        console.error('Error loading subscriptions:', subscriptionsError);
+        // For users without subscriptions, set as 'free'
+        const usersWithoutSubs = profilesOnly?.map(user => ({
+          ...user,
+          full_name: user.display_name || user.email || "No name",
+          subscription_status: 'free'
+        })) || [];
+
+        setUsers(usersWithoutSubs);
+        return;
       }
 
-      // Create a map of user IDs to subscription status
-      const subscriptionMap = new Map();
-      subscriptionsData?.forEach(sub => {
-        subscriptionMap.set(sub.user_id, sub.status);
-      });
+      // Process users with subscription data
+      const processedUsers = usersData?.map(user => {
+        const subscription = Array.isArray(user.subscriptions) ? user.subscriptions[0] : user.subscriptions;
+        const hasActiveSubscription = subscription && subscription.status === 'active';
+        
+        return {
+          ...user,
+          full_name: user.display_name || user.email || "No name",
+          subscription_status: hasActiveSubscription ? 'subscribed' : 'free'
+        };
+      }) || [];
 
-      // Combine data
-      const usersWithSubscriptions = profilesData?.map(user => ({
-        ...user,
-        full_name: user.display_name || user.email || "No name",
-        subscription_status: subscriptionMap.get(user.id) || 'none'
-      })) || [];
+      console.log('Processed users with subscription status:', processedUsers);
+      setUsers(processedUsers);
 
-      setUsers(usersWithSubscriptions);
     } catch (err) {
       console.error('Error loading users:', err);
       toast.error('Failed to load users');
@@ -119,7 +145,7 @@ export default function AdminUsers() {
       if (filterStatus === "online") {
         filtered = filtered.filter(user => user.is_logged_in);
       } else if (filterStatus === "subscribed") {
-        filtered = filtered.filter(user => user.subscription_status === 'active');
+        filtered = filtered.filter(user => user.subscription_status === 'subscribed');
       } else if (filterStatus === "unconfirmed") {
         filtered = filtered.filter(user => !user.email_confirmed);
       } else if (filterStatus === "suspended") {
@@ -155,22 +181,22 @@ export default function AdminUsers() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+      <div className="h-screen bg-gradient-background flex items-center justify-center">
         <div className="text-foreground">Loading users...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground flex flex-col">
+    <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4 flex-shrink-0">
+      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/admindash')}
+              onClick={() => navigate('/admin-dashboard')}
               className="rounded-full hover:bg-accent/10"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -220,7 +246,7 @@ export default function AdminUsers() {
       </div>
 
       {/* Scrollable Users List */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      <div className="flex-1 overflow-auto px-6 pb-6">
         <div className="grid gap-4">
           {filteredUsers.map((user) => (
             <Card key={user.id} className={`enhanced-card ${user.is_suspended ? 'border-red-200 bg-red-50/50' : ''}`}>
@@ -262,10 +288,10 @@ export default function AdminUsers() {
                           {user.is_logged_in ? "Online" : "Offline"}
                         </Badge>
                         <Badge 
-                          variant={user.subscription_status === 'active' ? "default" : "outline"}
-                          className={user.subscription_status === 'active' ? 'bg-accent-green text-white' : ''}
+                          variant={user.subscription_status === 'subscribed' ? "default" : "outline"}
+                          className={user.subscription_status === 'subscribed' ? 'bg-accent-green text-white' : ''}
                         >
-                          {user.subscription_status === 'active' ? "Subscribed" : "Free"}
+                          {user.subscription_status === 'subscribed' ? "Subscribed" : "Free"}
                         </Badge>
                         <Badge 
                           variant={user.email_confirmed ? "default" : "destructive"}
