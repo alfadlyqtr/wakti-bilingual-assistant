@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -20,9 +20,21 @@ import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validatePassword, validateConfirmPassword } from "@/utils/validations";
 
 export default function Signup() {
-  // CACHE BUSTER - Force fresh component load
-  console.log("🔥 SIGNUP COMPONENT LOADED - CACHE BUSTER:", Date.now());
-  console.log("🚀 Signup component rendering - START - Version 2.0");
+  // FORCE CACHE CLEAR - Multiple strategies
+  const CACHE_BUSTER = Date.now() + Math.random();
+  console.log("🔥🔥🔥 SIGNUP LOADED - CACHE BUSTER:", CACHE_BUSTER);
+  
+  // Force browser refresh if needed
+  useEffect(() => {
+    const hasRefreshed = sessionStorage.getItem('signup-force-refresh');
+    if (!hasRefreshed) {
+      console.log("🔄 First load - forcing refresh to clear cache");
+      sessionStorage.setItem('signup-force-refresh', 'true');
+      window.location.reload();
+      return;
+    }
+    console.log("✅ Cache refresh completed, proceeding with signup");
+  }, []);
   
   const navigate = useNavigate();
   const { language } = useTheme();
@@ -42,19 +54,12 @@ export default function Signup() {
   const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
 
-  console.log("📝 State initialized:", {
-    name, username, email, password, confirmPassword, 
-    dateOfBirth, dobInputValue, agreedToTerms
-  });
-
   // Real-time password validation
   const handlePasswordChange = (value: string) => {
-    console.log("🔒 Password change:", value);
     setPassword(value);
     const error = validatePassword(value);
     setPasswordError(error);
     
-    // Also check confirm password if it's filled
     if (confirmPassword) {
       const confirmError = validateConfirmPassword(value, confirmPassword);
       setConfirmPasswordError(confirmError);
@@ -63,7 +68,6 @@ export default function Signup() {
 
   // Real-time confirm password validation
   const handleConfirmPasswordChange = (value: string) => {
-    console.log("🔒 Confirm password change:", value);
     setConfirmPassword(value);
     const error = validateConfirmPassword(password, value);
     setConfirmPasswordError(error);
@@ -71,7 +75,6 @@ export default function Signup() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("📤 Signup form submitted");
     setErrorMsg(null);
     
     if (!name || !username || !email || !password || !confirmPassword || !dateOfBirth) {
@@ -84,7 +87,6 @@ export default function Signup() {
       return;
     }
     
-    // Validate password
     const passwordValidationError = validatePassword(password);
     if (passwordValidationError) {
       setPasswordError(passwordValidationError);
@@ -92,7 +94,6 @@ export default function Signup() {
       return;
     }
     
-    // Validate confirm password
     const confirmPasswordValidationError = validateConfirmPassword(password, confirmPassword);
     if (confirmPasswordValidationError) {
       setConfirmPasswordError(confirmPasswordValidationError);
@@ -103,12 +104,8 @@ export default function Signup() {
     setIsLoading(true);
     
     try {
-      // Get the redirect URL for email confirmation
       const redirectUrl = `${window.location.origin}/confirmed`;
       
-      console.log('🔄 Attempting signup with redirect URL:', redirectUrl);
-      
-      // Create the user in Supabase Auth with email confirmation
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -123,28 +120,20 @@ export default function Signup() {
       });
       
       if (error) {
-        console.error("❌ Signup error:", error);
         setErrorMsg(error.message);
         toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
       } else if (data?.user) {
-        console.log('✅ Signup successful:', data);
-        
-        // Check if user needs email confirmation
         if (!data.user.email_confirmed_at) {
-          console.log('📧 Email confirmation required');
           toast.success(language === 'en' 
             ? 'Please check your email and click the confirmation link to verify your account.' 
             : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
           );
           setIsEmailConfirmationDialogOpen(true);
         } else {
-          // User is already confirmed (shouldn't happen with email confirmations enabled)
-          console.log('✅ User already confirmed, redirecting to dashboard');
           navigate("/dashboard");
         }
       }
     } catch (err) {
-      console.error("💥 Unexpected error during signup:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
       toast.error(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
     } finally {
@@ -152,10 +141,8 @@ export default function Signup() {
     }
   };
 
-  // Sync manual date input to picker and vice versa
   const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    console.log("📅 DOB input change:", value);
     setDobInputValue(value);
 
     if (value) {
@@ -168,9 +155,7 @@ export default function Signup() {
     }
   };
 
-  // When picking from calendar
   const handleCalendarDateSelect = (date: Date | undefined) => {
-    console.log("📅 Calendar date select:", date);
     setDateOfBirth(date);
     if (date) {
       setDobInputValue(date.toISOString().split("T")[0]);
@@ -179,7 +164,6 @@ export default function Signup() {
     }
   };
 
-  // Translations
   const translations = {
     en: {
       appName: "WAKTI",
@@ -199,7 +183,6 @@ export default function Signup() {
       privacyPolicy: "Privacy Policy",
       and: "and",
       termsOfService: "Terms of Service",
-      // Placeholders
       namePlaceholder: "Your Name",
       usernamePlaceholder: "username",
       emailPlaceholder: "example@email.com",
@@ -225,7 +208,6 @@ export default function Signup() {
       privacyPolicy: "سياسة الخصوصية",
       and: "و",
       termsOfService: "شروط الخدمة",
-      // Placeholders
       namePlaceholder: "اسمك",
       usernamePlaceholder: "اسم المستخدم",
       emailPlaceholder: "example@email.com",
@@ -237,22 +219,18 @@ export default function Signup() {
 
   const t = translations[language];
 
-  // Update navigation after user closes dialog
   const handleDialogClose = () => {
     setIsEmailConfirmationDialogOpen(false);
     navigate("/login");
   };
 
-  console.log("🎨 About to render signup page - Version 2.0");
-
   return (
     <>
-      {/* CACHE BUSTER HEADER */}
-      <div className="w-full bg-red-500 text-white text-center py-1 text-xs font-bold">
-        🔥 SIGNUP V2.0 - CACHE CLEARED - {Date.now()}
+      {/* SUPER VISIBLE CACHE BUSTER */}
+      <div className="w-full bg-red-600 text-white text-center py-2 text-sm font-black border-4 border-yellow-400">
+        🚨 COMPLETE SIGNUP FORM V3.0 - CACHE: {CACHE_BUSTER} 🚨
       </div>
       
-      {/* Original signup page */}
       <div className="min-h-screen bg-background text-foreground w-full max-w-md mx-auto">
         <header className="sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center">
@@ -278,7 +256,6 @@ export default function Signup() {
               className="w-full max-w-md mx-auto"
             >
               <div className="mb-6 text-center">
-                {/* App logo with navigation to home */}
                 <div 
                   className="inline-block cursor-pointer mb-4"
                   onClick={() => navigate("/home")}
@@ -409,15 +386,15 @@ export default function Signup() {
                   </div>
                 </div>
                 
-                {/* CONFIRM PASSWORD FIELD - MUST BE VISIBLE */}
-                <div className="space-y-2 bg-yellow-100 p-4 border-4 border-yellow-500 rounded-lg">
-                  <div className="bg-yellow-300 text-black p-2 rounded text-center font-bold">
-                    🔍 CONFIRM PASSWORD FIELD - SHOULD BE VISIBLE
+                {/* CONFIRM PASSWORD - ULTRA VISIBLE */}
+                <div className="space-y-2 bg-gradient-to-r from-blue-100 to-blue-200 p-6 border-4 border-blue-600 rounded-xl shadow-lg">
+                  <div className="bg-blue-500 text-white p-3 rounded-lg text-center font-black text-lg animate-pulse">
+                    🔐 CONFIRM PASSWORD FIELD 🔐
                   </div>
-                  <Label htmlFor="confirmPassword" className="text-base font-bold text-yellow-800">{t.confirmPassword}</Label>
+                  <Label htmlFor="confirmPassword" className="text-lg font-bold text-blue-800">{t.confirmPassword}</Label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Lock className="h-5 w-5 text-muted-foreground" />
+                      <Lock className="h-5 w-5 text-blue-600" />
                     </div>
                     <Input
                       id="confirmPassword"
@@ -429,7 +406,7 @@ export default function Signup() {
                       value={confirmPassword}
                       onChange={(e) => handleConfirmPasswordChange(e.target.value)}
                       className={cn(
-                        "pl-10 pr-10 py-6 text-base shadow-sm border-yellow-500",
+                        "pl-10 pr-10 py-6 text-base shadow-sm border-4 border-blue-400 bg-white",
                         confirmPasswordError && "border-red-500"
                       )}
                       required
@@ -440,26 +417,26 @@ export default function Signup() {
                       className="absolute inset-y-0 right-0 flex items-center pr-3"
                     >
                       {showConfirmPassword ? (
-                        <EyeOff className="h-5 w-5 text-muted-foreground" />
+                        <EyeOff className="h-5 w-5 text-blue-600" />
                       ) : (
-                        <Eye className="h-5 w-5 text-muted-foreground" />
+                        <Eye className="h-5 w-5 text-blue-600" />
                       )}
                     </button>
                   </div>
                   {confirmPasswordError && (
-                    <div className="text-sm text-red-500 mt-1">
+                    <div className="text-sm text-red-500 mt-1 font-bold">
                       {confirmPasswordError}
                     </div>
                   )}
                 </div>
                 
-                {/* DATE OF BIRTH FIELD - MUST BE VISIBLE */}
-                <div className="space-y-2 bg-green-100 p-4 border-4 border-green-500 rounded-lg">
-                  <div className="bg-green-300 text-black p-2 rounded text-center font-bold">
-                    🗓️ DATE OF BIRTH FIELD - SHOULD BE VISIBLE
+                {/* DATE OF BIRTH - ULTRA VISIBLE */}
+                <div className="space-y-2 bg-gradient-to-r from-green-100 to-green-200 p-6 border-4 border-green-600 rounded-xl shadow-lg">
+                  <div className="bg-green-500 text-white p-3 rounded-lg text-center font-black text-lg animate-pulse">
+                    📅 DATE OF BIRTH FIELD 📅
                   </div>
-                  <Label htmlFor="dateOfBirth" className="text-base font-bold text-green-800">{t.dateOfBirth}</Label>
-                  <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth" className="text-lg font-bold text-green-800">{t.dateOfBirth}</Label>
+                  <div className="space-y-3">
                     <Input
                       id="dob"
                       type="date"
@@ -467,7 +444,7 @@ export default function Signup() {
                       onChange={handleDobInputChange}
                       max={new Date().toISOString().split('T')[0]}
                       min="1900-01-01"
-                      className="w-full text-base border-green-500"
+                      className="w-full text-base border-4 border-green-400 bg-white py-6"
                       disabled={isLoading}
                       placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
                     />
@@ -476,12 +453,12 @@ export default function Signup() {
                         <Button
                           variant="outline"
                           className={cn(
-                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm border-green-500",
+                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm border-4 border-green-400 bg-white",
                             !dateOfBirth && "text-muted-foreground"
                           )}
                           disabled={isLoading}
                         >
-                          <CalendarIcon className="mr-2 h-5 w-5" />
+                          <CalendarIcon className="mr-2 h-5 w-5 text-green-600" />
                           {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
                         </Button>
                       </PopoverTrigger>
