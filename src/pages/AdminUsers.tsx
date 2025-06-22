@@ -52,8 +52,8 @@ export default function AdminUsers() {
 
   const loadUsers = async () => {
     try {
-      // Use explicit query structure to avoid relationship issues
-      const { data, error } = await supabase
+      // Load profiles with basic user info
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select(`
           id,
@@ -69,25 +69,32 @@ export default function AdminUsers() {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (profilesError) throw profilesError;
 
-      // Get subscription data separately and merge
-      const userIds = data.map(user => user.id);
-      const { data: subscriptionsData } = await supabase
+      // Get subscription data separately to avoid join issues
+      const userIds = profilesData?.map(user => user.id) || [];
+      const { data: subscriptionsData, error: subscriptionsError } = await supabase
         .from('subscriptions')
         .select('user_id, status')
         .in('user_id', userIds)
         .eq('status', 'active');
 
-      const subscriptionMap = new Map(
-        subscriptionsData?.map(sub => [sub.user_id, sub.status]) || []
-      );
+      if (subscriptionsError) {
+        console.error('Error loading subscriptions:', subscriptionsError);
+      }
 
-      const usersWithSubscriptions = data.map(user => ({
+      // Create a map of user IDs to subscription status
+      const subscriptionMap = new Map();
+      subscriptionsData?.forEach(sub => {
+        subscriptionMap.set(sub.user_id, sub.status);
+      });
+
+      // Combine data
+      const usersWithSubscriptions = profilesData?.map(user => ({
         ...user,
-        full_name: user.display_name || user.email,
+        full_name: user.display_name || user.email || "No name",
         subscription_status: subscriptionMap.get(user.id) || 'none'
-      }));
+      })) || [];
 
       setUsers(usersWithSubscriptions);
     } catch (err) {
@@ -103,7 +110,7 @@ export default function AdminUsers() {
 
     if (searchTerm) {
       filtered = filtered.filter(user =>
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -155,9 +162,9 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground">
+    <div className="min-h-screen bg-gradient-background text-foreground flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
+      <header className="sticky top-0 z-50 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Button
@@ -177,9 +184,9 @@ export default function AdminUsers() {
         </div>
       </header>
 
-      <div className="p-6">
-        {/* Search and Filter */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      {/* Search and Filter */}
+      <div className="flex-shrink-0 p-6">
+        <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -210,8 +217,10 @@ export default function AdminUsers() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      </div>
 
-        {/* Users List */}
+      {/* Scrollable Users List */}
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
         <div className="grid gap-4">
           {filteredUsers.map((user) => (
             <Card key={user.id} className={`enhanced-card ${user.is_suspended ? 'border-red-200 bg-red-50/50' : ''}`}>
@@ -227,7 +236,7 @@ export default function AdminUsers() {
                         />
                       ) : (
                         <span className="text-white font-medium">
-                          {(user.full_name || user.email).charAt(0).toUpperCase()}
+                          {(user.full_name || user.email || "?").charAt(0).toUpperCase()}
                         </span>
                       )}
                     </div>
@@ -254,13 +263,13 @@ export default function AdminUsers() {
                         </Badge>
                         <Badge 
                           variant={user.subscription_status === 'active' ? "default" : "outline"}
-                          className={user.subscription_status === 'active' ? 'bg-accent-green' : ''}
+                          className={user.subscription_status === 'active' ? 'bg-accent-green text-white' : ''}
                         >
                           {user.subscription_status === 'active' ? "Subscribed" : "Free"}
                         </Badge>
                         <Badge 
                           variant={user.email_confirmed ? "default" : "destructive"}
-                          className={user.email_confirmed ? 'bg-accent-green' : 'bg-accent-orange'}
+                          className={user.email_confirmed ? 'bg-accent-green text-white' : 'bg-accent-orange text-white'}
                         >
                           {user.email_confirmed ? "Verified" : "Unverified"}
                         </Badge>
