@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 
 import { ThemeProvider } from '@/providers/ThemeProvider';
+import { AuthProvider } from '@/contexts/AuthContext';
 import Index from '@/pages/Index';
 import Home from '@/pages/Home';
 import Calendar from '@/pages/Calendar';
@@ -23,26 +24,28 @@ function App() {
     <div className="App">
       <AdminAuthProvider>
         <ThemeProvider>
-          <QueryClientProvider client={queryClient}>
-            <BrowserRouter>
-              <div className="min-h-screen bg-background text-foreground">
-                <Toaster />
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/home" element={<Home />} />
-                  <Route path="/calendar" element={<Calendar />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/account" element={<Account />} />
-                  <Route path="/contacts" element={<Contacts />} />
-                  <Route path="/tasjeel" element={<Tasjeel />} />
-                  
-                  {/* Admin Routes */}
-                  <Route path="/mqtr" element={<AdminLogin />} />
-                  <Route path="/admindash" element={<AdminDashboard />} />
-                </Routes>
-              </div>
-            </BrowserRouter>
-          </QueryClientProvider>
+          <AuthProvider>
+            <QueryClientProvider client={queryClient}>
+              <BrowserRouter>
+                <div className="min-h-screen bg-background text-foreground">
+                  <Toaster />
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/home" element={<Home />} />
+                    <Route path="/calendar" element={<Calendar />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/account" element={<Account />} />
+                    <Route path="/contacts" element={<Contacts />} />
+                    <Route path="/tasjeel" element={<Tasjeel />} />
+                    
+                    {/* Admin Routes */}
+                    <Route path="/mqtr" element={<AdminLogin />} />
+                    <Route path="/admindash" element={<AdminDashboard />} />
+                  </Routes>
+                </div>
+              </BrowserRouter>
+            </QueryClientProvider>
+          </AuthProvider>
         </ThemeProvider>
       </AdminAuthProvider>
     </div>
