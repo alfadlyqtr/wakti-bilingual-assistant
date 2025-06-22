@@ -11,9 +11,9 @@ interface UserStatistics {
     charactersLimit: number;
     extraCharacters: number;
   };
-  translationQuota: {
-    dailyCount: number;
-    extraTranslations: number;
+  searchQuota: {
+    monthlyCount: number;
+    extraSearches: number;
   };
   tasjeelRecords: number;
   lastLoginAt: string | null;
@@ -29,9 +29,9 @@ export const useUserStatistics = (userId: string | null) => {
       charactersLimit: 5000,
       extraCharacters: 0
     },
-    translationQuota: {
-      dailyCount: 0,
-      extraTranslations: 0
+    searchQuota: {
+      monthlyCount: 0,
+      extraSearches: 0
     },
     tasjeelRecords: 0,
     lastLoginAt: null
@@ -44,7 +44,7 @@ export const useUserStatistics = (userId: string | null) => {
     const loadUserStatistics = async () => {
       setIsLoading(true);
       try {
-        // Load tasks created
+        // Load tasks created (TR tasks)
         const { count: tasksCreated } = await supabase
           .from('tr_tasks')
           .select('*', { count: 'exact', head: true })
@@ -64,20 +64,20 @@ export const useUserStatistics = (userId: string | null) => {
           .eq('user_id', userId)
           .eq('month_year', currentMonth);
 
-        // Load voice usage
+        // Load voice usage from user_voice_usage table
         const { data: voiceUsageData } = await supabase
           .from('user_voice_usage')
           .select('characters_used, characters_limit, extra_characters')
           .eq('user_id', userId)
           .single();
 
-        // Load translation quota
-        const today = new Date().toISOString().split('T')[0];
-        const { data: translationData } = await supabase
-          .from('user_translation_quotas')
-          .select('daily_count, extra_translations')
+        // Load search quota from user_search_quotas table (monthly limit is 10)
+        const currentMonthKey = new Date().toISOString().slice(0, 7);
+        const { data: searchQuotaData } = await supabase
+          .from('user_search_quotas')
+          .select('regular_search_count, extra_regular_searches')
           .eq('user_id', userId)
-          .eq('daily_date', today)
+          .eq('monthly_date', currentMonthKey)
           .single();
 
         // Load Tasjeel records
@@ -86,11 +86,12 @@ export const useUserStatistics = (userId: string | null) => {
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userId);
 
-        // Load last login
+        // Load last login from user_sessions table
         const { data: sessionData } = await supabase
           .from('user_sessions')
           .select('created_at')
           .eq('user_id', userId)
+          .eq('is_active', true)
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
@@ -104,9 +105,9 @@ export const useUserStatistics = (userId: string | null) => {
             charactersLimit: voiceUsageData?.characters_limit || 5000,
             extraCharacters: voiceUsageData?.extra_characters || 0
           },
-          translationQuota: {
-            dailyCount: translationData?.daily_count || 0,
-            extraTranslations: translationData?.extra_translations || 0
+          searchQuota: {
+            monthlyCount: searchQuotaData?.regular_search_count || 0,
+            extraSearches: searchQuotaData?.extra_regular_searches || 0
           },
           tasjeelRecords: tasjeelRecords || 0,
           lastLoginAt: sessionData?.created_at || null

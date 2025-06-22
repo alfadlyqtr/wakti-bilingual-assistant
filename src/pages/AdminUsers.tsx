@@ -151,7 +151,7 @@ export default function AdminUsers() {
         return (
           <Badge 
             variant="default"
-            className="bg-accent-purple text-white"
+            className="bg-accent-purple text-white text-xs"
           >
             Subscribed (G)
           </Badge>
@@ -163,14 +163,14 @@ export default function AdminUsers() {
       return (
         <Badge 
           variant="default"
-          className="bg-accent-green text-white"
+          className="bg-accent-green text-white text-xs"
         >
           Subscribed{planType}
         </Badge>
       );
     }
     return (
-      <Badge variant="outline">
+      <Badge variant="outline" className="text-xs">
         Free
       </Badge>
     );
@@ -178,7 +178,7 @@ export default function AdminUsers() {
 
   const handleUserAction = (user: User, action: string) => {
     setSelectedUser(user);
-    setOpenDropdownId(null); // Close dropdown immediately
+    setOpenDropdownId(null);
     
     switch (action) {
       case "View Profile":
@@ -216,7 +216,7 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-gradient-background text-foreground flex flex-col">
       {/* Mobile Responsive Header */}
       <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-3 sm:px-6 py-3 sm:py-4">
         <div className="flex items-center justify-between">
@@ -229,9 +229,9 @@ export default function AdminUsers() {
             >
               AD
             </Button>
-            <Users className="h-6 w-6 sm:h-8 sm:w-8 text-accent-blue" />
+            <Users className="h-5 w-5 sm:h-6 sm:w-6 lg:h-8 lg:w-8 text-accent-blue" />
             <div>
-              <h1 className="text-lg sm:text-xl font-bold text-enhanced-heading">User Management</h1>
+              <h1 className="text-base sm:text-lg lg:text-xl font-bold text-enhanced-heading">User Management</h1>
               <p className="text-xs sm:text-sm text-muted-foreground">{filteredUsers.length} users found</p>
             </div>
           </div>
@@ -242,24 +242,25 @@ export default function AdminUsers() {
       <div className="flex-shrink-0 p-3 sm:p-6">
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             <Input
               placeholder="Search users by email or name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 input-enhanced text-sm"
+              className="pl-8 sm:pl-10 input-enhanced text-xs sm:text-sm"
             />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center space-x-2 text-sm">
-                <Filter className="h-4 w-4" />
-                <span>
+              <Button variant="outline" className="flex items-center space-x-2 text-xs sm:text-sm px-3 py-2">
+                <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">
                   {filterStatus === "all" ? "All Users" : 
                    filterStatus === "online" ? "Online" : 
                    filterStatus === "subscribed" ? "Subscribed" : 
                    filterStatus === "unconfirmed" ? "Unconfirmed" : "Suspended"}
                 </span>
+                <span className="sm:hidden">Filter</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
@@ -278,40 +279,42 @@ export default function AdminUsers() {
         <div className="grid gap-3 sm:gap-4">
           {filteredUsers.map((user) => (
             <Card key={user.id} className={`enhanced-card ${user.is_suspended ? 'border-red-200 bg-red-50/50' : ''}`}>
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
+              <CardContent className="p-3 sm:p-4 lg:p-6">
+                <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center justify-between sm:gap-4">
+                  <div className="flex items-center space-x-3 min-w-0 flex-1">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
                       {user.avatar_url ? (
                         <img
                           src={user.avatar_url}
                           alt={user.full_name || user.email}
-                          className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover"
+                          className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full object-cover"
                         />
                       ) : (
-                        <span className="text-white font-medium text-sm sm:text-base">
+                        <span className="text-white font-medium text-xs sm:text-sm lg:text-base">
                           {(user.full_name || user.email || "?").charAt(0).toUpperCase()}
                         </span>
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 mb-1">
+                        <h3 className="font-semibold text-enhanced-heading text-xs sm:text-sm lg:text-base truncate">
                           {user.full_name || "No name"}
                         </h3>
-                        {user.email_confirmed ? (
-                          <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-accent-green flex-shrink-0" />
-                        ) : (
-                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-accent-orange flex-shrink-0" />
-                        )}
-                        {user.is_suspended && (
-                          <Badge variant="destructive" className="text-xs">
-                            SUSPENDED
-                          </Badge>
-                        )}
+                        <div className="flex items-center space-x-1 mt-1 sm:mt-0">
+                          {user.email_confirmed ? (
+                            <CheckCircle className="h-3 w-3 text-accent-green flex-shrink-0" />
+                          ) : (
+                            <AlertCircle className="h-3 w-3 text-accent-orange flex-shrink-0" />
+                          )}
+                          {user.is_suspended && (
+                            <Badge variant="destructive" className="text-xs">
+                              SUSPENDED
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{user.email}</p>
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-2">
+                      <p className="text-xs text-muted-foreground truncate mb-2">{user.email}</p>
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                         <Badge variant={user.is_logged_in ? "default" : "secondary"} className="text-xs">
                           {user.is_logged_in ? "Online" : "Offline"}
                         </Badge>
@@ -326,13 +329,13 @@ export default function AdminUsers() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-4">
-                    <div className="text-right text-xs sm:text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between sm:justify-end space-x-2">
+                    <div className="text-right text-xs text-muted-foreground">
                       <p>Joined {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}</p>
                     </div>
                     <DropdownMenu open={openDropdownId === user.id} onOpenChange={(open) => setOpenDropdownId(open ? user.id : null)}>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-8 sm:w-8">
                           <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -367,10 +370,10 @@ export default function AdminUsers() {
 
         {filteredUsers.length === 0 && (
           <Card className="enhanced-card">
-            <CardContent className="p-8 sm:p-12 text-center">
-              <Users className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
-              <p className="text-sm text-muted-foreground">Try adjusting your search or filter criteria.</p>
+            <CardContent className="p-6 sm:p-8 lg:p-12 text-center">
+              <Users className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-sm sm:text-base lg:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground">Try adjusting your search or filter criteria.</p>
             </CardContent>
           </Card>
         )}

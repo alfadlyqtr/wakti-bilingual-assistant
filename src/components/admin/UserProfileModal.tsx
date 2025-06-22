@@ -41,44 +41,44 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Basic Info */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Basic Information</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Basic Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-primary rounded-full flex items-center justify-center">
                   {user.avatar_url ? (
                     <img
                       src={user.avatar_url}
                       alt={user.full_name || user.email}
-                      className="w-16 h-16 rounded-full object-cover"
+                      className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover"
                     />
                   ) : (
-                    <span className="text-white font-bold text-xl">
+                    <span className="text-white font-bold text-lg sm:text-xl">
                       {(user.full_name || user.email).charAt(0).toUpperCase()}
                     </span>
                   )}
                 </div>
-                <div>
-                  <h3 className="text-xl font-semibold">{user.full_name || "No name"}</h3>
-                  <p className="text-muted-foreground flex items-center">
-                    <Mail className="h-4 w-4 mr-1" />
+                <div className="flex-1">
+                  <h3 className="text-lg sm:text-xl font-semibold">{user.full_name || "No name"}</h3>
+                  <p className="text-muted-foreground flex items-center text-sm sm:text-base">
+                    <Mail className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                     {user.email}
                   </p>
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm font-medium">Account Status</p>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <Badge variant={user.is_logged_in ? "default" : "secondary"}>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <Badge variant={user.is_logged_in ? "default" : "secondary"} className="text-xs">
                       {user.is_logged_in ? "Online" : "Offline"}
                     </Badge>
-                    <Badge variant={user.email_confirmed ? "default" : "destructive"}>
+                    <Badge variant={user.email_confirmed ? "default" : "destructive"} className="text-xs">
                       {user.email_confirmed ? "Verified" : "Unverified"}
                     </Badge>
                   </div>
@@ -88,20 +88,20 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
                   <p className="text-sm font-medium">Subscription</p>
                   <Badge 
                     variant={user.subscription_status === 'active' ? "default" : "outline"}
-                    className={user.subscription_status === 'active' ? 'bg-accent-green mt-1' : 'mt-1'}
+                    className={`${user.subscription_status === 'active' ? 'bg-accent-green mt-1' : 'mt-1'} text-xs`}
                   >
                     {user.subscription_status === 'active' ? "Subscribed" : "Free"}
                   </Badge>
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <p className="text-sm font-medium flex items-center">
                     <Calendar className="h-4 w-4 mr-1" />
                     Member Since
                   </p>
-                  <p className="text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     {new Date(user.created_at).toLocaleDateString()} 
                     ({formatDistanceToNow(new Date(user.created_at), { addSuffix: true })})
                   </p>
@@ -112,7 +112,7 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
                     <Shield className="h-4 w-4 mr-1" />
                     Last Login
                   </p>
-                  <p className="text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     {statistics.lastLoginAt 
                       ? formatDistanceToNow(new Date(statistics.lastLoginAt), { addSuffix: true })
                       : 'Never logged in'
@@ -127,7 +127,7 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
           {user.is_suspended && (
             <Card className="border-red-200 bg-red-50">
               <CardHeader>
-                <CardTitle className="text-lg text-red-700 flex items-center">
+                <CardTitle className="text-base sm:text-lg text-red-700 flex items-center">
                   <AlertTriangle className="h-5 w-5 mr-2" />
                   Account Suspended
                 </CardTitle>
@@ -150,53 +150,53 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
           {/* Activity Statistics */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Activity Statistics</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Activity Statistics</CardTitle>
             </CardHeader>
             <CardContent>
               {statsLoading ? (
-                <div className="text-center py-4">Loading statistics...</div>
+                <div className="text-center py-4 text-sm">Loading statistics...</div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-center">
                   <div>
-                    <p className="text-2xl font-bold text-accent-blue">{statistics.tasksCreated}</p>
-                    <p className="text-sm text-muted-foreground">Tasks Created</p>
+                    <p className="text-xl sm:text-2xl font-bold text-accent-blue">{statistics.tasksCreated}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Tasks Created</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-accent-green">{statistics.eventsCreated}</p>
-                    <p className="text-sm text-muted-foreground">Events Created</p>
+                    <p className="text-xl sm:text-2xl font-bold text-accent-green">{statistics.eventsCreated}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Events Created</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-accent-purple">{statistics.aiQueries}</p>
-                    <p className="text-sm text-muted-foreground">AI Queries (This Month)</p>
+                    <p className="text-xl sm:text-2xl font-bold text-accent-purple">{statistics.aiQueries}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">AI Queries (This Month)</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-accent-orange">{statistics.tasjeelRecords}</p>
-                    <p className="text-sm text-muted-foreground">Voice Recordings</p>
+                    <p className="text-xl sm:text-2xl font-bold text-accent-orange">{statistics.tasjeelRecords}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Voice Recordings</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-accent-cyan">{statistics.translationQuota.dailyCount}/25</p>
-                    <p className="text-sm text-muted-foreground">Translations Today</p>
+                    <p className="text-xl sm:text-2xl font-bold text-accent-cyan">{statistics.searchQuota.monthlyCount}/10</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Searches This Month</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-accent-pink">{statistics.translationQuota.extraTranslations}</p>
-                    <p className="text-sm text-muted-foreground">Extra Translations</p>
+                    <p className="text-xl sm:text-2xl font-bold text-accent-pink">{statistics.searchQuota.extraSearches}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Extra Searches</p>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Voice & AI Usage */}
+          {/* Voice Clone Usage */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center">
+              <CardTitle className="text-base sm:text-lg flex items-center">
                 <Mic className="h-5 w-5 mr-2" />
                 Voice Clone Usage
               </CardTitle>
             </CardHeader>
             <CardContent>
               {statsLoading ? (
-                <div className="text-center py-4">Loading voice usage...</div>
+                <div className="text-center py-4 text-sm">Loading voice usage...</div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">

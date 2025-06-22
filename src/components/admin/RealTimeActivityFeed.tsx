@@ -1,10 +1,11 @@
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Activity, Users, MessageSquare, CreditCard } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { AlertCircle, CheckCircle } from "lucide-react";
 
-interface Activity {
+interface RecentActivity {
   id: string;
   type: 'user_registration' | 'subscription_activation' | 'contact_submission' | 'task_creation';
   message: string;
@@ -13,55 +14,51 @@ interface Activity {
 }
 
 interface ActivityFeedProps {
-  activities: Activity[];
+  activities: RecentActivity[];
   isLoading: boolean;
 }
 
 export const RealTimeActivityFeed = ({ activities, isLoading }: ActivityFeedProps) => {
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'user_registration':
+        return <Users className="h-3 w-3 sm:h-4 sm:w-4" />;
+      case 'subscription_activation':
+        return <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />;
+      case 'contact_submission':
+        return <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />;
+      default:
+        return <Activity className="h-3 w-3 sm:h-4 sm:w-4" />;
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'success': return 'bg-accent-green';
       case 'warning': return 'bg-accent-orange';
       case 'info': return 'bg-accent-blue';
-      default: return 'bg-accent-purple';
-    }
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'user_registration': return '👤';
-      case 'subscription_activation': return '💳';
-      case 'contact_submission': return '📩';
-      case 'task_creation': return '✅';
-      default: return '📊';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'success': return <CheckCircle className="h-4 w-4 text-accent-green" />;
-      case 'warning': return <AlertCircle className="h-4 w-4 text-accent-orange" />;
-      case 'info': return <CheckCircle className="h-4 w-4 text-accent-blue" />;
-      default: return <CheckCircle className="h-4 w-4 text-accent-purple" />;
+      default: return 'bg-accent-gray';
     }
   };
 
   if (isLoading) {
     return (
       <Card className="enhanced-card">
-        <CardHeader>
-          <CardTitle className="text-enhanced-heading text-xl">Recent Activity</CardTitle>
-          <CardDescription className="text-sm">Loading latest system events...</CardDescription>
+        <CardHeader className="pb-2 sm:pb-3">
+          <CardTitle className="text-sm sm:text-base lg:text-lg flex items-center">
+            <Activity className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-blue" />
+            Recent Activity
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="pt-0">
+          <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg animate-pulse">
-                <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-gradient-secondary/20 rounded-full"></div>
-                  <div className="h-4 bg-gradient-secondary/20 rounded w-64"></div>
+              <div key={i} className="flex items-center space-x-3 animate-pulse">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-secondary/20 rounded-full"></div>
+                <div className="flex-1">
+                  <div className="h-3 sm:h-4 bg-gradient-secondary/20 rounded mb-1"></div>
+                  <div className="h-2 sm:h-3 bg-gradient-secondary/20 rounded w-2/3"></div>
                 </div>
-                <div className="h-3 bg-gradient-secondary/20 rounded w-16"></div>
               </div>
             ))}
           </div>
@@ -72,36 +69,45 @@ export const RealTimeActivityFeed = ({ activities, isLoading }: ActivityFeedProp
 
   return (
     <Card className="enhanced-card">
-      <CardHeader>
-        <CardTitle className="text-enhanced-heading text-xl">Recent Activity</CardTitle>
-        <CardDescription className="text-sm">Latest system events with email verification status</CardDescription>
+      <CardHeader className="pb-2 sm:pb-3">
+        <CardTitle className="text-sm sm:text-base lg:text-lg flex items-center justify-between">
+          <div className="flex items-center">
+            <Activity className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-blue" />
+            Recent Activity
+          </div>
+          <div className="flex items-center space-x-1">
+            <div className="w-2 h-2 bg-accent-green rounded-full animate-pulse"></div>
+            <span className="text-xs text-muted-foreground">Live</span>
+          </div>
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {activities.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No recent activity</p>
-            </div>
-          ) : (
-            activities.map((activity) => (
-              <div key={activity.id} className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg hover:bg-gradient-secondary/20 transition-colors">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-3 h-3 rounded-full ${getStatusColor(activity.status)}`}></div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-lg">{getTypeIcon(activity.type)}</span>
-                    <span className="font-medium text-sm">{activity.message}</span>
-                    {activity.type === 'user_registration' && getStatusIcon(activity.status)}
+      <CardContent className="pt-0">
+        <ScrollArea className="h-24 sm:h-32 w-full">
+          {activities.length > 0 ? (
+            <div className="space-y-2 sm:space-y-3 pr-2">
+              {activities.map((activity) => (
+                <div key={activity.id} className="flex items-start space-x-2 sm:space-x-3 p-2 rounded-lg hover:bg-accent/5 transition-colors">
+                  <div className={`w-5 h-5 sm:w-6 sm:h-6 ${getStatusColor(activity.status)} rounded-full flex items-center justify-center text-white flex-shrink-0 mt-0.5`}>
+                    {getActivityIcon(activity.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm text-enhanced-heading font-medium leading-tight">
+                      {activity.message}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+                    </p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline" className="text-xs">
-                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                  </Badge>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-4 sm:py-6">
+              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-xs sm:text-sm text-muted-foreground">No recent activity</p>
+            </div>
           )}
-        </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );

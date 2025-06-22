@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -55,24 +54,26 @@ export const useRealTimeAdminData = () => {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'unread');
 
-      // Load online users (users who are logged in)
+      // Load online users (users who are currently logged in)
       const { count: onlineUsers } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true })
         .eq('is_logged_in', true)
         .neq('display_name', '[DELETED USER]');
 
-      // Calculate monthly revenue from active subscriptions
+      // Calculate monthly revenue from active subscriptions (fixed calculation)
       let monthlyRevenue = 0;
       if (activeSubscriptionData && activeSubscriptionData.length > 0) {
         monthlyRevenue = activeSubscriptionData.reduce((sum, profile) => {
           // Skip admin-gifted subscriptions (they don't contribute to revenue)
-          if (profile.plan_name?.toLowerCase().includes('gift')) {
+          if (profile.plan_name?.toLowerCase().includes('gift') || 
+              profile.plan_name?.toLowerCase().includes('admin')) {
             return sum;
           }
           
-          // Calculate amount based on plan name
-          const isYearly = profile.plan_name?.toLowerCase().includes('yearly');
+          // Calculate amount based on plan name - Fixed amounts
+          const isYearly = profile.plan_name?.toLowerCase().includes('yearly') || 
+                           profile.plan_name?.toLowerCase().includes('year');
           const amount = isYearly ? 600 : 60; // 600 QAR yearly, 60 QAR monthly
           return sum + amount;
         }, 0);
@@ -112,7 +113,7 @@ export const useRealTimeAdminData = () => {
     try {
       const activities: RecentActivity[] = [];
 
-      // Get recent user registrations with email confirmation status
+      // Get recent user registrations with email confirmation status (limit to 3)
       const { data: newUsers } = await supabase
         .from('profiles')
         .select('email, created_at, email_confirmed')
@@ -131,47 +132,9 @@ export const useRealTimeAdminData = () => {
         });
       });
 
-      // Get recent subscription activations from profiles table
-      const { data: newSubs } = await supabase
-        .from('profiles')
-        .select('email, billing_start_date, plan_name')
-        .eq('is_subscribed', true)
-        .eq('subscription_status', 'active')
-        .not('billing_start_date', 'is', null)
-        .neq('display_name', '[DELETED USER]')
-        .order('billing_start_date', { ascending: false })
-        .limit(2);
-
-      newSubs?.forEach(profile => {
-        activities.push({
-          id: `sub-${profile.billing_start_date}`,
-          type: 'subscription_activation',
-          message: `Subscription activated: ${profile.email} (${profile.plan_name})`,
-          timestamp: profile.billing_start_date,
-          status: 'success'
-        });
-      });
-
-      // Get recent contact submissions
-      const { data: contacts } = await supabase
-        .from('contact_submissions')
-        .select('name, email, created_at')
-        .order('created_at', { ascending: false })
-        .limit(2);
-
-      contacts?.forEach(contact => {
-        activities.push({
-          id: `contact-${contact.created_at}`,
-          type: 'contact_submission',
-          message: `New contact form: ${contact.name} (${contact.email})`,
-          timestamp: contact.created_at,
-          status: 'info'
-        });
-      });
-
-      // Sort by timestamp
+      // Sort by timestamp and limit to 3 activities total
       activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setRecentActivity(activities.slice(0, 5));
+      setRecentActivity(activities.slice(0, 3));
     } catch (error) {
       console.error('Error loading recent activity:', error);
     }
