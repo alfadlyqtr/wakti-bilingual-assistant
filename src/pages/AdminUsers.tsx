@@ -207,6 +207,11 @@ export default function AdminUsers() {
     loadUsers(); // Refresh the user list
   };
 
+  const handleBackToAdmin = () => {
+    console.log('Navigating to admin dashboard...');
+    navigate('/admin-dashboard');
+  };
+
   if (isLoading) {
     return (
       <div className="h-screen bg-gradient-background flex items-center justify-center">
@@ -224,7 +229,7 @@ export default function AdminUsers() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate('/admin-dashboard')}
+              onClick={handleBackToAdmin}
               className="rounded-full hover:bg-accent/10 font-bold text-lg"
             >
               AD
