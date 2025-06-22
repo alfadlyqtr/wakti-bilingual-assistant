@@ -315,7 +315,7 @@ export default function AdminUsers() {
 
                   <div className="flex items-center space-x-2">
                     <div className="text-right text-sm text-muted-foreground">
-                      <p>Joined {new Date(user.created_at).toLocaleDateString()}</p>
+                      <p>Joined {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}</p>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

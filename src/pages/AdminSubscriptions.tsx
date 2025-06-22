@@ -1,11 +1,13 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreditCard, ArrowLeft, Search, CheckCircle, Clock, User, Crown } from "lucide-react";
+import { CreditCard, ArrowLeft, Search, CheckCircle, Clock, User, Crown, Calendar, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -23,6 +25,13 @@ interface SubscriptionData {
   plan_name?: string;
 }
 
+interface ActivationDetails {
+  planName: string;
+  billingAmount: number;
+  billingCurrency: string;
+  billingCycle: string;
+}
+
 export default function AdminSubscriptions() {
   const navigate = useNavigate();
   const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([]);
@@ -30,6 +39,16 @@ export default function AdminSubscriptions() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [activatingId, setActivatingId] = useState<string | null>(null);
+  
+  // Activation modal states
+  const [isActivationModalOpen, setIsActivationModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SubscriptionData | null>(null);
+  const [activationDetails, setActivationDetails] = useState<ActivationDetails>({
+    planName: 'Wakti Monthly',
+    billingAmount: 60,
+    billingCurrency: 'QAR',
+    billingCycle: 'monthly'
+  });
 
   useEffect(() => {
     loadSubscriptions();
@@ -41,7 +60,7 @@ export default function AdminSubscriptions() {
 
   const loadSubscriptions = async () => {
     try {
-      // Load all users with subscription information from profiles table
+      // Load all users with subscription information from profiles table, excluding deleted users
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select(`
@@ -54,6 +73,7 @@ export default function AdminSubscriptions() {
           billing_start_date,
           created_at
         `)
+        .neq('suspension_reason', 'Account deleted by admin')
         .order('created_at', { ascending: false });
 
       if (profilesError) {
@@ -114,15 +134,22 @@ export default function AdminSubscriptions() {
     setFilteredSubscriptions(filtered);
   };
 
-  const activateSubscription = async (userId: string) => {
-    setActivatingId(userId);
+  const handleActivationClick = (user: SubscriptionData) => {
+    setSelectedUser(user);
+    setIsActivationModalOpen(true);
+  };
+
+  const confirmActivateSubscription = async () => {
+    if (!selectedUser) return;
+    
+    setActivatingId(selectedUser.user_id);
     
     try {
       const { error } = await supabase.rpc('admin_activate_subscription', {
-        p_user_id: userId,
-        p_plan_name: 'Monthly',
-        p_billing_amount: 60,
-        p_billing_currency: 'QAR'
+        p_user_id: selectedUser.user_id,
+        p_plan_name: activationDetails.planName,
+        p_billing_amount: activationDetails.billingAmount,
+        p_billing_currency: activationDetails.billingCurrency
       });
 
       if (error) {
@@ -130,16 +157,37 @@ export default function AdminSubscriptions() {
         throw error;
       }
 
+      // Generate PayPal subscription ID and dates
+      const now = new Date();
+      const paypalId = `ADMIN-MANUAL-${Date.now()}`;
+      const nextBilling = new Date(now);
+      if (activationDetails.billingCycle === 'yearly') {
+        nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+      } else {
+        nextBilling.setMonth(nextBilling.getMonth() + 1);
+      }
+
       setSubscriptions(prev => prev.map(sub => 
-        sub.user_id === userId ? { 
+        sub.user_id === selectedUser.user_id ? { 
           ...sub, 
           status: 'active',
           is_subscribed: true,
-          subscription_status: 'active'
+          subscription_status: 'active',
+          plan_name: activationDetails.planName,
+          amount: activationDetails.billingAmount
         } : sub
       ));
       
-      toast.success('Subscription activated successfully');
+      // Show success details
+      toast.success(
+        `Subscription activated successfully!\n` +
+        `Plan: ${activationDetails.planName}\n` +
+        `Billing Start: ${now.toLocaleDateString()}\n` +
+        `PayPal ID: ${paypalId}\n` +
+        `Next Billing: ${nextBilling.toLocaleDateString()}`
+      );
+      
+      setIsActivationModalOpen(false);
       loadSubscriptions(); // Refresh data
     } catch (err) {
       console.error('Error activating subscription:', err);
@@ -147,6 +195,15 @@ export default function AdminSubscriptions() {
     } finally {
       setActivatingId(null);
     }
+  };
+
+  const handlePlanChange = (planName: string) => {
+    setActivationDetails(prev => ({
+      ...prev,
+      planName,
+      billingAmount: planName.includes('Yearly') ? 600 : 60,
+      billingCycle: planName.includes('Yearly') ? 'yearly' : 'monthly'
+    }));
   };
 
   if (isLoading) {
@@ -266,13 +323,13 @@ export default function AdminSubscriptions() {
 
                   <div className="flex items-center space-x-3">
                     <div className="text-right text-sm text-muted-foreground">
-                      <p>Joined {new Date(subscription.created_at).toLocaleDateString()}</p>
+                      <p>Joined {subscription.created_at ? new Date(subscription.created_at).toLocaleDateString() : 'Unknown'}</p>
                       <p className="text-xs">ID: {subscription.id.slice(0, 8)}...</p>
                     </div>
                     
                     {(!subscription.is_subscribed || subscription.subscription_status !== 'active') && (
                       <Button
-                        onClick={() => activateSubscription(subscription.user_id)}
+                        onClick={() => handleActivationClick(subscription)}
                         disabled={activatingId === subscription.user_id}
                         className="btn-enhanced"
                       >
@@ -313,6 +370,93 @@ export default function AdminSubscriptions() {
           </Card>
         )}
       </div>
+
+      {/* Enhanced Activation Modal */}
+      <Dialog open={isActivationModalOpen} onOpenChange={setIsActivationModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Crown className="h-5 w-5" />
+              <span>Activate Subscription</span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedUser && (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted rounded">
+                <h3 className="font-medium">{selectedUser.user_name || "No name"}</h3>
+                <p className="text-sm text-muted-foreground">{selectedUser.user_email}</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Plan</label>
+                  <Select value={activationDetails.planName} onValueChange={handlePlanChange}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Wakti Monthly">Wakti Monthly (60 QAR/month)</SelectItem>
+                      <SelectItem value="Wakti Yearly">Wakti Yearly (600 QAR/year)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">Amount</label>
+                    <div className="mt-1 p-2 bg-muted rounded text-sm">
+                      {activationDetails.billingAmount} {activationDetails.billingCurrency}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Cycle</label>
+                    <div className="mt-1 p-2 bg-muted rounded text-sm capitalize">
+                      {activationDetails.billingCycle}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Calendar className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-800">Subscription Details</span>
+                  </div>
+                  <div className="text-xs text-blue-700 space-y-1">
+                    <p><strong>Billing Start Date:</strong> {new Date().toLocaleDateString()}</p>
+                    <p><strong>PayPal Subscription ID:</strong> ADMIN-MANUAL-{Date.now()}</p>
+                    <p><strong>Next Billing Date:</strong> {
+                      (() => {
+                        const next = new Date();
+                        if (activationDetails.billingCycle === 'yearly') {
+                          next.setFullYear(next.getFullYear() + 1);
+                        } else {
+                          next.setMonth(next.getMonth() + 1);
+                        }
+                        return next.toLocaleDateString();
+                      })()
+                    }</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setIsActivationModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={confirmActivateSubscription}
+                  disabled={activatingId === selectedUser.user_id}
+                  className="flex items-center space-x-2"
+                >
+                  <DollarSign className="h-4 w-4" />
+                  <span>{activatingId === selectedUser.user_id ? "Activating..." : "Activate Subscription"}</span>
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
