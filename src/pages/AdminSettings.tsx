@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Sun, Moon, Languages, ArrowLeft, Save, Palette, Bell, Database, Key } from "lucide-react";
+import { Shield, Sun, Moon, Languages, Save, Palette, Bell, Database, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
+import { AdminHeader } from "@/components/admin/AdminHeader";
 
 export default function AdminSettings() {
   const navigate = useNavigate();
@@ -35,10 +36,6 @@ export default function AdminSettings() {
     toast.success('Settings saved successfully');
   };
 
-  const handleBackToDashboard = () => {
-    navigate('/admindash');
-  };
-
   const handleThemeToggle = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
@@ -60,51 +57,36 @@ export default function AdminSettings() {
 
   return (
     <div className="min-h-screen bg-gradient-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleBackToDashboard}
-              className="rounded-full hover:bg-accent/10"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <Shield className="h-8 w-8 text-accent-blue" />
-            <div>
-              <h1 className="text-xl font-bold text-enhanced-heading">Admin Settings</h1>
-              <p className="text-sm text-muted-foreground">Configure admin panel preferences</p>
-            </div>
-          </div>
-          
-          <Button
-            onClick={handleSaveSettings}
-            className="btn-enhanced"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            Save Settings
-          </Button>
-        </div>
-      </header>
+      <AdminHeader
+        title="Admin Settings"
+        subtitle="Configure admin panel preferences"
+        icon={<Shield className="h-6 w-6 sm:h-8 sm:w-8 text-accent-blue" />}
+      >
+        <Button
+          onClick={handleSaveSettings}
+          className="btn-enhanced"
+        >
+          <Save className="h-4 w-4 mr-2" />
+          Save Settings
+        </Button>
+      </AdminHeader>
 
       {/* Settings Content */}
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="p-3 sm:p-6 max-w-4xl mx-auto space-y-4 sm:space-y-6 overflow-auto">
         {/* Appearance Settings */}
         <Card className="enhanced-card">
           <CardHeader>
             <CardTitle className="text-enhanced-heading flex items-center">
-              <Palette className="h-5 w-5 mr-2 text-accent-purple" />
+              <Palette className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-purple" />
               Appearance & Language
             </CardTitle>
             <CardDescription>Customize the look and feel of the admin panel</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+          <CardContent className="space-y-4 sm:space-y-6">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Theme Mode</Label>
-                <div className="text-sm text-muted-foreground">Choose between light and dark mode</div>
+                <Label className="text-sm sm:text-base font-medium">Theme Mode</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">Choose between light and dark mode</div>
               </div>
               <div className="flex items-center space-x-3">
                 <Sun className="h-4 w-4 text-accent-orange" />
@@ -116,10 +98,10 @@ export default function AdminSettings() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Language</Label>
-                <div className="text-sm text-muted-foreground">Admin panel interface language</div>
+                <Label className="text-sm sm:text-base font-medium">Language</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">Admin panel interface language</div>
               </div>
               <div className="flex items-center space-x-3">
                 <Languages className="h-4 w-4 text-accent-green" />
@@ -139,16 +121,16 @@ export default function AdminSettings() {
         <Card className="enhanced-card">
           <CardHeader>
             <CardTitle className="text-enhanced-heading flex items-center">
-              <Bell className="h-5 w-5 mr-2 text-accent-orange" />
+              <Bell className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-orange" />
               Notifications
             </CardTitle>
             <CardDescription>Configure how you receive admin notifications</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+          <CardContent className="space-y-4 sm:space-y-6">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Email Notifications</Label>
-                <div className="text-sm text-muted-foreground">Receive admin alerts via email</div>
+                <Label className="text-sm sm:text-base font-medium">Email Notifications</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">Receive admin alerts via email</div>
               </div>
               <Switch
                 checked={settings.emailNotifications}
@@ -156,10 +138,10 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Push Notifications</Label>
-                <div className="text-sm text-muted-foreground">Browser push notifications for urgent alerts</div>
+                <Label className="text-sm sm:text-base font-medium">Push Notifications</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">Browser push notifications for urgent alerts</div>
               </div>
               <Switch
                 checked={settings.pushNotifications}
@@ -173,16 +155,16 @@ export default function AdminSettings() {
         <Card className="enhanced-card">
           <CardHeader>
             <CardTitle className="text-enhanced-heading flex items-center">
-              <Database className="h-5 w-5 mr-2 text-accent-blue" />
+              <Database className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-blue" />
               System Configuration
             </CardTitle>
             <CardDescription>Manage system-wide admin settings</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+          <CardContent className="space-y-4 sm:space-y-6">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Auto Backup</Label>
-                <div className="text-sm text-muted-foreground">Automatically backup admin data</div>
+                <Label className="text-sm sm:text-base font-medium">Auto Backup</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">Automatically backup admin data</div>
               </div>
               <Switch
                 checked={settings.autoBackup}
@@ -190,10 +172,10 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Maintenance Mode</Label>
-                <div className="text-sm text-muted-foreground">Put the app in maintenance mode</div>
+                <Label className="text-sm sm:text-base font-medium">Maintenance Mode</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">Put the app in maintenance mode</div>
               </div>
               <Switch
                 checked={settings.maintenanceMode}
@@ -201,10 +183,10 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Debug Mode</Label>
-                <div className="text-sm text-muted-foreground">Enable debug logging</div>
+                <Label className="text-sm sm:text-base font-medium">Debug Mode</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">Enable debug logging</div>
               </div>
               <Switch
                 checked={settings.debugMode}
@@ -212,16 +194,16 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Data Retention</Label>
-                <div className="text-sm text-muted-foreground">How long to keep admin logs</div>
+                <Label className="text-sm sm:text-base font-medium">Data Retention</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">How long to keep admin logs</div>
               </div>
               <Select 
                 value={settings.dataRetention} 
                 onValueChange={(value) => handleSettingChange('dataRetention', value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-24 sm:w-32">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -234,16 +216,16 @@ export default function AdminSettings() {
               </Select>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Session Timeout</Label>
-                <div className="text-sm text-muted-foreground">Admin session duration</div>
+                <Label className="text-sm sm:text-base font-medium">Session Timeout</Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">Admin session duration</div>
               </div>
               <Select 
                 value={settings.sessionTimeout} 
                 onValueChange={(value) => handleSettingChange('sessionTimeout', value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-24 sm:w-32">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -261,7 +243,7 @@ export default function AdminSettings() {
         <Card className="enhanced-card">
           <CardHeader>
             <CardTitle className="text-enhanced-heading flex items-center">
-              <Key className="h-5 w-5 mr-2 text-accent-green" />
+              <Key className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-green" />
               Security
             </CardTitle>
             <CardDescription>Admin security and access controls</CardDescription>

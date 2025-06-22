@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Gift, ArrowLeft, Search, Plus, Mic, Languages } from "lucide-react";
+import { Gift, Search, Plus, Mic, Languages } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AdminHeader } from "@/components/admin/AdminHeader";
 
 interface User {
   id: string;
@@ -132,39 +132,24 @@ export default function AdminQuotas() {
 
   return (
     <div className="min-h-screen bg-gradient-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/admindash')}
-              className="rounded-full hover:bg-accent/10"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <Gift className="h-8 w-8 text-accent-purple" />
-            <div>
-              <h1 className="text-xl font-bold text-enhanced-heading">Quota Management</h1>
-              <p className="text-sm text-muted-foreground">Gift voice credits and translation quotas</p>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AdminHeader
+        title="Quota Management"
+        subtitle="Gift voice credits and translation quotas"
+        icon={<Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
+      />
 
-      <div className="p-6">
+      <div className="p-3 sm:p-6 overflow-auto">
         {/* Gift Quota Form */}
-        <Card className="enhanced-card mb-8">
+        <Card className="enhanced-card mb-6 sm:mb-8">
           <CardHeader>
             <CardTitle className="text-enhanced-heading flex items-center">
-              <Gift className="h-5 w-5 mr-2 text-accent-purple" />
+              <Gift className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-purple" />
               Gift Quota Credits
             </CardTitle>
             <CardDescription>Add additional voice or translation credits to user accounts</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label className="text-sm font-medium">Quota Type</Label>
                 <Select value={quotaType} onValueChange={(value: 'voice' | 'translation') => setQuotaType(value)}>
@@ -236,7 +221,7 @@ export default function AdminQuotas() {
         </div>
 
         {/* Users List */}
-        <div className="grid gap-4">
+        <div className="grid gap-3 sm:gap-4">
           {filteredUsers.map((user) => (
             <Card 
               key={user.id} 
@@ -245,10 +230,10 @@ export default function AdminQuotas() {
               }`}
               onClick={() => setSelectedUser(user)}
             >
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center">
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-primary rounded-full flex items-center justify-center">
                       <span className="text-white font-medium">
                         {(user.full_name || user.email).charAt(0).toUpperCase()}
                       </span>
@@ -261,7 +246,7 @@ export default function AdminQuotas() {
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-6">
+                  <div className="flex items-center space-x-4 sm:space-x-6">
                     {/* Voice Quota */}
                     <div className="text-center">
                       <div className="flex items-center space-x-2 mb-1">
@@ -296,9 +281,9 @@ export default function AdminQuotas() {
 
         {filteredUsers.length === 0 && (
           <Card className="enhanced-card">
-            <CardContent className="p-12 text-center">
-              <Gift className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
+            <CardContent className="p-8 sm:p-12 text-center">
+              <Gift className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-base sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
               <p className="text-muted-foreground">Try adjusting your search criteria.</p>
             </CardContent>
           </Card>
