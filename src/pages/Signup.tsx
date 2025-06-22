@@ -20,21 +20,10 @@ import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validatePassword, validateConfirmPassword } from "@/utils/validations";
 
 export default function Signup() {
-  // FORCE CACHE CLEAR - Multiple strategies
-  const CACHE_BUSTER = Date.now() + Math.random();
-  console.log("🔥🔥🔥 SIGNUP LOADED - CACHE BUSTER:", CACHE_BUSTER);
-  
-  // Force browser refresh if needed
-  useEffect(() => {
-    const hasRefreshed = sessionStorage.getItem('signup-force-refresh');
-    if (!hasRefreshed) {
-      console.log("🔄 First load - forcing refresh to clear cache");
-      sessionStorage.setItem('signup-force-refresh', 'true');
-      window.location.reload();
-      return;
-    }
-    console.log("✅ Cache refresh completed, proceeding with signup");
-  }, []);
+  // UNIQUE IDENTIFIER FOR THIS COMPONENT
+  console.log("🔥🔥🔥 LOADING COMPLETE SIGNUP COMPONENT WITH ALL FIELDS 🔥🔥🔥");
+  console.log("Component file: src/pages/Signup.tsx");
+  console.log("Should show: Name, Username, Email, Password, Confirm Password, Date of Birth");
   
   const navigate = useNavigate();
   const { language } = useTheme();
@@ -53,6 +42,19 @@ export default function Signup() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
+
+  // Log all state values for debugging
+  useEffect(() => {
+    console.log("Signup Form State:", {
+      name,
+      username,
+      email,
+      password: password ? "***" : "",
+      confirmPassword: confirmPassword ? "***" : "",
+      dateOfBirth,
+      agreedToTerms
+    });
+  }, [name, username, email, password, confirmPassword, dateOfBirth, agreedToTerms]);
 
   // Real-time password validation
   const handlePasswordChange = (value: string) => {
@@ -77,7 +79,10 @@ export default function Signup() {
     e.preventDefault();
     setErrorMsg(null);
     
+    console.log("🚀 Signup form submitted");
+    
     if (!name || !username || !email || !password || !confirmPassword || !dateOfBirth) {
+      console.log("❌ Missing fields:", { name: !!name, username: !!username, email: !!email, password: !!password, confirmPassword: !!confirmPassword, dateOfBirth: !!dateOfBirth });
       setErrorMsg(language === 'en' ? 'Please fill in all fields including date of birth' : 'يرجى تعبئة جميع الحقول بما في ذلك تاريخ الميلاد');
       return;
     }
@@ -226,9 +231,9 @@ export default function Signup() {
 
   return (
     <>
-      {/* SUPER VISIBLE CACHE BUSTER */}
-      <div className="w-full bg-red-600 text-white text-center py-2 text-sm font-black border-4 border-yellow-400">
-        🚨 COMPLETE SIGNUP FORM V3.0 - CACHE: {CACHE_BUSTER} 🚨
+      {/* ABSOLUTE UNIQUE IDENTIFIER */}
+      <div className="w-full bg-purple-600 text-white text-center py-4 text-lg font-black border-8 border-red-500 animate-pulse">
+        🎯 THIS IS THE COMPLETE SIGNUP FORM - VERSION IDENTIFIER: COMPLETE-SIGNUP-V1.0 🎯
       </div>
       
       <div className="min-h-screen bg-background text-foreground w-full max-w-md mx-auto">
@@ -386,15 +391,15 @@ export default function Signup() {
                   </div>
                 </div>
                 
-                {/* CONFIRM PASSWORD - ULTRA VISIBLE */}
-                <div className="space-y-2 bg-gradient-to-r from-blue-100 to-blue-200 p-6 border-4 border-blue-600 rounded-xl shadow-lg">
-                  <div className="bg-blue-500 text-white p-3 rounded-lg text-center font-black text-lg animate-pulse">
-                    🔐 CONFIRM PASSWORD FIELD 🔐
+                {/* CONFIRM PASSWORD FIELD */}
+                <div className="space-y-2 bg-gradient-to-r from-yellow-100 to-yellow-200 p-6 border-4 border-yellow-600 rounded-xl shadow-lg">
+                  <div className="bg-yellow-500 text-white p-3 rounded-lg text-center font-black text-lg animate-bounce">
+                    🔐 CONFIRM PASSWORD FIELD - SHOULD BE VISIBLE 🔐
                   </div>
-                  <Label htmlFor="confirmPassword" className="text-lg font-bold text-blue-800">{t.confirmPassword}</Label>
+                  <Label htmlFor="confirmPassword" className="text-lg font-bold text-yellow-800">{t.confirmPassword}</Label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Lock className="h-5 w-5 text-blue-600" />
+                      <Lock className="h-5 w-5 text-yellow-600" />
                     </div>
                     <Input
                       id="confirmPassword"
@@ -406,7 +411,7 @@ export default function Signup() {
                       value={confirmPassword}
                       onChange={(e) => handleConfirmPasswordChange(e.target.value)}
                       className={cn(
-                        "pl-10 pr-10 py-6 text-base shadow-sm border-4 border-blue-400 bg-white",
+                        "pl-10 pr-10 py-6 text-base shadow-sm border-4 border-yellow-400 bg-white",
                         confirmPasswordError && "border-red-500"
                       )}
                       required
@@ -417,9 +422,9 @@ export default function Signup() {
                       className="absolute inset-y-0 right-0 flex items-center pr-3"
                     >
                       {showConfirmPassword ? (
-                        <EyeOff className="h-5 w-5 text-blue-600" />
+                        <EyeOff className="h-5 w-5 text-yellow-600" />
                       ) : (
-                        <Eye className="h-5 w-5 text-blue-600" />
+                        <Eye className="h-5 w-5 text-yellow-600" />
                       )}
                     </button>
                   </div>
@@ -430,12 +435,12 @@ export default function Signup() {
                   )}
                 </div>
                 
-                {/* DATE OF BIRTH - ULTRA VISIBLE */}
-                <div className="space-y-2 bg-gradient-to-r from-green-100 to-green-200 p-6 border-4 border-green-600 rounded-xl shadow-lg">
-                  <div className="bg-green-500 text-white p-3 rounded-lg text-center font-black text-lg animate-pulse">
-                    📅 DATE OF BIRTH FIELD 📅
+                {/* DATE OF BIRTH FIELD */}
+                <div className="space-y-2 bg-gradient-to-r from-blue-100 to-blue-200 p-6 border-4 border-blue-600 rounded-xl shadow-lg">
+                  <div className="bg-blue-500 text-white p-3 rounded-lg text-center font-black text-lg animate-bounce">
+                    📅 DATE OF BIRTH FIELD - SHOULD BE VISIBLE 📅
                   </div>
-                  <Label htmlFor="dateOfBirth" className="text-lg font-bold text-green-800">{t.dateOfBirth}</Label>
+                  <Label htmlFor="dateOfBirth" className="text-lg font-bold text-blue-800">{t.dateOfBirth}</Label>
                   <div className="space-y-3">
                     <Input
                       id="dob"
@@ -444,7 +449,7 @@ export default function Signup() {
                       onChange={handleDobInputChange}
                       max={new Date().toISOString().split('T')[0]}
                       min="1900-01-01"
-                      className="w-full text-base border-4 border-green-400 bg-white py-6"
+                      className="w-full text-base border-4 border-blue-400 bg-white py-6"
                       disabled={isLoading}
                       placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
                     />
@@ -453,12 +458,12 @@ export default function Signup() {
                         <Button
                           variant="outline"
                           className={cn(
-                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm border-4 border-green-400 bg-white",
+                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm border-4 border-blue-400 bg-white",
                             !dateOfBirth && "text-muted-foreground"
                           )}
                           disabled={isLoading}
                         >
-                          <CalendarIcon className="mr-2 h-5 w-5 text-green-600" />
+                          <CalendarIcon className="mr-2 h-5 w-5 text-blue-600" />
                           {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
                         </Button>
                       </PopoverTrigger>
