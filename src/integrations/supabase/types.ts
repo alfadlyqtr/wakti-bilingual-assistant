@@ -50,6 +50,44 @@ export type Database = {
           },
         ]
       }
+      admin_messages: {
+        Row: {
+          admin_id: string
+          content: string
+          created_at: string
+          id: string
+          is_read: boolean | null
+          recipient_id: string
+          subject: string
+        }
+        Insert: {
+          admin_id: string
+          content: string
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          recipient_id: string
+          subject: string
+        }
+        Update: {
+          admin_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          recipient_id?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_messages_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_sessions: {
         Row: {
           admin_user_id: string | null
@@ -943,6 +981,7 @@ export type Database = {
           id: string
           is_logged_in: boolean | null
           is_subscribed: boolean | null
+          is_suspended: boolean | null
           last_name: string | null
           next_billing_date: string | null
           notification_preferences: Json | null
@@ -950,6 +989,9 @@ export type Database = {
           plan_name: string | null
           settings: Json | null
           subscription_status: string | null
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
           updated_at: string | null
           username: string | null
         }
@@ -965,6 +1007,7 @@ export type Database = {
           id: string
           is_logged_in?: boolean | null
           is_subscribed?: boolean | null
+          is_suspended?: boolean | null
           last_name?: string | null
           next_billing_date?: string | null
           notification_preferences?: Json | null
@@ -972,6 +1015,9 @@ export type Database = {
           plan_name?: string | null
           settings?: Json | null
           subscription_status?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           updated_at?: string | null
           username?: string | null
         }
@@ -987,6 +1033,7 @@ export type Database = {
           id?: string
           is_logged_in?: boolean | null
           is_subscribed?: boolean | null
+          is_suspended?: boolean | null
           last_name?: string | null
           next_billing_date?: string | null
           notification_preferences?: Json | null
@@ -994,10 +1041,21 @@ export type Database = {
           plan_name?: string | null
           settings?: Json | null
           subscription_status?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           updated_at?: string | null
           username?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_suspended_by_fkey"
+            columns: ["suspended_by"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shared_task_completions: {
         Row: {
@@ -1913,6 +1971,15 @@ export type Database = {
         }
         Returns: string
       }
+      send_admin_message: {
+        Args: {
+          p_admin_id: string
+          p_recipient_id: string
+          p_subject: string
+          p_content: string
+        }
+        Returns: string
+      }
       set_limit: {
         Args: { "": number }
         Returns: number
@@ -1928,6 +1995,18 @@ export type Database = {
       show_trgm: {
         Args: { "": string }
         Returns: string[]
+      }
+      soft_delete_user: {
+        Args: { p_user_id: string; p_admin_id: string }
+        Returns: boolean
+      }
+      suspend_user: {
+        Args: { p_user_id: string; p_admin_id: string; p_reason?: string }
+        Returns: boolean
+      }
+      unsuspend_user: {
+        Args: { p_user_id: string }
+        Returns: boolean
       }
       update_overdue_tasks: {
         Args: Record<PropertyKey, never>

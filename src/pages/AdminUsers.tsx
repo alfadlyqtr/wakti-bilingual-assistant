@@ -1,14 +1,17 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, ArrowLeft, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle } from "lucide-react";
+import { Shield, ArrowLeft, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { UserProfileModal } from "@/components/admin/UserProfileModal";
+import { AdminMessageModal } from "@/components/admin/AdminMessageModal";
+import { SuspendUserModal, DeleteUserModal } from "@/components/admin/UserActionModals";
 
 interface User {
   id: string;
@@ -19,6 +22,9 @@ interface User {
   is_logged_in: boolean;
   email_confirmed: boolean;
   subscription_status?: string;
+  is_suspended?: boolean;
+  suspended_at?: string;
+  suspension_reason?: string;
 }
 
 export default function AdminUsers() {
@@ -28,6 +34,13 @@ export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
+  
+  // Modal states
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -49,7 +62,10 @@ export default function AdminUsers() {
           avatar_url,
           created_at,
           is_logged_in,
-          email_confirmed
+          email_confirmed,
+          is_suspended,
+          suspended_at,
+          suspension_reason
         `)
         .order('created_at', { ascending: false });
 
@@ -99,15 +115,35 @@ export default function AdminUsers() {
         filtered = filtered.filter(user => user.subscription_status === 'active');
       } else if (filterStatus === "unconfirmed") {
         filtered = filtered.filter(user => !user.email_confirmed);
+      } else if (filterStatus === "suspended") {
+        filtered = filtered.filter(user => user.is_suspended);
       }
     }
 
     setFilteredUsers(filtered);
   };
 
-  const handleUserAction = (userId: string, action: string) => {
-    toast.info(`${action} action for user ${userId}`);
-    // Implement actual user actions here
+  const handleUserAction = (user: User, action: string) => {
+    setSelectedUser(user);
+    
+    switch (action) {
+      case "View Profile":
+        setIsProfileModalOpen(true);
+        break;
+      case "Send Message":
+        setIsMessageModalOpen(true);
+        break;
+      case "Suspend User":
+        setIsSuspendModalOpen(true);
+        break;
+      case "Delete User":
+        setIsDeleteModalOpen(true);
+        break;
+    }
+  };
+
+  const handleModalSuccess = () => {
+    loadUsers(); // Refresh the user list
   };
 
   if (isLoading) {
@@ -160,7 +196,8 @@ export default function AdminUsers() {
                 <span>
                   {filterStatus === "all" ? "All Users" : 
                    filterStatus === "online" ? "Online" : 
-                   filterStatus === "subscribed" ? "Subscribed" : "Unconfirmed"}
+                   filterStatus === "subscribed" ? "Subscribed" : 
+                   filterStatus === "unconfirmed" ? "Unconfirmed" : "Suspended"}
                 </span>
               </Button>
             </DropdownMenuTrigger>
@@ -169,6 +206,7 @@ export default function AdminUsers() {
               <DropdownMenuItem onClick={() => setFilterStatus("online")}>Online Users</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterStatus("subscribed")}>Subscribed Users</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterStatus("unconfirmed")}>Unconfirmed Email</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterStatus("suspended")}>Suspended Users</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -176,7 +214,7 @@ export default function AdminUsers() {
         {/* Users List */}
         <div className="grid gap-4">
           {filteredUsers.map((user) => (
-            <Card key={user.id} className="enhanced-card">
+            <Card key={user.id} className={`enhanced-card ${user.is_suspended ? 'border-red-200 bg-red-50/50' : ''}`}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
@@ -202,6 +240,11 @@ export default function AdminUsers() {
                           <CheckCircle className="h-4 w-4 text-accent-green" />
                         ) : (
                           <AlertCircle className="h-4 w-4 text-accent-orange" />
+                        )}
+                        {user.is_suspended && (
+                          <Badge variant="destructive" className="text-xs">
+                            SUSPENDED
+                          </Badge>
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">{user.email}</p>
@@ -236,17 +279,24 @@ export default function AdminUsers() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleUserAction(user.id, "View Profile")}>
-                          <UserCheck className="h-4 w-4 mr-2" />
+                        <DropdownMenuItem onClick={() => handleUserAction(user, "View Profile")}>
+                          <Eye className="h-4 w-4 mr-2" />
                           View Profile
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleUserAction(user.id, "Send Message")}>
+                        <DropdownMenuItem onClick={() => handleUserAction(user, "Send Message")}>
                           <Mail className="h-4 w-4 mr-2" />
                           Send Message
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleUserAction(user.id, "Suspend User")}>
+                        <DropdownMenuItem onClick={() => handleUserAction(user, "Suspend User")}>
                           <UserX className="h-4 w-4 mr-2" />
-                          Suspend User
+                          {user.is_suspended ? "Unsuspend User" : "Suspend User"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleUserAction(user, "Delete User")}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete User
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -267,6 +317,33 @@ export default function AdminUsers() {
           </Card>
         )}
       </div>
+
+      {/* Modals */}
+      <UserProfileModal
+        user={selectedUser}
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
+      
+      <AdminMessageModal
+        user={selectedUser}
+        isOpen={isMessageModalOpen}
+        onClose={() => setIsMessageModalOpen(false)}
+      />
+      
+      <SuspendUserModal
+        user={selectedUser}
+        isOpen={isSuspendModalOpen}
+        onClose={() => setIsSuspendModalOpen(false)}
+        onSuccess={handleModalSuccess}
+      />
+      
+      <DeleteUserModal
+        user={selectedUser}
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onSuccess={handleModalSuccess}
+      />
     </div>
   );
 }
