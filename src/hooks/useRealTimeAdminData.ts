@@ -110,19 +110,20 @@ export const useRealTimeAdminData = () => {
         });
       });
 
-      // Get recent subscription activations
+      // Get recent subscription activations - Fix the email access issue
       const { data: newSubs } = await supabase
         .from('subscriptions')
-        .select('created_at, profiles(email)')
+        .select('created_at, profiles!inner(email)')
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(2);
 
       newSubs?.forEach(sub => {
+        const profileEmail = (sub.profiles as any)?.email || 'Unknown user';
         activities.push({
           id: `sub-${sub.created_at}`,
           type: 'subscription_activation',
-          message: `Subscription activated: ${sub.profiles?.email || 'Unknown user'}`,
+          message: `Subscription activated: ${profileEmail}`,
           timestamp: sub.created_at,
           status: 'success'
         });
