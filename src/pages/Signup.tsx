@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -9,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, CheckCircle, XCircle } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,7 +16,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
-import { validatePassword, validateConfirmPassword } from "@/utils/validations";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -26,78 +24,42 @@ export default function Signup() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
   const [dobInputValue, setDobInputValue] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
-
-  // Password requirements check
-  const passwordRequirements = {
-    length: password.length >= 6,
-    uppercase: /[A-Z]/.test(password),
-    lowercase: /[a-z]/.test(password),
-    digit: /\d/.test(password)
-  };
-
-  // Real-time password validation
-  const handlePasswordChange = (value: string) => {
-    setPassword(value);
-    const error = validatePassword(value);
-    setPasswordError(error);
-    
-    if (confirmPassword) {
-      const confirmError = validateConfirmPassword(value, confirmPassword);
-      setConfirmPasswordError(confirmError);
-    }
-  };
-
-  // Real-time confirm password validation
-  const handleConfirmPasswordChange = (value: string) => {
-    setConfirmPassword(value);
-    const error = validateConfirmPassword(password, value);
-    setConfirmPasswordError(error);
-  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     
-    if (!name || !username || !email || !password || !confirmPassword || !dateOfBirth) {
+    if (!name || !username || !email || !password || !dateOfBirth) {
       setErrorMsg(language === 'en' ? 'Please fill in all fields including date of birth' : 'يرجى تعبئة جميع الحقول بما في ذلك تاريخ الميلاد');
       return;
     }
     
     if (!agreedToTerms) {
-      setErrorMsg(language === 'en' ? 'You must agree to the Privacy Policy and Terms of Service to continue' : 'يجب أن توافق على سياسة الخصوصية وشروط الخدمة للمتابعة');
+      setErrorMsg(language === 'en' ? 'Please agree to the Privacy Policy and Terms of Service' : 'يرجى الموافقة على سياسة الخصوصية وشروط الخدمة');
       return;
     }
     
-    const passwordValidationError = validatePassword(password);
-    if (passwordValidationError) {
-      setPasswordError(passwordValidationError);
-      setErrorMsg(passwordValidationError);
-      return;
-    }
-    
-    const confirmPasswordValidationError = validateConfirmPassword(password, confirmPassword);
-    if (confirmPasswordValidationError) {
-      setConfirmPasswordError(confirmPasswordValidationError);
-      setErrorMsg(confirmPasswordValidationError);
+    if (password.length < 6) {
+      setErrorMsg(language === 'en' ? 'Password must be at least 6 characters long' : 'يجب أن تكون كلمة المرور 6 أحرف على الأقل');
       return;
     }
     
     setIsLoading(true);
     
     try {
+      // Get the redirect URL for email confirmation
       const redirectUrl = `${window.location.origin}/confirmed`;
       
+      console.log('Attempting signup with redirect URL:', redirectUrl);
+      
+      // Create the user in Supabase Auth with email confirmation
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -112,20 +74,28 @@ export default function Signup() {
       });
       
       if (error) {
+        console.error("Signup error:", error);
         setErrorMsg(error.message);
         toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
       } else if (data?.user) {
+        console.log('Signup successful:', data);
+        
+        // Check if user needs email confirmation
         if (!data.user.email_confirmed_at) {
+          console.log('Email confirmation required');
           toast.success(language === 'en' 
             ? 'Please check your email and click the confirmation link to verify your account.' 
             : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
           );
           setIsEmailConfirmationDialogOpen(true);
         } else {
+          // User is already confirmed (shouldn't happen with email confirmations enabled)
+          console.log('User already confirmed, redirecting to dashboard');
           navigate("/dashboard");
         }
       }
     } catch (err) {
+      console.error("Unexpected error during signup:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
       toast.error(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
     } finally {
@@ -133,6 +103,7 @@ export default function Signup() {
     }
   };
 
+  // Sync manual date input to picker and vice versa
   const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setDobInputValue(value);
@@ -147,6 +118,7 @@ export default function Signup() {
     }
   };
 
+  // When picking from calendar
   const handleCalendarDateSelect = (date: Date | undefined) => {
     setDateOfBirth(date);
     if (date) {
@@ -156,6 +128,7 @@ export default function Signup() {
     }
   };
 
+  // Translations
   const translations = {
     en: {
       appName: "WAKTI",
@@ -164,7 +137,6 @@ export default function Signup() {
       username: "Username",
       email: "Email",
       password: "Password",
-      confirmPassword: "Confirm Password",
       dateOfBirth: "Date of Birth",
       loading: "Loading...",
       signup: "Sign Up",
@@ -175,18 +147,12 @@ export default function Signup() {
       privacyPolicy: "Privacy Policy",
       and: "and",
       termsOfService: "Terms of Service",
+      // Placeholders
       namePlaceholder: "Your Name",
       usernamePlaceholder: "username",
       emailPlaceholder: "example@email.com",
       passwordPlaceholder: "Create a password",
-      confirmPasswordPlaceholder: "Confirm your password",
-      dobPlaceholder: "Select your date of birth",
-      passwordRequirements: "Password Requirements:",
-      atLeast6Chars: "At least 6 characters",
-      oneUppercase: "One uppercase letter",
-      oneLowercase: "One lowercase letter",
-      oneDigit: "One digit",
-      mustAgreeTerms: "You must agree to our Privacy Policy and Terms of Service"
+      dobPlaceholder: "Select your date of birth"
     },
     ar: {
       appName: "وقتي",
@@ -195,7 +161,6 @@ export default function Signup() {
       username: "اسم المستخدم",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
-      confirmPassword: "تأكيد كلمة المرور",
       dateOfBirth: "تاريخ الميلاد",
       loading: "جاري التحميل...",
       signup: "إنشاء حساب",
@@ -206,328 +171,226 @@ export default function Signup() {
       privacyPolicy: "سياسة الخصوصية",
       and: "و",
       termsOfService: "شروط الخدمة",
+      // Placeholders
       namePlaceholder: "اسمك",
       usernamePlaceholder: "اسم المستخدم",
       emailPlaceholder: "example@email.com",
       passwordPlaceholder: "إنشاء كلمة مرور",
-      confirmPasswordPlaceholder: "تأكيد كلمة المرور",
-      dobPlaceholder: "اختر تاريخ ميلادك",
-      passwordRequirements: "متطلبات كلمة المرور:",
-      atLeast6Chars: "6 أحرف على الأقل",
-      oneUppercase: "حرف كبير واحد",
-      oneLowercase: "حرف صغير واحد",
-      oneDigit: "رقم واحد",
-      mustAgreeTerms: "يجب أن توافق على سياسة الخصوصية وشروط الخدمة"
+      dobPlaceholder: "اختر تاريخ ميلادك"
     }
   };
 
   const t = translations[language];
 
+  // Update navigation after user closes dialog
   const handleDialogClose = () => {
     setIsEmailConfirmationDialogOpen(false);
     navigate("/login");
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground w-full max-w-md mx-auto">
-      <header className="sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
-        <div className="flex items-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-1 mr-2"
-            onClick={() => navigate("/home")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="text-xs">{t.backToHome}</span>
-          </Button>
-        </div>
-        <ThemeLanguageToggle />
-      </header>
+    <>
+      {/* Original signup page */}
+      <div className="mobile-container">
+        <header className="mobile-header">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-1 mr-2"
+              onClick={() => navigate("/home")}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="text-xs">{t.backToHome}</span>
+            </Button>
+          </div>
+          <ThemeLanguageToggle />
+        </header>
 
-      <div className="flex-1 overflow-y-auto pb-safe">
-        <div className="px-6 py-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="w-full max-w-md mx-auto"
-          >
-            <div className="mb-6 text-center">
-              <div 
-                className="inline-block cursor-pointer mb-3"
-                onClick={() => navigate("/home")}
-              >
-                <Logo3D size="lg" />
-              </div>
-              <h1 className="text-2xl font-bold">{t.createAccount}</h1>
-              
-              {errorMsg && (
-                <div className="mt-3 text-sm text-red-500 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                  {errorMsg}
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex min-h-[80vh] flex-col justify-center py-6 px-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="w-full max-w-md mx-auto"
+            >
+              <div className="mb-6 text-center">
+                {/* App logo with navigation to home */}
+                <div 
+                  className="inline-block cursor-pointer mb-4"
+                  onClick={() => navigate("/home")}
+                >
+                  <Logo3D size="lg" />
                 </div>
-              )}
-            </div>
-
-            <form onSubmit={handleSignup} className="space-y-4">
-              {/* Name Field */}
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium">{t.name}</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <Input
-                    id="name"
-                    placeholder={t.namePlaceholder}
-                    type="text"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    disabled={isLoading}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="pl-10 h-12"
-                    required
-                  />
-                </div>
-              </div>
-              
-              {/* Username Field */}
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm font-medium">{t.username}</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <Input
-                    id="username"
-                    placeholder={t.usernamePlaceholder}
-                    type="text"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    disabled={isLoading}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 h-12"
-                    required
-                  />
-                </div>
-              </div>
-              
-              {/* Email Field */}
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium">{t.email}</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <Input
-                    id="email"
-                    placeholder={t.emailPlaceholder}
-                    type="email"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect="off"
-                    disabled={isLoading}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 h-12"
-                    required
-                  />
-                </div>
-              </div>
-              
-              {/* Password Requirements */}
-              {password && (
-                <div className="p-3 bg-muted/50 rounded-lg border">
-                  <h3 className="text-sm font-medium mb-2">{t.passwordRequirements}</h3>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs">
-                      {passwordRequirements.length ? 
-                        <CheckCircle className="h-3 w-3 text-green-500" /> : 
-                        <XCircle className="h-3 w-3 text-red-500" />
-                      }
-                      <span className={passwordRequirements.length ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                        {t.atLeast6Chars}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      {passwordRequirements.uppercase ? 
-                        <CheckCircle className="h-3 w-3 text-green-500" /> : 
-                        <XCircle className="h-3 w-3 text-red-500" />
-                      }
-                      <span className={passwordRequirements.uppercase ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                        {t.oneUppercase}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      {passwordRequirements.lowercase ? 
-                        <CheckCircle className="h-3 w-3 text-green-500" /> : 
-                        <XCircle className="h-3 w-3 text-red-500" />
-                      }
-                      <span className={passwordRequirements.lowercase ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                        {t.oneLowercase}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      {passwordRequirements.digit ? 
-                        <CheckCircle className="h-3 w-3 text-green-500" /> : 
-                        <XCircle className="h-3 w-3 text-red-500" />
-                      }
-                      <span className={passwordRequirements.digit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                        {t.oneDigit}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Password Field */}
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium">{t.password}</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <Lock className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder={t.passwordPlaceholder}
-                    autoCapitalize="none"
-                    autoComplete="new-password"
-                    disabled={isLoading}
-                    value={password}
-                    onChange={(e) => handlePasswordChange(e.target.value)}
-                    className={cn(
-                      "pl-10 pr-10 h-12",
-                      passwordError && "border-red-500"
-                    )}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </button>
-                </div>
-                {passwordError && (
-                  <div className="text-xs text-red-500 mt-1">
-                    {passwordError}
+                <h1 className="text-2xl font-bold">{t.createAccount}</h1>
+                
+                {errorMsg && (
+                  <div className="mt-3 text-sm text-red-500">
+                    {errorMsg}
                   </div>
                 )}
               </div>
-              
-              {/* Confirm Password Field */}
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-sm font-medium">{t.confirmPassword}</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <Lock className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
-                    placeholder={t.confirmPasswordPlaceholder}
-                    autoCapitalize="none"
-                    autoComplete="new-password"
-                    disabled={isLoading}
-                    value={confirmPassword}
-                    onChange={(e) => handleConfirmPasswordChange(e.target.value)}
-                    className={cn(
-                      "pl-10 pr-10 h-12",
-                      confirmPasswordError && "border-red-500"
-                    )}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3"
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </button>
-                </div>
-                {confirmPasswordError && (
-                  <div className="text-xs text-red-500 mt-1">
-                    {confirmPasswordError}
-                  </div>
-                )}
-              </div>
-              
-              {/* Date of Birth Field */}
-              <div className="space-y-2">
-                <Label htmlFor="dateOfBirth" className="text-sm font-medium">{t.dateOfBirth}</Label>
+
+              <form onSubmit={handleSignup} className="space-y-6">
                 <div className="space-y-2">
-                  <Input
-                    id="dob"
-                    type="date"
-                    value={dobInputValue}
-                    onChange={handleDobInputChange}
-                    max={new Date().toISOString().split('T')[0]}
-                    min="1900-01-01"
-                    className="w-full h-12"
-                    disabled={isLoading}
-                    placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
-                  />
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal h-12",
-                          !dateOfBirth && "text-muted-foreground"
-                        )}
-                        disabled={isLoading}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={dateOfBirth}
-                        onSelect={handleCalendarDateSelect}
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Label htmlFor="name" className="text-base">{t.name}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <User className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="name"
+                      placeholder={t.namePlaceholder}
+                      type="text"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      disabled={isLoading}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="pl-10 py-6 text-base shadow-sm"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
-              
-              {/* Privacy and Terms Checkbox - More Prominent */}
-              <div className="p-4 bg-primary/5 border-2 border-primary/20 rounded-lg">
+                
+                <div className="space-y-2">
+                  <Label htmlFor="username" className="text-base">{t.username}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <User className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="username"
+                      placeholder={t.usernamePlaceholder}
+                      type="text"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      disabled={isLoading}
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="pl-10 py-6 text-base shadow-sm"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-base">{t.email}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Mail className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="email"
+                      placeholder={t.emailPlaceholder}
+                      type="email"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      autoCorrect="off"
+                      disabled={isLoading}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10 py-6 text-base shadow-sm"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
+                  <div className="space-y-2">
+                    {/* Manual date entry */}
+                    <Input
+                      id="dob"
+                      type="date"
+                      value={dobInputValue}
+                      onChange={handleDobInputChange}
+                      max={new Date().toISOString().split('T')[0]}
+                      min="1900-01-01"
+                      className="w-full text-base"
+                      disabled={isLoading}
+                      placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
+                    />
+                    {/* OR calendar picker */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
+                            !dateOfBirth && "text-muted-foreground"
+                          )}
+                          disabled={isLoading}
+                        >
+                          <CalendarIcon className="mr-2 h-5 w-5" />
+                          {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={dateOfBirth}
+                          onSelect={handleCalendarDateSelect}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-base">{t.password}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Lock className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder={t.passwordPlaceholder}
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      disabled={isLoading}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10 pr-10 py-6 text-base shadow-sm"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Privacy and Terms Checkbox */}
                 <div className="flex items-start space-x-3">
                   <Checkbox
                     id="terms"
                     checked={agreedToTerms}
                     onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
                     disabled={isLoading}
-                    className="mt-1 border-primary data-[state=checked]:bg-primary"
+                    className="mt-1"
                   />
                   <div className="text-sm leading-relaxed">
-                    <label htmlFor="terms" className="cursor-pointer font-medium">
-                      <span className="text-primary font-semibold">{t.mustAgreeTerms}</span>
-                      <br />
+                    <label htmlFor="terms" className="cursor-pointer">
                       {t.agreeToTerms}{" "}
                       <button
                         type="button"
                         onClick={() => navigate("/privacy-terms")}
-                        className="text-primary hover:underline font-semibold underline decoration-2"
+                        className="text-primary hover:underline font-medium"
                       >
                         {t.privacyPolicy}
                       </button>
@@ -535,45 +398,44 @@ export default function Signup() {
                       <button
                         type="button"
                         onClick={() => navigate("/privacy-terms")}
-                        className="text-primary hover:underline font-semibold underline decoration-2"
+                        className="text-primary hover:underline font-medium"
                       >
                         {t.termsOfService}
                       </button>
                     </label>
                   </div>
                 </div>
-              </div>
-              
-              <Button
-                type="submit"
-                className="w-full h-12 text-sm font-semibold shadow-md hover:shadow-lg transition-all"
-                disabled={isLoading || !agreedToTerms || !!passwordError || !!confirmPasswordError}
-              >
-                {isLoading ? t.loading : t.signup}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                {t.alreadyHaveAccount}{" "}
+                
                 <Button
-                  variant="link"
-                  className="px-0 text-sm font-medium"
-                  onClick={() => navigate("/login")}
+                  type="submit"
+                  className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
+                  disabled={isLoading || !agreedToTerms}
                 >
-                  {t.login}
+                  {isLoading ? t.loading : t.signup}
                 </Button>
-              </p>
-            </div>
-          </motion.div>
+              </form>
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {t.alreadyHaveAccount}{" "}
+                  <Button
+                    variant="link"
+                    className="px-0"
+                    onClick={() => navigate("/login")}
+                  >
+                    {t.login}
+                  </Button>
+                </p>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </div>
-      
       {/* Email Confirmation Dialog */}
       <EmailConfirmationDialog
         open={isEmailConfirmationDialogOpen}
         onClose={handleDialogClose}
       />
-    </div>
+    </>
   );
 }
