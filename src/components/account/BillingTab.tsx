@@ -1,370 +1,175 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { useTheme } from '@/providers/ThemeProvider';
-import { t } from '@/utils/translations';
-import { CreditCard, Calendar, History, RefreshCw, ThumbsUp } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 
-interface UserSubscription {
-  is_subscribed: boolean;
-  subscription_status: string | null;
-  plan_name: string | null;
-  billing_start_date: string | null;
-  next_billing_date: string | null;
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { CreditCard, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
+
+interface PaymentRecord {
+  id: string;
+  paypal_subscription_id: string;
+  paypal_plan_id: string;
+  plan_name: string;
+  billing_amount: number;
+  billing_currency: string;
+  billing_cycle: string;
+  status: string;
+  start_date: string;
+  next_billing_date: string;
+  created_at: string;
 }
 
 export function BillingTab() {
   const { language } = useTheme();
-  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showLinkPayPal, setShowLinkPayPal] = useState(false);
-  const [linkPayPalId, setLinkPayPalId] = useState('');
-  const [linking, setLinking] = useState(false);
-  const [userId, setUserId] = useState<string>("");
+  const { user } = useAuthContext();
+  const [paymentHistory, setPaymentHistory] = useState<PaymentRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadSubscription();
-    // Get userId and store in state
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (data?.user?.id) {
-        setUserId(data.user.id);
-      } else {
-        setUserId(""); // fallback
-      }
-      if (error) {
-        console.error("Error fetching user:", error);
-      }
-    });
-    // eslint-disable-next-line
-  }, []);
+    loadPaymentHistory();
+  }, [user]);
 
-  const loadSubscription = async () => {
-    setLoading(true);
+  const loadPaymentHistory = async () => {
+    if (!user) return;
+
     try {
-      console.log('Loading subscription data...');
-      
-      // 1. Try to fetch latest subscription from subscriptions table first
-      const { data: subRows, error: subErr } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      setIsLoading(true);
+      console.log('Loading payment history for user:', user.id);
 
-      console.log('Subscriptions table data:', subRows);
-
-      let sub: UserSubscription | null = null;
-
-      if (subRows && (subRows.status === "active" || subRows.status === "trialing")) {
-        sub = {
-          is_subscribed: subRows.status === "active" || subRows.status === "trialing",
-          subscription_status: subRows.status,
-          plan_name: subRows.plan_name,
-          billing_start_date: subRows.start_date,
-          next_billing_date: subRows.next_billing_date,
-        };
-        console.log('Using subscription from subscriptions table:', sub);
-      } else {
-        // fallback to profiles (legacy)
-        console.log('No active subscription in subscriptions table, checking profiles...');
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('is_subscribed, subscription_status, plan_name, billing_start_date, next_billing_date')
-          .maybeSingle();
-
-        console.log('Profile data:', profile);
-
-        if (error) {
-          console.error('Error fetching user subscription:', error);
-          throw error;
-        }
-        sub = profile
-          ? {
-              is_subscribed: profile.is_subscribed,
-              subscription_status: profile.subscription_status,
-              plan_name: profile.plan_name,
-              billing_start_date: profile.billing_start_date,
-              next_billing_date: profile.next_billing_date,
-            }
-          : {
-              is_subscribed: false,
-              subscription_status: 'inactive',
-              plan_name: null,
-              billing_start_date: null,
-              next_billing_date: null,
-            };
-        console.log('Using subscription from profiles table:', sub);
-      }
-      setSubscription(sub);
-    } catch (error) {
-      console.error('Error loading subscription:', error);
-      toast.error(language === 'ar' ? 'فشل في تحميل تفاصيل الاشتراك' : 'Failed to load subscription details');
-      setSubscription({
-        is_subscribed: false,
-        subscription_status: 'inactive',
-        plan_name: null,
-        billing_start_date: null,
-        next_billing_date: null
+      const { data, error } = await supabase.rpc('get_user_payment_history', {
+        p_user_id: user.id
       });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
 
-  const handleSubscribe = (planUrl: string) => {
-    window.open(planUrl, '_blank');
-    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
-  };
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadSubscription();
-    toast.success(language === 'ar' ? 'تم تحديث بيانات الاشتراك' : 'Subscription info refreshed');
-  };
-
-  const handleManualLink = async () => {
-    if (!linkPayPalId) {
-      toast.error(language === 'ar' ? 'يرجى إدخال معرف الاشتراك' : 'Please enter subscription ID');
-      return;
-    }
-    setLinking(true);
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      const accessToken = session.session?.access_token || '';
-      
-      const res = await fetch(
-        'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/link-paypal-subscription',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ paypal_subscription_id: linkPayPalId }),
-        }
-      );
-      const result = await res.json();
-      if (result.success) {
-        toast.success(language === 'ar' ? 'تم ربط الاشتراك بنجاح' : 'Subscription linked successfully');
-        loadSubscription();
-        setShowLinkPayPal(false);
-        setLinkPayPalId('');
-      } else {
-        toast.error(result.error || language === 'ar' ? 'فشل في ربط الاشتراك' : 'Failed to link subscription');
+      if (error) {
+        console.error('Error loading payment history:', error);
+        throw error;
       }
-    } catch (e) {
-      toast.error(language === 'ar' ? 'فشل في ربط الاشتراك' : 'Failed to link subscription');
+
+      console.log('Payment history loaded:', data);
+      setPaymentHistory(data || []);
+    } catch (error) {
+      console.error('Failed to load payment history:', error);
+      toast.error(language === "ar" 
+        ? "فشل في تحميل سجل المدفوعات" 
+        : "Failed to load payment history"
+      );
     } finally {
-      setLinking(false);
+      setIsLoading(false);
     }
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US');
+  const getStatusIcon = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'pending':
+        return <Clock className="h-4 w-4 text-yellow-500" />;
+      case 'cancelled':
+      case 'suspended':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-gray-500" />;
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="animate-pulse">
-          <Card>
-            <CardHeader>
-              <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled':
+      case 'suspended':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
-  const planName = subscription?.plan_name || '';
-  const subscriptionStatus = subscription?.subscription_status || '';
-  const nextBillingDate = formatDate(subscription?.next_billing_date);
-  const billingStartDate = formatDate(subscription?.billing_start_date);
-  const isMonthlyPlan = planName?.toLowerCase().includes('month');
-  const isYearlyPlan = planName?.toLowerCase().includes('year');
-  const isSubscribed = subscription?.is_subscribed || false;
-
-  // Build PayPal URLs with userId if available
-  const monthlyPlanUrl =
-    'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA'
-    + (userId ? `&custom_id=${userId}` : '');
-
-  const yearlyPlanUrl =
-    'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y'
-    + (userId ? `&custom_id=${userId}` : '');
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString(language === "ar" ? "ar-QA" : "en-US", {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
 
   return (
     <div className="space-y-6">
-      {/* Subscription Information */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-row justify-between items-center">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                {t("subscriptionInfo", language)}
-              </CardTitle>
-              <CardDescription>
-                {language === 'ar' 
-                  ? 'معلومات خطة الاشتراك الحالية'
-                  : 'Current subscription plan information'
-                }
-              </CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing || loading}>
-              <RefreshCw className={`h-4 w-4${refreshing ? " animate-spin" : ""} mr-1`} />
-              {language === 'ar' ? 'تحديث' : 'Refresh'}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-2">
-            <Label htmlFor="plan-name">{t("planName", language)}</Label>
-            <Input
-              id="plan-name"
-              value={planName}
-              readOnly
-              className="bg-muted cursor-not-allowed"
-              placeholder={language === 'ar' ? 'لم يتم تحديد الخطة' : 'No plan selected'}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="subscription-status">{t("subscriptionStatus", language)}</Label>
-            <Input
-              id="subscription-status"
-              value={subscriptionStatus}
-              readOnly
-              className="bg-muted cursor-not-allowed"
-              placeholder={language === 'ar' ? 'غير محدد' : 'Not specified'}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="next-billing">{t("nextBillingDate", language)}</Label>
-            <Input
-              id="next-billing"
-              value={nextBillingDate}
-              readOnly
-              className="bg-muted cursor-not-allowed"
-              placeholder={language === 'ar' ? 'غير محدد' : 'Not specified'}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="billing-start">{t("billingStartDate", language)}</Label>
-            <Input
-              id="billing-start"
-              value={billingStartDate}
-              readOnly
-              className="bg-muted cursor-not-allowed"
-              placeholder={language === 'ar' ? 'غير محدد' : 'Not specified'}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Upgrade Options */}
+      {/* Current Subscription Status */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            {t("upgradeOptions", language)}
+            <CreditCard className="h-5 w-5" />
+            {language === "ar" ? "حالة الاشتراك الحالي" : "Current Subscription"}
           </CardTitle>
-          <CardDescription>
-            {language === 'ar' 
-              ? 'خيارات ترقية خطة الاشتراك'
-              : 'Subscription plan upgrade options'
-            }
-          </CardDescription>
         </CardHeader>
         <CardContent>
-          {!isSubscribed ? (
-            <>
-              <div className="space-y-3">
-                <Button 
-                  className="w-full sm:w-auto"
-                  onClick={() => handleSubscribe(monthlyPlanUrl)}
-                >
-                  {language === 'ar' ? 'اشترك شهرياً - $16.50 USD ≈ 60 ريال' : 'Subscribe Monthly - $16.50 USD ≈ 60 QAR'}
-                </Button>
-                <Button 
-                  variant="outline"
-                  className="w-full sm:w-auto ml-0 sm:ml-2"
-                  onClick={() => handleSubscribe(yearlyPlanUrl)}
-                >
-                  {language === 'ar' ? 'اشترك سنوياً - $165.00 USD ≈ 600 ريال' : 'Subscribe Yearly - $165.00 USD ≈ 600 QAR'}
-                </Button>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-3 text-xs underline text-primary underline-offset-4"
-                onClick={() => setShowLinkPayPal(true)}
-              >
-                {language === 'ar'
-                  ? 'ربط اشتراك بايبال يدوياً'
-                  : 'Link existing PayPal Subscription manually'}
-              </Button>
-              {showLinkPayPal && (
-                <div className="my-3 space-y-2 rounded-md border bg-muted p-4">
-                  <label className="block text-sm mb-1">
-                    {language === 'ar'
-                      ? 'ادخل معرف اشتراك PayPal'
-                      : 'Enter your PayPal subscription ID'}
-                  </label>
-                  <input
-                    className="bg-white border p-2 w-full rounded"
-                    value={linkPayPalId}
-                    onChange={e => setLinkPayPalId(e.target.value)}
-                    placeholder="sub_xxxxxxxxxx"
-                  />
-                  <Button
-                    className="mt-2"
-                    disabled={linking}
-                    onClick={handleManualLink}
-                  >
-                    {linking
-                      ? (language === 'ar' ? 'جاري الربط...' : 'Linking...')
-                      : (language === 'ar' ? 'ربط الاشتراك' : 'Link Subscription')
-                    }
-                  </Button>
+          {paymentHistory.length > 0 ? (
+            <div className="space-y-4">
+              {paymentHistory.slice(0, 1).map((record) => (
+                <div key={record.id} className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">{record.plan_name}</h3>
+                    <Badge className={getStatusColor(record.status)}>
+                      <span className="flex items-center gap-1">
+                        {getStatusIcon(record.status)}
+                        {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                      </span>
+                    </Badge>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">
+                        {language === "ar" ? "المبلغ" : "Amount"}
+                      </p>
+                      <p className="font-medium">
+                        {record.billing_amount} {record.billing_currency}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">
+                        {language === "ar" ? "دورة الفوترة" : "Billing Cycle"}
+                      </p>
+                      <p className="font-medium capitalize">{record.billing_cycle}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">
+                        {language === "ar" ? "تاريخ البداية" : "Start Date"}
+                      </p>
+                      <p className="font-medium">{formatDate(record.start_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">
+                        {language === "ar" ? "الفوترة التالية" : "Next Billing"}
+                      </p>
+                      <p className="font-medium">{formatDate(record.next_billing_date)}</p>
+                    </div>
+                  </div>
+
+                  {record.paypal_subscription_id && (
+                    <div className="mt-3 pt-3 border-t">
+                      <p className="text-xs text-muted-foreground">
+                        PayPal ID: {record.paypal_subscription_id}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </>
-          ) : isMonthlyPlan ? (
-            <Button 
-              className="w-full sm:w-auto"
-              onClick={() => handleSubscribe(yearlyPlanUrl)}
-            >
-              {t("upgradeToYearly", language)}
-            </Button>
-          ) : isYearlyPlan ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-3">
-              <ThumbsUp className="h-8 w-8 text-green-600 dark:text-green-400 mb-1" />
-              <p className="text-base font-semibold text-center">
-                {language === 'ar'
-                  ? 'أنت مشترك في الخطة الأعلى 👍'
-                  : "You're on the highest available plan 👍"}
-              </p>
+              ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              {t("highestPlanMessage", language)}
-            </p>
+            <div className="text-center py-8">
+              <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">
+                {language === "ar" ? "لا يوجد اشتراك نشط" : "No active subscription"}
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -373,20 +178,99 @@ export function BillingTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
-            {t("paymentHistory", language)}
+            <Calendar className="h-5 w-5" />
+            {language === "ar" ? "سجل المدفوعات" : "Payment History"}
           </CardTitle>
           <CardDescription>
-            {language === 'ar' 
-              ? 'سجل المدفوعات والفواتير السابقة'
-              : 'Previous payments and billing history'
+            {language === "ar" 
+              ? "سجل جميع معاملات الاشتراك الخاصة بك"
+              : "Track all your subscription transactions"
             }
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground text-center py-8">
-            {t("noPaymentHistory", language)}
-          </p>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="h-20 bg-gray-200 rounded"></div>
+                </div>
+              ))}
+            </div>
+          ) : paymentHistory.length > 0 ? (
+            <div className="space-y-4">
+              {paymentHistory.map((record) => (
+                <div key={record.id} className="p-4 border rounded-lg hover:bg-accent/5 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">{record.plan_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatDate(record.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">
+                        {record.billing_amount} {record.billing_currency}
+                      </p>
+                      <Badge className={getStatusColor(record.status)} variant="outline">
+                        {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground">
+                    <p>{language === "ar" ? "معرف PayPal:" : "PayPal ID:"} {record.paypal_subscription_id}</p>
+                    <p>{language === "ar" ? "معرف الخطة:" : "Plan ID:"} {record.paypal_plan_id}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">
+                {language === "ar" ? "لا يوجد سجل مدفوعات" : "No payment history"}
+              </h3>
+              <p className="text-muted-foreground">
+                {language === "ar" 
+                  ? "ستظهر معاملات الاشتراك الخاصة بك هنا"
+                  : "Your subscription transactions will appear here"
+                }
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Billing Support */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {language === "ar" ? "دعم الفوترة" : "Billing Support"}
+          </CardTitle>
+          <CardDescription>
+            {language === "ar" 
+              ? "هل تحتاج إلى مساعدة في الفوترة أو الاشتراك؟"
+              : "Need help with billing or subscriptions?"
+            }
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <Button variant="outline" className="w-full justify-start" asChild>
+              <a href="mailto:billing@wakti.qa">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                {language === "ar" ? "التواصل مع دعم الفوترة" : "Contact Billing Support"}
+              </a>
+            </Button>
+            <Button variant="outline" className="w-full justify-start" onClick={() => window.open('/contact', '_blank')}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              {language === "ar" ? "إرسال استفسار" : "Submit Inquiry"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -11,8 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Mail, MessageCircle, CheckCircle, ArrowLeft } from "lucide-react";
+import { Mail, MessageCircle, CheckCircle, ArrowLeft, AlertTriangle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function ContactUs() {
   const { language } = useTheme();
@@ -21,7 +23,8 @@ export default function ContactUs() {
     name: "",
     email: "",
     subject: "",
-    message: ""
+    message: "",
+    submissionType: "contact"
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -34,12 +37,30 @@ export default function ContactUs() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast.success(t("messageSubmitted", language));
-    setIsSubmitted(true);
-    setIsSubmitting(false);
+    try {
+      console.log('Submitting contact form with data:', formData);
+      
+      const { data, error } = await supabase.functions.invoke('submit-contact-form', {
+        body: formData
+      });
+
+      if (error) {
+        console.error('Error submitting contact form:', error);
+        throw error;
+      }
+
+      console.log('Contact form submitted successfully:', data);
+      toast.success(t("messageSubmitted", language));
+      setIsSubmitted(true);
+    } catch (error) {
+      console.error('Failed to submit contact form:', error);
+      toast.error(language === "ar" 
+        ? "فشل في إرسال الرسالة. يرجى المحاولة مرة أخرى." 
+        : "Failed to send message. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -51,7 +72,7 @@ export default function ContactUs() {
 
   const resetForm = () => {
     setIsSubmitted(false);
-    setFormData({ name: "", email: "", subject: "", message: "" });
+    setFormData({ name: "", email: "", subject: "", message: "", submissionType: "contact" });
   };
 
   // Thank you state
@@ -139,6 +160,34 @@ export default function ContactUs() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="submissionType">
+                    {language === "ar" ? "نوع الرسالة" : "Message Type"}
+                  </Label>
+                  <Select 
+                    value={formData.submissionType} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, submissionType: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="contact">
+                        {language === "ar" ? "اتصال عام" : "General Contact"}
+                      </SelectItem>
+                      <SelectItem value="feedback">
+                        {language === "ar" ? "تقييم وملاحظات" : "Submit Feedback"}
+                      </SelectItem>
+                      <SelectItem value="abuse">
+                        <span className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                          {language === "ar" ? "إبلاغ عن سوء استخدام" : "Report Abuse"}
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div>
                   <Label htmlFor="name">{t("name", language)}</Label>
                   <Input

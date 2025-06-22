@@ -30,5 +30,20 @@ export const feedback = {
   enterAbuseDetails: "Enter abuse details",
   abuseReported: "Abuse Reported",
   errorSubmittingReport: "Error submitting report",
-  submitReport: "Submit Report"
+  submitReport: "Submit Report",
+  messageSubmitted: "Message submitted successfully",
+  getInTouch: "Get in Touch",
+  contactDescription: "We'd love to hear from you. Send us a message and we'll respond as soon as possible.",
+  emailSupport: "Email support",
+  sendMessage: "Send Message",
+  name: "Name",
+  enterYourName: "Enter your name",
+  email: "Email",
+  enterYourEmail: "Enter your email",
+  subject: "Subject", 
+  enterSubject: "Enter subject",
+  message: "Message",
+  enterYourMessage: "Enter your message",
+  sending: "Sending...",
+  contactUs: "Contact Us"
 };
