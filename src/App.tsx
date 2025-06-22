@@ -6,7 +6,7 @@ import { Toaster } from 'sonner';
 
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { AuthProvider } from '@/contexts/AuthContext';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import Index from '@/pages/Index';
 import Home from '@/pages/Home';
 import Login from '@/pages/Login';
