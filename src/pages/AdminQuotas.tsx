@@ -125,7 +125,7 @@ export default function AdminQuotas() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+      <div className="bg-gradient-background flex items-center justify-center" style={{ minHeight: '100vh' }}>
         <div className="text-foreground">Loading quota management...</div>
       </div>
     );
@@ -139,7 +139,7 @@ export default function AdminQuotas() {
         icon={<Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
       />
 
-      <div className="p-3 sm:p-6 pb-24 space-y-6">
+      <div className="p-3 sm:p-6 pb-32 space-y-6">
         {/* Gift Quota Form */}
         <Card className="enhanced-card">
           <CardHeader>

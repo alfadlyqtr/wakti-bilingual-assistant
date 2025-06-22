@@ -114,7 +114,7 @@ export default function AdminDashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+      <div className="bg-gradient-background flex items-center justify-center" style={{ minHeight: '100vh' }}>
         <div className="text-foreground">Loading admin dashboard...</div>
       </div>
     );
@@ -197,7 +197,7 @@ export default function AdminDashboard() {
       </header>
 
       {/* Main Content with Natural Scrolling */}
-      <main className="p-3 sm:p-4 lg:p-6 pb-24 space-y-4 sm:space-y-6">
+      <main className="p-3 sm:p-4 lg:p-6 pb-32 space-y-4 sm:space-y-6">
         {/* Real-Time Activity Feed */}
         <RealTimeActivityFeed activities={recentActivity} isLoading={dataLoading} />
 

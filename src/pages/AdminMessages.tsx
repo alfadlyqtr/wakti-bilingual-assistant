@@ -157,7 +157,7 @@ export default function AdminMessages() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+      <div className="bg-gradient-background flex items-center justify-center" style={{ minHeight: '100vh' }}>
         <div className="text-foreground">Loading messages...</div>
       </div>
     );
@@ -237,7 +237,7 @@ export default function AdminMessages() {
       </div>
 
       {/* Messages List with Natural Scrolling */}
-      <div className="p-3 sm:p-6 pb-24 space-y-3 sm:space-y-4">
+      <div className="p-3 sm:p-6 pb-32 space-y-3 sm:space-y-4">
         {filteredMessages.map((message) => (
           <Card key={message.id} className="enhanced-card">
             <CardContent className="p-3 sm:p-6">
