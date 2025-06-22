@@ -430,3 +430,114 @@ export const uploadAudioFile = async (options: AudioUploadOptions): Promise<stri
 export const updateRecordingTitle = async (id: string, title: string): Promise<TasjeelRecord> => {
   return updateTasjeelRecord(id, { title });
 };
+
+// Admin-specific functions
+export const adminActivateSubscription = async (
+  userId: string, 
+  planName: string, 
+  billingAmount: number = 60
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { data, error } = await supabase.rpc('admin_activate_subscription', {
+      p_user_id: userId,
+      p_plan_name: planName,
+      p_billing_amount: billingAmount,
+      p_billing_currency: 'QAR'
+    });
+
+    if (error) {
+      console.error('Error activating subscription:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to activate subscription:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Log admin activity
+export const logAdminActivity = async (
+  action: string,
+  targetType?: string,
+  targetId?: string,
+  details?: Record<string, any>
+): Promise<void> => {
+  try {
+    const sessionToken = localStorage.getItem('admin_session_token');
+    if (!sessionToken) return;
+
+    // Get admin user from session
+    const { data: adminData } = await supabase.rpc('validate_admin_session', {
+      p_session_token: sessionToken
+    });
+
+    if (!adminData || adminData.length === 0) return;
+
+    const adminUser = adminData[0];
+
+    await supabase
+      .from('admin_activity_logs')
+      .insert({
+        admin_user_id: adminUser.admin_id,
+        action,
+        target_type: targetType,
+        target_id: targetId,
+        details: details || {},
+        ip_address: 'unknown' // You could get this from the client if needed
+      });
+  } catch (error) {
+    console.error('Failed to log admin activity:', error);
+  }
+};
+
+// Get contact submissions
+export const getContactSubmissions = async (): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('contact_submissions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching contact submissions:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Failed to get contact submissions:', error);
+    return [];
+  }
+};
+
+// Submit contact form
+export const submitContactForm = async (
+  name: string,
+  email: string,
+  subject: string,
+  message: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('contact_submissions')
+      .insert({
+        name,
+        email,
+        subject,
+        message,
+        status: 'unread'
+      });
+
+    if (error) {
+      console.error('Error submitting contact form:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to submit contact form:', error);
+    return { success: false, error: error.message };
+  }
+};

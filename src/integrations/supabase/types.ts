@@ -9,6 +9,124 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      admin_activity_logs: {
+        Row: {
+          action: string
+          admin_user_id: string | null
+          created_at: string | null
+          details: Json | null
+          id: string
+          ip_address: string | null
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          admin_user_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_activity_logs_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_sessions: {
+        Row: {
+          admin_user_id: string | null
+          created_at: string | null
+          expires_at: string
+          id: string
+          ip_address: string | null
+          session_token: string
+          user_agent: string | null
+        }
+        Insert: {
+          admin_user_id?: string | null
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          ip_address?: string | null
+          session_token: string
+          user_agent?: string | null
+        }
+        Update: {
+          admin_user_id?: string | null
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          ip_address?: string | null
+          session_token?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_sessions_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_users: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean | null
+          last_login_at: string | null
+          password_hash: string
+          permissions: Json | null
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name: string
+          id?: string
+          is_active?: boolean | null
+          last_login_at?: string | null
+          password_hash: string
+          permissions?: Json | null
+          role?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean | null
+          last_login_at?: string | null
+          password_hash?: string
+          permissions?: Json | null
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       ai_chat_history: {
         Row: {
           action_result: Json | null
@@ -205,6 +323,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      contact_submissions: {
+        Row: {
+          admin_response: string | null
+          created_at: string | null
+          email: string
+          id: string
+          message: string
+          name: string
+          responded_at: string | null
+          responded_by: string | null
+          status: string | null
+          subject: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_response?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          message: string
+          name: string
+          responded_at?: string | null
+          responded_by?: string | null
+          status?: string | null
+          subject?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_response?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          responded_at?: string | null
+          responded_by?: string | null
+          status?: string | null
+          subject?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_submissions_responded_by_fkey"
+            columns: ["responded_by"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contacts: {
         Row: {
@@ -1524,6 +1692,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_activate_subscription: {
+        Args: {
+          p_user_id: string
+          p_plan_name: string
+          p_billing_amount?: number
+          p_billing_currency?: string
+        }
+        Returns: boolean
+      }
       admin_update_storage_bucket: {
         Args: {
           p_bucket_id: string
@@ -1536,6 +1713,14 @@ export type Database = {
       are_users_contacts: {
         Args: { user1: string; user2: string }
         Returns: boolean
+      }
+      authenticate_admin: {
+        Args: { p_email: string; p_password: string }
+        Returns: {
+          admin_id: string
+          session_token: string
+          expires_at: string
+        }[]
       }
       can_users_message: {
         Args: { sender_id: string; recipient_id: string }
@@ -1752,6 +1937,16 @@ export type Database = {
       user_is_conversation_participant: {
         Args: { conversation_id: string }
         Returns: boolean
+      }
+      validate_admin_session: {
+        Args: { p_session_token: string }
+        Returns: {
+          admin_id: string
+          email: string
+          full_name: string
+          role: string
+          permissions: Json
+        }[]
       }
     }
     Enums: {
