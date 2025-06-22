@@ -58,7 +58,7 @@ export default function AdminUsers() {
       
       console.log('Loading users from database...');
       
-      // Load users from auth.users table via profiles with proper join
+      // Load users from profiles table, excluding deleted users
       const { data: usersData, error } = await supabase
         .from('profiles')
         .select(`
@@ -76,7 +76,7 @@ export default function AdminUsers() {
           subscription_status,
           plan_name
         `)
-        .is('suspension_reason', null) // Only get users that are NOT deleted
+        .neq('suspension_reason', 'Account deleted by admin')
         .order('created_at', { ascending: false });
 
       if (error) {

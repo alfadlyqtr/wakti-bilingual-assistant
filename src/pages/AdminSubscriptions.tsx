@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreditCard, ArrowLeft, Search, CheckCircle, Clock, User, Crown, Calendar, DollarSign } from "lucide-react";
+import { CreditCard, Search, CheckCircle, Clock, User, Crown, Calendar, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ interface SubscriptionData {
   is_subscribed?: boolean;
   subscription_status?: string;
   plan_name?: string;
+  next_billing_date?: string;
 }
 
 interface ActivationDetails {
@@ -30,6 +31,7 @@ interface ActivationDetails {
   billingAmount: number;
   billingCurrency: string;
   billingCycle: string;
+  billingStartDate: string;
 }
 
 export default function AdminSubscriptions() {
@@ -47,7 +49,8 @@ export default function AdminSubscriptions() {
     planName: 'Wakti Monthly',
     billingAmount: 60,
     billingCurrency: 'QAR',
-    billingCycle: 'monthly'
+    billingCycle: 'monthly',
+    billingStartDate: new Date().toISOString().split('T')[0]
   });
 
   useEffect(() => {
@@ -60,6 +63,8 @@ export default function AdminSubscriptions() {
 
   const loadSubscriptions = async () => {
     try {
+      setIsLoading(true);
+      
       // Load all users with subscription information from profiles table, excluding deleted users
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
@@ -71,6 +76,7 @@ export default function AdminSubscriptions() {
           subscription_status,
           plan_name,
           billing_start_date,
+          next_billing_date,
           created_at
         `)
         .neq('suspension_reason', 'Account deleted by admin')
@@ -81,32 +87,21 @@ export default function AdminSubscriptions() {
         throw profilesError;
       }
 
-      // Also load actual subscription records
-      const { data: subscriptionsData, error: subscriptionsError } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (subscriptionsError) {
-        console.error('Error loading subscriptions:', subscriptionsError);
-      }
-
-      // Combine data prioritizing profiles information
+      // Process data
       const combinedData = profilesData?.map(profile => {
-        const matchingSubscription = subscriptionsData?.find(sub => sub.user_id === profile.id);
-        
         return {
-          id: matchingSubscription?.id || profile.id,
+          id: profile.id,
           user_id: profile.id,
           status: profile.subscription_status || 'inactive',
-          amount: matchingSubscription?.billing_amount || (profile.plan_name?.toLowerCase().includes('yearly') ? 600 : 60),
-          currency: matchingSubscription?.billing_currency || 'QAR',
+          amount: profile.plan_name?.toLowerCase().includes('yearly') ? 600 : 60,
+          currency: 'QAR',
           created_at: profile.billing_start_date || profile.created_at,
           user_email: profile.email,
           user_name: profile.display_name,
           is_subscribed: profile.is_subscribed,
           subscription_status: profile.subscription_status,
-          plan_name: profile.plan_name
+          plan_name: profile.plan_name,
+          next_billing_date: profile.next_billing_date
         };
       }) || [];
 
@@ -136,6 +131,13 @@ export default function AdminSubscriptions() {
 
   const handleActivationClick = (user: SubscriptionData) => {
     setSelectedUser(user);
+    setActivationDetails({
+      planName: 'Wakti Monthly',
+      billingAmount: 60,
+      billingCurrency: 'QAR',
+      billingCycle: 'monthly',
+      billingStartDate: new Date().toISOString().split('T')[0]
+    });
     setIsActivationModalOpen(true);
   };
 
@@ -158,7 +160,7 @@ export default function AdminSubscriptions() {
       }
 
       // Generate PayPal subscription ID and dates
-      const now = new Date();
+      const now = new Date(activationDetails.billingStartDate);
       const paypalId = `ADMIN-MANUAL-${Date.now()}`;
       const nextBilling = new Date(now);
       if (activationDetails.billingCycle === 'yearly') {
@@ -174,11 +176,11 @@ export default function AdminSubscriptions() {
           is_subscribed: true,
           subscription_status: 'active',
           plan_name: activationDetails.planName,
-          amount: activationDetails.billingAmount
+          amount: activationDetails.billingAmount,
+          next_billing_date: nextBilling.toISOString()
         } : sub
       ));
       
-      // Show success details
       toast.success(
         `Subscription activated successfully!\n` +
         `Plan: ${activationDetails.planName}\n` +
@@ -188,7 +190,7 @@ export default function AdminSubscriptions() {
       );
       
       setIsActivationModalOpen(false);
-      loadSubscriptions(); // Refresh data
+      loadSubscriptions();
     } catch (err) {
       console.error('Error activating subscription:', err);
       toast.error('Failed to activate subscription');
@@ -206,38 +208,54 @@ export default function AdminSubscriptions() {
     }));
   };
 
+  const handleBackToAdmin = () => {
+    console.log('Navigating to admin dashboard...');
+    navigate('/admin-dashboard');
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+      <div className="h-screen bg-gradient-background flex items-center justify-center">
         <div className="text-foreground">Loading subscriptions...</div>
       </div>
     );
   }
 
+  // Focus on subscribed users and expiring soon
+  const subscribedUsers = filteredSubscriptions.filter(sub => sub.is_subscribed && sub.subscription_status === 'active');
+  const freeUsers = filteredSubscriptions.filter(sub => !sub.is_subscribed || sub.subscription_status !== 'active');
+  const expiringUsers = subscribedUsers.filter(sub => {
+    if (!sub.next_billing_date) return false;
+    const nextBilling = new Date(sub.next_billing_date);
+    const now = new Date();
+    const daysDiff = Math.ceil((nextBilling.getTime() - now.getTime()) / (1000 * 3600 * 24));
+    return daysDiff <= 7 && daysDiff >= 0;
+  });
+
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground">
+    <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
+      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Button
               variant="ghost"
-              size="icon"
-              onClick={() => navigate('/admin-dashboard')}
-              className="rounded-full hover:bg-accent/10"
+              size="sm"
+              onClick={handleBackToAdmin}
+              className="rounded-full hover:bg-accent/10 font-bold text-lg"
             >
-              <ArrowLeft className="h-5 w-5" />
+              AD
             </Button>
             <CreditCard className="h-8 w-8 text-accent-green" />
             <div>
               <h1 className="text-xl font-bold text-enhanced-heading">Subscription Control</h1>
-              <p className="text-sm text-muted-foreground">Manually activate subscriptions</p>
+              <p className="text-sm text-muted-foreground">Focus on subscribed users and expiring subscriptions</p>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="p-6">
+      <div className="flex-1 overflow-auto p-6">
         {/* Search */}
         <div className="mb-6">
           <div className="relative">
@@ -252,13 +270,13 @@ export default function AdminSubscriptions() {
         </div>
 
         {/* Subscription Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="enhanced-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Total Users</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-enhanced-heading">{subscriptions.length}</div>
+              <div className="text-2xl font-bold text-enhanced-heading">{filteredSubscriptions.length}</div>
             </CardContent>
           </Card>
           
@@ -267,9 +285,16 @@ export default function AdminSubscriptions() {
               <CardTitle className="text-sm font-medium">Active Subscriptions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-enhanced-heading">
-                {subscriptions.filter(sub => sub.is_subscribed && sub.subscription_status === 'active').length}
-              </div>
+              <div className="text-2xl font-bold text-accent-green">{subscribedUsers.length}</div>
+            </CardContent>
+          </Card>
+          
+          <Card className="enhanced-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Expiring Soon (7 days)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-accent-orange">{expiringUsers.length}</div>
             </CardContent>
           </Card>
           
@@ -278,56 +303,85 @@ export default function AdminSubscriptions() {
               <CardTitle className="text-sm font-medium">Free Users</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-enhanced-heading">
-                {subscriptions.filter(sub => !sub.is_subscribed || sub.subscription_status !== 'active').length}
-              </div>
+              <div className="text-2xl font-bold text-enhanced-heading">{freeUsers.length}</div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Subscriptions List */}
-        <div className="grid gap-4">
-          {filteredSubscriptions.map((subscription) => (
-            <Card key={subscription.id} className="enhanced-card">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center">
-                      <User className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-enhanced-heading">
-                        {subscription.user_name || "No name"}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">{subscription.user_email}</p>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <Badge 
-                          variant={subscription.is_subscribed && subscription.subscription_status === 'active' ? "default" : "outline"}
-                          className={
-                            subscription.is_subscribed && subscription.subscription_status === 'active' 
-                              ? 'bg-accent-green text-white' 
-                              : 'text-muted-foreground'
-                          }
-                        >
-                          {subscription.is_subscribed && subscription.subscription_status === 'active' 
-                            ? `Subscribed (${subscription.plan_name?.toLowerCase().includes('yearly') ? 'Y' : 'M'})` 
-                            : 'Free'
-                          }
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {subscription.amount} {subscription.currency?.toUpperCase()}
-                        </span>
+        {/* Subscribed Users Section */}
+        {subscribedUsers.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-enhanced-heading mb-4">Active Subscribers ({subscribedUsers.length})</h2>
+            <div className="grid gap-4">
+              {subscribedUsers.map((subscription) => (
+                <Card key={subscription.id} className="enhanced-card border-accent-green/20">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center">
+                          <Crown className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-enhanced-heading">
+                            {subscription.user_name || "No name"}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">{subscription.user_email}</p>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <Badge className="bg-accent-green text-white">
+                              {subscription.plan_name?.toLowerCase().includes('yearly') ? 'Yearly' : 'Monthly'} Subscriber
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {subscription.amount} {subscription.currency?.toUpperCase()}
+                            </span>
+                            {subscription.next_billing_date && (
+                              <span className="text-xs text-muted-foreground">
+                                Next: {new Date(subscription.next_billing_date).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                      <Badge className="bg-accent-green">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Active
+                      </Badge>
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
-                  <div className="flex items-center space-x-3">
-                    <div className="text-right text-sm text-muted-foreground">
-                      <p>Joined {subscription.created_at ? new Date(subscription.created_at).toLocaleDateString() : 'Unknown'}</p>
-                      <p className="text-xs">ID: {subscription.id.slice(0, 8)}...</p>
-                    </div>
-                    
-                    {(!subscription.is_subscribed || subscription.subscription_status !== 'active') && (
+        {/* Free Users Section */}
+        {freeUsers.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold text-enhanced-heading mb-4">Free Users ({freeUsers.length})</h2>
+            <div className="grid gap-4">
+              {freeUsers.map((subscription) => (
+                <Card key={subscription.id} className="enhanced-card">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center">
+                          <User className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-enhanced-heading">
+                            {subscription.user_name || "No name"}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">{subscription.user_email}</p>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <Badge variant="outline">
+                              Free User
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              Joined {subscription.created_at ? new Date(subscription.created_at).toLocaleDateString() : 'Unknown'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
                       <Button
                         onClick={() => handleActivationClick(subscription)}
                         disabled={activatingId === subscription.user_id}
@@ -345,20 +399,13 @@ export default function AdminSubscriptions() {
                           </>
                         )}
                       </Button>
-                    )}
-                    
-                    {subscription.is_subscribed && subscription.subscription_status === 'active' && (
-                      <Badge className="bg-accent-green">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Active
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         {filteredSubscriptions.length === 0 && (
           <Card className="enhanced-card">
@@ -390,7 +437,7 @@ export default function AdminSubscriptions() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium">Plan</label>
+                  <label className="text-sm font-medium">Plan Name</label>
                   <Select value={activationDetails.planName} onValueChange={handlePlanChange}>
                     <SelectTrigger className="mt-1">
                       <SelectValue />
@@ -400,6 +447,19 @@ export default function AdminSubscriptions() {
                       <SelectItem value="Wakti Yearly">Wakti Yearly (600 QAR/year)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Billing Start Date</label>
+                  <Input
+                    type="date"
+                    value={activationDetails.billingStartDate}
+                    onChange={(e) => setActivationDetails(prev => ({
+                      ...prev,
+                      billingStartDate: e.target.value
+                    }))}
+                    className="mt-1"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -423,11 +483,11 @@ export default function AdminSubscriptions() {
                     <span className="text-sm font-medium text-blue-800">Subscription Details</span>
                   </div>
                   <div className="text-xs text-blue-700 space-y-1">
-                    <p><strong>Billing Start Date:</strong> {new Date().toLocaleDateString()}</p>
+                    <p><strong>Billing Start Date:</strong> {new Date(activationDetails.billingStartDate).toLocaleDateString()}</p>
                     <p><strong>PayPal Subscription ID:</strong> ADMIN-MANUAL-{Date.now()}</p>
                     <p><strong>Next Billing Date:</strong> {
                       (() => {
-                        const next = new Date();
+                        const next = new Date(activationDetails.billingStartDate);
                         if (activationDetails.billingCycle === 'yearly') {
                           next.setFullYear(next.getFullYear() + 1);
                         } else {
