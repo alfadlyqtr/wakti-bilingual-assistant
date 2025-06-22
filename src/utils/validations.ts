@@ -38,7 +38,27 @@ export function validatePassword(password: string): string | null {
   }
   
   if (password.length < 6) {
-    return "Password must be at least 6 characters";
+    return "Password must be at least 6 characters, contain one uppercase letter and one number";
+  }
+  
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  
+  if (!hasUpperCase || !hasNumber) {
+    return "Password must be at least 6 characters, contain one uppercase letter and one number";
+  }
+  
+  return null; // No errors
+}
+
+// Confirm password validation
+export function validateConfirmPassword(password: string, confirmPassword: string): string | null {
+  if (!confirmPassword) {
+    return "Please confirm your password";
+  }
+  
+  if (password !== confirmPassword) {
+    return "Passwords do not match";
   }
   
   return null; // No errors
