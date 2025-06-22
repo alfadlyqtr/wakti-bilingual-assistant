@@ -18,6 +18,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     isLoading: boolean;
     error?: string;
   }>({ isSubscribed: false, isLoading: true });
+  const [showSubscriptionOverlay, setShowSubscriptionOverlay] = useState(false);
 
   // Owner accounts that bypass all restrictions
   const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
@@ -123,7 +124,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!subscriptionStatus.isSubscribed) {
     console.log("ProtectedRoute: User not subscribed, showing subscription overlay");
     console.log("ProtectedRoute: Subscription status details:", subscriptionStatus);
-    return <SubscriptionOverlay />;
+    return (
+      <SubscriptionOverlay 
+        isOpen={true} 
+        onClose={() => setShowSubscriptionOverlay(false)} 
+      />
+    );
   }
 
   console.log("ProtectedRoute: User authenticated and subscribed, rendering protected content");

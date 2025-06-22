@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { CreditCard, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
 
@@ -26,7 +25,7 @@ interface PaymentRecord {
 
 export function BillingTab() {
   const { language } = useTheme();
-  const { user } = useAuthContext();
+  const { user } = useAuth();
   const [paymentHistory, setPaymentHistory] = useState<PaymentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
