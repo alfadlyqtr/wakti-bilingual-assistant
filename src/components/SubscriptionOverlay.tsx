@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/providers/ThemeProvider";
 import { UserMenu } from "@/components/UserMenu";
 import { t } from "@/utils/translations";
+import { toast } from "sonner";
 
 interface SubscriptionOverlayProps {
   isOpen: boolean;
@@ -24,6 +25,22 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
   if (!mounted) return null;
 
   if (!isOpen) return null;
+
+  const handleMonthlySubscription = () => {
+    // PayPal Monthly Plan URL (60 QAR/month)
+    const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
+    window.open(monthlyPlanUrl, '_blank');
+    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
+    setTimeout(() => onClose(), 1500);
+  };
+
+  const handleYearlySubscription = () => {
+    // PayPal Yearly Plan URL (600 QAR/year)
+    const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
+    window.open(yearlyPlanUrl, '_blank');
+    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
+    setTimeout(() => onClose(), 1500);
+  };
 
   const features = [
     {
@@ -109,7 +126,7 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full" size="lg">
+                  <Button onClick={handleMonthlySubscription} className="w-full" size="lg">
                     {language === "ar" ? "اشترك شهرياً" : "Subscribe Monthly"}
                   </Button>
                 </CardContent>
@@ -132,7 +149,7 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full" size="lg">
+                  <Button onClick={handleYearlySubscription} className="w-full" size="lg">
                     {language === "ar" ? "اشترك سنوياً" : "Subscribe Yearly"}
                   </Button>
                 </CardContent>
