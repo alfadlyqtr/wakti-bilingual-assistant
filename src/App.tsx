@@ -24,9 +24,9 @@ function App() {
     <div className="App">
       <AdminAuthProvider>
         <ThemeProvider>
-          <AuthProvider>
-            <QueryClientProvider client={queryClient}>
-              <BrowserRouter>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <AuthProvider>
                 <div className="min-h-screen bg-background text-foreground">
                   <Toaster />
                   <Routes>
@@ -43,9 +43,9 @@ function App() {
                     <Route path="/admindash" element={<AdminDashboard />} />
                   </Routes>
                 </div>
-              </BrowserRouter>
-            </QueryClientProvider>
-          </AuthProvider>
+              </AuthProvider>
+            </BrowserRouter>
+          </QueryClientProvider>
         </ThemeProvider>
       </AdminAuthProvider>
     </div>
