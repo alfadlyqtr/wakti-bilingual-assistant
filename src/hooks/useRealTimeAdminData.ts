@@ -34,17 +34,20 @@ export const useRealTimeAdminData = () => {
 
   const loadStats = async () => {
     try {
-      // Load total users
+      // Load total users (exclude suspended/deleted ones)
       const { count: totalUsers } = await supabase
         .from('profiles')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .neq('display_name', '[DELETED USER]')
+        .eq('is_suspended', false);
 
-      // Load active subscriptions from profiles table (same source as subscription control page)
+      // Load active subscriptions from profiles table
       const { data: activeSubscriptionData, count: activeSubscriptions } = await supabase
         .from('profiles')
-        .select('plan_name, is_subscribed, subscription_status', { count: 'exact' })
+        .select('plan_name, is_subscribed, subscription_status, billing_start_date', { count: 'exact' })
         .eq('is_subscribed', true)
-        .eq('subscription_status', 'active');
+        .eq('subscription_status', 'active')
+        .neq('display_name', '[DELETED USER]');
 
       // Load pending messages
       const { count: pendingMessages } = await supabase
@@ -52,17 +55,23 @@ export const useRealTimeAdminData = () => {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'unread');
 
-      // Load online users
+      // Load online users (users who are logged in)
       const { count: onlineUsers } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true })
-        .eq('is_logged_in', true);
+        .eq('is_logged_in', true)
+        .neq('display_name', '[DELETED USER]');
 
-      // Calculate monthly revenue from active subscriptions (using same logic as subscription page)
+      // Calculate monthly revenue from active subscriptions
       let monthlyRevenue = 0;
       if (activeSubscriptionData && activeSubscriptionData.length > 0) {
         monthlyRevenue = activeSubscriptionData.reduce((sum, profile) => {
-          // Calculate amount based on plan name (matching subscription control page logic)
+          // Skip admin-gifted subscriptions (they don't contribute to revenue)
+          if (profile.plan_name?.toLowerCase().includes('gift')) {
+            return sum;
+          }
+          
+          // Calculate amount based on plan name
           const isYearly = profile.plan_name?.toLowerCase().includes('yearly');
           const amount = isYearly ? 600 : 60; // 600 QAR yearly, 60 QAR monthly
           return sum + amount;
@@ -74,7 +83,8 @@ export const useRealTimeAdminData = () => {
       const { count: newUsersToday } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true })
-        .gte('created_at', `${today}T00:00:00`);
+        .gte('created_at', `${today}T00:00:00`)
+        .neq('display_name', '[DELETED USER]');
 
       setStats({
         totalUsers: totalUsers || 0,
@@ -85,11 +95,12 @@ export const useRealTimeAdminData = () => {
         newUsersToday: newUsersToday || 0
       });
 
-      console.log('Admin stats loaded (fixed):', {
+      console.log('Admin stats loaded:', {
         totalUsers: totalUsers || 0,
         activeSubscriptions: activeSubscriptions || 0,
         monthlyRevenue,
-        pendingMessages: pendingMessages || 0
+        pendingMessages: pendingMessages || 0,
+        onlineUsers: onlineUsers || 0
       });
     } catch (error) {
       console.error('Error loading admin stats:', error);
@@ -105,6 +116,7 @@ export const useRealTimeAdminData = () => {
       const { data: newUsers } = await supabase
         .from('profiles')
         .select('email, created_at, email_confirmed')
+        .neq('display_name', '[DELETED USER]')
         .order('created_at', { ascending: false })
         .limit(3);
 
@@ -126,6 +138,7 @@ export const useRealTimeAdminData = () => {
         .eq('is_subscribed', true)
         .eq('subscription_status', 'active')
         .not('billing_start_date', 'is', null)
+        .neq('display_name', '[DELETED USER]')
         .order('billing_start_date', { ascending: false })
         .limit(2);
 

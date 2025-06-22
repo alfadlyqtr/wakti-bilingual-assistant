@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditCard, Search, CheckCircle, Clock, User, Crown, Calendar, DollarSign } from "lucide-react";
@@ -359,43 +358,50 @@ export default function AdminSubscriptions() {
           <div className="mb-6 sm:mb-8">
             <h2 className="text-base sm:text-lg font-semibold text-enhanced-heading mb-3 sm:mb-4">Active Subscribers ({subscribedUsers.length})</h2>
             <div className="grid gap-3 sm:gap-4">
-              {subscribedUsers.map((subscription) => (
-                <Card key={subscription.id} className="enhanced-card border-accent-green/20">
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
-                      <div className="flex items-center space-x-3 sm:space-x-4">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                          <Crown className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
-                            {subscription.user_name || "No name"}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground truncate">{subscription.user_email}</p>
-                          <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <Badge className="bg-accent-green text-white text-xs">
-                              {subscription.plan_name?.toLowerCase().includes('yearly') ? 'Yearly' : 
-                               subscription.plan_name?.toLowerCase().includes('gift') ? 'Gift' : 'Monthly'} Subscriber
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {subscription.amount} {subscription.currency?.toUpperCase()}
-                            </span>
-                            {subscription.next_billing_date && (
-                              <span className="text-xs text-muted-foreground">
-                                Next: {new Date(subscription.next_billing_date).toLocaleDateString()}
-                              </span>
-                            )}
+              {subscribedUsers.map((subscription) => {
+                const isGifted = subscription.plan_name?.toLowerCase().includes('gift') || 
+                                subscription.plan_name?.toLowerCase().includes('admin');
+                
+                return (
+                  <Card key={subscription.id} className="enhanced-card border-accent-green/20">
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
+                        <div className="flex items-center space-x-3 sm:space-x-4">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
+                            <Crown className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
+                              {subscription.user_name || "No name"}
+                            </h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground truncate">{subscription.user_email}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <Badge className={isGifted ? "bg-accent-purple text-white text-xs" : "bg-accent-green text-white text-xs"}>
+                                {isGifted ? 'Gift from Admin' : 
+                                 subscription.plan_name?.toLowerCase().includes('yearly') ? 'Yearly' : 'Monthly'} Subscriber
+                              </Badge>
+                              {!isGifted && (
+                                <span className="text-xs text-muted-foreground">
+                                  {subscription.amount} {subscription.currency?.toUpperCase()}
+                                </span>
+                              )}
+                              {subscription.next_billing_date && (
+                                <span className="text-xs text-muted-foreground">
+                                  Next: {new Date(subscription.next_billing_date).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        <Badge className="bg-accent-green self-start sm:self-center">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Active
+                        </Badge>
                       </div>
-                      <Badge className="bg-accent-green self-start sm:self-center">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Active
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </div>
         )}

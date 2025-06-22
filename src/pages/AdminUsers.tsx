@@ -43,6 +43,7 @@ export default function AdminUsers() {
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -75,6 +76,7 @@ export default function AdminUsers() {
           subscription_status,
           plan_name
         `)
+        .neq('display_name', '[DELETED USER]')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -141,6 +143,21 @@ export default function AdminUsers() {
 
   const getSubscriptionBadge = (user: User) => {
     if (user.is_subscribed && user.subscription_status === 'active') {
+      // Check if it's a gifted subscription
+      const isGifted = user.plan_name?.toLowerCase().includes('gift') || 
+                      user.plan_name?.toLowerCase().includes('admin');
+      
+      if (isGifted) {
+        return (
+          <Badge 
+            variant="default"
+            className="bg-accent-purple text-white"
+          >
+            Subscribed (G)
+          </Badge>
+        );
+      }
+      
       const planType = user.plan_name?.toLowerCase().includes('yearly') || 
                       user.plan_name?.toLowerCase().includes('year') ? ' (Y)' : ' (M)';
       return (
@@ -161,6 +178,7 @@ export default function AdminUsers() {
 
   const handleUserAction = (user: User, action: string) => {
     setSelectedUser(user);
+    setOpenDropdownId(null); // Close dropdown immediately
     
     switch (action) {
       case "View Profile":
@@ -199,42 +217,42 @@ export default function AdminUsers() {
 
   return (
     <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
+      {/* Mobile Responsive Header */}
+      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-3 sm:px-6 py-3 sm:py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleBackToAdmin}
-              className="rounded-full hover:bg-accent/10 font-bold text-lg"
+              className="rounded-full hover:bg-accent/10 font-bold text-sm sm:text-lg px-2 sm:px-3"
             >
               AD
             </Button>
-            <Users className="h-8 w-8 text-accent-blue" />
+            <Users className="h-6 w-6 sm:h-8 sm:w-8 text-accent-blue" />
             <div>
-              <h1 className="text-xl font-bold text-enhanced-heading">User Management</h1>
-              <p className="text-sm text-muted-foreground">{filteredUsers.length} users found</p>
+              <h1 className="text-lg sm:text-xl font-bold text-enhanced-heading">User Management</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">{filteredUsers.length} users found</p>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Search and Filter */}
-      <div className="flex-shrink-0 p-6">
-        <div className="flex flex-col sm:flex-row gap-4">
+      {/* Mobile Responsive Search and Filter */}
+      <div className="flex-shrink-0 p-3 sm:p-6">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search users by email or name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 input-enhanced"
+              className="pl-10 input-enhanced text-sm"
             />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center space-x-2">
+              <Button variant="outline" className="flex items-center space-x-2 text-sm">
                 <Filter className="h-4 w-4" />
                 <span>
                   {filterStatus === "all" ? "All Users" : 
@@ -256,35 +274,35 @@ export default function AdminUsers() {
       </div>
 
       {/* Scrollable Users List */}
-      <div className="flex-1 overflow-auto px-6 pb-6">
-        <div className="grid gap-4">
+      <div className="flex-1 overflow-auto px-3 sm:px-6 pb-6">
+        <div className="grid gap-3 sm:gap-4">
           {filteredUsers.map((user) => (
             <Card key={user.id} className={`enhanced-card ${user.is_suspended ? 'border-red-200 bg-red-50/50' : ''}`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
                       {user.avatar_url ? (
                         <img
                           src={user.avatar_url}
                           alt={user.full_name || user.email}
-                          className="w-12 h-12 rounded-full object-cover"
+                          className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover"
                         />
                       ) : (
-                        <span className="text-white font-medium">
+                        <span className="text-white font-medium text-sm sm:text-base">
                           {(user.full_name || user.email || "?").charAt(0).toUpperCase()}
                         </span>
                       )}
                     </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold text-enhanced-heading">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
                           {user.full_name || "No name"}
                         </h3>
                         {user.email_confirmed ? (
-                          <CheckCircle className="h-4 w-4 text-accent-green" />
+                          <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-accent-green flex-shrink-0" />
                         ) : (
-                          <AlertCircle className="h-4 w-4 text-accent-orange" />
+                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-accent-orange flex-shrink-0" />
                         )}
                         {user.is_suspended && (
                           <Badge variant="destructive" className="text-xs">
@@ -292,15 +310,15 @@ export default function AdminUsers() {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <Badge variant={user.is_logged_in ? "default" : "secondary"}>
+                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{user.email}</p>
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-2">
+                        <Badge variant={user.is_logged_in ? "default" : "secondary"} className="text-xs">
                           {user.is_logged_in ? "Online" : "Offline"}
                         </Badge>
                         {getSubscriptionBadge(user)}
                         <Badge 
                           variant={user.email_confirmed ? "default" : "destructive"}
-                          className={user.email_confirmed ? 'bg-accent-green text-white' : 'bg-accent-orange text-white'}
+                          className={`text-xs ${user.email_confirmed ? 'bg-accent-green text-white' : 'bg-accent-orange text-white'}`}
                         >
                           {user.email_confirmed ? "Verified" : "Unverified"}
                         </Badge>
@@ -308,14 +326,14 @@ export default function AdminUsers() {
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <div className="text-right text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-4">
+                    <div className="text-right text-xs sm:text-sm text-muted-foreground">
                       <p>Joined {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}</p>
                     </div>
-                    <DropdownMenu>
+                    <DropdownMenu open={openDropdownId === user.id} onOpenChange={(open) => setOpenDropdownId(open ? user.id : null)}>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10">
+                          <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
@@ -349,10 +367,10 @@ export default function AdminUsers() {
 
         {filteredUsers.length === 0 && (
           <Card className="enhanced-card">
-            <CardContent className="p-12 text-center">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
-              <p className="text-muted-foreground">Try adjusting your search or filter criteria.</p>
+            <CardContent className="p-8 sm:p-12 text-center">
+              <Users className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-base sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
+              <p className="text-sm text-muted-foreground">Try adjusting your search or filter criteria.</p>
             </CardContent>
           </Card>
         )}

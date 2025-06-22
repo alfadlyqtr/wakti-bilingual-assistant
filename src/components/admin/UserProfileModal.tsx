@@ -2,8 +2,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, Mail, Calendar, Shield, AlertTriangle } from "lucide-react";
+import { User, Mail, Calendar, Shield, AlertTriangle, Mic, MessageSquare, CheckSquare, Zap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useUserStatistics } from "@/hooks/useUserStatistics";
 
 interface User {
   id: string;
@@ -26,11 +27,13 @@ interface UserProfileModalProps {
 }
 
 export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProps) => {
+  const { statistics, isLoading: statsLoading } = useUserStatistics(user?.id || null);
+
   if (!user) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <User className="h-5 w-5" />
@@ -92,15 +95,30 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
                 </div>
               </div>
               
-              <div>
-                <p className="text-sm font-medium flex items-center">
-                  <Calendar className="h-4 w-4 mr-1" />
-                  Member Since
-                </p>
-                <p className="text-muted-foreground">
-                  {new Date(user.created_at).toLocaleDateString()} 
-                  ({formatDistanceToNow(new Date(user.created_at), { addSuffix: true })})
-                </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium flex items-center">
+                    <Calendar className="h-4 w-4 mr-1" />
+                    Member Since
+                  </p>
+                  <p className="text-muted-foreground">
+                    {new Date(user.created_at).toLocaleDateString()} 
+                    ({formatDistanceToNow(new Date(user.created_at), { addSuffix: true })})
+                  </p>
+                </div>
+                
+                <div>
+                  <p className="text-sm font-medium flex items-center">
+                    <Shield className="h-4 w-4 mr-1" />
+                    Last Login
+                  </p>
+                  <p className="text-muted-foreground">
+                    {statistics.lastLoginAt 
+                      ? formatDistanceToNow(new Date(statistics.lastLoginAt), { addSuffix: true })
+                      : 'Never logged in'
+                    }
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -129,26 +147,78 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
             </Card>
           )}
 
-          {/* Account Statistics */}
+          {/* Activity Statistics */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Account Statistics</CardTitle>
+              <CardTitle className="text-lg">Activity Statistics</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <p className="text-2xl font-bold text-accent-blue">N/A</p>
-                  <p className="text-sm text-muted-foreground">Tasks Created</p>
+              {statsLoading ? (
+                <div className="text-center py-4">Loading statistics...</div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="text-2xl font-bold text-accent-blue">{statistics.tasksCreated}</p>
+                    <p className="text-sm text-muted-foreground">Tasks Created</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-accent-green">{statistics.eventsCreated}</p>
+                    <p className="text-sm text-muted-foreground">Events Created</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-accent-purple">{statistics.aiQueries}</p>
+                    <p className="text-sm text-muted-foreground">AI Queries (This Month)</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-accent-orange">{statistics.tasjeelRecords}</p>
+                    <p className="text-sm text-muted-foreground">Voice Recordings</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-accent-cyan">{statistics.translationQuota.dailyCount}/25</p>
+                    <p className="text-sm text-muted-foreground">Translations Today</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-accent-pink">{statistics.translationQuota.extraTranslations}</p>
+                    <p className="text-sm text-muted-foreground">Extra Translations</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-accent-green">N/A</p>
-                  <p className="text-sm text-muted-foreground">Events Created</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Voice & AI Usage */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <Mic className="h-5 w-5 mr-2" />
+                Voice Clone Usage
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <div className="text-center py-4">Loading voice usage...</div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Characters Used</span>
+                    <span className="text-sm">
+                      {statistics.voiceUsage.charactersUsed.toLocaleString()} / {statistics.voiceUsage.charactersLimit.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-accent-blue h-2 rounded-full" 
+                      style={{ 
+                        width: `${Math.min((statistics.voiceUsage.charactersUsed / statistics.voiceUsage.charactersLimit) * 100, 100)}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Remaining: {(statistics.voiceUsage.charactersLimit - statistics.voiceUsage.charactersUsed + statistics.voiceUsage.extraCharacters).toLocaleString()}</span>
+                    <span>Extra: {statistics.voiceUsage.extraCharacters.toLocaleString()}</span>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-accent-purple">N/A</p>
-                  <p className="text-sm text-muted-foreground">AI Queries</p>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
