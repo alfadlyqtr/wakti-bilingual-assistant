@@ -22,6 +22,8 @@ interface User {
   is_logged_in: boolean;
   email_confirmed: boolean;
   subscription_status?: string;
+  is_subscribed?: boolean;
+  plan_name?: string;
   is_suspended?: boolean;
   suspended_at?: string;
   suspension_reason?: string;
@@ -54,7 +56,7 @@ export default function AdminUsers() {
     try {
       setIsLoading(true);
       
-      // Use a single query with JOIN to get both profile and subscription data
+      // Use direct query on profiles table without complex JOIN
       const { data: usersData, error } = await supabase
         .from('profiles')
         .select(`
@@ -68,59 +70,36 @@ export default function AdminUsers() {
           is_suspended,
           suspended_at,
           suspension_reason,
-          subscriptions!inner(
-            id,
-            status,
-            plan_name
-          )
+          is_subscribed,
+          subscription_status,
+          plan_name
         `)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading users with subscriptions:', error);
-        // Fallback to loading profiles without subscriptions
-        const { data: profilesOnly, error: profilesError } = await supabase
-          .from('profiles')
-          .select(`
-            id,
-            email,
-            display_name,
-            avatar_url,
-            created_at,
-            is_logged_in,
-            email_confirmed,
-            is_suspended,
-            suspended_at,
-            suspension_reason
-          `)
-          .order('created_at', { ascending: false });
-
-        if (profilesError) throw profilesError;
-
-        // For users without subscriptions, set as 'free'
-        const usersWithoutSubs = profilesOnly?.map(user => ({
-          ...user,
-          full_name: user.display_name || user.email || "No name",
-          subscription_status: 'free'
-        })) || [];
-
-        setUsers(usersWithoutSubs);
+        console.error('Error loading users:', error);
+        toast.error('Failed to load users');
         return;
       }
 
-      // Process users with subscription data
+      // Process users and determine subscription display
       const processedUsers = usersData?.map(user => {
-        const subscription = Array.isArray(user.subscriptions) ? user.subscriptions[0] : user.subscriptions;
-        const hasActiveSubscription = subscription && subscription.status === 'active';
+        let subscriptionDisplay = 'free';
+        
+        // If user is subscribed and has active status, show subscribed with plan type
+        if (user.is_subscribed && user.subscription_status === 'active') {
+          const planType = user.plan_name?.toLowerCase().includes('yearly') || user.plan_name?.toLowerCase().includes('year') ? 'Y' : 'M';
+          subscriptionDisplay = `subscribed_${planType}`;
+        }
         
         return {
           ...user,
           full_name: user.display_name || user.email || "No name",
-          subscription_status: hasActiveSubscription ? 'subscribed' : 'free'
+          subscription_status: subscriptionDisplay
         };
       }) || [];
 
-      console.log('Processed users with subscription status:', processedUsers);
+      console.log('Processed users with correct subscription status:', processedUsers);
       setUsers(processedUsers);
 
     } catch (err) {
@@ -145,7 +124,7 @@ export default function AdminUsers() {
       if (filterStatus === "online") {
         filtered = filtered.filter(user => user.is_logged_in);
       } else if (filterStatus === "subscribed") {
-        filtered = filtered.filter(user => user.subscription_status === 'subscribed');
+        filtered = filtered.filter(user => user.subscription_status?.startsWith('subscribed'));
       } else if (filterStatus === "unconfirmed") {
         filtered = filtered.filter(user => !user.email_confirmed);
       } else if (filterStatus === "suspended") {
@@ -154,6 +133,25 @@ export default function AdminUsers() {
     }
 
     setFilteredUsers(filtered);
+  };
+
+  const getSubscriptionBadge = (subscriptionStatus?: string) => {
+    if (subscriptionStatus?.startsWith('subscribed')) {
+      const planType = subscriptionStatus.includes('_Y') ? ' (Y)' : ' (M)';
+      return (
+        <Badge 
+          variant="default"
+          className="bg-accent-green text-white"
+        >
+          Subscribed{planType}
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline">
+        Free
+      </Badge>
+    );
   };
 
   const handleUserAction = (user: User, action: string) => {
@@ -287,12 +285,7 @@ export default function AdminUsers() {
                         <Badge variant={user.is_logged_in ? "default" : "secondary"}>
                           {user.is_logged_in ? "Online" : "Offline"}
                         </Badge>
-                        <Badge 
-                          variant={user.subscription_status === 'subscribed' ? "default" : "outline"}
-                          className={user.subscription_status === 'subscribed' ? 'bg-accent-green text-white' : ''}
-                        >
-                          {user.subscription_status === 'subscribed' ? "Subscribed" : "Free"}
-                        </Badge>
+                        {getSubscriptionBadge(user.subscription_status)}
                         <Badge 
                           variant={user.email_confirmed ? "default" : "destructive"}
                           className={user.email_confirmed ? 'bg-accent-green text-white' : 'bg-accent-orange text-white'}
