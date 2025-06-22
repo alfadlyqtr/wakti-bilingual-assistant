@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
@@ -37,6 +37,14 @@ export default function Signup() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
+
+  // Password requirements check
+  const passwordRequirements = {
+    length: password.length >= 6,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    digit: /\d/.test(password)
+  };
 
   // Real-time password validation
   const handlePasswordChange = (value: string) => {
@@ -67,7 +75,7 @@ export default function Signup() {
     }
     
     if (!agreedToTerms) {
-      setErrorMsg(language === 'en' ? 'Please agree to the Privacy Policy and Terms of Service' : 'يرجى الموافقة على سياسة الخصوصية وشروط الخدمة');
+      setErrorMsg(language === 'en' ? 'You must agree to the Privacy Policy and Terms of Service to continue' : 'يجب أن توافق على سياسة الخصوصية وشروط الخدمة للمتابعة');
       return;
     }
     
@@ -172,7 +180,13 @@ export default function Signup() {
       emailPlaceholder: "example@email.com",
       passwordPlaceholder: "Create a password",
       confirmPasswordPlaceholder: "Confirm your password",
-      dobPlaceholder: "Select your date of birth"
+      dobPlaceholder: "Select your date of birth",
+      passwordRequirements: "Password Requirements:",
+      atLeast6Chars: "At least 6 characters",
+      oneUppercase: "One uppercase letter",
+      oneLowercase: "One lowercase letter",
+      oneDigit: "One digit",
+      mustAgreeTerms: "You must agree to our Privacy Policy and Terms of Service"
     },
     ar: {
       appName: "وقتي",
@@ -197,7 +211,13 @@ export default function Signup() {
       emailPlaceholder: "example@email.com",
       passwordPlaceholder: "إنشاء كلمة مرور",
       confirmPasswordPlaceholder: "تأكيد كلمة المرور",
-      dobPlaceholder: "اختر تاريخ ميلادك"
+      dobPlaceholder: "اختر تاريخ ميلادك",
+      passwordRequirements: "متطلبات كلمة المرور:",
+      atLeast6Chars: "6 أحرف على الأقل",
+      oneUppercase: "حرف كبير واحد",
+      oneLowercase: "حرف صغير واحد",
+      oneDigit: "رقم واحد",
+      mustAgreeTerms: "يجب أن توافق على سياسة الخصوصية وشروط الخدمة"
     }
   };
 
@@ -225,15 +245,15 @@ export default function Signup() {
         <ThemeLanguageToggle />
       </header>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex min-h-[calc(100vh-80px)] flex-col justify-start py-4 px-6">
+      <div className="flex-1 overflow-y-auto pb-safe">
+        <div className="px-6 py-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             className="w-full max-w-md mx-auto"
           >
-            <div className="mb-4 text-center">
+            <div className="mb-6 text-center">
               <div 
                 className="inline-block cursor-pointer mb-3"
                 onClick={() => navigate("/home")}
@@ -243,7 +263,7 @@ export default function Signup() {
               <h1 className="text-2xl font-bold">{t.createAccount}</h1>
               
               {errorMsg && (
-                <div className="mt-3 text-sm text-red-500">
+                <div className="mt-3 text-sm text-red-500 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                   {errorMsg}
                 </div>
               )}
@@ -252,7 +272,7 @@ export default function Signup() {
             <form onSubmit={handleSignup} className="space-y-4">
               {/* Name Field */}
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm">{t.name}</Label>
+                <Label htmlFor="name" className="text-sm font-medium">{t.name}</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                     <User className="h-4 w-4 text-muted-foreground" />
@@ -266,7 +286,7 @@ export default function Signup() {
                     disabled={isLoading}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="pl-10 py-3 text-sm"
+                    className="pl-10 h-12"
                     required
                   />
                 </div>
@@ -274,7 +294,7 @@ export default function Signup() {
               
               {/* Username Field */}
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm">{t.username}</Label>
+                <Label htmlFor="username" className="text-sm font-medium">{t.username}</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                     <User className="h-4 w-4 text-muted-foreground" />
@@ -288,7 +308,7 @@ export default function Signup() {
                     disabled={isLoading}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 py-3 text-sm"
+                    className="pl-10 h-12"
                     required
                   />
                 </div>
@@ -296,7 +316,7 @@ export default function Signup() {
               
               {/* Email Field */}
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm">{t.email}</Label>
+                <Label htmlFor="email" className="text-sm font-medium">{t.email}</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                     <Mail className="h-4 w-4 text-muted-foreground" />
@@ -311,15 +331,60 @@ export default function Signup() {
                     disabled={isLoading}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 py-3 text-sm"
+                    className="pl-10 h-12"
                     required
                   />
                 </div>
               </div>
               
+              {/* Password Requirements */}
+              {password && (
+                <div className="p-3 bg-muted/50 rounded-lg border">
+                  <h3 className="text-sm font-medium mb-2">{t.passwordRequirements}</h3>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      {passwordRequirements.length ? 
+                        <CheckCircle className="h-3 w-3 text-green-500" /> : 
+                        <XCircle className="h-3 w-3 text-red-500" />
+                      }
+                      <span className={passwordRequirements.length ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                        {t.atLeast6Chars}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      {passwordRequirements.uppercase ? 
+                        <CheckCircle className="h-3 w-3 text-green-500" /> : 
+                        <XCircle className="h-3 w-3 text-red-500" />
+                      }
+                      <span className={passwordRequirements.uppercase ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                        {t.oneUppercase}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      {passwordRequirements.lowercase ? 
+                        <CheckCircle className="h-3 w-3 text-green-500" /> : 
+                        <XCircle className="h-3 w-3 text-red-500" />
+                      }
+                      <span className={passwordRequirements.lowercase ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                        {t.oneLowercase}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      {passwordRequirements.digit ? 
+                        <CheckCircle className="h-3 w-3 text-green-500" /> : 
+                        <XCircle className="h-3 w-3 text-red-500" />
+                      }
+                      <span className={passwordRequirements.digit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                        {t.oneDigit}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Password Field */}
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm">{t.password}</Label>
+                <Label htmlFor="password" className="text-sm font-medium">{t.password}</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                     <Lock className="h-4 w-4 text-muted-foreground" />
@@ -334,7 +399,7 @@ export default function Signup() {
                     value={password}
                     onChange={(e) => handlePasswordChange(e.target.value)}
                     className={cn(
-                      "pl-10 pr-10 py-3 text-sm",
+                      "pl-10 pr-10 h-12",
                       passwordError && "border-red-500"
                     )}
                     required
@@ -356,17 +421,11 @@ export default function Signup() {
                     {passwordError}
                   </div>
                 )}
-                <div className="text-xs text-muted-foreground mt-1">
-                  {language === 'en' 
-                    ? "Password must be at least 6 characters with 1 uppercase, 1 lowercase, and 1 digit"
-                    : "يجب أن تحتوي كلمة المرور على 6 أحرف على الأقل مع حرف كبير وحرف صغير ورقم"
-                  }
-                </div>
               </div>
               
               {/* Confirm Password Field */}
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-sm">{t.confirmPassword}</Label>
+                <Label htmlFor="confirmPassword" className="text-sm font-medium">{t.confirmPassword}</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                     <Lock className="h-4 w-4 text-muted-foreground" />
@@ -381,7 +440,7 @@ export default function Signup() {
                     value={confirmPassword}
                     onChange={(e) => handleConfirmPasswordChange(e.target.value)}
                     className={cn(
-                      "pl-10 pr-10 py-3 text-sm",
+                      "pl-10 pr-10 h-12",
                       confirmPasswordError && "border-red-500"
                     )}
                     required
@@ -407,7 +466,7 @@ export default function Signup() {
               
               {/* Date of Birth Field */}
               <div className="space-y-2">
-                <Label htmlFor="dateOfBirth" className="text-sm">{t.dateOfBirth}</Label>
+                <Label htmlFor="dateOfBirth" className="text-sm font-medium">{t.dateOfBirth}</Label>
                 <div className="space-y-2">
                   <Input
                     id="dob"
@@ -416,7 +475,7 @@ export default function Signup() {
                     onChange={handleDobInputChange}
                     max={new Date().toISOString().split('T')[0]}
                     min="1900-01-01"
-                    className="w-full text-sm py-3"
+                    className="w-full h-12"
                     disabled={isLoading}
                     placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
                   />
@@ -425,7 +484,7 @@ export default function Signup() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-full justify-start text-left font-normal py-3 text-sm",
+                          "w-full justify-start text-left font-normal h-12",
                           !dateOfBirth && "text-muted-foreground"
                         )}
                         disabled={isLoading}
@@ -450,52 +509,56 @@ export default function Signup() {
                 </div>
               </div>
               
-              {/* Privacy and Terms Checkbox */}
-              <div className="flex items-start space-x-3">
-                <Checkbox
-                  id="terms"
-                  checked={agreedToTerms}
-                  onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
-                  disabled={isLoading}
-                  className="mt-1"
-                />
-                <div className="text-xs leading-relaxed">
-                  <label htmlFor="terms" className="cursor-pointer">
-                    {t.agreeToTerms}{" "}
-                    <button
-                      type="button"
-                      onClick={() => navigate("/privacy-terms")}
-                      className="text-primary hover:underline font-medium"
-                    >
-                      {t.privacyPolicy}
-                    </button>
-                    {" "}{t.and}{" "}
-                    <button
-                      type="button"
-                      onClick={() => navigate("/privacy-terms")}
-                      className="text-primary hover:underline font-medium"
-                    >
-                      {t.termsOfService}
-                    </button>
-                  </label>
+              {/* Privacy and Terms Checkbox - More Prominent */}
+              <div className="p-4 bg-primary/5 border-2 border-primary/20 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="terms"
+                    checked={agreedToTerms}
+                    onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                    disabled={isLoading}
+                    className="mt-1 border-primary data-[state=checked]:bg-primary"
+                  />
+                  <div className="text-sm leading-relaxed">
+                    <label htmlFor="terms" className="cursor-pointer font-medium">
+                      <span className="text-primary font-semibold">{t.mustAgreeTerms}</span>
+                      <br />
+                      {t.agreeToTerms}{" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/privacy-terms")}
+                        className="text-primary hover:underline font-semibold underline decoration-2"
+                      >
+                        {t.privacyPolicy}
+                      </button>
+                      {" "}{t.and}{" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/privacy-terms")}
+                        className="text-primary hover:underline font-semibold underline decoration-2"
+                      >
+                        {t.termsOfService}
+                      </button>
+                    </label>
+                  </div>
                 </div>
               </div>
               
               <Button
                 type="submit"
-                className="w-full text-sm py-3 shadow-md hover:shadow-lg transition-all"
+                className="w-full h-12 text-sm font-semibold shadow-md hover:shadow-lg transition-all"
                 disabled={isLoading || !agreedToTerms || !!passwordError || !!confirmPasswordError}
               >
                 {isLoading ? t.loading : t.signup}
               </Button>
             </form>
 
-            <div className="mt-4 text-center">
-              <p className="text-xs text-muted-foreground">
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
                 {t.alreadyHaveAccount}{" "}
                 <Button
                   variant="link"
-                  className="px-0 text-xs"
+                  className="px-0 text-sm font-medium"
                   onClick={() => navigate("/login")}
                 >
                   {t.login}
