@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -32,6 +33,7 @@ interface ActivationDetails {
   billingCurrency: string;
   billingCycle: string;
   billingStartDate: string;
+  paypalSubscriptionId: string;
 }
 
 export default function AdminSubscriptions() {
@@ -50,7 +52,8 @@ export default function AdminSubscriptions() {
     billingAmount: 60,
     billingCurrency: 'QAR',
     billingCycle: 'monthly',
-    billingStartDate: new Date().toISOString().split('T')[0]
+    billingStartDate: new Date().toISOString().split('T')[0],
+    paypalSubscriptionId: ''
   });
 
   useEffect(() => {
@@ -139,7 +142,8 @@ export default function AdminSubscriptions() {
       billingAmount: 60,
       billingCurrency: 'QAR',
       billingCycle: 'monthly',
-      billingStartDate: new Date().toISOString().split('T')[0]
+      billingStartDate: new Date().toISOString().split('T')[0],
+      paypalSubscriptionId: ''
     });
     setIsActivationModalOpen(true);
   };
@@ -147,12 +151,15 @@ export default function AdminSubscriptions() {
   const confirmActivateSubscription = async () => {
     if (!selectedUser) return;
     
+    // Validate PayPal Subscription ID is provided
+    if (!activationDetails.paypalSubscriptionId.trim()) {
+      toast.error('PayPal Subscription ID is required');
+      return;
+    }
+    
     setActivatingId(selectedUser.user_id);
     
     try {
-      // Generate unique PayPal subscription ID
-      const paypalId = `ADMIN-MANUAL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
       const { error } = await supabase.rpc('admin_activate_subscription', {
         p_user_id: selectedUser.user_id,
         p_plan_name: activationDetails.planName,
@@ -168,12 +175,13 @@ export default function AdminSubscriptions() {
       // Update the user's PayPal subscription ID in profiles table
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ paypal_subscription_id: paypalId })
+        .update({ paypal_subscription_id: activationDetails.paypalSubscriptionId.trim() })
         .eq('id', selectedUser.user_id);
 
       if (updateError) {
         console.error('Error updating PayPal subscription ID:', updateError);
-        // Don't throw here as the subscription was already activated
+        toast.error('Failed to update PayPal subscription ID');
+        return;
       }
 
       const now = new Date(activationDetails.billingStartDate);
@@ -202,7 +210,7 @@ export default function AdminSubscriptions() {
         `Subscription activated successfully!\n` +
         `Plan: ${activationDetails.planName}\n` +
         `Billing Start: ${now.toLocaleDateString()}\n` +
-        `PayPal ID: ${paypalId}\n` +
+        `PayPal ID: ${activationDetails.paypalSubscriptionId}\n` +
         `Next Billing: ${nextBilling.toLocaleDateString()}`
       );
       
@@ -237,10 +245,10 @@ export default function AdminSubscriptions() {
   };
 
   const handleBackToAdmin = () => {
-    console.log('AD button clicked - navigating to admin dashboard...');
+    console.log('AD button clicked - FIXED NAVIGATION to /admindash');
     console.log('Current location:', window.location.href);
-    navigate('/admin-dashboard');
-    console.log('Navigation called to /admin-dashboard');
+    navigate('/admindash');
+    console.log('Navigation called to /admindash (CORRECTED FROM /admin-dashboard)');
   };
 
   if (isLoading) {
@@ -449,7 +457,7 @@ export default function AdminSubscriptions() {
         )}
       </div>
 
-      {/* Enhanced Activation Modal */}
+      {/* Enhanced Activation Modal with Manual PayPal ID */}
       <Dialog open={isActivationModalOpen} onOpenChange={setIsActivationModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -468,7 +476,7 @@ export default function AdminSubscriptions() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium">Plan Name</label>
+                  <Label className="text-sm font-medium">Plan Name</Label>
                   <Select value={activationDetails.planName} onValueChange={handlePlanChange}>
                     <SelectTrigger className="mt-1">
                       <SelectValue />
@@ -483,7 +491,23 @@ export default function AdminSubscriptions() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Billing Start Date</label>
+                  <Label className="text-sm font-medium">PayPal Subscription ID (REQUIRED)</Label>
+                  <Input
+                    placeholder="Enter PayPal Subscription ID manually..."
+                    value={activationDetails.paypalSubscriptionId}
+                    onChange={(e) => setActivationDetails(prev => ({
+                      ...prev,
+                      paypalSubscriptionId: e.target.value
+                    }))}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Copy and paste the PayPal Subscription ID from your PayPal dashboard
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium">Billing Start Date</Label>
                   <Input
                     type="date"
                     value={activationDetails.billingStartDate}
@@ -497,13 +521,13 @@ export default function AdminSubscriptions() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm font-medium">Amount</label>
+                    <Label className="text-sm font-medium">Amount</Label>
                     <div className="mt-1 p-2 bg-muted rounded text-sm">
                       {activationDetails.billingAmount} {activationDetails.billingCurrency}
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Cycle</label>
+                    <Label className="text-sm font-medium">Cycle</Label>
                     <div className="mt-1 p-2 bg-muted rounded text-sm capitalize">
                       {activationDetails.billingCycle}
                     </div>
@@ -517,7 +541,7 @@ export default function AdminSubscriptions() {
                   </div>
                   <div className="text-xs text-blue-700 space-y-1">
                     <p><strong>Billing Start Date:</strong> {new Date(activationDetails.billingStartDate).toLocaleDateString()}</p>
-                    <p><strong>PayPal Subscription ID:</strong> ADMIN-MANUAL-{Date.now()}-XXXXXXX</p>
+                    <p><strong>PayPal Subscription ID:</strong> {activationDetails.paypalSubscriptionId || 'Enter PayPal ID above'}</p>
                     <p><strong>Next Billing Date:</strong> {
                       (() => {
                         const next = new Date(activationDetails.billingStartDate);
@@ -542,7 +566,7 @@ export default function AdminSubscriptions() {
                 </Button>
                 <Button 
                   onClick={confirmActivateSubscription}
-                  disabled={activatingId === selectedUser.user_id}
+                  disabled={activatingId === selectedUser.user_id || !activationDetails.paypalSubscriptionId.trim()}
                   className="flex items-center space-x-2"
                 >
                   <DollarSign className="h-4 w-4" />

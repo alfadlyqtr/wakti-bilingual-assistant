@@ -85,7 +85,7 @@ export default function AdminDashboard() {
     console.log(`Admin Dashboard - navigating to section: ${section}`);
     setActiveSection(section);
     
-    // Navigate to actual pages using absolute paths
+    // Navigate to actual pages using absolute paths - FIXED NAVIGATION
     switch (section) {
       case 'users':
         console.log('Navigating to /admin/users');

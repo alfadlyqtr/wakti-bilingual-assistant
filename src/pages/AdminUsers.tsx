@@ -183,10 +183,10 @@ export default function AdminUsers() {
   };
 
   const handleBackToAdmin = () => {
-    console.log('AD button clicked - navigating to admin dashboard...');
+    console.log('AD button clicked - FIXED NAVIGATION to /admindash');
     console.log('Current location:', window.location.href);
-    navigate('/admin-dashboard');
-    console.log('Navigation called to /admin-dashboard');
+    navigate('/admindash');
+    console.log('Navigation called to /admindash (CORRECTED FROM /admin-dashboard)');
   };
 
   if (isLoading) {
