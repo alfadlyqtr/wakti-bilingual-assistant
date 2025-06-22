@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -39,10 +38,10 @@ export const useRealTimeAdminData = () => {
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
-      // Load active subscriptions - use explicit count query
-      const { count: activeSubscriptions } = await supabase
+      // Load active subscriptions - properly query the subscriptions table
+      const { data: activeSubscriptionData, count: activeSubscriptions } = await supabase
         .from('subscriptions')
-        .select('*', { count: 'exact', head: true })
+        .select('billing_amount', { count: 'exact' })
         .eq('status', 'active');
 
       // Load pending messages
@@ -58,17 +57,13 @@ export const useRealTimeAdminData = () => {
         .eq('is_logged_in', true);
 
       // Calculate monthly revenue from active subscriptions
-      const { data: activeSubscriptionData, error: revenueError } = await supabase
-        .from('subscriptions')
-        .select('billing_amount')
-        .eq('status', 'active');
-
-      if (revenueError) {
-        console.error('Error loading revenue data:', revenueError);
+      let monthlyRevenue = 0;
+      if (activeSubscriptionData && activeSubscriptionData.length > 0) {
+        monthlyRevenue = activeSubscriptionData.reduce((sum, sub) => {
+          const amount = parseFloat(sub.billing_amount?.toString() || '0');
+          return sum + (isNaN(amount) ? 0 : amount);
+        }, 0);
       }
-
-      const monthlyRevenue = activeSubscriptionData?.reduce((sum, sub) => 
-        sum + (parseFloat(sub.billing_amount?.toString() || '0') || 0), 0) || 0;
 
       // Load new users today
       const today = new Date().toISOString().split('T')[0];
@@ -84,6 +79,13 @@ export const useRealTimeAdminData = () => {
         onlineUsers: onlineUsers || 0,
         monthlyRevenue,
         newUsersToday: newUsersToday || 0
+      });
+
+      console.log('Admin stats loaded:', {
+        totalUsers: totalUsers || 0,
+        activeSubscriptions: activeSubscriptions || 0,
+        monthlyRevenue,
+        pendingMessages: pendingMessages || 0
       });
     } catch (error) {
       console.error('Error loading admin stats:', error);

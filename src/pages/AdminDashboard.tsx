@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOut, Settings, Gift, UserCheck, RefreshCw, Menu } from "lucide-react";
@@ -125,20 +124,20 @@ export default function AdminDashboard() {
   return (
     <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
       {/* Mobile Responsive Header */}
-      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-4 sm:px-6 py-3 sm:py-4 z-50">
+      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-3 sm:px-4 py-3 z-50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-accent-blue" />
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-accent-blue" />
             <div>
-              <h1 className="text-lg sm:text-xl font-bold text-enhanced-heading">WAKTI Admin</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Abdullah Alfadly</p>
+              <h1 className="text-base sm:text-lg font-bold text-enhanced-heading">WAKTI Admin</h1>
+              <p className="text-xs text-muted-foreground hidden sm:block">Abdullah Alfadly</p>
             </div>
           </div>
           
-          <div className="flex items-center space-x-2 sm:space-x-3">
-            <Button variant="outline" size="sm" onClick={handleRefresh} className="bg-gradient-secondary hover:bg-gradient-primary hidden sm:flex">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            <Button variant="outline" size="sm" onClick={handleRefresh} className="bg-gradient-secondary hover:bg-gradient-primary text-xs px-2 sm:px-3">
+              <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
             
             {/* Mobile Menu Button */}
@@ -146,20 +145,20 @@ export default function AdminDashboard() {
               variant="outline"
               size="sm"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="sm:hidden"
+              className="sm:hidden px-2"
             >
-              <Menu className="h-4 w-4" />
+              <Menu className="h-3 w-3" />
             </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="bg-gradient-secondary hover:bg-gradient-primary">
-                  <Settings className="h-4 w-4 mr-1 sm:mr-2" />
+                <Button variant="outline" size="sm" className="bg-gradient-secondary hover:bg-gradient-primary text-xs px-2 sm:px-3">
+                  <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
                   <span className="hidden sm:inline">Settings</span>
-                  <ChevronDown className="h-4 w-4 ml-1 sm:ml-2" />
+                  <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem onClick={() => navigate('/admin-settings')}>
                   <Settings className="h-4 w-4 mr-2" />
                   Admin Settings
@@ -175,89 +174,85 @@ export default function AdminDashboard() {
 
         {/* Mobile Menu Dropdown */}
         {mobileMenuOpen && (
-          <div className="sm:hidden mt-4 pb-4 border-t border-border/30 pt-4">
+          <div className="sm:hidden mt-3 pb-3 border-t border-border/30 pt-3">
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleSectionChange('users')} className="justify-start">
-                <Users className="h-4 w-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={() => handleSectionChange('users')} className="justify-start text-xs py-2">
+                <Users className="h-3 w-3 mr-2" />
                 Users
               </Button>
-              <Button variant="outline" size="sm" onClick={() => handleSectionChange('messages')} className="justify-start">
-                <MessageSquare className="h-4 w-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={() => handleSectionChange('messages')} className="justify-start text-xs py-2">
+                <MessageSquare className="h-3 w-3 mr-2" />
                 Messages
               </Button>
-              <Button variant="outline" size="sm" onClick={() => handleSectionChange('subscriptions')} className="justify-start">
-                <CreditCard className="h-4 w-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={() => handleSectionChange('subscriptions')} className="justify-start text-xs py-2">
+                <CreditCard className="h-3 w-3 mr-2" />
                 Subscriptions
               </Button>
-              <Button variant="outline" size="sm" onClick={() => handleSectionChange('analytics')} className="justify-start">
-                <BarChart3 className="h-4 w-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={() => handleSectionChange('analytics')} className="justify-start text-xs py-2">
+                <BarChart3 className="h-3 w-3 mr-2" />
                 Analytics
               </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={handleRefresh} className="w-full mt-2">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh Data
-            </Button>
           </div>
         )}
       </header>
 
       {/* Scrollable Main Content */}
       <ScrollArea className="flex-1">
-        <div className="p-4 sm:p-6 pb-32">
+        <div className="p-3 sm:p-4 pb-24">
           {/* Real-Time Activity Feed */}
-          <div className="mb-6 sm:mb-8">
+          <div className="mb-4 sm:mb-6">
             <RealTimeActivityFeed activities={recentActivity} isLoading={dataLoading} />
           </div>
 
           {/* Real-Time Dashboard Stats - Mobile Responsive */}
-          <div className="mb-6 sm:mb-8">
-            <div className="flex items-center justify-between mb-4 sm:mb-6">
-              <h2 className="text-xl sm:text-2xl font-bold text-enhanced-heading">Live Dashboard</h2>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-accent-green rounded-full animate-pulse"></div>
-                <span className="text-xs sm:text-sm text-muted-foreground">Live</span>
+          <div className="mb-4 sm:mb-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-enhanced-heading">Live Dashboard</h2>
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <div className="w-2 h-2 sm:w-3 sm:h-3 bg-accent-green rounded-full animate-pulse"></div>
+                <span className="text-xs text-muted-foreground">Live</span>
               </div>
             </div>
             <RealTimeStatsCards stats={stats} isLoading={dataLoading} />
           </div>
 
           {/* Management Tools - Mobile Responsive Grid */}
-          <div className="mb-6 sm:mb-8">
-            <h2 className="text-xl sm:text-2xl font-bold text-enhanced-heading mb-4 sm:mb-6">Management Tools</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          <div className="mb-4 sm:mb-6">
+            <h2 className="text-lg sm:text-xl font-bold text-enhanced-heading mb-3 sm:mb-4">Management Tools</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
-                    <Users className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-blue" />
+                <CardHeader className="pb-2 sm:pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                    <Users className="h-4 w-4 mr-2 text-accent-blue" />
                     User Management
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
+                  <CardDescription className="text-xs">
                     Manage app users, profiles, and access control
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full btn-enhanced text-xs sm:text-sm py-3 sm:py-4" onClick={() => handleSectionChange('users')}>
+                  <Button className="w-full btn-enhanced text-xs py-2 sm:py-3" onClick={() => handleSectionChange('users')}>
                     Manage Users
                   </Button>
                 </CardContent>
               </Card>
 
               <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
-                    <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-orange" />
+                <CardHeader className="pb-2 sm:pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                    <MessageSquare className="h-4 w-4 mr-2 text-accent-orange" />
                     Support Messages
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
+                  <CardDescription className="text-xs">
                     Contact forms, feedback, and abuse reports
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full btn-secondary-enhanced text-xs sm:text-sm py-3 sm:py-4 relative" onClick={() => handleSectionChange('messages')}>
+                  <Button className="w-full btn-secondary-enhanced text-xs py-2 sm:py-3 relative" onClick={() => handleSectionChange('messages')}>
                     View Messages
                     {stats.pendingMessages > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
                         {stats.pendingMessages}
                       </span>
                     )}
@@ -266,34 +261,34 @@ export default function AdminDashboard() {
               </Card>
 
               <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
-                    <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-green" />
+                <CardHeader className="pb-2 sm:pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                    <CreditCard className="h-4 w-4 mr-2 text-accent-green" />
                     Subscription Control
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
+                  <CardDescription className="text-xs">
                     Manage subscription lifecycle and billing
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full btn-enhanced text-xs sm:text-sm py-3 sm:py-4" onClick={() => handleSectionChange('subscriptions')}>
+                  <Button className="w-full btn-enhanced text-xs py-2 sm:py-3" onClick={() => handleSectionChange('subscriptions')}>
                     Manage Subs
                   </Button>
                 </CardContent>
               </Card>
 
               <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
-                    <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-cyan" />
+                <CardHeader className="pb-2 sm:pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                    <BarChart3 className="h-4 w-4 mr-2 text-accent-cyan" />
                     Analytics Dashboard
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
+                  <CardDescription className="text-xs">
                     Revenue: {stats.monthlyRevenue.toFixed(0)} QAR this month
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full btn-enhanced text-xs sm:text-sm py-3 sm:py-4" onClick={() => handleSectionChange('analytics')}>
+                  <Button className="w-full btn-enhanced text-xs py-2 sm:py-3" onClick={() => handleSectionChange('analytics')}>
                     View Analytics
                   </Button>
                 </CardContent>
@@ -304,19 +299,19 @@ export default function AdminDashboard() {
       </ScrollArea>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="flex-shrink-0 border-t border-border/30 bg-gradient-nav backdrop-blur-xl shadow-vibrant px-4 sm:px-6 py-4 sm:py-6">
+      <nav className="flex-shrink-0 border-t border-border/30 bg-gradient-nav backdrop-blur-xl shadow-vibrant px-3 sm:px-4 py-3 sm:py-4">
         <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-4 gap-2 sm:gap-4">
+          <div className="grid grid-cols-4 gap-1 sm:gap-2">
             <Button 
               variant={activeSection === 'dashboard' ? 'default' : 'outline'} 
               size="sm"
               onClick={() => setActiveSection('dashboard')} 
               className={`
-                flex flex-col items-center justify-center h-12 sm:h-16 w-full rounded-xl transition-all duration-300
+                flex flex-col items-center justify-center h-10 sm:h-12 w-full rounded-lg transition-all duration-300
                 ${activeSection === 'dashboard' ? 'btn-enhanced shadow-colored scale-105 border-accent-blue/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
               `}
             >
-              <BarChart3 className={`h-4 w-4 sm:h-6 sm:w-6 mb-1 ${activeSection === 'dashboard' ? 'text-white' : 'text-accent-blue'}`} />
+              <BarChart3 className={`h-3 w-3 sm:h-4 sm:w-4 mb-0.5 ${activeSection === 'dashboard' ? 'text-white' : 'text-accent-blue'}`} />
               <span className="text-xs font-semibold">Dashboard</span>
             </Button>
 
@@ -325,13 +320,13 @@ export default function AdminDashboard() {
               size="sm"
               onClick={() => handleSectionChange('users')} 
               className={`
-                flex flex-col items-center justify-center h-12 sm:h-16 w-full rounded-xl transition-all duration-300 relative
+                flex flex-col items-center justify-center h-10 sm:h-12 w-full rounded-lg transition-all duration-300 relative
                 ${activeSection === 'users' ? 'btn-enhanced shadow-colored scale-105 border-accent-green/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
               `}
             >
-              <Users className={`h-4 w-4 sm:h-6 sm:w-6 mb-1 ${activeSection === 'users' ? 'text-white' : 'text-accent-green'}`} />
+              <Users className={`h-3 w-3 sm:h-4 sm:w-4 mb-0.5 ${activeSection === 'users' ? 'text-white' : 'text-accent-green'}`} />
               {stats.onlineUsers > 0 && (
-                <span className="absolute -top-1 -right-1 bg-accent-green text-white text-xs rounded-full h-4 w-4 sm:h-6 sm:w-6 flex items-center justify-center font-bold shadow-lg">
+                <span className="absolute -top-0.5 -right-0.5 bg-accent-green text-white text-xs rounded-full h-3 w-3 sm:h-4 sm:w-4 flex items-center justify-center font-bold shadow-lg">
                   {stats.onlineUsers}
                 </span>
               )}
@@ -343,13 +338,13 @@ export default function AdminDashboard() {
               size="sm"
               onClick={() => handleSectionChange('messages')} 
               className={`
-                flex flex-col items-center justify-center h-12 sm:h-16 w-full rounded-xl transition-all duration-300 relative
+                flex flex-col items-center justify-center h-10 sm:h-12 w-full rounded-lg transition-all duration-300 relative
                 ${activeSection === 'messages' ? 'btn-enhanced shadow-colored scale-105 border-accent-orange/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
               `}
             >
-              <MessageSquare className={`h-4 w-4 sm:h-6 sm:w-6 mb-1 ${activeSection === 'messages' ? 'text-white' : 'text-accent-orange'}`} />
+              <MessageSquare className={`h-3 w-3 sm:h-4 sm:w-4 mb-0.5 ${activeSection === 'messages' ? 'text-white' : 'text-accent-orange'}`} />
               {stats.pendingMessages > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 sm:h-6 sm:w-6 flex items-center justify-center font-bold shadow-lg animate-pulse">
+                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full h-3 w-3 sm:h-4 sm:w-4 flex items-center justify-center font-bold shadow-lg animate-pulse">
                   {stats.pendingMessages}
                 </span>
               )}
@@ -361,11 +356,11 @@ export default function AdminDashboard() {
               size="sm"
               onClick={() => handleSectionChange('analytics')} 
               className={`
-                flex flex-col items-center justify-center h-12 sm:h-16 w-full rounded-xl transition-all duration-300
+                flex flex-col items-center justify-center h-10 sm:h-12 w-full rounded-lg transition-all duration-300
                 ${activeSection === 'analytics' ? 'btn-enhanced shadow-colored scale-105 border-accent-purple/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
               `}
             >
-              <BarChart3 className={`h-4 w-4 sm:h-6 sm:w-6 mb-1 ${activeSection === 'analytics' ? 'text-white' : 'text-accent-purple'}`} />
+              <BarChart3 className={`h-3 w-3 sm:h-4 sm:w-4 mb-0.5 ${activeSection === 'analytics' ? 'text-white' : 'text-accent-purple'}`} />
               <span className="text-xs font-semibold">Analytics</span>
             </Button>
           </div>

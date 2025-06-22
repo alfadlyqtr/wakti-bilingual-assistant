@@ -17,11 +17,11 @@ interface StatsCardsProps {
 export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {[...Array(6)].map((_, i) => (
           <Card key={i} className="enhanced-card animate-pulse">
-            <CardContent className="p-4 sm:p-6">
-              <div className="h-12 sm:h-16 bg-gradient-secondary/20 rounded"></div>
+            <CardContent className="p-3 sm:p-4">
+              <div className="h-16 bg-gradient-secondary/20 rounded"></div>
             </CardContent>
           </Card>
         ))}
@@ -79,19 +79,19 @@ export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
       {statsData.map((stat, index) => (
         <Card key={index} className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-          <CardHeader className="pb-2 sm:pb-3">
+          <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground line-clamp-2 leading-tight">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">
                 {stat.title}
               </CardTitle>
-              <stat.icon className={`h-4 w-4 sm:h-6 sm:w-6 ${stat.color} flex-shrink-0`} />
+              <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.color} flex-shrink-0`} />
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-xl sm:text-3xl font-bold text-enhanced-heading mb-1">
+          <CardContent className="pt-0 pb-3">
+            <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-enhanced-heading mb-1">
               {stat.value}
             </div>
             <p className="text-xs text-muted-foreground">{stat.description}</p>
