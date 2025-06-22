@@ -186,6 +186,39 @@ export default function AdminDashboard() {
       {/* Scrollable Main Content */}
       <ScrollArea className="flex-1">
         <div className="p-6 pb-32">
+          {/* Recent Activity - Moved to Top */}
+          <Card className="enhanced-card mb-8">
+            <CardHeader>
+              <CardTitle className="text-enhanced-heading text-xl">Recent Activity</CardTitle>
+              <CardDescription className="text-sm">Latest admin actions and system events</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-3 h-3 bg-accent-green rounded-full"></div>
+                    <span className="font-medium text-sm">New user registration: user@example.com</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">5 min ago</span>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-3 h-3 bg-accent-blue rounded-full"></div>
+                    <span className="font-medium text-sm">PayPal subscription activated</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">12 min ago</span>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-3 h-3 bg-accent-orange rounded-full"></div>
+                    <span className="font-medium text-sm">New contact form submission</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">1 hour ago</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Dashboard Overview - 2x2 Layout */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-enhanced-heading mb-6">Dashboard Overview</h2>
@@ -374,43 +407,10 @@ export default function AdminDashboard() {
               </Card>
             </div>
           </div>
-
-          {/* Recent Activity */}
-          <Card className="enhanced-card">
-            <CardHeader>
-              <CardTitle className="text-enhanced-heading text-xl">Recent Activity</CardTitle>
-              <CardDescription className="text-sm">Latest admin actions and system events</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-3 h-3 bg-accent-green rounded-full"></div>
-                    <span className="font-medium text-sm">New user registration: user@example.com</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">5 min ago</span>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-3 h-3 bg-accent-blue rounded-full"></div>
-                    <span className="font-medium text-sm">PayPal subscription activated</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">12 min ago</span>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-3 h-3 bg-accent-orange rounded-full"></div>
-                    <span className="font-medium text-sm">New contact form submission</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">1 hour ago</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </ScrollArea>
 
-      {/* Bottom Navigation - Fixed at bottom */}
+      {/* Bottom Navigation - Reverted to Original */}
       <nav className="flex-shrink-0 border-t border-border/50 bg-gradient-nav backdrop-blur-xl p-4">
         <div className="flex justify-center">
           <div className="flex space-x-2">
