@@ -65,7 +65,9 @@ export default function AdminSubscriptions() {
     try {
       setIsLoading(true);
       
-      // Load all users with subscription information from profiles table, excluding deleted users
+      console.log('Loading subscriptions from database...');
+      
+      // Load ALL users from profiles table - DO NOT filter anything
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select(`
@@ -79,7 +81,6 @@ export default function AdminSubscriptions() {
           next_billing_date,
           created_at
         `)
-        .neq('suspension_reason', 'Account deleted by admin')
         .order('created_at', { ascending: false });
 
       if (profilesError) {
@@ -87,7 +88,9 @@ export default function AdminSubscriptions() {
         throw profilesError;
       }
 
-      // Process data
+      console.log('Raw profiles data from database:', profilesData);
+
+      // Process data - show ALL users
       const combinedData = profilesData?.map(profile => {
         return {
           id: profile.id,
@@ -96,16 +99,18 @@ export default function AdminSubscriptions() {
           amount: profile.plan_name?.toLowerCase().includes('yearly') ? 600 : 60,
           currency: 'QAR',
           created_at: profile.billing_start_date || profile.created_at,
-          user_email: profile.email,
-          user_name: profile.display_name,
-          is_subscribed: profile.is_subscribed,
-          subscription_status: profile.subscription_status,
+          user_email: profile.email || 'No email',
+          user_name: profile.display_name || 'No name',
+          is_subscribed: profile.is_subscribed || false,
+          subscription_status: profile.subscription_status || 'inactive',
           plan_name: profile.plan_name,
           next_billing_date: profile.next_billing_date
         };
       }) || [];
 
       console.log('Combined subscription data:', combinedData);
+      console.log('Total users loaded for subscriptions:', combinedData.length);
+      
       setSubscriptions(combinedData);
     } catch (err) {
       console.error('Error loading subscriptions:', err);

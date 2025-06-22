@@ -58,7 +58,7 @@ export default function AdminUsers() {
       
       console.log('Loading users from database...');
       
-      // Load users from profiles table, excluding deleted users
+      // Load users from profiles table - DO NOT filter out ANY users here
       const { data: usersData, error } = await supabase
         .from('profiles')
         .select(`
@@ -76,7 +76,6 @@ export default function AdminUsers() {
           subscription_status,
           plan_name
         `)
-        .neq('suspension_reason', 'Account deleted by admin')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -85,7 +84,9 @@ export default function AdminUsers() {
         return;
       }
 
-      // Process users data
+      console.log('Raw users data from database:', usersData);
+
+      // Process users data - show ALL users
       const processedUsers = usersData?.map(user => ({
         id: user.id,
         email: user.email || "No email",
@@ -103,6 +104,8 @@ export default function AdminUsers() {
       })) || [];
 
       console.log('Processed users:', processedUsers);
+      console.log('Total users loaded:', processedUsers.length);
+      
       setUsers(processedUsers);
 
     } catch (err) {

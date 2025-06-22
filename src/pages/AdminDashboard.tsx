@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOut, Settings, Gift, UserCheck, RefreshCw } from "lucide-react";
@@ -10,26 +11,31 @@ import { toast } from "sonner";
 import { useRealTimeAdminData } from "@/hooks/useRealTimeAdminData";
 import { RealTimeStatsCards } from "@/components/admin/RealTimeStatsCards";
 import { RealTimeActivityFeed } from "@/components/admin/RealTimeActivityFeed";
+
 interface AdminSession {
   admin_id: string;
   session_token: string;
   expires_at: string;
   email: string;
 }
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('dashboard');
+  
   const {
     stats,
     recentActivity,
     isLoading: dataLoading,
     refetch
   } = useRealTimeAdminData();
+
   useEffect(() => {
     validateAdminSession();
   }, []);
+
   const validateAdminSession = async () => {
     try {
       const storedSession = localStorage.getItem('admin_session');
@@ -37,25 +43,27 @@ export default function AdminDashboard() {
         navigate('/mqtr');
         return;
       }
+
       const session: AdminSession = JSON.parse(storedSession);
+      
       if (new Date(session.expires_at) < new Date()) {
         localStorage.removeItem('admin_session');
         toast.error('Admin session expired');
         navigate('/mqtr');
         return;
       }
-      const {
-        data,
-        error
-      } = await supabase.rpc('validate_admin_session', {
+
+      const { data, error } = await supabase.rpc('validate_admin_session', {
         p_session_token: session.session_token
       });
+
       if (error || !data || data.length === 0) {
         localStorage.removeItem('admin_session');
         toast.error('Invalid admin session');
         navigate('/mqtr');
         return;
       }
+
       setAdminSession(session);
     } catch (err) {
       console.error('Session validation error:', err);
@@ -65,14 +73,16 @@ export default function AdminDashboard() {
       setIsLoading(false);
     }
   };
+
   const handleLogout = () => {
     localStorage.removeItem('admin_session');
     toast.success('Logged out successfully');
     navigate('/mqtr');
   };
+
   const handleSectionChange = (section: string) => {
     setActiveSection(section);
-
+    
     // Navigate to actual pages
     switch (section) {
       case 'users':
@@ -94,17 +104,23 @@ export default function AdminDashboard() {
         break;
     }
   };
+
   const handleRefresh = async () => {
     toast.info('Refreshing data...');
     await refetch();
     toast.success('Data refreshed successfully');
   };
+
   if (isLoading) {
-    return <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+    return (
+      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
         <div className="text-foreground">Loading admin dashboard...</div>
-      </div>;
+      </div>
+    );
   }
-  return <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
+
+  return (
+    <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
       {/* Header - Fixed at top */}
       <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4 z-50">
         <div className="flex items-center justify-between">
@@ -199,9 +215,11 @@ export default function AdminDashboard() {
                 <CardContent>
                   <Button className="w-full btn-secondary-enhanced text-sm py-4 relative" onClick={() => handleSectionChange('messages')}>
                     View Messages
-                    {stats.pendingMessages > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {stats.pendingMessages > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                         {stats.pendingMessages}
-                      </span>}
+                      </span>
+                    )}
                   </Button>
                 </CardContent>
               </Card>
@@ -217,7 +235,9 @@ export default function AdminDashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full btn-enhanced text-sm py-4" onClick={() => handleSectionChange('subscriptions')}>Manage Subs</Button>
+                  <Button className="w-full btn-enhanced text-sm py-4" onClick={() => handleSectionChange('subscriptions')}>
+                    Manage Subs
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -280,45 +300,70 @@ export default function AdminDashboard() {
       <nav className="flex-shrink-0 border-t border-border/30 bg-gradient-nav backdrop-blur-xl shadow-vibrant px-6 py-6">
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-4 gap-4">
-            <Button variant={activeSection === 'dashboard' ? 'default' : 'outline'} size="lg" onClick={() => setActiveSection('dashboard')} className={`
+            <Button 
+              variant={activeSection === 'dashboard' ? 'default' : 'outline'} 
+              size="lg" 
+              onClick={() => setActiveSection('dashboard')} 
+              className={`
                 flex flex-col items-center justify-center h-16 w-full rounded-xl transition-all duration-300
                 ${activeSection === 'dashboard' ? 'btn-enhanced shadow-colored scale-105 border-accent-blue/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
-              `}>
+              `}
+            >
               <BarChart3 className={`h-6 w-6 mb-1 ${activeSection === 'dashboard' ? 'text-white' : 'text-accent-blue'}`} />
               <span className="text-xs font-semibold">Dashboard</span>
             </Button>
 
-            <Button variant={activeSection === 'users' ? 'default' : 'outline'} size="lg" onClick={() => handleSectionChange('users')} className={`
+            <Button 
+              variant={activeSection === 'users' ? 'default' : 'outline'} 
+              size="lg" 
+              onClick={() => handleSectionChange('users')} 
+              className={`
                 flex flex-col items-center justify-center h-16 w-full rounded-xl transition-all duration-300 relative
                 ${activeSection === 'users' ? 'btn-enhanced shadow-colored scale-105 border-accent-green/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
-              `}>
+              `}
+            >
               <Users className={`h-6 w-6 mb-1 ${activeSection === 'users' ? 'text-white' : 'text-accent-green'}`} />
-              {stats.onlineUsers > 0 && <span className="absolute -top-1 -right-1 bg-accent-green text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold shadow-lg">
+              {stats.onlineUsers > 0 && (
+                <span className="absolute -top-1 -right-1 bg-accent-green text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold shadow-lg">
                   {stats.onlineUsers}
-                </span>}
+                </span>
+              )}
               <span className="text-xs font-semibold">Users</span>
             </Button>
 
-            <Button variant={activeSection === 'messages' ? 'default' : 'outline'} size="lg" onClick={() => handleSectionChange('messages')} className={`
+            <Button 
+              variant={activeSection === 'messages' ? 'default' : 'outline'} 
+              size="lg" 
+              onClick={() => handleSectionChange('messages')} 
+              className={`
                 flex flex-col items-center justify-center h-16 w-full rounded-xl transition-all duration-300 relative
                 ${activeSection === 'messages' ? 'btn-enhanced shadow-colored scale-105 border-accent-orange/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
-              `}>
+              `}
+            >
               <MessageSquare className={`h-6 w-6 mb-1 ${activeSection === 'messages' ? 'text-white' : 'text-accent-orange'}`} />
-              {stats.pendingMessages > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold shadow-lg animate-pulse">
+              {stats.pendingMessages > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold shadow-lg animate-pulse">
                   {stats.pendingMessages}
-                </span>}
+                </span>
+              )}
               <span className="text-xs font-semibold">Messages</span>
             </Button>
 
-            <Button variant={activeSection === 'analytics' ? 'default' : 'outline'} size="lg" onClick={() => handleSectionChange('analytics')} className={`
+            <Button 
+              variant={activeSection === 'analytics' ? 'default' : 'outline'} 
+              size="lg" 
+              onClick={() => handleSectionChange('analytics')} 
+              className={`
                 flex flex-col items-center justify-center h-16 w-full rounded-xl transition-all duration-300
                 ${activeSection === 'analytics' ? 'btn-enhanced shadow-colored scale-105 border-accent-purple/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
-              `}>
+              `}
+            >
               <BarChart3 className={`h-6 w-6 mb-1 ${activeSection === 'analytics' ? 'text-white' : 'text-accent-purple'}`} />
               <span className="text-xs font-semibold">Analytics</span>
             </Button>
           </div>
         </div>
       </nav>
-    </div>;
+    </div>
+  );
 }
