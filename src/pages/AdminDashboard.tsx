@@ -5,6 +5,7 @@ import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOu
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -143,25 +144,24 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-8 py-6">
+    <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
+      {/* Header - Fixed at top */}
+      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4 z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Shield className="h-10 w-10 text-accent-blue" />
+            <Shield className="h-8 w-8 text-accent-blue" />
             <div>
-              <h1 className="text-2xl font-bold text-enhanced-heading">WAKTI Admin Panel</h1>
+              <h1 className="text-xl font-bold text-enhanced-heading">WAKTI Admin Panel</h1>
               <p className="text-sm text-muted-foreground">Welcome, Abdullah Alfadly</p>
             </div>
           </div>
           
           <div className="flex items-center space-x-3">
-            {/* Settings Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="bg-gradient-secondary hover:bg-gradient-primary px-6 py-3"
+                  className="bg-gradient-secondary hover:bg-gradient-primary px-4 py-2"
                 >
                   <Settings className="h-4 w-4 mr-2" />
                   Settings
@@ -183,275 +183,277 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="p-8 pb-32">
-        {/* Dashboard Overview - 2x2 Layout */}
-        <div className="mb-12">
-          <h2 className="text-3xl font-bold text-enhanced-heading mb-8">Dashboard Overview</h2>
-          <div className="grid grid-cols-2 gap-8">
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-medium">Total Users</CardTitle>
-                  <Users className="h-8 w-8 text-accent-blue" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-enhanced-heading mb-2">{stats.totalUsers}</div>
-                <p className="text-sm text-muted-foreground">Registered users</p>
-              </CardContent>
-            </Card>
+      {/* Scrollable Main Content */}
+      <ScrollArea className="flex-1">
+        <div className="p-6 pb-32">
+          {/* Dashboard Overview - 2x2 Layout */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-enhanced-heading mb-6">Dashboard Overview</h2>
+            <div className="grid grid-cols-2 gap-6">
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-medium">Total Users</CardTitle>
+                    <Users className="h-6 w-6 text-accent-blue" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-enhanced-heading mb-1">{stats.totalUsers}</div>
+                  <p className="text-xs text-muted-foreground">Registered users</p>
+                </CardContent>
+              </Card>
 
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-medium">Active Subscriptions</CardTitle>
-                  <CreditCard className="h-8 w-8 text-accent-green" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-enhanced-heading mb-2">{stats.activeSubscriptions}</div>
-                <p className="text-sm text-muted-foreground">Paying customers</p>
-              </CardContent>
-            </Card>
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-medium">Active Subscriptions</CardTitle>
+                    <CreditCard className="h-6 w-6 text-accent-green" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-enhanced-heading mb-1">{stats.activeSubscriptions}</div>
+                  <p className="text-xs text-muted-foreground">Paying customers</p>
+                </CardContent>
+              </Card>
 
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-medium">Pending Messages</CardTitle>
-                  <MessageSquare className="h-8 w-8 text-accent-orange" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-enhanced-heading mb-2">{stats.pendingMessages}</div>
-                <p className="text-sm text-muted-foreground">Unread contacts</p>
-              </CardContent>
-            </Card>
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-medium">Pending Messages</CardTitle>
+                    <MessageSquare className="h-6 w-6 text-accent-orange" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-enhanced-heading mb-1">{stats.pendingMessages}</div>
+                  <p className="text-xs text-muted-foreground">Unread contacts</p>
+                </CardContent>
+              </Card>
 
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-medium">Online Users</CardTitle>
-                  <BarChart3 className="h-8 w-8 text-accent-purple" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-enhanced-heading mb-2">{stats.onlineUsers}</div>
-                <p className="text-sm text-muted-foreground">Currently active</p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Management Tools - 2 Cards Per Row */}
-        <div className="mb-12">
-          <h2 className="text-3xl font-bold text-enhanced-heading mb-8">Management Tools</h2>
-          <div className="grid grid-cols-2 gap-8">
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-enhanced-heading flex items-center text-xl">
-                  <Users className="h-6 w-6 mr-3 text-accent-blue" />
-                  User Management
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Manage app users, view profiles, and control access
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  className="w-full btn-enhanced text-lg py-6"
-                  onClick={() => handleSectionChange('users')}
-                >
-                  Manage Users
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-enhanced-heading flex items-center text-xl">
-                  <MessageSquare className="h-6 w-6 mr-3 text-accent-orange" />
-                  Support Messages
-                </CardTitle>
-                <CardDescription className="text-base">
-                  View and respond to user contact forms
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  className="w-full btn-secondary-enhanced text-lg py-6 relative"
-                  onClick={() => handleSectionChange('messages')}
-                >
-                  View Messages
-                  {stats.pendingMessages > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center">
-                      {stats.pendingMessages}
-                    </span>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-enhanced-heading flex items-center text-xl">
-                  <CreditCard className="h-6 w-6 mr-3 text-accent-green" />
-                  Subscription Control
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Manually activate PayPal subscriptions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  className="w-full btn-enhanced text-lg py-6"
-                  onClick={() => handleSectionChange('subscriptions')}
-                >
-                  Manage Subscriptions
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-enhanced-heading flex items-center text-xl">
-                  <Gift className="h-6 w-6 mr-3 text-accent-purple" />
-                  Quota Management
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Gift voice credits and translation quotas
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  className="w-full btn-secondary-enhanced text-lg py-6"
-                  onClick={() => handleSectionChange('quotas')}
-                >
-                  Manage Quotas
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-enhanced-heading flex items-center text-xl">
-                  <BarChart3 className="h-6 w-6 mr-3 text-accent-cyan" />
-                  Analytics Dashboard
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Revenue tracking and user analytics
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  className="w-full btn-enhanced text-lg py-6"
-                  onClick={() => handleSectionChange('analytics')}
-                >
-                  View Analytics
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-enhanced-heading flex items-center text-xl">
-                  <UserCheck className="h-6 w-6 mr-3 text-accent-blue" />
-                  System Monitoring
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Monitor system health and performance
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  className="w-full btn-secondary-enhanced text-lg py-6"
-                  onClick={() => toast.info('System monitoring coming soon')}
-                >
-                  System Status
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <Card className="enhanced-card">
-          <CardHeader>
-            <CardTitle className="text-enhanced-heading text-2xl">Recent Activity</CardTitle>
-            <CardDescription className="text-base">Latest admin actions and system events</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="flex items-center justify-between p-6 bg-gradient-secondary/10 rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="w-4 h-4 bg-accent-green rounded-full"></div>
-                  <span className="font-medium text-lg">New user registration: user@example.com</span>
-                </div>
-                <span className="text-sm text-muted-foreground">5 min ago</span>
-              </div>
-              <div className="flex items-center justify-between p-6 bg-gradient-secondary/10 rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="w-4 h-4 bg-accent-blue rounded-full"></div>
-                  <span className="font-medium text-lg">PayPal subscription activated</span>
-                </div>
-                <span className="text-sm text-muted-foreground">12 min ago</span>
-              </div>
-              <div className="flex items-center justify-between p-6 bg-gradient-secondary/10 rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="w-4 h-4 bg-accent-orange rounded-full"></div>
-                  <span className="font-medium text-lg">New contact form submission</span>
-                </div>
-                <span className="text-sm text-muted-foreground">1 hour ago</span>
-              </div>
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-medium">Online Users</CardTitle>
+                    <BarChart3 className="h-6 w-6 text-accent-purple" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-enhanced-heading mb-1">{stats.onlineUsers}</div>
+                  <p className="text-xs text-muted-foreground">Currently active</p>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      {/* Bottom Navigation - Simplified and Clean */}
-      <nav className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-10">
-        <div className="flex justify-center py-4 px-8 rounded-full bg-gradient-nav backdrop-blur-xl border border-border/50 shadow-vibrant">
-          <div className="flex space-x-3">
+          {/* Management Tools - 2 Cards Per Row */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-enhanced-heading mb-6">Management Tools</h2>
+            <div className="grid grid-cols-2 gap-6">
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-base">
+                    <Users className="h-5 w-5 mr-2 text-accent-blue" />
+                    User Management
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    Manage app users, view profiles, and control access
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    className="w-full btn-enhanced text-sm py-4"
+                    onClick={() => handleSectionChange('users')}
+                  >
+                    Manage Users
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-base">
+                    <MessageSquare className="h-5 w-5 mr-2 text-accent-orange" />
+                    Support Messages
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    View and respond to user contact forms
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    className="w-full btn-secondary-enhanced text-sm py-4 relative"
+                    onClick={() => handleSectionChange('messages')}
+                  >
+                    View Messages
+                    {stats.pendingMessages > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {stats.pendingMessages}
+                      </span>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-base">
+                    <CreditCard className="h-5 w-5 mr-2 text-accent-green" />
+                    Subscription Control
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    Manually activate PayPal subscriptions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    className="w-full btn-enhanced text-sm py-4"
+                    onClick={() => handleSectionChange('subscriptions')}
+                  >
+                    Manage Subscriptions
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-base">
+                    <Gift className="h-5 w-5 mr-2 text-accent-purple" />
+                    Quota Management
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    Gift voice credits and translation quotas
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    className="w-full btn-secondary-enhanced text-sm py-4"
+                    onClick={() => handleSectionChange('quotas')}
+                  >
+                    Manage Quotas
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-base">
+                    <BarChart3 className="h-5 w-5 mr-2 text-accent-cyan" />
+                    Analytics Dashboard
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    Revenue tracking and user analytics
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    className="w-full btn-enhanced text-sm py-4"
+                    onClick={() => handleSectionChange('analytics')}
+                  >
+                    View Analytics
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-enhanced-heading flex items-center text-base">
+                    <UserCheck className="h-5 w-5 mr-2 text-accent-blue" />
+                    System Monitoring
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    Monitor system health and performance
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    className="w-full btn-secondary-enhanced text-sm py-4"
+                    onClick={() => toast.info('System monitoring coming soon')}
+                  >
+                    System Status
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <Card className="enhanced-card">
+            <CardHeader>
+              <CardTitle className="text-enhanced-heading text-xl">Recent Activity</CardTitle>
+              <CardDescription className="text-sm">Latest admin actions and system events</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-3 h-3 bg-accent-green rounded-full"></div>
+                    <span className="font-medium text-sm">New user registration: user@example.com</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">5 min ago</span>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-3 h-3 bg-accent-blue rounded-full"></div>
+                    <span className="font-medium text-sm">PayPal subscription activated</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">12 min ago</span>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-3 h-3 bg-accent-orange rounded-full"></div>
+                    <span className="font-medium text-sm">New contact form submission</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">1 hour ago</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ScrollArea>
+
+      {/* Bottom Navigation - Fixed at bottom */}
+      <nav className="flex-shrink-0 border-t border-border/50 bg-gradient-nav backdrop-blur-xl p-4">
+        <div className="flex justify-center">
+          <div className="flex space-x-2">
             <Button
               variant={activeSection === 'dashboard' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setActiveSection('dashboard')}
-              className="rounded-full px-6"
+              className="rounded-full px-4"
             >
-              <BarChart3 className="h-5 w-5" />
-              <span className="ml-2">Dashboard</span>
+              <BarChart3 className="h-4 w-4" />
+              <span className="ml-2 text-xs">Dashboard</span>
             </Button>
             <Button
               variant={activeSection === 'users' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => handleSectionChange('users')}
-              className="rounded-full px-6"
+              className="rounded-full px-4"
             >
-              <Users className="h-5 w-5" />
-              <span className="ml-2">Users</span>
+              <Users className="h-4 w-4" />
+              <span className="ml-2 text-xs">Users</span>
             </Button>
             <Button
               variant={activeSection === 'messages' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => handleSectionChange('messages')}
-              className="rounded-full px-6 relative"
+              className="rounded-full px-4 relative"
             >
-              <MessageSquare className="h-5 w-5" />
+              <MessageSquare className="h-4 w-4" />
               {stats.pendingMessages > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
                   {stats.pendingMessages}
                 </span>
               )}
-              <span className="ml-2">Messages</span>
+              <span className="ml-2 text-xs">Messages</span>
             </Button>
             <Button
               variant={activeSection === 'analytics' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => handleSectionChange('analytics')}
-              className="rounded-full px-6"
+              className="rounded-full px-4"
             >
-              <BarChart3 className="h-5 w-5" />
-              <span className="ml-2">Analytics</span>
+              <BarChart3 className="h-4 w-4" />
+              <span className="ml-2 text-xs">Analytics</span>
             </Button>
           </div>
         </div>
