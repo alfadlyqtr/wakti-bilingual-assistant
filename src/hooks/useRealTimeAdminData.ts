@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -57,15 +56,13 @@ export const useRealTimeAdminData = () => {
         .select('*', { count: 'exact', head: true })
         .eq('is_logged_in', true);
 
-      // Calculate monthly revenue
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-      const { data: monthlySubscriptions } = await supabase
+      // Calculate total monthly revenue from ALL active subscriptions
+      const { data: allActiveSubscriptions } = await supabase
         .from('subscriptions')
         .select('billing_amount')
-        .eq('status', 'active')
-        .gte('created_at', `${currentMonth}-01`);
+        .eq('status', 'active');
 
-      const monthlyRevenue = monthlySubscriptions?.reduce((sum, sub) => 
+      const monthlyRevenue = allActiveSubscriptions?.reduce((sum, sub) => 
         sum + (Number(sub.billing_amount) || 0), 0) || 0;
 
       // Load new users today

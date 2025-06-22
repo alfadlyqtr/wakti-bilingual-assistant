@@ -195,7 +195,7 @@ export default function AdminDashboard() {
                     User Management
                   </CardTitle>
                   <CardDescription className="text-sm">
-                    Manage {stats.totalUsers} app users, profiles, and access control
+                    Manage app users, profiles, and access control
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -203,7 +203,7 @@ export default function AdminDashboard() {
                     className="w-full btn-enhanced text-sm py-4"
                     onClick={() => handleSectionChange('users')}
                   >
-                    Manage Users ({stats.onlineUsers} online)
+                    Manage Users
                   </Button>
                 </CardContent>
               </Card>
@@ -240,7 +240,7 @@ export default function AdminDashboard() {
                     Subscription Control
                   </CardTitle>
                   <CardDescription className="text-sm">
-                    Manage {stats.activeSubscriptions} active PayPal subscriptions
+                    Manage subscription lifecycle and billing
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
