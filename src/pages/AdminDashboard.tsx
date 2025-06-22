@@ -410,50 +410,77 @@ export default function AdminDashboard() {
         </div>
       </ScrollArea>
 
-      {/* Bottom Navigation - Reverted to Original */}
-      <nav className="flex-shrink-0 border-t border-border/50 bg-gradient-nav backdrop-blur-xl p-4">
-        <div className="flex justify-center">
-          <div className="flex space-x-2">
+      {/* Enhanced Bottom Navigation */}
+      <nav className="flex-shrink-0 border-t border-border/30 bg-gradient-nav backdrop-blur-xl shadow-vibrant px-6 py-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-4 gap-4">
             <Button
-              variant={activeSection === 'dashboard' ? 'default' : 'ghost'}
-              size="sm"
+              variant={activeSection === 'dashboard' ? 'default' : 'outline'}
+              size="lg"
               onClick={() => setActiveSection('dashboard')}
-              className="rounded-full px-4"
+              className={`
+                flex flex-col items-center justify-center h-16 w-full rounded-xl transition-all duration-300
+                ${activeSection === 'dashboard' 
+                  ? 'btn-enhanced shadow-colored scale-105 border-accent-blue/30' 
+                  : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'
+                }
+              `}
             >
-              <BarChart3 className="h-4 w-4" />
-              <span className="ml-2 text-xs">Dashboard</span>
+              <BarChart3 className={`h-6 w-6 mb-1 ${activeSection === 'dashboard' ? 'text-white' : 'text-accent-blue'}`} />
+              <span className="text-xs font-semibold">Dashboard</span>
             </Button>
+
             <Button
-              variant={activeSection === 'users' ? 'default' : 'ghost'}
-              size="sm"
+              variant={activeSection === 'users' ? 'default' : 'outline'}
+              size="lg"
               onClick={() => handleSectionChange('users')}
-              className="rounded-full px-4"
+              className={`
+                flex flex-col items-center justify-center h-16 w-full rounded-xl transition-all duration-300
+                ${activeSection === 'users' 
+                  ? 'btn-enhanced shadow-colored scale-105 border-accent-green/30' 
+                  : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'
+                }
+              `}
             >
-              <Users className="h-4 w-4" />
-              <span className="ml-2 text-xs">Users</span>
+              <Users className={`h-6 w-6 mb-1 ${activeSection === 'users' ? 'text-white' : 'text-accent-green'}`} />
+              <span className="text-xs font-semibold">Users</span>
             </Button>
+
             <Button
-              variant={activeSection === 'messages' ? 'default' : 'ghost'}
-              size="sm"
+              variant={activeSection === 'messages' ? 'default' : 'outline'}
+              size="lg"
               onClick={() => handleSectionChange('messages')}
-              className="rounded-full px-4 relative"
+              className={`
+                flex flex-col items-center justify-center h-16 w-full rounded-xl transition-all duration-300 relative
+                ${activeSection === 'messages' 
+                  ? 'btn-enhanced shadow-colored scale-105 border-accent-orange/30' 
+                  : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'
+                }
+              `}
             >
-              <MessageSquare className="h-4 w-4" />
+              <MessageSquare className={`h-6 w-6 mb-1 ${activeSection === 'messages' ? 'text-white' : 'text-accent-orange'}`} />
               {stats.pendingMessages > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold shadow-lg">
                   {stats.pendingMessages}
                 </span>
               )}
-              <span className="ml-2 text-xs">Messages</span>
+              <span className="text-xs font-semibold">Messages</span>
             </Button>
+
             <Button
-              variant={activeSection === 'analytics' ? 'default' : 'ghost'}
-              size="sm"
+              variant={activeSection === 'analytics' ? 'default' : 'outline'}
+              size="lg"
               onClick={() => handleSectionChange('analytics')}
-              className="rounded-full px-4"
+              className={`
+                flex flex-col items-center justify-center h-16 w-full rounded-xl transition-all duration-300
+                ${activeSection === 'analytics' 
+                  ? 'btn-enhanced shadow-colored scale-105 border-accent-purple/30' 
+                  : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'
+                }
+              `}
             >
-              <BarChart3 className="h-4 w-4" />
-              <span className="ml-2 text-xs">Analytics</span>
+              <BarChart3 className={`h-6 w-6 mb-1 ${activeSection === 'analytics' ? 'text-white' : 'text-accent-purple'}`} />
+              <span className="text-xs font-semibold">Analytics</span>
             </Button>
           </div>
         </div>
