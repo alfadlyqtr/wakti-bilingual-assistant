@@ -8,6 +8,12 @@ import { ThemeProvider } from '@/providers/ThemeProvider';
 import { AuthProvider } from '@/contexts/AuthContext';
 import Index from '@/pages/Index';
 import Home from '@/pages/Home';
+import Login from '@/pages/Login';
+import Signup from '@/pages/Signup';
+import ForgotPassword from '@/pages/ForgotPassword';
+import ResetPassword from '@/pages/ResetPassword';
+import ResetSuccess from '@/pages/ResetSuccess';
+import Confirmed from '@/pages/Confirmed';
 import Calendar from '@/pages/Calendar';
 import Settings from '@/pages/Settings';
 import Account from '@/pages/Account';
@@ -32,6 +38,16 @@ function App() {
                   <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/home" element={<Home />} />
+                    
+                    {/* Authentication Routes */}
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/reset-success" element={<ResetSuccess />} />
+                    <Route path="/confirmed" element={<Confirmed />} />
+                    
+                    {/* App Routes */}
                     <Route path="/calendar" element={<Calendar />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/account" element={<Account />} />
