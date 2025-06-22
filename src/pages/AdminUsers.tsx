@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle, Trash2, Eye } from "lucide-react";
@@ -216,16 +215,16 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground flex flex-col">
-      {/* Mobile Responsive Header */}
-      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-3 sm:px-6 py-3 sm:py-4">
+    <div className="min-h-screen bg-gradient-background text-foreground">
+      {/* Mobile Responsive Header with AD Button */}
+      <header className="bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-3 sm:px-6 py-3 sm:py-4 sticky top-0 z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 sm:space-x-4">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleBackToAdmin}
-              className="rounded-full hover:bg-accent/10 font-bold text-sm sm:text-lg px-2 sm:px-3"
+              className="rounded-full hover:bg-accent/10 font-bold text-sm sm:text-lg px-2 sm:px-3 bg-gradient-primary text-white hover:bg-gradient-secondary"
             >
               AD
             </Button>
@@ -239,7 +238,7 @@ export default function AdminUsers() {
       </header>
 
       {/* Mobile Responsive Search and Filter */}
-      <div className="flex-shrink-0 p-3 sm:p-6">
+      <div className="p-3 sm:p-6 bg-gradient-background">
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
@@ -247,23 +246,22 @@ export default function AdminUsers() {
               placeholder="Search users by email or name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 sm:pl-10 input-enhanced text-xs sm:text-sm"
+              className="pl-8 sm:pl-10 input-enhanced text-xs sm:text-sm h-9 sm:h-10"
             />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center space-x-2 text-xs sm:text-sm px-3 py-2">
+              <Button variant="outline" className="flex items-center space-x-2 text-xs sm:text-sm px-3 py-2 h-9 sm:h-10 min-w-[100px] sm:min-w-[120px]">
                 <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">
+                <span className="truncate">
                   {filterStatus === "all" ? "All Users" : 
                    filterStatus === "online" ? "Online" : 
                    filterStatus === "subscribed" ? "Subscribed" : 
                    filterStatus === "unconfirmed" ? "Unconfirmed" : "Suspended"}
                 </span>
-                <span className="sm:hidden">Filter</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent align="end" className="w-40 sm:w-48">
               <DropdownMenuItem onClick={() => setFilterStatus("all")}>All Users</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterStatus("online")}>Online Users</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterStatus("subscribed")}>Subscribed Users</DropdownMenuItem>
@@ -275,98 +273,99 @@ export default function AdminUsers() {
       </div>
 
       {/* Scrollable Users List */}
-      <div className="flex-1 overflow-auto px-3 sm:px-6 pb-6">
-        <div className="grid gap-3 sm:gap-4">
-          {filteredUsers.map((user) => (
-            <Card key={user.id} className={`enhanced-card ${user.is_suspended ? 'border-red-200 bg-red-50/50' : ''}`}>
-              <CardContent className="p-3 sm:p-4 lg:p-6">
-                <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center justify-between sm:gap-4">
-                  <div className="flex items-center space-x-3 min-w-0 flex-1">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                      {user.avatar_url ? (
-                        <img
-                          src={user.avatar_url}
-                          alt={user.full_name || user.email}
-                          className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-white font-medium text-xs sm:text-sm lg:text-base">
-                          {(user.full_name || user.email || "?").charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 mb-1">
-                        <h3 className="font-semibold text-enhanced-heading text-xs sm:text-sm lg:text-base truncate">
-                          {user.full_name || "No name"}
-                        </h3>
-                        <div className="flex items-center space-x-1 mt-1 sm:mt-0">
-                          {user.email_confirmed ? (
-                            <CheckCircle className="h-3 w-3 text-accent-green flex-shrink-0" />
-                          ) : (
-                            <AlertCircle className="h-3 w-3 text-accent-orange flex-shrink-0" />
-                          )}
-                          {user.is_suspended && (
-                            <Badge variant="destructive" className="text-xs">
-                              SUSPENDED
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate mb-2">{user.email}</p>
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-                        <Badge variant={user.is_logged_in ? "default" : "secondary"} className="text-xs">
-                          {user.is_logged_in ? "Online" : "Offline"}
-                        </Badge>
-                        {getSubscriptionBadge(user)}
-                        <Badge 
-                          variant={user.email_confirmed ? "default" : "destructive"}
-                          className={`text-xs ${user.email_confirmed ? 'bg-accent-green text-white' : 'bg-accent-orange text-white'}`}
-                        >
-                          {user.email_confirmed ? "Verified" : "Unverified"}
-                        </Badge>
-                      </div>
-                    </div>
+      <div className="flex-1 px-3 sm:px-6 pb-6 space-y-3 sm:space-y-4">
+        {filteredUsers.map((user) => (
+          <Card key={user.id} className={`enhanced-card ${user.is_suspended ? 'border-red-200 bg-red-50/50' : ''}`}>
+            <CardContent className="p-3 sm:p-4 lg:p-6">
+              <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center justify-between sm:gap-4">
+                <div className="flex items-center space-x-3 min-w-0 flex-1">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt={user.full_name || user.email}
+                        className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-white font-medium text-xs sm:text-sm lg:text-base">
+                        {(user.full_name || user.email || "?").charAt(0).toUpperCase()}
+                      </span>
+                    )}
                   </div>
-
-                  <div className="flex items-center justify-between sm:justify-end space-x-2">
-                    <div className="text-right text-xs text-muted-foreground">
-                      <p>Joined {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 mb-1">
+                      <h3 className="font-semibold text-enhanced-heading text-xs sm:text-sm lg:text-base truncate">
+                        {user.full_name || "No name"}
+                      </h3>
+                      <div className="flex items-center space-x-1 mt-1 sm:mt-0">
+                        {user.email_confirmed ? (
+                          <CheckCircle className="h-3 w-3 text-accent-green flex-shrink-0" />
+                        ) : (
+                          <AlertCircle className="h-3 w-3 text-accent-orange flex-shrink-0" />
+                        )}
+                        {user.is_suspended && (
+                          <Badge variant="destructive" className="text-xs px-1 py-0">
+                            SUSPENDED
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <DropdownMenu open={openDropdownId === user.id} onOpenChange={(open) => setOpenDropdownId(open ? user.id : null)}>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-8 sm:w-8">
-                          <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleUserAction(user, "View Profile")}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Profile
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleUserAction(user, "Send Message")}>
-                          <Mail className="h-4 w-4 mr-2" />
-                          Send Message
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleUserAction(user, "Suspend User")}>
-                          <UserX className="h-4 w-4 mr-2" />
-                          {user.is_suspended ? "Unsuspend User" : "Suspend User"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => handleUserAction(user, "Delete User")}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete User
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <p className="text-xs text-muted-foreground truncate mb-2">{user.email}</p>
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                      <Badge variant={user.is_logged_in ? "default" : "secondary"} className="text-xs px-2 py-0">
+                        {user.is_logged_in ? "Online" : "Offline"}
+                      </Badge>
+                      {getSubscriptionBadge(user)}
+                      <Badge 
+                        variant={user.email_confirmed ? "default" : "destructive"}
+                        className={`text-xs px-2 py-0 ${user.email_confirmed ? 'bg-accent-green text-white' : 'bg-accent-orange text-white'}`}
+                      >
+                        {user.email_confirmed ? "Verified" : "Unverified"}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+
+                <div className="flex items-center justify-between sm:justify-end space-x-2">
+                  <div className="text-right text-xs text-muted-foreground">
+                    <p>Joined {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}</p>
+                  </div>
+                  <DropdownMenu 
+                    open={openDropdownId === user.id} 
+                    onOpenChange={(open) => setOpenDropdownId(open ? user.id : null)}
+                  >
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-8 sm:w-8 hover:bg-accent/10">
+                        <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40 sm:w-48">
+                      <DropdownMenuItem onClick={() => handleUserAction(user, "View Profile")}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Profile
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUserAction(user, "Send Message")}>
+                        <Mail className="h-4 w-4 mr-2" />
+                        Send Message
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUserAction(user, "Suspend User")}>
+                        <UserX className="h-4 w-4 mr-2" />
+                        {user.is_suspended ? "Unsuspend User" : "Suspend User"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleUserAction(user, "Delete User")}
+                        className="text-red-600 focus:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete User
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
         {filteredUsers.length === 0 && (
           <Card className="enhanced-card">
