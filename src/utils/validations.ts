@@ -31,7 +31,7 @@ export function validateEmail(email: string): string | null {
   return null; // No errors
 }
 
-// Password validation
+// Enhanced password validation
 export function validatePassword(password: string): string | null {
   if (!password) {
     return "Password cannot be empty";
@@ -39,6 +39,34 @@ export function validatePassword(password: string): string | null {
   
   if (password.length < 6) {
     return "Password must be at least 6 characters";
+  }
+  
+  // Check for at least one uppercase letter
+  if (!/[A-Z]/.test(password)) {
+    return "Password must contain at least one uppercase letter";
+  }
+  
+  // Check for at least one lowercase letter
+  if (!/[a-z]/.test(password)) {
+    return "Password must contain at least one lowercase letter";
+  }
+  
+  // Check for at least one digit
+  if (!/\d/.test(password)) {
+    return "Password must contain at least one digit";
+  }
+  
+  return null; // No errors
+}
+
+// Confirm password validation
+export function validateConfirmPassword(password: string, confirmPassword: string): string | null {
+  if (!confirmPassword) {
+    return "Please confirm your password";
+  }
+  
+  if (password !== confirmPassword) {
+    return "Passwords do not match";
   }
   
   return null; // No errors

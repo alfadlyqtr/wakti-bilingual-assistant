@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -16,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
+import { validatePassword, validateConfirmPassword } from "@/utils/validations";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -24,19 +26,43 @@ export default function Signup() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
   const [dobInputValue, setDobInputValue] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
+
+  // Real-time password validation
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    const error = validatePassword(value);
+    setPasswordError(error);
+    
+    // Also check confirm password if it's filled
+    if (confirmPassword) {
+      const confirmError = validateConfirmPassword(value, confirmPassword);
+      setConfirmPasswordError(confirmError);
+    }
+  };
+
+  // Real-time confirm password validation
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+    const error = validateConfirmPassword(password, value);
+    setConfirmPasswordError(error);
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     
-    if (!name || !username || !email || !password || !dateOfBirth) {
+    if (!name || !username || !email || !password || !confirmPassword || !dateOfBirth) {
       setErrorMsg(language === 'en' ? 'Please fill in all fields including date of birth' : 'يرجى تعبئة جميع الحقول بما في ذلك تاريخ الميلاد');
       return;
     }
@@ -46,8 +72,19 @@ export default function Signup() {
       return;
     }
     
-    if (password.length < 6) {
-      setErrorMsg(language === 'en' ? 'Password must be at least 6 characters long' : 'يجب أن تكون كلمة المرور 6 أحرف على الأقل');
+    // Validate password
+    const passwordValidationError = validatePassword(password);
+    if (passwordValidationError) {
+      setPasswordError(passwordValidationError);
+      setErrorMsg(passwordValidationError);
+      return;
+    }
+    
+    // Validate confirm password
+    const confirmPasswordValidationError = validateConfirmPassword(password, confirmPassword);
+    if (confirmPasswordValidationError) {
+      setConfirmPasswordError(confirmPasswordValidationError);
+      setErrorMsg(confirmPasswordValidationError);
       return;
     }
     
@@ -137,6 +174,7 @@ export default function Signup() {
       username: "Username",
       email: "Email",
       password: "Password",
+      confirmPassword: "Confirm Password",
       dateOfBirth: "Date of Birth",
       loading: "Loading...",
       signup: "Sign Up",
@@ -152,6 +190,7 @@ export default function Signup() {
       usernamePlaceholder: "username",
       emailPlaceholder: "example@email.com",
       passwordPlaceholder: "Create a password",
+      confirmPasswordPlaceholder: "Confirm your password",
       dobPlaceholder: "Select your date of birth"
     },
     ar: {
@@ -161,6 +200,7 @@ export default function Signup() {
       username: "اسم المستخدم",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
+      confirmPassword: "تأكيد كلمة المرور",
       dateOfBirth: "تاريخ الميلاد",
       loading: "جاري التحميل...",
       signup: "إنشاء حساب",
@@ -176,6 +216,7 @@ export default function Signup() {
       usernamePlaceholder: "اسم المستخدم",
       emailPlaceholder: "example@email.com",
       passwordPlaceholder: "إنشاء كلمة مرور",
+      confirmPasswordPlaceholder: "تأكيد كلمة المرور",
       dobPlaceholder: "اختر تاريخ ميلادك"
     }
   };
@@ -357,8 +398,11 @@ export default function Signup() {
                       autoComplete="new-password"
                       disabled={isLoading}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10 py-6 text-base shadow-sm"
+                      onChange={(e) => handlePasswordChange(e.target.value)}
+                      className={cn(
+                        "pl-10 pr-10 py-6 text-base shadow-sm",
+                        passwordError && "border-red-500"
+                      )}
                       required
                     />
                     <button
@@ -373,6 +417,57 @@ export default function Signup() {
                       )}
                     </button>
                   </div>
+                  {passwordError && (
+                    <div className="text-sm text-red-500 mt-1">
+                      {passwordError}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {language === 'en' 
+                      ? "Password must be at least 6 characters with 1 uppercase, 1 lowercase, and 1 digit"
+                      : "يجب أن تحتوي كلمة المرور على 6 أحرف على الأقل مع حرف كبير وحرف صغير ورقم"
+                    }
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword" className="text-base">{t.confirmPassword}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Lock className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder={t.confirmPasswordPlaceholder}
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      disabled={isLoading}
+                      value={confirmPassword}
+                      onChange={(e) => handleConfirmPasswordChange(e.target.value)}
+                      className={cn(
+                        "pl-10 pr-10 py-6 text-base shadow-sm",
+                        confirmPasswordError && "border-red-500"
+                      )}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                  {confirmPasswordError && (
+                    <div className="text-sm text-red-500 mt-1">
+                      {confirmPasswordError}
+                    </div>
+                  )}
                 </div>
                 
                 {/* Privacy and Terms Checkbox */}
@@ -409,7 +504,7 @@ export default function Signup() {
                 <Button
                   type="submit"
                   className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
-                  disabled={isLoading || !agreedToTerms}
+                  disabled={isLoading || !agreedToTerms || !!passwordError || !!confirmPasswordError}
                 >
                   {isLoading ? t.loading : t.signup}
                 </Button>
