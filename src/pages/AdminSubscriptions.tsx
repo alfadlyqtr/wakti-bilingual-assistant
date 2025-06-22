@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreditCard, ArrowLeft, Search, CheckCircle, Clock, User } from "lucide-react";
+import { CreditCard, ArrowLeft, Search, CheckCircle, Clock, User, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,21 +9,24 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface Subscription {
+interface SubscriptionData {
   id: string;
   user_id: string;
   status: string;
-  amount: number;
-  currency: string;
+  amount?: number;
+  currency?: string;
   created_at: string;
   user_email?: string;
   user_name?: string;
+  is_subscribed?: boolean;
+  subscription_status?: string;
+  plan_name?: string;
 }
 
 export default function AdminSubscriptions() {
   const navigate = useNavigate();
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [filteredSubscriptions, setFilteredSubscriptions] = useState<Subscription[]>([]);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([]);
+  const [filteredSubscriptions, setFilteredSubscriptions] = useState<SubscriptionData[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [activatingId, setActivatingId] = useState<string | null>(null);
@@ -38,23 +41,57 @@ export default function AdminSubscriptions() {
 
   const loadSubscriptions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('subscriptions')
+      // Load all users with subscription information from profiles table
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
         .select(`
-          *,
-          profiles(email, full_name)
+          id,
+          email,
+          display_name,
+          is_subscribed,
+          subscription_status,
+          plan_name,
+          billing_start_date,
+          created_at
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (profilesError) {
+        console.error('Error loading profiles:', profilesError);
+        throw profilesError;
+      }
 
-      const subscriptionsWithUserInfo = data.map(sub => ({
-        ...sub,
-        user_email: sub.profiles?.email,
-        user_name: sub.profiles?.full_name
-      }));
+      // Also load actual subscription records
+      const { data: subscriptionsData, error: subscriptionsError } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      setSubscriptions(subscriptionsWithUserInfo);
+      if (subscriptionsError) {
+        console.error('Error loading subscriptions:', subscriptionsError);
+      }
+
+      // Combine data prioritizing profiles information
+      const combinedData = profilesData?.map(profile => {
+        const matchingSubscription = subscriptionsData?.find(sub => sub.user_id === profile.id);
+        
+        return {
+          id: matchingSubscription?.id || profile.id,
+          user_id: profile.id,
+          status: profile.subscription_status || 'inactive',
+          amount: matchingSubscription?.billing_amount || (profile.plan_name?.toLowerCase().includes('yearly') ? 600 : 60),
+          currency: matchingSubscription?.billing_currency || 'QAR',
+          created_at: profile.billing_start_date || profile.created_at,
+          user_email: profile.email,
+          user_name: profile.display_name,
+          is_subscribed: profile.is_subscribed,
+          subscription_status: profile.subscription_status,
+          plan_name: profile.plan_name
+        };
+      }) || [];
+
+      console.log('Combined subscription data:', combinedData);
+      setSubscriptions(combinedData);
     } catch (err) {
       console.error('Error loading subscriptions:', err);
       toast.error('Failed to load subscriptions');
@@ -77,22 +114,33 @@ export default function AdminSubscriptions() {
     setFilteredSubscriptions(filtered);
   };
 
-  const activateSubscription = async (subscriptionId: string) => {
-    setActivatingId(subscriptionId);
+  const activateSubscription = async (userId: string) => {
+    setActivatingId(userId);
     
     try {
-      const { error } = await supabase
-        .from('subscriptions')
-        .update({ status: 'active' })
-        .eq('id', subscriptionId);
+      const { error } = await supabase.rpc('admin_activate_subscription', {
+        p_user_id: userId,
+        p_plan_name: 'Monthly',
+        p_billing_amount: 60,
+        p_billing_currency: 'QAR'
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error activating subscription:', error);
+        throw error;
+      }
 
       setSubscriptions(prev => prev.map(sub => 
-        sub.id === subscriptionId ? { ...sub, status: 'active' } : sub
+        sub.user_id === userId ? { 
+          ...sub, 
+          status: 'active',
+          is_subscribed: true,
+          subscription_status: 'active'
+        } : sub
       ));
       
       toast.success('Subscription activated successfully');
+      loadSubscriptions(); // Refresh data
     } catch (err) {
       console.error('Error activating subscription:', err);
       toast.error('Failed to activate subscription');
@@ -118,7 +166,7 @@ export default function AdminSubscriptions() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/admindash')}
+              onClick={() => navigate('/admin-dashboard')}
               className="rounded-full hover:bg-accent/10"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -126,7 +174,7 @@ export default function AdminSubscriptions() {
             <CreditCard className="h-8 w-8 text-accent-green" />
             <div>
               <h1 className="text-xl font-bold text-enhanced-heading">Subscription Control</h1>
-              <p className="text-sm text-muted-foreground">Manually activate PayPal subscriptions</p>
+              <p className="text-sm text-muted-foreground">Manually activate subscriptions</p>
             </div>
           </div>
         </div>
@@ -150,7 +198,7 @@ export default function AdminSubscriptions() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="enhanced-card">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Total Subscriptions</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-enhanced-heading">{subscriptions.length}</div>
@@ -163,18 +211,18 @@ export default function AdminSubscriptions() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-enhanced-heading">
-                {subscriptions.filter(sub => sub.status === 'active').length}
+                {subscriptions.filter(sub => sub.is_subscribed && sub.subscription_status === 'active').length}
               </div>
             </CardContent>
           </Card>
           
           <Card className="enhanced-card">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Pending Activation</CardTitle>
+              <CardTitle className="text-sm font-medium">Free Users</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-enhanced-heading">
-                {subscriptions.filter(sub => sub.status === 'pending').length}
+                {subscriptions.filter(sub => !sub.is_subscribed || sub.subscription_status !== 'active').length}
               </div>
             </CardContent>
           </Card>
@@ -188,7 +236,7 @@ export default function AdminSubscriptions() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center">
-                      <CreditCard className="h-6 w-6 text-white" />
+                      <User className="h-6 w-6 text-white" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-enhanced-heading">
@@ -197,13 +245,17 @@ export default function AdminSubscriptions() {
                       <p className="text-sm text-muted-foreground">{subscription.user_email}</p>
                       <div className="flex items-center space-x-2 mt-1">
                         <Badge 
-                          variant={subscription.status === 'active' ? "default" : subscription.status === 'pending' ? "secondary" : "outline"}
+                          variant={subscription.is_subscribed && subscription.subscription_status === 'active' ? "default" : "outline"}
                           className={
-                            subscription.status === 'active' ? 'bg-accent-green' :
-                            subscription.status === 'pending' ? 'bg-accent-orange' : ''
+                            subscription.is_subscribed && subscription.subscription_status === 'active' 
+                              ? 'bg-accent-green text-white' 
+                              : 'text-muted-foreground'
                           }
                         >
-                          {subscription.status}
+                          {subscription.is_subscribed && subscription.subscription_status === 'active' 
+                            ? `Subscribed (${subscription.plan_name?.toLowerCase().includes('yearly') ? 'Y' : 'M'})` 
+                            : 'Free'
+                          }
                         </Badge>
                         <span className="text-sm text-muted-foreground">
                           {subscription.amount} {subscription.currency?.toUpperCase()}
@@ -214,31 +266,31 @@ export default function AdminSubscriptions() {
 
                   <div className="flex items-center space-x-3">
                     <div className="text-right text-sm text-muted-foreground">
-                      <p>Created {new Date(subscription.created_at).toLocaleDateString()}</p>
+                      <p>Joined {new Date(subscription.created_at).toLocaleDateString()}</p>
                       <p className="text-xs">ID: {subscription.id.slice(0, 8)}...</p>
                     </div>
                     
-                    {subscription.status === 'pending' && (
+                    {(!subscription.is_subscribed || subscription.subscription_status !== 'active') && (
                       <Button
-                        onClick={() => activateSubscription(subscription.id)}
-                        disabled={activatingId === subscription.id}
+                        onClick={() => activateSubscription(subscription.user_id)}
+                        disabled={activatingId === subscription.user_id}
                         className="btn-enhanced"
                       >
-                        {activatingId === subscription.id ? (
+                        {activatingId === subscription.user_id ? (
                           <>
                             <Clock className="h-4 w-4 mr-2 animate-spin" />
                             Activating...
                           </>
                         ) : (
                           <>
-                            <CheckCircle className="h-4 w-4 mr-2" />
+                            <Crown className="h-4 w-4 mr-2" />
                             Activate
                           </>
                         )}
                       </Button>
                     )}
                     
-                    {subscription.status === 'active' && (
+                    {subscription.is_subscribed && subscription.subscription_status === 'active' && (
                       <Badge className="bg-accent-green">
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Active
@@ -255,7 +307,7 @@ export default function AdminSubscriptions() {
           <Card className="enhanced-card">
             <CardContent className="p-12 text-center">
               <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-enhanced-heading mb-2">No subscriptions found</h3>
+              <h3 className="text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
               <p className="text-muted-foreground">Try adjusting your search criteria.</p>
             </CardContent>
           </Card>

@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, ArrowLeft, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle, Trash2, Eye } from "lucide-react";
+import { Shield, ArrowLeft, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle, Trash2, Eye, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,7 @@ export default function AdminUsers() {
     try {
       setIsLoading(true);
       
-      // Use direct query on profiles table without complex JOIN
+      // Load users excluding soft-deleted ones
       const { data: usersData, error } = await supabase
         .from('profiles')
         .select(`
@@ -74,6 +74,7 @@ export default function AdminUsers() {
           subscription_status,
           plan_name
         `)
+        .neq('suspension_reason', 'Account deleted by admin')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -82,24 +83,13 @@ export default function AdminUsers() {
         return;
       }
 
-      // Process users and determine subscription display
-      const processedUsers = usersData?.map(user => {
-        let subscriptionDisplay = 'free';
-        
-        // If user is subscribed and has active status, show subscribed with plan type
-        if (user.is_subscribed && user.subscription_status === 'active') {
-          const planType = user.plan_name?.toLowerCase().includes('yearly') || user.plan_name?.toLowerCase().includes('year') ? 'Y' : 'M';
-          subscriptionDisplay = `subscribed_${planType}`;
-        }
-        
-        return {
-          ...user,
-          full_name: user.display_name || user.email || "No name",
-          subscription_status: subscriptionDisplay
-        };
-      }) || [];
+      // Process users with correct subscription status
+      const processedUsers = usersData?.map(user => ({
+        ...user,
+        full_name: user.display_name || user.email || "No name"
+      })) || [];
 
-      console.log('Processed users with correct subscription status:', processedUsers);
+      console.log('Loaded users:', processedUsers);
       setUsers(processedUsers);
 
     } catch (err) {
@@ -124,7 +114,7 @@ export default function AdminUsers() {
       if (filterStatus === "online") {
         filtered = filtered.filter(user => user.is_logged_in);
       } else if (filterStatus === "subscribed") {
-        filtered = filtered.filter(user => user.subscription_status?.startsWith('subscribed'));
+        filtered = filtered.filter(user => user.is_subscribed);
       } else if (filterStatus === "unconfirmed") {
         filtered = filtered.filter(user => !user.email_confirmed);
       } else if (filterStatus === "suspended") {
@@ -135,9 +125,10 @@ export default function AdminUsers() {
     setFilteredUsers(filtered);
   };
 
-  const getSubscriptionBadge = (subscriptionStatus?: string) => {
-    if (subscriptionStatus?.startsWith('subscribed')) {
-      const planType = subscriptionStatus.includes('_Y') ? ' (Y)' : ' (M)';
+  const getSubscriptionBadge = (user: User) => {
+    if (user.is_subscribed && user.subscription_status === 'active') {
+      const planType = user.plan_name?.toLowerCase().includes('yearly') || 
+                      user.plan_name?.toLowerCase().includes('year') ? ' (Y)' : ' (M)';
       return (
         <Badge 
           variant="default"
@@ -152,6 +143,29 @@ export default function AdminUsers() {
         Free
       </Badge>
     );
+  };
+
+  const handleManualSubscriptionActivation = async (user: User) => {
+    try {
+      const { error } = await supabase.rpc('admin_activate_subscription', {
+        p_user_id: user.id,
+        p_plan_name: 'Monthly',
+        p_billing_amount: 60,
+        p_billing_currency: 'QAR'
+      });
+
+      if (error) {
+        console.error('Error activating subscription:', error);
+        toast.error('Failed to activate subscription');
+        return;
+      }
+
+      toast.success(`Subscription activated for ${user.full_name || user.email}`);
+      loadUsers(); // Refresh the list
+    } catch (error) {
+      console.error('Error activating subscription:', error);
+      toast.error('Failed to activate subscription');
+    }
   };
 
   const handleUserAction = (user: User, action: string) => {
@@ -169,6 +183,9 @@ export default function AdminUsers() {
         break;
       case "Delete User":
         setIsDeleteModalOpen(true);
+        break;
+      case "Activate Subscription":
+        handleManualSubscriptionActivation(user);
         break;
     }
   };
@@ -285,7 +302,7 @@ export default function AdminUsers() {
                         <Badge variant={user.is_logged_in ? "default" : "secondary"}>
                           {user.is_logged_in ? "Online" : "Offline"}
                         </Badge>
-                        {getSubscriptionBadge(user.subscription_status)}
+                        {getSubscriptionBadge(user)}
                         <Badge 
                           variant={user.email_confirmed ? "default" : "destructive"}
                           className={user.email_confirmed ? 'bg-accent-green text-white' : 'bg-accent-orange text-white'}
@@ -315,6 +332,12 @@ export default function AdminUsers() {
                           <Mail className="h-4 w-4 mr-2" />
                           Send Message
                         </DropdownMenuItem>
+                        {!user.is_subscribed && (
+                          <DropdownMenuItem onClick={() => handleUserAction(user, "Activate Subscription")}>
+                            <Crown className="h-4 w-4 mr-2" />
+                            Activate Subscription
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => handleUserAction(user, "Suspend User")}>
                           <UserX className="h-4 w-4 mr-2" />
                           {user.is_suspended ? "Unsuspend User" : "Suspend User"}

@@ -176,15 +176,34 @@ export const DeleteUserModal = ({ user, isOpen, onClose, onSuccess }: DeleteModa
 
       const session = JSON.parse(adminSession);
       
-      const { error } = await supabase.rpc('soft_delete_user', {
-        p_user_id: user.id,
-        p_admin_id: session.admin_id
-      });
+      // First mark as deleted in profiles
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          is_suspended: true,
+          suspended_at: new Date().toISOString(),
+          suspended_by: session.admin_id,
+          suspension_reason: 'Account deleted by admin',
+          display_name: '[DELETED USER]',
+          email: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
 
-      if (error) {
-        console.error('Error deleting user:', error);
+      if (profileError) {
+        console.error('Error deleting user profile:', profileError);
         toast.error("Failed to delete user");
         return;
+      }
+
+      // Also try to delete from auth.users if possible (this might fail due to RLS)
+      try {
+        const { error: authError } = await supabase.auth.admin.deleteUser(user.id);
+        if (authError) {
+          console.log('Auth deletion failed (expected):', authError);
+        }
+      } catch (authErr) {
+        console.log('Auth deletion not available:', authErr);
       }
 
       toast.success(`User ${user.full_name || user.email} has been deleted`);
@@ -219,7 +238,7 @@ export const DeleteUserModal = ({ user, isOpen, onClose, onSuccess }: DeleteModa
                   Permanently delete {user.full_name || user.email}?
                 </p>
                 <p className="text-sm text-red-700 mt-1">
-                  This action cannot be undone. The user's profile will be anonymized and they will no longer be able to access their account.
+                  This action will remove the user from the admin interface and anonymize their profile. They will no longer be able to access their account.
                 </p>
               </div>
             </div>
