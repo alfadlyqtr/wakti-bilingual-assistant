@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -20,7 +19,7 @@ import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validatePassword, validateConfirmPassword } from "@/utils/validations";
 
 export default function Signup() {
-  console.log("Signup component rendering");
+  console.log("🚀 Signup component rendering - START");
   
   const navigate = useNavigate();
   const { language } = useTheme();
@@ -40,10 +39,14 @@ export default function Signup() {
   const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
 
-  console.log("Signup state initialized");
+  console.log("📝 State initialized:", {
+    name, username, email, password, confirmPassword, 
+    dateOfBirth, dobInputValue, agreedToTerms
+  });
 
   // Real-time password validation
   const handlePasswordChange = (value: string) => {
+    console.log("🔒 Password change:", value);
     setPassword(value);
     const error = validatePassword(value);
     setPasswordError(error);
@@ -57,6 +60,7 @@ export default function Signup() {
 
   // Real-time confirm password validation
   const handleConfirmPasswordChange = (value: string) => {
+    console.log("🔒 Confirm password change:", value);
     setConfirmPassword(value);
     const error = validateConfirmPassword(password, value);
     setConfirmPasswordError(error);
@@ -64,7 +68,7 @@ export default function Signup() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Signup form submitted");
+    console.log("📤 Signup form submitted");
     setErrorMsg(null);
     
     if (!name || !username || !email || !password || !confirmPassword || !dateOfBirth) {
@@ -99,7 +103,7 @@ export default function Signup() {
       // Get the redirect URL for email confirmation
       const redirectUrl = `${window.location.origin}/confirmed`;
       
-      console.log('Attempting signup with redirect URL:', redirectUrl);
+      console.log('🔄 Attempting signup with redirect URL:', redirectUrl);
       
       // Create the user in Supabase Auth with email confirmation
       const { data, error } = await supabase.auth.signUp({
@@ -116,15 +120,15 @@ export default function Signup() {
       });
       
       if (error) {
-        console.error("Signup error:", error);
+        console.error("❌ Signup error:", error);
         setErrorMsg(error.message);
         toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
       } else if (data?.user) {
-        console.log('Signup successful:', data);
+        console.log('✅ Signup successful:', data);
         
         // Check if user needs email confirmation
         if (!data.user.email_confirmed_at) {
-          console.log('Email confirmation required');
+          console.log('📧 Email confirmation required');
           toast.success(language === 'en' 
             ? 'Please check your email and click the confirmation link to verify your account.' 
             : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
@@ -132,12 +136,12 @@ export default function Signup() {
           setIsEmailConfirmationDialogOpen(true);
         } else {
           // User is already confirmed (shouldn't happen with email confirmations enabled)
-          console.log('User already confirmed, redirecting to dashboard');
+          console.log('✅ User already confirmed, redirecting to dashboard');
           navigate("/dashboard");
         }
       }
     } catch (err) {
-      console.error("Unexpected error during signup:", err);
+      console.error("💥 Unexpected error during signup:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
       toast.error(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
     } finally {
@@ -148,6 +152,7 @@ export default function Signup() {
   // Sync manual date input to picker and vice versa
   const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    console.log("📅 DOB input change:", value);
     setDobInputValue(value);
 
     if (value) {
@@ -162,6 +167,7 @@ export default function Signup() {
 
   // When picking from calendar
   const handleCalendarDateSelect = (date: Date | undefined) => {
+    console.log("📅 Calendar date select:", date);
     setDateOfBirth(date);
     if (date) {
       setDobInputValue(date.toISOString().split("T")[0]);
@@ -234,7 +240,7 @@ export default function Signup() {
     navigate("/login");
   };
 
-  console.log("About to render signup page");
+  console.log("🎨 About to render signup page");
 
   try {
     return (
@@ -282,6 +288,7 @@ export default function Signup() {
                 </div>
 
                 <form onSubmit={handleSignup} className="space-y-6">
+                  {/* Name Field */}
                   <div className="space-y-2">
                     <Label htmlFor="name" className="text-base">{t.name}</Label>
                     <div className="relative">
@@ -303,6 +310,7 @@ export default function Signup() {
                     </div>
                   </div>
                   
+                  {/* Username Field */}
                   <div className="space-y-2">
                     <Label htmlFor="username" className="text-base">{t.username}</Label>
                     <div className="relative">
@@ -324,6 +332,7 @@ export default function Signup() {
                     </div>
                   </div>
                   
+                  {/* Email Field */}
                   <div className="space-y-2">
                     <Label htmlFor="email" className="text-base">{t.email}</Label>
                     <div className="relative">
@@ -346,10 +355,10 @@ export default function Signup() {
                     </div>
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
+                  {/* DEBUG: Date of Birth Field - SHOULD BE VISIBLE */}
+                  <div className="space-y-2 border-2 border-red-500 p-2">
+                    <Label htmlFor="dateOfBirth" className="text-base text-red-500">{t.dateOfBirth} (DEBUG: THIS SHOULD BE VISIBLE)</Label>
                     <div className="space-y-2">
-                      {/* Manual date entry */}
                       <Input
                         id="dob"
                         type="date"
@@ -357,17 +366,16 @@ export default function Signup() {
                         onChange={handleDobInputChange}
                         max={new Date().toISOString().split('T')[0]}
                         min="1900-01-01"
-                        className="w-full text-base"
+                        className="w-full text-base border-red-500"
                         disabled={isLoading}
                         placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
                       />
-                      {/* OR calendar picker */}
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
                             className={cn(
-                              "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
+                              "w-full justify-start text-left font-normal py-6 text-base shadow-sm border-red-500",
                               !dateOfBirth && "text-muted-foreground"
                             )}
                             disabled={isLoading}
@@ -392,6 +400,7 @@ export default function Signup() {
                     </div>
                   </div>
                   
+                  {/* Password Field */}
                   <div className="space-y-2">
                     <Label htmlFor="password" className="text-base">{t.password}</Label>
                     <div className="relative">
@@ -438,8 +447,9 @@ export default function Signup() {
                     </div>
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-base">{t.confirmPassword}</Label>
+                  {/* DEBUG: Confirm Password Field - SHOULD BE VISIBLE */}
+                  <div className="space-y-2 border-2 border-blue-500 p-2">
+                    <Label htmlFor="confirmPassword" className="text-base text-blue-500">{t.confirmPassword} (DEBUG: THIS SHOULD BE VISIBLE)</Label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                         <Lock className="h-5 w-5 text-muted-foreground" />
@@ -454,7 +464,7 @@ export default function Signup() {
                         value={confirmPassword}
                         onChange={(e) => handleConfirmPasswordChange(e.target.value)}
                         className={cn(
-                          "pl-10 pr-10 py-6 text-base shadow-sm",
+                          "pl-10 pr-10 py-6 text-base shadow-sm border-blue-500",
                           confirmPasswordError && "border-red-500"
                         )}
                         required
