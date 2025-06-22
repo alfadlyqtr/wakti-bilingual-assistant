@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -34,6 +35,7 @@ import SharedTask from "@/pages/SharedTask";
 import Help from "@/pages/Help";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminSettings from "@/pages/AdminSettings";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -53,6 +55,14 @@ function App() {
                   element={
                     <AdminProtectedRoute>
                       <AdminDashboard />
+                    </AdminProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin-settings"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminSettings />
                     </AdminProtectedRoute>
                   }
                 />

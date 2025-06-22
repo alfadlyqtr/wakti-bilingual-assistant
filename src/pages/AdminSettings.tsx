@@ -1,0 +1,279 @@
+
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Shield, Sun, Moon, Languages, ArrowLeft, Save, Palette, Bell, Database, Key } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTheme } from "@/providers/ThemeProvider";
+import { toast } from "sonner";
+
+export default function AdminSettings() {
+  const navigate = useNavigate();
+  const { theme, setTheme, language, setLanguage } = useTheme();
+  const [settings, setSettings] = useState({
+    emailNotifications: true,
+    pushNotifications: false,
+    autoBackup: true,
+    maintenanceMode: false,
+    debugMode: false,
+    dataRetention: '90',
+    sessionTimeout: '60'
+  });
+
+  const handleSettingChange = (key: string, value: boolean | string) => {
+    setSettings(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const handleSaveSettings = () => {
+    // Here you would save settings to the database
+    localStorage.setItem('admin_settings', JSON.stringify(settings));
+    toast.success('Settings saved successfully');
+  };
+
+  const handleBackToDashboard = () => {
+    navigate('/admindash');
+  };
+
+  useEffect(() => {
+    // Load saved settings
+    const savedSettings = localStorage.getItem('admin_settings');
+    if (savedSettings) {
+      setSettings(JSON.parse(savedSettings));
+    }
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gradient-background text-foreground">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleBackToDashboard}
+              className="rounded-full hover:bg-accent/10"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <Shield className="h-8 w-8 text-accent-blue" />
+            <div>
+              <h1 className="text-xl font-bold text-enhanced-heading">Admin Settings</h1>
+              <p className="text-sm text-muted-foreground">Configure admin panel preferences</p>
+            </div>
+          </div>
+          
+          <Button
+            onClick={handleSaveSettings}
+            className="btn-enhanced"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Save Settings
+          </Button>
+        </div>
+      </header>
+
+      {/* Settings Content */}
+      <div className="p-6 max-w-4xl mx-auto space-y-6">
+        {/* Appearance Settings */}
+        <Card className="enhanced-card">
+          <CardHeader>
+            <CardTitle className="text-enhanced-heading flex items-center">
+              <Palette className="h-5 w-5 mr-2 text-accent-purple" />
+              Appearance
+            </CardTitle>
+            <CardDescription>Customize the look and feel of the admin panel</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Theme</Label>
+                <div className="text-sm text-muted-foreground">Choose between light and dark mode</div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Sun className="h-4 w-4 text-accent-orange" />
+                <Switch
+                  checked={theme === 'dark'}
+                  onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                />
+                <Moon className="h-4 w-4 text-accent-purple" />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Language</Label>
+                <div className="text-sm text-muted-foreground">Admin panel interface language</div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Languages className="h-4 w-4 text-accent-green" />
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="ar">العربية</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Notification Settings */}
+        <Card className="enhanced-card">
+          <CardHeader>
+            <CardTitle className="text-enhanced-heading flex items-center">
+              <Bell className="h-5 w-5 mr-2 text-accent-orange" />
+              Notifications
+            </CardTitle>
+            <CardDescription>Configure how you receive admin notifications</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Email Notifications</Label>
+                <div className="text-sm text-muted-foreground">Receive admin alerts via email</div>
+              </div>
+              <Switch
+                checked={settings.emailNotifications}
+                onCheckedChange={(checked) => handleSettingChange('emailNotifications', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Push Notifications</Label>
+                <div className="text-sm text-muted-foreground">Browser push notifications for urgent alerts</div>
+              </div>
+              <Switch
+                checked={settings.pushNotifications}
+                onCheckedChange={(checked) => handleSettingChange('pushNotifications', checked)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* System Settings */}
+        <Card className="enhanced-card">
+          <CardHeader>
+            <CardTitle className="text-enhanced-heading flex items-center">
+              <Database className="h-5 w-5 mr-2 text-accent-blue" />
+              System Configuration
+            </CardTitle>
+            <CardDescription>Manage system-wide admin settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Auto Backup</Label>
+                <div className="text-sm text-muted-foreground">Automatically backup admin data</div>
+              </div>
+              <Switch
+                checked={settings.autoBackup}
+                onCheckedChange={(checked) => handleSettingChange('autoBackup', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Maintenance Mode</Label>
+                <div className="text-sm text-muted-foreground">Put the app in maintenance mode</div>
+              </div>
+              <Switch
+                checked={settings.maintenanceMode}
+                onCheckedChange={(checked) => handleSettingChange('maintenanceMode', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Debug Mode</Label>
+                <div className="text-sm text-muted-foreground">Enable debug logging</div>
+              </div>
+              <Switch
+                checked={settings.debugMode}
+                onCheckedChange={(checked) => handleSettingChange('debugMode', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Data Retention (days)</Label>
+                <div className="text-sm text-muted-foreground">How long to keep admin logs</div>
+              </div>
+              <Select 
+                value={settings.dataRetention} 
+                onValueChange={(value) => handleSettingChange('dataRetention', value)}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 days</SelectItem>
+                  <SelectItem value="60">60 days</SelectItem>
+                  <SelectItem value="90">90 days</SelectItem>
+                  <SelectItem value="180">180 days</SelectItem>
+                  <SelectItem value="365">1 year</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Session Timeout (minutes)</Label>
+                <div className="text-sm text-muted-foreground">Admin session duration</div>
+              </div>
+              <Select 
+                value={settings.sessionTimeout} 
+                onValueChange={(value) => handleSettingChange('sessionTimeout', value)}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 min</SelectItem>
+                  <SelectItem value="60">1 hour</SelectItem>
+                  <SelectItem value="120">2 hours</SelectItem>
+                  <SelectItem value="480">8 hours</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Security Settings */}
+        <Card className="enhanced-card">
+          <CardHeader>
+            <CardTitle className="text-enhanced-heading flex items-center">
+              <Key className="h-5 w-5 mr-2 text-accent-green" />
+              Security
+            </CardTitle>
+            <CardDescription>Admin security and access controls</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button variant="outline" className="w-full">
+              <Key className="h-4 w-4 mr-2" />
+              Change Admin Password
+            </Button>
+            <Button variant="outline" className="w-full">
+              <Shield className="h-4 w-4 mr-2" />
+              View Login History
+            </Button>
+            <Button variant="outline" className="w-full">
+              <Database className="h-4 w-4 mr-2" />
+              Export Admin Logs
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
