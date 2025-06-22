@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle, Trash2, Eye, Crown } from "lucide-react";
+import { Shield, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,7 +58,6 @@ export default function AdminUsers() {
       
       console.log('Loading users from database...');
       
-      // Load users from profiles table - DO NOT filter out ANY users here
       const { data: usersData, error } = await supabase
         .from('profiles')
         .select(`
@@ -86,7 +85,6 @@ export default function AdminUsers() {
 
       console.log('Raw users data from database:', usersData);
 
-      // Process users data - show ALL users
       const processedUsers = usersData?.map(user => ({
         id: user.id,
         email: user.email || "No email",
@@ -161,29 +159,6 @@ export default function AdminUsers() {
     );
   };
 
-  const handleManualSubscriptionActivation = async (user: User) => {
-    try {
-      const { error } = await supabase.rpc('admin_activate_subscription', {
-        p_user_id: user.id,
-        p_plan_name: 'Monthly',
-        p_billing_amount: 60,
-        p_billing_currency: 'QAR'
-      });
-
-      if (error) {
-        console.error('Error activating subscription:', error);
-        toast.error('Failed to activate subscription');
-        return;
-      }
-
-      toast.success(`Subscription activated for ${user.full_name || user.email}`);
-      loadUsers(); // Refresh the list
-    } catch (error) {
-      console.error('Error activating subscription:', error);
-      toast.error('Failed to activate subscription');
-    }
-  };
-
   const handleUserAction = (user: User, action: string) => {
     setSelectedUser(user);
     
@@ -200,19 +175,18 @@ export default function AdminUsers() {
       case "Delete User":
         setIsDeleteModalOpen(true);
         break;
-      case "Activate Subscription":
-        handleManualSubscriptionActivation(user);
-        break;
     }
   };
 
   const handleModalSuccess = () => {
-    loadUsers(); // Refresh the user list
+    loadUsers();
   };
 
   const handleBackToAdmin = () => {
-    console.log('Navigating to admin dashboard...');
+    console.log('AD button clicked - navigating to admin dashboard...');
+    console.log('Current location:', window.location.href);
     navigate('/admin-dashboard');
+    console.log('Navigation called to /admin-dashboard');
   };
 
   if (isLoading) {
@@ -353,12 +327,6 @@ export default function AdminUsers() {
                           <Mail className="h-4 w-4 mr-2" />
                           Send Message
                         </DropdownMenuItem>
-                        {!user.is_subscribed && (
-                          <DropdownMenuItem onClick={() => handleUserAction(user, "Activate Subscription")}>
-                            <Crown className="h-4 w-4 mr-2" />
-                            Activate Subscription
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuItem onClick={() => handleUserAction(user, "Suspend User")}>
                           <UserX className="h-4 w-4 mr-2" />
                           {user.is_suspended ? "Unsuspend User" : "Suspend User"}

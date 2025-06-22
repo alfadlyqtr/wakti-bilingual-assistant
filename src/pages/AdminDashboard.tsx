@@ -40,6 +40,7 @@ export default function AdminDashboard() {
     try {
       const storedSession = localStorage.getItem('admin_session');
       if (!storedSession) {
+        console.log('No admin session found, redirecting to admin login...');
         navigate('/mqtr');
         return;
       }
@@ -81,23 +82,29 @@ export default function AdminDashboard() {
   };
 
   const handleSectionChange = (section: string) => {
+    console.log(`Admin Dashboard - navigating to section: ${section}`);
     setActiveSection(section);
     
-    // Navigate to actual pages
+    // Navigate to actual pages using absolute paths
     switch (section) {
       case 'users':
+        console.log('Navigating to /admin/users');
         navigate('/admin/users');
         break;
       case 'messages':
+        console.log('Navigating to /admin/messages');
         navigate('/admin/messages');
         break;
       case 'subscriptions':
+        console.log('Navigating to /admin/subscriptions');
         navigate('/admin/subscriptions');
         break;
       case 'quotas':
+        console.log('Navigating to /admin/quotas');
         navigate('/admin/quotas');
         break;
       case 'analytics':
+        console.log('Navigating to /admin/analytics');
         navigate('/admin/analytics');
         break;
       default:

@@ -67,7 +67,6 @@ export default function AdminSubscriptions() {
       
       console.log('Loading subscriptions from database...');
       
-      // Load ALL users from profiles table - DO NOT filter anything
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select(`
@@ -90,7 +89,6 @@ export default function AdminSubscriptions() {
 
       console.log('Raw profiles data from database:', profilesData);
 
-      // Process data - show ALL users
       const combinedData = profilesData?.map(profile => {
         return {
           id: profile.id,
@@ -152,6 +150,9 @@ export default function AdminSubscriptions() {
     setActivatingId(selectedUser.user_id);
     
     try {
+      // Generate unique PayPal subscription ID
+      const paypalId = `ADMIN-MANUAL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
       const { error } = await supabase.rpc('admin_activate_subscription', {
         p_user_id: selectedUser.user_id,
         p_plan_name: activationDetails.planName,
@@ -164,12 +165,23 @@ export default function AdminSubscriptions() {
         throw error;
       }
 
-      // Generate PayPal subscription ID and dates
+      // Update the user's PayPal subscription ID in profiles table
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ paypal_subscription_id: paypalId })
+        .eq('id', selectedUser.user_id);
+
+      if (updateError) {
+        console.error('Error updating PayPal subscription ID:', updateError);
+        // Don't throw here as the subscription was already activated
+      }
+
       const now = new Date(activationDetails.billingStartDate);
-      const paypalId = `ADMIN-MANUAL-${Date.now()}`;
       const nextBilling = new Date(now);
       if (activationDetails.billingCycle === 'yearly') {
         nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+      } else if (activationDetails.planName.includes('2 weeks')) {
+        nextBilling.setDate(nextBilling.getDate() + 14);
       } else {
         nextBilling.setMonth(nextBilling.getMonth() + 1);
       }
@@ -205,17 +217,30 @@ export default function AdminSubscriptions() {
   };
 
   const handlePlanChange = (planName: string) => {
+    let amount = 60;
+    let cycle = 'monthly';
+
+    if (planName.includes('Yearly')) {
+      amount = 600;
+      cycle = 'yearly';
+    } else if (planName.includes('Gift from Admin')) {
+      amount = 0; // Free gift plans
+      cycle = planName.includes('2 weeks') ? 'bi-weekly' : 'monthly';
+    }
+
     setActivationDetails(prev => ({
       ...prev,
       planName,
-      billingAmount: planName.includes('Yearly') ? 600 : 60,
-      billingCycle: planName.includes('Yearly') ? 'yearly' : 'monthly'
+      billingAmount: amount,
+      billingCycle: cycle
     }));
   };
 
   const handleBackToAdmin = () => {
-    console.log('Navigating to admin dashboard...');
+    console.log('AD button clicked - navigating to admin dashboard...');
+    console.log('Current location:', window.location.href);
     navigate('/admin-dashboard');
+    console.log('Navigation called to /admin-dashboard');
   };
 
   if (isLoading) {
@@ -333,7 +358,8 @@ export default function AdminSubscriptions() {
                           <p className="text-sm text-muted-foreground">{subscription.user_email}</p>
                           <div className="flex items-center space-x-2 mt-1">
                             <Badge className="bg-accent-green text-white">
-                              {subscription.plan_name?.toLowerCase().includes('yearly') ? 'Yearly' : 'Monthly'} Subscriber
+                              {subscription.plan_name?.toLowerCase().includes('yearly') ? 'Yearly' : 
+                               subscription.plan_name?.toLowerCase().includes('gift') ? 'Gift' : 'Monthly'} Subscriber
                             </Badge>
                             <span className="text-sm text-muted-foreground">
                               {subscription.amount} {subscription.currency?.toUpperCase()}
@@ -450,6 +476,8 @@ export default function AdminSubscriptions() {
                     <SelectContent>
                       <SelectItem value="Wakti Monthly">Wakti Monthly (60 QAR/month)</SelectItem>
                       <SelectItem value="Wakti Yearly">Wakti Yearly (600 QAR/year)</SelectItem>
+                      <SelectItem value="Gift from Admin (2 weeks free)">Gift from Admin (2 weeks free)</SelectItem>
+                      <SelectItem value="Gift from Admin (1 month free)">Gift from Admin (1 month free)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -489,18 +517,21 @@ export default function AdminSubscriptions() {
                   </div>
                   <div className="text-xs text-blue-700 space-y-1">
                     <p><strong>Billing Start Date:</strong> {new Date(activationDetails.billingStartDate).toLocaleDateString()}</p>
-                    <p><strong>PayPal Subscription ID:</strong> ADMIN-MANUAL-{Date.now()}</p>
+                    <p><strong>PayPal Subscription ID:</strong> ADMIN-MANUAL-{Date.now()}-XXXXXXX</p>
                     <p><strong>Next Billing Date:</strong> {
                       (() => {
                         const next = new Date(activationDetails.billingStartDate);
                         if (activationDetails.billingCycle === 'yearly') {
                           next.setFullYear(next.getFullYear() + 1);
+                        } else if (activationDetails.planName.includes('2 weeks')) {
+                          next.setDate(next.getDate() + 14);
                         } else {
                           next.setMonth(next.getMonth() + 1);
                         }
                         return next.toLocaleDateString();
                       })()
                     }</p>
+                    <p><strong>Note:</strong> PayPal ID will be tied to user's billing tab in their account page.</p>
                   </div>
                 </div>
               </div>
