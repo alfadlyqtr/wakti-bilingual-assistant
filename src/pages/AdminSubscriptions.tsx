@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditCard, Search, CheckCircle, Clock, User, Crown, Calendar, DollarSign } from "lucide-react";
@@ -34,6 +33,7 @@ interface ActivationDetails {
   billingCycle: string;
   billingStartDate: string;
   paypalSubscriptionId: string;
+  paypalPlanId: string;
 }
 
 export default function AdminSubscriptions() {
@@ -53,7 +53,8 @@ export default function AdminSubscriptions() {
     billingCurrency: 'QAR',
     billingCycle: 'monthly',
     billingStartDate: new Date().toISOString().split('T')[0],
-    paypalSubscriptionId: ''
+    paypalSubscriptionId: '',
+    paypalPlanId: 'P-5RM543441H466435NNBGLCWA'
   });
 
   useEffect(() => {
@@ -143,7 +144,8 @@ export default function AdminSubscriptions() {
       billingCurrency: 'QAR',
       billingCycle: 'monthly',
       billingStartDate: new Date().toISOString().split('T')[0],
-      paypalSubscriptionId: ''
+      paypalSubscriptionId: '',
+      paypalPlanId: 'P-5RM543441H466435NNBGLCWA'
     });
     setIsActivationModalOpen(true);
   };
@@ -164,7 +166,8 @@ export default function AdminSubscriptions() {
         p_user_id: selectedUser.user_id,
         p_plan_name: activationDetails.planName,
         p_billing_amount: activationDetails.billingAmount,
-        p_billing_currency: activationDetails.billingCurrency
+        p_billing_currency: activationDetails.billingCurrency,
+        p_paypal_plan_id: activationDetails.paypalPlanId
       });
 
       if (error) {
@@ -227,20 +230,24 @@ export default function AdminSubscriptions() {
   const handlePlanChange = (planName: string) => {
     let amount = 60;
     let cycle = 'monthly';
+    let paypalPlanId = 'P-5RM543441H466435NNBGLCWA'; // Default monthly plan
 
     if (planName.includes('Yearly')) {
       amount = 600;
       cycle = 'yearly';
+      paypalPlanId = 'P-5V753699962632454NBGLE6Y'; // Yearly plan
     } else if (planName.includes('Gift from Admin')) {
       amount = 0; // Free gift plans
       cycle = planName.includes('2 weeks') ? 'bi-weekly' : 'monthly';
+      paypalPlanId = 'ADMIN-GIFT-PLAN'; // Special ID for gift plans
     }
 
     setActivationDetails(prev => ({
       ...prev,
       planName,
       billingAmount: amount,
-      billingCycle: cycle
+      billingCycle: cycle,
+      paypalPlanId
     }));
   };
 
@@ -540,6 +547,8 @@ export default function AdminSubscriptions() {
                     <span className="text-sm font-medium text-blue-800">Subscription Details</span>
                   </div>
                   <div className="text-xs text-blue-700 space-y-1">
+                    <p><strong>Plan:</strong> {activationDetails.planName}</p>
+                    <p><strong>PayPal Plan ID:</strong> {activationDetails.paypalPlanId}</p>
                     <p><strong>Billing Start Date:</strong> {new Date(activationDetails.billingStartDate).toLocaleDateString()}</p>
                     <p><strong>PayPal Subscription ID:</strong> {activationDetails.paypalSubscriptionId || 'Enter PayPal ID above'}</p>
                     <p><strong>Next Billing Date:</strong> {

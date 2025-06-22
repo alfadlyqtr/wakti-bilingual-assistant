@@ -1754,12 +1754,20 @@ export type Database = {
     }
     Functions: {
       admin_activate_subscription: {
-        Args: {
-          p_user_id: string
-          p_plan_name: string
-          p_billing_amount?: number
-          p_billing_currency?: string
-        }
+        Args:
+          | {
+              p_user_id: string
+              p_plan_name: string
+              p_billing_amount?: number
+              p_billing_currency?: string
+            }
+          | {
+              p_user_id: string
+              p_plan_name: string
+              p_billing_amount?: number
+              p_billing_currency?: string
+              p_paypal_plan_id?: string
+            }
         Returns: boolean
       }
       admin_update_storage_bucket: {
