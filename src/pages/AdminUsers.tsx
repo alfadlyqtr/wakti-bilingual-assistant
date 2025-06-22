@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, ArrowLeft, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle, Trash2, Eye, Crown } from "lucide-react";
+import { Shield, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle, Trash2, Eye, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,9 @@ export default function AdminUsers() {
     try {
       setIsLoading(true);
       
-      // Load users excluding soft-deleted ones
+      console.log('Loading users from database...');
+      
+      // Load users from auth.users table via profiles with proper join
       const { data: usersData, error } = await supabase
         .from('profiles')
         .select(`
@@ -74,7 +76,7 @@ export default function AdminUsers() {
           subscription_status,
           plan_name
         `)
-        .neq('suspension_reason', 'Account deleted by admin')
+        .is('suspension_reason', null) // Only get users that are NOT deleted
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -83,13 +85,24 @@ export default function AdminUsers() {
         return;
       }
 
-      // Process users with correct subscription status
+      // Process users data
       const processedUsers = usersData?.map(user => ({
-        ...user,
-        full_name: user.display_name || user.email || "No name"
+        id: user.id,
+        email: user.email || "No email",
+        full_name: user.display_name || user.email || "No name",
+        avatar_url: user.avatar_url,
+        created_at: user.created_at,
+        is_logged_in: user.is_logged_in || false,
+        email_confirmed: user.email_confirmed || false,
+        is_suspended: user.is_suspended || false,
+        suspended_at: user.suspended_at,
+        suspension_reason: user.suspension_reason,
+        is_subscribed: user.is_subscribed || false,
+        subscription_status: user.subscription_status || 'inactive',
+        plan_name: user.plan_name
       })) || [];
 
-      console.log('Loaded users:', processedUsers);
+      console.log('Processed users:', processedUsers);
       setUsers(processedUsers);
 
     } catch (err) {
@@ -210,11 +223,11 @@ export default function AdminUsers() {
           <div className="flex items-center space-x-4">
             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               onClick={() => navigate('/admin-dashboard')}
-              className="rounded-full hover:bg-accent/10"
+              className="rounded-full hover:bg-accent/10 font-bold text-lg"
             >
-              <ArrowLeft className="h-5 w-5" />
+              AD
             </Button>
             <Users className="h-8 w-8 text-accent-blue" />
             <div>
