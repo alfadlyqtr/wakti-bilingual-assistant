@@ -66,6 +66,46 @@ function App() {
                     </AdminProtectedRoute>
                   }
                 />
+                <Route
+                  path="/admin/users"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminUsers />
+                    </AdminProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/messages"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminMessages />
+                    </AdminProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/subscriptions"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminSubscriptions />
+                    </AdminProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/quotas"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminQuotas />
+                    </AdminProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/analytics"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminAnalytics />
+                    </AdminProtectedRoute>
+                  }
+                />
                 
                 {/* Public Routes */}
                 <Route path="/home" element={<Home />} />

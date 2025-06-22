@@ -31,7 +31,6 @@ export default function AdminSettings() {
   };
 
   const handleSaveSettings = () => {
-    // Here you would save settings to the database
     localStorage.setItem('admin_settings', JSON.stringify(settings));
     toast.success('Settings saved successfully');
   };
@@ -40,8 +39,19 @@ export default function AdminSettings() {
     navigate('/admindash');
   };
 
+  const handleThemeToggle = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    toast.success(`Switched to ${newTheme} mode`);
+  };
+
+  const handleLanguageToggle = () => {
+    const newLanguage = language === 'en' ? 'ar' : 'en';
+    setLanguage(newLanguage);
+    toast.success(`Language switched to ${newLanguage === 'en' ? 'English' : 'العربية'}`);
+  };
+
   useEffect(() => {
-    // Load saved settings
     const savedSettings = localStorage.getItem('admin_settings');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
@@ -86,42 +96,40 @@ export default function AdminSettings() {
           <CardHeader>
             <CardTitle className="text-enhanced-heading flex items-center">
               <Palette className="h-5 w-5 mr-2 text-accent-purple" />
-              Appearance
+              Appearance & Language
             </CardTitle>
             <CardDescription>Customize the look and feel of the admin panel</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Theme</Label>
+                <Label className="text-base font-medium">Theme Mode</Label>
                 <div className="text-sm text-muted-foreground">Choose between light and dark mode</div>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <Sun className="h-4 w-4 text-accent-orange" />
                 <Switch
                   checked={theme === 'dark'}
-                  onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                  onCheckedChange={handleThemeToggle}
                 />
                 <Moon className="h-4 w-4 text-accent-purple" />
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Language</Label>
+                <Label className="text-base font-medium">Language</Label>
                 <div className="text-sm text-muted-foreground">Admin panel interface language</div>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <Languages className="h-4 w-4 text-accent-green" />
-                <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="ar">العربية</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Button
+                  variant="outline"
+                  onClick={handleLanguageToggle}
+                  className="min-w-24"
+                >
+                  {language === 'en' ? 'English' : 'العربية'}
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -137,9 +145,9 @@ export default function AdminSettings() {
             <CardDescription>Configure how you receive admin notifications</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Email Notifications</Label>
+                <Label className="text-base font-medium">Email Notifications</Label>
                 <div className="text-sm text-muted-foreground">Receive admin alerts via email</div>
               </div>
               <Switch
@@ -148,9 +156,9 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Push Notifications</Label>
+                <Label className="text-base font-medium">Push Notifications</Label>
                 <div className="text-sm text-muted-foreground">Browser push notifications for urgent alerts</div>
               </div>
               <Switch
@@ -171,9 +179,9 @@ export default function AdminSettings() {
             <CardDescription>Manage system-wide admin settings</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Auto Backup</Label>
+                <Label className="text-base font-medium">Auto Backup</Label>
                 <div className="text-sm text-muted-foreground">Automatically backup admin data</div>
               </div>
               <Switch
@@ -182,9 +190,9 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Maintenance Mode</Label>
+                <Label className="text-base font-medium">Maintenance Mode</Label>
                 <div className="text-sm text-muted-foreground">Put the app in maintenance mode</div>
               </div>
               <Switch
@@ -193,9 +201,9 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Debug Mode</Label>
+                <Label className="text-base font-medium">Debug Mode</Label>
                 <div className="text-sm text-muted-foreground">Enable debug logging</div>
               </div>
               <Switch
@@ -204,9 +212,9 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Data Retention (days)</Label>
+                <Label className="text-base font-medium">Data Retention</Label>
                 <div className="text-sm text-muted-foreground">How long to keep admin logs</div>
               </div>
               <Select 
@@ -226,9 +234,9 @@ export default function AdminSettings() {
               </Select>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-gradient-secondary/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label className="text-base">Session Timeout (minutes)</Label>
+                <Label className="text-base font-medium">Session Timeout</Label>
                 <div className="text-sm text-muted-foreground">Admin session duration</div>
               </div>
               <Select 
@@ -259,15 +267,15 @@ export default function AdminSettings() {
             <CardDescription>Admin security and access controls</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button variant="outline" className="w-full">
+            <Button variant="outline" className="w-full justify-start">
               <Key className="h-4 w-4 mr-2" />
               Change Admin Password
             </Button>
-            <Button variant="outline" className="w-full">
+            <Button variant="outline" className="w-full justify-start">
               <Shield className="h-4 w-4 mr-2" />
               View Login History
             </Button>
-            <Button variant="outline" className="w-full">
+            <Button variant="outline" className="w-full justify-start">
               <Database className="h-4 w-4 mr-2" />
               Export Admin Logs
             </Button>
