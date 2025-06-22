@@ -32,6 +32,9 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import TasksReminders from "@/pages/TasksReminders";
 import SharedTask from "@/pages/SharedTask";
 import Help from "@/pages/Help";
+import AdminLogin from "@/pages/AdminLogin";
+import AdminDashboard from "@/pages/AdminDashboard";
+import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +46,17 @@ function App() {
           <QueryClientProvider client={queryClient}>
             <div className="min-h-screen bg-background text-foreground">
               <Routes>
+                {/* Admin Routes - Completely Separate */}
+                <Route path="/mqtr" element={<AdminLogin />} />
+                <Route
+                  path="/admindash"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminDashboard />
+                    </AdminProtectedRoute>
+                  }
+                />
+                
                 {/* Public Routes */}
                 <Route path="/home" element={<Home />} />
                 <Route path="/login" element={<Login />} />
