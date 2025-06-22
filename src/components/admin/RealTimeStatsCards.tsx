@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CreditCard, MessageSquare, BarChart3, TrendingUp, UserPlus } from "lucide-react";
+import { Users, CreditCard, MessageSquare, BarChart3, TrendingUp, UserPlus, Clock } from "lucide-react";
 
 interface StatsCardsProps {
   stats: {
@@ -17,11 +17,11 @@ interface StatsCardsProps {
 export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
         {[...Array(6)].map((_, i) => (
           <Card key={i} className="enhanced-card animate-pulse">
-            <CardContent className="p-6">
-              <div className="h-16 bg-gradient-secondary/20 rounded"></div>
+            <CardContent className="p-4 sm:p-6">
+              <div className="h-12 sm:h-16 bg-gradient-secondary/20 rounded"></div>
             </CardContent>
           </Card>
         ))}
@@ -29,97 +29,75 @@ export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
     );
   }
 
+  // Calculate derived stats
+  const freeUsers = stats.totalUsers - stats.activeSubscriptions;
+  const expiringSoon = 0; // This would come from subscription expiry logic
+
+  const statsData = [
+    {
+      title: "Total Users",
+      value: stats.totalUsers.toLocaleString(),
+      icon: Users,
+      color: "text-accent-blue",
+      description: "Registered users"
+    },
+    {
+      title: "Active Subscriptions", 
+      value: stats.activeSubscriptions.toLocaleString(),
+      icon: CreditCard,
+      color: "text-accent-green",
+      description: "Paying customers"
+    },
+    {
+      title: "Expiring Soon (7 days)",
+      value: expiringSoon.toLocaleString(),
+      icon: Clock,
+      color: "text-accent-orange", 
+      description: "Need attention"
+    },
+    {
+      title: "Free Users",
+      value: freeUsers.toLocaleString(),
+      icon: UserPlus,
+      color: "text-accent-purple",
+      description: "Non-subscribers"
+    },
+    {
+      title: "Pending Messages",
+      value: stats.pendingMessages.toLocaleString(),
+      icon: MessageSquare,
+      color: "text-accent-orange",
+      description: "Unread contacts"
+    },
+    {
+      title: "Monthly Revenue",
+      value: `${stats.monthlyRevenue.toFixed(0)} QAR`,
+      icon: TrendingUp,
+      color: "text-accent-cyan",
+      description: "This month"
+    }
+  ];
+
   return (
-    <div className="grid grid-cols-2 gap-6">
-      <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-medium">Total Users</CardTitle>
-            <Users className="h-6 w-6 text-accent-blue" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-enhanced-heading mb-1">
-            {stats.totalUsers.toLocaleString()}
-          </div>
-          <p className="text-xs text-muted-foreground">Registered users</p>
-        </CardContent>
-      </Card>
-
-      <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-medium">Active Subscriptions</CardTitle>
-            <CreditCard className="h-6 w-6 text-accent-green" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-enhanced-heading mb-1">
-            {stats.activeSubscriptions.toLocaleString()}
-          </div>
-          <p className="text-xs text-muted-foreground">Paying customers</p>
-        </CardContent>
-      </Card>
-
-      <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-medium">Pending Messages</CardTitle>
-            <MessageSquare className="h-6 w-6 text-accent-orange" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-enhanced-heading mb-1">
-            {stats.pendingMessages.toLocaleString()}
-          </div>
-          <p className="text-xs text-muted-foreground">Unread contacts</p>
-        </CardContent>
-      </Card>
-
-      <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-medium">Online Users</CardTitle>
-            <BarChart3 className="h-6 w-6 text-accent-purple" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-enhanced-heading mb-1">
-            {stats.onlineUsers.toLocaleString()}
-          </div>
-          <p className="text-xs text-muted-foreground">Currently active</p>
-        </CardContent>
-      </Card>
-
-      <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-medium">Monthly Revenue</CardTitle>
-            <TrendingUp className="h-6 w-6 text-accent-cyan" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-enhanced-heading mb-1">
-            {stats.monthlyRevenue.toFixed(0)} QAR
-          </div>
-          <p className="text-xs text-muted-foreground">This month</p>
-        </CardContent>
-      </Card>
-
-      <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-medium">New Users Today</CardTitle>
-            <UserPlus className="h-6 w-6 text-accent-green" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-enhanced-heading mb-1">
-            {stats.newUsersToday.toLocaleString()}
-          </div>
-          <p className="text-xs text-muted-foreground">Signups today</p>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+      {statsData.map((stat, index) => (
+        <Card key={index} className="enhanced-card hover:shadow-vibrant transition-all duration-300">
+          <CardHeader className="pb-2 sm:pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground line-clamp-2 leading-tight">
+                {stat.title}
+              </CardTitle>
+              <stat.icon className={`h-4 w-4 sm:h-6 sm:w-6 ${stat.color} flex-shrink-0`} />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-xl sm:text-3xl font-bold text-enhanced-heading mb-1">
+              {stat.value}
+            </div>
+            <p className="text-xs text-muted-foreground">{stat.description}</p>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 };

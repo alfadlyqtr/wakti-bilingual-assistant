@@ -22,7 +22,7 @@ serve(async (req) => {
 
     console.log('Submitting contact form:', { name, email, subject, submissionType })
 
-    // Insert into contact_submissions table
+    // Insert into contact_submissions table with proper submission_type
     const { data, error } = await supabase
       .from('contact_submissions')
       .insert({
@@ -30,7 +30,8 @@ serve(async (req) => {
         email,
         subject,
         message,
-        submission_type: submissionType || 'contact'
+        submission_type: submissionType || 'contact',
+        status: 'unread'
       })
       .select()
       .single()
