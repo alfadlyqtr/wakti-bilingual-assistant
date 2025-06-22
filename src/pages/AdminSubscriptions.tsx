@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditCard, Search, CheckCircle, Clock, User, Crown, Calendar, DollarSign } from "lucide-react";
@@ -191,8 +192,8 @@ export default function AdminSubscriptions() {
       const nextBilling = new Date(now);
       if (activationDetails.billingCycle === 'yearly') {
         nextBilling.setFullYear(nextBilling.getFullYear() + 1);
-      } else if (activationDetails.planName.includes('2 weeks')) {
-        nextBilling.setDate(nextBilling.getDate() + 14);
+      } else if (activationDetails.planName.includes('1 week')) {
+        nextBilling.setDate(nextBilling.getDate() + 7);
       } else {
         nextBilling.setMonth(nextBilling.getMonth() + 1);
       }
@@ -238,7 +239,7 @@ export default function AdminSubscriptions() {
       paypalPlanId = 'P-5V753699962632454NBGLE6Y'; // Yearly plan
     } else if (planName.includes('Gift from Admin')) {
       amount = 0; // Free gift plans
-      cycle = planName.includes('2 weeks') ? 'bi-weekly' : 'monthly';
+      cycle = planName.includes('1 week') ? 'weekly' : 'monthly';
       paypalPlanId = 'ADMIN-GIFT-PLAN'; // Special ID for gift plans
     }
 
@@ -279,104 +280,104 @@ export default function AdminSubscriptions() {
 
   return (
     <div className="h-screen bg-gradient-background text-foreground flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-6 py-4">
+      {/* Mobile Responsive Header */}
+      <header className="flex-shrink-0 bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-3 sm:px-6 py-3 sm:py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleBackToAdmin}
-              className="rounded-full hover:bg-accent/10 font-bold text-lg"
+              className="rounded-full hover:bg-accent/10 font-bold text-sm sm:text-lg px-2 sm:px-3"
             >
               AD
             </Button>
-            <CreditCard className="h-8 w-8 text-accent-green" />
+            <CreditCard className="h-6 w-6 sm:h-8 sm:w-8 text-accent-green" />
             <div>
-              <h1 className="text-xl font-bold text-enhanced-heading">Subscription Control</h1>
-              <p className="text-sm text-muted-foreground">Focus on subscribed users and expiring subscriptions</p>
+              <h1 className="text-lg sm:text-xl font-bold text-enhanced-heading">Subscription Control</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Focus on subscribed users and expiring subscriptions</p>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto p-6">
-        {/* Search */}
-        <div className="mb-6">
+      <div className="flex-1 overflow-auto p-3 sm:p-6">
+        {/* Mobile Responsive Search */}
+        <div className="mb-4 sm:mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by user email, name, or subscription ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 input-enhanced"
+              className="pl-10 input-enhanced text-sm"
             />
           </div>
         </div>
 
-        {/* Subscription Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* Mobile Responsive Subscription Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
           <Card className="enhanced-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs sm:text-sm font-medium">Total Users</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-enhanced-heading">{filteredSubscriptions.length}</div>
+              <div className="text-xl sm:text-2xl font-bold text-enhanced-heading">{filteredSubscriptions.length}</div>
             </CardContent>
           </Card>
           
           <Card className="enhanced-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Active Subscriptions</CardTitle>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs sm:text-sm font-medium">Active Subscriptions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-accent-green">{subscribedUsers.length}</div>
+              <div className="text-xl sm:text-2xl font-bold text-accent-green">{subscribedUsers.length}</div>
             </CardContent>
           </Card>
           
           <Card className="enhanced-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Expiring Soon (7 days)</CardTitle>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs sm:text-sm font-medium">Expiring Soon (7 days)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-accent-orange">{expiringUsers.length}</div>
+              <div className="text-xl sm:text-2xl font-bold text-accent-orange">{expiringUsers.length}</div>
             </CardContent>
           </Card>
           
           <Card className="enhanced-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Free Users</CardTitle>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs sm:text-sm font-medium">Free Users</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-enhanced-heading">{freeUsers.length}</div>
+              <div className="text-xl sm:text-2xl font-bold text-enhanced-heading">{freeUsers.length}</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Subscribed Users Section */}
         {subscribedUsers.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-enhanced-heading mb-4">Active Subscribers ({subscribedUsers.length})</h2>
-            <div className="grid gap-4">
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-base sm:text-lg font-semibold text-enhanced-heading mb-3 sm:mb-4">Active Subscribers ({subscribedUsers.length})</h2>
+            <div className="grid gap-3 sm:gap-4">
               {subscribedUsers.map((subscription) => (
                 <Card key={subscription.id} className="enhanced-card border-accent-green/20">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center">
-                          <Crown className="h-6 w-6 text-white" />
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
+                      <div className="flex items-center space-x-3 sm:space-x-4">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
+                          <Crown className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-enhanced-heading">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
                             {subscription.user_name || "No name"}
                           </h3>
-                          <p className="text-sm text-muted-foreground">{subscription.user_email}</p>
-                          <div className="flex items-center space-x-2 mt-1">
-                            <Badge className="bg-accent-green text-white">
+                          <p className="text-xs sm:text-sm text-muted-foreground truncate">{subscription.user_email}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <Badge className="bg-accent-green text-white text-xs">
                               {subscription.plan_name?.toLowerCase().includes('yearly') ? 'Yearly' : 
                                subscription.plan_name?.toLowerCase().includes('gift') ? 'Gift' : 'Monthly'} Subscriber
                             </Badge>
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {subscription.amount} {subscription.currency?.toUpperCase()}
                             </span>
                             {subscription.next_billing_date && (
@@ -387,7 +388,7 @@ export default function AdminSubscriptions() {
                           </div>
                         </div>
                       </div>
-                      <Badge className="bg-accent-green">
+                      <Badge className="bg-accent-green self-start sm:self-center">
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Active
                       </Badge>
@@ -402,26 +403,26 @@ export default function AdminSubscriptions() {
         {/* Free Users Section */}
         {freeUsers.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold text-enhanced-heading mb-4">Free Users ({freeUsers.length})</h2>
-            <div className="grid gap-4">
+            <h2 className="text-base sm:text-lg font-semibold text-enhanced-heading mb-3 sm:mb-4">Free Users ({freeUsers.length})</h2>
+            <div className="grid gap-3 sm:gap-4">
               {freeUsers.map((subscription) => (
                 <Card key={subscription.id} className="enhanced-card">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center">
-                          <User className="h-6 w-6 text-white" />
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
+                      <div className="flex items-center space-x-3 sm:space-x-4">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
+                          <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-enhanced-heading">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
                             {subscription.user_name || "No name"}
                           </h3>
-                          <p className="text-sm text-muted-foreground">{subscription.user_email}</p>
-                          <div className="flex items-center space-x-2 mt-1">
-                            <Badge variant="outline">
+                          <p className="text-xs sm:text-sm text-muted-foreground truncate">{subscription.user_email}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs">
                               Free User
                             </Badge>
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               Joined {subscription.created_at ? new Date(subscription.created_at).toLocaleDateString() : 'Unknown'}
                             </span>
                           </div>
@@ -431,16 +432,17 @@ export default function AdminSubscriptions() {
                       <Button
                         onClick={() => handleActivationClick(subscription)}
                         disabled={activatingId === subscription.user_id}
-                        className="btn-enhanced"
+                        className="btn-enhanced text-sm sm:text-base self-start sm:self-center"
+                        size="sm"
                       >
                         {activatingId === subscription.user_id ? (
                           <>
-                            <Clock className="h-4 w-4 mr-2 animate-spin" />
+                            <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-2 animate-spin" />
                             Activating...
                           </>
                         ) : (
                           <>
-                            <Crown className="h-4 w-4 mr-2" />
+                            <Crown className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
                             Activate
                           </>
                         )}
@@ -455,50 +457,50 @@ export default function AdminSubscriptions() {
 
         {filteredSubscriptions.length === 0 && (
           <Card className="enhanced-card">
-            <CardContent className="p-12 text-center">
-              <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
-              <p className="text-muted-foreground">Try adjusting your search criteria.</p>
+            <CardContent className="p-8 sm:p-12 text-center">
+              <CreditCard className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-base sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
+              <p className="text-sm text-muted-foreground">Try adjusting your search criteria.</p>
             </CardContent>
           </Card>
         )}
       </div>
 
-      {/* Enhanced Activation Modal with Manual PayPal ID */}
+      {/* Enhanced Activation Modal with Mobile Responsive Design */}
       <Dialog open={isActivationModalOpen} onOpenChange={setIsActivationModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm sm:max-w-md mx-4">
           <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <Crown className="h-5 w-5" />
+            <DialogTitle className="flex items-center space-x-2 text-sm sm:text-base">
+              <Crown className="h-4 w-4 sm:h-5 sm:w-5" />
               <span>Activate Subscription</span>
             </DialogTitle>
           </DialogHeader>
           
           {selectedUser && (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded">
-                <h3 className="font-medium">{selectedUser.user_name || "No name"}</h3>
-                <p className="text-sm text-muted-foreground">{selectedUser.user_email}</p>
+            <div className="space-y-3 sm:space-y-4">
+              <div className="p-3 sm:p-4 bg-muted rounded">
+                <h3 className="font-medium text-sm sm:text-base">{selectedUser.user_name || "No name"}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">{selectedUser.user_email}</p>
               </div>
 
               <div className="space-y-3">
                 <div>
-                  <Label className="text-sm font-medium">Plan Name</Label>
+                  <Label className="text-xs sm:text-sm font-medium">Plan Name</Label>
                   <Select value={activationDetails.planName} onValueChange={handlePlanChange}>
-                    <SelectTrigger className="mt-1">
+                    <SelectTrigger className="mt-1 text-xs sm:text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Wakti Monthly">Wakti Monthly (60 QAR/month)</SelectItem>
                       <SelectItem value="Wakti Yearly">Wakti Yearly (600 QAR/year)</SelectItem>
-                      <SelectItem value="Gift from Admin (2 weeks free)">Gift from Admin (2 weeks free)</SelectItem>
+                      <SelectItem value="Gift from Admin (1 week free)">Gift from Admin (1 week free)</SelectItem>
                       <SelectItem value="Gift from Admin (1 month free)">Gift from Admin (1 month free)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium">PayPal Subscription ID (REQUIRED)</Label>
+                  <Label className="text-xs sm:text-sm font-medium">PayPal Subscription ID (REQUIRED)</Label>
                   <Input
                     placeholder="Enter PayPal Subscription ID manually..."
                     value={activationDetails.paypalSubscriptionId}
@@ -506,7 +508,7 @@ export default function AdminSubscriptions() {
                       ...prev,
                       paypalSubscriptionId: e.target.value
                     }))}
-                    className="mt-1"
+                    className="mt-1 text-xs sm:text-sm"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Copy and paste the PayPal Subscription ID from your PayPal dashboard
@@ -514,7 +516,7 @@ export default function AdminSubscriptions() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium">Billing Start Date</Label>
+                  <Label className="text-xs sm:text-sm font-medium">Billing Start Date</Label>
                   <Input
                     type="date"
                     value={activationDetails.billingStartDate}
@@ -522,20 +524,20 @@ export default function AdminSubscriptions() {
                       ...prev,
                       billingStartDate: e.target.value
                     }))}
-                    className="mt-1"
+                    className="mt-1 text-xs sm:text-sm"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-sm font-medium">Amount</Label>
-                    <div className="mt-1 p-2 bg-muted rounded text-sm">
+                    <Label className="text-xs sm:text-sm font-medium">Amount</Label>
+                    <div className="mt-1 p-2 bg-muted rounded text-xs sm:text-sm">
                       {activationDetails.billingAmount} {activationDetails.billingCurrency}
                     </div>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Cycle</Label>
-                    <div className="mt-1 p-2 bg-muted rounded text-sm capitalize">
+                    <Label className="text-xs sm:text-sm font-medium">Cycle</Label>
+                    <div className="mt-1 p-2 bg-muted rounded text-xs sm:text-sm capitalize">
                       {activationDetails.billingCycle}
                     </div>
                   </div>
@@ -543,8 +545,8 @@ export default function AdminSubscriptions() {
 
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded">
                   <div className="flex items-center space-x-2 mb-2">
-                    <Calendar className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-800">Subscription Details</span>
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
+                    <span className="text-xs sm:text-sm font-medium text-blue-800">Subscription Details</span>
                   </div>
                   <div className="text-xs text-blue-700 space-y-1">
                     <p><strong>Plan:</strong> {activationDetails.planName}</p>
@@ -556,8 +558,8 @@ export default function AdminSubscriptions() {
                         const next = new Date(activationDetails.billingStartDate);
                         if (activationDetails.billingCycle === 'yearly') {
                           next.setFullYear(next.getFullYear() + 1);
-                        } else if (activationDetails.planName.includes('2 weeks')) {
-                          next.setDate(next.getDate() + 14);
+                        } else if (activationDetails.planName.includes('1 week')) {
+                          next.setDate(next.getDate() + 7);
                         } else {
                           next.setMonth(next.getMonth() + 1);
                         }
@@ -569,16 +571,16 @@ export default function AdminSubscriptions() {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsActivationModalOpen(false)}>
+              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
+                <Button variant="outline" onClick={() => setIsActivationModalOpen(false)} className="text-xs sm:text-sm">
                   Cancel
                 </Button>
                 <Button 
                   onClick={confirmActivateSubscription}
                   disabled={activatingId === selectedUser.user_id || !activationDetails.paypalSubscriptionId.trim()}
-                  className="flex items-center space-x-2"
+                  className="flex items-center justify-center space-x-2 text-xs sm:text-sm"
                 >
-                  <DollarSign className="h-4 w-4" />
+                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
                   <span>{activatingId === selectedUser.user_id ? "Activating..." : "Activate Subscription"}</span>
                 </Button>
               </div>

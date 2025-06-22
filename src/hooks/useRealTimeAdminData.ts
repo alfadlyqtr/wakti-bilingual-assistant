@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -38,11 +39,12 @@ export const useRealTimeAdminData = () => {
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
-      // Load active subscriptions - properly query the subscriptions table
+      // Load active subscriptions from profiles table (same source as subscription control page)
       const { data: activeSubscriptionData, count: activeSubscriptions } = await supabase
-        .from('subscriptions')
-        .select('billing_amount', { count: 'exact' })
-        .eq('status', 'active');
+        .from('profiles')
+        .select('plan_name, is_subscribed, subscription_status', { count: 'exact' })
+        .eq('is_subscribed', true)
+        .eq('subscription_status', 'active');
 
       // Load pending messages
       const { count: pendingMessages } = await supabase
@@ -56,12 +58,14 @@ export const useRealTimeAdminData = () => {
         .select('*', { count: 'exact', head: true })
         .eq('is_logged_in', true);
 
-      // Calculate monthly revenue from active subscriptions
+      // Calculate monthly revenue from active subscriptions (using same logic as subscription page)
       let monthlyRevenue = 0;
       if (activeSubscriptionData && activeSubscriptionData.length > 0) {
-        monthlyRevenue = activeSubscriptionData.reduce((sum, sub) => {
-          const amount = parseFloat(sub.billing_amount?.toString() || '0');
-          return sum + (isNaN(amount) ? 0 : amount);
+        monthlyRevenue = activeSubscriptionData.reduce((sum, profile) => {
+          // Calculate amount based on plan name (matching subscription control page logic)
+          const isYearly = profile.plan_name?.toLowerCase().includes('yearly');
+          const amount = isYearly ? 600 : 60; // 600 QAR yearly, 60 QAR monthly
+          return sum + amount;
         }, 0);
       }
 
@@ -81,7 +85,7 @@ export const useRealTimeAdminData = () => {
         newUsersToday: newUsersToday || 0
       });
 
-      console.log('Admin stats loaded:', {
+      console.log('Admin stats loaded (fixed):', {
         totalUsers: totalUsers || 0,
         activeSubscriptions: activeSubscriptions || 0,
         monthlyRevenue,
@@ -115,25 +119,22 @@ export const useRealTimeAdminData = () => {
         });
       });
 
-      // Get recent subscription activations - fix the query structure
+      // Get recent subscription activations from profiles table
       const { data: newSubs } = await supabase
-        .from('subscriptions')
-        .select(`
-          created_at,
-          user_id,
-          profiles!inner(email)
-        `)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
+        .from('profiles')
+        .select('email, billing_start_date, plan_name')
+        .eq('is_subscribed', true)
+        .eq('subscription_status', 'active')
+        .not('billing_start_date', 'is', null)
+        .order('billing_start_date', { ascending: false })
         .limit(2);
 
-      newSubs?.forEach(sub => {
-        const profileEmail = (sub.profiles as any)?.email || 'Unknown user';
+      newSubs?.forEach(profile => {
         activities.push({
-          id: `sub-${sub.created_at}`,
+          id: `sub-${profile.billing_start_date}`,
           type: 'subscription_activation',
-          message: `Subscription activated: ${profileEmail}`,
-          timestamp: sub.created_at,
+          message: `Subscription activated: ${profile.email} (${profile.plan_name})`,
+          timestamp: profile.billing_start_date,
           status: 'success'
         });
       });
@@ -185,14 +186,6 @@ export const useRealTimeAdminData = () => {
       })
       .subscribe();
 
-    const subscriptionsSubscription = supabase
-      .channel('subscriptions-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
-        loadStats();
-        loadRecentActivity();
-      })
-      .subscribe();
-
     const contactsSubscription = supabase
       .channel('contacts-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_submissions' }, () => {
@@ -205,7 +198,6 @@ export const useRealTimeAdminData = () => {
       clearInterval(statsInterval);
       clearInterval(activityInterval);
       supabase.removeChannel(profilesSubscription);
-      supabase.removeChannel(subscriptionsSubscription);
       supabase.removeChannel(contactsSubscription);
     };
   }, []);

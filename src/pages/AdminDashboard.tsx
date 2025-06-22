@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOut, Settings, Gift, UserCheck, RefreshCw, Menu } from "lucide-react";
@@ -129,7 +130,7 @@ export default function AdminDashboard() {
           <div className="flex items-center space-x-2 sm:space-x-3">
             <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-accent-blue" />
             <div>
-              <h1 className="text-base sm:text-lg font-bold text-enhanced-heading">WAKTI Admin</h1>
+              <h1 className="text-sm sm:text-base lg:text-lg font-bold text-enhanced-heading">WAKTI Admin</h1>
               <p className="text-xs text-muted-foreground hidden sm:block">Abdullah Alfadly</p>
             </div>
           </div>
@@ -208,7 +209,7 @@ export default function AdminDashboard() {
           {/* Real-Time Dashboard Stats - Mobile Responsive */}
           <div className="mb-4 sm:mb-6">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <h2 className="text-lg sm:text-xl font-bold text-enhanced-heading">Live Dashboard</h2>
+              <h2 className="text-base sm:text-lg lg:text-xl font-bold text-enhanced-heading">Live Dashboard</h2>
               <div className="flex items-center space-x-1 sm:space-x-2">
                 <div className="w-2 h-2 sm:w-3 sm:h-3 bg-accent-green rounded-full animate-pulse"></div>
                 <span className="text-xs text-muted-foreground">Live</span>
@@ -219,7 +220,7 @@ export default function AdminDashboard() {
 
           {/* Management Tools - Mobile Responsive Grid */}
           <div className="mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-xl font-bold text-enhanced-heading mb-3 sm:mb-4">Management Tools</h2>
+            <h2 className="text-base sm:text-lg lg:text-xl font-bold text-enhanced-heading mb-3 sm:mb-4">Management Tools</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300">
                 <CardHeader className="pb-2 sm:pb-3">
@@ -299,7 +300,7 @@ export default function AdminDashboard() {
       </ScrollArea>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="flex-shrink-0 border-t border-border/30 bg-gradient-nav backdrop-blur-xl shadow-vibrant px-3 sm:px-4 py-3 sm:py-4">
+      <nav className="flex-shrink-0 border-t border-border/30 bg-gradient-nav backdrop-blur-xl shadow-vibrant px-2 sm:px-3 py-2 sm:py-3">
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-4 gap-1 sm:gap-2">
             <Button 
@@ -307,7 +308,7 @@ export default function AdminDashboard() {
               size="sm"
               onClick={() => setActiveSection('dashboard')} 
               className={`
-                flex flex-col items-center justify-center h-10 sm:h-12 w-full rounded-lg transition-all duration-300
+                flex flex-col items-center justify-center h-12 sm:h-14 w-full rounded-lg transition-all duration-300
                 ${activeSection === 'dashboard' ? 'btn-enhanced shadow-colored scale-105 border-accent-blue/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
               `}
             >
@@ -320,7 +321,7 @@ export default function AdminDashboard() {
               size="sm"
               onClick={() => handleSectionChange('users')} 
               className={`
-                flex flex-col items-center justify-center h-10 sm:h-12 w-full rounded-lg transition-all duration-300 relative
+                flex flex-col items-center justify-center h-12 sm:h-14 w-full rounded-lg transition-all duration-300 relative
                 ${activeSection === 'users' ? 'btn-enhanced shadow-colored scale-105 border-accent-green/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
               `}
             >
@@ -338,7 +339,7 @@ export default function AdminDashboard() {
               size="sm"
               onClick={() => handleSectionChange('messages')} 
               className={`
-                flex flex-col items-center justify-center h-10 sm:h-12 w-full rounded-lg transition-all duration-300 relative
+                flex flex-col items-center justify-center h-12 sm:h-14 w-full rounded-lg transition-all duration-300 relative
                 ${activeSection === 'messages' ? 'btn-enhanced shadow-colored scale-105 border-accent-orange/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
               `}
             >
@@ -356,7 +357,7 @@ export default function AdminDashboard() {
               size="sm"
               onClick={() => handleSectionChange('analytics')} 
               className={`
-                flex flex-col items-center justify-center h-10 sm:h-12 w-full rounded-lg transition-all duration-300
+                flex flex-col items-center justify-center h-12 sm:h-14 w-full rounded-lg transition-all duration-300
                 ${activeSection === 'analytics' ? 'btn-enhanced shadow-colored scale-105 border-accent-purple/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
               `}
             >
