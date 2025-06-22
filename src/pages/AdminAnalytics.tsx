@@ -117,14 +117,14 @@ export default function AdminAnalytics() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground">
+    <div className="bg-gradient-background text-foreground">
       <AdminHeader
         title="Analytics Dashboard"
         subtitle="Revenue tracking and user analytics"
         icon={<BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-accent-cyan" />}
       />
 
-      <div className="p-3 sm:p-6 mb-20 space-y-6 sm:space-y-8">
+      <div className="p-3 sm:p-6 pb-24 space-y-6 sm:space-y-8">
         {/* Revenue Analytics */}
         <div>
           <h2 className="text-lg sm:text-2xl font-bold text-enhanced-heading mb-4 sm:mb-6">Revenue Analytics</h2>

@@ -132,14 +132,14 @@ export default function AdminQuotas() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground">
+    <div className="bg-gradient-background text-foreground">
       <AdminHeader
         title="Quota Management"
         subtitle="Gift voice credits and translation quotas"
         icon={<Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
       />
 
-      <div className="p-3 sm:p-6 mb-20 space-y-6">
+      <div className="p-3 sm:p-6 pb-24 space-y-6">
         {/* Gift Quota Form */}
         <Card className="enhanced-card">
           <CardHeader>

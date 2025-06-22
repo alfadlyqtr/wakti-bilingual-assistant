@@ -56,7 +56,7 @@ export default function AdminSettings() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground">
+    <div className="bg-gradient-background text-foreground">
       <AdminHeader
         title="Admin Settings"
         subtitle="Configure admin panel preferences"
@@ -72,7 +72,7 @@ export default function AdminSettings() {
       </AdminHeader>
 
       {/* Settings Content */}
-      <div className="p-3 sm:p-6 max-w-4xl mx-auto mb-20 space-y-4 sm:space-y-6">
+      <div className="p-3 sm:p-6 max-w-4xl mx-auto pb-24 space-y-4 sm:space-y-6">
         {/* Appearance Settings */}
         <Card className="enhanced-card">
           <CardHeader>

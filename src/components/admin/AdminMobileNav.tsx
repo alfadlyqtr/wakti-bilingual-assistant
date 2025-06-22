@@ -1,7 +1,7 @@
 
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Users, MessageSquare, Gift, Settings } from "lucide-react";
+import { Users, MessageSquare, Gift } from "lucide-react";
 
 export const AdminMobileNav = () => {
   const navigate = useNavigate();
@@ -10,13 +10,6 @@ export const AdminMobileNav = () => {
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
-    {
-      id: 'dashboard',
-      path: '/admindash',
-      icon: BarChart3,
-      label: 'Dashboard',
-      color: 'text-accent-blue'
-    },
     {
       id: 'users',
       path: '/admin/users',
@@ -37,20 +30,13 @@ export const AdminMobileNav = () => {
       icon: Gift,
       label: 'Quotas',
       color: 'text-accent-purple'
-    },
-    {
-      id: 'settings',
-      path: '/admin-settings',
-      icon: Settings,
-      label: 'Settings',
-      color: 'text-accent-cyan'
     }
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-border/30 bg-gradient-nav backdrop-blur-xl shadow-vibrant px-2 sm:px-3 py-2 sm:py-3 z-40">
       <div className="max-w-4xl mx-auto">
-        <div className="grid grid-cols-5 gap-1 sm:gap-2">
+        <div className="grid grid-cols-3 gap-1 sm:gap-2">
           {navItems.map(({ id, path, icon: Icon, label, color }) => (
             <Button
               key={id}

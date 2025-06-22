@@ -164,7 +164,7 @@ export default function AdminMessages() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground">
+    <div className="bg-gradient-background text-foreground">
       <AdminHeader
         title="Support Messages"
         subtitle={`${filteredMessages.length} messages found`}
@@ -237,7 +237,7 @@ export default function AdminMessages() {
       </div>
 
       {/* Messages List with Natural Scrolling */}
-      <div className="p-3 sm:p-6 mb-20 space-y-3 sm:space-y-4">
+      <div className="p-3 sm:p-6 pb-24 space-y-3 sm:space-y-4">
         {filteredMessages.map((message) => (
           <Card key={message.id} className="enhanced-card">
             <CardContent className="p-3 sm:p-6">
