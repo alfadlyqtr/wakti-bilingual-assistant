@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Index from '@/pages/Index';
 import Home from '@/pages/Home';
 import Login from '@/pages/Login';
@@ -14,6 +15,7 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import ResetSuccess from '@/pages/ResetSuccess';
 import Confirmed from '@/pages/Confirmed';
+import Dashboard from '@/pages/Dashboard';
 import Calendar from '@/pages/Calendar';
 import Settings from '@/pages/Settings';
 import Account from '@/pages/Account';
@@ -47,12 +49,37 @@ function App() {
                     <Route path="/reset-success" element={<ResetSuccess />} />
                     <Route path="/confirmed" element={<Confirmed />} />
                     
-                    {/* App Routes */}
-                    <Route path="/calendar" element={<Calendar />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/account" element={<Account />} />
-                    <Route path="/contacts" element={<Contacts />} />
-                    <Route path="/tasjeel" element={<Tasjeel />} />
+                    {/* Protected App Routes */}
+                    <Route path="/dashboard" element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/calendar" element={
+                      <ProtectedRoute>
+                        <Calendar />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/settings" element={
+                      <ProtectedRoute>
+                        <Settings />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/account" element={
+                      <ProtectedRoute>
+                        <Account />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/contacts" element={
+                      <ProtectedRoute>
+                        <Contacts />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/tasjeel" element={
+                      <ProtectedRoute>
+                        <Tasjeel />
+                      </ProtectedRoute>
+                    } />
                     
                     {/* Admin Routes */}
                     <Route path="/mqtr" element={<AdminLogin />} />
