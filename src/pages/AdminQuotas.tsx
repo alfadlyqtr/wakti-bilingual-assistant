@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 
 interface User {
   id: string;
@@ -138,9 +139,9 @@ export default function AdminQuotas() {
         icon={<Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
       />
 
-      <div className="p-3 sm:p-6 overflow-auto">
+      <div className="p-3 sm:p-6 mb-20 space-y-6">
         {/* Gift Quota Form */}
-        <Card className="enhanced-card mb-6 sm:mb-8">
+        <Card className="enhanced-card">
           <CardHeader>
             <CardTitle className="text-enhanced-heading flex items-center">
               <Gift className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-purple" />
@@ -208,7 +209,7 @@ export default function AdminQuotas() {
         </Card>
 
         {/* Search */}
-        <div className="mb-6">
+        <div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -289,6 +290,9 @@ export default function AdminQuotas() {
           </Card>
         )}
       </div>
+
+      {/* Admin Mobile Navigation */}
+      <AdminMobileNav />
     </div>
   );
 }

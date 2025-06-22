@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 
 interface ContactMessage {
   id: string;
@@ -163,7 +164,7 @@ export default function AdminMessages() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background text-foreground flex flex-col">
+    <div className="min-h-screen bg-gradient-background text-foreground">
       <AdminHeader
         title="Support Messages"
         subtitle={`${filteredMessages.length} messages found`}
@@ -236,70 +237,68 @@ export default function AdminMessages() {
       </div>
 
       {/* Messages List with Natural Scrolling */}
-      <div className="flex-1 p-3 sm:p-6 pb-32 overflow-auto">
-        <div className="grid gap-3 sm:gap-4">
-          {filteredMessages.map((message) => (
-            <Card key={message.id} className="enhanced-card">
-              <CardContent className="p-3 sm:p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 sm:space-x-3 mb-3">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white font-medium text-sm">
-                          {message.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">{message.name}</h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground truncate">{message.email}</p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 flex-shrink-0">
-                        <Badge className={getTypeColor(message.submission_type)} variant="outline">
-                          {message.submission_type}
-                        </Badge>
-                        <Badge className={getStatusColor(message.status)}>
-                          {message.status}
-                        </Badge>
-                      </div>
+      <div className="p-3 sm:p-6 mb-20 space-y-3 sm:space-y-4">
+        {filteredMessages.map((message) => (
+          <Card key={message.id} className="enhanced-card">
+            <CardContent className="p-3 sm:p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2 sm:space-x-3 mb-3">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-medium text-sm">
+                        {message.name.charAt(0).toUpperCase()}
+                      </span>
                     </div>
-                    
-                    {message.subject && (
-                      <h4 className="font-medium text-sm mb-2 text-enhanced-heading">{message.subject}</h4>
-                    )}
-                    
-                    <p className="text-xs sm:text-sm mb-3 bg-gradient-secondary/10 p-3 rounded-lg line-clamp-3">
-                      {message.message}
-                    </p>
-                    
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(message.created_at).toLocaleString()}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">{message.name}</h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{message.email}</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 flex-shrink-0">
+                      <Badge className={getTypeColor(message.submission_type)} variant="outline">
+                        {message.submission_type}
+                      </Badge>
+                      <Badge className={getStatusColor(message.status)}>
+                        {message.status}
+                      </Badge>
+                    </div>
                   </div>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="flex-shrink-0 ml-2">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {message.status === 'unread' && (
-                        <DropdownMenuItem onClick={() => markAsRead(message.id)}>
-                          <MailOpen className="h-4 w-4 mr-2" />
-                          Mark as Read
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => setSelectedMessage(message)}>
-                        <Reply className="h-4 w-4 mr-2" />
-                        Reply
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  
+                  {message.subject && (
+                    <h4 className="font-medium text-sm mb-2 text-enhanced-heading">{message.subject}</h4>
+                  )}
+                  
+                  <p className="text-xs sm:text-sm mb-3 bg-gradient-secondary/10 p-3 rounded-lg line-clamp-3">
+                    {message.message}
+                  </p>
+                  
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(message.created_at).toLocaleString()}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="flex-shrink-0 ml-2">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {message.status === 'unread' && (
+                      <DropdownMenuItem onClick={() => markAsRead(message.id)}>
+                        <MailOpen className="h-4 w-4 mr-2" />
+                        Mark as Read
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => setSelectedMessage(message)}>
+                      <Reply className="h-4 w-4 mr-2" />
+                      Reply
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
         {filteredMessages.length === 0 && (
           <Card className="enhanced-card">
@@ -311,6 +310,9 @@ export default function AdminMessages() {
           </Card>
         )}
       </div>
+
+      {/* Admin Mobile Navigation */}
+      <AdminMobileNav />
     </div>
   );
 }

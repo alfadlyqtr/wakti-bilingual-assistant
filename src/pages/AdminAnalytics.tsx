@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 
 interface AnalyticsData {
   totalRevenue: number;
@@ -123,9 +124,9 @@ export default function AdminAnalytics() {
         icon={<BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-accent-cyan" />}
       />
 
-      <div className="p-3 sm:p-6 overflow-auto">
+      <div className="p-3 sm:p-6 mb-20 space-y-6 sm:space-y-8">
         {/* Revenue Analytics */}
-        <div className="mb-6 sm:mb-8">
+        <div>
           <h2 className="text-lg sm:text-2xl font-bold text-enhanced-heading mb-4 sm:mb-6">Revenue Analytics</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <Card className="enhanced-card">
@@ -161,7 +162,7 @@ export default function AdminAnalytics() {
         </div>
 
         {/* User Analytics */}
-        <div className="mb-6 sm:mb-8">
+        <div>
           <h2 className="text-lg sm:text-2xl font-bold text-enhanced-heading mb-4 sm:mb-6">User Analytics</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <Card className="enhanced-card">
@@ -219,7 +220,7 @@ export default function AdminAnalytics() {
         </div>
 
         {/* Growth Metrics */}
-        <div className="mb-6 sm:mb-8">
+        <div>
           <h2 className="text-lg sm:text-2xl font-bold text-enhanced-heading mb-4 sm:mb-6">Growth Metrics</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <Card className="enhanced-card">
@@ -296,6 +297,9 @@ export default function AdminAnalytics() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Admin Mobile Navigation */}
+      <AdminMobileNav />
     </div>
   );
 }

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Sun, Moon, Languages, Save, Palette, Bell, Database, Key } from "lucide-react";
@@ -10,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 
 export default function AdminSettings() {
   const navigate = useNavigate();
@@ -72,7 +72,7 @@ export default function AdminSettings() {
       </AdminHeader>
 
       {/* Settings Content */}
-      <div className="p-3 sm:p-6 max-w-4xl mx-auto space-y-4 sm:space-y-6 overflow-auto">
+      <div className="p-3 sm:p-6 max-w-4xl mx-auto mb-20 space-y-4 sm:space-y-6">
         {/* Appearance Settings */}
         <Card className="enhanced-card">
           <CardHeader>
@@ -264,6 +264,9 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Admin Mobile Navigation */}
+      <AdminMobileNav />
     </div>
   );
 }

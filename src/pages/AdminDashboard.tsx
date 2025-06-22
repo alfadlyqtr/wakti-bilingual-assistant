@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOut, Settings, Gift, UserCheck, RefreshCw, Menu } from "lucide-react";
+import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOut, Settings, RefreshCw, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useRealTimeAdminData } from "@/hooks/useRealTimeAdminData";
 import { RealTimeStatsCards } from "@/components/admin/RealTimeStatsCards";
 import { RealTimeActivityFeed } from "@/components/admin/RealTimeActivityFeed";
+import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 
 interface AdminSession {
   admin_id: string;
@@ -22,7 +23,6 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const {
@@ -83,7 +83,6 @@ export default function AdminDashboard() {
 
   const handleSectionChange = (section: string) => {
     console.log(`Admin Dashboard - navigating to section: ${section}`);
-    setActiveSection(section);
     setMobileMenuOpen(false);
     
     switch (section) {
@@ -198,7 +197,7 @@ export default function AdminDashboard() {
       </header>
 
       {/* Main Content with Natural Scrolling */}
-      <main className="flex-1 p-3 sm:p-4 lg:p-6 pb-24 space-y-4 sm:space-y-6 overflow-auto">
+      <main className="p-3 sm:p-4 lg:p-6 mb-20 space-y-4 sm:space-y-6">
         {/* Real-Time Activity Feed */}
         <RealTimeActivityFeed activities={recentActivity} isLoading={dataLoading} />
 
@@ -294,74 +293,8 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-border/30 bg-gradient-nav backdrop-blur-xl shadow-vibrant px-2 sm:px-3 py-2 sm:py-3 z-40">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-4 gap-1 sm:gap-2">
-            <Button 
-              variant={activeSection === 'dashboard' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setActiveSection('dashboard')} 
-              className={`
-                flex flex-col items-center justify-center h-10 sm:h-12 lg:h-14 w-full rounded-lg transition-all duration-300
-                ${activeSection === 'dashboard' ? 'btn-enhanced shadow-colored scale-105 border-accent-blue/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
-              `}
-            >
-              <BarChart3 className={`h-3 w-3 sm:h-4 sm:w-4 mb-0.5 ${activeSection === 'dashboard' ? 'text-white' : 'text-accent-blue'}`} />
-              <span className="text-xs font-semibold">Dashboard</span>
-            </Button>
-
-            <Button 
-              variant={activeSection === 'users' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => handleSectionChange('users')} 
-              className={`
-                flex flex-col items-center justify-center h-10 sm:h-12 lg:h-14 w-full rounded-lg transition-all duration-300 relative
-                ${activeSection === 'users' ? 'btn-enhanced shadow-colored scale-105 border-accent-green/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
-              `}
-            >
-              <Users className={`h-3 w-3 sm:h-4 sm:w-4 mb-0.5 ${activeSection === 'users' ? 'text-white' : 'text-accent-green'}`} />
-              {stats.onlineUsers > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-accent-green text-white text-xs rounded-full h-3 w-3 sm:h-4 sm:w-4 flex items-center justify-center font-bold shadow-lg">
-                  {stats.onlineUsers}
-                </span>
-              )}
-              <span className="text-xs font-semibold">Users</span>
-            </Button>
-
-            <Button 
-              variant={activeSection === 'messages' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => handleSectionChange('messages')} 
-              className={`
-                flex flex-col items-center justify-center h-10 sm:h-12 lg:h-14 w-full rounded-lg transition-all duration-300 relative
-                ${activeSection === 'messages' ? 'btn-enhanced shadow-colored scale-105 border-accent-orange/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
-              `}
-            >
-              <MessageSquare className={`h-3 w-3 sm:h-4 sm:w-4 mb-0.5 ${activeSection === 'messages' ? 'text-white' : 'text-accent-orange'}`} />
-              {stats.pendingMessages > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full h-3 w-3 sm:h-4 sm:w-4 flex items-center justify-center font-bold shadow-lg animate-pulse">
-                  {stats.pendingMessages}
-                </span>
-              )}
-              <span className="text-xs font-semibold">Messages</span>
-            </Button>
-
-            <Button 
-              variant={activeSection === 'analytics' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => handleSectionChange('analytics')} 
-              className={`
-                flex flex-col items-center justify-center h-10 sm:h-12 lg:h-14 w-full rounded-lg transition-all duration-300
-                ${activeSection === 'analytics' ? 'btn-enhanced shadow-colored scale-105 border-accent-purple/30' : 'btn-secondary-enhanced hover:scale-105 hover:shadow-glow'}
-              `}
-            >
-              <BarChart3 className={`h-3 w-3 sm:h-4 sm:w-4 mb-0.5 ${activeSection === 'analytics' ? 'text-white' : 'text-accent-purple'}`} />
-              <span className="text-xs font-semibold">Analytics</span>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      {/* Admin Mobile Navigation */}
+      <AdminMobileNav />
     </div>
   );
 }
