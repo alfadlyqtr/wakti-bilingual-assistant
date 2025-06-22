@@ -2,6 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
+import { AlertCircle, CheckCircle } from "lucide-react";
 
 interface Activity {
   id: string;
@@ -36,6 +37,15 @@ export const RealTimeActivityFeed = ({ activities, isLoading }: ActivityFeedProp
     }
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'success': return <CheckCircle className="h-4 w-4 text-accent-green" />;
+      case 'warning': return <AlertCircle className="h-4 w-4 text-accent-orange" />;
+      case 'info': return <CheckCircle className="h-4 w-4 text-accent-blue" />;
+      default: return <CheckCircle className="h-4 w-4 text-accent-purple" />;
+    }
+  };
+
   if (isLoading) {
     return (
       <Card className="enhanced-card">
@@ -64,7 +74,7 @@ export const RealTimeActivityFeed = ({ activities, isLoading }: ActivityFeedProp
     <Card className="enhanced-card">
       <CardHeader>
         <CardTitle className="text-enhanced-heading text-xl">Recent Activity</CardTitle>
-        <CardDescription className="text-sm">Latest admin actions and system events</CardDescription>
+        <CardDescription className="text-sm">Latest system events with email verification status</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -80,6 +90,7 @@ export const RealTimeActivityFeed = ({ activities, isLoading }: ActivityFeedProp
                   <div className="flex items-center space-x-2">
                     <span className="text-lg">{getTypeIcon(activity.type)}</span>
                     <span className="font-medium text-sm">{activity.message}</span>
+                    {activity.type === 'user_registration' && getStatusIcon(activity.status)}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">

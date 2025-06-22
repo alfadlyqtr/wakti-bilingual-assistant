@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, ArrowLeft, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail } from "lucide-react";
+import { Shield, ArrowLeft, Search, Filter, MoreHorizontal, Users, UserCheck, UserX, Mail, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ interface User {
   avatar_url?: string;
   created_at: string;
   is_logged_in: boolean;
+  email_confirmed: boolean;
   subscription_status?: string;
 }
 
@@ -38,24 +39,38 @@ export default function AdminUsers() {
 
   const loadUsers = async () => {
     try {
+      // Use explicit query structure to avoid relationship issues
       const { data, error } = await supabase
         .from('profiles')
         .select(`
           id,
           email,
-          full_name,
+          display_name,
           avatar_url,
           created_at,
           is_logged_in,
-          subscriptions(status)
+          email_confirmed
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
+      // Get subscription data separately and merge
+      const userIds = data.map(user => user.id);
+      const { data: subscriptionsData } = await supabase
+        .from('subscriptions')
+        .select('user_id, status')
+        .in('user_id', userIds)
+        .eq('status', 'active');
+
+      const subscriptionMap = new Map(
+        subscriptionsData?.map(sub => [sub.user_id, sub.status]) || []
+      );
+
       const usersWithSubscriptions = data.map(user => ({
         ...user,
-        subscription_status: user.subscriptions?.[0]?.status || 'none'
+        full_name: user.display_name || user.email,
+        subscription_status: subscriptionMap.get(user.id) || 'none'
       }));
 
       setUsers(usersWithSubscriptions);
@@ -82,6 +97,8 @@ export default function AdminUsers() {
         filtered = filtered.filter(user => user.is_logged_in);
       } else if (filterStatus === "subscribed") {
         filtered = filtered.filter(user => user.subscription_status === 'active');
+      } else if (filterStatus === "unconfirmed") {
+        filtered = filtered.filter(user => !user.email_confirmed);
       }
     }
 
@@ -140,13 +157,18 @@ export default function AdminUsers() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex items-center space-x-2">
                 <Filter className="h-4 w-4" />
-                <span>{filterStatus === "all" ? "All Users" : filterStatus === "online" ? "Online" : "Subscribed"}</span>
+                <span>
+                  {filterStatus === "all" ? "All Users" : 
+                   filterStatus === "online" ? "Online" : 
+                   filterStatus === "subscribed" ? "Subscribed" : "Unconfirmed"}
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => setFilterStatus("all")}>All Users</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterStatus("online")}>Online Users</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterStatus("subscribed")}>Subscribed Users</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterStatus("unconfirmed")}>Unconfirmed Email</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -172,9 +194,16 @@ export default function AdminUsers() {
                       )}
                     </div>
                     <div>
-                      <h3 className="font-semibold text-enhanced-heading">
-                        {user.full_name || "No name"}
-                      </h3>
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-semibold text-enhanced-heading">
+                          {user.full_name || "No name"}
+                        </h3>
+                        {user.email_confirmed ? (
+                          <CheckCircle className="h-4 w-4 text-accent-green" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-accent-orange" />
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">{user.email}</p>
                       <div className="flex items-center space-x-2 mt-1">
                         <Badge variant={user.is_logged_in ? "default" : "secondary"}>
@@ -185,6 +214,12 @@ export default function AdminUsers() {
                           className={user.subscription_status === 'active' ? 'bg-accent-green' : ''}
                         >
                           {user.subscription_status === 'active' ? "Subscribed" : "Free"}
+                        </Badge>
+                        <Badge 
+                          variant={user.email_confirmed ? "default" : "destructive"}
+                          className={user.email_confirmed ? 'bg-accent-green' : 'bg-accent-orange'}
+                        >
+                          {user.email_confirmed ? "Verified" : "Unverified"}
                         </Badge>
                       </div>
                     </div>

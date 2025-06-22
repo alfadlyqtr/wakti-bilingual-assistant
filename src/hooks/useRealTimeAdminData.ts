@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -38,7 +39,7 @@ export const useRealTimeAdminData = () => {
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
-      // Load active subscriptions
+      // Load active subscriptions - use explicit count query
       const { count: activeSubscriptions } = await supabase
         .from('subscriptions')
         .select('*', { count: 'exact', head: true })
@@ -56,14 +57,18 @@ export const useRealTimeAdminData = () => {
         .select('*', { count: 'exact', head: true })
         .eq('is_logged_in', true);
 
-      // Calculate total monthly revenue from ALL active subscriptions
-      const { data: allActiveSubscriptions } = await supabase
+      // Calculate monthly revenue from active subscriptions
+      const { data: activeSubscriptionData, error: revenueError } = await supabase
         .from('subscriptions')
         .select('billing_amount')
         .eq('status', 'active');
 
-      const monthlyRevenue = allActiveSubscriptions?.reduce((sum, sub) => 
-        sum + (Number(sub.billing_amount) || 0), 0) || 0;
+      if (revenueError) {
+        console.error('Error loading revenue data:', revenueError);
+      }
+
+      const monthlyRevenue = activeSubscriptionData?.reduce((sum, sub) => 
+        sum + (parseFloat(sub.billing_amount?.toString() || '0') || 0), 0) || 0;
 
       // Load new users today
       const today = new Date().toISOString().split('T')[0];
@@ -90,27 +95,32 @@ export const useRealTimeAdminData = () => {
     try {
       const activities: RecentActivity[] = [];
 
-      // Get recent user registrations
+      // Get recent user registrations with email confirmation status
       const { data: newUsers } = await supabase
         .from('profiles')
-        .select('email, created_at')
+        .select('email, created_at, email_confirmed')
         .order('created_at', { ascending: false })
         .limit(3);
 
       newUsers?.forEach(user => {
+        const emailStatus = user.email_confirmed ? 'confirmed' : 'not confirmed yet';
         activities.push({
           id: `user-${user.created_at}`,
           type: 'user_registration',
-          message: `New user registration: ${user.email}`,
+          message: `New user registration: ${user.email} (email ${emailStatus})`,
           timestamp: user.created_at,
-          status: 'success'
+          status: user.email_confirmed ? 'success' : 'warning'
         });
       });
 
-      // Get recent subscription activations - Fix the email access issue
+      // Get recent subscription activations - fix the query structure
       const { data: newSubs } = await supabase
         .from('subscriptions')
-        .select('created_at, profiles!inner(email)')
+        .select(`
+          created_at,
+          user_id,
+          profiles!inner(email)
+        `)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(2);

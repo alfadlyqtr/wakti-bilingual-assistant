@@ -938,6 +938,7 @@ export type Database = {
           created_at: string | null
           display_name: string | null
           email: string | null
+          email_confirmed: boolean | null
           first_name: string | null
           id: string
           is_logged_in: boolean | null
@@ -959,6 +960,7 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           email?: string | null
+          email_confirmed?: boolean | null
           first_name?: string | null
           id: string
           is_logged_in?: boolean | null
@@ -980,6 +982,7 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           email?: string | null
+          email_confirmed?: boolean | null
           first_name?: string | null
           id?: string
           is_logged_in?: boolean | null
