@@ -121,9 +121,9 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="bg-gradient-background text-foreground min-h-screen flex flex-col">
+    <div className="h-screen bg-gradient-background text-foreground flex flex-col">
       {/* Mobile Responsive Header */}
-      <header className="bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-3 sm:px-4 lg:px-6 py-3 sticky top-0 z-50 flex-shrink-0">
+      <header className="bg-gradient-nav backdrop-blur-xl border-b border-border/50 px-3 sm:px-4 lg:px-6 py-3 flex-shrink-0 z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 sm:space-x-3">
             <Shield className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-accent-blue" />
@@ -196,8 +196,8 @@ export default function AdminDashboard() {
         )}
       </header>
 
-      {/* Main Content with Natural Scrolling - Fixed Container */}
-      <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6 pb-32 space-y-4 sm:space-y-6">
+      {/* Main Content with Proper Scrolling */}
+      <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 pb-20 space-y-4 sm:space-y-6">
         {/* Real-Time Activity Feed */}
         <RealTimeActivityFeed activities={recentActivity} isLoading={dataLoading} />
 

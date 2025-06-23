@@ -1,6 +1,4 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Users, MessageSquare, CreditCard } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -82,9 +80,9 @@ export const RealTimeActivityFeed = ({ activities, isLoading }: ActivityFeedProp
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
-        <ScrollArea className="max-h-40 sm:max-h-48 w-full">
+        <div className="w-full">
           {activities.length > 0 ? (
-            <div className="space-y-2 sm:space-y-3 pr-2">
+            <div className="space-y-2 sm:space-y-3">
               {activities.map((activity) => (
                 <div key={activity.id} className="flex items-start space-x-2 sm:space-x-3 p-2 rounded-lg hover:bg-accent/5 transition-colors">
                   <div className={`w-5 h-5 sm:w-6 sm:h-6 ${getStatusColor(activity.status)} rounded-full flex items-center justify-center text-white flex-shrink-0 mt-0.5`}>
@@ -107,7 +105,7 @@ export const RealTimeActivityFeed = ({ activities, isLoading }: ActivityFeedProp
               <p className="text-xs sm:text-sm text-muted-foreground">No recent activity</p>
             </div>
           )}
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
