@@ -86,7 +86,7 @@ export function UserMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate("/contacts")}>
           <MessageSquare className="mr-2 h-4 w-4" />
-          <span>{t("messages", language)}</span>
+          <span>{t("contacts", language)}</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate("/contacts")}>
           <Users className="mr-2 h-4 w-4" />
@@ -99,7 +99,7 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut} disabled={isLoggingOut}>
           <LogOut className="mr-2 h-4 w-4" />
-          <span>{isLoggingOut ? t("signingOut", language) : t("logout", language)}</span>
+          <span>{isLoggingOut ? t("loading", language) : t("logout", language)}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

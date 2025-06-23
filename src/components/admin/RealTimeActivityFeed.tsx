@@ -82,7 +82,7 @@ export const RealTimeActivityFeed = ({ activities, isLoading }: ActivityFeedProp
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
-        <ScrollArea className="h-24 sm:h-32 w-full">
+        <ScrollArea className="max-h-40 sm:max-h-48 w-full">
           {activities.length > 0 ? (
             <div className="space-y-2 sm:space-y-3 pr-2">
               {activities.map((activity) => (
