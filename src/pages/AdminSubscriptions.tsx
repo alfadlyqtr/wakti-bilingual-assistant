@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditCard, Search, CheckCircle, Clock, User, Crown, Calendar, DollarSign } from "lucide-react";
@@ -300,7 +301,7 @@ export default function AdminSubscriptions() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 pb-20">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 pb-24">
         {/* Mobile Responsive Search */}
         <div className="mb-4 sm:mb-6">
           <div className="relative">
@@ -474,7 +475,7 @@ export default function AdminSubscriptions() {
 
       {/* Enhanced Activation Modal with Mobile Responsive Design and Proper Scrolling */}
       <Dialog open={isActivationModalOpen} onOpenChange={setIsActivationModalOpen}>
-        <DialogContent className="max-w-sm sm:max-w-md mx-4 max-h-[85vh] flex flex-col">
+        <DialogContent className="max-w-sm sm:max-w-md mx-4 max-h-[85vh] overflow-y-auto">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center space-x-2 text-sm sm:text-base">
               <Crown className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -483,7 +484,7 @@ export default function AdminSubscriptions() {
           </DialogHeader>
           
           {selectedUser && (
-            <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 pr-2">
+            <div className="space-y-3 sm:space-y-4">
               <div className="p-3 sm:p-4 bg-muted rounded">
                 <h3 className="font-medium text-sm sm:text-base">{selectedUser.user_name || "No name"}</h3>
                 <p className="text-xs sm:text-sm text-muted-foreground truncate">{selectedUser.user_email}</p>
@@ -576,20 +577,20 @@ export default function AdminSubscriptions() {
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setIsActivationModalOpen(false)} className="text-xs sm:text-sm">
-                Cancel
-              </Button>
-              <Button 
-                onClick={confirmActivateSubscription}
-                disabled={activatingId === selectedUser.user_id || !activationDetails.paypalSubscriptionId.trim()}
-                className="flex items-center justify-center space-x-2 text-xs sm:text-sm"
-              >
-                <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span>{activatingId === selectedUser.user_id ? "Activating..." : "Activate Subscription"}</span>
-              </Button>
+              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setIsActivationModalOpen(false)} className="text-xs sm:text-sm">
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={confirmActivateSubscription}
+                  disabled={activatingId === selectedUser.user_id || !activationDetails.paypalSubscriptionId.trim()}
+                  className="flex items-center justify-center space-x-2 text-xs sm:text-sm"
+                >
+                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span>{activatingId === selectedUser.user_id ? "Activating..." : "Activate Subscription"}</span>
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
