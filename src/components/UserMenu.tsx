@@ -1,184 +1,107 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  LogOut, Users, User as UserIcon, ChevronDown, Book
-} from "lucide-react";
-import { useTheme } from "@/providers/ThemeProvider";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { t } from "@/utils/translations";
+import { LogOut, Settings, MessageSquare, Users, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-import { UnreadBadge } from "./UnreadBadge";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useTheme } from "@/providers/ThemeProvider";
+import { signOut } from "@/utils/auth";
+import { t } from "@/utils/translations";
 
 export function UserMenu() {
-  const [isOpen, setIsOpen] = useState(false);
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const { language } = useTheme();
-  const { user, signOut } = useAuth();
-  const { unreadTotal } = useUnreadMessages();
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const toggleMenu = () => {
-    setIsOpen(!isOpen);
-  };
-
-  const closeMenu = () => {
-    setIsOpen(false);
-  };
-
-  const handleMenuItemClick = (path: string) => {
-    navigate(path);
-    closeMenu();
-  };
-
-  const handleLogout = async () => {
+  const handleSignOut = async () => {
     try {
+      setIsLoggingOut(true);
       await signOut();
-      toast.success(language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح');
+      navigate("/");
     } catch (error) {
-      console.error('Error logging out:', error);
-      toast.error(language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج');
+      console.error("Error signing out:", error);
+    } finally {
+      setIsLoggingOut(false);
     }
-    closeMenu();
   };
 
-  // Shorthand for avatar display name
-  const getInitials = () => {
-    if (!user) return "?";
-    
-    const name = user.user_metadata?.full_name || user.email || '';
-    if (!name) return "?";
-    
-    if (name.includes(' ')) {
-      const [first, last] = name.split(' ');
-      return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
-    }
-    
-    return name.charAt(0).toUpperCase();
+  const getUserInitials = () => {
+    const fullName = user?.user_metadata?.full_name || user?.email || "";
+    return fullName
+      .split(" ")
+      .map(name => name[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2);
   };
 
-  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t("user", language);
-  
-  // Add cache-busting to avatar URL
-  const getCacheBustedAvatarUrl = (url: string) => {
-    if (!url) return url;
-    const timestamp = Date.now();
-    return `${url}?t=${timestamp}`;
-  };
-
-  const avatarUrl = user?.user_metadata?.avatar_url ? getCacheBustedAvatarUrl(user.user_metadata.avatar_url) : '';
-
-  // Bump up badge size for dropdown avatar to 'md'
-  const dropdownAvatarBadgeSize = "md";
-
-  // User menu options with blinking and badge (badge is after text for Contacts row)
-  const menuOptions = [
-    { 
-      icon: <Users size={16} />, // No badge here; put badge after label for clarity
-      label: t("contacts", language), 
-      path: "/contacts",
-      showUnread: true // custom flag for special rendering below
-    },
-    { icon: <UserIcon size={16} />, label: t("account", language), path: "/account" },
-    { icon: <Book size={16} />, label: t("help", language), path: "/help" },
-    { divider: true },
-    { icon: <LogOut size={16} />, label: t("logout", language), action: handleLogout },
-  ];
+  // Get avatar URL with cache busting
+  const avatarUrl = user?.user_metadata?.avatar_url;
+  const cacheBustedAvatarUrl = avatarUrl ? `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : '';
 
   return (
-    <div className="relative z-50">
-      <button 
-        onClick={toggleMenu}
-        className="flex items-center space-x-1 bg-muted/40 hover:bg-muted/60 px-2 py-1 rounded-full transition-colors relative"
-      >
-        <span className="relative">
-          <Avatar className="h-6 w-6">
-            <AvatarImage 
-              src={avatarUrl} 
-              alt={displayName}
-            />
-            <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+          <Avatar className="h-8 w-8">
+            {cacheBustedAvatarUrl ? (
+              <AvatarImage 
+                src={cacheBustedAvatarUrl} 
+                alt={user?.user_metadata?.full_name || "User"}
+                key={cacheBustedAvatarUrl} // Force re-render when URL changes
+              />
+            ) : null}
+            <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold text-xs">
+              {getUserInitials()}
+            </AvatarFallback>
           </Avatar>
-          {/* Header avatar badge, tiny size & offset */}
-          <UnreadBadge
-            count={unreadTotal}
-            size="sm"
-            className="-right-1.5 -top-1.5"
-          />
-        </span>
-        <span className="text-sm max-w-[70px] truncate">{displayName}</span>
-        <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <div 
-              className="fixed inset-0 z-40"
-              onClick={closeMenu}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.15 }}
-              className="absolute right-0 mt-1 w-48 bg-background border border-border rounded-md shadow-lg overflow-hidden z-50"
-            >
-              <div className="py-2 px-3 border-b border-border">
-                <div className="flex items-center space-x-2">
-                  <span className="relative">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage 
-                        src={avatarUrl} 
-                        alt={displayName}
-                      />
-                      <AvatarFallback>{getInitials()}</AvatarFallback>
-                    </Avatar>
-                    {/* Dropdown avatar badge: make slightly larger, blink, and visually clear */}
-                    <UnreadBadge
-                      count={unreadTotal}
-                      size="md"
-                      blink={!!unreadTotal}
-                      className="-right-3 -top-3"
-                    />
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium truncate">{displayName}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="py-1">
-                {menuOptions.map((option, i) => (
-                  option.divider ? (
-                    <div key={`divider-${i}`} className="my-1 border-t border-border" />
-                  ) : (
-                    <button
-                      key={option.label}
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center space-x-2 relative"
-                      onClick={() => option.action ? option.action() : handleMenuItemClick(option.path)}
-                    >
-                      <span className="text-muted-foreground">{option.icon}</span>
-                      <span>{option.label}</span>
-                      {/* Only for Contacts row: show badge beside label */}
-                      {option.showUnread && (
-                        <UnreadBadge
-                          count={unreadTotal}
-                          size="sm"
-                          blink={!!unreadTotal}
-                          className="ml-2"
-                        />
-                      )}
-                    </button>
-                  )
-                ))}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56" align="end" forceMount>
+        <div className="flex items-center justify-start gap-2 p-2">
+          <div className="flex flex-col space-y-1 leading-none">
+            {user?.user_metadata?.full_name && (
+              <p className="font-medium">{user.user_metadata.full_name}</p>
+            )}
+            {user?.email && (
+              <p className="w-[200px] truncate text-sm text-muted-foreground">
+                {user.email}
+              </p>
+            )}
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => navigate("/settings")}>
+          <Settings className="mr-2 h-4 w-4" />
+          <span>{t("settings", language)}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/contacts")}>
+          <MessageSquare className="mr-2 h-4 w-4" />
+          <span>{t("messages", language)}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/contacts")}>
+          <Users className="mr-2 h-4 w-4" />
+          <span>{t("contacts", language)}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/account")}>
+          <User className="mr-2 h-4 w-4" />
+          <span>{t("account", language)}</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleSignOut} disabled={isLoggingOut}>
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>{isLoggingOut ? t("signingOut", language) : t("logout", language)}</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

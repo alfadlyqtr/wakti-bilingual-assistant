@@ -55,12 +55,28 @@ export const ProfileImageUpload = () => {
       
       console.log('Uploading avatar file:', { fileName, fileSize: file.size, fileType: file.type });
       
-      // Upload the file to Supabase storage
+      // Delete old avatar if exists
+      if (user?.user_metadata?.avatar_url) {
+        try {
+          const oldFileName = user.user_metadata.avatar_url.split('/').pop();
+          if (oldFileName && oldFileName !== fileName) {
+            await supabase.storage
+              .from('avatars')
+              .remove([oldFileName]);
+            console.log('Old avatar deleted:', oldFileName);
+          }
+        } catch (deleteError) {
+          console.warn('Could not delete old avatar:', deleteError);
+          // Don't block upload if deletion fails
+        }
+      }
+      
+      // Upload the new file to Supabase storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: false
+          upsert: true // Allow overwriting
         });
         
       if (uploadError) {
@@ -68,13 +84,13 @@ export const ProfileImageUpload = () => {
         throw uploadError;
       }
       
-      // Get the public URL
+      // Get the public URL with cache busting
       const { data: storageData } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath);
       
-      const newAvatarUrl = storageData.publicUrl;
-      console.log('New avatar URL:', newAvatarUrl);
+      const newAvatarUrl = `${storageData.publicUrl}?t=${Date.now()}`;
+      console.log('New avatar URL with cache busting:', newAvatarUrl);
       
       // Update user metadata with the correct structure expected by Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.updateUser({
@@ -153,18 +169,20 @@ export const ProfileImageUpload = () => {
     setImageError(true);
   };
 
-  // Use the latest avatar URL from user metadata or local state
+  // Use the latest avatar URL from user metadata or local state with cache busting
   const currentAvatarUrl = user?.user_metadata?.avatar_url || avatarUrl;
-  const shouldShowImage = currentAvatarUrl && !imageError;
+  const cacheBustedUrl = currentAvatarUrl ? `${currentAvatarUrl}${currentAvatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : '';
+  const shouldShowImage = cacheBustedUrl && !imageError;
 
   return (
     <div className="flex flex-col items-center space-y-4">
       <Avatar className="w-24 h-24">
         {shouldShowImage ? (
           <AvatarImage 
-            src={currentAvatarUrl} 
+            src={cacheBustedUrl} 
             alt={t("profileImage", language)}
             onError={handleImageError}
+            key={cacheBustedUrl} // Force re-render when URL changes
           />
         ) : null}
         <AvatarFallback className="text-lg bg-blue-100 text-blue-700 font-semibold">
