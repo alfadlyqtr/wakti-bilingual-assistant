@@ -49,3 +49,36 @@ export const signIn = async (email: string, password: string) => {
     throw error;
   }
 };
+
+// Add back missing functions for backward compatibility
+export const getCurrentUser = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    return null;
+  }
+};
+
+export const deleteUserAccount = async () => {
+  try {
+    // This would typically be handled by an edge function for security
+    throw new Error('Account deletion must be handled by admin');
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    throw error;
+  }
+};
+
+export const updateUserPassword = async (password: string) => {
+  try {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+    toast.success('Password updated successfully');
+  } catch (error) {
+    console.error('Error updating password:', error);
+    toast.error('Failed to update password');
+    throw error;
+  }
+};

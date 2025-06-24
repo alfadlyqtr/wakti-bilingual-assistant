@@ -13,11 +13,10 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
-import { signOut } from "@/utils/auth";
 import { t } from "@/utils/translations";
 
 export function UserMenu() {
-  const { user } = use();
+  const { user, signOut } = useAuth(); // Fixed: was use() instead of useAuth()
   const { language } = useTheme();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);

@@ -8,7 +8,13 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isLoading: boolean; // Add alias for backwards compatibility
   refreshSession: () => Promise<void>;
+  signOut: () => Promise<void>; // Add signOut method
+  updateProfile: (data: any) => Promise<void>; // Add for Account page
+  updateEmail: (email: string) => Promise<void>; // Add for Account page
+  updatePassword: (password: string) => Promise<void>; // Add for Account page
+  forgotPassword: (email: string) => Promise<void>; // Add for ForgotPassword page
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +34,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signOut = async () => {
+    try {
+      console.log('Starting logout process...');
+      
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Logout error:', error);
+        toast.error('Failed to logout');
+        throw error;
+      }
+      
+      console.log('Logout completed successfully');
+      toast.success('Logged out successfully');
+      
+    } catch (error) {
+      console.error('Error during logout:', error);
+      toast.error('Failed to logout');
+      throw error;
+    }
+  };
+
+  const updateProfile = async (data: any) => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data
+      });
+      if (error) throw error;
+      toast.success('Profile updated successfully');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+      throw error;
+    }
+  };
+
+  const updateEmail = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ email });
+      if (error) throw error;
+      toast.success('Email updated successfully');
+    } catch (error) {
+      console.error('Error updating email:', error);
+      toast.error('Failed to update email');
+      throw error;
+    }
+  };
+
+  const updatePassword = async (password: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      toast.success('Password updated successfully');
+    } catch (error) {
+      console.error('Error updating password:', error);
+      toast.error('Failed to update password');
+      throw error;
+    }
+  };
+
+  const forgotPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      toast.success('Password reset email sent');
+    } catch (error) {
+      console.error('Error sending reset email:', error);
+      toast.error('Failed to send reset email');
+      throw error;
+    }
+  };
+
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -36,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes - simplified without complex session tracking
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -87,7 +165,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     session,
     loading,
+    isLoading: loading, // Alias for backwards compatibility
     refreshSession,
+    signOut,
+    updateProfile,
+    updateEmail,
+    updatePassword,
+    forgotPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

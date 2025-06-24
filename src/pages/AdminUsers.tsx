@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Users, Search, Crown, Shield, Clock, Ban, Trash2, Eye, Settings, RefreshCw } from "lucide-react";
@@ -25,6 +24,9 @@ interface UserData {
   last_login_at?: string;
   is_online?: boolean;
   session_count?: number;
+  full_name?: string;
+  is_logged_in?: boolean;
+  email_confirmed?: boolean;
 }
 
 export default function AdminUsers() {
@@ -115,7 +117,10 @@ export default function AdminUsers() {
               ...profile,
               is_online: isOnline,
               session_count: totalSessions || 0,
-              last_login_at: lastLoginAt
+              last_login_at: lastLoginAt,
+              full_name: profile.display_name,
+              is_logged_in: isOnline,
+              email_confirmed: true
             };
           } catch (error) {
             console.warn('Error processing user session data:', error);
@@ -123,7 +128,10 @@ export default function AdminUsers() {
               ...profile,
               is_online: false,
               session_count: 0,
-              last_login_at: null
+              last_login_at: null,
+              full_name: profile.display_name,
+              is_logged_in: false,
+              email_confirmed: true
             };
           }
         })
