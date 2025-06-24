@@ -23,19 +23,32 @@ export default function AdminLogin() {
     setIsLoading(true);
 
     try {
+      console.log('Attempting admin login for:', email);
+      
       // Call the admin authentication function
       const { data, error } = await supabase.rpc('authenticate_admin', {
         p_email: email,
         p_password: password
       });
 
-      if (error || !data || data.length === 0) {
+      console.log('Admin auth response:', data, error);
+
+      if (error) {
+        console.error('Admin auth error:', error);
+        setErrorMsg('Invalid admin credentials');
+        toast.error('Invalid admin credentials');
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.error('No admin data returned');
         setErrorMsg('Invalid admin credentials');
         toast.error('Invalid admin credentials');
         return;
       }
 
       const adminData = data[0];
+      console.log('Admin login successful:', adminData);
       
       // Store admin session in localStorage
       localStorage.setItem('admin_session', JSON.stringify({

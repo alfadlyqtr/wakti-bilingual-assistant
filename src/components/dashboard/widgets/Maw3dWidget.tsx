@@ -21,8 +21,8 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
+        // Fast, simple fetch without complex operations
         const userEvents = await Maw3dService.getUserEvents();
-        console.log('Maw3d Widget fetched events:', userEvents.length);
         setEvents(userEvents);
       } catch (error) {
         console.error('Error fetching Maw3d events for widget:', error);

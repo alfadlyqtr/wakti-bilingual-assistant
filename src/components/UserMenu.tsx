@@ -16,7 +16,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 
 export function UserMenu() {
-  const { user, signOut } = useAuth(); // Fixed: was use() instead of useAuth()
+  const { user, signOut } = useAuth();
   const { language } = useTheme();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);

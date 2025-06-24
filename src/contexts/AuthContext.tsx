@@ -123,39 +123,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Simple session tracking without complex enforcement
-        try {
-          await supabase
-            .from('user_sessions')
-            .upsert({
-              user_id: session.user.id,
-              session_token: session.access_token,
-              device_info: navigator.userAgent.substring(0, 200),
-              is_active: true
-            });
-        } catch (error) {
-          console.warn('Could not track user session:', error);
-          // Don't block login if session tracking fails
-        }
-      }
-
-      if (event === 'SIGNED_OUT') {
-        // Simple cleanup on logout
-        try {
-          const { data: userData } = await supabase.auth.getUser();
-          if (userData.user) {
-            await supabase
-              .from('user_sessions')
-              .update({ is_active: false })
-              .eq('user_id', userData.user.id);
-          }
-        } catch (error) {
-          console.warn('Could not update session on logout:', error);
-          // Don't block logout if cleanup fails
-        }
-      }
     });
 
     return () => subscription.unsubscribe();
