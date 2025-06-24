@@ -10,9 +10,17 @@ import { toast } from "sonner";
 
 interface User {
   id: string;
-  email: string;
-  full_name: string;
+  email?: string;
+  full_name?: string;
   is_suspended?: boolean;
+}
+
+interface UserActionModalsProps {
+  isOpen: boolean;
+  onClose: () => void;
+  user: User | null;
+  actionType: 'suspend' | 'delete' | null;
+  onActionCompleted: () => void;
 }
 
 interface SuspendModalProps {
@@ -242,4 +250,31 @@ export const DeleteUserModal = ({ user, isOpen, onClose, onSuccess }: DeleteModa
       </DialogContent>
     </Dialog>
   );
+};
+
+// Main component that combines both modals
+export const UserActionModals = ({ isOpen, onClose, user, actionType, onActionCompleted }: UserActionModalsProps) => {
+  if (actionType === 'suspend') {
+    return (
+      <SuspendUserModal
+        isOpen={isOpen}
+        onClose={onClose}
+        user={user}
+        onSuccess={onActionCompleted}
+      />
+    );
+  }
+
+  if (actionType === 'delete') {
+    return (
+      <DeleteUserModal
+        isOpen={isOpen}
+        onClose={onClose}
+        user={user}
+        onSuccess={onActionCompleted}
+      />
+    );
+  }
+
+  return null;
 };

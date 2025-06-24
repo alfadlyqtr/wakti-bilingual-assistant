@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Users, Search, Crown, Shield, Clock, Ban, Trash2, Eye, Settings, RefreshCw } from "lucide-react";
@@ -27,6 +28,14 @@ interface UserData {
   full_name?: string;
   is_logged_in?: boolean;
   email_confirmed?: boolean;
+}
+
+// User interface compatible with modal components
+interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  is_suspended?: boolean;
 }
 
 export default function AdminUsers() {
@@ -159,6 +168,16 @@ export default function AdminUsers() {
     }
 
     setFilteredUsers(filtered);
+  };
+
+  // Convert UserData to User for modal compatibility
+  const convertToUser = (userData: UserData): User => {
+    return {
+      id: userData.id,
+      email: userData.email || '',
+      full_name: userData.full_name || userData.display_name || 'Unknown User',
+      is_suspended: userData.is_suspended
+    };
   };
 
   const handleUserAction = (user: UserData, action: 'view' | 'suspend' | 'delete') => {
@@ -400,7 +419,7 @@ export default function AdminUsers() {
           <UserActionModals
             isOpen={isActionModalOpen}
             onClose={() => setIsActionModalOpen(false)}
-            user={selectedUser}
+            user={convertToUser(selectedUser)}
             actionType={actionType}
             onActionCompleted={loadUsers}
           />
