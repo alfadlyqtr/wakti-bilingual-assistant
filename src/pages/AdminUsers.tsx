@@ -35,7 +35,14 @@ interface User {
   id: string;
   email: string;
   full_name: string;
+  created_at: string;
+  is_logged_in: boolean;
+  email_confirmed: boolean;
+  avatar_url?: string;
+  subscription_status?: string;
   is_suspended?: boolean;
+  suspended_at?: string;
+  suspension_reason?: string;
 }
 
 export default function AdminUsers() {
@@ -172,6 +179,22 @@ export default function AdminUsers() {
 
   // Convert UserData to User for modal compatibility
   const convertToUser = (userData: UserData): User => {
+    return {
+      id: userData.id,
+      email: userData.email || '',
+      full_name: userData.full_name || userData.display_name || 'Unknown User',
+      created_at: userData.created_at,
+      is_logged_in: userData.is_logged_in || false,
+      email_confirmed: userData.email_confirmed || false,
+      subscription_status: userData.subscription_status,
+      is_suspended: userData.is_suspended,
+      suspended_at: userData.suspended_at,
+      suspension_reason: userData.suspension_reason
+    };
+  };
+
+  // Convert UserData to User for action modals (simpler interface)
+  const convertToUserForActions = (userData: UserData) => {
     return {
       id: userData.id,
       email: userData.email || '',
@@ -419,7 +442,7 @@ export default function AdminUsers() {
           <UserActionModals
             isOpen={isActionModalOpen}
             onClose={() => setIsActionModalOpen(false)}
-            user={convertToUser(selectedUser)}
+            user={convertToUserForActions(selectedUser)}
             actionType={actionType}
             onActionCompleted={loadUsers}
           />
