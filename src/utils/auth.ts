@@ -1,105 +1,51 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import { UserAttributes } from "@supabase/supabase-js";
+import { toast } from "sonner";
 
-// Sign out function
-export async function signOut() {
-  return await supabase.auth.signOut();
-}
-
-// Get current session - useful for checking authentication state
-export async function getCurrentSession() {
-  return await supabase.auth.getSession();
-}
-
-// Get current user
-export async function getCurrentUser() {
-  const { data } = await supabase.auth.getUser();
-  return data?.user;
-}
-
-// Update profile function
-export async function updateProfile(data: { user_metadata: { 
-  display_name?: string; 
-  avatar_url?: string;
-  full_name?: string; 
-} }) {
+export const signOut = async () => {
   try {
-    console.log("Updating profile with data:", data);
+    console.log('Starting logout process...');
     
-    // Convert to the format expected by Supabase
-    const userData: UserAttributes = {
-      data: data.user_metadata
-    };
-    
-    const { data: updatedUser, error } = await supabase.auth.updateUser(userData);
-    
-    console.log("Profile update response:", { updatedUser, error });
+    // Simple, fast logout - just call Supabase auth signOut
+    const { error } = await supabase.auth.signOut();
     
     if (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to logout');
       throw error;
     }
     
-    return { user: updatedUser, error: null };
+    console.log('Logout completed successfully');
+    toast.success('Logged out successfully');
+    
   } catch (error) {
-    console.error("Error updating profile:", error);
-    return { user: null, error };
+    console.error('Error during logout:', error);
+    toast.error('Failed to logout');
+    throw error;
   }
-}
+};
 
-// Update password function
-export async function updateUserPassword(currentPassword: string, newPassword: string) {
+export const signIn = async (email: string, password: string) => {
   try {
-    // First verify the current password is correct
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: (await getCurrentUser())?.email || '',
-      password: currentPassword
-    });
+    console.log('Starting login process for:', email);
     
-    if (verifyError) {
-      return { error: { message: 'Current password is incorrect' } };
-    }
-    
-    const { error } = await supabase.auth.updateUser({ 
-      password: newPassword 
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
-    return { error };
-  } catch (error) {
-    console.error("Error updating password:", error);
-    return { error: { message: 'Failed to update password' } };
-  }
-}
 
-// Delete account function
-export async function deleteUserAccount() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      return { error: new Error('No active session found') };
+    if (error) {
+      console.error('Login error:', error);
+      toast.error('Invalid email or password');
+      throw error;
     }
+
+    console.log('Login successful for:', email);
+    toast.success('Welcome back!');
     
-    // Call our serverless function to delete the user account
-    const SUPABASE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co";
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    const result = await response.json();
-    
-    if (!response.ok) {
-      return { error: new Error(result.error || 'Failed to delete account') };
-    }
-    
-    // Sign out the user locally after successful deletion
-    await supabase.auth.signOut();
-    
-    return { error: null };
+    return data;
   } catch (error) {
-    console.error("Error deleting account:", error);
-    return { error };
+    console.error('Error during login:', error);
+    throw error;
   }
-}
+};

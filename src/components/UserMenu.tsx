@@ -17,7 +17,7 @@ import { signOut } from "@/utils/auth";
 import { t } from "@/utils/translations";
 
 export function UserMenu() {
-  const { user } = useAuth();
+  const { user } = use();
   const { language } = useTheme();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);

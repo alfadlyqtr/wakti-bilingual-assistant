@@ -50,20 +50,23 @@ export const ProfileImageUpload = () => {
       }
       
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const fileName = `${Date.now()}.${fileExt}`;
+      // Store in user-specific folder for proper RLS
+      const filePath = `${user?.id}/${fileName}`;
       
-      console.log('Uploading avatar file:', { fileName, fileSize: file.size, fileType: file.type });
+      console.log('Uploading avatar file:', { fileName, fileSize: file.size, fileType: file.type, filePath });
       
       // Delete old avatar if exists
       if (user?.user_metadata?.avatar_url) {
         try {
-          const oldFileName = user.user_metadata.avatar_url.split('/').pop();
-          if (oldFileName && oldFileName !== fileName) {
+          const oldUrl = user.user_metadata.avatar_url;
+          const oldPath = oldUrl.split('/').pop();
+          if (oldPath && oldPath !== fileName && oldPath.includes('.')) {
+            const oldFilePath = `${user.id}/${oldPath}`;
             await supabase.storage
               .from('avatars')
-              .remove([oldFileName]);
-            console.log('Old avatar deleted:', oldFileName);
+              .remove([oldFilePath]);
+            console.log('Old avatar deleted:', oldFilePath);
           }
         } catch (deleteError) {
           console.warn('Could not delete old avatar:', deleteError);
@@ -71,7 +74,7 @@ export const ProfileImageUpload = () => {
         }
       }
       
-      // Upload the new file to Supabase storage
+      // Upload the new file to Supabase storage with user folder structure
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, {
@@ -81,6 +84,7 @@ export const ProfileImageUpload = () => {
         
       if (uploadError) {
         console.error('Upload error:', uploadError);
+        toast.error('Failed to upload avatar. Please try again.');
         throw uploadError;
       }
       
@@ -101,6 +105,7 @@ export const ProfileImageUpload = () => {
       
       if (authError) {
         console.error('Auth update error:', authError);
+        toast.error('Failed to update profile. Please try again.');
         throw authError;
       }
 
@@ -130,7 +135,15 @@ export const ProfileImageUpload = () => {
       toast.success(t("profileImageUpdated", language));
     } catch (error: any) {
       console.error('Avatar upload failed:', error);
-      toast.error(`${t("error", language)}: ${error.message}`);
+      
+      // Show user-friendly error messages
+      if (error.message?.includes('permission')) {
+        toast.error('Permission denied. Please try logging out and back in.');
+      } else if (error.message?.includes('storage')) {
+        toast.error('Upload failed. Please check your internet connection and try again.');
+      } else {
+        toast.error(`Upload failed: ${error.message || 'Unknown error'}`);
+      }
     } finally {
       setUploading(false);
       // Clear the input to allow re-upload of the same file
