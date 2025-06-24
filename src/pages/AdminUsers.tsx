@@ -412,7 +412,7 @@ export default function AdminUsers() {
           <UserProfileModal
             isOpen={isProfileModalOpen}
             onClose={() => setIsProfileModalOpen(false)}
-            user={selectedUser}
+            user={convertToUser(selectedUser)}
             onUserUpdated={loadUsers}
           />
           
