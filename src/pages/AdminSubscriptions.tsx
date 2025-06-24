@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditCard, Search, CheckCircle, Clock, User, Crown, Calendar, DollarSign } from "lucide-react";
@@ -241,6 +240,16 @@ export default function AdminSubscriptions() {
       amount = 0; // Free gift plans
       cycle = planName.includes('1 week') ? 'weekly' : 'monthly';
       paypalPlanId = 'ADMIN-GIFT-PLAN'; // Special ID for gift plans
+    } else if (planName.includes('Paid Cash/Bank Transfer')) {
+      // Handle cash/bank transfer plans
+      if (planName.includes('600 QAR Yearly')) {
+        amount = 600;
+        cycle = 'yearly';
+      } else {
+        amount = 60;
+        cycle = 'monthly';
+      }
+      paypalPlanId = 'CASH-BANK-TRANSFER'; // Special ID for cash/bank transfers
     }
 
     setActivationDetails(prev => ({
@@ -500,6 +509,8 @@ export default function AdminSubscriptions() {
                     <SelectContent>
                       <SelectItem value="Wakti Monthly">Wakti Monthly (60 QAR/month)</SelectItem>
                       <SelectItem value="Wakti Yearly">Wakti Yearly (600 QAR/year)</SelectItem>
+                      <SelectItem value="Paid Cash/Bank Transfer 60 QAR Monthly">Paid Cash/Bank Transfer 60 QAR Monthly</SelectItem>
+                      <SelectItem value="Paid Cash/Bank Transfer 600 QAR Yearly">Paid Cash/Bank Transfer 600 QAR Yearly</SelectItem>
                       <SelectItem value="Gift from Admin (1 week free)">Gift from Admin (1 week free)</SelectItem>
                       <SelectItem value="Gift from Admin (1 month free)">Gift from Admin (1 month free)</SelectItem>
                     </SelectContent>
