@@ -1,4 +1,3 @@
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,9 +23,10 @@ interface UserProfileModalProps {
   user: User | null;
   isOpen: boolean;
   onClose: () => void;
+  onUserUpdated?: () => Promise<void>; // Add the missing prop
 }
 
-export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProps) => {
+export const UserProfileModal = ({ user, isOpen, onClose, onUserUpdated }: UserProfileModalProps) => {
   const { statistics, isLoading: statsLoading } = useUserStatistics(user?.id || null);
 
   if (!user) return null;
