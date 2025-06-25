@@ -263,36 +263,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ai_quota_management: {
-        Row: {
-          chat_characters_used: number
-          created_at: string
-          id: string
-          image_prompts_used: number
-          search_characters_used: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          chat_characters_used?: number
-          created_at?: string
-          id?: string
-          image_prompts_used?: number
-          search_characters_used?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          chat_characters_used?: number
-          created_at?: string
-          id?: string
-          image_prompts_used?: number
-          search_characters_used?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       ai_usage_logs: {
         Row: {
           created_at: string
@@ -1872,16 +1842,6 @@ export type Database = {
       get_current_user_id: {
         Args: Record<PropertyKey, never>
         Returns: string
-      }
-      get_or_create_ai_quota: {
-        Args: { p_user_id: string }
-        Returns: {
-          chat_characters_used: number
-          search_characters_used: number
-          image_prompts_used: number
-          created_at: string
-          updated_at: string
-        }[]
       }
       get_or_create_user_quota: {
         Args: { p_user_id: string }

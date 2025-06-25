@@ -1,17 +1,17 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
-import { optimizedWaktiAIService } from '@/services/OptimizedWaktiAIService';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
-import { useAIQuotaManagement } from '@/hooks/useAIQuotaManagement';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatHeader } from '@/components/wakti-ai-v2/ChatHeader';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
+import { Plus } from 'lucide-react';
 
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
@@ -39,9 +39,6 @@ const WaktiAIV2 = () => {
   const scrollAreaRef = useRef<any>(null);
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
-
-  // Optimized quota management
-  const { quotaData: aiQuotaData, updateQuotaUsage } = useAIQuotaManagement();
 
   // Simplified quota management - only voice
   const {
@@ -479,7 +476,10 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🚀 OPTIMIZED WAKTI AI: Starting optimized message processing');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED TASK SYSTEM ===');
+      console.log('🔄 WAKTI AI V2.5: Message:', message);
+      console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
+      console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
       // Handle Voice Translator quota increment BEFORE sending
       if (inputType === 'voice') {
@@ -508,25 +508,44 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Use optimized AI service
-      console.log('🚀 Using optimized AI service for faster responses');
-      const response = await optimizedWaktiAIService.getOptimizedAIResponse({
+      const completeContext = getCompleteConversationContext();
+      const contextForAI = [...completeContext, userMessage].slice(-50);
+
+      console.log('🧠 WAKTI AI V2.5: Sending enhanced context to AI:', {
+        contextMessages: contextForAI.length,
+        hasConversationHistory: conversationMessages.length > 0,
+        currentConversationId
+      });
+
+      const response = await WaktiAIV2Service.sendMessage(
         message,
-        userId: user.id,
+        user.id,
         language,
-        conversationId: currentConversationId,
-        inputType
-      });
+        currentConversationId,
+        inputType,
+        contextForAI,
+        false,
+        activeTrigger,
+        textGenParams,
+        attachedFiles || [],
+        calendarContext,
+        userContext
+      );
 
-      console.log('🚀 OPTIMIZED RESPONSE:', { 
-        cached: response.cached, 
-        length: response.response?.length,
-        quotaUsed: response.quotaUsed 
-      });
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
+      console.log('🔄 WAKTI AI V2.5: Needs Confirmation:', response.needsConfirmation);
+      console.log('🔄 WAKTI AI V2.5: Pending Task Data:', !!response.pendingTaskData);
+      console.log('🔄 WAKTI AI V2.5: Pending Reminder Data:', !!response.pendingReminderData);
 
-      // Update AI quota usage for analytics
-      if (response.quotaUsed > 0) {
-        await updateQuotaUsage('chat', response.quotaUsed);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.conversationId && response.conversationId !== currentConversationId) {
+        setCurrentConversationId(response.conversationId);
+        loadFullConversationHistory(response.conversationId);
+        console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
       }
 
       const assistantMessage: AIMessage = {
@@ -534,21 +553,53 @@ const WaktiAIV2 = () => {
         role: 'assistant',
         content: response.response,
         timestamp: new Date(),
-        intent: 'optimized_response',
-        confidence: 'high',
-        actionTaken: false,
-        isCached: response.cached
+        intent: response.intent,
+        confidence: response.confidence as 'high' | 'medium' | 'low',
+        actionTaken: response.actionTaken,
+        browsingUsed: response.browsingUsed,
+        browsingData: response.browsingData,
+        quotaStatus: response.quotaStatus,
+        requiresSearchConfirmation: response.requiresSearchConfirmation,
+        imageUrl: response.imageUrl,
+        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl,
+        actionResult: response.actionResult,
+        fileAnalysisResults: response.fileAnalysisResults,
+        deepIntegration: response.deepIntegration,
+        automationSuggestions: response.automationSuggestions,
+        predictiveInsights: response.predictiveInsights,
+        workflowActions: response.workflowActions,
+        contextualActions: response.contextualActions,
+        needsConfirmation: response.needsConfirmation,
+        pendingTaskData: response.pendingTaskData,
+        pendingReminderData: response.pendingReminderData
       };
 
       const finalSessionMessages = [...updatedSessionMessages, assistantMessage].slice(-30);
       setSessionMessages(finalSessionMessages);
 
-      if (response.cached) {
-        showSuccess(
-          language === 'ar' 
-            ? '⚡ إجابة سريعة من الذاكرة المؤقتة' 
-            : '⚡ Fast cached response'
-        );
+      // Handle task/reminder confirmation
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        console.log('🔧 Setting up task/reminder confirmation UI');
+        setPendingTaskData(response.pendingTaskData);
+        setPendingReminderData(response.pendingReminderData);
+        setShowTaskConfirmation(true);
+      }
+
+      if (!currentConversationId) {
+        const allMessagesForConversation = [...updatedSessionMessages, assistantMessage];
+        const newConversationId = await createConversationIfNeeded(allMessagesForConversation);
+        if (newConversationId) {
+          setCurrentConversationId(newConversationId);
+          loadFullConversationHistory(newConversationId);
+          console.log('🆕 Set new conversation ID:', newConversationId);
+          
+          fetchConversations();
+        }
+      } else {
+        await saveMessageToConversation(userMessage, currentConversationId);
+        await saveMessageToConversation(assistantMessage, currentConversationId);
+        
+        fetchConversations();
       }
 
       // Voice Translation quota refresh with immediate UI update
@@ -564,13 +615,50 @@ const WaktiAIV2 = () => {
         );
       }
 
+      if (response.quotaStatus) {
+        console.log('📊 Received quota status from AI response:', response.quotaStatus);
+        setQuotaStatus(response.quotaStatus);
+      }
+
       if (inputType === 'voice') {
         console.log('🔄 Voice operation completed - refreshing voice quota...');
         await refreshVoiceQuota();
       }
 
+      if (response.requiresSearchConfirmation) {
+        setSearchConfirmationRequired(true);
+      }
+
+      if (response.fileAnalysisResults && response.fileAnalysisResults.length > 0) {
+        const successfulAnalyses = response.fileAnalysisResults.filter((result: any) => result.analysis.success);
+        if (successfulAnalyses.length > 0) {
+          showSuccess(
+            language === 'ar' 
+              ? `تم تحليل ${successfulAnalyses.length} ملف بنجاح` 
+              : `Successfully analyzed ${successfulAnalyses.length} file(s)`
+          );
+        }
+      }
+
+      if (response.workflowActions?.length > 0 || response.predictiveInsights) {
+        showSuccess(
+          language === 'ar' 
+            ? 'تم تفعيل الميزات المتقدمة للجيل الرابع' 
+            : 'Phase 4 advanced features activated'
+        );
+      }
+
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        console.log('🔧 Task/Reminder confirmation card should be shown');
+        showSuccess(
+          language === 'ar' 
+            ? 'تم تحضير البيانات للتأكيد - راجع التفاصيل وأكد الإنشاء' 
+            : 'Data prepared for confirmation - review details and confirm creation'
+        );
+      }
+
     } catch (error: any) {
-      console.error('🔄 OPTIMIZED AI: ❌ Error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced system error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
