@@ -1,9 +1,9 @@
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
 import Maw3d from "@/pages/Maw3d";
@@ -309,6 +309,7 @@ function App() {
               </Routes>
               
               <Toaster />
+              <SpeedInsights />
             </div>
           </QueryClientProvider>
         </AuthProvider>
