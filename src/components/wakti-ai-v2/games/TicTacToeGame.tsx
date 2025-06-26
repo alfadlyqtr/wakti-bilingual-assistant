@@ -15,17 +15,43 @@ const AI_REMARKS = {
   easy: [
     "I'm just clicking stuff 😅",
     "You win again?! What!",
-    "Oops… was that a mistake?"
+    "Oops… was that a mistake?",
+    "Wait, how did you do that?",
+    "I was supposed to block that!"
   ],
   medium: [
     "You're tricky, I like it.",
     "I was going to do that!",
-    "This game's getting serious."
+    "This game's getting serious.",
+    "Nice move... but I'm watching you.",
+    "Hmm, didn't see that coming."
   ],
   hard: [
     "You won't beat me this time.",
     "Hehe... I've calculated every outcome.",
-    "One wrong move... and it's mine 😈"
+    "One wrong move... and it's mine 😈",
+    "Impossible! Let me recalculate...",
+    "You're better than I thought."
+  ]
+};
+
+const VICTORY_REMARKS = {
+  player_win: [
+    "Wow! You actually beat me! 🏆",
+    "Impossible! How did you win?! 😱",
+    "I demand a rematch! Well played! 🎉",
+    "You're too good for me! 👑",
+    "Okay, I'm impressed! Victory is yours! ⭐"
+  ],
+  ai_win: [
+    "Better luck next time! 😎",
+    "I am the ultimate Tic-Tac-Toe master! 🤖",
+    "Victory is mine! Want another round? 🏆"
+  ],
+  draw: [
+    "A worthy opponent! Well fought! 🤝",
+    "Neither of us could claim victory!",
+    "Perfectly balanced... as all things should be."
   ]
 };
 
@@ -40,6 +66,8 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
   const [winner, setWinner] = useState<Player | 'draw' | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [currentAIRemark, setCurrentAIRemark] = useState<string>('');
+  const [isAIThinking, setIsAIThinking] = useState(false);
+  const [showVictoryBadge, setShowVictoryBadge] = useState(false);
 
   // Load saved game state
   useEffect(() => {
@@ -100,67 +128,99 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
 
     if (availableMoves.length === 0) return -1;
 
+    const playerSymbol = aiSymbol === 'X' ? 'O' : 'X';
+
     switch (difficulty) {
       case 'easy':
+        // 30% chance to make optimal move, 70% random
+        if (Math.random() < 0.3) {
+          // Try to win first
+          for (const move of availableMoves) {
+            const testBoard = [...currentBoard];
+            testBoard[move] = aiSymbol;
+            if (checkWinner(testBoard) === aiSymbol) {
+              return move;
+            }
+          }
+          // Block player from winning
+          for (const move of availableMoves) {
+            const testBoard = [...currentBoard];
+            testBoard[move] = playerSymbol;
+            if (checkWinner(testBoard) === playerSymbol) {
+              return move;
+            }
+          }
+        }
         return availableMoves[Math.floor(Math.random() * availableMoves.length)];
       
       case 'medium':
-        // Try to win first
-        for (const move of availableMoves) {
-          const testBoard = [...currentBoard];
-          testBoard[move] = aiSymbol;
-          if (checkWinner(testBoard) === aiSymbol) {
-            return move;
+        // 80% chance to make optimal move
+        if (Math.random() < 0.8) {
+          // Try to win first
+          for (const move of availableMoves) {
+            const testBoard = [...currentBoard];
+            testBoard[move] = aiSymbol;
+            if (checkWinner(testBoard) === aiSymbol) {
+              return move;
+            }
+          }
+          
+          // Block player from winning
+          for (const move of availableMoves) {
+            const testBoard = [...currentBoard];
+            testBoard[move] = playerSymbol;
+            if (checkWinner(testBoard) === playerSymbol) {
+              return move;
+            }
+          }
+          
+          // Take center if available
+          if (availableMoves.includes(4)) return 4;
+          
+          // Take corners
+          const corners = [0, 2, 6, 8].filter(i => availableMoves.includes(i));
+          if (corners.length > 0) {
+            return corners[Math.floor(Math.random() * corners.length)];
           }
         }
         
-        // Block player from winning
-        const playerSymbol = aiSymbol === 'X' ? 'O' : 'X';
-        for (const move of availableMoves) {
-          const testBoard = [...currentBoard];
-          testBoard[move] = playerSymbol;
-          if (checkWinner(testBoard) === playerSymbol) {
-            return move;
-          }
-        }
-        
-        // Take center if available
-        if (availableMoves.includes(4)) return 4;
-        
-        // Take random move
         return availableMoves[Math.floor(Math.random() * availableMoves.length)];
       
       case 'hard':
-        // Minimax algorithm
-        const minimax = (board: Board, depth: number, isMaximizing: boolean): number => {
+        // Perfect minimax algorithm
+        const minimax = (board: Board, depth: number, isMaximizing: boolean, alpha: number = -Infinity, beta: number = Infinity): number => {
           const result = checkWinner(board);
           
           if (result === aiSymbol) return 10 - depth;
           if (result === playerSymbol) return depth - 10;
           if (result === 'draw') return 0;
           
+          const moves = board
+            .map((cell, index) => cell === null ? index : null)
+            .filter(val => val !== null) as number[];
+
           if (isMaximizing) {
-            let bestScore = -Infinity;
-            for (const move of availableMoves) {
-              if (board[move] === null) {
-                board[move] = aiSymbol;
-                const score = minimax(board, depth + 1, false);
-                board[move] = null;
-                bestScore = Math.max(score, bestScore);
-              }
+            let maxEval = -Infinity;
+            for (const move of moves) {
+              board[move] = aiSymbol;
+              const evaluation = minimax(board, depth + 1, false, alpha, beta);
+              board[move] = null;
+              maxEval = Math.max(maxEval, evaluation);
+              alpha = Math.max(alpha, evaluation);
+              if (beta <= alpha) break;
             }
-            return bestScore;
+            return maxEval;
           } else {
-            let bestScore = Infinity;
-            for (const move of availableMoves) {
-              if (board[move] === null) {
-                board[move] = playerSymbol;
-                const score = minimax(board, depth + 1, true);
-                board[move] = null;
-                bestScore = Math.min(score, bestScore);
-              }
+            let minEval = Infinity;
+            for (const move of moves) {
+              board[move] = playerSymbol;
+              const evaluation = minimax(board, depth + 1, true, alpha, beta);
+              board[move] = null;
+              minEval = Math.min(minEval, evaluation);
+              beta = Math.min(beta, evaluation);
+              if (beta <= alpha) break;
             }
-            return bestScore;
+            return minEval;
           }
         };
         
@@ -184,6 +244,38 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     }
   };
 
+  const getAIThinkingTime = (difficulty: Difficulty): number => {
+    switch (difficulty) {
+      case 'easy': return 1500 + Math.random() * 1000; // 1.5-2.5s
+      case 'medium': return 2000 + Math.random() * 1500; // 2-3.5s
+      case 'hard': return 3000 + Math.random() * 2000; // 3-5s
+      default: return 2000;
+    }
+  };
+
+  const showAIRemark = (type: 'game' | 'victory' = 'game') => {
+    let remarks: string[];
+    
+    if (type === 'victory') {
+      if (winner === playerSymbol) {
+        remarks = VICTORY_REMARKS.player_win;
+      } else if (winner === 'draw') {
+        remarks = VICTORY_REMARKS.draw;
+      } else {
+        remarks = VICTORY_REMARKS.ai_win;
+      }
+    } else {
+      remarks = AI_REMARKS[difficulty];
+    }
+    
+    const randomRemark = remarks[Math.floor(Math.random() * remarks.length)];
+    setCurrentAIRemark(randomRemark);
+    
+    setTimeout(() => {
+      setCurrentAIRemark('');
+    }, type === 'victory' ? 5000 : 3000);
+  };
+
   const makeMove = (index: number) => {
     if (board[index] || gameOver || !isPlayerTurn || !gameStarted) return;
 
@@ -196,10 +288,15 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     if (gameResult) {
       setWinner(gameResult);
       setGameOver(true);
+      setShowVictoryBadge(true);
+      setTimeout(() => showAIRemark('victory'), 500);
       return;
     }
 
-    // AI move after delay
+    // AI move with realistic timing
+    setIsAIThinking(true);
+    const thinkingTime = getAIThinkingTime(difficulty);
+    
     setTimeout(() => {
       const aiSymbol = playerSymbol === 'X' ? 'O' : 'X';
       const aiMove = getAIMove(newBoard, aiSymbol);
@@ -213,21 +310,19 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
         if (aiGameResult) {
           setWinner(aiGameResult);
           setGameOver(true);
+          setShowVictoryBadge(true);
+          setTimeout(() => showAIRemark('victory'), 500);
         } else {
           setIsPlayerTurn(true);
+          // Show game remark occasionally
+          if (Math.random() < 0.4) {
+            setTimeout(() => showAIRemark('game'), 300);
+          }
         }
-        
-        // Show AI remark inline
-        const remarks = AI_REMARKS[difficulty];
-        const randomRemark = remarks[Math.floor(Math.random() * remarks.length)];
-        setCurrentAIRemark(randomRemark);
-        
-        // Clear remark after 3 seconds
-        setTimeout(() => {
-          setCurrentAIRemark('');
-        }, 3000);
       }
-    }, 500);
+      
+      setIsAIThinking(false);
+    }, thinkingTime);
   };
 
   const startGame = () => {
@@ -323,13 +418,18 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Game Header with AI Remarks */}
+    <div className="space-y-4 select-none">
+      {/* Game Header with AI Remarks and Victory Badge */}
       <div className="text-center space-y-2">
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <h3 className="text-lg font-bold">
             {language === 'ar' ? 'إكس أو' : 'Tic-Tac-Toe'}
           </h3>
+          {showVictoryBadge && winner && (
+            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full text-lg font-bold animate-bounce shadow-lg">
+              {winner === playerSymbol ? '🏆 Victory!' : winner === 'draw' ? '🤝 Draw!' : '🤖 AI Wins!'}
+            </div>
+          )}
           {currentAIRemark && (
             <div className="bg-blue-100 dark:bg-blue-900/20 px-3 py-1 rounded-full text-sm text-blue-700 dark:text-blue-300 animate-fade-in max-w-xs">
               🤖 {currentAIRemark}
@@ -351,10 +451,11 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
           <Button
             key={index}
             variant="outline"
-            className="h-20 w-20 text-3xl font-bold transition-all duration-200 active:scale-95 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="h-20 w-20 text-3xl font-bold transition-all duration-200 active:scale-95 hover:bg-slate-100 dark:hover:bg-slate-800 select-none touch-manipulation"
             onTouchStart={() => makeMove(index)}
             onClick={() => makeMove(index)}
             disabled={!!cell || gameOver || !isPlayerTurn}
+            style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
           >
             {cell}
           </Button>
@@ -375,11 +476,22 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
       {!gameOver && (
         <div className="text-center">
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            {isPlayerTurn 
+            {isAIThinking 
+              ? (language === 'ar' ? 'الذكاء الاصطناعي يفكر...' : 'AI thinking...')
+              : isPlayerTurn 
               ? (language === 'ar' ? 'دورك - اضغط على المربع' : 'Your turn - Tap a square')
-              : (language === 'ar' ? 'دور الذكاء الاصطناعي...' : 'AI thinking...')
+              : (language === 'ar' ? 'دور الذكاء الاصطناعي...' : 'AI turn...')
             }
           </p>
+          {isAIThinking && (
+            <div className="flex justify-center mt-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

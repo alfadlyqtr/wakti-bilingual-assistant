@@ -14,26 +14,81 @@ type PlayerColor = 'white' | 'black';
 
 const AI_REMARKS = {
   easy: [
-    "Oops, is that check?",
-    "Go easy on me...",
-    "Hmm, I forgot how the horse moves."
+    "Wait, which way does the knight move again?",
+    "Oops, did I just give away my queen?",
+    "Chess is harder than I thought...",
+    "Is that checkmate? Already?!",
+    "I'll get better... eventually."
   ],
   medium: [
-    "Good move. Let me think…",
-    "I won't fall for that again.",
-    "Tricky. I like it."
+    "Interesting strategy you have there.",
+    "I see what you're trying to do...",
+    "This position looks promising for me.",
+    "You're making me work for this win.",
+    "Let me think about this move..."
   ],
   hard: [
-    "This ends in 8 moves. You just don't know it yet.",
-    "Nice try, human.",
-    "I am the AI. Resistance is futile."
+    "You cannot escape the inevitable.",
+    "I have calculated 47 moves ahead.",
+    "Your position is already lost.",
+    "Impressive... but futile.",
+    "Even grandmasters fear my algorithm."
   ]
 };
 
-// High contrast chess pieces with better visibility
+const VICTORY_REMARKS = {
+  player_win: [
+    "Impossible! A human defeated me?! 🏆",
+    "Well played, chess master! 👑",
+    "You have earned my respect! 🎉",
+    "Victory is yours... this time! ⭐",
+    "I shall study this game forever! 🤯"
+  ],
+  ai_win: [
+    "As calculated. Victory achieved! 🤖",
+    "Another human falls to my logic! 😎",
+    "Chess mastery belongs to AI! 🏆"
+  ],
+  draw: [
+    "A stalemate... you fought well! 🤝",
+    "Neither king shall fall today!",
+    "Honor in battle, honor in draw! ⚖️"
+  ]
+};
+
+// Enhanced chess pieces with better contrast
 const PIECE_SYMBOLS = {
   'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
   'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+};
+
+// Piece values for evaluation
+const PIECE_VALUES = {
+  'p': 100, 'n': 300, 'b': 300, 'r': 500, 'q': 900, 'k': 10000
+};
+
+// Position evaluation tables
+const PIECE_SQUARE_TABLES = {
+  'p': [
+    0,  0,  0,  0,  0,  0,  0,  0,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+    5,  5, 10, 25, 25, 10,  5,  5,
+    0,  0,  0, 20, 20,  0,  0,  0,
+    5, -5,-10,  0,  0,-10, -5,  5,
+    5, 10, 10,-20,-20, 10, 10,  5,
+    0,  0,  0,  0,  0,  0,  0,  0
+  ],
+  'n': [
+    -50,-40,-30,-30,-30,-30,-40,-50,
+    -40,-20,  0,  0,  0,  0,-20,-40,
+    -30,  0, 10, 15, 15, 10,  0,-30,
+    -30,  5, 15, 20, 20, 15,  5,-30,
+    -30,  0, 15, 20, 20, 15,  0,-30,
+    -30,  5, 10, 15, 15, 10,  5,-30,
+    -40,-20,  0,  5,  5,  0,-20,-40,
+    -50,-40,-30,-30,-30,-30,-40,-50
+  ]
 };
 
 export function ChessGame({ onBack }: ChessGameProps) {
@@ -50,6 +105,8 @@ export function ChessGame({ onBack }: ChessGameProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [possibleMoves, setPossibleMoves] = useState<string[]>([]);
   const [currentAIRemark, setCurrentAIRemark] = useState<string>('');
+  const [isAIThinking, setIsAIThinking] = useState(false);
+  const [showVictoryBadge, setShowVictoryBadge] = useState(false);
 
   // Load saved game state
   useEffect(() => {
@@ -91,23 +148,39 @@ export function ChessGame({ onBack }: ChessGameProps) {
     let score = 0;
     const board = game.board();
     
-    const pieceValues: { [key: string]: number } = {
-      'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9, 'k': 0,
-      'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0
-    };
-
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 8; j++) {
-        const piece = board[i][j];
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = board[row][col];
         if (piece) {
-          const value = pieceValues[piece.type];
+          const pieceValue = PIECE_VALUES[piece.type];
+          let positionValue = 0;
+          
+          // Add position bonus for pawns and knights
+          if (piece.type === 'p' && PIECE_SQUARE_TABLES.p) {
+            const index = piece.color === 'w' ? row * 8 + col : (7 - row) * 8 + col;
+            positionValue = PIECE_SQUARE_TABLES.p[index];
+          } else if (piece.type === 'n' && PIECE_SQUARE_TABLES.n) {
+            const index = row * 8 + col;
+            positionValue = PIECE_SQUARE_TABLES.n[index];
+          }
+          
+          const totalValue = pieceValue + positionValue;
+          
           if (piece.color === 'w') {
-            score += value;
+            score += totalValue;
           } else {
-            score -= value;
+            score -= totalValue;
           }
         }
       }
+    }
+
+    // Add bonus for checkmate/check
+    if (game.isCheckmate()) {
+      return game.turn() === 'w' ? -50000 : 50000;
+    }
+    if (game.isCheck()) {
+      score += game.turn() === 'w' ? -50 : 50;
     }
 
     return score;
@@ -122,16 +195,60 @@ export function ChessGame({ onBack }: ChessGameProps) {
 
     switch (difficulty) {
       case 'easy':
+        // 40% chance to make a good move, 60% random
+        if (Math.random() < 0.4) {
+          // Look for checkmate in 1
+          for (const move of possibleMoves) {
+            const gameCopy = new Chess(currentGame.fen());
+            gameCopy.move(move);
+            if (gameCopy.isCheckmate()) {
+              return move;
+            }
+          }
+          
+          // Avoid blunders (don't hang pieces)
+          const safeMoves = possibleMoves.filter(move => {
+            const gameCopy = new Chess(currentGame.fen());
+            gameCopy.move(move);
+            const evaluation = evaluatePosition(gameCopy);
+            const currentEval = evaluatePosition(currentGame);
+            return Math.abs(evaluation - currentEval) < 300; // Don't lose major pieces
+          });
+          
+          if (safeMoves.length > 0) {
+            return safeMoves[Math.floor(Math.random() * safeMoves.length)];
+          }
+        }
         return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
       
       case 'medium':
+        // Look deeper with better evaluation
         let bestMove = possibleMoves[0];
         let bestScore = isAIWhite ? -Infinity : Infinity;
         
         for (const move of possibleMoves) {
           const gameCopy = new Chess(currentGame.fen());
           gameCopy.move(move);
-          const score = evaluatePosition(gameCopy);
+          
+          // Look 1-2 moves ahead
+          let score = evaluatePosition(gameCopy);
+          
+          // Simple 1-ply lookahead
+          const nextMoves = gameCopy.moves();
+          if (nextMoves.length > 0) {
+            let nextBest = isAIWhite ? Infinity : -Infinity;
+            for (let i = 0; i < Math.min(5, nextMoves.length); i++) {
+              const nextGame = new Chess(gameCopy.fen());
+              nextGame.move(nextMoves[i]);
+              const nextScore = evaluatePosition(nextGame);
+              if (isAIWhite) {
+                nextBest = Math.min(nextBest, nextScore);
+              } else {
+                nextBest = Math.max(nextBest, nextScore);
+              }
+            }
+            score = (score + nextBest) / 2;
+          }
           
           if (isAIWhite ? score > bestScore : score < bestScore) {
             bestScore = score;
@@ -142,19 +259,23 @@ export function ChessGame({ onBack }: ChessGameProps) {
         return bestMove;
       
       case 'hard':
-        const minimax = (game: Chess, depth: number, isMaximizing: boolean): number => {
+        // Advanced minimax with alpha-beta pruning
+        const minimax = (game: Chess, depth: number, isMaximizing: boolean, alpha: number = -Infinity, beta: number = Infinity): number => {
           if (depth === 0 || game.isGameOver()) {
             return evaluatePosition(game);
           }
           
           const moves = game.moves();
+          
           if (isMaximizing) {
             let maxEvaluation = -Infinity;
             for (const move of moves) {
               const gameCopy = new Chess(game.fen());
               gameCopy.move(move);
-              const evaluation = minimax(gameCopy, depth - 1, false);
+              const evaluation = minimax(gameCopy, depth - 1, false, alpha, beta);
               maxEvaluation = Math.max(maxEvaluation, evaluation);
+              alpha = Math.max(alpha, evaluation);
+              if (beta <= alpha) break; // Alpha-beta pruning
             }
             return maxEvaluation;
           } else {
@@ -162,8 +283,10 @@ export function ChessGame({ onBack }: ChessGameProps) {
             for (const move of moves) {
               const gameCopy = new Chess(game.fen());
               gameCopy.move(move);
-              const evaluation = minimax(gameCopy, depth - 1, true);
+              const evaluation = minimax(gameCopy, depth - 1, true, alpha, beta);
               minEvaluation = Math.min(minEvaluation, evaluation);
+              beta = Math.min(beta, evaluation);
+              if (beta <= alpha) break; // Alpha-beta pruning
             }
             return minEvaluation;
           }
@@ -175,7 +298,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
         for (const move of possibleMoves) {
           const gameCopy = new Chess(currentGame.fen());
           gameCopy.move(move);
-          const score = minimax(gameCopy, 2, !isAIWhite);
+          const score = minimax(gameCopy, 3, !isAIWhite); // 3-ply search
           
           if (isAIWhite ? score > bestHardScore : score < bestHardScore) {
             bestHardScore = score;
@@ -190,8 +313,45 @@ export function ChessGame({ onBack }: ChessGameProps) {
     }
   };
 
+  const getAIThinkingTime = (difficulty: Difficulty): number => {
+    switch (difficulty) {
+      case 'easy': return 1500 + Math.random() * 1000; // 1.5-2.5s
+      case 'medium': return 2500 + Math.random() * 1500; // 2.5-4s
+      case 'hard': return 4000 + Math.random() * 2000; // 4-6s
+      default: return 3000;
+    }
+  };
+
+  const showAIRemark = (type: 'game' | 'victory' = 'game') => {
+    let remarks: string[];
+    
+    if (type === 'victory') {
+      if (game.isCheckmate()) {
+        if ((game.turn() === 'w' && playerColor === 'black') || (game.turn() === 'b' && playerColor === 'white')) {
+          remarks = VICTORY_REMARKS.player_win;
+        } else {
+          remarks = VICTORY_REMARKS.ai_win;
+        }
+      } else {
+        remarks = VICTORY_REMARKS.draw;
+      }
+    } else {
+      remarks = AI_REMARKS[difficulty];
+    }
+    
+    const randomRemark = remarks[Math.floor(Math.random() * remarks.length)];
+    setCurrentAIRemark(randomRemark);
+    
+    setTimeout(() => {
+      setCurrentAIRemark('');
+    }, type === 'victory' ? 6000 : 4000);
+  };
+
   const makeAIMove = useCallback(() => {
     if (gameOver || isPlayerTurn) return;
+    
+    setIsAIThinking(true);
+    const thinkingTime = getAIThinkingTime(difficulty);
     
     setTimeout(() => {
       const aiMove = getAIMove(game);
@@ -204,32 +364,23 @@ export function ChessGame({ onBack }: ChessGameProps) {
           
           if (gameCopy.isGameOver()) {
             setGameOver(true);
-            if (gameCopy.isCheckmate()) {
-              showSuccess(language === 'ar' ? 'فاز الذكاء الاصطناعي بالكش مات!' : 'AI won by checkmate!');
-            } else if (gameCopy.isDraw()) {
-              showInfo(language === 'ar' ? 'تعادل!' : 'Game is a draw!');
-            }
+            setShowVictoryBadge(true);
+            setTimeout(() => showAIRemark('victory'), 500);
           } else {
             setIsPlayerTurn(true);
             
-            // Show AI remark inline
-            if (Math.random() < 0.4) {
-              const remarks = AI_REMARKS[difficulty];
-              const randomRemark = remarks[Math.floor(Math.random() * remarks.length)];
-              setCurrentAIRemark(randomRemark);
-              
-              // Clear remark after 4 seconds
-              setTimeout(() => {
-                setCurrentAIRemark('');
-              }, 4000);
+            // Show AI remark occasionally after moves
+            if (Math.random() < 0.3) {
+              setTimeout(() => showAIRemark('game'), 500);
             }
           }
         } catch (error) {
           console.error('Invalid AI move:', error);
         }
       }
-    }, 1000);
-  }, [game, gameOver, isPlayerTurn, difficulty, language, showSuccess, showInfo]);
+      setIsAIThinking(false);
+    }, thinkingTime);
+  }, [game, gameOver, isPlayerTurn, difficulty]);
 
   useEffect(() => {
     if (gameStarted && !isPlayerTurn && !gameOver) {
@@ -273,11 +424,8 @@ export function ChessGame({ onBack }: ChessGameProps) {
           
           if (gameCopy.isGameOver()) {
             setGameOver(true);
-            if (gameCopy.isCheckmate()) {
-              showSuccess(language === 'ar' ? 'لقد فزت بالكش مات!' : 'You won by checkmate!');
-            } else if (gameCopy.isDraw()) {
-              showInfo(language === 'ar' ? 'تعادل!' : 'Game is a draw!');
-            }
+            setShowVictoryBadge(true);
+            setTimeout(() => showAIRemark('victory'), 500);
           }
         }
       } catch (error) {
@@ -310,39 +458,46 @@ export function ChessGame({ onBack }: ChessGameProps) {
             key={square}
             className={`
               w-12 h-12 flex items-center justify-center cursor-pointer text-3xl font-bold
-              transition-all duration-200 active:scale-95 relative
+              transition-all duration-200 active:scale-95 relative select-none touch-manipulation
               ${isLight 
                 ? 'bg-amber-100 dark:bg-amber-200' 
                 : 'bg-amber-700 dark:bg-amber-800'
               }
-              ${isSelected ? 'ring-4 ring-blue-500 bg-blue-200 dark:bg-blue-600' : ''}
+              ${isSelected ? 'ring-4 ring-blue-500 bg-blue-200 dark:bg-blue-600 transform scale-110' : ''}
               ${isPossibleMove ? 'bg-green-300 dark:bg-green-600 ring-2 ring-green-400' : ''}
               hover:brightness-110
             `}
             onTouchStart={() => handleSquareClick(square)}
             onClick={() => handleSquareClick(square)}
+            style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
           >
             {piece && (
               <span 
                 className={`
                   ${piece.color === 'w' 
-                    ? 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]' 
-                    : 'text-black drop-shadow-[0_2px_2px_rgba(255,255,255,0.8)]'
+                    ? 'text-white' 
+                    : 'text-black'
                   }
-                  ${isSelected ? 'scale-110' : ''}
-                  transition-transform duration-200
+                  ${isSelected ? 'scale-110 animate-pulse' : ''}
+                  transition-all duration-200 pointer-events-none
                 `}
                 style={{
                   filter: piece.color === 'w' 
-                    ? 'drop-shadow(1px 1px 0px #000) drop-shadow(-1px -1px 0px #000) drop-shadow(1px -1px 0px #000) drop-shadow(-1px 1px 0px #000)'
-                    : 'drop-shadow(1px 1px 0px #fff) drop-shadow(-1px -1px 0px #fff) drop-shadow(1px -1px 0px #fff) drop-shadow(-1px 1px 0px #fff)'
+                    ? 'drop-shadow(2px 2px 1px #000) drop-shadow(-1px -1px 1px #000) drop-shadow(2px -1px 1px #000) drop-shadow(-1px 2px 1px #000)'
+                    : 'drop-shadow(2px 2px 1px #fff) drop-shadow(-1px -1px 1px #fff) drop-shadow(2px -1px 1px #fff) drop-shadow(-1px 2px 1px #fff)',
+                  textShadow: piece.color === 'w' 
+                    ? '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000'
+                    : '2px 2px 0px #fff, -2px -2px 0px #fff, 2px -2px 0px #fff, -2px 2px 0px #fff'
                 }}
               >
                 {PIECE_SYMBOLS[piece.type.toUpperCase() as keyof typeof PIECE_SYMBOLS]}
               </span>
             )}
             {isPossibleMove && !piece && (
-              <div className="w-4 h-4 bg-green-500 rounded-full opacity-70"></div>
+              <div className="w-4 h-4 bg-green-500 rounded-full opacity-70 animate-pulse"></div>
+            )}
+            {isPossibleMove && piece && (
+              <div className="absolute inset-0 border-4 border-red-400 rounded-sm animate-pulse"></div>
             )}
           </div>
         );
@@ -446,13 +601,21 @@ export function ChessGame({ onBack }: ChessGameProps) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Game Header with AI Remarks */}
+    <div className="space-y-4 select-none">
+      {/* Game Header with AI Remarks and Victory Badge */}
       <div className="text-center space-y-2">
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <h3 className="text-lg font-bold">
             {language === 'ar' ? 'شطرنج' : 'Chess'}
           </h3>
+          {showVictoryBadge && gameOver && (
+            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full text-lg font-bold animate-bounce shadow-lg">
+              {game.isCheckmate() ? 
+                ((game.turn() === 'w' && playerColor === 'black') || (game.turn() === 'b' && playerColor === 'white')) ? 
+                '🏆 Checkmate! You Win!' : '🤖 AI Checkmate!' 
+                : '🤝 Draw!'}
+            </div>
+          )}
           {currentAIRemark && (
             <div className="bg-amber-100 dark:bg-amber-900/20 px-3 py-1 rounded-full text-sm text-amber-700 dark:text-amber-300 animate-fade-in max-w-xs">
               🤖 {currentAIRemark}
@@ -478,11 +641,22 @@ export function ChessGame({ onBack }: ChessGameProps) {
       {!gameOver && (
         <div className="text-center">
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            {isPlayerTurn 
-              ? (language === 'ar' ? 'دورك - اضغط على القطعة ثم على الهدف' : 'Your turn - Tap piece then target')
-              : (language === 'ar' ? 'دور الذكاء الاصطناعي...' : 'AI thinking...')
+            {isAIThinking 
+              ? (language === 'ar' ? 'الذكاء الاصطناعي يحسب...' : 'AI calculating...')
+              : isPlayerTurn 
+              ? (language === 'ar' ? 'دورك - اضغط على القطعة ثم على الهدف' : 'Your turn - Tap piece then destination')
+              : (language === 'ar' ? 'دور الذكاء الاصطناعي...' : 'AI turn...')
             }
           </p>
+          {isAIThinking && (
+            <div className="flex justify-center mt-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-amber-500 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
