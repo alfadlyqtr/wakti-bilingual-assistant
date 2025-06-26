@@ -1,7 +1,12 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { PerformanceCache } from './PerformanceCache';
 import { WaktiAIV2Service, AIMessage } from './WaktiAIV2Service';
+
+// Add interface for context result
+interface ContextResult {
+  calendarContext: any;
+  userContext: any;
+}
 
 class OptimizedWaktiAIServiceClass {
   private conversationSummaries = new Map<string, string>();
@@ -40,16 +45,16 @@ class OptimizedWaktiAIServiceClass {
     }
   }
 
-  // Enhanced smart context loading with request deduplication
-  private async getSmartContext(message: string, userId: string) {
+  // Enhanced smart context loading with request deduplication and proper typing
+  private async getSmartContext(message: string, userId: string): Promise<ContextResult> {
     if (!PerformanceCache.needsCalendarContext(message)) {
       return { calendarContext: null, userContext: null };
     }
 
     const cacheKey = `context_${userId}`;
     
-    return PerformanceCache.deduplicate(cacheKey, async () => {
-      const cached = PerformanceCache.get(cacheKey);
+    return PerformanceCache.deduplicate(cacheKey, async (): Promise<ContextResult> => {
+      const cached = PerformanceCache.get<ContextResult>(cacheKey);
       if (cached) {
         console.log('🎯 Using cached context');
         return cached;
@@ -62,7 +67,7 @@ class OptimizedWaktiAIServiceClass {
         WaktiAIV2Service.getUserContext(userId)
       ]);
 
-      const context = { calendarContext, userContext };
+      const context: ContextResult = { calendarContext, userContext };
       PerformanceCache.set(cacheKey, context, 600000); // 10 minutes
       return context;
     });
