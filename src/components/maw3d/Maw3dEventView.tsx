@@ -223,17 +223,18 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
     }
   };
 
-  // Calculate text style
+  // Calculate text style with proper type checking
   const getTextStyle = () => {
+    // Ensure text_style exists and has proper fallbacks
     const textStyle = event.text_style || {};
     return {
-      color: textStyle.color || '#000000',
-      textAlign: textStyle.alignment || 'center',
-      fontWeight: textStyle.isBold ? 'bold' : 'normal',
-      fontStyle: textStyle.isItalic ? 'italic' : 'normal',
-      textDecoration: textStyle.isUnderline ? 'underline' : 'none',
-      fontFamily: textStyle.fontFamily || 'Inter',
-      textShadow: textStyle.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'
+      color: (textStyle as any).color || '#000000',
+      textAlign: (textStyle as any).alignment || 'center',
+      fontWeight: (textStyle as any).isBold ? 'bold' : 'normal',
+      fontStyle: (textStyle as any).isItalic ? 'italic' : 'normal',
+      textDecoration: (textStyle as any).isUnderline ? 'underline' : 'none',
+      fontFamily: (textStyle as any).fontFamily || 'Inter',
+      textShadow: (textStyle as any).hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'
     };
   };
 
@@ -310,7 +311,7 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
             <h1 
               className="mb-4 leading-tight"
               style={{ 
-                fontSize: `${event.text_style?.fontSize || 24}px`,
+                fontSize: `${((event.text_style as any)?.fontSize) || 24}px`,
               }}
             >
               {event.title}
@@ -319,7 +320,7 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
               <p 
                 className="opacity-90 leading-relaxed"
                 style={{ 
-                  fontSize: `${Math.max((event.text_style?.fontSize || 24) * 0.6, 14)}px`,
+                  fontSize: `${Math.max((((event.text_style as any)?.fontSize) || 24) * 0.6, 14)}px`,
                   marginTop: '16px',
                 }}
               >
