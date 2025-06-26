@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
@@ -389,8 +390,8 @@ export class Maw3dService {
     }
   }
 
-  // Helper method to generate share URL for Maw3d events - UPDATED TO USE STANDALONE EVENT URL
+  // Helper method to generate share URL for Maw3d events - RESTORED TO ORIGINAL FORMAT
   static getShareUrl(shortId: string): string {
-    return `${window.location.origin}/event/${shortId}`;
+    return `${window.location.origin}/maw3d/${shortId}`;
   }
 }

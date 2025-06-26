@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -12,7 +13,6 @@ import Maw3dEdit from "@/pages/Maw3dEdit";
 import Maw3dManage from "@/pages/Maw3dManage";
 import Maw3dView from "@/pages/Maw3dView";
 import Maw3dEvents from "@/pages/Maw3dEvents";
-import StandaloneEvent from "@/pages/StandaloneEvent";
 import Tasjeel from "@/pages/Tasjeel";
 import WaktiAi from "@/pages/WaktiAi";
 import Settings from "@/pages/Settings";
@@ -206,20 +206,9 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
-                <Route
-                  path="/maw3d/view/:id"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Maw3dView />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
                 
-                {/* Public Standalone Event Route */}
-                <Route path="/event/:shortId" element={<StandaloneEvent />} />
+                {/* Public Maw3d View Route - handles both UUID and short_id */}
+                <Route path="/maw3d/:id" element={<Maw3dView />} />
                 
                 <Route
                   path="/tasjeel"
