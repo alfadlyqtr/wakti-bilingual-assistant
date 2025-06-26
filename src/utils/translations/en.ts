@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 export const en: { [key in TranslationKey]: string } = {
@@ -7,7 +6,7 @@ export const en: { [key in TranslationKey]: string } = {
   "contact": "Contact",
   "login": "Login",
   "logout": "Logout",
-  "register": "Register",
+  "signup": "Register",
   "profile": "Profile",
   "settings": "Settings",
   "dashboard": "Dashboard",
