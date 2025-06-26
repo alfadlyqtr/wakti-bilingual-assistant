@@ -30,6 +30,7 @@ const AI_REMARKS = {
   ]
 };
 
+// High contrast chess pieces with better visibility
 const PIECE_SYMBOLS = {
   'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
   'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
@@ -48,6 +49,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [possibleMoves, setPossibleMoves] = useState<string[]>([]);
+  const [currentAIRemark, setCurrentAIRemark] = useState<string>('');
 
   // Load saved game state
   useEffect(() => {
@@ -210,10 +212,16 @@ export function ChessGame({ onBack }: ChessGameProps) {
           } else {
             setIsPlayerTurn(true);
             
-            if (Math.random() < 0.3) {
+            // Show AI remark inline
+            if (Math.random() < 0.4) {
               const remarks = AI_REMARKS[difficulty];
               const randomRemark = remarks[Math.floor(Math.random() * remarks.length)];
-              showInfo(`AI: ${randomRemark}`);
+              setCurrentAIRemark(randomRemark);
+              
+              // Clear remark after 4 seconds
+              setTimeout(() => {
+                setCurrentAIRemark('');
+              }, 4000);
             }
           }
         } catch (error) {
@@ -301,22 +309,48 @@ export function ChessGame({ onBack }: ChessGameProps) {
           <div
             key={square}
             className={`
-              w-10 h-10 flex items-center justify-center cursor-pointer text-2xl
-              ${isLight ? 'bg-amber-100' : 'bg-amber-800'}
-              ${isSelected ? 'ring-4 ring-blue-500' : ''}
-              ${isPossibleMove ? 'bg-green-300' : ''}
-              hover:opacity-80 transition-all
+              w-12 h-12 flex items-center justify-center cursor-pointer text-3xl font-bold
+              transition-all duration-200 active:scale-95 relative
+              ${isLight 
+                ? 'bg-amber-100 dark:bg-amber-200' 
+                : 'bg-amber-700 dark:bg-amber-800'
+              }
+              ${isSelected ? 'ring-4 ring-blue-500 bg-blue-200 dark:bg-blue-600' : ''}
+              ${isPossibleMove ? 'bg-green-300 dark:bg-green-600 ring-2 ring-green-400' : ''}
+              hover:brightness-110
             `}
+            onTouchStart={() => handleSquareClick(square)}
             onClick={() => handleSquareClick(square)}
           >
-            {piece && PIECE_SYMBOLS[piece.type.toUpperCase() as keyof typeof PIECE_SYMBOLS]}
+            {piece && (
+              <span 
+                className={`
+                  ${piece.color === 'w' 
+                    ? 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]' 
+                    : 'text-black drop-shadow-[0_2px_2px_rgba(255,255,255,0.8)]'
+                  }
+                  ${isSelected ? 'scale-110' : ''}
+                  transition-transform duration-200
+                `}
+                style={{
+                  filter: piece.color === 'w' 
+                    ? 'drop-shadow(1px 1px 0px #000) drop-shadow(-1px -1px 0px #000) drop-shadow(1px -1px 0px #000) drop-shadow(-1px 1px 0px #000)'
+                    : 'drop-shadow(1px 1px 0px #fff) drop-shadow(-1px -1px 0px #fff) drop-shadow(1px -1px 0px #fff) drop-shadow(-1px 1px 0px #fff)'
+                }}
+              >
+                {PIECE_SYMBOLS[piece.type.toUpperCase() as keyof typeof PIECE_SYMBOLS]}
+              </span>
+            )}
+            {isPossibleMove && !piece && (
+              <div className="w-4 h-4 bg-green-500 rounded-full opacity-70"></div>
+            )}
           </div>
         );
       }
     }
     
     return (
-      <div className={`grid grid-cols-8 gap-0 border-2 border-amber-900 ${playerColor === 'black' ? 'rotate-180' : ''}`}>
+      <div className={`grid grid-cols-8 gap-0 border-4 border-amber-900 rounded-lg overflow-hidden ${playerColor === 'black' ? 'rotate-180' : ''}`}>
         {squares}
       </div>
     );
@@ -331,6 +365,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
     setIsPlayerTurn(playerColor === 'white');
     setSelectedSquare(null);
     setPossibleMoves([]);
+    setCurrentAIRemark('');
     
     if (playerColor === 'black') {
       setTimeout(() => {
@@ -354,6 +389,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
     setIsPlayerTurn(true);
     setSelectedSquare(null);
     setPossibleMoves([]);
+    setCurrentAIRemark('');
     localStorage.removeItem('wakti_chess_game');
   };
 
@@ -368,15 +404,17 @@ export function ChessGame({ onBack }: ChessGameProps) {
             <div className="flex gap-2">
               <Button
                 variant={playerColor === 'white' ? 'default' : 'outline'}
+                onTouchStart={() => setPlayerColor('white')}
                 onClick={() => setPlayerColor('white')}
-                className="flex-1"
+                className="flex-1 min-h-[48px]"
               >
                 {language === 'ar' ? '⚪ أبيض' : '⚪ White'}
               </Button>
               <Button
                 variant={playerColor === 'black' ? 'default' : 'outline'}
+                onTouchStart={() => setPlayerColor('black')}
                 onClick={() => setPlayerColor('black')}
-                className="flex-1"
+                className="flex-1 min-h-[48px]"
               >
                 {language === 'ar' ? '⚫ أسود' : '⚫ Black'}
               </Button>
@@ -388,7 +426,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
               {language === 'ar' ? 'مستوى الصعوبة:' : 'Difficulty:'}
             </label>
             <Select value={difficulty} onValueChange={(value: Difficulty) => setDifficulty(value)}>
-              <SelectTrigger>
+              <SelectTrigger className="min-h-[48px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -400,7 +438,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
           </div>
         </div>
 
-        <Button onClick={startGame} className="w-full">
+        <Button onClick={startGame} className="w-full min-h-[48px]">
           {language === 'ar' ? 'ابدأ اللعبة' : 'Start Game'}
         </Button>
       </div>
@@ -409,18 +447,30 @@ export function ChessGame({ onBack }: ChessGameProps) {
 
   return (
     <div className="space-y-4">
-      <div className="text-center">
-        <p className="text-lg font-medium">
+      {/* Game Header with AI Remarks */}
+      <div className="text-center space-y-2">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          <h3 className="text-lg font-bold">
+            {language === 'ar' ? 'شطرنج' : 'Chess'}
+          </h3>
+          {currentAIRemark && (
+            <div className="bg-amber-100 dark:bg-amber-900/20 px-3 py-1 rounded-full text-sm text-amber-700 dark:text-amber-300 animate-fade-in max-w-xs">
+              🤖 {currentAIRemark}
+            </div>
+          )}
+        </div>
+        
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           {language === 'ar' ? `أنت: ${playerColor === 'white' ? 'أبيض' : 'أسود'}` : `You: ${playerColor}`} | 
           {language === 'ar' ? ` الذكاء الاصطناعي: ${playerColor === 'white' ? 'أسود' : 'أبيض'}` : ` AI: ${playerColor === 'white' ? 'black' : 'white'}`}
         </p>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-xs text-slate-500 dark:text-slate-500">
           {language === 'ar' ? `الصعوبة: ${difficulty === 'easy' ? 'سهل' : difficulty === 'medium' ? 'متوسط' : 'صعب'}` : `Difficulty: ${difficulty}`}
         </p>
       </div>
 
-      <div className="flex justify-center">
-        <div className="w-fit">
+      <div className="flex justify-center overflow-x-auto">
+        <div className="min-w-fit">
           {renderBoard()}
         </div>
       </div>
@@ -429,7 +479,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
         <div className="text-center">
           <p className="text-sm text-slate-600 dark:text-slate-400">
             {isPlayerTurn 
-              ? (language === 'ar' ? 'دورك - اضغط على القطعة ثم على المربع المطلوب' : 'Your turn - Click piece then target square')
+              ? (language === 'ar' ? 'دورك - اضغط على القطعة ثم على الهدف' : 'Your turn - Tap piece then target')
               : (language === 'ar' ? 'دور الذكاء الاصطناعي...' : 'AI thinking...')
             }
           </p>
@@ -437,10 +487,10 @@ export function ChessGame({ onBack }: ChessGameProps) {
       )}
 
       <div className="flex gap-2">
-        <Button variant="outline" onClick={restartGame} className="flex-1">
+        <Button variant="outline" onClick={restartGame} className="flex-1 min-h-[48px]">
           {language === 'ar' ? 'إعادة تشغيل' : 'Restart'}
         </Button>
-        <Button variant="outline" onClick={onBack} className="flex-1">
+        <Button variant="outline" onClick={onBack} className="flex-1 min-h-[48px]">
           {language === 'ar' ? 'رجوع' : 'Back'}
         </Button>
       </div>

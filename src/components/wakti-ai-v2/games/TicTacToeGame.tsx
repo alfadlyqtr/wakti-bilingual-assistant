@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useToastHelper } from '@/hooks/use-toast-helper';
 
 interface TicTacToeGameProps {
   onBack: () => void;
@@ -33,7 +31,6 @@ const AI_REMARKS = {
 
 export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
   const { language } = useTheme();
-  const { showSuccess, showInfo } = useToastHelper();
   
   const [board, setBoard] = useState<Board>(Array(9).fill(null));
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
@@ -42,6 +39,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<Player | 'draw' | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
+  const [currentAIRemark, setCurrentAIRemark] = useState<string>('');
 
   // Load saved game state
   useEffect(() => {
@@ -219,10 +217,15 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
           setIsPlayerTurn(true);
         }
         
-        // Show AI remark
+        // Show AI remark inline
         const remarks = AI_REMARKS[difficulty];
         const randomRemark = remarks[Math.floor(Math.random() * remarks.length)];
-        showInfo(`AI: ${randomRemark}`);
+        setCurrentAIRemark(randomRemark);
+        
+        // Clear remark after 3 seconds
+        setTimeout(() => {
+          setCurrentAIRemark('');
+        }, 3000);
       }
     }, 500);
   };
@@ -233,6 +236,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     setIsPlayerTurn(playerSymbol === 'X');
     setGameOver(false);
     setWinner(null);
+    setCurrentAIRemark('');
     
     // If player chose O, AI goes first
     if (playerSymbol === 'O') {
@@ -252,6 +256,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     setIsPlayerTurn(true);
     setGameOver(false);
     setWinner(null);
+    setCurrentAIRemark('');
     localStorage.removeItem('wakti_tictactoe_game');
   };
 
@@ -276,15 +281,17 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
             <div className="flex gap-2">
               <Button
                 variant={playerSymbol === 'X' ? 'default' : 'outline'}
+                onTouchStart={() => setPlayerSymbol('X')}
                 onClick={() => setPlayerSymbol('X')}
-                className="flex-1"
+                className="flex-1 min-h-[48px]"
               >
                 X
               </Button>
               <Button
                 variant={playerSymbol === 'O' ? 'default' : 'outline'}
+                onTouchStart={() => setPlayerSymbol('O')}
                 onClick={() => setPlayerSymbol('O')}
-                className="flex-1"
+                className="flex-1 min-h-[48px]"
               >
                 O
               </Button>
@@ -296,7 +303,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
               {language === 'ar' ? 'مستوى الصعوبة:' : 'Difficulty:'}
             </label>
             <Select value={difficulty} onValueChange={(value: Difficulty) => setDifficulty(value)}>
-              <SelectTrigger>
+              <SelectTrigger className="min-h-[48px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -308,7 +315,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
           </div>
         </div>
 
-        <Button onClick={startGame} className="w-full">
+        <Button onClick={startGame} className="w-full min-h-[48px]">
           {language === 'ar' ? 'ابدأ اللعبة' : 'Start Game'}
         </Button>
       </div>
@@ -317,22 +324,35 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
 
   return (
     <div className="space-y-4">
-      <div className="text-center">
-        <p className="text-lg font-medium">
+      {/* Game Header with AI Remarks */}
+      <div className="text-center space-y-2">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          <h3 className="text-lg font-bold">
+            {language === 'ar' ? 'إكس أو' : 'Tic-Tac-Toe'}
+          </h3>
+          {currentAIRemark && (
+            <div className="bg-blue-100 dark:bg-blue-900/20 px-3 py-1 rounded-full text-sm text-blue-700 dark:text-blue-300 animate-fade-in max-w-xs">
+              🤖 {currentAIRemark}
+            </div>
+          )}
+        </div>
+        
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           {language === 'ar' ? `أنت: ${playerSymbol}` : `You: ${playerSymbol}`} | 
           {language === 'ar' ? ` الذكاء الاصطناعي: ${playerSymbol === 'X' ? 'O' : 'X'}` : ` AI: ${playerSymbol === 'X' ? 'O' : 'X'}`}
         </p>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-xs text-slate-500 dark:text-slate-500">
           {language === 'ar' ? `الصعوبة: ${difficulty === 'easy' ? 'سهل' : difficulty === 'medium' ? 'متوسط' : 'صعب'}` : `Difficulty: ${difficulty}`}
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
+      <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
         {board.map((cell, index) => (
           <Button
             key={index}
             variant="outline"
-            className="h-16 text-2xl font-bold"
+            className="h-20 w-20 text-3xl font-bold transition-all duration-200 active:scale-95 hover:bg-slate-100 dark:hover:bg-slate-800"
+            onTouchStart={() => makeMove(index)}
             onClick={() => makeMove(index)}
             disabled={!!cell || gameOver || !isPlayerTurn}
           >
@@ -346,7 +366,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
           <p className="text-xl font-bold text-green-600">
             {getWinnerMessage()}
           </p>
-          <Button onClick={restartGame}>
+          <Button onClick={restartGame} className="min-h-[48px]">
             {language === 'ar' ? 'العب مرة أخرى' : 'Play Again'}
           </Button>
         </div>
@@ -356,7 +376,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
         <div className="text-center">
           <p className="text-sm text-slate-600 dark:text-slate-400">
             {isPlayerTurn 
-              ? (language === 'ar' ? 'دورك' : 'Your turn')
+              ? (language === 'ar' ? 'دورك - اضغط على المربع' : 'Your turn - Tap a square')
               : (language === 'ar' ? 'دور الذكاء الاصطناعي...' : 'AI thinking...')
             }
           </p>
@@ -364,10 +384,10 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
       )}
 
       <div className="flex gap-2">
-        <Button variant="outline" onClick={restartGame} className="flex-1">
+        <Button variant="outline" onClick={restartGame} className="flex-1 min-h-[48px]">
           {language === 'ar' ? 'إعادة تشغيل' : 'Restart'}
         </Button>
-        <Button variant="outline" onClick={onBack} className="flex-1">
+        <Button variant="outline" onClick={onBack} className="flex-1 min-h-[48px]">
           {language === 'ar' ? 'رجوع' : 'Back'}
         </Button>
       </div>
