@@ -144,23 +144,23 @@ export function ChessGame({ onBack }: ChessGameProps) {
           
           const moves = game.moves();
           if (isMaximizing) {
-            let maxEval = -Infinity;
+            let maxEvaluation = -Infinity;
             for (const move of moves) {
               const gameCopy = new Chess(game.fen());
               gameCopy.move(move);
-              const eval = minimax(gameCopy, depth - 1, false);
-              maxEval = Math.max(maxEval, eval);
+              const evaluation = minimax(gameCopy, depth - 1, false);
+              maxEvaluation = Math.max(maxEvaluation, evaluation);
             }
-            return maxEval;
+            return maxEvaluation;
           } else {
-            let minEval = Infinity;
+            let minEvaluation = Infinity;
             for (const move of moves) {
               const gameCopy = new Chess(game.fen());
               gameCopy.move(move);
-              const eval = minimax(gameCopy, depth - 1, true);
-              minEval = Math.min(minEval, eval);
+              const evaluation = minimax(gameCopy, depth - 1, true);
+              minEvaluation = Math.min(minEvaluation, evaluation);
             }
-            return minEval;
+            return minEvaluation;
           }
         };
         
