@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -207,7 +208,7 @@ export default function Maw3dView() {
 
   if (isLoading) {
     return (
-      <div className="w-full bg-background" style={{ minHeight: '100vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div className="min-h-screen bg-background overflow-y-auto">
         <Toaster />
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto text-center space-y-4">
@@ -224,7 +225,7 @@ export default function Maw3dView() {
 
   if (!event) {
     return (
-      <div className="w-full bg-background" style={{ minHeight: '100vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div className="min-h-screen bg-background overflow-y-auto">
         <Toaster />
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto text-center space-y-4">
@@ -251,7 +252,7 @@ export default function Maw3dView() {
   };
 
   return (
-    <div className="w-full bg-background" style={{ minHeight: '100vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+    <div className="min-h-screen bg-background overflow-y-auto">
       <Toaster />
       <div className="container mx-auto px-4 py-8 pb-32">
         <div className="max-w-2xl mx-auto space-y-6">
