@@ -30,7 +30,7 @@ class OptimizedWaktiAIServiceClass {
     }
 
     const cacheKey = `context_${userId}`;
-    const cached = PerformanceCache.get(cacheKey);
+    const cached = PerformanceCache.get<{ calendarContext: any; userContext: any }>(cacheKey);
     if (cached) return cached;
 
     console.log('🧠 Loading calendar context for relevant query:', message.slice(0, 50));

@@ -14,19 +14,23 @@ interface OptimizedEventCardProps {
 // Memoized background style computation
 const useOptimizedStyles = (event: Maw3dEvent) => {
   return useMemo(() => {
-    const hasImage = event.background_image_url;
+    const hasImage = event.background_type === 'image' && event.background_value;
     
     const backgroundStyle = hasImage ? {
-      backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)), url(${event.background_image_url})`,
+      backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)), url(${event.background_value})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat'
     } : {
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      background: event.background_type === 'gradient' 
+        ? event.background_value 
+        : event.background_type === 'color' 
+        ? event.background_value 
+        : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
     };
 
     const blurredStyle = hasImage ? {
-      backgroundImage: `url(${event.background_image_url})`,
+      backgroundImage: `url(${event.background_value})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       filter: 'blur(10px)',
@@ -34,7 +38,7 @@ const useOptimizedStyles = (event: Maw3dEvent) => {
     } : {};
 
     return { backgroundStyle, blurredStyle, hasImage };
-  }, [event.background_image_url]);
+  }, [event.background_type, event.background_value]);
 };
 
 const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event, onClick }) => {
@@ -123,7 +127,7 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-sm">
                   <Users className="h-4 w-4 text-pink-300" />
-                  <span>{event.rsvp_count || 0} attending</span>
+                  <span>0 attending</span>
                 </div>
                 
                 <Badge 

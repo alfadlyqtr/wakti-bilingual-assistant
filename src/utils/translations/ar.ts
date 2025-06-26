@@ -1,4 +1,3 @@
-
 import { authAr } from "./modules/ar/auth";
 import { commonAr } from "./modules/ar/common";
 import { navigationAr } from "./modules/ar/navigation";
@@ -41,4 +40,14 @@ export const ar = {
   ...legalAr,
   ...billingAr,
   ...confirmationAr,
+  
+  errorLoadingEvents: "خطأ في تحميل الأحداث",
+  tryAgain: "حاول مرة أخرى",
+  discoverEvents: "اكتشف الأحداث الرائعة",
+  maw3dEvents: "أحداث موعد",
+  loadingEvents: "جار تحميل الأحداث...",
+  noEventsYet: "لا توجد أحداث بعد",
+  createFirstEvent: "إنشاء أول حدث للبدء!",
+  createEvent: "إنشاء حدث",
+  pullToRefresh: "اسحب للتحديث",
 };
