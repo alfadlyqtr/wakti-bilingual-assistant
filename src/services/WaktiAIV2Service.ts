@@ -1,5 +1,4 @@
 import { supabase } from '@/integrations/supabase/client';
-import { ChatMemoryService } from './ChatMemoryService';
 
 export interface AIMessage {
   id: string;
@@ -55,160 +54,6 @@ export class WaktiAIV2ServiceClass {
   // SECURITY FIX: Get user-specific localStorage key
   private static getUserStorageKey(suffix: string): string {
     return `wakti_ai_${suffix}`;
-  }
-
-  // Enhanced buddy-chat message processing
-  private static enhanceMessageWithBuddyChat(
-    message: string, 
-    response: any, 
-    activeTrigger: string,
-    conversationContext: string
-  ): any {
-    const buddyEnhancements: any = {};
-
-    // Cross-mode suggestions
-    if (activeTrigger === 'chat') {
-      const searchTriggers = ['weather', 'news', 'current', 'latest', 'price', 'score', 'what is'];
-      const needsSearch = searchTriggers.some(trigger => 
-        message.toLowerCase().includes(trigger)
-      );
-      
-      if (needsSearch) {
-        buddyEnhancements.crossModeHint = 'search';
-      }
-    }
-
-    if (activeTrigger === 'search' && response.browsingUsed) {
-      buddyEnhancements.followUpSuggestion = this.generateSearchFollowUp(response.response);
-    }
-
-    // Conversation continuity detection
-    if (conversationContext) {
-      buddyEnhancements.conversationContinuity = this.detectTopicContinuity(
-        message, 
-        conversationContext
-      );
-    }
-
-    // Engagement level based on response content
-    buddyEnhancements.engagement = this.calculateEngagementLevel(response.response);
-
-    return {
-      ...response,
-      buddyChat: buddyEnhancements
-    };
-  }
-
-  // Generate natural follow-up suggestions for search results
-  private static generateSearchFollowUp(searchResponse: string): string {
-    const followUps = [
-      "Would you like me to search for more specific details about this?",
-      "What aspect of this interests you most?",
-      "Should I look up related information?",
-      "Would you like me to find more recent updates on this topic?",
-      "Is there a particular part you'd like me to explore further?"
-    ];
-    
-    return followUps[Math.floor(Math.random() * followUps.length)];
-  }
-
-  // Detect if user is continuing previous topic or starting new one
-  private static detectTopicContinuity(message: string, conversationContext: string): string {
-    const continuityWords = ['also', 'and', 'additionally', 'furthermore', 'more about', 'tell me more'];
-    const newTopicWords = ['now', 'instead', 'different', 'change topic', 'something else'];
-    
-    const lowerMessage = message.toLowerCase();
-    
-    if (continuityWords.some(word => lowerMessage.includes(word))) {
-      return 'continuing';
-    }
-    
-    if (newTopicWords.some(word => lowerMessage.includes(word))) {
-      return 'new_topic';
-    }
-    
-    // Check if message relates to recent conversation topics
-    const recentTopics = this.extractTopicsFromContext(conversationContext);
-    const messageWords = lowerMessage.split(' ');
-    
-    const topicOverlap = recentTopics.some(topic => 
-      messageWords.some(word => topic.includes(word) || word.includes(topic))
-    );
-    
-    return topicOverlap ? 'related' : 'new_topic';
-  }
-
-  // Extract topics from conversation context
-  private static extractTopicsFromContext(context: string): string[] {
-    const topics: string[] = [];
-    const lines = context.split('\n');
-    
-    lines.forEach(line => {
-      if (line.startsWith('Topic: ')) {
-        topics.push(line.replace('Topic: ', '').toLowerCase());
-      }
-    });
-    
-    return topics;
-  }
-
-  // Calculate engagement level based on response characteristics
-  private static calculateEngagementLevel(response: string): 'high' | 'medium' | 'low' {
-    const engagementIndicators = {
-      high: ['?', '!', 'interesting', 'exciting', 'amazing', 'curious', 'explore'],
-      medium: ['can', 'would', 'could', 'might', 'perhaps'],
-      low: ['yes', 'no', 'ok', 'simple']
-    };
-    
-    const lowerResponse = response.toLowerCase();
-    
-    for (const [level, indicators] of Object.entries(engagementIndicators)) {
-      if (indicators.some(indicator => lowerResponse.includes(indicator))) {
-        return level as 'high' | 'medium' | 'low';
-      }
-    }
-    
-    return 'medium';
-  }
-
-  // Enhanced conversation context preparation
-  private static prepareEnhancedContext(
-    userId: string, 
-    activeTrigger: string, 
-    contextMessages: any[]
-  ): string {
-    // Get enhanced memory context
-    const memoryContext = ChatMemoryService.getConversationContext(userId);
-    
-    // Combine with current session context
-    let fullContext = memoryContext;
-    
-    if (contextMessages && contextMessages.length > 0) {
-      fullContext += '\nCurrent session:\n';
-      contextMessages.slice(-5).forEach(msg => {
-        fullContext += `${msg.role}: ${msg.content}\n`;
-      });
-    }
-    
-    // Add mode-specific context hints
-    fullContext += `\nCurrent mode: ${activeTrigger}\n`;
-    fullContext += this.getModeSpecificHints(activeTrigger);
-    
-    return fullContext;
-  }
-
-  // Get mode-specific conversation hints
-  private static getModeSpecificHints(activeTrigger: string): string {
-    switch (activeTrigger) {
-      case 'chat':
-        return 'Mode context: Casual conversation mode - be warm, engaging, and naturally suggest search mode for factual queries.\n';
-      case 'search':
-        return 'Mode context: Search mode - provide informative responses and engage conversationally after search results.\n';
-      case 'image':
-        return 'Mode context: Image generation mode - focus on creative image descriptions and artistic guidance.\n';
-      default:
-        return '';
-    }
   }
 
   // Helper: Convert any attachedFiles[] with `url` and no `content` to base64 format for vision models
@@ -348,11 +193,6 @@ export class WaktiAIV2ServiceClass {
 
   sendMessageWithSearchConfirmation(message: string, conversationId: string | null, language: string = 'en') {
     return WaktiAIV2ServiceClass.sendMessageWithSearchConfirmation(message, conversationId, language);
-  }
-
-  // NEW: Clear chat memory
-  clearChatMemory(userId?: string) {
-    return ChatMemoryService.clearMemory(userId);
   }
 
   // SECURITY FIX: Enhanced static method for better conversation saving with user isolation
@@ -545,21 +385,7 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('📤 WAKTI AI V2: Sending enhanced buddy-chat message for user:', userId);
-
-      // Prepare enhanced conversation context with memory
-      const enhancedContext = this.prepareEnhancedContext(userId, activeTrigger, conversationHistory);
-      
-      // Load enhanced chat memory for better continuity
-      let chatMemory: any[] = [];
-      if (activeTrigger === 'chat') {
-        const memoryExchanges = ChatMemoryService.loadMemory(userId);
-        chatMemory = ChatMemoryService.formatForAI(memoryExchanges);
-        console.log(`🧠 Loaded ${memoryExchanges.length} enhanced chat exchanges from memory`);
-      }
-
-      // Enhanced context for the AI
-      const fullContextMessages = activeTrigger === 'chat' ? chatMemory : conversationHistory;
+      console.log('📤 WAKTI AI V2: Sending DIRECT message for user:', userId);
 
       // --- BEGIN VISION LOGIC (convert attachedFiles with url to base64 if needed) ---
       let processedAttachedFiles = attachedFiles;
@@ -579,7 +405,7 @@ export class WaktiAIV2ServiceClass {
       }
       // --- END CRITICAL VISION LOGIC ---
 
-      // CORRECTED: Use the wakti-ai-v2-brain function with enhanced buddy-chat context
+      // DIRECT CALL: Use the wakti-ai-v2-brain function directly - no optimization layers
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -587,7 +413,7 @@ export class WaktiAIV2ServiceClass {
           language,
           conversationId,
           inputType,
-          contextMessages: fullContextMessages,
+          contextMessages: conversationHistory,
           confirmSearch,
           activeTrigger,
           textGenParams,
@@ -601,9 +427,9 @@ export class WaktiAIV2ServiceClass {
           confirmReminder,
           pendingTaskData,
           pendingReminderData,
-          enhancedContext,
-          memoryStats: ChatMemoryService.getMemoryStats(userId),
-          conversationSummary: ChatMemoryService.loadConversationSummary(userId)
+          enhancedContext: '', // No complex context enhancement
+          memoryStats: {}, // No complex memory stats
+          conversationSummary: null // No conversation summary
         }
       });
 
@@ -611,23 +437,10 @@ export class WaktiAIV2ServiceClass {
         throw new Error(response.error.message || 'AI service error');
       }
 
-      // Enhance response with buddy-chat features
-      const enhancedResponse = this.enhanceMessageWithBuddyChat(
-        message, 
-        response.data, 
-        activeTrigger,
-        enhancedContext
-      );
-
-      // Save to enhanced chat memory if this was a successful chat mode interaction
-      if (activeTrigger === 'chat' && enhancedResponse?.response) {
-        ChatMemoryService.addExchange(message, enhancedResponse.response, userId);
-      }
-
-      console.log('📥 WAKTI AI V2: Received enhanced buddy-chat response');
-      return enhancedResponse;
+      console.log('📥 WAKTI AI V2: Received DIRECT response');
+      return response.data;
     } catch (error: any) {
-      console.error('WaktiAIV2Service enhanced sendMessage error:', error);
+      console.error('WaktiAIV2Service DIRECT sendMessage error:', error);
       throw error;
     }
   }

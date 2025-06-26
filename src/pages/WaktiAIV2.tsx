@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { OptimizedWaktiAIService } from '@/services/OptimizedWaktiAIService';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -36,13 +35,9 @@ const WaktiAIV2 = () => {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
 
-  // Optimized quota management
+  // Simplified quota management
   const { quota: aiQuota, fetchQuota: fetchAIQuota } = useAIQuotaManagement();
-  
-  // Simplified quota management - only voice
   const { refreshVoiceQuota } = useExtendedQuotaManagement(language);
-
-  // Translation quota management for Voice Translator
   const {
     userQuota: translationQuota,
     refreshTranslationQuota,
@@ -304,7 +299,7 @@ const WaktiAIV2 = () => {
     setSessionMessages(updatedMessages);
   };
 
-  // OPTIMIZED: Main send message handler with performance improvements
+  // SIMPLIFIED: Direct service call with minimal processing
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
@@ -316,18 +311,16 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🚀 OPTIMIZED: Wakti AI V2.5 Enhanced Processing');
+      console.log('🚀 FAST: Wakti AI Direct Processing');
 
       // Handle Voice Translator quota increment BEFORE sending
       if (inputType === 'voice') {
-        console.log('📈 Voice translation detected - checking and incrementing translation quota...');
         const canTranslate = await incrementTranslationCount();
         if (!canTranslate) {
           setIsLoading(false);
           showError(language === 'ar' ? 'تم الوصول للحد الأقصى من الترجمات' : 'Translation quota exceeded');
           return;
         }
-        console.log('✅ Voice translation quota incremented successfully');
       }
 
       const userMessage: AIMessage = {
@@ -342,18 +335,34 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // USE OPTIMIZED SERVICE with smart caching and context loading
-      const response = await OptimizedWaktiAIService.sendOptimizedMessage(
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      // DIRECT SERVICE CALL - No optimization layers
+      const response = await WaktiAIV2Service.sendMessage(
         message,
-        currentConversationId,
-        updatedSessionMessages,
+        user.id,
         language,
+        currentConversationId,
         inputType,
+        updatedSessionMessages.slice(-10), // Only last 10 messages for context
+        false, // confirmSearch
         activeTrigger,
-        attachedFiles || []
+        textGenParams,
+        attachedFiles || [],
+        null, // calendarContext - load only if needed
+        null, // userContext - load only if needed
+        true, // enableAdvancedIntegration
+        true, // enablePredictiveInsights
+        true, // enableWorkflowAutomation
+        false, // confirmTask
+        false, // confirmReminder
+        null, // pendingTaskData
+        null  // pendingReminderData
       );
 
-      console.log('✅ OPTIMIZED: Response received');
+      console.log('✅ FAST: Response received');
 
       if (response.error) {
         throw new Error(response.error);
@@ -362,7 +371,6 @@ const WaktiAIV2 = () => {
       if (response.conversationId && response.conversationId !== currentConversationId) {
         setCurrentConversationId(response.conversationId);
         loadFullConversationHistory(response.conversationId);
-        console.log('🔄 Updated conversation ID:', response.conversationId);
       }
 
       const assistantMessage: AIMessage = {
@@ -396,7 +404,6 @@ const WaktiAIV2 = () => {
 
       // Handle task/reminder confirmation
       if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
-        console.log('🔧 Setting up task/reminder confirmation UI');
         setPendingTaskData(response.pendingTaskData);
         setPendingReminderData(response.pendingReminderData);
         setShowTaskConfirmation(true);
@@ -408,7 +415,6 @@ const WaktiAIV2 = () => {
         if (newConversationId) {
           setCurrentConversationId(newConversationId);
           loadFullConversationHistory(newConversationId);
-          console.log('🆕 Set new conversation ID:', newConversationId);
           fetchConversations();
         }
       } else {
@@ -417,21 +423,18 @@ const WaktiAIV2 = () => {
         fetchConversations();
       }
 
-      // Voice Translation quota refresh with immediate UI update
+      // Voice Translation quota refresh
       if (inputType === 'voice') {
-        console.log('🔄 Voice translation completed - refreshing translation quota...');
         await refreshTranslationQuota();
-        
         const remainingTranslations = MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1;
         showSuccess(
           language === 'ar' 
-            ? `تم تنفيذ الترجمة الصوتية بنجاح وتحديث الحصة (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
-            : `Voice translation completed successfully - quota updated (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} remaining)`
+            ? `تم تنفيذ الترجمة الصوتية بنجاح (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
+            : `Voice translation completed (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} remaining)`
         );
       }
 
       if (inputType === 'voice') {
-        console.log('🔄 Voice operation completed - refreshing voice quota...');
         await refreshVoiceQuota();
       }
 
@@ -439,36 +442,8 @@ const WaktiAIV2 = () => {
         setSearchConfirmationRequired(true);
       }
 
-      if (response.fileAnalysisResults && response.fileAnalysisResults.length > 0) {
-        const successfulAnalyses = response.fileAnalysisResults.filter((result: any) => result.analysis.success);
-        if (successfulAnalyses.length > 0) {
-          showSuccess(
-            language === 'ar' 
-              ? `تم تحليل ${successfulAnalyses.length} ملف بنجاح` 
-              : `Successfully analyzed ${successfulAnalyses.length} file(s)`
-          );
-        }
-      }
-
-      if (response.workflowActions?.length > 0 || response.predictiveInsights) {
-        showSuccess(
-          language === 'ar' 
-            ? 'تم تفعيل الميزات المتقدمة للجيل الرابع' 
-            : 'Phase 4 advanced features activated'
-        );
-      }
-
-      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
-        console.log('🔧 Task/Reminder confirmation card should be shown');
-        showSuccess(
-          language === 'ar' 
-            ? 'تم تحضير البيانات للتأكيد - راجع التفاصيل وأكد الإنشاء' 
-            : 'Data prepared for confirmation - review details and confirm creation'
-        );
-      }
-
     } catch (error: any) {
-      console.error('🔄 OPTIMIZED: ❌ Enhanced system error:', error);
+      console.error('🔄 FAST: ❌ System error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
@@ -506,8 +481,6 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !conversationId) return;
 
-      console.log('💾 Saving message to conversation:', conversationId);
-
       const { error } = await supabase
         .from('ai_chat_history')
         .insert({
@@ -533,8 +506,6 @@ const WaktiAIV2 = () => {
       }
 
       await WaktiAIV2Service.updateConversationTimestamp(conversationId);
-
-      console.log('✅ Message saved successfully');
     } catch (error) {
       console.error('❌ Error in saveMessageToConversation:', error);
     }
@@ -582,7 +553,6 @@ const WaktiAIV2 = () => {
       setSessionMessages(finalMessages);
 
       if (response.quotaStatus) {
-        // Update AI quota if needed
         fetchAIQuota(true);
       }
 
