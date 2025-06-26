@@ -304,8 +304,8 @@ const WaktiAIV2 = () => {
       setStreamingMessageId(thinkingMessage.id);
       setStreamingContent('');
 
-      // Start streaming
-      const fullResponse = await WaktiAIV2Service.sendStreamingMessage(
+      // Start streaming - Fix: Use static method correctly
+      const fullResponse = await WaktiAIV2ServiceClass.sendStreamingMessage(
         message,
         language,
         currentConversationId,
