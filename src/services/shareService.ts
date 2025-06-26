@@ -1,63 +1,44 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { supabase } from "@/integrations/supabase/client";
 
 export class ShareService {
-  static generateEventLink(eventId: string, shortId?: string): string {
-    // If shortId is provided, it's a Maw3d event - use the standalone event URL format
-    if (shortId) {
-      const link = `https://wakti.qa/event/${shortId}`;
-      console.log('Generated Maw3d standalone event link:', link);
-      return link;
-    }
-    
-    // Otherwise, use the regular events URL format
-    const link = `https://wakti.qa/event/${eventId}`;
-    console.log('Generated event link:', link);
-    return link;
-  }
-
-  static async shareEvent(eventId: string, shortId?: string) {
+  // Share Maw3d event - Fixed to use correct URL format
+  static async shareEvent(eventId: string, shortId: string): Promise<void> {
     console.log('=== ShareService.shareEvent START ===');
     console.log('Called with eventId:', eventId, 'shortId:', shortId);
     
     try {
-      // Generate the appropriate link based on whether it's a Maw3d event
-      const link = this.generateEventLink(eventId, shortId);
-      console.log('Generated link for sharing:', link);
+      // Generate the correct Maw3d event URL using the /maw3d/:id route
+      const eventUrl = `${window.location.origin}/maw3d/${shortId}`;
+      console.log('Generated Maw3d event link:', eventUrl);
       
-      // Check if we can use the native share API
+      const shareData = {
+        title: 'WAKTI Event',
+        text: 'Check out this event!',
+        url: eventUrl
+      };
+      
+      console.log('Generated link for sharing:', eventUrl);
+      
+      // Check if Web Share API is available
       console.log('Checking navigator.share availability:', !!navigator.share);
       console.log('Checking navigator.canShare availability:', !!navigator.canShare);
       
       if (navigator.share) {
         console.log('Using navigator.share');
-        const shareData = {
-          title: 'WAKTI Event',
-          text: 'Check out this event!',
-          url: link,
-        };
-        
         console.log('Share data prepared:', shareData);
         
-        // Check if the data can be shared before attempting to share
-        if (navigator.canShare) {
-          const canShare = navigator.canShare(shareData);
-          console.log('Can share this data:', canShare);
-          
-          if (!canShare) {
-            console.log('Data cannot be shared, falling back to clipboard');
-            throw new Error('Data cannot be shared');
-          }
+        if (navigator.canShare && !navigator.canShare(shareData)) {
+          console.log('Data cannot be shared, falling back to clipboard');
+          throw new Error('Data cannot be shared');
         }
         
-        console.log('Attempting to share...');
+        console.log('Can share this data:', navigator.canShare ? navigator.canShare(shareData) : 'canShare not supported');
+        
         await navigator.share(shareData);
-        console.log('Share successful via navigator.share');
-        toast.success('Event shared successfully!');
+        console.log('Native share completed successfully');
       } else {
-        console.log('navigator.share not available, using clipboard');
-        throw new Error('Navigator share not available');
+        throw new Error('Web Share API not supported');
       }
     } catch (error) {
       console.error('Error in native share:', error);
@@ -65,25 +46,57 @@ export class ShareService {
       
       // Fallback to clipboard
       try {
-        const link = this.generateEventLink(eventId, shortId);
-        console.log('Attempting clipboard copy with link:', link);
-        
-        if (!navigator.clipboard) {
-          console.error('Clipboard API not available');
-          toast.error('Share feature not supported on this device');
-          return;
-        }
+        const eventUrl = `${window.location.origin}/maw3d/${shortId}`;
+        console.log('Generated Maw3d event link:', eventUrl);
+        console.log('Attempting clipboard copy with link:', eventUrl);
         
         console.log('Writing to clipboard...');
-        await navigator.clipboard.writeText(link);
+        await navigator.clipboard.writeText(eventUrl);
         console.log('Clipboard copy successful');
-        toast.success('Event link copied to clipboard!');
+        
+        // Show success message
+        if ('toast' in window) {
+          (window as any).toast?.success?.('Link copied to clipboard!');
+        }
       } catch (clipboardError) {
-        console.error('Clipboard error:', clipboardError);
-        toast.error('Failed to copy link. Please try again.');
+        console.error('Clipboard fallback failed:', clipboardError);
+        throw new Error('Failed to share event link');
       }
     }
     
     console.log('=== ShareService.shareEvent END ===');
+  }
+
+  // Share T&R task
+  static async shareTask(taskId: string, shareLink: string): Promise<void> {
+    console.log('=== ShareService.shareTask START ===');
+    console.log('Called with taskId:', taskId, 'shareLink:', shareLink);
+    
+    try {
+      const taskUrl = `${window.location.origin}/shared-task/${shareLink}`;
+      console.log('Generated task link:', taskUrl);
+      
+      const shareData = {
+        title: 'WAKTI Task',
+        text: 'Check out this shared task!',
+        url: taskUrl
+      };
+      
+      if (navigator.share) {
+        await navigator.share(shareData);
+        console.log('Task shared successfully');
+      } else {
+        // Fallback to clipboard
+        await navigator.clipboard.writeText(taskUrl);
+        if ('toast' in window) {
+          (window as any).toast?.success?.('Task link copied to clipboard!');
+        }
+      }
+    } catch (error) {
+      console.error('Error sharing task:', error);
+      throw error;
+    }
+    
+    console.log('=== ShareService.shareTask END ===');
   }
 }
