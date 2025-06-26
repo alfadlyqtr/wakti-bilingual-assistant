@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { Chess } from 'chess.js';
+// @ts-ignore - react-chessboard may not have perfect TypeScript definitions
 import { Chessboard } from 'react-chessboard';
 
 interface ChessGameProps {
