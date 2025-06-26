@@ -177,7 +177,8 @@ class OptimizedWaktiAIServiceClass {
 
       // Smart context loading with caching
       const authTime = Date.now();
-      const { calendarContext, userContext } = await this.getSmartContext(message, user.id);
+      const contextResult = await this.getSmartContext(message, user.id);
+      const { calendarContext, userContext } = contextResult;
       console.log(`🧠 Context: ${Date.now() - authTime}ms`);
 
       // Optimized message history with deduplication
