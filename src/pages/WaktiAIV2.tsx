@@ -252,11 +252,12 @@ const WaktiAIV2 = () => {
     setSessionMessages(prev => [...prev, cancelMessage]);
   };
 
-  // New state for streaming
+  // New state for streaming with enhanced performance
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState<string>('');
+  const [isStreaming, setIsStreaming] = useState(false);
 
-  // ULTRA-FAST: Streamlined message sending with optimized flow
+  // ULTRA-FAST: Enhanced streaming message sending
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
@@ -266,9 +267,10 @@ const WaktiAIV2 = () => {
 
     setIsLoading(true);
     setError(null);
+    setIsStreaming(true);
 
     try {
-      console.log('⚡ ULTRA-FAST: Message processing initiated');
+      console.log('⚡ ULTRA-FAST STREAMING: Message processing initiated');
       const startTime = Date.now();
 
       // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
@@ -289,56 +291,54 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // ULTRA-FAST: Get all messages for context (will be compressed in service)
-      const allMessages = [...conversationMessages, ...updatedSessionMessages];
+      // Create streaming placeholder
+      const streamingMessageId = `streaming-${Date.now()}`;
+      setStreamingMessageId(streamingMessageId);
+      setStreamingContent('');
 
-      // ULTRA-FAST: Direct service call with compressed context
-      const response = await WaktiAIV2Service.sendMessage(
+      // ULTRA-FAST: Start streaming response
+      const streamedResponse = await WaktiAIV2Service.sendStreamingMessage(
         message,
-        '', // userId will be resolved from cache in service
         language,
         currentConversationId,
-        inputType,
-        allMessages, // Service will compress this automatically
-        false,
         activeTrigger,
-        null,
-        attachedFiles || []
+        attachedFiles || [],
+        (content: string) => {
+          // Update streaming content in real-time
+          setStreamingContent(content);
+        },
+        (finalContent: string) => {
+          // Create final assistant message
+          const assistantMessage: AIMessage = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: finalContent,
+            timestamp: new Date(),
+            intent: 'streamed_response',
+            confidence: 'high',
+            actionTaken: false
+          };
+
+          const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
+          setSessionMessages(finalSessionMessages);
+          
+          // Clear streaming state
+          setStreamingMessageId(null);
+          setStreamingContent('');
+          setIsStreaming(false);
+          
+          const responseTime = Date.now() - startTime;
+          console.log(`⚡ ULTRA-FAST STREAMING: Total response time: ${responseTime}ms`);
+        },
+        (error: string) => {
+          console.error('⚡ STREAMING ERROR:', error);
+          setError(error);
+          setStreamingMessageId(null);
+          setStreamingContent('');
+          setIsStreaming(false);
+          showError(error || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message'));
+        }
       );
-
-      const responseTime = Date.now() - startTime;
-      console.log(`⚡ ULTRA-FAST: Total response time: ${responseTime}ms`);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      // ULTRA-FAST: Create assistant message
-      const assistantMessage: AIMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: response.response,
-        timestamp: new Date(),
-        intent: response.intent,
-        confidence: response.confidence as 'high' | 'medium' | 'low',
-        actionTaken: response.actionTaken,
-        browsingUsed: response.browsingUsed,
-        browsingData: response.browsingData,
-        imageUrl: response.imageUrl,
-        needsConfirmation: response.needsConfirmation,
-        pendingTaskData: response.pendingTaskData,
-        pendingReminderData: response.pendingReminderData
-      };
-
-      const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
-      setSessionMessages(finalSessionMessages);
-
-      // Handle confirmations
-      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
-        setPendingTaskData(response.pendingTaskData);
-        setPendingReminderData(response.pendingReminderData);
-        setShowTaskConfirmation(true);
-      }
 
       // FIRE-AND-FORGET: Background quota updates
       if (inputType === 'voice') {
@@ -347,8 +347,11 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('⚡ ULTRA-FAST: Error:', error);
+      console.error('⚡ ULTRA-FAST STREAMING: Error:', error);
       setError(error.message || 'Failed to send message');
+      setStreamingMessageId(null);
+      setStreamingContent('');
+      setIsStreaming(false);
       showError(error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message'));
     } finally {
       setIsLoading(false);
@@ -482,7 +485,21 @@ const WaktiAIV2 = () => {
     showSuccess(language === 'ar' ? 'تم إنشاء النص' : 'Text generated');
   };
 
+  // Enhanced display messages with streaming support
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
+  
+  // Add streaming message if active
+  if (streamingMessageId && streamingContent) {
+    allDisplayMessages.push({
+      id: streamingMessageId,
+      role: 'assistant',
+      content: streamingContent,
+      timestamp: new Date(),
+      intent: 'streaming',
+      confidence: 'high',
+      isStreaming: true
+    });
+  }
 
   const handleOpenPlusDrawer = () => {
     setShowQuickActions(true);

@@ -173,7 +173,7 @@ export class WaktiAIV2ServiceClass {
     try {
       console.log('⚡ ULTRA-FAST: Message processing initiated');
       
-      // ULTRA-FAST: Check cache first for basic responses
+      // ULTRA-FAST: Check cache first for basic responses (but skip for files)
       if (!attachedFiles?.length && activeTrigger === 'chat') {
         const cachedResponse = AIResponseCache.getCachedResponse(message);
         if (cachedResponse) {
@@ -197,7 +197,7 @@ export class WaktiAIV2ServiceClass {
       // ULTRA-FAST: Compress message history
       const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory);
       
-      // ULTRA-FAST: Process optimized files efficiently
+      // ULTRA-FAST: Process attached files with document support
       let processedFiles = attachedFiles;
       if (attachedFiles?.length > 0) {
         processedFiles = await this.processOptimizedFiles(attachedFiles);
@@ -230,7 +230,7 @@ export class WaktiAIV2ServiceClass {
         throw new Error(response.error.message || 'AI service error');
       }
       
-      // Cache simple responses for future use (only basic chat)
+      // Cache simple responses for future use (only basic chat without files)
       if (activeTrigger === 'chat' && !attachedFiles?.length && message.length < 50) {
         AIResponseCache.setCachedResponse(message, response.data.response);
       }
@@ -247,27 +247,50 @@ export class WaktiAIV2ServiceClass {
     }
   }
   
-  // Process optimized files (use URLs instead of Base64)
+  // Enhanced file processing with document support
   private static async processOptimizedFiles(attachedFiles: any[]): Promise<any[]> {
     if (!attachedFiles?.length) return [];
     
     return attachedFiles.map(file => {
-      // If file is already optimized (has publicUrl), use it directly
-      if (file.optimized && file.publicUrl) {
+      // Handle different file types
+      if (file.type?.startsWith('image/')) {
+        // Image files for OpenAI Vision
+        if (file.optimized && file.publicUrl) {
+          return {
+            type: 'image_url',
+            image_url: {
+              url: file.publicUrl
+            },
+            name: file.name
+          };
+        }
+        
+        if (file.content) {
+          return {
+            type: 'image_url',
+            image_url: {
+              url: `data:${file.type};base64,${file.content}`
+            },
+            name: file.name
+          };
+        }
+      } else if (file.type === 'text/plain' || 
+                 file.type === 'application/pdf' || 
+                 file.type?.includes('document')) {
+        // Document files
         return {
-          type: file.type,
-          url: file.publicUrl,
+          type: 'document',
+          content: file.content,
           name: file.name,
-          optimized: true
+          fileType: file.type
         };
       }
       
-      // Fallback to original processing for non-optimized files
-      return file;
-    });
+      return null;
+    }).filter(Boolean);
   }
 
-  // Add streaming capability
+  // Add streaming capability with enhanced speed
   static async sendStreamingMessage(
     message: string,
     language: string = 'en',
@@ -278,19 +301,21 @@ export class WaktiAIV2ServiceClass {
     onComplete?: (content: string) => void,
     onError?: (error: string) => void
   ): Promise<string> {
-    // Check cache first
+    console.log('🚀 ULTRA-FAST STREAMING: Starting streaming response');
+    
+    // Check cache first for non-file requests
     if (!attachedFiles?.length && activeTrigger === 'chat') {
       const cachedResponse = AIResponseCache.getCachedResponse(message);
       if (cachedResponse) {
-        console.log('⚡ STREAMING CACHE HIT');
-        // Simulate streaming for cached responses
+        console.log('⚡ STREAMING CACHE HIT: Simulating stream for cached response');
+        // Simulate streaming for cached responses with ultra-fast playback
         let index = 0;
         const simulateStreaming = () => {
           if (index < cachedResponse.length) {
-            const chunk = cachedResponse.slice(0, index + 1);
+            const chunk = cachedResponse.slice(0, index + 3); // 3 chars at a time for speed
             onToken?.(chunk);
-            index += Math.random() > 0.5 ? 2 : 1; // Variable speed
-            setTimeout(simulateStreaming, 30);
+            index += 3;
+            setTimeout(simulateStreaming, 10); // Ultra-fast 10ms intervals
           } else {
             onComplete?.(cachedResponse);
           }

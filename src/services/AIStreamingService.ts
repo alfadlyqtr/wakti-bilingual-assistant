@@ -26,9 +26,12 @@ export class AIStreamingServiceClass {
     this.activeStreams.set(streamId, abortController);
 
     try {
+      console.log("🚀 STREAMING CLIENT: Starting stream request");
+      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Authentication required');
 
+      // Use the new streaming function
       const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
         method: 'POST',
         headers: {
@@ -104,6 +107,7 @@ export class AIStreamingServiceClass {
       }
       
       const errorMessage = error.message || 'Streaming failed';
+      console.error("🚀 STREAMING CLIENT ERROR:", errorMessage);
       onError?.(errorMessage);
       throw error;
     } finally {
