@@ -90,19 +90,20 @@ const OptimizedMaw3dEvents = () => {
             </div>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <Button 
               onClick={handleRefresh}
               variant="outline"
               size="sm"
               disabled={loading}
+              className="flex-1 sm:flex-none"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
             <Button 
               onClick={handleCreateEvent}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300 flex-1 sm:flex-none"
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Event
