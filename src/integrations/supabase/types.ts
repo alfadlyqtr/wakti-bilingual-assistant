@@ -325,38 +325,53 @@ export type Database = {
       }
       ai_user_knowledge: {
         Row: {
+          ai_tone: string | null
+          auto_enable: boolean | null
           communication_style: string | null
           created_at: string
           id: string
           interests: string[] | null
           main_use: string | null
+          nickname: string | null
           personal_note: string | null
+          reply_style: string | null
           response_length: string | null
           role: string | null
+          traits: string[] | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          ai_tone?: string | null
+          auto_enable?: boolean | null
           communication_style?: string | null
           created_at?: string
           id?: string
           interests?: string[] | null
           main_use?: string | null
+          nickname?: string | null
           personal_note?: string | null
+          reply_style?: string | null
           response_length?: string | null
           role?: string | null
+          traits?: string[] | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          ai_tone?: string | null
+          auto_enable?: boolean | null
           communication_style?: string | null
           created_at?: string
           id?: string
           interests?: string[] | null
           main_use?: string | null
+          nickname?: string | null
           personal_note?: string | null
+          reply_style?: string | null
           response_length?: string | null
           role?: string | null
+          traits?: string[] | null
           updated_at?: string
           user_id?: string
         }
@@ -2059,6 +2074,39 @@ export type Database = {
       update_overdue_tasks: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      upsert_user_personalization: {
+        Args: {
+          p_user_id: string
+          p_nickname?: string
+          p_role?: string
+          p_main_use?: string
+          p_interests?: string[]
+          p_ai_tone?: string
+          p_reply_style?: string
+          p_traits?: string[]
+          p_communication_style?: string
+          p_response_length?: string
+          p_personal_note?: string
+          p_auto_enable?: boolean
+        }
+        Returns: {
+          id: string
+          user_id: string
+          nickname: string
+          role: string
+          main_use: string
+          interests: string[]
+          ai_tone: string
+          reply_style: string
+          traits: string[]
+          communication_style: string
+          response_length: string
+          personal_note: string
+          auto_enable: boolean
+          created_at: string
+          updated_at: string
+        }[]
       }
       user_can_access_task: {
         Args: { task_id: string }

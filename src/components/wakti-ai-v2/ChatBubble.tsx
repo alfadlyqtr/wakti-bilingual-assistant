@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
-import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy, Save, Expand } from 'lucide-react';
+import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy, Save, Expand, Speaker } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useState } from 'react';
@@ -17,6 +18,7 @@ interface ChatBubbleProps {
 export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubbleProps) {
   const { language } = useTheme();
   const isUser = message.role === 'user';
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   // Format message content with enhanced buddy-chat features
   const formatContent = (content: string) => {
@@ -45,6 +47,63 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       console.error('Failed to copy message:', error);
       toast.error(language === 'ar' ? 'خطأ' : 'Error', {
         description: language === 'ar' ? 'فشل في نسخ الرسالة' : 'Failed to copy message',
+      });
+    }
+  };
+
+  // Speak message content using browser's native TTS
+  const handleSpeak = async () => {
+    try {
+      if (!message.content || !window.speechSynthesis) {
+        toast.error(language === 'ar' ? 'خطأ' : 'Error', {
+          description: language === 'ar' ? 'ميزة النطق غير متوفرة' : 'Speech synthesis not available',
+        });
+        return;
+      }
+
+      // Stop any currently speaking text
+      window.speechSynthesis.cancel();
+
+      if (isSpeaking) {
+        setIsSpeaking(false);
+        return;
+      }
+
+      setIsSpeaking(true);
+
+      const utterance = new SpeechSynthesisUtterance(message.content);
+      
+      // Detect Arabic text and set appropriate language
+      const isArabic = /[\u0600-\u06FF]/.test(message.content);
+      utterance.lang = isArabic ? "ar-SA" : "en-US";
+      
+      // Set voice properties
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+      
+      // Handle speech events
+      utterance.onend = () => {
+        setIsSpeaking(false);
+      };
+      
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        toast.error(language === 'ar' ? 'خطأ' : 'Error', {
+          description: language === 'ar' ? 'فشل في قراءة الرسالة' : 'Failed to speak message',
+        });
+      };
+
+      window.speechSynthesis.speak(utterance);
+      
+      toast.success(language === 'ar' ? 'جاري القراءة...' : 'Speaking...', {
+        description: language === 'ar' ? 'يتم قراءة الرسالة' : 'Reading message aloud',
+      });
+
+    } catch (error) {
+      console.error('Failed to speak message:', error);
+      setIsSpeaking(false);
+      toast.error(language === 'ar' ? 'خطأ' : 'Error', {
+        description: language === 'ar' ? 'فشل في قراءة الرسالة' : 'Failed to speak message',
       });
     }
   };
@@ -272,17 +331,36 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             </div>
           </Card>
 
-          {/* Copy button for AI messages */}
+          {/* Action buttons for AI messages */}
           {!isUser && (
-            <Button
-              onClick={handleCopy}
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 mt-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Copy className="w-3 h-3 mr-1" />
-              {language === 'ar' ? 'نسخ' : 'Copy'}
-            </Button>
+            <div className="flex items-center gap-1 mt-1">
+              {/* Copy button */}
+              <Button
+                onClick={handleCopy}
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Copy className="w-3 h-3 mr-1" />
+                {language === 'ar' ? 'نسخ' : 'Copy'}
+              </Button>
+
+              {/* Speak button */}
+              <Button
+                onClick={handleSpeak}
+                variant="ghost"
+                size="sm"
+                className={`h-6 px-2 text-xs transition-colors ${
+                  isSpeaking 
+                    ? 'text-blue-600 hover:text-blue-700' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title={language === 'ar' ? 'قراءة الرسالة' : 'Speak message'}
+              >
+                <Speaker className={`w-3 h-3 mr-1 ${isSpeaking ? 'animate-pulse' : ''}`} />
+                {language === 'ar' ? 'استمع' : 'Speak'}
+              </Button>
+            </div>
           )}
 
           {/* Message timestamp */}
