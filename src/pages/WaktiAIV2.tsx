@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
+import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -253,7 +253,6 @@ const WaktiAIV2 = () => {
   };
 
   // New state for streaming
-  const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState<string>('');
 
@@ -263,21 +262,21 @@ const WaktiAIV2 = () => {
     inputType: 'text' | 'voice' = 'text',
     attachedFiles?: any[]
   ) => {
-    if ((!message.trim() && !attachedFiles?.length) || isLoading || isStreaming) return;
+    if ((!message.trim() && !attachedFiles?.length) || isLoading) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      console.log('⚡ STREAMING: Message processing initiated');
+      console.log('⚡ ULTRA-FAST: Message processing initiated');
       const startTime = Date.now();
 
-      // Voice quota check (non-blocking)
+      // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
       if (inputType === 'voice') {
         incrementTranslationCount().catch(e => console.warn('Quota check failed:', e));
       }
 
-      // Create user message immediately
+      // ULTRA-FAST: Create user message immediately
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -290,104 +289,67 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // Create thinking message
-      const thinkingMessage: AIMessage = {
-        id: `thinking-${Date.now()}`,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-        isThinking: true
-      };
+      // ULTRA-FAST: Get all messages for context (will be compressed in service)
+      const allMessages = [...conversationMessages, ...updatedSessionMessages];
 
-      setSessionMessages(prev => [...prev, thinkingMessage]);
-      setIsStreaming(true);
-      setStreamingMessageId(thinkingMessage.id);
-      setStreamingContent('');
-
-      // Start streaming - Fix: Use static method correctly
-      const fullResponse = await WaktiAIV2ServiceClass.sendStreamingMessage(
+      // ULTRA-FAST: Direct service call with compressed context
+      const response = await WaktiAIV2Service.sendMessage(
         message,
+        '', // userId will be resolved from cache in service
         language,
         currentConversationId,
+        inputType,
+        allMessages, // Service will compress this automatically
+        false,
         activeTrigger,
-        attachedFiles || [],
-        // onToken callback
-        (content: string) => {
-          setStreamingContent(content);
-          // Update the thinking message with streamed content
-          setSessionMessages(prev => prev.map(msg => 
-            msg.id === thinkingMessage.id 
-              ? { ...msg, content, isThinking: false }
-              : msg
-          ));
-        },
-        // onComplete callback
-        (finalContent: string) => {
-          setIsStreaming(false);
-          setStreamingMessageId(null);
-          setStreamingContent('');
-          
-          // Create final assistant message
-          const assistantMessage: AIMessage = {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
-            content: finalContent,
-            timestamp: new Date(),
-            intent: 'streaming_response',
-            confidence: 'high'
-          };
-
-          // Replace thinking message with final message
-          setSessionMessages(prev => prev.map(msg => 
-            msg.id === thinkingMessage.id 
-              ? assistantMessage
-              : msg
-          ));
-
-          const responseTime = Date.now() - startTime;
-          console.log(`⚡ STREAMING: Total response time: ${responseTime}ms`);
-        },
-        // onError callback
-        (error: string) => {
-          console.error('⚡ STREAMING: Error:', error);
-          setIsStreaming(false);
-          setStreamingMessageId(null);
-          setStreamingContent('');
-          
-          // Replace thinking message with error message
-          const errorMessage: AIMessage = {
-            id: `error-${Date.now()}`,
-            role: 'assistant',
-            content: language === 'ar' ? 'عذراً، حدث خطأ في الاتصال.' : 'Sorry, there was a connection error.',
-            timestamp: new Date(),
-            intent: 'error',
-            confidence: 'high'
-          };
-
-          setSessionMessages(prev => prev.map(msg => 
-            msg.id === thinkingMessage.id 
-              ? errorMessage
-              : msg
-          ));
-
-          setError(error);
-          showError(error);
-        }
+        null,
+        attachedFiles || []
       );
 
-      // Background quota updates
+      const responseTime = Date.now() - startTime;
+      console.log(`⚡ ULTRA-FAST: Total response time: ${responseTime}ms`);
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      // ULTRA-FAST: Create assistant message
+      const assistantMessage: AIMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: response.response,
+        timestamp: new Date(),
+        intent: response.intent,
+        confidence: response.confidence as 'high' | 'medium' | 'low',
+        actionTaken: response.actionTaken,
+        browsingUsed: response.browsingUsed,
+        browsingData: response.browsingData,
+        imageUrl: response.imageUrl,
+        needsConfirmation: response.needsConfirmation,
+        pendingTaskData: response.pendingTaskData,
+        pendingReminderData: response.pendingReminderData
+      };
+
+      const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
+      setSessionMessages(finalSessionMessages);
+
+      // Handle confirmations
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        setPendingTaskData(response.pendingTaskData);
+        setPendingReminderData(response.pendingReminderData);
+        setShowTaskConfirmation(true);
+      }
+
+      // FIRE-AND-FORGET: Background quota updates
       if (inputType === 'voice') {
         Promise.all([refreshTranslationQuota(), refreshVoiceQuota()])
           .catch(e => console.warn('Background quota update failed:', e));
       }
 
     } catch (error: any) {
-      console.error('⚡ STREAMING: Error:', error);
+      console.error('⚡ ULTRA-FAST: Error:', error);
       setError(error.message || 'Failed to send message');
       showError(error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message'));
-      setIsStreaming(false);
-      setStreamingMessageId(null);
-      setStreamingContent('');
     } finally {
       setIsLoading(false);
     }
@@ -549,7 +511,7 @@ const WaktiAIV2 = () => {
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[140px]">
         <ChatMessages
           sessionMessages={allDisplayMessages}
-          isLoading={isLoading || isStreaming}
+          isLoading={isLoading}
           activeTrigger={activeTrigger}
           scrollAreaRef={scrollAreaRef}
           userProfile={userProfile}
@@ -566,7 +528,7 @@ const WaktiAIV2 = () => {
         <ChatInput
           message={message}
           setMessage={setMessage}
-          isLoading={isLoading || isStreaming}
+          isLoading={isLoading}
           sessionMessages={allDisplayMessages}
           onSendMessage={handleSendMessage}
           onClearChat={handleClearChat}
@@ -591,7 +553,7 @@ const WaktiAIV2 = () => {
         onNewConversation={handleNewConversation}
         onClearChat={handleClearChat}
         sessionMessages={allDisplayMessages}
-        isLoading={isLoading || isStreaming}
+        isLoading={isLoading}
       />
     </div>
   );
