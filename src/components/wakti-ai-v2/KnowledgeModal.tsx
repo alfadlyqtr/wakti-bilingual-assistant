@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,8 +41,10 @@ import {
   TrendingUp,
   Camera,
   MessageCircle,
-  FileText
+  FileText,
+  Info
 } from 'lucide-react';
+import { PersonalizationCache } from '@/services/PersonalizationCache';
 
 interface KnowledgeModalProps {
   open: boolean;
@@ -57,6 +58,11 @@ interface UserKnowledge {
   interests?: string[];
   communication_style?: string;
   response_length?: string;
+  nickname?: string;
+  ai_tone?: string;
+  reply_style?: string;
+  traits?: string[];
+  auto_enable?: boolean;
 }
 
 export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
@@ -74,7 +80,12 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
     main_use: '',
     interests: [],
     communication_style: '',
-    response_length: ''
+    response_length: '',
+    nickname: '',
+    ai_tone: 'neutral',
+    reply_style: 'detailed',
+    traits: [],
+    auto_enable: true
   });
 
   // Professional roles with icons
@@ -160,14 +171,19 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
         console.log('Loaded existing knowledge:', data);
         setHasExistingData(true);
         
-        // Properly map database values to form state
+        // Map all database values to form state (including new personalization fields)
         setKnowledge({
           personal_note: data.personal_note || '',
           role: data.role || '',
           main_use: data.main_use || '',
           interests: Array.isArray(data.interests) ? data.interests : [],
           communication_style: data.communication_style || '',
-          response_length: data.response_length || ''
+          response_length: data.response_length || '',
+          nickname: data.nickname || '',
+          ai_tone: data.ai_tone || 'neutral',
+          reply_style: data.reply_style || 'detailed',
+          traits: Array.isArray(data.traits) ? data.traits : [],
+          auto_enable: data.auto_enable !== false
         });
       } else {
         console.log('No existing knowledge found, using defaults');
@@ -179,7 +195,12 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
           main_use: '',
           interests: [],
           communication_style: '',
-          response_length: ''
+          response_length: '',
+          nickname: '',
+          ai_tone: 'neutral',
+          reply_style: 'detailed',
+          traits: [],
+          auto_enable: true
         });
       }
     } catch (error) {
@@ -198,27 +219,41 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
     try {
       setSaving(true);
       
-      // Convert empty strings to null for database storage
-      const dataToSave = {
-        user_id: user.id,
-        personal_note: knowledge.personal_note || null,
-        role: knowledge.role || null,
-        main_use: knowledge.main_use || null,
-        interests: knowledge.interests && knowledge.interests.length > 0 ? knowledge.interests : [],
-        communication_style: knowledge.communication_style || null,
-        response_length: knowledge.response_length || null
-      };
-
-      console.log('Saving knowledge data:', dataToSave);
-
-      const { error } = await supabase
-        .from('ai_user_knowledge')
-        .upsert(dataToSave);
+      // Use the new upsert function for comprehensive save
+      const { error } = await supabase.rpc('upsert_user_personalization', {
+        p_user_id: user.id,
+        p_nickname: knowledge.nickname || null,
+        p_role: knowledge.role || null,
+        p_main_use: knowledge.main_use || null,
+        p_interests: knowledge.interests && knowledge.interests.length > 0 ? knowledge.interests : [],
+        p_ai_tone: knowledge.ai_tone || 'neutral',
+        p_reply_style: knowledge.reply_style || 'detailed',
+        p_traits: knowledge.traits && knowledge.traits.length > 0 ? knowledge.traits : [],
+        p_communication_style: knowledge.communication_style || null,
+        p_response_length: knowledge.response_length || null,
+        p_personal_note: knowledge.personal_note || null,
+        p_auto_enable: knowledge.auto_enable !== false
+      });
 
       if (error) throw error;
 
       console.log('Knowledge saved successfully');
       setHasExistingData(true);
+
+      // Update personalization cache
+      PersonalizationCache.save({
+        nickname: knowledge.nickname,
+        role: knowledge.role,
+        main_use: knowledge.main_use,
+        interests: knowledge.interests,
+        ai_tone: knowledge.ai_tone,
+        reply_style: knowledge.reply_style,
+        traits: knowledge.traits,
+        communication_style: knowledge.communication_style,
+        response_length: knowledge.response_length,
+        personal_note: knowledge.personal_note,
+        auto_enable: knowledge.auto_enable
+      });
 
       // Show success confirmation
       setSavedConfirmation(true);
@@ -303,6 +338,24 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
               </div>
             </div>
           )}
+
+          {/* Note about new personalization feature */}
+          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+            <div className="flex items-start gap-2 text-purple-600 dark:text-purple-400">
+              <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium">
+                  {language === 'ar' ? 'ميزة جديدة: تخصيص وكتي!' : 'New Feature: Personalize Wakti!'}
+                </p>
+                <p className="text-xs mt-1 opacity-90">
+                  {language === 'ar' 
+                    ? 'يمكنك الآن استخدام "تخصيص وكتي" من قائمة المحادثات للحصول على تجربة أكثر تخصيصاً'
+                    : 'You can now use "Personalize Wakti" from the conversations menu for a more customized experience'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Personal Information */}
           <div className="space-y-3">

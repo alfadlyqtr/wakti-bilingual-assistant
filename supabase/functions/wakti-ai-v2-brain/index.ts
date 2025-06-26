@@ -1,19 +1,113 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { analyzeTaskIntent } from "./taskParsing.ts";
-import { processWithBuddyChatAI } from "./chatAnalysis.ts";
-import { generateImageWithRunware } from "./imageGeneration.ts";
-import { executeRegularSearch } from "./search.ts";
-import { generateConversationId, DEEPSEEK_API_KEY, OPENAI_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY, supabase } from "./utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-auth-token, x-skip-auth',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing pipeline loaded with image optimization");
+const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
+
+console.log("🚀 WAKTI AI V2: Ultra-fast service loaded with personalization support");
+
+// Enhanced system prompt builder with personalization
+function buildPersonalizedPrompt(language: string, personalization?: any): string {
+  const basePrompt = language === 'ar' 
+    ? `أنت WAKTI، مساعد ذكي متقدم ومفيد. كن ودوداً ومساعداً في إجاباتك. استخدم نصاً عادياً واضحاً بدون رموز زائدة.`
+    : `You are WAKTI, an advanced and helpful AI assistant. Be friendly and helpful in your responses. Use clean, plain text without excessive formatting.`;
+
+  if (!personalization?.auto_enable) {
+    return basePrompt;
+  }
+
+  let personalizedPrompt = basePrompt;
+
+  // Add nickname
+  if (personalization.nickname) {
+    personalizedPrompt += language === 'ar' 
+      ? ` ناد المستخدم باسم "${personalization.nickname}".`
+      : ` Call the user "${personalization.nickname}".`;
+  }
+
+  // Add role context
+  if (personalization.role) {
+    personalizedPrompt += language === 'ar' 
+      ? ` المستخدم يعمل كـ ${personalization.role}.`
+      : ` The user works as a ${personalization.role}.`;
+  }
+
+  // Add tone adjustment
+  if (personalization.ai_tone && personalization.ai_tone !== 'neutral') {
+    const toneMap = {
+      funny: language === 'ar' ? 'مرحة' : 'funny',
+      serious: language === 'ar' ? 'جدية' : 'serious', 
+      casual: language === 'ar' ? 'عفوية' : 'casual',
+      encouraging: language === 'ar' ? 'مشجعة' : 'encouraging',
+      formal: language === 'ar' ? 'رسمية' : 'formal',
+      sassy: language === 'ar' ? 'ساخرة' : 'sassy'
+    };
+    
+    const tone = toneMap[personalization.ai_tone] || personalization.ai_tone;
+    personalizedPrompt += language === 'ar' 
+      ? ` استخدم نبرة ${tone} في ردودك.`
+      : ` Use a ${tone} tone in your responses.`;
+  }
+
+  // Add reply style
+  if (personalization.reply_style && personalization.reply_style !== 'detailed') {
+    const styleMap = {
+      short: language === 'ar' ? 'مختصرة' : 'short and concise',
+      walkthrough: language === 'ar' ? 'خطوة بخطوة' : 'step-by-step walkthrough',
+      bullet_points: language === 'ar' ? 'نقاط' : 'bullet point format'
+    };
+    
+    const style = styleMap[personalization.reply_style] || personalization.reply_style;
+    personalizedPrompt += language === 'ar' 
+      ? ` قدم إجابات ${style}.`
+      : ` Provide ${style} responses.`;
+  }
+
+  // Add traits
+  if (personalization.traits && personalization.traits.length > 0) {
+    const traitsMap = {
+      chatty: language === 'ar' ? 'ثرثار' : 'chatty',
+      witty: language === 'ar' ? 'ذكي' : 'witty',
+      straight_shooting: language === 'ar' ? 'مباشر' : 'straight-shooting',
+      encouraging: language === 'ar' ? 'مشجع' : 'encouraging',
+      gen_z: language === 'ar' ? 'بأسلوب جيل زد' : 'Gen Z style',
+      skeptical: language === 'ar' ? 'متشكك' : 'skeptical',
+      traditional: language === 'ar' ? 'تقليدي' : 'traditional',
+      forward_thinking: language === 'ar' ? 'متطلع للمستقبل' : 'forward-thinking',
+      poetic: language === 'ar' ? 'شاعري' : 'poetic'
+    };
+    
+    const mappedTraits = personalization.traits
+      .map(trait => traitsMap[trait] || trait)
+      .join(language === 'ar' ? '، ' : ', ');
+    
+    personalizedPrompt += language === 'ar' 
+      ? ` اتبع هذه السمات: ${mappedTraits}.`
+      : ` Embody these traits: ${mappedTraits}.`;
+  }
+
+  // Add custom instructions
+  if (personalization.personal_note) {
+    personalizedPrompt += language === 'ar' 
+      ? ` تعليمات إضافية: ${personalization.personal_note}`
+      : ` Additional instructions: ${personalization.personal_note}`;
+  }
+
+  console.log('🎛️ Built personalized system prompt');
+  return personalizedPrompt;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -21,236 +115,139 @@ serve(async (req) => {
   }
 
   try {
-    console.log("⚡ WAKTI AI ULTRA-FAST: Processing request with minimal overhead");
-    const startTime = Date.now();
-
-    // ULTRA-FAST: Skip full auth if cached token provided
-    const skipAuth = req.headers.get('x-skip-auth') === 'true';
-    const authToken = req.headers.get('x-auth-token');
+    console.log("🚀 ULTRA-FAST AI: Processing request with personalization");
     
-    let user;
-    if (skipAuth && authToken) {
-      // Minimal token validation instead of full getUser()
-      try {
-        const { data } = await supabase.auth.getUser(authToken);
-        user = data.user;
-      } catch (e) {
-        // Fallback to full auth if token invalid
-        const authHeader = req.headers.get('authorization');
-        if (!authHeader) throw new Error('Authentication required');
-        const { data } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-        user = data.user;
-      }
-    } else {
-      // Standard auth for non-optimized requests
-      const authHeader = req.headers.get('authorization');
-      if (!authHeader) throw new Error('Authentication required');
-      const { data } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-      user = data.user;
+    // Authenticate user
+    const authHeader = req.headers.get('authorization') || req.headers.get('x-auth-token');
+    if (!authHeader) {
+      throw new Error('Authentication required');
     }
 
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user } } = await supabase.auth.getUser(token);
     if (!user) {
-      return new Response(JSON.stringify({ 
-        error: "Invalid authentication",
-        success: false
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      throw new Error('Invalid authentication');
     }
 
     const requestBody = await req.json();
     const {
       message,
-      userId,
       language = 'en',
       conversationId = null,
-      inputType = 'text',
       activeTrigger = 'chat',
       attachedFiles = [],
       conversationSummary = '',
-      recentMessages = []
+      recentMessages = [],
+      personalization = null
     } = requestBody;
 
-    if (userId !== user.id) {
-      return new Response(JSON.stringify({ 
-        error: "User ID mismatch",
-        success: false
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
     if (!message?.trim() && !attachedFiles?.length) {
-      return new Response(JSON.stringify({ 
-        error: "Message or attachment required",
-        success: false
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      throw new Error('Message or attachment required');
+    }
+
+    console.log("🎛️ Using personalization:", personalization);
+
+    // Choose API based on files (force OpenAI for vision)
+    let apiKey = DEEPSEEK_API_KEY;
+    let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+    let model = 'deepseek-chat';
+    
+    if (!apiKey || (attachedFiles?.length > 0 && attachedFiles.some(f => f.type?.startsWith('image/')))) {
+      apiKey = OPENAI_API_KEY;
+      apiUrl = 'https://api.openai.com/v1/chat/completions';
+      model = 'gpt-4o-mini';
+    }
+    
+    if (!apiKey) {
+      throw new Error("No AI API key configured");
+    }
+
+    // Build personalized system prompt
+    const systemPrompt = buildPersonalizedPrompt(language, personalization);
+
+    // Build context from conversation history
+    let conversationContext = '';
+    if (conversationSummary) {
+      conversationContext += `Previous conversation: ${conversationSummary}\n\n`;
+    }
+    
+    if (recentMessages?.length > 0) {
+      conversationContext += 'Recent messages:\n';
+      recentMessages.forEach(msg => {
+        conversationContext += `${msg.role}: ${msg.content}\n`;
       });
+      conversationContext += '\n';
     }
 
-    console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing for user:", user.id);
-
-    // OPTIMIZED: Process attached files with URL handling
-    let processedFiles = [];
-    if (attachedFiles && attachedFiles.length > 0) {
-      processedFiles = await processAttachedFilesOptimized(attachedFiles);
-      console.log(`⚡ OPTIMIZED: Processed ${processedFiles.length} files with URL optimization`);
-    }
-
-    // ULTRA-FAST: Smart keyword detection for task creation
-    let response = '';
-    let imageUrl = null;
-    let browsingUsed = false;
-    let browsingData = null;
-    let actionTaken = null;
-    let needsConfirmation = false;
-    let pendingTaskData = null;
-    let pendingReminderData = null;
-
-    // ULTRA-FAST: Quick task detection without heavy analysis
-    const hasTaskKeywords = /create task|add task|أنشئ مهمة|create reminder|add reminder/i.test(message);
-
-    if (hasTaskKeywords) {
-      console.log("⚡ ULTRA-FAST: Task creation detected, minimal analysis");
-      const taskAnalysis = await analyzeTaskIntent(message, language);
+    // Prepare messages with file support
+    let userContent = conversationContext + message;
+    
+    if (attachedFiles?.length > 0) {
+      const contentParts = [{ type: 'text', text: userContent }];
       
-      if (taskAnalysis.isTask || taskAnalysis.isReminder) {
-        needsConfirmation = true;
-        
-        if (taskAnalysis.isTask) {
-          pendingTaskData = taskAnalysis.taskData;
-          response = language === 'ar' 
-            ? `اكتشفت أنك تريد إنشاء مهمة. راجع التفاصيل وتأكد:`
-            : `I detected you want to create a task. Please review and confirm:`;
-        } else {
-          pendingReminderData = taskAnalysis.reminderData;
-          response = language === 'ar' 
-            ? `اكتشفت أنك تريد إنشاء تذكير. راجع التفاصيل وتأكد:`
-            : `I detected you want to create a reminder. Please review and confirm:`;
+      for (const file of attachedFiles) {
+        if (file.type?.startsWith('image/') && file.content) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${file.type};base64,${file.content}`
+            }
+          });
         }
       }
+      
+      userContent = contentParts;
     }
 
-    // ULTRA-FAST: Direct processing based on trigger without analysis
-    if (!needsConfirmation) {
-      switch (activeTrigger) {
-        case 'search':
-          console.log("⚡ ULTRA-FAST: Direct search execution");
-          const searchResult = await executeRegularSearch(message, language);
-          if (searchResult.success) {
-            browsingUsed = true;
-            browsingData = searchResult.data;
-            // ULTRA-FAST: Use compressed context instead of full history
-            const context = conversationSummary ? 
-              `${conversationSummary}\n\nRecent context: ${recentMessages.slice(-2).map(m => m.content).join(' ')}\n\nSearch results: ${searchResult.context}` :
-              searchResult.context;
-            response = await processWithBuddyChatAI(
-              message, 
-              context, 
-              language, 
-              [],
-              '',
-              activeTrigger,
-              'search_results',
-              attachedFiles
-            );
-          } else {
-            response = await processWithBuddyChatAI(
-              message, 
-              conversationSummary, 
-              language, 
-              [],
-              '',
-              activeTrigger,
-              'search_failed',
-              attachedFiles
-            );
-          }
-          break;
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userContent }
+    ];
 
-        case 'image':
-          console.log("⚡ ULTRA-FAST: Direct image generation");
-          try {
-            const imageResult = await generateImageWithRunware(message, user.id, language);
-            
-            if (imageResult.success) {
-              imageUrl = imageResult.imageUrl;
-              
-              let baseResponse = language === 'ar' 
-                ? `تم إنشاء الصورة بنجاح.`
-                : `Image generated successfully.`;
+    console.log("🚀 ULTRA-FAST AI: Making API request with personalized prompt");
 
-              if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
-                baseResponse += language === 'ar'
-                  ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
-                  : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
-              }
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 2048
+      })
+    });
 
-              response = baseResponse;
-            } else {
-              response = imageResult.error;
-            }
-          } catch (error) {
-            console.error("Image generation error:", error);
-            response = language === 'ar' 
-              ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
-              : `❌ Sorry, an error occurred while generating the image.`;
-          }
-          break;
-
-        case 'chat':
-        default:
-          console.log("⚡ ULTRA-FAST: Direct chat processing with optimized files");
-          const chatContext = conversationSummary ? 
-            `${conversationSummary}\n\nRecent messages: ${recentMessages.slice(-2).map(m => `${m.role}: ${m.content}`).join('\n')}` :
-            null;
-          response = await processWithBuddyChatAI(
-            message, 
-            chatContext, 
-            language, 
-            [],
-            '',
-            activeTrigger,
-            'direct_chat',
-            processedFiles // Use optimized files
-          );
-          break;
-      }
+    if (!response.ok) {
+      throw new Error(`AI API failed: ${response.status}`);
     }
 
-    const processingTime = Date.now() - startTime;
-    console.log(`⚡ WAKTI AI ULTRA-FAST: Processed in ${processingTime}ms`);
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content;
+    
+    if (!content) {
+      throw new Error('No response from AI');
+    }
 
-    // ULTRA-FAST: Minimal response structure
-    const result = {
-      response,
-      conversationId: conversationId || generateConversationId(),
-      intent: 'processed',
+    console.log("✅ ULTRA-FAST AI: Response generated successfully");
+
+    return new Response(JSON.stringify({
+      response: content,
+      conversationId: conversationId,
+      intent: 'chat_response',
       confidence: 'high',
-      actionTaken,
-      imageUrl,
-      browsingUsed,
-      browsingData,
-      needsConfirmation,
-      pendingTaskData,
-      pendingReminderData,
       success: true,
-      processingTime
-    };
-
-    return new Response(JSON.stringify(result), {
+      personalized: !!personalization?.auto_enable
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("⚡ WAKTI AI ULTRA-FAST: Error:", error);
-    
+    console.error("🚀 ULTRA-FAST AI ERROR:", error);
     return new Response(JSON.stringify({
-      error: error.message || 'Processing error',
+      error: error.message || 'AI service error',
       success: false
     }), {
       status: 500,
@@ -258,32 +255,3 @@ serve(async (req) => {
     });
   }
 });
-
-// OPTIMIZED: Process files with URL handling instead of Base64
-async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[]> {
-  if (!attachedFiles || attachedFiles.length === 0) return [];
-
-  return attachedFiles.map(file => {
-    // If file is optimized (has URL), use it directly for OpenAI Vision
-    if (file.optimized && file.url) {
-      return {
-        type: 'image_url',
-        image_url: {
-          url: file.url
-        }
-      };
-    }
-    
-    // Fallback to existing Base64 processing for non-optimized files
-    if (file.content) {
-      return {
-        type: 'image_url',
-        image_url: {
-          url: `data:${file.type};base64,${file.content}`
-        }
-      };
-    }
-    
-    return null;
-  }).filter(Boolean);
-}
