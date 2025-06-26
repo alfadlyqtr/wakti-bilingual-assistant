@@ -29,7 +29,7 @@ export class AIStreamingServiceClass {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Authentication required');
 
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/wakti-ai-v2-brain-stream`, {
+      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
