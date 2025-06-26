@@ -1,4 +1,3 @@
-
 import React, { Suspense } from 'react';
 import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { OptimizedEventCard } from '@/components/optimized/OptimizedEventCard';
@@ -36,13 +35,13 @@ const OptimizedMaw3dEvents = () => {
   const { events, loading, error, refreshEvents } = useOptimizedMaw3dEvents();
 
   const handleEventClick = (event: any) => {
-    console.log('📱 Navigating to event:', event.id);
-    navigate(`/maw3d/${event.id}`);
+    console.log('📱 Navigating to event management:', event.id);
+    navigate(`/maw3d/manage/${event.id}`);
   };
 
   const handleCreateEvent = () => {
     console.log('📱 Navigating to create event');
-    navigate('/maw3d-create');
+    navigate('/maw3d/create');
   };
 
   const handleRefresh = async () => {
