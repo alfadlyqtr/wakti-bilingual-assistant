@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
@@ -36,7 +37,7 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { language } = useTheme();
 
-  // Auto-scroll to bottom when new messages arrive or streaming updates
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
@@ -65,74 +66,14 @@ export function ChatMessages({
               </div>
             )}
             
-            {sessionMessages.map((message, index) => {
-              // Show enhanced streaming indicator for streaming messages
-              if (message.isStreaming) {
-                return (
-                  <div key={message.id} className="flex justify-start px-2">
-                    <div className="bg-muted rounded-2xl px-4 py-3 mr-12 max-w-[85%]">
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {message.content}
-                        <div className="inline-flex items-center ml-1">
-                          <div className="flex space-x-1">
-                            <div 
-                              className="w-1 h-1 bg-primary rounded-full animate-bounce" 
-                              style={{ animationDelay: '0ms' }} 
-                            />
-                            <div 
-                              className="w-1 h-1 bg-primary rounded-full animate-bounce" 
-                              style={{ animationDelay: '150ms' }} 
-                            />
-                            <div 
-                              className="w-1 h-1 bg-primary rounded-full animate-bounce" 
-                              style={{ animationDelay: '300ms' }} 
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              // Show enhanced typing indicator for thinking messages
-              if (message.isThinking) {
-                return (
-                  <div key={message.id} className="flex justify-start px-2">
-                    <div className="bg-muted rounded-2xl px-4 py-3 mr-12 max-w-[85%]">
-                      <div className="flex items-center gap-2">
-                        <div className="flex space-x-1">
-                          <div 
-                            className="w-2 h-2 bg-primary rounded-full animate-bounce" 
-                            style={{ animationDelay: '0ms' }} 
-                          />
-                          <div 
-                            className="w-2 h-2 bg-primary rounded-full animate-bounce" 
-                            style={{ animationDelay: '150ms' }} 
-                          />
-                          <div 
-                            className="w-2 h-2 bg-primary rounded-full animate-bounce" 
-                            style={{ animationDelay: '300ms' }} 
-                          />
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {language === 'ar' ? 'WAKTI يفكر...' : 'WAKTI is thinking...'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <ChatBubble
-                  key={message.id || index}
-                  message={message}
-                  userProfile={userProfile}
-                  activeTrigger={activeTrigger}
-                />
-              );
-            })}
+            {sessionMessages.map((message, index) => (
+              <ChatBubble
+                key={message.id || index}
+                message={message}
+                userProfile={userProfile}
+                activeTrigger={activeTrigger}
+              />
+            ))}
 
             {/* Enhanced Task/Reminder Confirmation Card */}
             {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (

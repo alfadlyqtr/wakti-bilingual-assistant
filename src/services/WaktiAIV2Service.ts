@@ -1,6 +1,6 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { AIResponseCache } from './AIResponseCache';
-import { AIStreamingService } from './AIStreamingService';
 
 export interface AIMessage {
   id: string;
@@ -21,8 +21,6 @@ export interface AIMessage {
   pendingTaskData?: any;
   pendingReminderData?: any;
   attachedFiles?: any[];
-  isStreaming?: boolean;
-  isThinking?: boolean;
 }
 
 export interface AIConversation {
@@ -150,7 +148,7 @@ class LocalMemoryCache {
 }
 
 export class WaktiAIV2ServiceClass {
-  // Enhanced message sending with caching and streaming
+  // ULTRA-FAST: Enhanced message sending with aggressive caching
   static async sendMessage(
     message: string,
     userId?: string,
@@ -173,13 +171,14 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('⚡ ULTRA-FAST: Message processing initiated');
+      console.log('⚡ ULTRA-FAST AI: Message processing initiated');
+      const startTime = Date.now();
       
       // ULTRA-FAST: Check cache first for basic responses (but skip for files)
-      if (!attachedFiles?.length && activeTrigger === 'chat') {
+      if (!attachedFiles?.length && activeTrigger === 'chat' && message.length < 100) {
         const cachedResponse = AIResponseCache.getCachedResponse(message);
         if (cachedResponse) {
-          console.log('⚡ CACHE HIT: Returning cached response');
+          console.log('⚡ CACHE HIT: Returning cached response instantly');
           return {
             response: cachedResponse,
             conversationId: conversationId || this.generateConversationId(),
@@ -187,7 +186,7 @@ export class WaktiAIV2ServiceClass {
             confidence: 'high',
             success: true,
             cached: true,
-            processingTime: 0
+            processingTime: Date.now() - startTime
           };
         }
       }
@@ -206,7 +205,6 @@ export class WaktiAIV2ServiceClass {
       }
       
       // ULTRA-FAST: Direct API call with optimized payload
-      const startTime = Date.now();
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -217,7 +215,9 @@ export class WaktiAIV2ServiceClass {
           activeTrigger,
           attachedFiles: processedFiles,
           conversationSummary: summary,
-          recentMessages: recentMessages.slice(-3)
+          recentMessages: recentMessages.slice(-3),
+          // Ultra-fast mode flag
+          ultraFastMode: true
         },
         headers: {
           'x-auth-token': auth.token,
@@ -226,7 +226,7 @@ export class WaktiAIV2ServiceClass {
       });
       
       const responseTime = Date.now() - startTime;
-      console.log(`⚡ ULTRA-FAST: Response received in ${responseTime}ms`);
+      console.log(`⚡ ULTRA-FAST AI: Response received in ${responseTime}ms`);
       
       if (response.error) {
         throw new Error(response.error.message || 'AI service error');
@@ -244,7 +244,7 @@ export class WaktiAIV2ServiceClass {
       
       return response.data;
     } catch (error: any) {
-      console.error('⚡ ULTRA-FAST: Service error:', error);
+      console.error('⚡ ULTRA-FAST AI: Service error:', error);
       throw error;
     }
   }
@@ -290,53 +290,6 @@ export class WaktiAIV2ServiceClass {
       
       return null;
     }).filter(Boolean);
-  }
-
-  // Add streaming capability with enhanced speed
-  static async sendStreamingMessage(
-    message: string,
-    language: string = 'en',
-    conversationId?: string | null,
-    activeTrigger: string = 'chat',
-    attachedFiles: any[] = [],
-    onToken?: (content: string) => void,
-    onComplete?: (content: string) => void,
-    onError?: (error: string) => void
-  ): Promise<string> {
-    console.log('🚀 ULTRA-FAST STREAMING: Starting streaming response');
-    
-    // Check cache first for non-file requests
-    if (!attachedFiles?.length && activeTrigger === 'chat') {
-      const cachedResponse = AIResponseCache.getCachedResponse(message);
-      if (cachedResponse) {
-        console.log('⚡ STREAMING CACHE HIT: Simulating stream for cached response');
-        // Simulate streaming for cached responses with ultra-fast playback
-        let index = 0;
-        const simulateStreaming = () => {
-          if (index < cachedResponse.length) {
-            const chunk = cachedResponse.slice(0, index + 3); // 3 chars at a time for speed
-            onToken?.(chunk);
-            index += 3;
-            setTimeout(simulateStreaming, 10); // Ultra-fast 10ms intervals
-          } else {
-            onComplete?.(cachedResponse);
-          }
-        };
-        simulateStreaming();
-        return cachedResponse;
-      }
-    }
-
-    return AIStreamingService.streamResponse(
-      message,
-      language,
-      conversationId,
-      activeTrigger,
-      attachedFiles,
-      (response) => onToken?.(response.content),
-      (response) => onComplete?.(response.content),
-      onError
-    );
   }
 
   private static generateConversationId(): string {
