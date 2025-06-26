@@ -1,18 +1,13 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  MessageSquare, Search, Image, PenTool, Mic, Volume2, 
-  Zap, Gamepad2
-} from 'lucide-react';
+import { MessageSquare, Search, Image, PenTool, Mic, Volume2, Zap, Gamepad2 } from 'lucide-react';
 import { TextGeneratorPopup } from './TextGeneratorPopup';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 import { GameModeModal } from './GameModeModal';
-
 interface QuickActionsProps {
   onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
   activeTrigger: string;
@@ -20,89 +15,77 @@ interface QuickActionsProps {
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
   onClose?: () => void;
 }
-
-export function QuickActionsPanel({ 
-  onSendMessage, 
-  activeTrigger, 
+export function QuickActionsPanel({
+  onSendMessage,
+  activeTrigger,
   onTriggerChange,
   onTextGenerated,
   onClose
 }: QuickActionsProps) {
-  const { language } = useTheme();
+  const {
+    language
+  } = useTheme();
   const [showTextGen, setShowTextGen] = useState(false);
   const [showVoiceTranslator, setShowVoiceTranslator] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showBuyExtras, setShowBuyExtras] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
-
-  const triggerModes = [
-    {
-      id: 'chat',
-      label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
-      icon: <MessageSquare className="h-4 w-4" />,
-      activeColor: 'bg-blue-500',
-      hoverColor: 'hover:bg-blue-500/20',
-      borderColor: 'border-blue-500',
-      description: language === 'ar' ? 'محادثة عادية مع الذكاء الاصطناعي' : 'Normal chat with AI'
-    },
-    {
-      id: 'search',
-      label: language === 'ar' ? 'بحث' : 'Search',
-      icon: <Search className="h-4 w-4" />,
-      activeColor: 'bg-green-500',
-      hoverColor: 'hover:bg-green-500/20',
-      borderColor: 'border-green-500',
-      description: language === 'ar' ? 'بحث في الإنترنت' : 'Search the internet'
-    },
-    {
-      id: 'image',
-      label: language === 'ar' ? 'صورة' : 'Image',
-      icon: <Image className="h-4 w-4" />,
-      activeColor: 'bg-orange-500',
-      hoverColor: 'hover:bg-orange-500/20',
-      borderColor: 'border-orange-500',
-      description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
-    }
-  ];
-
-  const quickActions = [
-    {
-      icon: <PenTool className="h-5 w-5" />,
-      label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
-      description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
-      action: () => setShowTextGen(true),
-      color: 'bg-purple-500'
-    },
-    {
-      icon: <Volume2 className="h-5 w-5" />,
-      label: language === 'ar' ? 'مترجم صوتي' : 'Voice Translator',
-      description: language === 'ar' ? 'ترجمة فورية بالصوت' : 'Real-time voice translation',
-      action: () => setShowVoiceTranslator(true),
-      color: 'bg-indigo-500'
-    },
-    {
-      icon: <Mic className="h-5 w-5" />,
-      label: language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone',
-      description: language === 'ar' ? 'إنشاء نسخة من صوتك' : 'Create a copy of your voice',
-      action: () => setShowVoiceClone(true),
-      color: 'bg-pink-500'
-    },
-    {
-      icon: <Gamepad2 className="h-5 w-5" />,
-      label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
-      description: language === 'ar' ? 'العب ألعاب ذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
-      action: () => setShowGameMode(true),
-      color: 'bg-red-500'
-    },
-    {
-      icon: <Zap className="h-5 w-5" />,
-      label: language === 'ar' ? 'شراء إضافات' : 'Buy Extras',
-      description: language === 'ar' ? 'المزيد من الميزات المتقدمة' : 'More advanced features',
-      action: () => setShowBuyExtras(true),
-      color: 'bg-yellow-500'
-    }
-  ];
-
+  const triggerModes = [{
+    id: 'chat',
+    label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
+    icon: <MessageSquare className="h-4 w-4" />,
+    activeColor: 'bg-blue-500',
+    hoverColor: 'hover:bg-blue-500/20',
+    borderColor: 'border-blue-500',
+    description: language === 'ar' ? 'محادثة عادية مع الذكاء الاصطناعي' : 'Normal chat with AI'
+  }, {
+    id: 'search',
+    label: language === 'ar' ? 'بحث' : 'Search',
+    icon: <Search className="h-4 w-4" />,
+    activeColor: 'bg-green-500',
+    hoverColor: 'hover:bg-green-500/20',
+    borderColor: 'border-green-500',
+    description: language === 'ar' ? 'بحث في الإنترنت' : 'Search the internet'
+  }, {
+    id: 'image',
+    label: language === 'ar' ? 'صورة' : 'Image',
+    icon: <Image className="h-4 w-4" />,
+    activeColor: 'bg-orange-500',
+    hoverColor: 'hover:bg-orange-500/20',
+    borderColor: 'border-orange-500',
+    description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
+  }];
+  const quickActions = [{
+    icon: <PenTool className="h-5 w-5" />,
+    label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
+    description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
+    action: () => setShowTextGen(true),
+    color: 'bg-purple-500'
+  }, {
+    icon: <Volume2 className="h-5 w-5" />,
+    label: language === 'ar' ? 'مترجم صوتي' : 'Voice Translator',
+    description: language === 'ar' ? 'ترجمة فورية بالصوت' : 'Real-time voice translation',
+    action: () => setShowVoiceTranslator(true),
+    color: 'bg-indigo-500'
+  }, {
+    icon: <Mic className="h-5 w-5" />,
+    label: language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone',
+    description: language === 'ar' ? 'إنشاء نسخة من صوتك' : 'Create a copy of your voice',
+    action: () => setShowVoiceClone(true),
+    color: 'bg-pink-500'
+  }, {
+    icon: <Gamepad2 className="h-5 w-5" />,
+    label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
+    description: language === 'ar' ? 'العب ألعاب ذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
+    action: () => setShowGameMode(true),
+    color: 'bg-red-500'
+  }, {
+    icon: <Zap className="h-5 w-5" />,
+    label: language === 'ar' ? 'شراء إضافات' : 'Buy Extras',
+    description: language === 'ar' ? 'المزيد من الميزات المتقدمة' : 'More advanced features',
+    action: () => setShowBuyExtras(true),
+    color: 'bg-yellow-500'
+  }];
   const handleTriggerSelect = (triggerId: string) => {
     onTriggerChange(triggerId);
     console.log('✨ Quick Actions: Trigger changed to:', triggerId);
@@ -120,17 +103,11 @@ export function QuickActionsPanel({
     // DO NOT close the drawer here! Popups will remain open now.
     console.log('🔧 Quick Actions: Tool opened and drawer stays open');
   };
-
-  return (
-    <div className="h-full overflow-y-auto">
+  return <div className="h-full overflow-y-auto">
       <div className="p-4 space-y-6">
         <div className="text-center">
-          <h2 className="text-xl font-bold text-slate-700 dark:text-slate-300">
-            {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
-          </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            {language === 'ar' ? 'أدوات ذكية لتحسين تجربتك' : 'Smart tools to enhance your experience'}
-          </p>
+          
+          
         </div>
 
         {/* AI Modes */}
@@ -144,19 +121,9 @@ export function QuickActionsPanel({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {triggerModes.map((mode) => {
-              const isActive = activeTrigger === mode.id;
-              return (
-                <Button
-                  key={mode.id}
-                  onClick={() => handleTriggerSelect(mode.id)}
-                  variant="ghost"
-                  className={`w-full justify-start h-auto p-3 transition-all duration-300 ${
-                    isActive 
-                      ? `${mode.activeColor} border-2 ${mode.borderColor} text-white shadow-lg` 
-                      : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border-2 border-transparent text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`
-                  }`}
-                >
+            {triggerModes.map(mode => {
+            const isActive = activeTrigger === mode.id;
+            return <Button key={mode.id} onClick={() => handleTriggerSelect(mode.id)} variant="ghost" className={`w-full justify-start h-auto p-3 transition-all duration-300 ${isActive ? `${mode.activeColor} border-2 ${mode.borderColor} text-white shadow-lg` : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border-2 border-transparent text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`}`}>
                   <div className={`p-2 rounded-lg ${isActive ? 'bg-white/20' : mode.activeColor} text-white mr-3`}>
                     {mode.icon}
                   </div>
@@ -164,9 +131,8 @@ export function QuickActionsPanel({
                     <div className="font-medium text-sm">{mode.label}</div>
                     <div className="text-xs opacity-70">{mode.description}</div>
                   </div>
-                </Button>
-              );
-            })}
+                </Button>;
+          })}
           </CardContent>
         </Card>
 
@@ -176,12 +142,7 @@ export function QuickActionsPanel({
             {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
           </h3>
           <div className="grid gap-3">
-            {quickActions.map((action, index) => (
-              <Card 
-                key={index} 
-                className="cursor-pointer hover:shadow-md transition-all duration-300 bg-white/20 dark:bg-black/20 hover:bg-white/30 dark:hover:bg-black/30 border-white/30 dark:border-white/20 hover:border-white/40 dark:hover:border-white/30"
-                onClick={() => handleToolAction(action.action)}
-              >
+            {quickActions.map((action, index) => <Card key={index} className="cursor-pointer hover:shadow-md transition-all duration-300 bg-white/20 dark:bg-black/20 hover:bg-white/30 dark:hover:bg-black/30 border-white/30 dark:border-white/20 hover:border-white/40 dark:hover:border-white/30" onClick={() => handleToolAction(action.action)}>
                 <CardContent className="p-4">
                   <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-lg ${action.color} text-white`}>
@@ -193,42 +154,24 @@ export function QuickActionsPanel({
                     </div>
                   </div>
                 </CardContent>
-              </Card>
-            ))}
+              </Card>)}
           </div>
         </div>
 
         {/* Text Generator Popup */}
-        <TextGeneratorPopup
-          open={showTextGen}
-          onOpenChange={setShowTextGen}
-          onGenerated={onTextGenerated}
-        />
+        <TextGeneratorPopup open={showTextGen} onOpenChange={setShowTextGen} onGenerated={onTextGenerated} />
 
         {/* Voice Translator Popup */}
-        <VoiceTranslatorPopup
-          open={showVoiceTranslator}
-          onOpenChange={setShowVoiceTranslator}
-        />
+        <VoiceTranslatorPopup open={showVoiceTranslator} onOpenChange={setShowVoiceTranslator} />
 
         {/* Voice Clone Popup */}
-        <VoiceClonePopup
-          open={showVoiceClone}
-          onOpenChange={setShowVoiceClone}
-        />
+        <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
 
         {/* Game Mode Modal */}
-        <GameModeModal
-          open={showGameMode}
-          onOpenChange={setShowGameMode}
-        />
+        <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />
 
         {/* Buy Extras Popup */}
-        <BuyExtrasPopup
-          open={showBuyExtras}
-          onOpenChange={setShowBuyExtras}
-        />
+        <BuyExtrasPopup open={showBuyExtras} onOpenChange={setShowBuyExtras} />
       </div>
-    </div>
-  );
+    </div>;
 }
