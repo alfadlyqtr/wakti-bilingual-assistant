@@ -32,62 +32,261 @@ export interface AIConversation {
   message_count: number;
 }
 
-export class WaktiAIV2ServiceClass {
-  // ULTRA-FAST: Simplified localStorage operations
-  private static getUserStorageKey(suffix: string): string {
-    return `wakti_ai_${suffix}`;
+// ULTRA-FAST: Message compression utilities
+class MessageCompressor {
+  static compressHistory(messages: AIMessage[]): { summary: string; recentMessages: AIMessage[] } {
+    if (messages.length <= 5) {
+      return { summary: '', recentMessages: messages };
+    }
+
+    const recentMessages = messages.slice(-3); // Keep last 3 messages
+    const oldMessages = messages.slice(0, -3);
+    
+    // Create simple summary of older messages
+    const summary = this.createSummary(oldMessages);
+    
+    return { summary, recentMessages };
   }
 
-  // ULTRA-FAST: Direct file conversion for vision if needed
-  private static async convertFilesToBase64IfNeeded(attachedFiles: any[]): Promise<any[]> {
-    if (!attachedFiles || !Array.isArray(attachedFiles) || attachedFiles.length === 0) return [];
+  private static createSummary(messages: AIMessage[]): string {
+    if (messages.length === 0) return '';
+    
+    const topics = new Set<string>();
+    const actions = [];
+    
+    messages.forEach(msg => {
+      if (msg.intent) topics.add(msg.intent);
+      if (msg.actionTaken) actions.push(msg.content.substring(0, 50));
+    });
+    
+    let summary = `Previous conversation covered: ${Array.from(topics).join(', ')}.`;
+    if (actions.length > 0) {
+      summary += ` Actions taken: ${actions.join('; ')}.`;
+    }
+    
+    return summary;
+  }
+}
 
+// ULTRA-FAST: Auth cache manager
+class AuthCache {
+  private static cache: { userId: string; token: string; expires: number } | null = null;
+  
+  static async getValidAuth(): Promise<{ userId: string; token: string } | null> {
+    // Check cache first
+    if (this.cache && Date.now() < this.cache.expires) {
+      return { userId: this.cache.userId, token: this.cache.token };
+    }
+    
+    // Get fresh auth
+    const { data: { user, session } } = await supabase.auth.getUser();
+    if (!user || !session) return null;
+    
+    // Cache for 10 minutes
+    this.cache = {
+      userId: user.id,
+      token: session.access_token,
+      expires: Date.now() + (10 * 60 * 1000)
+    };
+    
+    return { userId: user.id, token: session.access_token };
+  }
+  
+  static clearCache() {
+    this.cache = null;
+  }
+}
+
+// ULTRA-FAST: Local memory cache
+class LocalMemoryCache {
+  private static readonly STORAGE_KEY = 'wakti_ai_memory';
+  private static readonly MAX_MESSAGES = 5;
+  
+  static saveMessages(conversationId: string | null, messages: AIMessage[]) {
+    try {
+      const memory = {
+        conversationId,
+        messages: messages.slice(-this.MAX_MESSAGES),
+        timestamp: Date.now()
+      };
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(memory));
+    } catch (e) {
+      console.warn('Failed to save local memory:', e);
+    }
+  }
+  
+  static loadMessages(): { conversationId: string | null; messages: AIMessage[] } | null {
+    try {
+      const stored = localStorage.getItem(this.STORAGE_KEY);
+      if (!stored) return null;
+      
+      const memory = JSON.parse(stored);
+      
+      // Check if memory is less than 1 hour old
+      if (Date.now() - memory.timestamp > 60 * 60 * 1000) {
+        localStorage.removeItem(this.STORAGE_KEY);
+        return null;
+      }
+      
+      return {
+        conversationId: memory.conversationId,
+        messages: memory.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }))
+      };
+    } catch (e) {
+      console.warn('Failed to load local memory:', e);
+      return null;
+    }
+  }
+  
+  static clearMemory() {
+    localStorage.removeItem(this.STORAGE_KEY);
+  }
+}
+
+export class WaktiAIV2ServiceClass {
+  // ULTRA-FAST: Streamlined message sending
+  static async sendMessage(
+    message: string,
+    userId?: string,
+    language: string = 'en',
+    conversationId?: string | null,
+    inputType: 'text' | 'voice' = 'text',
+    conversationHistory: any[] = [],
+    confirmSearch: boolean = false,
+    activeTrigger: string = 'chat',
+    textGenParams: any = null,
+    attachedFiles: any[] = [],
+    calendarContext: any = null,
+    userContext: any = null,
+    enableAdvancedIntegration: boolean = true,
+    enablePredictiveInsights: boolean = true,
+    enableWorkflowAutomation: boolean = true,
+    confirmTask: boolean = false,
+    confirmReminder: boolean = false,
+    pendingTaskData: any = null,
+    pendingReminderData: any = null
+  ) {
+    try {
+      console.log('⚡ ULTRA-FAST: Message processing initiated');
+      
+      // ULTRA-FAST: Get cached auth or fresh auth
+      const auth = await AuthCache.getValidAuth();
+      if (!auth) throw new Error('Authentication failed');
+      
+      // ULTRA-FAST: Compress message history
+      const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory);
+      
+      // ULTRA-FAST: Process attached files efficiently
+      let processedFiles = attachedFiles;
+      if (attachedFiles?.length > 0) {
+        processedFiles = await this.convertFilesToBase64IfNeeded(attachedFiles);
+      }
+      
+      // ULTRA-FAST: Direct API call with compressed payload
+      const startTime = Date.now();
+      const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message,
+          userId: auth.userId,
+          language,
+          conversationId,
+          inputType,
+          activeTrigger,
+          attachedFiles: processedFiles,
+          conversationSummary: summary,
+          recentMessages: recentMessages.slice(-3) // Only last 3 messages
+        },
+        headers: {
+          'x-auth-token': auth.token,
+          'x-skip-auth': 'true' // Skip full auth check in edge function
+        }
+      });
+      
+      const responseTime = Date.now() - startTime;
+      console.log(`⚡ ULTRA-FAST: Response received in ${responseTime}ms`);
+      
+      if (response.error) {
+        throw new Error(response.error.message || 'AI service error');
+      }
+      
+      // FIRE-AND-FORGET: Quota logging (no await)
+      this.logQuotaAsync(auth.userId, inputType, responseTime).catch(e => 
+        console.warn('Quota logging failed silently:', e)
+      );
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('⚡ ULTRA-FAST: Service error:', error);
+      throw error;
+    }
+  }
+  
+  // FIRE-AND-FORGET: Non-blocking quota logging
+  private static async logQuotaAsync(userId: string, inputType: string, responseTime: number) {
+    try {
+      // This runs in background without blocking user experience
+      setTimeout(async () => {
+        await supabase.functions.invoke('log-quota-usage', {
+          body: { userId, inputType, responseTime }
+        });
+      }, 0);
+    } catch (e) {
+      // Silent failure - never block user experience
+    }
+  }
+  
+  // ULTRA-FAST: File conversion with caching
+  private static async convertFilesToBase64IfNeeded(attachedFiles: any[]): Promise<any[]> {
+    if (!attachedFiles?.length) return [];
+    
     const processed = await Promise.all(
       attachedFiles.map(async (file) => {
-        if (file.content) {
-          return { type: file.type, content: file.content };
-        }
-        if (!file.url) return null;
+        if (file.content) return { type: file.type, content: file.content };
+        if (!file.url || !file.type?.startsWith('image/')) return null;
         
         try {
           const response = await fetch(file.url);
           const blob = await response.blob();
-          if (!file.type.startsWith('image/') && file.type !== 'text/plain') return null;
           
           return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => {
-              let result = reader.result as string;
+              const result = reader.result as string;
               const base64Index = result.indexOf('base64,');
-              if (base64Index !== -1) result = result.substring(base64Index + 7);
-              resolve({ type: file.type, content: result });
+              if (base64Index !== -1) {
+                resolve({ type: file.type, content: result.substring(base64Index + 7) });
+              } else {
+                resolve(null);
+              }
             };
             reader.onerror = () => resolve(null);
             reader.readAsDataURL(blob);
           });
         } catch (e) {
-          console.error('[WaktiAIV2Service] File conversion failed:', file.url, e);
           return null;
         }
       })
     );
-
+    
     return processed.filter(Boolean);
   }
-
-  // Instance method delegates
+  
+  // Instance methods for compatibility
   saveChatSession(messages: AIMessage[], conversationId: string | null) {
-    return WaktiAIV2ServiceClass.saveChatSession(messages, conversationId);
+    LocalMemoryCache.saveMessages(conversationId, messages);
   }
-
+  
   loadChatSession() {
-    return WaktiAIV2ServiceClass.loadChatSession();
+    return LocalMemoryCache.loadMessages();
   }
-
+  
   clearChatSession() {
-    return WaktiAIV2ServiceClass.clearChatSession();
+    LocalMemoryCache.clearMemory();
   }
-
+  
   sendMessage(
     message: string,
     userId: string,
@@ -116,151 +315,20 @@ export class WaktiAIV2ServiceClass {
       enableWorkflowAutomation, confirmTask, confirmReminder, pendingTaskData, pendingReminderData
     );
   }
-
-  getConversations() {
-    return WaktiAIV2ServiceClass.getConversations();
-  }
-
-  getConversationMessages(conversationId: string) {
-    return WaktiAIV2ServiceClass.getConversationMessages(conversationId);
-  }
-
-  deleteConversation(conversationId: string) {
-    return WaktiAIV2ServiceClass.deleteConversation(conversationId);
-  }
-
-  // ULTRA-FAST: Simplified session storage
-  static saveChatSession(messages: AIMessage[], conversationId: string | null) {
-    try {
-      const sessionData = {
-        messages: messages.slice(-20), // Keep only last 20 messages
-        conversationId,
-        timestamp: Date.now()
-      };
-      
-      const storageKey = this.getUserStorageKey('chat_session');
-      localStorage.setItem(storageKey, JSON.stringify(sessionData));
-    } catch (error) {
-      console.error('Failed to save chat session:', error);
-    }
-  }
-
-  static loadChatSession(): { messages: AIMessage[], conversationId: string | null } | null {
-    try {
-      const storageKey = this.getUserStorageKey('chat_session');
-      const sessionData = localStorage.getItem(storageKey);
-      if (!sessionData) return null;
-
-      const parsed = JSON.parse(sessionData);
-      
-      // Check if session is less than 24 hours old
-      const now = Date.now();
-      const sessionAge = now - (parsed.timestamp || 0);
-      if (sessionAge > 24 * 60 * 60 * 1000) {
-        localStorage.removeItem(storageKey);
-        return null;
-      }
-
-      if (parsed.messages) {
-        parsed.messages = parsed.messages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }));
-      }
-
-      return {
-        messages: parsed.messages || [],
-        conversationId: parsed.conversationId || null
-      };
-    } catch (error) {
-      console.error('Failed to load chat session:', error);
-      const storageKey = this.getUserStorageKey('chat_session');
-      localStorage.removeItem(storageKey);
-      return null;
-    }
-  }
-
-  static clearChatSession() {
-    try {
-      const storageKey = this.getUserStorageKey('chat_session');
-      localStorage.removeItem(storageKey);
-    } catch (error) {
-      console.error('Failed to clear chat session:', error);
-    }
-  }
-
-  // ULTRA-FAST: Direct service call with minimal overhead
-  static async sendMessage(
-    message: string,
-    userId: string,
-    language: string = 'en',
-    conversationId?: string | null,
-    inputType: 'text' | 'voice' = 'text',
-    conversationHistory: any[] = [],
-    confirmSearch: boolean = false,
-    activeTrigger: string = 'chat',
-    textGenParams: any = null,
-    attachedFiles: any[] = [],
-    calendarContext: any = null,
-    userContext: any = null,
-    enableAdvancedIntegration: boolean = true,
-    enablePredictiveInsights: boolean = true,
-    enableWorkflowAutomation: boolean = true,
-    confirmTask: boolean = false,
-    confirmReminder: boolean = false,
-    pendingTaskData: any = null,
-    pendingReminderData: any = null
-  ) {
-    try {
-      console.log('⚡ ULTRA-FAST: Direct service call initiated');
-
-      // ULTRA-FAST: Process attached files if needed
-      let processedAttachedFiles = attachedFiles;
-      if (attachedFiles && attachedFiles.length > 0) {
-        const missingBase64 = attachedFiles.some(f => f.url && !f.content && f.type?.startsWith('image/'));
-        if (missingBase64) {
-          processedAttachedFiles = await this.convertFilesToBase64IfNeeded(attachedFiles);
-        }
-      }
-
-      // ULTRA-FAST: Direct API call with minimal payload
-      const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          userId,
-          language,
-          conversationId,
-          inputType,
-          activeTrigger,
-          attachedFiles: processedAttachedFiles
-        }
-      });
-
-      if (response.error) {
-        throw new Error(response.error.message || 'AI service error');
-      }
-
-      console.log('⚡ ULTRA-FAST: Response received in record time');
-      return response.data;
-    } catch (error: any) {
-      console.error('⚡ ULTRA-FAST: Service error:', error);
-      throw error;
-    }
-  }
-
-  // ULTRA-FAST: Simplified conversation operations
+  
+  // ULTRA-FAST: Streamlined conversation operations
   static async getConversations(): Promise<AIConversation[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
+      const auth = await AuthCache.getValidAuth();
+      if (!auth) throw new Error('Authentication required');
+      
       const { data, error } = await supabase
         .from('ai_conversations')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', auth.userId)
         .order('last_message_at', { ascending: false })
-        .limit(20); // Limit to 20 most recent
-
+        .limit(20);
+      
       if (error) throw error;
       return data || [];
     } catch (error: any) {
@@ -268,7 +336,11 @@ export class WaktiAIV2ServiceClass {
       throw error;
     }
   }
-
+  
+  getConversations() {
+    return WaktiAIV2ServiceClass.getConversations();
+  }
+  
   static async getConversationMessages(conversationId: string): Promise<any[]> {
     try {
       const { data, error } = await supabase
@@ -276,8 +348,8 @@ export class WaktiAIV2ServiceClass {
         .select('*')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
-        .limit(100); // Limit to 100 messages
-
+        .limit(50);
+      
       if (error) throw error;
       return data || [];
     } catch (error: any) {
@@ -285,21 +357,28 @@ export class WaktiAIV2ServiceClass {
       throw error;
     }
   }
-
+  
+  getConversationMessages(conversationId: string) {
+    return WaktiAIV2ServiceClass.getConversationMessages(conversationId);
+  }
+  
   static async deleteConversation(conversationId: string): Promise<void> {
     try {
-      // FAST: Simple parallel deletion
       const [messagesResult, conversationResult] = await Promise.all([
         supabase.from('ai_chat_history').delete().eq('conversation_id', conversationId),
         supabase.from('ai_conversations').delete().eq('id', conversationId)
       ]);
-
+      
       if (messagesResult.error) throw messagesResult.error;
       if (conversationResult.error) throw conversationResult.error;
     } catch (error: any) {
       console.error('Error deleting conversation:', error);
       throw error;
     }
+  }
+  
+  deleteConversation(conversationId: string) {
+    return WaktiAIV2ServiceClass.deleteConversation(conversationId);
   }
 }
 

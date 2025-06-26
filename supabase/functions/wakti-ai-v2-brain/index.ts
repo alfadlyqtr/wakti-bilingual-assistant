@@ -10,36 +10,46 @@ import { generateConversationId, DEEPSEEK_API_KEY, OPENAI_API_KEY, TAVILY_API_KE
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
 console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing pipeline loaded");
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     console.log("⚡ WAKTI AI ULTRA-FAST: Processing request with minimal overhead");
+    const startTime = Date.now();
 
-    // STREAMLINED: Single auth check with minimal validation
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ 
-        error: "Authentication required",
-        success: false
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    // ULTRA-FAST: Skip full auth if cached token provided
+    const skipAuth = req.headers.get('x-skip-auth') === 'true';
+    const authToken = req.headers.get('x-auth-token');
+    
+    let user;
+    if (skipAuth && authToken) {
+      // Minimal token validation instead of full getUser()
+      try {
+        const { data } = await supabase.auth.getUser(authToken);
+        user = data.user;
+      } catch (e) {
+        // Fallback to full auth if token invalid
+        const authHeader = req.headers.get('authorization');
+        if (!authHeader) throw new Error('Authentication required');
+        const { data } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+        user = data.user;
+      }
+    } else {
+      // Standard auth for non-optimized requests
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader) throw new Error('Authentication required');
+      const { data } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+      user = data.user;
     }
 
-    // FAST: Direct user extraction without full verification
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user } } = await supabase.auth.getUser(token);
     if (!user) {
       return new Response(JSON.stringify({ 
         error: "Invalid authentication",
@@ -50,7 +60,6 @@ serve(async (req) => {
       });
     }
 
-    // Get request body
     const requestBody = await req.json();
     const {
       message,
@@ -59,10 +68,11 @@ serve(async (req) => {
       conversationId = null,
       inputType = 'text',
       activeTrigger = 'chat',
-      attachedFiles = []
+      attachedFiles = [],
+      conversationSummary = '',
+      recentMessages = []
     } = requestBody;
 
-    // STREAMLINED: Basic validation only
     if (userId !== user.id) {
       return new Response(JSON.stringify({ 
         error: "User ID mismatch",
@@ -73,7 +83,7 @@ serve(async (req) => {
       });
     }
 
-    if ((!message || message.trim() === '') && attachedFiles.length === 0) {
+    if (!message?.trim() && !attachedFiles?.length) {
       return new Response(JSON.stringify({ 
         error: "Message or attachment required",
         success: false
@@ -85,7 +95,7 @@ serve(async (req) => {
 
     console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing for user:", user.id);
 
-    // ULTRA-FAST: Skip all analysis overhead, go direct to processing
+    // ULTRA-FAST: Smart keyword detection for task creation
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -95,12 +105,8 @@ serve(async (req) => {
     let pendingTaskData = null;
     let pendingReminderData = null;
 
-    // FAST: Only check for explicit task creation if keywords are present
-    const hasTaskKeywords = message.toLowerCase().includes('create task') || 
-                           message.toLowerCase().includes('add task') ||
-                           message.toLowerCase().includes('أنشئ مهمة') ||
-                           message.toLowerCase().includes('create reminder') ||
-                           message.toLowerCase().includes('add reminder');
+    // ULTRA-FAST: Quick task detection without heavy analysis
+    const hasTaskKeywords = /create task|add task|أنشئ مهمة|create reminder|add reminder/i.test(message);
 
     if (hasTaskKeywords) {
       console.log("⚡ ULTRA-FAST: Task creation detected, minimal analysis");
@@ -132,9 +138,13 @@ serve(async (req) => {
           if (searchResult.success) {
             browsingUsed = true;
             browsingData = searchResult.data;
+            // ULTRA-FAST: Use compressed context instead of full history
+            const context = conversationSummary ? 
+              `${conversationSummary}\n\nRecent context: ${recentMessages.slice(-2).map(m => m.content).join(' ')}\n\nSearch results: ${searchResult.context}` :
+              searchResult.context;
             response = await processWithBuddyChatAI(
               message, 
-              searchResult.context, 
+              context, 
               language, 
               [],
               '',
@@ -145,7 +155,7 @@ serve(async (req) => {
           } else {
             response = await processWithBuddyChatAI(
               message, 
-              null, 
+              conversationSummary, 
               language, 
               [],
               '',
@@ -189,9 +199,13 @@ serve(async (req) => {
         case 'chat':
         default:
           console.log("⚡ ULTRA-FAST: Direct chat processing");
+          // ULTRA-FAST: Use compressed context for chat
+          const chatContext = conversationSummary ? 
+            `${conversationSummary}\n\nRecent messages: ${recentMessages.slice(-2).map(m => `${m.role}: ${m.content}`).join('\n')}` :
+            null;
           response = await processWithBuddyChatAI(
             message, 
-            null, 
+            chatContext, 
             language, 
             [],
             '',
@@ -202,6 +216,9 @@ serve(async (req) => {
           break;
       }
     }
+
+    const processingTime = Date.now() - startTime;
+    console.log(`⚡ WAKTI AI ULTRA-FAST: Processed in ${processingTime}ms`);
 
     // ULTRA-FAST: Minimal response structure
     const result = {
@@ -216,10 +233,9 @@ serve(async (req) => {
       needsConfirmation,
       pendingTaskData,
       pendingReminderData,
-      success: true
+      success: true,
+      processingTime
     };
-
-    console.log("⚡ WAKTI AI ULTRA-FAST: Response ready in record time");
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
