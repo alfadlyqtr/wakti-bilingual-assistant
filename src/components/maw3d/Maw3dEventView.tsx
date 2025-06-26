@@ -35,28 +35,53 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
   }, [id]);
 
   const fetchEvent = async () => {
+    console.log('=== PHASE 2: IMPROVED ERROR HANDLING ===');
+    
     try {
-      console.log('Fetching Maw3d event with ID:', id);
+      console.log('Starting event fetch with ID:', id);
       setError(null);
+      setLoading(true);
       
       let eventData: Maw3dEvent | null = null;
       
-      // First try by short_id (for shared links)
-      if (id && id.startsWith('maw3d_')) {
-        eventData = await Maw3dService.getEventByShortId(id);
-      } else if (id) {
-        // Try by UUID if it's a direct ID
-        eventData = await Maw3dService.getEvent(id);
-      }
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout - event loading took too long')), 10000);
+      });
+      
+      const fetchPromise = async () => {
+        // First try by short_id (for shared links)
+        if (id && id.startsWith('maw3d_')) {
+          console.log('Fetching by short_id:', id);
+          return await Maw3dService.getEventByShortId(id);
+        } else if (id) {
+          // Try by UUID if it's a direct ID
+          console.log('Fetching by UUID:', id);
+          return await Maw3dService.getEvent(id);
+        }
+        return null;
+      };
+
+      // Race the fetch against the timeout
+      eventData = await Promise.race([fetchPromise(), timeoutPromise]);
 
       if (!eventData) {
-        console.log('No Maw3d event found');
-        setError('Event not found');
+        console.log('No Maw3d event found for ID:', id);
+        setError(`Event not found. ID: ${id}`);
         toast.error('Event not found');
         return;
       }
 
-      console.log('Maw3d event data loaded successfully:', eventData);
+      console.log('=== EVENT LOADED SUCCESSFULLY ===');
+      console.log('Event data:', {
+        id: eventData.id,
+        title: eventData.title,
+        short_id: eventData.short_id,
+        event_date: eventData.event_date,
+        language: eventData.language,
+        text_style: eventData.text_style
+      });
+      
       setEvent(eventData);
 
       // For public view, we don't need creator name fetching from profiles
@@ -65,9 +90,27 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
         setCreatorName(eventData.organizer);
       }
     } catch (error) {
-      console.error('Error fetching Maw3d event:', error);
-      setError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      toast.error('Failed to load event');
+      console.error('=== ERROR IN fetchEvent ===');
+      console.error('Error details:', error);
+      
+      let errorMessage = 'Failed to load event';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Handle specific error types
+        if (error.message.includes('timeout')) {
+          errorMessage = 'Event loading timed out. Please try again.';
+        } else if (error.message.includes('PGRST116')) {
+          errorMessage = 'Event not found in database';
+        } else if (error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+      }
+      
+      console.error('Final error message:', errorMessage);
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -150,12 +193,18 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <h1 className="text-xl font-bold">Loading...</h1>
+              <h1 className="text-xl font-bold">Loading Event...</h1>
             </div>
           </header>
         )}
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center flex-col gap-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="text-sm text-muted-foreground">Loading event details...</p>
+          {id && (
+            <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+              Event ID: {id}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -180,24 +229,33 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
           </header>
         )}
         <div className="flex-1 flex items-center justify-center flex-col gap-4">
-          <p className="text-center">Event not found</p>
-          {error && (
-            <div className="text-sm text-muted-foreground bg-muted p-4 rounded max-w-md">
-              <p className="font-medium">Debug Info:</p>
-              <p>ID: {id}</p>
+          <div className="text-center max-w-md mx-auto p-6">
+            <h2 className="text-xl font-bold mb-2">Unable to Load Event</h2>
+            <p className="text-muted-foreground mb-4">{error || 'Event not found'}</p>
+            
+            <div className="text-sm text-muted-foreground bg-muted p-4 rounded mb-4">
+              <p className="font-medium">Debug Information:</p>
+              <p>Event ID: {id}</p>
               <p>Error: {error}</p>
               <p>Standalone: {standalone ? 'Yes' : 'No'}</p>
+              <p>Timestamp: {new Date().toISOString()}</p>
             </div>
-          )}
-          {standalone && (
-            <Button 
-              variant="outline" 
-              onClick={() => window.open('/', '_blank')}
-            >
-              <ExternalLink className="h-4 w-4 mr-1" />
-              Open WAKTI
-            </Button>
-          )}
+            
+            <div className="flex flex-col gap-2">
+              <Button onClick={fetchEvent} variant="outline">
+                Try Again
+              </Button>
+              {standalone && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => window.open('/', '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Open WAKTI
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );

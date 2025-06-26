@@ -111,30 +111,90 @@ export class Maw3dService {
   }
 
   static async getEventByShortId(shortId: string): Promise<Maw3dEvent | null> {
-    console.log('Fetching Maw3d event by short ID:', shortId);
+    console.log('=== PHASE 1: DEBUG getEventByShortId ===');
+    console.log('Input shortId:', shortId);
+    console.log('Type of shortId:', typeof shortId);
+    console.log('ShortId length:', shortId?.length);
+    
+    if (!shortId || typeof shortId !== 'string') {
+      console.error('Invalid shortId provided:', shortId);
+      throw new Error('Invalid shortId provided');
+    }
     
     // Clean the shortId - remove maw3d_ prefix if present for database query
     const cleanShortId = shortId.startsWith('maw3d_') ? shortId : `maw3d_${shortId}`;
     
-    console.log('Querying with clean short ID:', cleanShortId);
+    console.log('Cleaned short ID for database query:', cleanShortId);
     
-    const { data, error } = await supabase
-      .from('maw3d_events')
-      .select('*')
-      .eq('short_id', cleanShortId)
-      .single();
+    try {
+      console.log('Executing database query...');
+      const startTime = performance.now();
+      
+      const { data, error } = await supabase
+        .from('maw3d_events')
+        .select('*')
+        .eq('short_id', cleanShortId)
+        .single();
 
-    if (error) {
-      console.error('Error fetching event by short ID:', error);
-      if (error.code === 'PGRST116') {
-        console.log('Event not found with short ID:', cleanShortId);
+      const endTime = performance.now();
+      console.log(`Database query completed in ${endTime - startTime}ms`);
+
+      if (error) {
+        console.error('=== DATABASE QUERY ERROR ===');
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        
+        if (error.code === 'PGRST116') {
+          console.log('No event found with short ID:', cleanShortId);
+          return null;
+        }
+        throw error;
+      }
+      
+      console.log('=== PHASE 3: DATA VALIDATION ===');
+      console.log('Raw event data received:', data);
+      
+      if (!data) {
+        console.log('No data returned from database');
         return null;
       }
+      
+      // Validate required fields
+      const requiredFields = ['id', 'title', 'event_date', 'created_by'];
+      const missingFields = requiredFields.filter(field => !data[field]);
+      
+      if (missingFields.length > 0) {
+        console.error('Missing required fields:', missingFields);
+        throw new Error(`Event data is missing required fields: ${missingFields.join(', ')}`);
+      }
+      
+      // Validate text_style field
+      if (data.text_style && typeof data.text_style !== 'object') {
+        console.warn('text_style is not an object, converting:', data.text_style);
+        try {
+          data.text_style = JSON.parse(data.text_style);
+        } catch (e) {
+          console.error('Failed to parse text_style:', e);
+          data.text_style = {};
+        }
+      }
+      
+      console.log('=== EVENT VALIDATION SUCCESSFUL ===');
+      console.log('Event title:', data.title);
+      console.log('Event date:', data.event_date);
+      console.log('Event language:', data.language);
+      console.log('Text style:', data.text_style);
+      
+      return data;
+    } catch (error) {
+      console.error('=== UNEXPECTED ERROR IN getEventByShortId ===');
+      console.error('Error:', error);
       throw error;
     }
-    
-    console.log('Event fetched by short ID:', data);
-    return data;
   }
 
   static async getUserEvents(): Promise<Maw3dEvent[]> {
