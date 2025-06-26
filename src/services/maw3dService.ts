@@ -302,8 +302,8 @@ export class Maw3dService {
     }
   }
 
-  // Helper method to generate share URL for Maw3d events
+  // Helper method to generate share URL for Maw3d events - UPDATED TO USE STANDALONE EVENT URL
   static getShareUrl(shortId: string): string {
-    return `${window.location.origin}/maw3d/${shortId}`;
+    return `${window.location.origin}/event/${shortId}`;
   }
 }

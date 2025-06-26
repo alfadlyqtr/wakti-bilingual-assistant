@@ -1,12 +1,13 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export class ShareService {
   static generateEventLink(eventId: string, shortId?: string): string {
-    // If shortId is provided, it's a Maw3d event - use the Maw3d URL format
+    // If shortId is provided, it's a Maw3d event - use the standalone event URL format
     if (shortId) {
-      const link = `https://wakti.qa/maw3d/${shortId}`;
-      console.log('Generated Maw3d event link:', link);
+      const link = `https://wakti.qa/event/${shortId}`;
+      console.log('Generated Maw3d standalone event link:', link);
       return link;
     }
     

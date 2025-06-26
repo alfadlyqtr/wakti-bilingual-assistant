@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -372,8 +373,7 @@ const WaktiAIV2 = () => {
         actionTaken: !!msg.action_taken,
         inputType: msg.input_type as 'text' | 'voice',
         browsingUsed: msg.browsing_used,
-        browsingData: msg.browsing_data,
-        quotaStatus: msg.quota_status
+        browsingData: msg.browsing_data
       }));
       
       setConversationMessages(convertedMessages);
@@ -381,130 +381,6 @@ const WaktiAIV2 = () => {
       
     } catch (error) {
       console.error('❌ Error loading full conversation history:', error);
-    }
-  };
-
-  const saveCurrentConversationIfNeeded = async () => {
-    if (sessionMessages.length > 0 && !currentConversationId) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        await WaktiAIV2Service.saveCurrentConversationIfNeeded(user.id, sessionMessages, currentConversationId, language);
-      } catch (error) {
-        console.error('❌ Error saving current conversation:', error);
-      }
-    }
-  };
-
-  const createConversationIfNeeded = async (messages: AIMessage[]) => {
-    if (currentConversationId || messages.length < 2) return null;
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      console.log('🆕 Auto-creating conversation for new chat...');
-
-      const conversationId = await WaktiAIV2Service.ensureConversationExists(user.id, messages, language);
-      
-      if (conversationId) {
-        console.log('✅ Auto-created conversation:', conversationId);
-        return conversationId;
-      }
-
-      return null;
-    } catch (error) {
-      console.error('❌ Error in createConversationIfNeeded:', error);
-      return null;
-    }
-  };
-
-  const saveMessageToConversation = async (message: AIMessage, conversationId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !conversationId) return;
-
-      const { error } = await supabase
-        .from('ai_chat_history')
-        .insert({
-          conversation_id: conversationId,
-          user_id: user.id,
-          role: message.role,
-          content: message.content,
-          created_at: message.timestamp.toISOString(),
-          language: language,
-          input_type: message.inputType || 'text',
-          intent: message.intent,
-          confidence_level: message.confidence,
-          action_taken: message.actionTaken ? String(message.actionTaken) : null,
-          browsing_used: message.browsingUsed || false,
-          browsing_data: message.browsingData || null,
-          quota_status: message.quotaStatus || null,
-          action_result: message.actionResult || null
-        });
-
-      if (error) {
-        console.error('❌ Error saving message:', error);
-        return;
-      }
-
-      await WaktiAIV2Service.updateConversationTimestamp(conversationId);
-    } catch (error) {
-      console.error('❌ Error in saveMessageToConversation:', error);
-    }
-  };
-
-  const handleSearchConfirmation = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const response = await WaktiAIV2Service.sendMessageWithSearchConfirmation(
-        message,
-        currentConversationId,
-        language
-      );
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.conversationId && response.conversationId !== currentConversationId) {
-        setCurrentConversationId(response.conversationId);
-      }
-
-      const assistantMessage: AIMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: response.response,
-        timestamp: new Date(),
-        intent: response.intent,
-        confidence: response.confidence as 'high' | 'medium' | 'low',
-        actionTaken: !!response.actionTaken,
-        browsingUsed: response.browsingUsed,
-        browsingData: response.browsingData,
-        quotaStatus: response.quotaStatus,
-        requiresSearchConfirmation: response.requiresSearchConfirmation,
-        imageUrl: response.imageUrl,
-        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl
-      };
-
-      const finalMessages = [...sessionMessages, assistantMessage].slice(-30);
-      setSessionMessages(finalMessages);
-
-      if (response.quotaStatus) {
-        fetchAIQuota(true);
-      }
-
-    } catch (error: any) {
-      console.error('Error confirming search:', error);
-      setError(error.message || 'Failed to confirm search');
-    } finally {
-      setIsLoading(false);
     }
   };
 
