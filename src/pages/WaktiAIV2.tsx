@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
+import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -296,8 +296,8 @@ const WaktiAIV2 = () => {
       setStreamingMessageId(streamingMessageId);
       setStreamingContent('');
 
-      // ULTRA-FAST: Start streaming response
-      const streamedResponse = await WaktiAIV2Service.sendStreamingMessage(
+      // ULTRA-FAST: Start streaming response using static method
+      const streamedResponse = await WaktiAIV2ServiceClass.sendStreamingMessage(
         message,
         language,
         currentConversationId,

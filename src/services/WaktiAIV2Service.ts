@@ -21,6 +21,8 @@ export interface AIMessage {
   pendingTaskData?: any;
   pendingReminderData?: any;
   attachedFiles?: any[];
+  isStreaming?: boolean;
+  isThinking?: boolean;
 }
 
 export interface AIConversation {
