@@ -207,7 +207,7 @@ export default function Maw3dView() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
+      <div className="min-h-screen bg-background">
         <Toaster />
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto text-center space-y-4">
@@ -224,7 +224,7 @@ export default function Maw3dView() {
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
+      <div className="min-h-screen bg-background">
         <Toaster />
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto text-center space-y-4">
@@ -251,7 +251,7 @@ export default function Maw3dView() {
   };
 
   return (
-    <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
+    <div className="min-h-screen bg-background">
       <Toaster />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto space-y-6">
