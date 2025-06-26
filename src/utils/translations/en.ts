@@ -1,4 +1,3 @@
-
 import { auth } from "./modules/auth";
 import { common } from "./modules/common";
 import { navigation } from "./modules/navigation";
@@ -19,6 +18,7 @@ import { help } from "./modules/help";
 import { legal } from "./modules/legal";
 import { billing } from "./modules/billing";
 import { confirmation } from "./modules/confirmation";
+import { games } from "./modules/games";
 
 export const en = {
   ...common,
@@ -41,4 +41,5 @@ export const en = {
   ...legal,
   ...billing,
   ...confirmation,
+  ...games,
 };

@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 
 interface TicTacToeGameProps {
   onBack: () => void;
@@ -11,48 +13,19 @@ type Player = 'X' | 'O' | null;
 type Board = Player[];
 type Difficulty = 'easy' | 'medium' | 'hard';
 
-const AI_REMARKS = {
-  easy: [
-    "I'm just clicking stuff 😅",
-    "You win again?! What!",
-    "Oops… was that a mistake?",
-    "Wait, how did you do that?",
-    "I was supposed to block that!"
-  ],
-  medium: [
-    "You're tricky, I like it.",
-    "I was going to do that!",
-    "This game's getting serious.",
-    "Nice move... but I'm watching you.",
-    "Hmm, didn't see that coming."
-  ],
-  hard: [
-    "You won't beat me this time.",
-    "Hehe... I've calculated every outcome.",
-    "One wrong move... and it's mine 😈",
-    "Impossible! Let me recalculate...",
-    "You're better than I thought."
-  ]
+const getAIRemarks = (difficulty: Difficulty, language: string) => {
+  const remarkKeys = {
+    easy: ['ttt_easy_messing', 'ttt_easy_oops', 'ttt_easy_what_happened', 'ttt_easy_random', 'ttt_easy_confused'],
+    medium: ['ttt_medium_nice_block', 'ttt_medium_almost', 'ttt_medium_again', 'ttt_medium_tricky', 'ttt_medium_watching'],
+    hard: ['ttt_hard_cant_beat', 'ttt_hard_saw_moves', 'ttt_hard_last_chance', 'ttt_hard_perfect', 'ttt_hard_impossible']
+  };
+  return remarkKeys[difficulty].map(key => t(key, language));
 };
 
-const VICTORY_REMARKS = {
-  player_win: [
-    "Wow! You actually beat me! 🏆",
-    "Impossible! How did you win?! 😱",
-    "I demand a rematch! Well played! 🎉",
-    "You're too good for me! 👑",
-    "Okay, I'm impressed! Victory is yours! ⭐"
-  ],
-  ai_win: [
-    "Better luck next time! 😎",
-    "I am the ultimate Tic-Tac-Toe master! 🤖",
-    "Victory is mine! Want another round? 🏆"
-  ],
-  draw: [
-    "A worthy opponent! Well fought! 🤝",
-    "Neither of us could claim victory!",
-    "Perfectly balanced... as all things should be."
-  ]
+const getVictoryRemarks = (winner: Player | 'draw', playerSymbol: 'X' | 'O', language: string) => {
+  if (winner === 'draw') return [t('victory_draw', language)];
+  if (winner === playerSymbol) return [t('victory_player_win', language)];
+  return [t('victory_ai_win', language)];
 };
 
 export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
@@ -67,38 +40,6 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
   const [gameStarted, setGameStarted] = useState(false);
   const [currentAIRemark, setCurrentAIRemark] = useState<string>('');
   const [isAIThinking, setIsAIThinking] = useState(false);
-  const [showVictoryBadge, setShowVictoryBadge] = useState(false);
-
-  // Load saved game state
-  useEffect(() => {
-    const savedGame = localStorage.getItem('wakti_tictactoe_game');
-    if (savedGame) {
-      const gameState = JSON.parse(savedGame);
-      setBoard(gameState.board);
-      setIsPlayerTurn(gameState.isPlayerTurn);
-      setPlayerSymbol(gameState.playerSymbol);
-      setDifficulty(gameState.difficulty);
-      setGameOver(gameState.gameOver);
-      setWinner(gameState.winner);
-      setGameStarted(gameState.gameStarted);
-    }
-  }, []);
-
-  // Save game state
-  useEffect(() => {
-    if (gameStarted) {
-      const gameState = {
-        board,
-        isPlayerTurn,
-        playerSymbol,
-        difficulty,
-        gameOver,
-        winner,
-        gameStarted
-      };
-      localStorage.setItem('wakti_tictactoe_game', JSON.stringify(gameState));
-    }
-  }, [board, isPlayerTurn, playerSymbol, difficulty, gameOver, winner, gameStarted]);
 
   const checkWinner = (currentBoard: Board): Player | 'draw' | null => {
     const winPatterns = [
@@ -132,63 +73,43 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
 
     switch (difficulty) {
       case 'easy':
-        // 30% chance to make optimal move, 70% random
-        if (Math.random() < 0.3) {
-          // Try to win first
-          for (const move of availableMoves) {
-            const testBoard = [...currentBoard];
-            testBoard[move] = aiSymbol;
-            if (checkWinner(testBoard) === aiSymbol) {
-              return move;
-            }
-          }
-          // Block player from winning
-          for (const move of availableMoves) {
-            const testBoard = [...currentBoard];
-            testBoard[move] = playerSymbol;
-            if (checkWinner(testBoard) === playerSymbol) {
-              return move;
-            }
-          }
-        }
+        // 100% random moves
         return availableMoves[Math.floor(Math.random() * availableMoves.length)];
       
       case 'medium':
-        // 80% chance to make optimal move
-        if (Math.random() < 0.8) {
-          // Try to win first
-          for (const move of availableMoves) {
-            const testBoard = [...currentBoard];
-            testBoard[move] = aiSymbol;
-            if (checkWinner(testBoard) === aiSymbol) {
-              return move;
-            }
+        // Win/block priority with center/corner strategy
+        // Try to win first
+        for (const move of availableMoves) {
+          const testBoard = [...currentBoard];
+          testBoard[move] = aiSymbol;
+          if (checkWinner(testBoard) === aiSymbol) {
+            return move;
           }
-          
-          // Block player from winning
-          for (const move of availableMoves) {
-            const testBoard = [...currentBoard];
-            testBoard[move] = playerSymbol;
-            if (checkWinner(testBoard) === playerSymbol) {
-              return move;
-            }
+        }
+        
+        // Block player from winning
+        for (const move of availableMoves) {
+          const testBoard = [...currentBoard];
+          testBoard[move] = playerSymbol;
+          if (checkWinner(testBoard) === playerSymbol) {
+            return move;
           }
-          
-          // Take center if available
-          if (availableMoves.includes(4)) return 4;
-          
-          // Take corners
-          const corners = [0, 2, 6, 8].filter(i => availableMoves.includes(i));
-          if (corners.length > 0) {
-            return corners[Math.floor(Math.random() * corners.length)];
-          }
+        }
+        
+        // Take center if available
+        if (availableMoves.includes(4)) return 4;
+        
+        // Take corners
+        const corners = [0, 2, 6, 8].filter(i => availableMoves.includes(i));
+        if (corners.length > 0) {
+          return corners[Math.floor(Math.random() * corners.length)];
         }
         
         return availableMoves[Math.floor(Math.random() * availableMoves.length)];
       
       case 'hard':
         // Perfect minimax algorithm
-        const minimax = (board: Board, depth: number, isMaximizing: boolean, alpha: number = -Infinity, beta: number = Infinity): number => {
+        const minimax = (board: Board, depth: number, isMaximizing: boolean): number => {
           const result = checkWinner(board);
           
           if (result === aiSymbol) return 10 - depth;
@@ -203,22 +124,18 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
             let maxEval = -Infinity;
             for (const move of moves) {
               board[move] = aiSymbol;
-              const evaluation = minimax(board, depth + 1, false, alpha, beta);
+              const evaluation = minimax(board, depth + 1, false);
               board[move] = null;
               maxEval = Math.max(maxEval, evaluation);
-              alpha = Math.max(alpha, evaluation);
-              if (beta <= alpha) break;
             }
             return maxEval;
           } else {
             let minEval = Infinity;
             for (const move of moves) {
               board[move] = playerSymbol;
-              const evaluation = minimax(board, depth + 1, true, alpha, beta);
+              const evaluation = minimax(board, depth + 1, true);
               board[move] = null;
               minEval = Math.min(minEval, evaluation);
-              beta = Math.min(beta, evaluation);
-              if (beta <= alpha) break;
             }
             return minEval;
           }
@@ -244,28 +161,13 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     }
   };
 
-  const getAIThinkingTime = (difficulty: Difficulty): number => {
-    switch (difficulty) {
-      case 'easy': return 1500 + Math.random() * 1000; // 1.5-2.5s
-      case 'medium': return 2000 + Math.random() * 1500; // 2-3.5s
-      case 'hard': return 3000 + Math.random() * 2000; // 3-5s
-      default: return 2000;
-    }
-  };
-
   const showAIRemark = (type: 'game' | 'victory' = 'game') => {
     let remarks: string[];
     
     if (type === 'victory') {
-      if (winner === playerSymbol) {
-        remarks = VICTORY_REMARKS.player_win;
-      } else if (winner === 'draw') {
-        remarks = VICTORY_REMARKS.draw;
-      } else {
-        remarks = VICTORY_REMARKS.ai_win;
-      }
+      remarks = getVictoryRemarks(winner, playerSymbol, language);
     } else {
-      remarks = AI_REMARKS[difficulty];
+      remarks = getAIRemarks(difficulty, language);
     }
     
     const randomRemark = remarks[Math.floor(Math.random() * remarks.length)];
@@ -273,7 +175,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     
     setTimeout(() => {
       setCurrentAIRemark('');
-    }, type === 'victory' ? 5000 : 3000);
+    }, type === 'victory' ? 4000 : 2500);
   };
 
   const makeMove = (index: number) => {
@@ -288,14 +190,13 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     if (gameResult) {
       setWinner(gameResult);
       setGameOver(true);
-      setShowVictoryBadge(true);
-      setTimeout(() => showAIRemark('victory'), 500);
+      setTimeout(() => showAIRemark('victory'), 300);
       return;
     }
 
-    // AI move with realistic timing
+    // AI move with instant response (under 300ms)
     setIsAIThinking(true);
-    const thinkingTime = getAIThinkingTime(difficulty);
+    const thinkingTime = 150 + Math.random() * 100; // 150-250ms
     
     setTimeout(() => {
       const aiSymbol = playerSymbol === 'X' ? 'O' : 'X';
@@ -310,13 +211,12 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
         if (aiGameResult) {
           setWinner(aiGameResult);
           setGameOver(true);
-          setShowVictoryBadge(true);
-          setTimeout(() => showAIRemark('victory'), 500);
+          setTimeout(() => showAIRemark('victory'), 300);
         } else {
           setIsPlayerTurn(true);
-          // Show game remark occasionally
-          if (Math.random() < 0.4) {
-            setTimeout(() => showAIRemark('game'), 300);
+          // Show game remark occasionally (30% chance)
+          if (Math.random() < 0.3) {
+            setTimeout(() => showAIRemark('game'), 200);
           }
         }
       }
@@ -341,7 +241,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
         newBoard[aiMove] = 'X';
         setBoard(newBoard);
         setIsPlayerTurn(true);
-      }, 500);
+      }, 200);
     }
   };
 
@@ -352,17 +252,16 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     setGameOver(false);
     setWinner(null);
     setCurrentAIRemark('');
-    localStorage.removeItem('wakti_tictactoe_game');
   };
 
   const getWinnerMessage = () => {
     if (winner === 'draw') {
-      return language === 'ar' ? 'تعادل!' : 'It\'s a draw!';
+      return t('victory_draw', language);
     }
     if (winner === playerSymbol) {
-      return language === 'ar' ? 'لقد فزت!' : 'You won!';
+      return t('victory_player_win', language);
     }
-    return language === 'ar' ? 'فاز الذكاء الاصطناعي!' : 'AI won!';
+    return t('victory_ai_win', language);
   };
 
   if (!gameStarted) {
@@ -371,7 +270,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-2">
-              {language === 'ar' ? 'اختر رمزك:' : 'Choose your symbol:'}
+              {t('choose_symbol', language)}
             </label>
             <div className="flex gap-2">
               <Button
@@ -395,23 +294,23 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
 
           <div>
             <label className="block text-sm font-medium mb-2">
-              {language === 'ar' ? 'مستوى الصعوبة:' : 'Difficulty:'}
+              {t('difficulty', language)}
             </label>
             <Select value={difficulty} onValueChange={(value: Difficulty) => setDifficulty(value)}>
               <SelectTrigger className="min-h-[48px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="easy">{language === 'ar' ? 'سهل' : 'Easy'}</SelectItem>
-                <SelectItem value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</SelectItem>
-                <SelectItem value="hard">{language === 'ar' ? 'صعب' : 'Hard'}</SelectItem>
+                <SelectItem value="easy">{t('difficulty_easy', language)}</SelectItem>
+                <SelectItem value="medium">{t('difficulty_medium', language)}</SelectItem>
+                <SelectItem value="hard">{t('difficulty_hard', language)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
         <Button onClick={startGame} className="w-full min-h-[48px]">
-          {language === 'ar' ? 'ابدأ اللعبة' : 'Start Game'}
+          {t('start_game', language)}
         </Button>
       </div>
     );
@@ -419,17 +318,12 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
 
   return (
     <div className="space-y-4 select-none">
-      {/* Game Header with AI Remarks and Victory Badge */}
+      {/* Game Header */}
       <div className="text-center space-y-2">
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <h3 className="text-lg font-bold">
-            {language === 'ar' ? 'إكس أو' : 'Tic-Tac-Toe'}
+            Tic-Tac-Toe
           </h3>
-          {showVictoryBadge && winner && (
-            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full text-lg font-bold animate-bounce shadow-lg">
-              {winner === playerSymbol ? '🏆 Victory!' : winner === 'draw' ? '🤝 Draw!' : '🤖 AI Wins!'}
-            </div>
-          )}
           {currentAIRemark && (
             <div className="bg-blue-100 dark:bg-blue-900/20 px-3 py-1 rounded-full text-sm text-blue-700 dark:text-blue-300 animate-fade-in max-w-xs">
               🤖 {currentAIRemark}
@@ -442,7 +336,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
           {language === 'ar' ? ` الذكاء الاصطناعي: ${playerSymbol === 'X' ? 'O' : 'X'}` : ` AI: ${playerSymbol === 'X' ? 'O' : 'X'}`}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-500">
-          {language === 'ar' ? `الصعوبة: ${difficulty === 'easy' ? 'سهل' : difficulty === 'medium' ? 'متوسط' : 'صعب'}` : `Difficulty: ${difficulty}`}
+          {t('difficulty', language)}: {t(`difficulty_${difficulty}`, language)}
         </p>
       </div>
 
@@ -468,7 +362,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
             {getWinnerMessage()}
           </p>
           <Button onClick={restartGame} className="min-h-[48px]">
-            {language === 'ar' ? 'العب مرة أخرى' : 'Play Again'}
+            {t('play_again', language)}
           </Button>
         </div>
       )}
@@ -477,10 +371,10 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
         <div className="text-center">
           <p className="text-sm text-slate-600 dark:text-slate-400">
             {isAIThinking 
-              ? (language === 'ar' ? 'الذكاء الاصطناعي يفكر...' : 'AI thinking...')
+              ? t('ai_thinking', language)
               : isPlayerTurn 
-              ? (language === 'ar' ? 'دورك - اضغط على المربع' : 'Your turn - Tap a square')
-              : (language === 'ar' ? 'دور الذكاء الاصطناعي...' : 'AI turn...')
+              ? `${t('your_turn', language)} - ${t('tap_square', language)}`
+              : t('ai_turn', language)
             }
           </p>
           {isAIThinking && (
@@ -497,10 +391,10 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
 
       <div className="flex gap-2">
         <Button variant="outline" onClick={restartGame} className="flex-1 min-h-[48px]">
-          {language === 'ar' ? 'إعادة تشغيل' : 'Restart'}
+          {t('restart', language)}
         </Button>
         <Button variant="outline" onClick={onBack} className="flex-1 min-h-[48px]">
-          {language === 'ar' ? 'رجوع' : 'Back'}
+          {t('back', language)}
         </Button>
       </div>
     </div>
