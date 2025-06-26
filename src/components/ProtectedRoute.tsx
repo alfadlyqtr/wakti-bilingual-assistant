@@ -17,8 +17,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     isSubscribed: boolean;
     isLoading: boolean;
     error?: string;
-  }>({ isSubscribed: false, isLoading: true });
-  const [showSubscriptionOverlay, setShowSubscriptionOverlay] = useState(false);
+    needsPayment: boolean;
+    subscriptionDetails?: any;
+  }>({ isSubscribed: false, isLoading: true, needsPayment: false });
 
   // Owner accounts that bypass all restrictions
   const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
@@ -40,14 +41,22 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       
       if (!user) {
         console.log("ProtectedRoute: No user, setting not subscribed");
-        setSubscriptionStatus({ isSubscribed: false, isLoading: false });
+        setSubscriptionStatus({ 
+          isSubscribed: false, 
+          isLoading: false, 
+          needsPayment: true 
+        });
         return;
       }
 
       // Check if user is an owner account
       if (ownerAccounts.includes(user.email || '')) {
         console.log('ProtectedRoute: Owner account detected, bypassing subscription checks');
-        setSubscriptionStatus({ isSubscribed: true, isLoading: false });
+        setSubscriptionStatus({ 
+          isSubscribed: true, 
+          isLoading: false, 
+          needsPayment: false 
+        });
         return;
       }
 
@@ -56,7 +65,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('is_subscribed, subscription_status')
+          .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -65,6 +74,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           setSubscriptionStatus({ 
             isSubscribed: false, 
             isLoading: false, 
+            needsPayment: true,
             error: error.message 
           });
           return;
@@ -73,26 +83,72 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         console.log('ProtectedRoute: Raw profile data:', profile);
 
         if (!profile) {
-          console.log('ProtectedRoute: No profile found, user not subscribed');
-          setSubscriptionStatus({ isSubscribed: false, isLoading: false });
+          console.log('ProtectedRoute: No profile found, user needs subscription');
+          setSubscriptionStatus({ 
+            isSubscribed: false, 
+            isLoading: false, 
+            needsPayment: true 
+          });
           return;
         }
 
-        const isSubscribed = profile.is_subscribed === true && profile.subscription_status === 'active';
+        // Check if subscription is active and valid
+        const now = new Date();
+        let isValidSubscription = false;
+        let needsPayment = true;
+
+        // Basic subscription check
+        const hasActiveSubscription = profile.is_subscribed === true && profile.subscription_status === 'active';
         
-        console.log('ProtectedRoute: Subscription check result:', {
+        if (hasActiveSubscription && profile.next_billing_date) {
+          const nextBillingDate = new Date(profile.next_billing_date);
+          const gracePeriodDays = 7; // 7 days grace period after due date
+          const gracePeriodEnd = new Date(nextBillingDate);
+          gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays);
+          
+          // Subscription is valid if we haven't passed the grace period
+          isValidSubscription = now <= gracePeriodEnd;
+          needsPayment = now > nextBillingDate; // Payment needed if past due date
+          
+          console.log('ProtectedRoute: Date-based subscription check:', {
+            now: now.toISOString(),
+            nextBillingDate: nextBillingDate.toISOString(),
+            gracePeriodEnd: gracePeriodEnd.toISOString(),
+            isValidSubscription,
+            needsPayment,
+            daysUntilDue: Math.ceil((nextBillingDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+            daysOverdue: needsPayment ? Math.ceil((now.getTime() - nextBillingDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
+          });
+        } else if (hasActiveSubscription && !profile.next_billing_date) {
+          // Active subscription without billing date (like admin gifts) - consider valid
+          isValidSubscription = true;
+          needsPayment = false;
+          console.log('ProtectedRoute: Active subscription without billing date (admin gift/special case)');
+        }
+
+        console.log('ProtectedRoute: Final subscription evaluation:', {
           profileExists: !!profile,
           isSubscribed: profile.is_subscribed,
           subscriptionStatus: profile.subscription_status,
-          finalIsSubscribed: isSubscribed
+          nextBillingDate: profile.next_billing_date,
+          planName: profile.plan_name,
+          hasActiveSubscription,
+          isValidSubscription,
+          needsPayment
         });
 
-        setSubscriptionStatus({ isSubscribed, isLoading: false });
+        setSubscriptionStatus({ 
+          isSubscribed: isValidSubscription, 
+          isLoading: false,
+          needsPayment: needsPayment && !isValidSubscription,
+          subscriptionDetails: profile
+        });
       } catch (error) {
         console.error('ProtectedRoute: Exception during subscription check:', error);
         setSubscriptionStatus({ 
           isSubscribed: false, 
           isLoading: false, 
+          needsPayment: true,
           error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
@@ -103,8 +159,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       console.log("ProtectedRoute: Auth loaded, starting subscription check");
       checkSubscriptionStatus();
     } else if (!isLoading && !user) {
-      console.log("ProtectedRoute: Auth loaded but no user, setting not subscribed");
-      setSubscriptionStatus({ isSubscribed: false, isLoading: false });
+      console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
+      setSubscriptionStatus({ 
+        isSubscribed: false, 
+        isLoading: false, 
+        needsPayment: true 
+      });
     }
   }, [user, isLoading]);
 
@@ -120,18 +180,21 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check subscription status for non-owner accounts
-  if (!subscriptionStatus.isSubscribed) {
-    console.log("ProtectedRoute: User not subscribed, showing subscription overlay");
-    console.log("ProtectedRoute: Subscription status details:", subscriptionStatus);
+  // Show subscription overlay only when payment is actually needed
+  if (subscriptionStatus.needsPayment) {
+    console.log("ProtectedRoute: Payment needed, showing subscription overlay");
+    console.log("ProtectedRoute: Subscription details:", subscriptionStatus.subscriptionDetails);
     return (
       <SubscriptionOverlay 
         isOpen={true} 
-        onClose={() => setShowSubscriptionOverlay(false)} 
+        onClose={() => {
+          // Allow closing overlay but still show it on next navigation
+          // In a real app, you might want to store this in localStorage with a timestamp
+        }} 
       />
     );
   }
 
-  console.log("ProtectedRoute: User authenticated and subscribed, rendering protected content");
+  console.log("ProtectedRoute: User authenticated and subscription valid, rendering protected content");
   return <>{children}</>;
 }
