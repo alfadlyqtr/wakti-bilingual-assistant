@@ -207,7 +207,7 @@ export default function Maw3dView() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="w-full bg-background" style={{ minHeight: '100vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <Toaster />
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto text-center space-y-4">
@@ -224,7 +224,7 @@ export default function Maw3dView() {
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="w-full bg-background" style={{ minHeight: '100vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <Toaster />
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto text-center space-y-4">
@@ -251,9 +251,9 @@ export default function Maw3dView() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="w-full bg-background" style={{ minHeight: '100vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       <Toaster />
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 pb-32">
         <div className="max-w-2xl mx-auto space-y-6">
           
           {/* Event Preview with Image Blur */}
@@ -357,9 +357,6 @@ export default function Maw3dView() {
               </CardContent>
             </Card>
           )}
-
-          {/* Bottom padding to ensure content is accessible */}
-          <div className="h-20"></div>
 
         </div>
       </div>
