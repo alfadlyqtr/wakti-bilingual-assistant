@@ -5,46 +5,41 @@ import { OptimizedEventCard } from '@/components/optimized/OptimizedEventCard';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Heart, Plus, Calendar } from 'lucide-react';
+import { Heart, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-// Simplified skeleton loading component (reduced from 6 to 3 cards)
+// Ultra-fast skeleton component (reduced further)
 const EventsSkeleton = () => (
-  <div className="grid gap-6 md:gap-8">
-    {[...Array(3)].map((_, i) => (
+  <div className="grid gap-4">
+    {[...Array(2)].map((_, i) => (
       <div key={i} className="relative">
-        <Skeleton className="h-[200px] w-full rounded-xl" />
+        <Skeleton className="h-[150px] w-full rounded-xl" />
         <div className="absolute bottom-4 left-4 right-4 space-y-2">
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-3 w-1/2" />
-          <div className="flex gap-2">
-            <Skeleton className="h-6 w-20 rounded-full" />
-            <Skeleton className="h-6 w-16 rounded-full" />
-          </div>
         </div>
       </div>
     ))}
   </div>
 );
 
-const OptimizedMaw3dEvents = () => {
+const OptimizedMaw3dEvents = React.memo(() => {
   const navigate = useNavigate();
-  const { language } = useTheme();
   
-  // Use optimized hook
+  // Use optimized hook with caching and deduplication
   const { events, loading, error } = useOptimizedMaw3dEvents();
 
-  const handleEventClick = (event: any) => {
+  const handleEventClick = React.useCallback((event: any) => {
     console.log('📱 Navigating to event management:', event.id);
     navigate(`/maw3d/manage/${event.id}`);
-  };
+  }, [navigate]);
 
-  const handleCreateEvent = () => {
+  const handleCreateEvent = React.useCallback(() => {
     console.log('📱 Navigating to create event');
     navigate('/maw3d/create');
-  };
+  }, [navigate]);
 
-  // Handle error state with simple retry
+  // Handle error state
   if (error) {
     return (
       <div className="min-h-screen p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
@@ -65,7 +60,7 @@ const OptimizedMaw3dEvents = () => {
   return (
     <div className="min-h-screen p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
       <div className="max-w-4xl mx-auto">
-        {/* Fixed header with proper button layout */}
+        {/* Header */}
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg">
@@ -78,13 +73,12 @@ const OptimizedMaw3dEvents = () => {
               <p className="text-muted-foreground">
                 {loading 
                   ? 'Loading events...'
-                  : 'Discover and manage your events'
+                  : `Showing ${events.length} events`
                 }
               </p>
             </div>
           </div>
           
-          {/* Fixed Create Event button - full width on mobile, auto on larger screens */}
           <div className="w-full">
             <Button 
               onClick={handleCreateEvent}
@@ -97,7 +91,7 @@ const OptimizedMaw3dEvents = () => {
           </div>
         </div>
 
-        {/* Events content with simplified loading */}
+        {/* Events content */}
         <Suspense fallback={<EventsSkeleton />}>
           {loading ? (
             <EventsSkeleton />
@@ -133,17 +127,12 @@ const OptimizedMaw3dEvents = () => {
             </div>
           )}
         </Suspense>
-
-        {/* Simplified status info */}
-        {!loading && events.length > 0 && (
-          <div className="text-center mt-8 py-4 text-sm text-muted-foreground">
-            <p>Showing {events.length} events</p>
-          </div>
-        )}
       </div>
     </div>
   );
-};
+});
+
+OptimizedMaw3dEvents.displayName = 'OptimizedMaw3dEvents';
 
 export default function Maw3d() {
   return <OptimizedMaw3dEvents />;

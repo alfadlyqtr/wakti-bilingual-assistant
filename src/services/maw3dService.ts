@@ -1,7 +1,35 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
+// Simple auth cache to avoid repeated getUser() calls
+let authCache: { user: any; timestamp: number } | null = null;
+const AUTH_CACHE_TTL = 60000; // 1 minute
+
 export class Maw3dService {
+  // Cached auth helper
+  private static async getCachedUser() {
+    const now = Date.now();
+    
+    if (authCache && (now - authCache.timestamp) < AUTH_CACHE_TTL) {
+      return authCache.user;
+    }
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !userData.user) {
+      authCache = null;
+      return null;
+    }
+
+    authCache = {
+      user: userData.user,
+      timestamp: now
+    };
+
+    return userData.user;
+  }
+
   // Events
   static async createEvent(eventData: Omit<CreateEventFormData, 'invited_contacts'> & { created_by: string, language?: string }): Promise<Maw3dEvent> {
     console.log('=== CREATING MAW3D EVENT ===');
@@ -119,22 +147,22 @@ export class Maw3dService {
   }
 
   static async getUserEvents(): Promise<Maw3dEvent[]> {
-    console.log('Fetching user Maw3d events');
+    console.log('⚡ FAST: Fetching user Maw3d events');
     
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const user = await this.getCachedUser();
     
-    if (userError || !userData.user) {
+    if (!user) {
       console.log('No authenticated user found');
       return [];
     }
 
-    console.log('Fetching events for user:', userData.user.id);
+    console.log('⚡ FAST: Fetching events for cached user:', user.id);
 
-    // CRITICAL FIX: Only fetch events created by the current user
+    // SINGLE OPTIMIZED QUERY: Only fetch events created by the current user
     const { data: events, error } = await supabase
       .from('maw3d_events')
       .select('*')
-      .eq('created_by', userData.user.id)  // Filter by current user's ID
+      .eq('created_by', user.id)
       .order('event_date', { ascending: true });
 
     if (error) {
@@ -142,7 +170,7 @@ export class Maw3dService {
       throw error;
     }
 
-    console.log('Fetched Maw3d events for user:', events?.length || 0);
+    console.log('⚡ FAST: Fetched Maw3d events for user:', events?.length || 0);
     return events || [];
   }
 
@@ -264,9 +292,9 @@ export class Maw3dService {
       console.log('🎨 Generating AI background using generate-maw3d-background with prompt:', prompt);
       
       // Get current user for authentication
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const user = await this.getCachedUser();
       
-      if (userError || !userData.user) {
+      if (!user) {
         throw new Error('User authentication required for AI background generation');
       }
 
