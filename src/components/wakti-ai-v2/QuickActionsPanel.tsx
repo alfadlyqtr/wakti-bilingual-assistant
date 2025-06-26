@@ -1,15 +1,17 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   MessageSquare, Search, Image, PenTool, Mic, Volume2, 
-  Zap
+  Zap, Gamepad2
 } from 'lucide-react';
 import { TextGeneratorPopup } from './TextGeneratorPopup';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
+import { GameModeModal } from './GameModeModal';
 
 interface QuickActionsProps {
   onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
@@ -31,6 +33,7 @@ export function QuickActionsPanel({
   const [showVoiceTranslator, setShowVoiceTranslator] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showBuyExtras, setShowBuyExtras] = useState(false);
+  const [showGameMode, setShowGameMode] = useState(false);
 
   const triggerModes = [
     {
@@ -83,6 +86,13 @@ export function QuickActionsPanel({
       description: language === 'ar' ? 'إنشاء نسخة من صوتك' : 'Create a copy of your voice',
       action: () => setShowVoiceClone(true),
       color: 'bg-pink-500'
+    },
+    {
+      icon: <Gamepad2 className="h-5 w-5" />,
+      label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
+      description: language === 'ar' ? 'العب ألعاب ذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
+      action: () => setShowGameMode(true),
+      color: 'bg-red-500'
     },
     {
       icon: <Zap className="h-5 w-5" />,
@@ -205,6 +215,12 @@ export function QuickActionsPanel({
         <VoiceClonePopup
           open={showVoiceClone}
           onOpenChange={setShowVoiceClone}
+        />
+
+        {/* Game Mode Modal */}
+        <GameModeModal
+          open={showGameMode}
+          onOpenChange={setShowGameMode}
         />
 
         {/* Buy Extras Popup */}
