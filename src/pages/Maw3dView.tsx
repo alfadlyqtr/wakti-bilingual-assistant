@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -208,14 +207,16 @@ export default function Maw3dView() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background overflow-y-auto">
+      <div className="h-full flex flex-col bg-background">
         <Toaster />
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-2xl mx-auto text-center space-y-4">
-            <div className="animate-pulse">
-              <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="container mx-auto px-4 py-8">
+            <div className="max-w-2xl mx-auto text-center space-y-4">
+              <div className="animate-pulse">
+                <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
+                <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -225,12 +226,14 @@ export default function Maw3dView() {
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-background overflow-y-auto">
+      <div className="h-full flex flex-col bg-background">
         <Toaster />
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-2xl mx-auto text-center space-y-4">
-            <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
-            <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
+        <div className="flex-1 overflow-y-auto">
+          <div className="container mx-auto px-4 py-8">
+            <div className="max-w-2xl mx-auto text-center space-y-4">
+              <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
+              <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -252,113 +255,115 @@ export default function Maw3dView() {
   };
 
   return (
-    <div className="min-h-screen bg-background overflow-y-auto">
+    <div className="h-full flex flex-col bg-background">
       <Toaster />
-      <div className="container mx-auto px-4 py-8 pb-32">
-        <div className="max-w-2xl mx-auto space-y-6">
-          
-          {/* Event Preview with Image Blur */}
-          <EventPreview
-            event={event}
-            textStyle={event.text_style}
-            backgroundType={event.background_type}
-            backgroundValue={event.background_value}
-            rsvpCount={rsvpCounts}
-            showAttendingCount={event.show_attending_count}
-            language={eventLanguage}
-            imageBlur={event.image_blur}
-          />
-
-          {/* Action Buttons - Fixed to be on same line */}
-          <div className="flex gap-3 justify-center">
-            <CalendarDropdown 
-              event={calendarEvent} 
-              eventId={event.id}
-              language={eventLanguage} 
-            />
+      <div className="flex-1 overflow-y-auto">
+        <div className="container mx-auto px-4 py-8 pb-32">
+          <div className="max-w-2xl mx-auto space-y-6">
             
-            {event.google_maps_link && (
-              <Button
-                variant="outline"
-                onClick={() => window.open(event.google_maps_link, '_blank')}
-                className="flex items-center gap-2"
-              >
-                <MapPin className="w-4 h-4" />
-                {t('getDirections', eventLanguage)}
-              </Button>
-            )}
-          </div>
+            {/* Event Preview with Image Blur */}
+            <EventPreview
+              event={event}
+              textStyle={event.text_style}
+              backgroundType={event.background_type}
+              backgroundValue={event.background_value}
+              rsvpCount={rsvpCounts}
+              showAttendingCount={event.show_attending_count}
+              language={eventLanguage}
+              imageBlur={event.image_blur}
+            />
 
-          {/* RSVP Section */}
-          {event.is_public && !hasAlreadyRsvped && (
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold mb-4">
-                  {t('areYouAttending', eventLanguage)}
-                </h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <Input
-                      placeholder={t('enterYourName', eventLanguage)}
-                      value={guestName}
-                      onChange={(e) => setGuestName(e.target.value)}
-                      className={eventLanguage === 'ar' ? 'text-right' : ''}
-                      dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
-                    />
-                  </div>
+            {/* Action Buttons - Fixed to be on same line */}
+            <div className="flex gap-3 justify-center">
+              <CalendarDropdown 
+                event={calendarEvent} 
+                eventId={event.id}
+                language={eventLanguage} 
+              />
+              
+              {event.google_maps_link && (
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(event.google_maps_link, '_blank')}
+                  className="flex items-center gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  {t('getDirections', eventLanguage)}
+                </Button>
+              )}
+            </div>
+
+            {/* RSVP Section */}
+            {event.is_public && !hasAlreadyRsvped && (
+              <Card>
+                <CardContent className="p-6">
+                  <h3 className="text-lg font-semibold mb-4">
+                    {t('areYouAttending', eventLanguage)}
+                  </h3>
                   
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={() => handleRsvp('accepted')}
-                      disabled={isSubmitting || !guestName.trim()}
-                      className="flex-1 bg-green-500/20 border-green-500 text-green-700 hover:bg-green-500/30 hover:text-green-800"
-                      variant="outline"
-                    >
-                      {eventLanguage === 'ar' ? 'قبول' : 'Accept'}
-                    </Button>
-                    <Button
-                      onClick={() => handleRsvp('declined')}
-                      disabled={isSubmitting || !guestName.trim()}
-                      className="flex-1 bg-red-500/20 border-red-500 text-red-700 hover:bg-red-500/30 hover:text-red-800"
-                      variant="outline"
-                    >
-                      {eventLanguage === 'ar' ? 'رفض' : 'Decline'}
-                    </Button>
+                  <div className="space-y-4">
+                    <div>
+                      <Input
+                        placeholder={t('enterYourName', eventLanguage)}
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        className={eventLanguage === 'ar' ? 'text-right' : ''}
+                        dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
+                      />
+                    </div>
+                    
+                    <div className="flex gap-3">
+                      <Button
+                        onClick={() => handleRsvp('accepted')}
+                        disabled={isSubmitting || !guestName.trim()}
+                        className="flex-1 bg-green-500/20 border-green-500 text-green-700 hover:bg-green-500/30 hover:text-green-800"
+                        variant="outline"
+                      >
+                        {eventLanguage === 'ar' ? 'قبول' : 'Accept'}
+                      </Button>
+                      <Button
+                        onClick={() => handleRsvp('declined')}
+                        disabled={isSubmitting || !guestName.trim()}
+                        className="flex-1 bg-red-500/20 border-red-500 text-red-700 hover:bg-red-500/30 hover:text-red-800"
+                        variant="outline"
+                      >
+                        {eventLanguage === 'ar' ? 'رفض' : 'Decline'}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            )}
 
-          {/* Response Confirmation - Show for localStorage data */}
-          {hasAlreadyRsvped && localStorageData && (
-            <Card>
-              <CardContent className="p-6 text-center">
-                <h3 className={`text-lg font-bold mb-2 ${
-                  localStorageData.response === 'accepted' 
-                    ? 'text-green-700' 
-                    : 'text-red-700'
-                }`}>
-                  {localStorageData.response === 'accepted' 
-                    ? (eventLanguage === 'ar' ? `شكراً لك، ${localStorageData.name}!` : `Thank you, ${localStorageData.name}!`)
-                    : `Sorry, ${localStorageData.name}, you couldn't make it.`
-                  }
-                </h3>
-                <p className={`font-medium ${
-                  localStorageData.response === 'accepted' 
-                    ? 'text-green-600' 
-                    : 'text-red-600'
-                }`}>
-                  {eventLanguage === 'ar' 
-                    ? `تم تسجيل ${localStorageData.response === 'accepted' ? 'قبولك' : 'رفضك'}.`
-                    : `Your ${localStorageData.response === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`
-                  }
-                </p>
-              </CardContent>
-            </Card>
-          )}
+            {/* Response Confirmation - Show for localStorage data */}
+            {hasAlreadyRsvped && localStorageData && (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <h3 className={`text-lg font-bold mb-2 ${
+                    localStorageData.response === 'accepted' 
+                      ? 'text-green-700' 
+                      : 'text-red-700'
+                  }`}>
+                    {localStorageData.response === 'accepted' 
+                      ? (eventLanguage === 'ar' ? `شكراً لك، ${localStorageData.name}!` : `Thank you, ${localStorageData.name}!`)
+                      : `Sorry, ${localStorageData.name}, you couldn't make it.`
+                    }
+                  </h3>
+                  <p className={`font-medium ${
+                    localStorageData.response === 'accepted' 
+                      ? 'text-green-600' 
+                      : 'text-red-600'
+                  }`}>
+                    {eventLanguage === 'ar' 
+                      ? `تم تسجيل ${localStorageData.response === 'accepted' ? 'قبولك' : 'رفضك'}.`
+                      : `Your ${localStorageData.response === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`
+                    }
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
+          </div>
         </div>
       </div>
     </div>
