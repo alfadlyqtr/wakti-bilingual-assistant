@@ -1,5 +1,5 @@
 
-import React, { memo, useMemo } from 'react';
+import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, Clock, Heart } from 'lucide-react';
@@ -11,48 +11,32 @@ interface OptimizedEventCardProps {
   onClick: () => void;
 }
 
-// Memoized background style computation
-const useOptimizedStyles = (event: Maw3dEvent) => {
-  return useMemo(() => {
-    const hasImage = event.background_type === 'image' && event.background_value;
-    
-    const backgroundStyle = hasImage ? {
-      backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)), url(${event.background_value})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat'
-    } : event.background_type === 'gradient' ? {
-      background: event.background_value || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-    } : {
-      backgroundColor: event.background_value || '#3b82f6'
-    };
+const OptimizedEventCard: React.FC<OptimizedEventCardProps> = ({ event, onClick }) => {
+  // Simplified background style computation
+  const hasImage = event.background_type === 'image' && event.background_value;
+  
+  const backgroundStyle = hasImage ? {
+    backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)), url(${event.background_value})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat'
+  } : event.background_type === 'gradient' ? {
+    background: event.background_value || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+  } : {
+    backgroundColor: event.background_value || '#3b82f6'
+  };
 
-    const blurredStyle = hasImage ? {
-      backgroundImage: `url(${event.background_value})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      filter: `blur(${event.image_blur || 0}px)`,
-      transform: 'scale(1.1)'
-    } : {};
-
-    return { backgroundStyle, blurredStyle, hasImage };
-  }, [event.background_type, event.background_value, event.image_blur]);
-};
-
-const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event, onClick }) => {
-  const { backgroundStyle, blurredStyle, hasImage } = useOptimizedStyles(event);
-
-  // Memoized date formatting
-  const formattedDate = useMemo(() => {
+  // Simplified date formatting
+  const formattedDate = (() => {
     if (!event.event_date) return 'Date TBD';
     try {
       return format(parseISO(event.event_date.toString()), 'MMM d, yyyy');
     } catch {
       return 'Invalid Date';
     }
-  }, [event.event_date]);
+  })();
 
-  const formattedTime = useMemo(() => {
+  const formattedTime = (() => {
     if (!event.start_time) return null;
     try {
       const [hours, minutes] = event.start_time.split(':');
@@ -62,14 +46,7 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
     } catch {
       return null;
     }
-  }, [event.start_time]);
-
-  // Calculate RSVP count from the event data
-  const rsvpCount = useMemo(() => {
-    // This would need to be populated from the actual RSVP data
-    // For now, return 0 as a placeholder
-    return 0;
-  }, []);
+  })();
 
   return (
     <Card 
@@ -77,14 +54,6 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
       onClick={onClick}
     >
       <div className="relative">
-        {/* Optimized background with cached styles */}
-        {hasImage && (
-          <div 
-            className="absolute inset-0 opacity-20"
-            style={blurredStyle}
-          />
-        )}
-        
         <div 
           className="relative"
           style={backgroundStyle}
@@ -132,7 +101,7 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-sm">
                   <Users className="h-4 w-4 text-pink-300" />
-                  <span>{rsvpCount} attending</span>
+                  <span>0 attending</span>
                 </div>
                 
                 <Badge 
@@ -150,5 +119,4 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
   );
 };
 
-// Memoize the entire component for better performance
-export const OptimizedEventCard = memo(OptimizedEventCardComponent);
+export { OptimizedEventCard };
