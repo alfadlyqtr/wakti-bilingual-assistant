@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,7 +13,7 @@ import { t } from '@/utils/translations';
 import CalendarDropdown from '@/components/events/CalendarDropdown';
 
 export default function Maw3dView() {
-  const { shortId } = useParams();
+  const { id } = useParams();
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,10 +34,10 @@ export default function Maw3dView() {
   const eventLanguage: 'en' | 'ar' = (event?.language === 'ar' ? 'ar' : 'en');
 
   useEffect(() => {
-    if (shortId) {
+    if (id) {
       fetchEvent();
     }
-  }, [shortId]);
+  }, [id]);
 
   useEffect(() => {
     // Check localStorage for previous RSVP when event is loaded
@@ -72,9 +71,21 @@ export default function Maw3dView() {
   const fetchEvent = async () => {
     try {
       setIsLoading(true);
-      if (!shortId) return;
+      if (!id) return;
 
-      const eventData = await Maw3dService.getEventByShortId(shortId);
+      let eventData: Maw3dEvent | null = null;
+
+      // Check if the ID is a UUID (for authenticated users) or a short ID (for public sharing)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      
+      if (isUUID) {
+        // Fetch by UUID
+        eventData = await Maw3dService.getEvent(id);
+      } else {
+        // Fetch by short ID (public sharing)
+        eventData = await Maw3dService.getEventByShortId(id);
+      }
+
       if (!eventData) {
         toast.error(t('eventNotFound', eventLanguage));
         return;
