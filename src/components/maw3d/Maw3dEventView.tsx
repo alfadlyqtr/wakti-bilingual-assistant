@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,7 @@ interface Maw3dEventViewProps {
 }
 
 export default function Maw3dEventView({ standalone = false }: Maw3dEventViewProps) {
-  const { id } = useParams<{ id: string }>();
+  const { shortId } = useParams<{ shortId: string }>();
   const navigate = useNavigate();
   const { language } = useTheme();
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
@@ -29,16 +28,16 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
   const [submittingRsvp, setSubmittingRsvp] = useState(false);
 
   useEffect(() => {
-    if (id) {
+    if (shortId) {
       fetchEvent();
     }
-  }, [id]);
+  }, [shortId]);
 
   const fetchEvent = async () => {
     console.log('=== PHASE 2: IMPROVED ERROR HANDLING ===');
     
     try {
-      console.log('Starting event fetch with ID:', id);
+      console.log('Starting event fetch with shortId:', shortId);
       setError(null);
       setLoading(true);
       
@@ -51,13 +50,13 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
       
       const fetchPromise = async () => {
         // First try by short_id (for shared links)
-        if (id && id.startsWith('maw3d_')) {
-          console.log('Fetching by short_id:', id);
-          return await Maw3dService.getEventByShortId(id);
-        } else if (id) {
+        if (shortId && shortId.startsWith('maw3d_')) {
+          console.log('Fetching by short_id:', shortId);
+          return await Maw3dService.getEventByShortId(shortId);
+        } else if (shortId) {
           // Try by UUID if it's a direct ID
-          console.log('Fetching by UUID:', id);
-          return await Maw3dService.getEvent(id);
+          console.log('Fetching by UUID:', shortId);
+          return await Maw3dService.getEvent(shortId);
         }
         return null;
       };
@@ -66,8 +65,8 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
       eventData = await Promise.race([fetchPromise(), timeoutPromise]);
 
       if (!eventData) {
-        console.log('No Maw3d event found for ID:', id);
-        setError(`Event not found. ID: ${id}`);
+        console.log('No Maw3d event found for shortId:', shortId);
+        setError(`Event not found. shortId: ${shortId}`);
         toast.error('Event not found');
         return;
       }
@@ -200,9 +199,9 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
         <div className="flex-1 flex items-center justify-center flex-col gap-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           <p className="text-sm text-muted-foreground">Loading event details...</p>
-          {id && (
+          {shortId && (
             <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
-              Event ID: {id}
+              Event shortId: {shortId}
             </div>
           )}
         </div>
@@ -235,7 +234,7 @@ export default function Maw3dEventView({ standalone = false }: Maw3dEventViewPro
             
             <div className="text-sm text-muted-foreground bg-muted p-4 rounded mb-4">
               <p className="font-medium">Debug Information:</p>
-              <p>Event ID: {id}</p>
+              <p>Event shortId: {shortId}</p>
               <p>Error: {error}</p>
               <p>Standalone: {standalone ? 'Yes' : 'No'}</p>
               <p>Timestamp: {new Date().toISOString()}</p>
