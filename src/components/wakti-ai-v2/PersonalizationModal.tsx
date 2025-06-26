@@ -166,29 +166,38 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
     try {
       setSaving(true);
       
-      console.log('💾 Saving personalization...', personalization);
+      console.log('💾 Saving directly to database...', personalization);
 
-      const { error } = await supabase.rpc('upsert_user_personalization', {
-        p_user_id: user.id,
-        p_nickname: personalization.nickname || null,
-        p_role: personalization.role || null,
-        p_main_use: personalization.main_use || null,
-        p_interests: personalization.interests || [],
-        p_ai_tone: personalization.ai_tone || 'neutral',
-        p_reply_style: personalization.reply_style || 'detailed',
-        p_traits: personalization.traits || [],
-        p_communication_style: personalization.communication_style || null,
-        p_response_length: personalization.response_length || null,
-        p_personal_note: personalization.personal_note || null,
-        p_auto_enable: personalization.auto_enable !== false
-      });
+      // Direct database insert/update - bypass the RPC function
+      const { data, error } = await supabase
+        .from('ai_user_knowledge')
+        .upsert({
+          user_id: user.id,
+          nickname: personalization.nickname || null,
+          role: personalization.role || null,
+          main_use: personalization.main_use || null,
+          interests: personalization.interests || [],
+          ai_tone: personalization.ai_tone || 'neutral',
+          reply_style: personalization.reply_style || 'detailed',
+          traits: personalization.traits || [],
+          communication_style: personalization.communication_style || null,
+          response_length: personalization.response_length || null,
+          personal_note: personalization.personal_note || null,
+          auto_enable: personalization.auto_enable !== false,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database save error:', error);
+        throw error;
+      }
 
       // Update cache
       PersonalizationCache.save(personalization);
 
-      console.log('✅ Personalization saved successfully');
+      console.log('✅ Personalization saved successfully to database');
 
       // Show success confirmation
       setSavedConfirmation(true);
@@ -230,7 +239,15 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
       ? currentTraits.filter(t => t !== trait)
       : [...currentTraits, trait];
     
-    setPersonalization({ ...personalization, traits: updatedTraits });
+    setPersonalization(prev => ({ ...prev, traits: updatedTraits }));
+  };
+
+  // Fix typing issue by using proper change handlers
+  const updatePersonalization = (field: keyof UserPersonalization, value: any) => {
+    setPersonalization(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   const MainContent = () => {
@@ -290,7 +307,7 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
             </div>
             <Input
               value={personalization.nickname || ''}
-              onChange={(e) => setPersonalization({ ...personalization, nickname: e.target.value })}
+              onChange={(e) => updatePersonalization('nickname', e.target.value)}
               placeholder={language === 'ar' ? 'أحمد' : 'abood'}
               className="w-full"
             />
@@ -303,7 +320,7 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
             </Label>
             <Input
               value={personalization.role || ''}
-              onChange={(e) => setPersonalization({ ...personalization, role: e.target.value })}
+              onChange={(e) => updatePersonalization('role', e.target.value)}
               placeholder={language === 'ar' ? 'مصمم داخلي' : 'Interior designer'}
               className="w-full"
             />
@@ -321,7 +338,7 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
               </div>
               <Select
                 value={personalization.ai_tone || 'neutral'}
-                onValueChange={(value) => setPersonalization({ ...personalization, ai_tone: value })}
+                onValueChange={(value) => updatePersonalization('ai_tone', value)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -346,7 +363,7 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
               </div>
               <Select
                 value={personalization.reply_style || 'detailed'}
-                onValueChange={(value) => setPersonalization({ ...personalization, reply_style: value })}
+                onValueChange={(value) => updatePersonalization('reply_style', value)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -393,7 +410,7 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
             </Label>
             <Textarea
               value={personalization.personal_note || ''}
-              onChange={(e) => setPersonalization({ ...personalization, personal_note: e.target.value })}
+              onChange={(e) => updatePersonalization('personal_note', e.target.value)}
               placeholder={language === 'ar' 
                 ? 'كلما طلبت تعليمات خطوة بخطوة، قسمها إلى خطوات بطيئة وواضحة. تأكد من كل خطوة قبل الانتقال للتالية.'
                 : 'Whenever I ask for step-by-step instructions, break them into slow, clear baby steps. Confirm each one before moving on.'
@@ -418,7 +435,7 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
             </div>
             <Switch
               checked={personalization.auto_enable !== false}
-              onCheckedChange={(checked) => setPersonalization({ ...personalization, auto_enable: checked })}
+              onCheckedChange={(checked) => updatePersonalization('auto_enable', checked)}
             />
           </div>
 
