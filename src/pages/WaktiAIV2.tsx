@@ -20,9 +20,7 @@ const WaktiAIV2 = () => {
   const [showConversations, setShowConversations] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
-  const [textGenParams, setTextGenParams] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   
   // Enhanced task confirmation state
@@ -49,6 +47,7 @@ const WaktiAIV2 = () => {
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
 
+  // ULTRA-FAST: Minimal user profile loading
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
@@ -70,27 +69,28 @@ const WaktiAIV2 = () => {
     fetchUserProfile();
   }, []);
 
+  // ULTRA-FAST: Streamlined session loading
   useEffect(() => {
     if (!hasLoadedSession) {
       const savedSession = WaktiAIV2Service.loadChatSession();
       if (savedSession) {
-        console.log('📂 Restoring chat session...');
         setSessionMessages(savedSession.messages || []);
         if (savedSession.conversationId) {
           setCurrentConversationId(savedSession.conversationId);
-          loadFullConversationHistory(savedSession.conversationId);
         }
       }
       setHasLoadedSession(true);
     }
   }, [hasLoadedSession]);
 
+  // ULTRA-FAST: Simplified session saving
   useEffect(() => {
     if (hasLoadedSession && sessionMessages.length > 0) {
       WaktiAIV2Service.saveChatSession(sessionMessages, currentConversationId);
     }
   }, [sessionMessages, currentConversationId, hasLoadedSession]);
 
+  // ULTRA-FAST: Minimal conversations loading
   useEffect(() => {
     const fetchConversations = async () => {
       try {
@@ -98,12 +98,253 @@ const WaktiAIV2 = () => {
         setConversations(fetchedConversations);
       } catch (error: any) {
         console.error('Error fetching conversations:', error);
-        setError(error.message || 'Failed to fetch conversations');
       }
     };
 
     fetchConversations();
   }, []);
+
+  // ULTRA-FAST: Direct task confirmation without service calls
+  const handleTaskConfirmation = async (taskData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('tr_tasks')
+        .insert({
+          user_id: user.id,
+          title: taskData.title,
+          description: taskData.description || '',
+          due_date: taskData.due_date ? new Date(taskData.due_date).toISOString().split('T')[0] : null,
+          due_time: taskData.due_time || null,
+          priority: taskData.priority || 'normal',
+          completed: false
+        });
+
+      if (error) throw new Error('Failed to create task');
+
+      // FAST: Direct subtask insertion if needed
+      if (taskData.subtasks && taskData.subtasks.length > 0) {
+        const { data: createdTask } = await supabase
+          .from('tr_tasks')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('title', taskData.title)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (createdTask) {
+          const subtaskInserts = taskData.subtasks.map((subtask: string, index: number) => ({
+            task_id: createdTask.id,
+            title: subtask,
+            completed: false,
+            order_index: index
+          }));
+
+          await supabase.from('tr_subtasks').insert(subtaskInserts);
+        }
+      }
+
+      // FAST: Direct success message
+      const successMessage: AIMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'ar' 
+          ? `تم إنشاء المهمة بنجاح! 👍\n\n**${taskData.title}**`
+          : `Task created successfully! 👍\n\n**${taskData.title}**`,
+        timestamp: new Date(),
+        intent: 'task_created',
+        confidence: 'high',
+        actionTaken: true
+      };
+
+      setSessionMessages(prev => [...prev, successMessage]);
+      setPendingTaskData(null);
+      setShowTaskConfirmation(false);
+      showSuccess(language === 'ar' ? 'تم إنشاء المهمة!' : 'Task created!');
+
+    } catch (error: any) {
+      console.error('Task creation failed:', error);
+      showError(error.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task'));
+    } finally {
+      setTaskConfirmationLoading(false);
+    }
+  };
+
+  // ULTRA-FAST: Direct reminder confirmation
+  const handleReminderConfirmation = async (reminderData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('tr_reminders')
+        .insert({
+          user_id: user.id,
+          title: reminderData.title,
+          description: reminderData.description || '',
+          due_date: reminderData.due_date ? new Date(reminderData.due_date).toISOString().split('T')[0] : null,
+          due_time: reminderData.due_time || null
+        });
+
+      if (error) throw new Error('Failed to create reminder');
+
+      const successMessage: AIMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'ar' 
+          ? `تم إنشاء التذكير بنجاح! 👍\n\n**${reminderData.title}**`
+          : `Reminder created successfully! 👍\n\n**${reminderData.title}**`,
+        timestamp: new Date(),
+        intent: 'reminder_created',
+        confidence: 'high',
+        actionTaken: true
+      };
+
+      setSessionMessages(prev => [...prev, successMessage]);
+      setPendingReminderData(null);
+      setShowTaskConfirmation(false);
+      showSuccess(language === 'ar' ? 'تم إنشاء التذكير!' : 'Reminder created!');
+
+    } catch (error: any) {
+      console.error('Reminder creation failed:', error);
+      showError(error.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder'));
+    } finally {
+      setTaskConfirmationLoading(false);
+    }
+  };
+
+  const handleCancelTaskConfirmation = () => {
+    setPendingTaskData(null);
+    setPendingReminderData(null);
+    setShowTaskConfirmation(false);
+    
+    const cancelMessage: AIMessage = {
+      id: `cancel-${Date.now()}`,
+      role: 'assistant',
+      content: language === 'ar' 
+        ? 'تم إلغاء الإنشاء.'
+        : 'Creation cancelled.',
+      timestamp: new Date(),
+      intent: 'cancelled',
+      confidence: 'high'
+    };
+
+    setSessionMessages(prev => [...prev, cancelMessage]);
+  };
+
+  // ULTRA-FAST: Streamlined message sending with minimal processing
+  const handleSendMessage = async (
+    message: string, 
+    inputType: 'text' | 'voice' = 'text',
+    attachedFiles?: any[]
+  ) => {
+    if ((!message.trim() && !attachedFiles?.length) || isLoading) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log('⚡ ULTRA-FAST: Direct message processing initiated');
+
+      // FAST: Handle Voice quota check only if needed
+      if (inputType === 'voice') {
+        const canTranslate = await incrementTranslationCount();
+        if (!canTranslate) {
+          setIsLoading(false);
+          showError(language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Translation quota exceeded');
+          return;
+        }
+      }
+
+      // FAST: Direct user message creation
+      const userMessage: AIMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: message || '[File attachment]',
+        timestamp: new Date(),
+        inputType,
+        attachedFiles: attachedFiles || []
+      };
+
+      const updatedSessionMessages = [...sessionMessages, userMessage];
+      setSessionMessages(updatedSessionMessages);
+
+      // ULTRA-FAST: Direct service call with minimal context
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const response = await WaktiAIV2Service.sendMessage(
+        message,
+        user.id,
+        language,
+        currentConversationId,
+        inputType,
+        [],
+        false,
+        activeTrigger,
+        null,
+        attachedFiles || [],
+        null,
+        null,
+        false,
+        false,
+        false,
+        false,
+        false,
+        null,
+        null
+      );
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      // FAST: Direct response processing
+      const assistantMessage: AIMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: response.response,
+        timestamp: new Date(),
+        intent: response.intent,
+        confidence: response.confidence as 'high' | 'medium' | 'low',
+        actionTaken: response.actionTaken,
+        browsingUsed: response.browsingUsed,
+        browsingData: response.browsingData,
+        imageUrl: response.imageUrl,
+        needsConfirmation: response.needsConfirmation,
+        pendingTaskData: response.pendingTaskData,
+        pendingReminderData: response.pendingReminderData
+      };
+
+      const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
+      setSessionMessages(finalSessionMessages);
+
+      // FAST: Handle confirmations
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        setPendingTaskData(response.pendingTaskData);
+        setPendingReminderData(response.pendingReminderData);
+        setShowTaskConfirmation(true);
+      }
+
+      // FAST: Voice quota updates
+      if (inputType === 'voice') {
+        await refreshTranslationQuota();
+        await refreshVoiceQuota();
+      }
+
+    } catch (error: any) {
+      console.error('⚡ ULTRA-FAST: Error:', error);
+      setError(error.message || 'Failed to send message');
+      showError(error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchConversations = async () => {
     try {
@@ -143,313 +384,16 @@ const WaktiAIV2 = () => {
     }
   };
 
-  const handleTaskConfirmation = async (taskData: any) => {
-    setTaskConfirmationLoading(true);
-    try {
-      console.log('🔧 Creating task with data:', taskData);
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+  const saveCurrentConversationIfNeeded = async () => {
+    if (sessionMessages.length > 0 && !currentConversationId) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      const { error } = await supabase
-        .from('tr_tasks')
-        .insert({
-          user_id: user.id,
-          title: taskData.title,
-          description: taskData.description || '',
-          due_date: taskData.due_date ? new Date(taskData.due_date).toISOString().split('T')[0] : null,
-          due_time: taskData.due_time || null,
-          priority: taskData.priority || 'normal',
-          completed: false
-        });
-
-      if (error) {
-        console.error('❌ Error creating task:', error);
-        throw new Error('Failed to create task');
+        await WaktiAIV2Service.saveCurrentConversationIfNeeded(user.id, sessionMessages, currentConversationId, language);
+      } catch (error) {
+        console.error('❌ Error saving current conversation:', error);
       }
-
-      if (taskData.subtasks && taskData.subtasks.length > 0) {
-        const { data: createdTask } = await supabase
-          .from('tr_tasks')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('title', taskData.title)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (createdTask) {
-          const subtaskInserts = taskData.subtasks.map((subtask: string, index: number) => ({
-            task_id: createdTask.id,
-            title: subtask,
-            completed: false,
-            order_index: index
-          }));
-
-          await supabase
-            .from('tr_subtasks')
-            .insert(subtaskInserts);
-        }
-      }
-
-      const successMessage: AIMessage = {
-        id: `success-${Date.now()}`,
-        role: 'assistant',
-        content: language === 'ar' 
-          ? `تم إنشاء المهمة بنجاح! 👍\n\n**${taskData.title}**\n\n[انتقل إلى المهام والتذكيرات](/tasks-reminders)`
-          : `Task successfully created! 👍\n\n**${taskData.title}**\n\n[Go to Tasks & Reminders](/tasks-reminders)`,
-        timestamp: new Date(),
-        intent: 'task_created_success',
-        confidence: 'high',
-        actionTaken: true
-      };
-
-      const updatedMessages = [...sessionMessages, successMessage];
-      setSessionMessages(updatedMessages);
-
-      setPendingTaskData(null);
-      setShowTaskConfirmation(false);
-
-      showSuccess(
-        language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!'
-      );
-
-    } catch (error: any) {
-      console.error('❌ Task creation failed:', error);
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task')
-      );
-    } finally {
-      setTaskConfirmationLoading(false);
-    }
-  };
-
-  const handleReminderConfirmation = async (reminderData: any) => {
-    setTaskConfirmationLoading(true);
-    try {
-      console.log('🔧 Creating reminder with data:', reminderData);
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const { error } = await supabase
-        .from('tr_reminders')
-        .insert({
-          user_id: user.id,
-          title: reminderData.title,
-          description: reminderData.description || '',
-          due_date: reminderData.due_date ? new Date(reminderData.due_date).toISOString().split('T')[0] : null,
-          due_time: reminderData.due_time || null
-        });
-
-      if (error) {
-        console.error('❌ Error creating reminder:', error);
-        throw new Error('Failed to create reminder');
-      }
-
-      const successMessage: AIMessage = {
-        id: `success-${Date.now()}`,
-        role: 'assistant',
-        content: language === 'ar' 
-          ? `تم إنشاء التذكير بنجاح! 👍\n\n**${reminderData.title}**\n\n[انتقل إلى المهام والتذكيرات](/tasks-reminders)`
-          : `Reminder successfully created! 👍\n\n**${reminderData.title}**\n\n[Go to Tasks & Reminders](/tasks-reminders)`,
-        timestamp: new Date(),
-        intent: 'reminder_created_success',
-        confidence: 'high',
-        actionTaken: true
-      };
-
-      const updatedMessages = [...sessionMessages, successMessage];
-      setSessionMessages(updatedMessages);
-
-      setPendingReminderData(null);
-      setShowTaskConfirmation(false);
-
-      showSuccess(
-        language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!'
-      );
-
-    } catch (error: any) {
-      console.error('❌ Reminder creation failed:', error);
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder')
-      );
-    } finally {
-      setTaskConfirmationLoading(false);
-    }
-  };
-
-  const handleCancelTaskConfirmation = () => {
-    setPendingTaskData(null);
-    setPendingReminderData(null);
-    setShowTaskConfirmation(false);
-    
-    const cancelMessage: AIMessage = {
-      id: `cancel-${Date.now()}`,
-      role: 'assistant',
-      content: language === 'ar' 
-        ? 'تم إلغاء الإنشاء. يمكنك المحاولة مرة أخرى في أي وقت!'
-        : 'Creation cancelled. You can try again anytime!',
-      timestamp: new Date(),
-      intent: 'task_cancelled',
-      confidence: 'high'
-    };
-
-    const updatedMessages = [...sessionMessages, cancelMessage];
-    setSessionMessages(updatedMessages);
-  };
-
-  // SIMPLIFIED: Direct service call with minimal processing
-  const handleSendMessage = async (
-    message: string, 
-    inputType: 'text' | 'voice' = 'text',
-    attachedFiles?: any[]
-  ) => {
-    if ((!message.trim() && !attachedFiles?.length) || isLoading) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      console.log('🚀 FAST: Wakti AI Direct Processing');
-
-      // Handle Voice Translator quota increment BEFORE sending
-      if (inputType === 'voice') {
-        const canTranslate = await incrementTranslationCount();
-        if (!canTranslate) {
-          setIsLoading(false);
-          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من الترجمات' : 'Translation quota exceeded');
-          return;
-        }
-      }
-
-      const userMessage: AIMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: message || '[File attachment]',
-        timestamp: new Date(),
-        inputType,
-        attachedFiles: attachedFiles || []
-      };
-
-      const updatedSessionMessages = [...sessionMessages, userMessage];
-      setSessionMessages(updatedSessionMessages);
-
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      // DIRECT SERVICE CALL - No optimization layers
-      const response = await WaktiAIV2Service.sendMessage(
-        message,
-        user.id,
-        language,
-        currentConversationId,
-        inputType,
-        updatedSessionMessages.slice(-10), // Only last 10 messages for context
-        false, // confirmSearch
-        activeTrigger,
-        textGenParams,
-        attachedFiles || [],
-        null, // calendarContext - load only if needed
-        null, // userContext - load only if needed
-        true, // enableAdvancedIntegration
-        true, // enablePredictiveInsights
-        true, // enableWorkflowAutomation
-        false, // confirmTask
-        false, // confirmReminder
-        null, // pendingTaskData
-        null  // pendingReminderData
-      );
-
-      console.log('✅ FAST: Response received');
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.conversationId && response.conversationId !== currentConversationId) {
-        setCurrentConversationId(response.conversationId);
-        loadFullConversationHistory(response.conversationId);
-      }
-
-      const assistantMessage: AIMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: response.response,
-        timestamp: new Date(),
-        intent: response.intent,
-        confidence: response.confidence as 'high' | 'medium' | 'low',
-        actionTaken: response.actionTaken,
-        browsingUsed: response.browsingUsed,
-        browsingData: response.browsingData,
-        quotaStatus: response.quotaStatus,
-        requiresSearchConfirmation: response.requiresSearchConfirmation,
-        imageUrl: response.imageUrl,
-        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl,
-        actionResult: response.actionResult,
-        fileAnalysisResults: response.fileAnalysisResults,
-        deepIntegration: response.deepIntegration,
-        automationSuggestions: response.automationSuggestions,
-        predictiveInsights: response.predictiveInsights,
-        workflowActions: response.workflowActions,
-        contextualActions: response.contextualActions,
-        needsConfirmation: response.needsConfirmation,
-        pendingTaskData: response.pendingTaskData,
-        pendingReminderData: response.pendingReminderData
-      };
-
-      const finalSessionMessages = [...updatedSessionMessages, assistantMessage].slice(-30);
-      setSessionMessages(finalSessionMessages);
-
-      // Handle task/reminder confirmation
-      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
-        setPendingTaskData(response.pendingTaskData);
-        setPendingReminderData(response.pendingReminderData);
-        setShowTaskConfirmation(true);
-      }
-
-      if (!currentConversationId) {
-        const allMessagesForConversation = [...updatedSessionMessages, assistantMessage];
-        const newConversationId = await createConversationIfNeeded(allMessagesForConversation);
-        if (newConversationId) {
-          setCurrentConversationId(newConversationId);
-          loadFullConversationHistory(newConversationId);
-          fetchConversations();
-        }
-      } else {
-        await saveMessageToConversation(userMessage, currentConversationId);
-        await saveMessageToConversation(assistantMessage, currentConversationId);
-        fetchConversations();
-      }
-
-      // Voice Translation quota refresh
-      if (inputType === 'voice') {
-        await refreshTranslationQuota();
-        const remainingTranslations = MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1;
-        showSuccess(
-          language === 'ar' 
-            ? `تم تنفيذ الترجمة الصوتية بنجاح (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
-            : `Voice translation completed (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} remaining)`
-        );
-      }
-
-      if (inputType === 'voice') {
-        await refreshVoiceQuota();
-      }
-
-      if (response.requiresSearchConfirmation) {
-        setSearchConfirmationRequired(true);
-      }
-
-    } catch (error: any) {
-      console.error('🔄 FAST: ❌ System error:', error);
-      setError(error.message || 'Failed to send message');
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
-      );
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -556,9 +500,6 @@ const WaktiAIV2 = () => {
         fetchAIQuota(true);
       }
 
-      setSearchConfirmationRequired(false);
-      fetchConversations();
-
     } catch (error: any) {
       console.error('Error confirming search:', error);
       setError(error.message || 'Failed to confirm search');
@@ -567,64 +508,43 @@ const WaktiAIV2 = () => {
     }
   };
 
-  const saveCurrentConversationIfNeeded = async () => {
-    if (sessionMessages.length > 0 && !currentConversationId) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        await WaktiAIV2Service.saveCurrentConversationIfNeeded(user.id, sessionMessages, currentConversationId, language);
-      } catch (error) {
-        console.error('❌ Error saving current conversation:', error);
-      }
-    }
-  };
-
   const handleNewConversation = async () => {
-    console.log('🆕 Starting new conversation...');
-    
-    await saveCurrentConversationIfNeeded();
-    
     setCurrentConversationId(null);
     setSessionMessages([]);
     setConversationMessages([]);
     WaktiAIV2Service.clearChatSession();
-    setSearchConfirmationRequired(false);
     setError(null);
-    
     setPendingTaskData(null);
     setPendingReminderData(null);
     setShowTaskConfirmation(false);
-    
-    await fetchConversations();
-    
-    setShowConversations(false);
-    
-    console.log('✅ New conversation started');
   };
 
   const handleSelectConversation = async (conversationId: string) => {
     try {
-      console.log('📂 Loading conversation:', conversationId);
       setIsLoading(true);
+      const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
       
-      await loadFullConversationHistory(conversationId);
+      const convertedMessages: AIMessage[] = messages.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+        intent: msg.intent,
+        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
+        actionTaken: !!msg.action_taken,
+        inputType: msg.input_type as 'text' | 'voice'
+      }));
       
+      setConversationMessages(convertedMessages);
       setCurrentConversationId(conversationId);
-      
       setSessionMessages([]);
-      
-      setSearchConfirmationRequired(false);
       setError(null);
-      
       setPendingTaskData(null);
       setPendingReminderData(null);
       setShowTaskConfirmation(false);
       
-      console.log('📂 Conversation loaded successfully');
-      
     } catch (error: any) {
-      console.error('❌ Error loading conversation:', error);
+      console.error('Error loading conversation:', error);
       setError('Failed to load conversation');
     } finally {
       setIsLoading(false);
@@ -632,13 +552,10 @@ const WaktiAIV2 = () => {
   };
 
   const handleClearChat = () => {
-    console.log('🗑️ Clearing current chat session...');
     setSessionMessages([]);
     setConversationMessages([]);
     WaktiAIV2Service.clearChatSession();
-    setSearchConfirmationRequired(false);
     setError(null);
-    
     setPendingTaskData(null);
     setPendingReminderData(null);
     setShowTaskConfirmation(false);
@@ -653,26 +570,18 @@ const WaktiAIV2 = () => {
         setSessionMessages([]);
         setConversationMessages([]);
       }
-      showSuccess(
-        language === 'ar' ? 'تم حذف المحادثة بنجاح' : 'Conversation deleted successfully'
-      );
+      showSuccess(language === 'ar' ? 'تم حذف المحادثة' : 'Conversation deleted');
     } catch (error: any) {
       console.error('Error deleting conversation:', error);
-      setError(error.message || 'Failed to delete conversation');
-      showError(
-        error.message || (language === 'ar' ? 'فشل في حذف المحادثة' : 'Failed to delete conversation')
-      );
+      showError(error.message || (language === 'ar' ? 'فشل في حذف المحادثة' : 'Failed to delete conversation'));
     }
   };
 
   const handleTriggerChange = (trigger: string) => {
     setActiveTrigger(trigger);
-    console.log('✨ Active trigger set to:', trigger);
   };
 
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply', isTextGenerated: boolean = true) => {
-    console.log('📝 WaktiAIV2: Text generated from tool:', { text, mode, length: text.length });
-    
     const assistantMessage: AIMessage = {
       id: `assistant-textgen-${Date.now()}`,
       role: 'assistant',
@@ -684,32 +593,9 @@ const WaktiAIV2 = () => {
       isTextGenerated: true
     };
 
-    console.log('📝 WaktiAIV2: Adding generated text to session messages');
-    const updatedSessionMessages = [...sessionMessages, assistantMessage].slice(-30);
-    setSessionMessages(updatedSessionMessages);
-
-    if (currentConversationId) {
-      console.log('📝 WaktiAIV2: Saving generated text to conversation:', currentConversationId);
-      saveMessageToConversation(assistantMessage, currentConversationId);
-    }
-    
+    setSessionMessages(prev => [...prev, assistantMessage]);
     setShowQuickActions(false);
-    
-    showSuccess(
-      language === 'ar' ? 'تم إنشاء النص وإضافته للمحادثة' : 'Text generated and added to chat'
-    );
-
-    setTimeout(() => {
-      if (scrollAreaRef.current) {
-        const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (scrollContainer) {
-          scrollContainer.scrollTo({
-            top: scrollContainer.scrollHeight,
-            behavior: 'smooth'
-          });
-        }
-      }
-    }, 100);
+    showSuccess(language === 'ar' ? 'تم إنشاء النص' : 'Text generated');
   };
 
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
@@ -733,8 +619,8 @@ const WaktiAIV2 = () => {
       <div className="sticky top-0 z-30">
         <NotificationBars
           quotaStatus={aiQuota}
-          searchConfirmationRequired={searchConfirmationRequired}
-          onSearchConfirmation={handleSearchConfirmation}
+          searchConfirmationRequired={false}
+          onSearchConfirmation={() => {}}
           onQuotaRefresh={() => fetchAIQuota(true)}
         />
       </div>
