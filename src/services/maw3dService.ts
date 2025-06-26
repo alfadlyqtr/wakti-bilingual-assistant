@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
@@ -114,31 +113,23 @@ export class Maw3dService {
   static async getEventByShortId(shortId: string): Promise<Maw3dEvent | null> {
     console.log('Fetching Maw3d event by short ID:', shortId);
     
-    // First try with the exact shortId as provided
-    let { data, error } = await supabase
+    // Clean the shortId - remove maw3d_ prefix if present for database query
+    const cleanShortId = shortId.startsWith('maw3d_') ? shortId : `maw3d_${shortId}`;
+    
+    console.log('Querying with clean short ID:', cleanShortId);
+    
+    const { data, error } = await supabase
       .from('maw3d_events')
       .select('*')
-      .eq('short_id', shortId)
+      .eq('short_id', cleanShortId)
       .single();
-
-    if (error && error.code === 'PGRST116') {
-      // If not found, try with the maw3d_ prefix
-      const prefixedShortId = shortId.startsWith('maw3d_') ? shortId : `maw3d_${shortId}`;
-      console.log('Event not found with original shortId, trying with prefix:', prefixedShortId);
-      
-      const result = await supabase
-        .from('maw3d_events')
-        .select('*')
-        .eq('short_id', prefixedShortId)
-        .single();
-      
-      data = result.data;
-      error = result.error;
-    }
 
     if (error) {
       console.error('Error fetching event by short ID:', error);
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {
+        console.log('Event not found with short ID:', cleanShortId);
+        return null;
+      }
       throw error;
     }
     
@@ -256,6 +247,18 @@ export class Maw3dService {
 
     const trimmedName = guestName.trim();
     
+    // Check for duplicate names for this event
+    const { data: existingRsvp } = await supabase
+      .from('maw3d_rsvps')
+      .select('id')
+      .eq('event_id', eventId)
+      .eq('guest_name', trimmedName)
+      .single();
+
+    if (existingRsvp) {
+      throw new Error('Someone with this name has already responded to this event');
+    }
+    
     // Simple guest RSVP - no user_id needed
     const rsvpData = {
       event_id: eventId,
@@ -266,7 +269,7 @@ export class Maw3dService {
 
     console.log('Creating RSVP for guest:', trimmedName);
     
-    // Insert new guest RSVP - the unique constraint will prevent duplicates
+    // Insert new guest RSVP
     const { data, error } = await supabase
       .from('maw3d_rsvps')
       .insert(rsvpData)
@@ -275,10 +278,6 @@ export class Maw3dService {
 
     if (error) {
       console.error('Error creating RSVP for guest:', error);
-      // Handle unique constraint violation
-      if (error.code === '23505') {
-        throw new Error('Someone with this name has already responded to this event');
-      }
       throw error;
     }
     

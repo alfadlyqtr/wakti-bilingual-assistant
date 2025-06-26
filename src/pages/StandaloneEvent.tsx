@@ -2,7 +2,7 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import EventView from '@/components/events/EventView';
-import Maw3dView from '@/pages/Maw3dView';
+import Maw3dEventView from '@/components/maw3d/Maw3dEventView';
 
 export default function StandaloneEventPage() {
   const { id } = useParams();
@@ -11,8 +11,8 @@ export default function StandaloneEventPage() {
   const isMaw3dEvent = id && id.startsWith('maw3d_');
   
   if (isMaw3dEvent) {
-    // For Maw3d events, render the Maw3dView component
-    return <Maw3dView />;
+    // For Maw3d events, render the dedicated Maw3dEventView component
+    return <Maw3dEventView standalone={true} />;
   }
   
   // For regular events, render the EventView component
