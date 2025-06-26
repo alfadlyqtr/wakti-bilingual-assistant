@@ -1,12 +1,9 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { Chess } from 'chess.js';
-// @ts-ignore - react-chessboard may not have perfect TypeScript definitions
-import { Chessboard } from 'react-chessboard';
 
 interface ChessGameProps {
   onBack: () => void;
@@ -33,6 +30,11 @@ const AI_REMARKS = {
   ]
 };
 
+const PIECE_SYMBOLS = {
+  'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+  'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+};
+
 export function ChessGame({ onBack }: ChessGameProps) {
   const { language } = useTheme();
   const { showSuccess, showInfo, showError } = useToastHelper();
@@ -44,6 +46,8 @@ export function ChessGame({ onBack }: ChessGameProps) {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
+  const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+  const [possibleMoves, setPossibleMoves] = useState<string[]>([]);
 
   // Load saved game state
   useEffect(() => {
@@ -119,7 +123,6 @@ export function ChessGame({ onBack }: ChessGameProps) {
         return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
       
       case 'medium':
-        // Simple evaluation of each move
         let bestMove = possibleMoves[0];
         let bestScore = isAIWhite ? -Infinity : Infinity;
         
@@ -137,7 +140,6 @@ export function ChessGame({ onBack }: ChessGameProps) {
         return bestMove;
       
       case 'hard':
-        // Minimax with depth 2
         const minimax = (game: Chess, depth: number, isMaximizing: boolean): number => {
           if (depth === 0 || game.isGameOver()) {
             return evaluatePosition(game);
@@ -208,7 +210,6 @@ export function ChessGame({ onBack }: ChessGameProps) {
           } else {
             setIsPlayerTurn(true);
             
-            // Show AI remark occasionally
             if (Math.random() < 0.3) {
               const remarks = AI_REMARKS[difficulty];
               const randomRemark = remarks[Math.floor(Math.random() * remarks.length)];
@@ -228,39 +229,97 @@ export function ChessGame({ onBack }: ChessGameProps) {
     }
   }, [gameStarted, isPlayerTurn, gameOver, makeAIMove]);
 
-  const onDrop = (sourceSquare: string, targetSquare: string) => {
-    if (!gameStarted || !isPlayerTurn || gameOver) return false;
-    
-    const gameCopy = new Chess(game.fen());
-    try {
-      const move = gameCopy.move({
-        from: sourceSquare,
-        to: targetSquare,
-        promotion: 'q'
-      });
-      
-      if (move) {
-        setGame(gameCopy);
-        setGamePosition(gameCopy.fen());
-        setIsPlayerTurn(false);
+  const getSquarePosition = (index: number) => {
+    const row = Math.floor(index / 8);
+    const col = index % 8;
+    const files = 'abcdefgh';
+    const ranks = '87654321';
+    return files[col] + ranks[row];
+  };
+
+  const handleSquareClick = (square: string) => {
+    if (!gameStarted || !isPlayerTurn || gameOver) return;
+
+    if (selectedSquare === square) {
+      setSelectedSquare(null);
+      setPossibleMoves([]);
+      return;
+    }
+
+    if (selectedSquare && possibleMoves.includes(square)) {
+      // Make move
+      const gameCopy = new Chess(game.fen());
+      try {
+        const move = gameCopy.move({
+          from: selectedSquare,
+          to: square,
+          promotion: 'q'
+        });
         
-        if (gameCopy.isGameOver()) {
-          setGameOver(true);
-          if (gameCopy.isCheckmate()) {
-            showSuccess(language === 'ar' ? 'لقد فزت بالكش مات!' : 'You won by checkmate!');
-          } else if (gameCopy.isDraw()) {
-            showInfo(language === 'ar' ? 'تعادل!' : 'Game is a draw!');
+        if (move) {
+          setGame(gameCopy);
+          setGamePosition(gameCopy.fen());
+          setIsPlayerTurn(false);
+          setSelectedSquare(null);
+          setPossibleMoves([]);
+          
+          if (gameCopy.isGameOver()) {
+            setGameOver(true);
+            if (gameCopy.isCheckmate()) {
+              showSuccess(language === 'ar' ? 'لقد فزت بالكش مات!' : 'You won by checkmate!');
+            } else if (gameCopy.isDraw()) {
+              showInfo(language === 'ar' ? 'تعادل!' : 'Game is a draw!');
+            }
           }
         }
-        
-        return true;
+      } catch (error) {
+        showError(language === 'ar' ? 'حركة غير صحيحة' : 'Invalid move');
       }
-    } catch (error) {
-      showError(language === 'ar' ? 'حركة غير صحيحة' : 'Invalid move');
-      return false;
+    } else {
+      // Select piece
+      const moves = game.moves({ square: square as any, verbose: true });
+      if (moves.length > 0) {
+        setSelectedSquare(square);
+        setPossibleMoves(moves.map(move => move.to));
+      }
+    }
+  };
+
+  const renderBoard = () => {
+    const board = game.board();
+    const squares = [];
+    
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = board[row][col];
+        const square = getSquarePosition(row * 8 + col);
+        const isLight = (row + col) % 2 === 0;
+        const isSelected = selectedSquare === square;
+        const isPossibleMove = possibleMoves.includes(square);
+        
+        squares.push(
+          <div
+            key={square}
+            className={`
+              w-10 h-10 flex items-center justify-center cursor-pointer text-2xl
+              ${isLight ? 'bg-amber-100' : 'bg-amber-800'}
+              ${isSelected ? 'ring-4 ring-blue-500' : ''}
+              ${isPossibleMove ? 'bg-green-300' : ''}
+              hover:opacity-80 transition-all
+            `}
+            onClick={() => handleSquareClick(square)}
+          >
+            {piece && PIECE_SYMBOLS[piece.type.toUpperCase() as keyof typeof PIECE_SYMBOLS]}
+          </div>
+        );
+      }
     }
     
-    return false;
+    return (
+      <div className={`grid grid-cols-8 gap-0 border-2 border-amber-900 ${playerColor === 'black' ? 'rotate-180' : ''}`}>
+        {squares}
+      </div>
+    );
   };
 
   const startGame = () => {
@@ -270,8 +329,9 @@ export function ChessGame({ onBack }: ChessGameProps) {
     setGameStarted(true);
     setGameOver(false);
     setIsPlayerTurn(playerColor === 'white');
+    setSelectedSquare(null);
+    setPossibleMoves([]);
     
-    // If player chose black, AI goes first
     if (playerColor === 'black') {
       setTimeout(() => {
         const aiMove = getAIMove(newGame);
@@ -292,6 +352,8 @@ export function ChessGame({ onBack }: ChessGameProps) {
     setGameStarted(false);
     setGameOver(false);
     setIsPlayerTurn(true);
+    setSelectedSquare(null);
+    setPossibleMoves([]);
     localStorage.removeItem('wakti_chess_game');
   };
 
@@ -358,13 +420,8 @@ export function ChessGame({ onBack }: ChessGameProps) {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-md">
-          <Chessboard
-            position={gamePosition}
-            onPieceDrop={onDrop}
-            boardOrientation={playerColor}
-            arePiecesDraggable={!gameOver && isPlayerTurn}
-          />
+        <div className="w-fit">
+          {renderBoard()}
         </div>
       </div>
 
@@ -372,7 +429,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
         <div className="text-center">
           <p className="text-sm text-slate-600 dark:text-slate-400">
             {isPlayerTurn 
-              ? (language === 'ar' ? 'دورك' : 'Your turn')
+              ? (language === 'ar' ? 'دورك - اضغط على القطعة ثم على المربع المطلوب' : 'Your turn - Click piece then target square')
               : (language === 'ar' ? 'دور الذكاء الاصطناعي...' : 'AI thinking...')
             }
           </p>
