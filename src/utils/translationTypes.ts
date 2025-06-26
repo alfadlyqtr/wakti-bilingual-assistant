@@ -1,4 +1,5 @@
 
+
 export type SupportedLanguage = "en" | "ar";
 
 export type TranslationKey = 
@@ -1355,4 +1356,8 @@ export type TranslationKey =
   // MISSING KEYS FROM CURRENT ERRORS - FIX FOR MAW3D
   | "errorLoadingEvents"
   | "tryAgain"
-  | "discoverEvents";
+  | "discoverEvents"
+  
+  // Missing "agree" key that caused the build error
+  | "agree";
+
