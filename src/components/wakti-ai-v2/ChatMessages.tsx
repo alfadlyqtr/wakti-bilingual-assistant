@@ -1,12 +1,10 @@
+
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 import { useTheme } from '@/providers/ThemeProvider';
-import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
-import { useToastHelper } from '@/hooks/use-toast-helper';
-import { supabase } from '@/integrations/supabase/client';
 
 interface ChatMessagesProps {
   sessionMessages: any[];
@@ -38,7 +36,6 @@ export function ChatMessages({
   onCancelTaskConfirmation
 }: ChatMessagesProps) {
   const { language } = useTheme();
-  const { showSuccess } = useToastHelper();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -53,24 +50,8 @@ export function ChatMessages({
     }
   }, [sessionMessages, isLoading, showTaskConfirmation]);
 
-  // Clear chat memory when starting a completely new conversation (no messages)
-  useEffect(() => {
-    if (sessionMessages.length === 0) {
-      const clearMemory = async () => {
-        try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            WaktiAIV2Service.clearChatMemory(user.id);
-            console.log('🧠 Chat memory cleared for new conversation');
-          }
-        } catch (error) {
-          console.error('Error clearing chat memory:', error);
-        }
-      };
-      
-      clearMemory();
-    }
-  }, [sessionMessages.length]);
+  // Note: Chat memory clearing is now handled directly in the parent component
+  // when starting a new conversation - no need for a separate memory service
 
   // Fixed height component that fills available space
   return (

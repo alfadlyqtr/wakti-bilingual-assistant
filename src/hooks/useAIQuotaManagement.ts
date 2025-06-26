@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { PerformanceCache } from '@/services/PerformanceCache';
 
 interface AIQuota {
   chat_characters_used: number;
@@ -10,6 +9,10 @@ interface AIQuota {
   created_at: string;
   updated_at: string;
 }
+
+// Simple in-memory cache to avoid repeated DB calls
+let quotaCache: { [userId: string]: { data: AIQuota; timestamp: number } } = {};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export function useAIQuotaManagement() {
   const [quota, setQuota] = useState<AIQuota | null>(null);
@@ -20,14 +23,13 @@ export function useAIQuotaManagement() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const cacheKey = `ai_quota_${user.id}`;
-      
-      // Check cache first unless forced refresh
-      if (!forceRefresh) {
-        const cached = PerformanceCache.get<AIQuota>(cacheKey);
-        if (cached) {
-          setQuota(cached);
-          return cached;
+      // Check simple cache first unless forced refresh
+      if (!forceRefresh && quotaCache[user.id]) {
+        const cached = quotaCache[user.id];
+        const now = Date.now();
+        if (now - cached.timestamp < CACHE_DURATION) {
+          setQuota(cached.data);
+          return cached.data;
         }
       }
 
@@ -51,8 +53,12 @@ export function useAIQuotaManagement() {
         updated_at: new Date().toISOString()
       };
 
-      // Cache for 5 minutes
-      PerformanceCache.set(cacheKey, quotaData, 300000);
+      // Simple cache update
+      quotaCache[user.id] = {
+        data: quotaData,
+        timestamp: Date.now()
+      };
+
       setQuota(quotaData);
       return quotaData;
 
@@ -85,8 +91,7 @@ export function useAIQuotaManagement() {
       }
 
       // Invalidate cache and refetch
-      const cacheKey = `ai_quota_${user.id}`;
-      PerformanceCache.invalidate(cacheKey);
+      delete quotaCache[user.id];
       await fetchQuota(true);
 
     } catch (error) {
