@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,6 +6,7 @@ import { useToastHelper } from '@/hooks/use-toast-helper';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { t } from '@/utils/translations';
+import { TranslationKey } from '@/utils/translationTypes';
 
 interface ChessGameProps {
   onBack: () => void;
@@ -16,7 +16,7 @@ type Difficulty = 'easy' | 'medium' | 'hard';
 type PlayerColor = 'white' | 'black';
 
 const getAIRemarks = (difficulty: Difficulty, language: string) => {
-  const remarkKeys = {
+  const remarkKeys: Record<Difficulty, TranslationKey[]> = {
     easy: ['chess_easy_nice_move', 'chess_easy_didnt_see', 'chess_easy_oops', 'chess_easy_learning', 'chess_easy_mistake'],
     medium: ['chess_medium_sure', 'chess_medium_interesting', 'chess_medium_solid', 'chess_medium_thinking', 'chess_medium_challenge'],
     hard: ['chess_hard_wont_survive', 'chess_hard_simulation', 'chess_hard_try_again', 'chess_hard_calculated', 'chess_hard_inevitable']
@@ -281,6 +281,15 @@ export function ChessGame({ onBack }: ChessGameProps) {
     setCurrentAIRemark('');
   };
 
+  const getDifficultyLabel = (diff: Difficulty): TranslationKey => {
+    const difficultyMap: Record<Difficulty, TranslationKey> = {
+      easy: 'difficulty_easy',
+      medium: 'difficulty_medium',
+      hard: 'difficulty_hard'
+    };
+    return difficultyMap[diff];
+  };
+
   if (!gameStarted) {
     return (
       <div className="space-y-6">
@@ -353,7 +362,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
           {language === 'ar' ? ` الذكاء الاصطناعي: ${playerColor === 'white' ? 'أسود' : 'أبيض'}` : ` AI: ${playerColor === 'white' ? 'black' : 'white'}`}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-500">
-          {t('difficulty', language)}: {t(`difficulty_${difficulty}`, language)}
+          {t('difficulty', language)}: {t(getDifficultyLabel(difficulty), language)}
         </p>
       </div>
 

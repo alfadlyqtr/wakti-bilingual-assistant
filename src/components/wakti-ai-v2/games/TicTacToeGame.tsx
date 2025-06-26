@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { TranslationKey } from '@/utils/translationTypes';
 
 interface TicTacToeGameProps {
   onBack: () => void;
@@ -14,7 +14,7 @@ type Board = Player[];
 type Difficulty = 'easy' | 'medium' | 'hard';
 
 const getAIRemarks = (difficulty: Difficulty, language: string) => {
-  const remarkKeys = {
+  const remarkKeys: Record<Difficulty, TranslationKey[]> = {
     easy: ['ttt_easy_messing', 'ttt_easy_oops', 'ttt_easy_what_happened', 'ttt_easy_random', 'ttt_easy_confused'],
     medium: ['ttt_medium_nice_block', 'ttt_medium_almost', 'ttt_medium_again', 'ttt_medium_tricky', 'ttt_medium_watching'],
     hard: ['ttt_hard_cant_beat', 'ttt_hard_saw_moves', 'ttt_hard_last_chance', 'ttt_hard_perfect', 'ttt_hard_impossible']
@@ -264,6 +264,15 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     return t('victory_ai_win', language);
   };
 
+  const getDifficultyLabel = (diff: Difficulty): TranslationKey => {
+    const difficultyMap: Record<Difficulty, TranslationKey> = {
+      easy: 'difficulty_easy',
+      medium: 'difficulty_medium',
+      hard: 'difficulty_hard'
+    };
+    return difficultyMap[diff];
+  };
+
   if (!gameStarted) {
     return (
       <div className="space-y-6">
@@ -336,7 +345,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
           {language === 'ar' ? ` الذكاء الاصطناعي: ${playerSymbol === 'X' ? 'O' : 'X'}` : ` AI: ${playerSymbol === 'X' ? 'O' : 'X'}`}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-500">
-          {t('difficulty', language)}: {t(`difficulty_${difficulty}`, language)}
+          {t('difficulty', language)}: {t(getDifficultyLabel(difficulty), language)}
         </p>
       </div>
 
