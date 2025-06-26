@@ -6,10 +6,10 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Heart, Plus, Calendar } from 'lucide-react';
+import { Heart, Plus, Calendar, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-// Skeleton loading component for better perceived performance
+// Enhanced skeleton loading component
 const EventsSkeleton = () => (
   <div className="grid gap-6 md:gap-8">
     {[...Array(6)].map((_, i) => (
@@ -32,30 +32,36 @@ const OptimizedMaw3dEvents = () => {
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  // Use optimized hook with caching
+  // Use optimized hook with enhanced caching
   const { events, loading, error, refreshEvents } = useOptimizedMaw3dEvents();
 
   const handleEventClick = (event: any) => {
-    console.log('Navigating to event:', event.id);
+    console.log('📱 Navigating to event:', event.id);
     navigate(`/maw3d/${event.id}`);
   };
 
   const handleCreateEvent = () => {
-    console.log('Navigating to create event');
+    console.log('📱 Navigating to create event');
     navigate('/maw3d-create');
   };
 
-  // Handle error state
+  const handleRefresh = async () => {
+    console.log('🔄 Manual refresh triggered');
+    await refreshEvents();
+  };
+
+  // Handle error state with retry option
   if (error) {
     return (
       <div className="min-h-screen p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
         <div className="max-w-4xl mx-auto">
           <div className="text-center py-12">
             <Heart className="mx-auto h-12 w-12 text-red-500 mb-4" />
-            <h3 className="text-lg font-medium mb-2">{t("errorLoadingEvents", language)}</h3>
+            <h3 className="text-lg font-medium mb-2">Error Loading Events</h3>
             <p className="text-muted-foreground mb-4">{error}</p>
-            <Button onClick={() => refreshEvents()} variant="outline">
-              {t("tryAgain", language)}
+            <Button onClick={handleRefresh} variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
             </Button>
           </div>
         </div>
@@ -74,27 +80,38 @@ const OptimizedMaw3dEvents = () => {
             </div>
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                {t("maw3dEvents", language)}
+                Maw3d Events
               </h1>
               <p className="text-muted-foreground">
                 {loading 
-                  ? t("loadingEvents", language)
-                  : t("discoverEvents", language)
+                  ? 'Loading events...'
+                  : 'Discover and manage your events'
                 }
               </p>
             </div>
           </div>
           
-          <Button 
-            onClick={handleCreateEvent}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            {t("createEvent", language)}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleRefresh}
+              variant="outline"
+              size="sm"
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button 
+              onClick={handleCreateEvent}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Event
+            </Button>
+          </div>
         </div>
 
-        {/* Events content with suspense and optimized loading */}
+        {/* Events content with enhanced suspense and optimized loading */}
         <Suspense fallback={<EventsSkeleton />}>
           {loading ? (
             <EventsSkeleton />
@@ -103,10 +120,10 @@ const OptimizedMaw3dEvents = () => {
               <div className="max-w-md mx-auto p-8 rounded-2xl bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl">
                 <Heart className="mx-auto h-16 w-16 text-purple-400 mb-6" />
                 <h3 className="text-xl font-semibold mb-3 text-gray-800">
-                  {t("noEventsYet", language)}
+                  No Events Yet
                 </h3>
                 <p className="text-gray-600 mb-6 leading-relaxed">
-                  {t("createFirstEvent", language)}
+                  Create your first event to get started
                 </p>
                 <Button 
                   onClick={handleCreateEvent}
@@ -114,7 +131,7 @@ const OptimizedMaw3dEvents = () => {
                   className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <Plus className="h-5 w-5 mr-2" />
-                  {t("createEvent", language)}
+                  Create Event
                 </Button>
               </div>
             </div>
@@ -131,12 +148,10 @@ const OptimizedMaw3dEvents = () => {
           )}
         </Suspense>
 
-        {/* Pull to refresh hint for mobile */}
+        {/* Enhanced status info */}
         {!loading && events.length > 0 && (
-          <div className="text-center mt-8 py-4">
-            <p className="text-sm text-muted-foreground">
-              {t("pullToRefresh", language)}
-            </p>
+          <div className="text-center mt-8 py-4 text-sm text-muted-foreground">
+            <p>Showing {events.length} events • Pull down to refresh</p>
           </div>
         )}
       </div>

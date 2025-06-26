@@ -14,27 +14,29 @@ interface OptimizedEventCardProps {
 // Memoized background style computation
 const useOptimizedStyles = (event: Maw3dEvent) => {
   return useMemo(() => {
-    const hasImage = event.background_image_url;
+    const hasImage = event.background_type === 'image' && event.background_value;
     
     const backgroundStyle = hasImage ? {
-      backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)), url(${event.background_image_url})`,
+      backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)), url(${event.background_value})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat'
+    } : event.background_type === 'gradient' ? {
+      background: event.background_value || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
     } : {
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      backgroundColor: event.background_value || '#3b82f6'
     };
 
     const blurredStyle = hasImage ? {
-      backgroundImage: `url(${event.background_image_url})`,
+      backgroundImage: `url(${event.background_value})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
-      filter: 'blur(10px)',
+      filter: `blur(${event.image_blur || 0}px)`,
       transform: 'scale(1.1)'
     } : {};
 
     return { backgroundStyle, blurredStyle, hasImage };
-  }, [event.background_image_url]);
+  }, [event.background_type, event.background_value, event.image_blur]);
 };
 
 const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event, onClick }) => {
@@ -44,7 +46,7 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
   const formattedDate = useMemo(() => {
     if (!event.event_date) return 'Date TBD';
     try {
-      return format(parseISO(event.event_date), 'MMM d, yyyy');
+      return format(parseISO(event.event_date.toString()), 'MMM d, yyyy');
     } catch {
       return 'Invalid Date';
     }
@@ -61,6 +63,13 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
       return null;
     }
   }, [event.start_time]);
+
+  // Calculate RSVP count from the event data
+  const rsvpCount = useMemo(() => {
+    // This would need to be populated from the actual RSVP data
+    // For now, return 0 as a placeholder
+    return 0;
+  }, []);
 
   return (
     <Card 
@@ -105,7 +114,7 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
                   <span>{formattedDate}</span>
                 </div>
                 
-                {formattedTime && (
+                {formattedTime && !event.is_all_day && (
                   <div className="flex items-center gap-1 text-sm bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
                     <Clock className="h-4 w-4" />
                     <span>{formattedTime}</span>
@@ -123,7 +132,7 @@ const OptimizedEventCardComponent: React.FC<OptimizedEventCardProps> = ({ event,
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-sm">
                   <Users className="h-4 w-4 text-pink-300" />
-                  <span>{event.rsvp_count || 0} attending</span>
+                  <span>{rsvpCount} attending</span>
                 </div>
                 
                 <Badge 
