@@ -37,7 +37,8 @@ const OptimizedMaw3dEvents = () => {
 
   const handleEventClick = (event: any) => {
     console.log('Navigating to event:', event.id);
-    navigate(`/maw3d/${event.id}`);
+    // Fix: Navigate to the correct event view route
+    navigate(`/event/${event.id}`);
   };
 
   const handleCreateEvent = () => {
