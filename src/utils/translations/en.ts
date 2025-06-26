@@ -1,10 +1,10 @@
+
 import { TranslationKey } from "../translationTypes";
 
 export const en: { [key in TranslationKey]: string } = {
   "home": "Home",
   "about": "About",
   "contact": "Contact",
-  "services": "Services",
   "login": "Login",
   "logout": "Logout",
   "register": "Register",

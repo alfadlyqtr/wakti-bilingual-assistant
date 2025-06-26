@@ -1350,4 +1350,9 @@ export type TranslationKey =
 
   // NEW REMINDER KEYS FOR TASJEEL
   | "reviewTranscriptReminder"
-  | "reviewSummaryReminder";
+  | "reviewSummaryReminder"
+  
+  // MISSING KEYS FROM CURRENT ERRORS - FIX FOR MAW3D
+  | "errorLoadingEvents"
+  | "tryAgain"
+  | "discoverEvents";
