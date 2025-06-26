@@ -53,9 +53,13 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
   const [personalization, setPersonalization] = useState<UserPersonalization>({
     nickname: '',
     role: '',
+    main_use: '',
+    interests: [],
     ai_tone: 'neutral',
     reply_style: 'detailed',
     traits: [],
+    communication_style: '',
+    response_length: '',
     personal_note: '',
     auto_enable: true
   });
@@ -130,9 +134,13 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
         const loadedPersonalization: UserPersonalization = {
           nickname: data.nickname || '',
           role: data.role || '',
+          main_use: data.main_use || '',
+          interests: data.interests || [],
           ai_tone: data.ai_tone || 'neutral',
           reply_style: data.reply_style || 'detailed',
           traits: data.traits || [],
+          communication_style: data.communication_style || '',
+          response_length: data.response_length || '',
           personal_note: data.personal_note || '',
           auto_enable: data.auto_enable !== false
         };
@@ -164,9 +172,13 @@ export function PersonalizationModal({ open, onOpenChange }: PersonalizationModa
         p_user_id: user.id,
         p_nickname: personalization.nickname || null,
         p_role: personalization.role || null,
+        p_main_use: personalization.main_use || null,
+        p_interests: personalization.interests || [],
         p_ai_tone: personalization.ai_tone || 'neutral',
         p_reply_style: personalization.reply_style || 'detailed',
         p_traits: personalization.traits || [],
+        p_communication_style: personalization.communication_style || null,
+        p_response_length: personalization.response_length || null,
         p_personal_note: personalization.personal_note || null,
         p_auto_enable: personalization.auto_enable !== false
       });
