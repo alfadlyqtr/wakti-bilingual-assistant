@@ -78,18 +78,18 @@ class AuthCache {
       return { userId: this.cache.userId, token: this.cache.token };
     }
     
-    // Get fresh auth
-    const { data: { user, session } } = await supabase.auth.getUser();
-    if (!user || !session) return null;
+    // Get fresh auth using getSession to get both user and session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user || !session) return null;
     
     // Cache for 10 minutes
     this.cache = {
-      userId: user.id,
+      userId: session.user.id,
       token: session.access_token,
       expires: Date.now() + (10 * 60 * 1000)
     };
     
-    return { userId: user.id, token: session.access_token };
+    return { userId: session.user.id, token: session.access_token };
   }
   
   static clearCache() {
