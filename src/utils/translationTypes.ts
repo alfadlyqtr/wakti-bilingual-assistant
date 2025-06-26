@@ -1,5 +1,4 @@
 
-
 export type SupportedLanguage = "en" | "ar";
 
 export type TranslationKey = 
@@ -1351,13 +1350,4 @@ export type TranslationKey =
 
   // NEW REMINDER KEYS FOR TASJEEL
   | "reviewTranscriptReminder"
-  | "reviewSummaryReminder"
-  
-  // MISSING KEYS FROM CURRENT ERRORS - FIX FOR MAW3D
-  | "errorLoadingEvents"
-  | "tryAgain"
-  | "discoverEvents"
-  
-  // Missing "agree" key that caused the build error
-  | "agree";
-
+  | "reviewSummaryReminder";
