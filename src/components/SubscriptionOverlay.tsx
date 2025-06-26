@@ -1,12 +1,11 @@
 
 import { useEffect, useState } from "react";
-import { X, Crown, Check, Star, Zap } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/providers/ThemeProvider";
 import { UserMenu } from "@/components/UserMenu";
-import { t } from "@/utils/translations";
 import { toast } from "sonner";
 
 interface SubscriptionOverlayProps {
@@ -15,7 +14,7 @@ interface SubscriptionOverlayProps {
 }
 
 export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProps) {
-  const { theme, language, toggleTheme, toggleLanguage } = useTheme();
+  const { language } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -42,29 +41,11 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
     setTimeout(() => onClose(), 1500);
   };
 
-  const features = [
-    {
-      icon: <Zap className="h-5 w-5" />,
-      title: language === "ar" ? "AI متقدم غير محدود" : "Unlimited Advanced AI",
-      description: language === "ar" ? "وصول كامل لجميع ميزات الذكي الاصطناعي" : "Full access to all AI features"
-    },
-    {
-      icon: <Crown className="h-5 w-5" />,
-      title: language === "ar" ? "ميزات حصرية" : "Premium Features",
-      description: language === "ar" ? "احصل على ميزات متقدمة حصرية للمشتركين" : "Get advanced features exclusive to subscribers"
-    },
-    {
-      icon: <Star className="h-5 w-5" />,
-      title: language === "ar" ? "أولوية الدعم" : "Priority Support",
-      description: language === "ar" ? "دعم فني سريع ومخصص" : "Fast and dedicated technical support"
-    }
-  ];
-
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
-          {/* Header with Controls - Fixed positioning and higher z-index */}
+          {/* Header with Controls */}
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
             <div className="pointer-events-auto">
               <UserMenu />
@@ -80,39 +61,18 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
           </div>
 
           <CardHeader className="text-center pt-16 pb-6">
-            <div className="flex justify-center mb-4">
-              <div className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full">
-                <Crown className="h-8 w-8 text-white" />
-              </div>
-            </div>
-            <CardTitle className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              {language === "ar" ? "اشترك في واقتي بريميوم" : "Upgrade to Wakti Premium"}
+            <CardTitle className="text-2xl font-bold">
+              {language === "ar" ? "اشترك للوصول إلى تطبيق واقتي AI" : "Subscribe to access Wakti AI app"}
             </CardTitle>
             <CardDescription className="text-lg">
               {language === "ar" 
-                ? "احصل على وصول كامل لجميع الميزات المتقدمة"
-                : "Get full access to all advanced features"
+                ? "اختر خطة الاشتراك المناسبة لك"
+                : "Choose the subscription plan that works for you"
               }
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* Features */}
-            <div className="space-y-4">
-              {features.map((feature, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-accent/5">
-                  <div className="flex-shrink-0 p-2 bg-primary/10 rounded-full text-primary">
-                    {feature.icon}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground">{feature.description}</p>
-                  </div>
-                  <Check className="h-5 w-5 text-green-500 ml-auto flex-shrink-0" />
-                </div>
-              ))}
-            </div>
-
             {/* Pricing Plans */}
             <div className="grid gap-4 md:grid-cols-2">
               {/* Monthly Plan */}
@@ -160,8 +120,8 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
             <div className="text-center text-sm text-muted-foreground">
               <p>
                 {language === "ar" 
-                  ? "تجربة مجانية لمدة 3 أيام • إلغاء في أي وقت"
-                  : "3-day free trial • Cancel anytime"
+                  ? "إلغاء في أي وقت"
+                  : "Cancel anytime"
                 }
               </p>
             </div>
