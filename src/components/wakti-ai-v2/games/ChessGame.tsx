@@ -47,6 +47,10 @@ export function ChessGame({ onBack }: ChessGameProps) {
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [currentAIRemark, setCurrentAIRemark] = useState<string>('');
   const [isAIThinking, setIsAIThinking] = useState(false);
+  
+  // New states for tap-to-move system
+  const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+  const [validMoves, setValidMoves] = useState<string[]>([]);
 
   const evaluatePosition = (game: Chess): number => {
     let score = 0;
@@ -151,7 +155,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
           
           if (isAIWhite ? score > bestHardScore : score < bestHardScore) {
             bestHardScore = score;
-            bestMove = move;
+            bestHardMove = move;
           }
         }
         
@@ -229,33 +233,64 @@ export function ChessGame({ onBack }: ChessGameProps) {
     }
   }, [gameStarted, isPlayerTurn, gameOver, makeAIMove]);
 
-  const onDrop = (sourceSquare: string, targetSquare: string) => {
-    if (!gameStarted || !isPlayerTurn || gameOver) return false;
+  // New tap-to-move system
+  const onSquareClick = (square: string) => {
+    if (!gameStarted || !isPlayerTurn || gameOver) return;
 
     const gameCopy = new Chess(game.fen());
+    const piece = gameCopy.get(square as any);
+
+    // If no piece is selected
+    if (!selectedSquare) {
+      // Only select if it's the player's piece
+      if (piece && piece.color === (playerColor === 'white' ? 'w' : 'b')) {
+        setSelectedSquare(square);
+        // Get valid moves for this piece
+        const moves = gameCopy.moves({ square: square as any, verbose: true });
+        setValidMoves(moves.map(move => move.to));
+      }
+      return;
+    }
+
+    // If clicking on the same square, deselect
+    if (selectedSquare === square) {
+      setSelectedSquare(null);
+      setValidMoves([]);
+      return;
+    }
+
+    // If clicking on another piece of the same color, select it instead
+    if (piece && piece.color === (playerColor === 'white' ? 'w' : 'b')) {
+      setSelectedSquare(square);
+      const moves = gameCopy.moves({ square: square as any, verbose: true });
+      setValidMoves(moves.map(move => move.to));
+      return;
+    }
+
+    // Try to make a move
     try {
       const move = gameCopy.move({
-        from: sourceSquare,
-        to: targetSquare,
+        from: selectedSquare,
+        to: square,
         promotion: 'q'
       });
       
       if (move) {
         setGame(gameCopy);
+        setSelectedSquare(null);
+        setValidMoves([]);
         setIsPlayerTurn(false);
         
         if (gameCopy.isGameOver()) {
           setGameOver(true);
           setTimeout(() => showAIRemark('victory'), 500);
         }
-        
-        return true;
       }
     } catch (error) {
-      return false;
+      // Invalid move, just clear selection
+      setSelectedSquare(null);
+      setValidMoves([]);
     }
-    
-    return false;
   };
 
   const startGame = () => {
@@ -265,6 +300,25 @@ export function ChessGame({ onBack }: ChessGameProps) {
     setGameOver(false);
     setIsPlayerTurn(playerColor === 'white');
     setCurrentAIRemark('');
+    setSelectedSquare(null);
+    setValidMoves([]);
+    
+    // If player chose black, AI (white) moves first
+    if (playerColor === 'black') {
+      setIsPlayerTurn(false);
+    }
+  };
+
+  // Fixed: Play Again function that restarts without going to setup
+  const playAgain = () => {
+    const newGame = new Chess();
+    setGame(newGame);
+    setGameOver(false);
+    setIsPlayerTurn(playerColor === 'white');
+    setCurrentAIRemark('');
+    setSelectedSquare(null);
+    setValidMoves([]);
+    setIsAIThinking(false);
     
     // If player chose black, AI (white) moves first
     if (playerColor === 'black') {
@@ -279,6 +333,8 @@ export function ChessGame({ onBack }: ChessGameProps) {
     setGameOver(false);
     setIsPlayerTurn(true);
     setCurrentAIRemark('');
+    setSelectedSquare(null);
+    setValidMoves([]);
   };
 
   const getDifficultyLabel = (diff: Difficulty): TranslationKey => {
@@ -370,9 +426,16 @@ export function ChessGame({ onBack }: ChessGameProps) {
         <div className="w-full max-w-md">
           <Chessboard
             position={game.fen()}
-            onPieceDrop={onDrop}
+            onSquareClick={onSquareClick}
             boardOrientation={playerColor}
-            arePiecesDraggable={!gameOver && isPlayerTurn}
+            arePiecesDraggable={false}
+            customSquareStyles={{
+              ...(selectedSquare ? { [selectedSquare]: { backgroundColor: 'rgba(255, 255, 0, 0.4)' } } : {}),
+              ...validMoves.reduce((acc, square) => ({
+                ...acc,
+                [square]: { backgroundColor: 'rgba(0, 255, 0, 0.3)' }
+              }), {})
+            }}
             customBoardStyle={{
               borderRadius: '4px',
               boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
@@ -391,7 +454,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
               : t('victory_draw', language)
             }
           </p>
-          <Button onClick={restartGame} className="min-h-[48px]">
+          <Button onClick={playAgain} className="min-h-[48px]">
             {t('play_again', language)}
           </Button>
         </div>
@@ -403,7 +466,9 @@ export function ChessGame({ onBack }: ChessGameProps) {
             {isAIThinking 
               ? t('ai_calculating', language)
               : isPlayerTurn 
-              ? `${t('your_turn', language)} - ${t('tap_piece_destination', language)}`
+              ? selectedSquare
+                ? `${t('your_turn', language)} - ${t('tap_square', language)} ${language === 'ar' ? 'للحركة' : 'to move'}`
+                : `${t('your_turn', language)} - ${t('tap_piece_destination', language)}`
               : t('ai_turn', language)
             }
           </p>

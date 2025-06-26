@@ -245,6 +245,26 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
     }
   };
 
+  const playAgain = () => {
+    setBoard(Array(9).fill(null));
+    setIsPlayerTurn(playerSymbol === 'X');
+    setGameOver(false);
+    setWinner(null);
+    setCurrentAIRemark('');
+    setIsAIThinking(false);
+    
+    // If player chose O, AI goes first
+    if (playerSymbol === 'O') {
+      setTimeout(() => {
+        const aiMove = getAIMove(Array(9).fill(null), 'X');
+        const newBoard = Array(9).fill(null);
+        newBoard[aiMove] = 'X';
+        setBoard(newBoard);
+        setIsPlayerTurn(true);
+      }, 200);
+    }
+  };
+
   const restartGame = () => {
     setGameStarted(false);
     setBoard(Array(9).fill(null));
@@ -370,7 +390,7 @@ export function TicTacToeGame({ onBack }: TicTacToeGameProps) {
           <p className="text-xl font-bold text-green-600">
             {getWinnerMessage()}
           </p>
-          <Button onClick={restartGame} className="min-h-[48px]">
+          <Button onClick={playAgain} className="min-h-[48px]">
             {t('play_again', language)}
           </Button>
         </div>
