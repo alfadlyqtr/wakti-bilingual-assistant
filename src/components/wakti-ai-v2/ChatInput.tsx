@@ -1,10 +1,9 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, Loader2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useFileUpload } from '@/hooks/useFileUpload';
+import { useOptimizedFileUpload } from '@/hooks/useOptimizedFileUpload';
 import { FilePreview } from './FilePreview';
 import { DragDropUpload } from './DragDropUpload';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -59,14 +58,14 @@ export function ChatInput({
   const [cameraFile, setCameraFile] = useState<File | null>(null);
   const [showCameraPreview, setShowCameraPreview] = useState(false);
 
-  // File upload hook
+  // Use optimized file upload hook
   const {
     isUploading,
     uploadedFiles,
     uploadFiles,
     removeFile,
     clearFiles
-  } = useFileUpload();
+  } = useOptimizedFileUpload();
 
   // Handler to open Conversations Drawer (💬)
   const handleOpenConversationsDrawer = () => {
@@ -90,7 +89,17 @@ export function ChatInput({
 
   const handleSend = () => {
     if (message.trim() || uploadedFiles.length > 0) {
-      onSendMessage(message, 'text', uploadedFiles.length > 0 ? uploadedFiles : undefined);
+      // Convert optimized files to format expected by AI service
+      const optimizedFiles = uploadedFiles.map(file => ({
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        publicUrl: file.publicUrl,
+        optimized: true // Flag to indicate this is an optimized upload
+      }));
+      
+      onSendMessage(message, 'text', optimizedFiles.length > 0 ? optimizedFiles : undefined);
       setMessage('');
       clearFiles();
     }
@@ -178,7 +187,7 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Uploaded Files Display */}
+        {/* Uploaded Files Display - Updated to show optimized files */}
         {uploadedFiles.length > 0 && (
           <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
             <div className="max-w-4xl mx-auto">
@@ -189,16 +198,18 @@ export function ChatInput({
                 <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
                   {uploadedFiles.length}
                 </span>
+                <span className="text-xs text-green-500">⚡ Optimized</span>
               </div>
               <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
                 {uploadedFiles.map((file, index) => (
-                  <FilePreview
-                    key={index}
-                    file={file}
-                    index={index}
-                    onRemove={removeFile}
-                    size="sm"
-                  />
+                  <div key={file.id} className="relative">
+                    <FilePreview
+                      file={file}
+                      index={index}
+                      onRemove={() => removeFile(file.id)}
+                      size="sm"
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -331,12 +342,15 @@ export function ChatInput({
                 )}
               </div>
             </div>
-            {/* Status Indicators */}
-            {isUploading && (
+            {/* Status Indicators - Updated */}
+            {(isUploading || isLoading) && (
               <div className="mt-2 flex justify-center">
                 <div className="inline-flex items-center gap-2 px-2 py-1.5 bg-blue-500/10 backdrop-blur-xl text-blue-500 rounded-2xl border border-blue-500/20 text-xs font-medium">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  {language === 'ar' ? 'رفع...' : 'Uploading...'}
+                  {isUploading 
+                    ? (language === 'ar' ? 'رفع...' : 'Uploading...')
+                    : (language === 'ar' ? 'التفكير...' : 'Thinking...')
+                  }
                 </div>
               </div>
             )}

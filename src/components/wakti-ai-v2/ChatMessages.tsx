@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
@@ -37,7 +36,7 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { language } = useTheme();
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or streaming updates
   useEffect(() => {
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
@@ -50,14 +49,9 @@ export function ChatMessages({
     }
   }, [sessionMessages, isLoading, showTaskConfirmation]);
 
-  // Note: Chat memory clearing is now handled directly in the parent component
-  // when starting a new conversation - no need for a separate memory service
-
-  // Fixed height component that fills available space
   return (
     <div className="h-full w-full">
       <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-        {/* The pb-8 here creates a tiny space above the chat input/footer */}
         <div className="p-2 pb-8 min-h-full">
           <div className="w-full space-y-4">
             {sessionMessages.length === 0 && !showTaskConfirmation && (
@@ -71,14 +65,45 @@ export function ChatMessages({
               </div>
             )}
             
-            {sessionMessages.map((message, index) => (
-              <ChatBubble
-                key={message.id || index}
-                message={message}
-                userProfile={userProfile}
-                activeTrigger={activeTrigger}
-              />
-            ))}
+            {sessionMessages.map((message, index) => {
+              // Show enhanced typing indicator for thinking messages
+              if (message.isThinking) {
+                return (
+                  <div key={message.id} className="flex justify-start px-2">
+                    <div className="bg-muted rounded-2xl px-4 py-3 mr-12 max-w-[85%]">
+                      <div className="flex items-center gap-2">
+                        <div className="flex space-x-1">
+                          <div 
+                            className="w-2 h-2 bg-primary rounded-full animate-bounce" 
+                            style={{ animationDelay: '0ms' }} 
+                          />
+                          <div 
+                            className="w-2 h-2 bg-primary rounded-full animate-bounce" 
+                            style={{ animationDelay: '150ms' }} 
+                          />
+                          <div 
+                            className="w-2 h-2 bg-primary rounded-full animate-bounce" 
+                            style={{ animationDelay: '300ms' }} 
+                          />
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {language === 'ar' ? 'WAKTI يفكر...' : 'WAKTI is thinking...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <ChatBubble
+                  key={message.id || index}
+                  message={message}
+                  userProfile={userProfile}
+                  activeTrigger={activeTrigger}
+                />
+              );
+            })}
 
             {/* Enhanced Task/Reminder Confirmation Card */}
             {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (

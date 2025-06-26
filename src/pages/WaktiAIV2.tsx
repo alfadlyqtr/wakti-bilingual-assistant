@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -252,6 +251,10 @@ const WaktiAIV2 = () => {
 
     setSessionMessages(prev => [...prev, cancelMessage]);
   };
+
+  // New state for streaming
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [streamingContent, setStreamingContent] = useState<string>('');
 
   // ULTRA-FAST: Streamlined message sending with optimized flow
   const handleSendMessage = async (

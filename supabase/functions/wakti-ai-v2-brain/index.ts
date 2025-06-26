@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -14,7 +13,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing pipeline loaded");
+console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing pipeline loaded with image optimization");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -94,6 +93,13 @@ serve(async (req) => {
     }
 
     console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing for user:", user.id);
+
+    // OPTIMIZED: Process attached files with URL handling
+    let processedFiles = [];
+    if (attachedFiles && attachedFiles.length > 0) {
+      processedFiles = await processAttachedFilesOptimized(attachedFiles);
+      console.log(`⚡ OPTIMIZED: Processed ${processedFiles.length} files with URL optimization`);
+    }
 
     // ULTRA-FAST: Smart keyword detection for task creation
     let response = '';
@@ -198,8 +204,7 @@ serve(async (req) => {
 
         case 'chat':
         default:
-          console.log("⚡ ULTRA-FAST: Direct chat processing");
-          // ULTRA-FAST: Use compressed context for chat
+          console.log("⚡ ULTRA-FAST: Direct chat processing with optimized files");
           const chatContext = conversationSummary ? 
             `${conversationSummary}\n\nRecent messages: ${recentMessages.slice(-2).map(m => `${m.role}: ${m.content}`).join('\n')}` :
             null;
@@ -211,7 +216,7 @@ serve(async (req) => {
             '',
             activeTrigger,
             'direct_chat',
-            attachedFiles
+            processedFiles // Use optimized files
           );
           break;
       }
@@ -253,3 +258,32 @@ serve(async (req) => {
     });
   }
 });
+
+// OPTIMIZED: Process files with URL handling instead of Base64
+async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[]> {
+  if (!attachedFiles || attachedFiles.length === 0) return [];
+
+  return attachedFiles.map(file => {
+    // If file is optimized (has URL), use it directly for OpenAI Vision
+    if (file.optimized && file.url) {
+      return {
+        type: 'image_url',
+        image_url: {
+          url: file.url
+        }
+      };
+    }
+    
+    // Fallback to existing Base64 processing for non-optimized files
+    if (file.content) {
+      return {
+        type: 'image_url',
+        image_url: {
+          url: `data:${file.type};base64,${file.content}`
+        }
+      };
+    }
+    
+    return null;
+  }).filter(Boolean);
+}

@@ -1,5 +1,6 @@
-
 import { supabase } from '@/integrations/supabase/client';
+import { AIResponseCache } from './AIResponseCache';
+import { AIStreamingService } from './AIStreamingService';
 
 export interface AIMessage {
   id: string;
@@ -147,7 +148,7 @@ class LocalMemoryCache {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ULTRA-FAST: Streamlined message sending
+  // Enhanced message sending with caching and streaming
   static async sendMessage(
     message: string,
     userId?: string,
@@ -172,20 +173,37 @@ export class WaktiAIV2ServiceClass {
     try {
       console.log('⚡ ULTRA-FAST: Message processing initiated');
       
-      // ULTRA-FAST: Get cached auth or fresh auth
+      // ULTRA-FAST: Check cache first for basic responses
+      if (!attachedFiles?.length && activeTrigger === 'chat') {
+        const cachedResponse = AIResponseCache.getCachedResponse(message);
+        if (cachedResponse) {
+          console.log('⚡ CACHE HIT: Returning cached response');
+          return {
+            response: cachedResponse,
+            conversationId: conversationId || this.generateConversationId(),
+            intent: 'cached_response',
+            confidence: 'high',
+            success: true,
+            cached: true,
+            processingTime: 0
+          };
+        }
+      }
+      
+      // ULTRA-FAST: Get cached auth
       const auth = await AuthCache.getValidAuth();
       if (!auth) throw new Error('Authentication failed');
       
       // ULTRA-FAST: Compress message history
       const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory);
       
-      // ULTRA-FAST: Process attached files efficiently
+      // ULTRA-FAST: Process optimized files efficiently
       let processedFiles = attachedFiles;
       if (attachedFiles?.length > 0) {
-        processedFiles = await this.convertFilesToBase64IfNeeded(attachedFiles);
+        processedFiles = await this.processOptimizedFiles(attachedFiles);
       }
       
-      // ULTRA-FAST: Direct API call with compressed payload
+      // ULTRA-FAST: Direct API call with optimized payload
       const startTime = Date.now();
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
@@ -197,11 +215,11 @@ export class WaktiAIV2ServiceClass {
           activeTrigger,
           attachedFiles: processedFiles,
           conversationSummary: summary,
-          recentMessages: recentMessages.slice(-3) // Only last 3 messages
+          recentMessages: recentMessages.slice(-3)
         },
         headers: {
           'x-auth-token': auth.token,
-          'x-skip-auth': 'true' // Skip full auth check in edge function
+          'x-skip-auth': 'true'
         }
       });
       
@@ -212,7 +230,12 @@ export class WaktiAIV2ServiceClass {
         throw new Error(response.error.message || 'AI service error');
       }
       
-      // FIRE-AND-FORGET: Quota logging (no await)
+      // Cache simple responses for future use (only basic chat)
+      if (activeTrigger === 'chat' && !attachedFiles?.length && message.length < 50) {
+        AIResponseCache.setCachedResponse(message, response.data.response);
+      }
+      
+      // FIRE-AND-FORGET: Quota logging
       this.logQuotaAsync(auth.userId, inputType, responseTime).catch(e => 
         console.warn('Quota logging failed silently:', e)
       );
@@ -224,6 +247,75 @@ export class WaktiAIV2ServiceClass {
     }
   }
   
+  // Process optimized files (use URLs instead of Base64)
+  private static async processOptimizedFiles(attachedFiles: any[]): Promise<any[]> {
+    if (!attachedFiles?.length) return [];
+    
+    return attachedFiles.map(file => {
+      // If file is already optimized (has publicUrl), use it directly
+      if (file.optimized && file.publicUrl) {
+        return {
+          type: file.type,
+          url: file.publicUrl,
+          name: file.name,
+          optimized: true
+        };
+      }
+      
+      // Fallback to original processing for non-optimized files
+      return file;
+    });
+  }
+
+  // Add streaming capability
+  static async sendStreamingMessage(
+    message: string,
+    language: string = 'en',
+    conversationId?: string | null,
+    activeTrigger: string = 'chat',
+    attachedFiles: any[] = [],
+    onToken?: (content: string) => void,
+    onComplete?: (content: string) => void,
+    onError?: (error: string) => void
+  ): Promise<string> {
+    // Check cache first
+    if (!attachedFiles?.length && activeTrigger === 'chat') {
+      const cachedResponse = AIResponseCache.getCachedResponse(message);
+      if (cachedResponse) {
+        console.log('⚡ STREAMING CACHE HIT');
+        // Simulate streaming for cached responses
+        let index = 0;
+        const simulateStreaming = () => {
+          if (index < cachedResponse.length) {
+            const chunk = cachedResponse.slice(0, index + 1);
+            onToken?.(chunk);
+            index += Math.random() > 0.5 ? 2 : 1; // Variable speed
+            setTimeout(simulateStreaming, 30);
+          } else {
+            onComplete?.(cachedResponse);
+          }
+        };
+        simulateStreaming();
+        return cachedResponse;
+      }
+    }
+
+    return AIStreamingService.streamResponse(
+      message,
+      language,
+      conversationId,
+      activeTrigger,
+      attachedFiles,
+      (response) => onToken?.(response.content),
+      (response) => onComplete?.(response.content),
+      onError
+    );
+  }
+
+  private static generateConversationId(): string {
+    return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
   // FIRE-AND-FORGET: Non-blocking quota logging
   private static async logQuotaAsync(userId: string, inputType: string, responseTime: number) {
     try {
@@ -236,42 +328,6 @@ export class WaktiAIV2ServiceClass {
     } catch (e) {
       // Silent failure - never block user experience
     }
-  }
-  
-  // ULTRA-FAST: File conversion with caching
-  private static async convertFilesToBase64IfNeeded(attachedFiles: any[]): Promise<any[]> {
-    if (!attachedFiles?.length) return [];
-    
-    const processed = await Promise.all(
-      attachedFiles.map(async (file) => {
-        if (file.content) return { type: file.type, content: file.content };
-        if (!file.url || !file.type?.startsWith('image/')) return null;
-        
-        try {
-          const response = await fetch(file.url);
-          const blob = await response.blob();
-          
-          return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const result = reader.result as string;
-              const base64Index = result.indexOf('base64,');
-              if (base64Index !== -1) {
-                resolve({ type: file.type, content: result.substring(base64Index + 7) });
-              } else {
-                resolve(null);
-              }
-            };
-            reader.onerror = () => resolve(null);
-            reader.readAsDataURL(blob);
-          });
-        } catch (e) {
-          return null;
-        }
-      })
-    );
-    
-    return processed.filter(Boolean);
   }
   
   // Instance methods for compatibility
