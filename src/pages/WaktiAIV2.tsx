@@ -1,17 +1,17 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { OptimizedWaktiAIService } from '@/services/OptimizedWaktiAIService';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
+import { useAIQuotaManagement } from '@/hooks/useAIQuotaManagement';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatHeader } from '@/components/wakti-ai-v2/ChatHeader';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
-import { Plus } from 'lucide-react';
 
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
@@ -21,7 +21,6 @@ const WaktiAIV2 = () => {
   const [showConversations, setShowConversations] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [quotaStatus, setQuotaStatus] = useState<any>(null);
   const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
   const [textGenParams, setTextGenParams] = useState<any>(null);
@@ -33,17 +32,15 @@ const WaktiAIV2 = () => {
   const [pendingReminderData, setPendingReminderData] = useState<any>(null);
   const [taskConfirmationLoading, setTaskConfirmationLoading] = useState(false);
   
-  const [calendarContext, setCalendarContext] = useState<any>(null);
-  const [userContext, setUserContext] = useState<any>(null);
-  
   const scrollAreaRef = useRef<any>(null);
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
 
+  // Optimized quota management
+  const { quota: aiQuota, fetchQuota: fetchAIQuota } = useAIQuotaManagement();
+  
   // Simplified quota management - only voice
-  const {
-    refreshVoiceQuota
-  } = useExtendedQuotaManagement(language);
+  const { refreshVoiceQuota } = useExtendedQuotaManagement(language);
 
   // Translation quota management for Voice Translator
   const {
@@ -56,68 +53,6 @@ const WaktiAIV2 = () => {
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
-
-  useEffect(() => {
-    const fetchQuota = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
-
-        const quota = await WaktiAIV2Service.getOrFetchQuota(user.id);
-        setQuotaStatus(quota);
-      } catch (error: any) {
-        console.error('Error fetching quota:', error);
-        setError(error.message || 'Failed to fetch quota');
-      }
-    };
-
-    fetchQuota();
-  }, []);
-
-  // Updated fetchQuota function with force refresh option
-  const fetchQuota = async (forceRefresh: boolean = false) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      console.log(`📊 Fetching quota ${forceRefresh ? 'with force refresh' : 'normally'}`);
-      const quota = await WaktiAIV2Service.getOrFetchQuota(user.id, forceRefresh);
-      setQuotaStatus(quota);
-      
-      console.log('📊 Updated quota state:', quota);
-    } catch (error: any) {
-      console.error('Error fetching quota:', error);
-      setError(error.message || 'Failed to fetch quota');
-    }
-  };
-
-  useEffect(() => {
-    const fetchEnhancedContext = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        console.log('🔄 WAKTI AI V2.5: Fetching Phase 4 enhanced context...');
-
-        const [calendarCtx, userCtx] = await Promise.all([
-          WaktiAIV2Service.getCalendarContext(user.id),
-          WaktiAIV2Service.getUserContext(user.id)
-        ]);
-
-        setCalendarContext(calendarCtx);
-        setUserContext(userCtx);
-        
-        console.log('🔄 WAKTI AI V2.5: Enhanced context loaded:', {
-          calendar: !!calendarCtx,
-          user: !!userCtx
-        });
-      } catch (error) {
-        console.error('Error fetching enhanced context:', error);
-      }
-    };
-
-    fetchEnhancedContext();
-  }, []);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -213,29 +148,334 @@ const WaktiAIV2 = () => {
     }
   };
 
-  const getCompleteConversationContext = (): AIMessage[] => {
-    const allMessages = [...conversationMessages, ...sessionMessages];
+  const handleTaskConfirmation = async (taskData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      console.log('🔧 Creating task with data:', taskData);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('tr_tasks')
+        .insert({
+          user_id: user.id,
+          title: taskData.title,
+          description: taskData.description || '',
+          due_date: taskData.due_date ? new Date(taskData.due_date).toISOString().split('T')[0] : null,
+          due_time: taskData.due_time || null,
+          priority: taskData.priority || 'normal',
+          completed: false
+        });
+
+      if (error) {
+        console.error('❌ Error creating task:', error);
+        throw new Error('Failed to create task');
+      }
+
+      if (taskData.subtasks && taskData.subtasks.length > 0) {
+        const { data: createdTask } = await supabase
+          .from('tr_tasks')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('title', taskData.title)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (createdTask) {
+          const subtaskInserts = taskData.subtasks.map((subtask: string, index: number) => ({
+            task_id: createdTask.id,
+            title: subtask,
+            completed: false,
+            order_index: index
+          }));
+
+          await supabase
+            .from('tr_subtasks')
+            .insert(subtaskInserts);
+        }
+      }
+
+      const successMessage: AIMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'ar' 
+          ? `تم إنشاء المهمة بنجاح! 👍\n\n**${taskData.title}**\n\n[انتقل إلى المهام والتذكيرات](/tasks-reminders)`
+          : `Task successfully created! 👍\n\n**${taskData.title}**\n\n[Go to Tasks & Reminders](/tasks-reminders)`,
+        timestamp: new Date(),
+        intent: 'task_created_success',
+        confidence: 'high',
+        actionTaken: true
+      };
+
+      const updatedMessages = [...sessionMessages, successMessage];
+      setSessionMessages(updatedMessages);
+
+      setPendingTaskData(null);
+      setShowTaskConfirmation(false);
+
+      showSuccess(
+        language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!'
+      );
+
+    } catch (error: any) {
+      console.error('❌ Task creation failed:', error);
+      showError(
+        error.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task')
+      );
+    } finally {
+      setTaskConfirmationLoading(false);
+    }
+  };
+
+  const handleReminderConfirmation = async (reminderData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      console.log('🔧 Creating reminder with data:', reminderData);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('tr_reminders')
+        .insert({
+          user_id: user.id,
+          title: reminderData.title,
+          description: reminderData.description || '',
+          due_date: reminderData.due_date ? new Date(reminderData.due_date).toISOString().split('T')[0] : null,
+          due_time: reminderData.due_time || null
+        });
+
+      if (error) {
+        console.error('❌ Error creating reminder:', error);
+        throw new Error('Failed to create reminder');
+      }
+
+      const successMessage: AIMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'ar' 
+          ? `تم إنشاء التذكير بنجاح! 👍\n\n**${reminderData.title}**\n\n[انتقل إلى المهام والتذكيرات](/tasks-reminders)`
+          : `Reminder successfully created! 👍\n\n**${reminderData.title}**\n\n[Go to Tasks & Reminders](/tasks-reminders)`,
+        timestamp: new Date(),
+        intent: 'reminder_created_success',
+        confidence: 'high',
+        actionTaken: true
+      };
+
+      const updatedMessages = [...sessionMessages, successMessage];
+      setSessionMessages(updatedMessages);
+
+      setPendingReminderData(null);
+      setShowTaskConfirmation(false);
+
+      showSuccess(
+        language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!'
+      );
+
+    } catch (error: any) {
+      console.error('❌ Reminder creation failed:', error);
+      showError(
+        error.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder')
+      );
+    } finally {
+      setTaskConfirmationLoading(false);
+    }
+  };
+
+  const handleCancelTaskConfirmation = () => {
+    setPendingTaskData(null);
+    setPendingReminderData(null);
+    setShowTaskConfirmation(false);
     
-    const uniqueMessages = allMessages.filter((message, index, self) => 
-      index === self.findIndex(m => 
-        m.timestamp.getTime() === message.timestamp.getTime() && 
-        m.content === message.content &&
-        m.role === message.role
-      )
-    );
-    
-    uniqueMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-    
-    const contextMessages = uniqueMessages.slice(-50);
-    
-    console.log('🧠 Complete conversation context:', {
-      conversationMessages: conversationMessages.length,
-      sessionMessages: sessionMessages.length,
-      uniqueMessages: uniqueMessages.length,
-      contextMessages: contextMessages.length
-    });
-    
-    return contextMessages;
+    const cancelMessage: AIMessage = {
+      id: `cancel-${Date.now()}`,
+      role: 'assistant',
+      content: language === 'ar' 
+        ? 'تم إلغاء الإنشاء. يمكنك المحاولة مرة أخرى في أي وقت!'
+        : 'Creation cancelled. You can try again anytime!',
+      timestamp: new Date(),
+      intent: 'task_cancelled',
+      confidence: 'high'
+    };
+
+    const updatedMessages = [...sessionMessages, cancelMessage];
+    setSessionMessages(updatedMessages);
+  };
+
+  // OPTIMIZED: Main send message handler with performance improvements
+  const handleSendMessage = async (
+    message: string, 
+    inputType: 'text' | 'voice' = 'text',
+    attachedFiles?: any[]
+  ) => {
+    if ((!message.trim() && !attachedFiles?.length) || isLoading) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log('🚀 OPTIMIZED: Wakti AI V2.5 Enhanced Processing');
+
+      // Handle Voice Translator quota increment BEFORE sending
+      if (inputType === 'voice') {
+        console.log('📈 Voice translation detected - checking and incrementing translation quota...');
+        const canTranslate = await incrementTranslationCount();
+        if (!canTranslate) {
+          setIsLoading(false);
+          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من الترجمات' : 'Translation quota exceeded');
+          return;
+        }
+        console.log('✅ Voice translation quota incremented successfully');
+      }
+
+      const userMessage: AIMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: message || '[File attachment]',
+        timestamp: new Date(),
+        inputType,
+        attachedFiles: attachedFiles || []
+      };
+
+      const updatedSessionMessages = [...sessionMessages, userMessage];
+      setSessionMessages(updatedSessionMessages);
+
+      // USE OPTIMIZED SERVICE with smart caching and context loading
+      const response = await OptimizedWaktiAIService.sendOptimizedMessage(
+        message,
+        currentConversationId,
+        updatedSessionMessages,
+        language,
+        inputType,
+        activeTrigger,
+        attachedFiles || []
+      );
+
+      console.log('✅ OPTIMIZED: Response received');
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.conversationId && response.conversationId !== currentConversationId) {
+        setCurrentConversationId(response.conversationId);
+        loadFullConversationHistory(response.conversationId);
+        console.log('🔄 Updated conversation ID:', response.conversationId);
+      }
+
+      const assistantMessage: AIMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: response.response,
+        timestamp: new Date(),
+        intent: response.intent,
+        confidence: response.confidence as 'high' | 'medium' | 'low',
+        actionTaken: response.actionTaken,
+        browsingUsed: response.browsingUsed,
+        browsingData: response.browsingData,
+        quotaStatus: response.quotaStatus,
+        requiresSearchConfirmation: response.requiresSearchConfirmation,
+        imageUrl: response.imageUrl,
+        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl,
+        actionResult: response.actionResult,
+        fileAnalysisResults: response.fileAnalysisResults,
+        deepIntegration: response.deepIntegration,
+        automationSuggestions: response.automationSuggestions,
+        predictiveInsights: response.predictiveInsights,
+        workflowActions: response.workflowActions,
+        contextualActions: response.contextualActions,
+        needsConfirmation: response.needsConfirmation,
+        pendingTaskData: response.pendingTaskData,
+        pendingReminderData: response.pendingReminderData
+      };
+
+      const finalSessionMessages = [...updatedSessionMessages, assistantMessage].slice(-30);
+      setSessionMessages(finalSessionMessages);
+
+      // Handle task/reminder confirmation
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        console.log('🔧 Setting up task/reminder confirmation UI');
+        setPendingTaskData(response.pendingTaskData);
+        setPendingReminderData(response.pendingReminderData);
+        setShowTaskConfirmation(true);
+      }
+
+      if (!currentConversationId) {
+        const allMessagesForConversation = [...updatedSessionMessages, assistantMessage];
+        const newConversationId = await createConversationIfNeeded(allMessagesForConversation);
+        if (newConversationId) {
+          setCurrentConversationId(newConversationId);
+          loadFullConversationHistory(newConversationId);
+          console.log('🆕 Set new conversation ID:', newConversationId);
+          fetchConversations();
+        }
+      } else {
+        await saveMessageToConversation(userMessage, currentConversationId);
+        await saveMessageToConversation(assistantMessage, currentConversationId);
+        fetchConversations();
+      }
+
+      // Voice Translation quota refresh with immediate UI update
+      if (inputType === 'voice') {
+        console.log('🔄 Voice translation completed - refreshing translation quota...');
+        await refreshTranslationQuota();
+        
+        const remainingTranslations = MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1;
+        showSuccess(
+          language === 'ar' 
+            ? `تم تنفيذ الترجمة الصوتية بنجاح وتحديث الحصة (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
+            : `Voice translation completed successfully - quota updated (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} remaining)`
+        );
+      }
+
+      if (inputType === 'voice') {
+        console.log('🔄 Voice operation completed - refreshing voice quota...');
+        await refreshVoiceQuota();
+      }
+
+      if (response.requiresSearchConfirmation) {
+        setSearchConfirmationRequired(true);
+      }
+
+      if (response.fileAnalysisResults && response.fileAnalysisResults.length > 0) {
+        const successfulAnalyses = response.fileAnalysisResults.filter((result: any) => result.analysis.success);
+        if (successfulAnalyses.length > 0) {
+          showSuccess(
+            language === 'ar' 
+              ? `تم تحليل ${successfulAnalyses.length} ملف بنجاح` 
+              : `Successfully analyzed ${successfulAnalyses.length} file(s)`
+          );
+        }
+      }
+
+      if (response.workflowActions?.length > 0 || response.predictiveInsights) {
+        showSuccess(
+          language === 'ar' 
+            ? 'تم تفعيل الميزات المتقدمة للجيل الرابع' 
+            : 'Phase 4 advanced features activated'
+        );
+      }
+
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        console.log('🔧 Task/Reminder confirmation card should be shown');
+        showSuccess(
+          language === 'ar' 
+            ? 'تم تحضير البيانات للتأكيد - راجع التفاصيل وأكد الإنشاء' 
+            : 'Data prepared for confirmation - review details and confirm creation'
+        );
+      }
+
+    } catch (error: any) {
+      console.error('🔄 OPTIMIZED: ❌ Enhanced system error:', error);
+      setError(error.message || 'Failed to send message');
+      showError(
+        error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const createConversationIfNeeded = async (messages: AIMessage[]) => {
@@ -300,374 +540,6 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // Enhanced task confirmation handlers
-  const handleTaskConfirmation = async (taskData: any) => {
-    setTaskConfirmationLoading(true);
-    try {
-      console.log('🔧 Creating task with data:', taskData);
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      // Create the task in the TR system with correct column name
-      const { error } = await supabase
-        .from('tr_tasks')
-        .insert({
-          user_id: user.id,
-          title: taskData.title,
-          description: taskData.description || '',
-          due_date: taskData.due_date ? new Date(taskData.due_date).toISOString().split('T')[0] : null,
-          due_time: taskData.due_time || null,
-          priority: taskData.priority || 'normal',
-          completed: false // Fixed: Use 'completed' instead of 'status'
-        });
-
-      if (error) {
-        console.error('❌ Error creating task:', error);
-        throw new Error('Failed to create task');
-      }
-
-      // Create subtasks if any
-      if (taskData.subtasks && taskData.subtasks.length > 0) {
-        const { data: createdTask } = await supabase
-          .from('tr_tasks')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('title', taskData.title)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (createdTask) {
-          const subtaskInserts = taskData.subtasks.map((subtask: string, index: number) => ({
-            task_id: createdTask.id,
-            title: subtask,
-            completed: false,
-            order_index: index
-          }));
-
-          await supabase
-            .from('tr_subtasks')
-            .insert(subtaskInserts);
-        }
-      }
-
-      // Enhanced success message with task title and navigation button
-      const successMessage: AIMessage = {
-        id: `success-${Date.now()}`,
-        role: 'assistant',
-        content: language === 'ar' 
-          ? `تم إنشاء المهمة بنجاح! 👍\n\n**${taskData.title}**\n\n[انتقل إلى المهام والتذكيرات](/tasks-reminders)`
-          : `Task successfully created! 👍\n\n**${taskData.title}**\n\n[Go to Tasks & Reminders](/tasks-reminders)`,
-        timestamp: new Date(),
-        intent: 'task_created_success',
-        confidence: 'high',
-        actionTaken: true
-      };
-
-      const updatedMessages = [...sessionMessages, successMessage];
-      setSessionMessages(updatedMessages);
-
-      // Clear confirmation state
-      setPendingTaskData(null);
-      setShowTaskConfirmation(false);
-
-      showSuccess(
-        language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!'
-      );
-
-    } catch (error: any) {
-      console.error('❌ Task creation failed:', error);
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task')
-      );
-    } finally {
-      setTaskConfirmationLoading(false);
-    }
-  };
-
-  const handleReminderConfirmation = async (reminderData: any) => {
-    setTaskConfirmationLoading(true);
-    try {
-      console.log('🔧 Creating reminder with data:', reminderData);
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      // Create the reminder in the TR system
-      const { error } = await supabase
-        .from('tr_reminders')
-        .insert({
-          user_id: user.id,
-          title: reminderData.title,
-          description: reminderData.description || '',
-          due_date: reminderData.due_date ? new Date(reminderData.due_date).toISOString().split('T')[0] : null,
-          due_time: reminderData.due_time || null
-        });
-
-      if (error) {
-        console.error('❌ Error creating reminder:', error);
-        throw new Error('Failed to create reminder');
-      }
-
-      // Enhanced success message with reminder title and navigation button
-      const successMessage: AIMessage = {
-        id: `success-${Date.now()}`,
-        role: 'assistant',
-        content: language === 'ar' 
-          ? `تم إنشاء التذكير بنجاح! 👍\n\n**${reminderData.title}**\n\n[انتقل إلى المهام والتذكيرات](/tasks-reminders)`
-          : `Reminder successfully created! 👍\n\n**${reminderData.title}**\n\n[Go to Tasks & Reminders](/tasks-reminders)`,
-        timestamp: new Date(),
-        intent: 'reminder_created_success',
-        confidence: 'high',
-        actionTaken: true
-      };
-
-      const updatedMessages = [...sessionMessages, successMessage];
-      setSessionMessages(updatedMessages);
-
-      // Clear confirmation state
-      setPendingReminderData(null);
-      setShowTaskConfirmation(false);
-
-      showSuccess(
-        language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!'
-      );
-
-    } catch (error: any) {
-      console.error('❌ Reminder creation failed:', error);
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder')
-      );
-    } finally {
-      setTaskConfirmationLoading(false);
-    }
-  };
-
-  const handleCancelTaskConfirmation = () => {
-    setPendingTaskData(null);
-    setPendingReminderData(null);
-    setShowTaskConfirmation(false);
-    
-    // Add cancellation message to chat
-    const cancelMessage: AIMessage = {
-      id: `cancel-${Date.now()}`,
-      role: 'assistant',
-      content: language === 'ar' 
-        ? 'تم إلغاء الإنشاء. يمكنك المحاولة مرة أخرى في أي وقت!'
-        : 'Creation cancelled. You can try again anytime!',
-      timestamp: new Date(),
-      intent: 'task_cancelled',
-      confidence: 'high'
-    };
-
-    const updatedMessages = [...sessionMessages, cancelMessage];
-    setSessionMessages(updatedMessages);
-  };
-
-  const handleSendMessage = async (
-    message: string, 
-    inputType: 'text' | 'voice' = 'text',
-    attachedFiles?: any[]
-  ) => {
-    if ((!message.trim() && !attachedFiles?.length) || isLoading) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      console.log('🔄 WAKTI AI V2.5: === ENHANCED TASK SYSTEM ===');
-      console.log('🔄 WAKTI AI V2.5: Message:', message);
-      console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
-      console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
-
-      // Handle Voice Translator quota increment BEFORE sending
-      if (inputType === 'voice') {
-        console.log('📈 Voice translation detected - checking and incrementing translation quota...');
-        const canTranslate = await incrementTranslationCount();
-        if (!canTranslate) {
-          setIsLoading(false);
-          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من الترجمات' : 'Translation quota exceeded');
-          return;
-        }
-        console.log('✅ Voice translation quota incremented successfully');
-      }
-
-      const userMessage: AIMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: message || '[File attachment]',
-        timestamp: new Date(),
-        inputType,
-        attachedFiles: attachedFiles || []
-      };
-
-      const updatedSessionMessages = [...sessionMessages, userMessage];
-      setSessionMessages(updatedSessionMessages);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const completeContext = getCompleteConversationContext();
-      const contextForAI = [...completeContext, userMessage].slice(-50);
-
-      console.log('🧠 WAKTI AI V2.5: Sending enhanced context to AI:', {
-        contextMessages: contextForAI.length,
-        hasConversationHistory: conversationMessages.length > 0,
-        currentConversationId
-      });
-
-      const response = await WaktiAIV2Service.sendMessage(
-        message,
-        user.id,
-        language,
-        currentConversationId,
-        inputType,
-        contextForAI,
-        false,
-        activeTrigger,
-        textGenParams,
-        attachedFiles || [],
-        calendarContext,
-        userContext
-      );
-
-      console.log('🔄 WAKTI AI V2.5: === ENHANCED RESPONSE RECEIVED ===');
-      console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
-      console.log('🔄 WAKTI AI V2.5: Needs Confirmation:', response.needsConfirmation);
-      console.log('🔄 WAKTI AI V2.5: Pending Task Data:', !!response.pendingTaskData);
-      console.log('🔄 WAKTI AI V2.5: Pending Reminder Data:', !!response.pendingReminderData);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.conversationId && response.conversationId !== currentConversationId) {
-        setCurrentConversationId(response.conversationId);
-        loadFullConversationHistory(response.conversationId);
-        console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
-      }
-
-      const assistantMessage: AIMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: response.response,
-        timestamp: new Date(),
-        intent: response.intent,
-        confidence: response.confidence as 'high' | 'medium' | 'low',
-        actionTaken: response.actionTaken,
-        browsingUsed: response.browsingUsed,
-        browsingData: response.browsingData,
-        quotaStatus: response.quotaStatus,
-        requiresSearchConfirmation: response.requiresSearchConfirmation,
-        imageUrl: response.imageUrl,
-        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl,
-        actionResult: response.actionResult,
-        fileAnalysisResults: response.fileAnalysisResults,
-        deepIntegration: response.deepIntegration,
-        automationSuggestions: response.automationSuggestions,
-        predictiveInsights: response.predictiveInsights,
-        workflowActions: response.workflowActions,
-        contextualActions: response.contextualActions,
-        needsConfirmation: response.needsConfirmation,
-        pendingTaskData: response.pendingTaskData,
-        pendingReminderData: response.pendingReminderData
-      };
-
-      const finalSessionMessages = [...updatedSessionMessages, assistantMessage].slice(-30);
-      setSessionMessages(finalSessionMessages);
-
-      // Handle task/reminder confirmation
-      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
-        console.log('🔧 Setting up task/reminder confirmation UI');
-        setPendingTaskData(response.pendingTaskData);
-        setPendingReminderData(response.pendingReminderData);
-        setShowTaskConfirmation(true);
-      }
-
-      if (!currentConversationId) {
-        const allMessagesForConversation = [...updatedSessionMessages, assistantMessage];
-        const newConversationId = await createConversationIfNeeded(allMessagesForConversation);
-        if (newConversationId) {
-          setCurrentConversationId(newConversationId);
-          loadFullConversationHistory(newConversationId);
-          console.log('🆕 Set new conversation ID:', newConversationId);
-          
-          fetchConversations();
-        }
-      } else {
-        await saveMessageToConversation(userMessage, currentConversationId);
-        await saveMessageToConversation(assistantMessage, currentConversationId);
-        
-        fetchConversations();
-      }
-
-      // Voice Translation quota refresh with immediate UI update
-      if (inputType === 'voice') {
-        console.log('🔄 Voice translation completed - refreshing translation quota...');
-        await refreshTranslationQuota();
-        
-        const remainingTranslations = MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1;
-        showSuccess(
-          language === 'ar' 
-            ? `تم تنفيذ الترجمة الصوتية بنجاح وتحديث الحصة (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
-            : `Voice translation completed successfully - quota updated (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} remaining)`
-        );
-      }
-
-      if (response.quotaStatus) {
-        console.log('📊 Received quota status from AI response:', response.quotaStatus);
-        setQuotaStatus(response.quotaStatus);
-      }
-
-      if (inputType === 'voice') {
-        console.log('🔄 Voice operation completed - refreshing voice quota...');
-        await refreshVoiceQuota();
-      }
-
-      if (response.requiresSearchConfirmation) {
-        setSearchConfirmationRequired(true);
-      }
-
-      if (response.fileAnalysisResults && response.fileAnalysisResults.length > 0) {
-        const successfulAnalyses = response.fileAnalysisResults.filter((result: any) => result.analysis.success);
-        if (successfulAnalyses.length > 0) {
-          showSuccess(
-            language === 'ar' 
-              ? `تم تحليل ${successfulAnalyses.length} ملف بنجاح` 
-              : `Successfully analyzed ${successfulAnalyses.length} file(s)`
-          );
-        }
-      }
-
-      if (response.workflowActions?.length > 0 || response.predictiveInsights) {
-        showSuccess(
-          language === 'ar' 
-            ? 'تم تفعيل الميزات المتقدمة للجيل الرابع' 
-            : 'Phase 4 advanced features activated'
-        );
-      }
-
-      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
-        console.log('🔧 Task/Reminder confirmation card should be shown');
-        showSuccess(
-          language === 'ar' 
-            ? 'تم تحضير البيانات للتأكيد - راجع التفاصيل وأكد الإنشاء' 
-            : 'Data prepared for confirmation - review details and confirm creation'
-        );
-      }
-
-    } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced system error:', error);
-      setError(error.message || 'Failed to send message');
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSearchConfirmation = async () => {
     setIsLoading(true);
     setError(null);
@@ -710,7 +582,8 @@ const WaktiAIV2 = () => {
       setSessionMessages(finalMessages);
 
       if (response.quotaStatus) {
-        setQuotaStatus(response.quotaStatus);
+        // Update AI quota if needed
+        fetchAIQuota(true);
       }
 
       setSearchConfirmationRequired(false);
@@ -749,7 +622,6 @@ const WaktiAIV2 = () => {
     setSearchConfirmationRequired(false);
     setError(null);
     
-    // Clear task confirmation state
     setPendingTaskData(null);
     setPendingReminderData(null);
     setShowTaskConfirmation(false);
@@ -775,7 +647,6 @@ const WaktiAIV2 = () => {
       setSearchConfirmationRequired(false);
       setError(null);
       
-      // Clear task confirmation state
       setPendingTaskData(null);
       setPendingReminderData(null);
       setShowTaskConfirmation(false);
@@ -798,7 +669,6 @@ const WaktiAIV2 = () => {
     setSearchConfirmationRequired(false);
     setError(null);
     
-    // Clear task confirmation state
     setPendingTaskData(null);
     setPendingReminderData(null);
     setShowTaskConfirmation(false);
@@ -833,7 +703,6 @@ const WaktiAIV2 = () => {
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply', isTextGenerated: boolean = true) => {
     console.log('📝 WaktiAIV2: Text generated from tool:', { text, mode, length: text.length });
     
-    // Create assistant message with the generated text
     const assistantMessage: AIMessage = {
       id: `assistant-textgen-${Date.now()}`,
       role: 'assistant',
@@ -849,21 +718,17 @@ const WaktiAIV2 = () => {
     const updatedSessionMessages = [...sessionMessages, assistantMessage].slice(-30);
     setSessionMessages(updatedSessionMessages);
 
-    // Save to conversation if one exists
     if (currentConversationId) {
       console.log('📝 WaktiAIV2: Saving generated text to conversation:', currentConversationId);
       saveMessageToConversation(assistantMessage, currentConversationId);
     }
     
-    // Close the quick actions drawer
     setShowQuickActions(false);
     
-    // Show success message
     showSuccess(
       language === 'ar' ? 'تم إنشاء النص وإضافته للمحادثة' : 'Text generated and added to chat'
     );
 
-    // Auto-scroll to the new message
     setTimeout(() => {
       if (scrollAreaRef.current) {
         const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
@@ -879,12 +744,10 @@ const WaktiAIV2 = () => {
 
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
-  // Add this function just before the return
   const handleOpenPlusDrawer = () => {
     setShowQuickActions(true);
   };
 
-  // Listen for open-wakti-conversations event to open conversations drawer
   React.useEffect(() => {
     const handleOpenDrawer = () => {
       setShowConversations(true);
@@ -897,16 +760,14 @@ const WaktiAIV2 = () => {
 
   return (
     <div className="flex flex-col h-full min-h-screen bg-background overflow-hidden">
-      {/* Notification Bars only */}
       <div className="sticky top-0 z-30">
         <NotificationBars
-          quotaStatus={quotaStatus}
+          quotaStatus={aiQuota}
           searchConfirmationRequired={searchConfirmationRequired}
           onSearchConfirmation={handleSearchConfirmation}
-          onQuotaRefresh={() => fetchQuota(true)}
+          onQuotaRefresh={() => fetchAIQuota(true)}
         />
       </div>
-      {/* Main scrollable chat/msgs area */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[140px]">
         <ChatMessages
           sessionMessages={allDisplayMessages}
@@ -923,7 +784,6 @@ const WaktiAIV2 = () => {
           onCancelTaskConfirmation={handleCancelTaskConfirmation}
         />
       </div>
-      {/* Fixed Input at bottom with higher z-index */}
       <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-t border-border">
         <ChatInput
           message={message}
@@ -936,7 +796,6 @@ const WaktiAIV2 = () => {
           activeTrigger={activeTrigger}
         />
       </div>
-      {/* Drawers portal */}
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
