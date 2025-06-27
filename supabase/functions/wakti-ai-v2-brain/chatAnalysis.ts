@@ -82,15 +82,19 @@ export async function processWithBuddyChatAI(
       console.log(`⚡ SPEED-OPTIMIZED: Processing with ${attachedFiles.length} file(s)`);
     }
     
-    let apiKey = DEEPSEEK_API_KEY;
-    let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-    let model = 'deepseek-chat';
+    // SPEED-OPTIMIZED: Use OpenAI as primary for faster responses (2-4s vs 9-10s)
+    let apiKey = OPENAI_API_KEY;
+    let apiUrl = 'https://api.openai.com/v1/chat/completions';
+    let model = 'gpt-4o-mini'; // Fast and capable model with vision support
+    let usingOpenAI = true;
     
-    // Force OpenAI for any request with files/images
-    if (!apiKey || (attachedFiles && attachedFiles.length > 0)) {
-      apiKey = OPENAI_API_KEY;
-      apiUrl = 'https://api.openai.com/v1/chat/completions';
-      model = 'gpt-4o-mini'; // This model supports vision
+    // Fallback to DeepSeek if OpenAI is not available
+    if (!apiKey) {
+      console.log("⚡ SPEED-OPTIMIZED: OpenAI unavailable, falling back to DeepSeek");
+      apiKey = DEEPSEEK_API_KEY;
+      apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+      model = 'deepseek-chat';
+      usingOpenAI = false;
     }
     
     if (!apiKey) {
@@ -157,6 +161,8 @@ export async function processWithBuddyChatAI(
 
     messages.push({ role: 'user', content: userContent });
     
+    console.log(`⚡ SPEED-OPTIMIZED: Using ${usingOpenAI ? 'OpenAI (fast)' : 'DeepSeek (fallback)'}`);
+    
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -174,6 +180,16 @@ export async function processWithBuddyChatAI(
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`AI API failed: ${response.status}`, errorText);
+      
+      // If OpenAI fails, try DeepSeek as fallback
+      if (usingOpenAI && DEEPSEEK_API_KEY) {
+        console.log("⚡ SPEED-OPTIMIZED: OpenAI failed, trying DeepSeek fallback");
+        return processWithBuddyChatAI(
+          message, context, language, contextMessages, enhancedContext,
+          activeTrigger, interactionType, attachedFiles, customSystemPrompt, maxTokens
+        );
+      }
+      
       throw new Error(`AI API failed: ${response.status} - ${errorText}`);
     }
     

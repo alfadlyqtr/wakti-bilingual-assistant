@@ -14,7 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("⚡ WAKTI AI SPEED-OPTIMIZED: Ultra-fast processing pipeline with smart optimizations");
+console.log("⚡ WAKTI AI ULTRA-FAST: OpenAI-first processing pipeline with DeepSeek fallback");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("⚡ WAKTI AI SPEED-OPTIMIZED: Processing with minimal overhead");
+    console.log("⚡ WAKTI AI ULTRA-FAST: Processing with OpenAI primary, DeepSeek fallback");
     const startTime = Date.now();
 
     // ULTRA-FAST: Skip full auth if cached token provided
@@ -97,7 +97,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`⚡ SPEED-OPTIMIZED: Processing for user ${user.id} with style: ${userStyle}, tokens: ${maxTokens}`);
+    console.log(`⚡ ULTRA-FAST: Processing for user ${user.id} with style: ${userStyle}, tokens: ${maxTokens}`);
 
     // OPTIMIZED: Process attached files with URL handling
     let processedFiles = [];
@@ -106,7 +106,7 @@ serve(async (req) => {
       console.log(`⚡ OPTIMIZED: Processed ${processedFiles.length} files`);
     }
 
-    // SPEED-OPTIMIZED: Smart processing pipeline
+    // ULTRA-FAST: Smart processing pipeline with OpenAI priority
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -120,7 +120,7 @@ serve(async (req) => {
     const hasTaskKeywords = /create task|add task|أنشئ مهمة|create reminder|add reminder/i.test(message);
 
     if (hasTaskKeywords) {
-      console.log("⚡ SPEED-OPTIMIZED: Task creation detected");
+      console.log("⚡ ULTRA-FAST: Task creation detected");
       const taskAnalysis = await analyzeTaskIntent(message, language);
       
       if (taskAnalysis.isTask || taskAnalysis.isReminder) {
@@ -140,16 +140,16 @@ serve(async (req) => {
       }
     }
 
-    // SPEED-OPTIMIZED: Direct processing based on trigger
+    // ULTRA-FAST: Direct processing based on trigger with OpenAI priority
     if (!needsConfirmation) {
       switch (activeTrigger) {
         case 'search':
-          console.log("⚡ SPEED-OPTIMIZED: Direct search execution");
+          console.log("⚡ ULTRA-FAST: Direct search execution");
           const searchResult = await executeRegularSearch(message, language);
           if (searchResult.success) {
             browsingUsed = true;
             browsingData = searchResult.data;
-            // SPEED-OPTIMIZED: Use minimal context for search
+            // ULTRA-FAST: Use minimal context for search with OpenAI processing
             const context = userStyle === 'short answers' ? 
               searchResult.context.substring(0, 500) : // Limit context for short answers
               searchResult.context;
@@ -182,7 +182,7 @@ serve(async (req) => {
           break;
 
         case 'image':
-          console.log("⚡ SPEED-OPTIMIZED: Direct image generation");
+          console.log("⚡ ULTRA-FAST: Direct image generation");
           try {
             const imageResult = await generateImageWithRunware(message, user.id, language);
             
@@ -213,8 +213,8 @@ serve(async (req) => {
 
         case 'chat':
         default:
-          console.log("⚡ SPEED-OPTIMIZED: Direct chat processing");
-          // SPEED-OPTIMIZED: Build minimal chat context
+          console.log("⚡ ULTRA-FAST: Direct chat processing with OpenAI");
+          // ULTRA-FAST: Build minimal chat context for OpenAI processing
           const chatContext = userStyle === 'short answers' ? 
             null : // Skip context for short answers
             (conversationSummary ? 
@@ -228,7 +228,7 @@ serve(async (req) => {
             [],
             '',
             activeTrigger,
-            'speed_optimized_chat',
+            'ultra_fast_openai_chat',
             processedFiles,
             customSystemPrompt,
             maxTokens
@@ -238,13 +238,13 @@ serve(async (req) => {
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`⚡ SPEED-OPTIMIZED: Processed in ${processingTime}ms (target: <6000ms)`);
+    console.log(`⚡ ULTRA-FAST: Processed in ${processingTime}ms (target: <4000ms with OpenAI)`);
 
-    // SPEED-OPTIMIZED: Minimal response structure
+    // ULTRA-FAST: Minimal response structure
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'speed_optimized',
+      intent: 'ultra_fast_openai',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -256,7 +256,8 @@ serve(async (req) => {
       success: true,
       processingTime,
       speedOptimized: true,
-      tokensUsed: maxTokens
+      tokensUsed: maxTokens,
+      aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek'
     };
 
     return new Response(JSON.stringify(result), {
@@ -264,7 +265,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("⚡ SPEED-OPTIMIZED: Error:", error);
+    console.error("⚡ ULTRA-FAST: Error:", error);
     
     return new Response(JSON.stringify({
       error: error.message || 'Processing error',
