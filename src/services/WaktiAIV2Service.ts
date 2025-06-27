@@ -260,15 +260,15 @@ function buildOptimizedSystemPrompt(data: PersonalTouchData | null): string {
 // SPEED-OPTIMIZED: Get smart token limits based on style
 function getSmartTokenLimits(style: string): number {
   const tokenLimits = {
-    'short answers': 200, // Reduced from 300
-    'bullet points': 300, // Reduced from 400
-    'detailed': 600, // Reduced from 800
-    'step-by-step': 450, // Reduced from 600
-    'casual': 350, // Reduced from 500
-    'neutral': 400 // Reduced from 600
+    'short answers': 150, // Further reduced for ultra speed
+    'bullet points': 200, // Further reduced for ultra speed
+    'detailed': 400, // Further reduced for ultra speed
+    'step-by-step': 300, // Further reduced for ultra speed
+    'casual': 250, // Further reduced for ultra speed
+    'neutral': 300 // Further reduced for ultra speed
   };
   
-  return tokenLimits[style] || 400;
+  return tokenLimits[style] || 300;
 }
 
 // SPEED-OPTIMIZED: Detect if query is simple
@@ -284,11 +284,11 @@ function isSimpleQuery(message: string): boolean {
   return simplePatterns.some(pattern => pattern.test(message.trim()));
 }
 
-// NEW: Request debouncer to prevent rapid requests
+// FIXED: Request debouncer with proper typing
 class RequestDebouncer {
-  private static timers = new Map<string, number>();
+  private static timers = new Map<string, ReturnType<typeof setTimeout>>();
   
-  static debounce(key: string, fn: Function, delay: number = 500) {
+  static debounce(key: string, fn: Function, delay: number = 300) { // Reduced delay
     const existingTimer = this.timers.get(key);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -332,14 +332,14 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('⚡ HYPER-OPTIMIZED AI: Ultra-speed processing initiated');
+      console.log('⚡ ULTRA-FAST AI: Hyper-speed processing initiated');
       const startTime = Date.now();
       
-      // SPEED-OPTIMIZED: Load personal touch settings with caching
+      // ULTRA-FAST: Load personal touch settings with caching
       const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
       const userStyle = personalTouch?.style || 'detailed';
       
-      // SPEED-OPTIMIZED: Check cache first for simple queries
+      // ULTRA-FAST: Aggressive caching for simple queries
       if (!attachedFiles?.length && activeTrigger === 'chat' && isSimpleQuery(message)) {
         const cachedResponse = AIResponseCache.getCachedResponse(message);
         if (cachedResponse) {
@@ -360,30 +360,30 @@ export class WaktiAIV2ServiceClass {
       const auth = await AuthCache.getValidAuth();
       if (!auth) throw new Error('Authentication failed');
       
-      // SPEED-OPTIMIZED: Compress message history based on user style (more aggressive)
+      // ULTRA-FAST: More aggressive compression for speed
       const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory, userStyle);
       
-      // SPEED-OPTIMIZED: Process attached files (keep existing optimization)
+      // ULTRA-FAST: Process attached files (keep existing optimization)
       let processedFiles = attachedFiles;
       if (attachedFiles?.length > 0) {
         processedFiles = await this.processOptimizedFiles(attachedFiles);
       }
       
-      // SPEED-OPTIMIZED: Build minimal custom system prompt
+      // ULTRA-FAST: Build ultra-minimal custom system prompt
       const customSystemPrompt = buildOptimizedSystemPrompt(personalTouch);
       
-      // SPEED-OPTIMIZED: Get smart token limits (reduced)
+      // ULTRA-FAST: Get smart token limits (further reduced)
       const maxTokens = getSmartTokenLimits(userStyle);
       
       // Create abort controller for request timeout
       const abortController = AuthCache.getAbortController();
       
-      // Set aggressive timeout based on user style
-      const timeoutMs = userStyle === 'short answers' ? 4000 : 6000;
+      // ULTRA-FAST: Aggressive timeout based on user style
+      const timeoutMs = userStyle === 'short answers' ? 3000 : 4000; // Reduced timeouts
       const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
       
       try {
-        // ULTRA-FAST: Direct API call with speed-optimized payload (minimized)
+        // ULTRA-FAST: Direct API call with ultra-minimal payload
         const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
           body: {
             message,
@@ -393,10 +393,10 @@ export class WaktiAIV2ServiceClass {
             inputType,
             activeTrigger,
             attachedFiles: processedFiles,
-            // AGGRESSIVE OPTIMIZATION: Skip context for short answers
-            conversationSummary: userStyle === 'short answers' ? '' : summary?.substring(0, 200) || '',
+            // ULTRA-FAST: Skip most context for speed
+            conversationSummary: userStyle === 'short answers' ? '' : summary?.substring(0, 100) || '',
             recentMessages: userStyle === 'short answers' ? [] : recentMessages.slice(-1),
-            customSystemPrompt: customSystemPrompt.substring(0, 150), // Truncate prompt
+            customSystemPrompt: customSystemPrompt.substring(0, 100), // Further truncate
             maxTokens,
             userStyle,
             // Ultra-fast mode flags
@@ -413,13 +413,13 @@ export class WaktiAIV2ServiceClass {
         clearTimeout(timeoutId);
         
         const responseTime = Date.now() - startTime;
-        console.log(`⚡ HYPER-OPTIMIZED AI: Response in ${responseTime}ms`);
+        console.log(`⚡ ULTRA-FAST AI: Response in ${responseTime}ms`);
         
         if (response.error) {
           throw new Error(response.error.message || 'AI service error');
         }
         
-        // Cache simple responses for future use (only basic chat without files)
+        // ULTRA-FAST: Cache simple responses immediately
         if (activeTrigger === 'chat' && !attachedFiles?.length && isSimpleQuery(message)) {
           AIResponseCache.setCachedResponse(message, response.data.response);
         }
@@ -440,7 +440,7 @@ export class WaktiAIV2ServiceClass {
         throw error;
       }
     } catch (error: any) {
-      console.error('⚡ HYPER-OPTIMIZED AI: Service error:', error);
+      console.error('⚡ ULTRA-FAST AI: Service error:', error);
       throw error;
     }
   }
