@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -230,7 +231,7 @@ export function ChatInput({
               `}
               style={{ willChange: "box-shadow,border-color" }}
             >
-              {/* TOP ROW: [Plus] [💬 Conversations] [⚡ Quick Actions] [Mode Badge] */}
+              {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
               <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
                 <PlusMenu
                   onCamera={triggerCamera}
@@ -239,15 +240,15 @@ export function ChatInput({
                 />
                 <button
                   onClick={handleOpenConversationsDrawer}
-                  aria-label={language === "ar" ? "المحادثات" : "Conversations"}
+                  aria-label={language === "ar" ? "إضافي" : "Extra"}
                   className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
                   disabled={isLoading}
                   type="button"
                   tabIndex={0}
                 >
-                  <span className="text-lg" role="img" aria-label="Conversations">💬</span>
+                  <span className="text-lg" role="img" aria-label="Extra">💬</span>
                   <span className="text-xs font-medium text-foreground/80">
-                    {language === 'ar' ? 'المحادثات' : 'Conversations'}
+                    {language === 'ar' ? 'إضافي' : 'Extra'}
                   </span>
                 </button>
                 <button
