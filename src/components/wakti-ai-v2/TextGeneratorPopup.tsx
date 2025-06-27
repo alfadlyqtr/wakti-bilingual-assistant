@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,6 +36,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [contentType, setContentType] = useState('');
   const [tone, setTone] = useState('');
   const [length, setLength] = useState('');
+  const [toAddress, setToAddress] = useState('');
+  const [fromAddress, setFromAddress] = useState('');
   
   // Reply tab state
   const [keywords, setKeywords] = useState('');
@@ -51,8 +53,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     article: language === 'ar' ? 'مقال' : 'Article',
     social_post: language === 'ar' ? 'منشور اجتماعي' : 'Social Media Post',
     official_letter: language === 'ar' ? 'كتاب رسمي' : 'Official Letter',
-    poem: language === 'ar' ? 'قصيدة' : 'Poem', // RESTORED
-    story: language === 'ar' ? 'قصة' : 'Story' // RESTORED
+    poem: language === 'ar' ? 'قصيدة' : 'Poem',
+    story: language === 'ar' ? 'قصة' : 'Story'
   };
 
   // RESTORED: All tones including romantic
@@ -70,6 +72,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     medium: language === 'ar' ? 'متوسط' : 'Medium',
     long: language === 'ar' ? 'طويل' : 'Long'
   };
+
+  // Check if current content type requires address fields
+  const showAddressFields = ['email', 'letter', 'official_letter'].includes(contentType);
 
   const generateText = async () => {
     if (activeTab === 'compose' && !composePrompt.trim()) {
@@ -103,6 +108,21 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           prompt += language === 'ar' ? 
             `\nالطول: ${lengths[length]}` : 
             `\nLength: ${lengths[length]}`;
+        }
+
+        // Add address information if provided and relevant
+        if (showAddressFields) {
+          if (toAddress.trim()) {
+            prompt += language === 'ar' ? 
+              `\nإلى: ${toAddress}` : 
+              `\nTo: ${toAddress}`;
+          }
+          
+          if (fromAddress.trim()) {
+            prompt += language === 'ar' ? 
+              `\nمن: ${fromAddress}` : 
+              `\nFrom: ${fromAddress}`;
+          }
         }
       } else {
         // Build reply prompt with keywords and original message
@@ -184,6 +204,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     setReplyTone('');
     setLength('');
     setReplyLength('');
+    setToAddress('');
+    setFromAddress('');
     setGeneratedText('');
   };
 
@@ -204,6 +226,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     setReplyTone('');
     setLength('');
     setReplyLength('');
+    setToAddress('');
+    setFromAddress('');
     setIsCopied(false);
     onClose();
   };
@@ -292,6 +316,41 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </Select>
               </div>
             </div>
+
+            {/* Address Fields - Only show for relevant content types */}
+            {showAddressFields && (
+              <div className="space-y-3 pt-2 border-t border-border/50">
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  {language === 'ar' ? 'معلومات العنوان' : 'Address Information'}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="to-address" className="text-sm font-medium">
+                      {language === 'ar' ? 'إلى من' : 'To whom'}
+                    </Label>
+                    <Input
+                      id="to-address"
+                      placeholder={language === 'ar' ? 'اسم المستلم أو عنوانه' : 'Recipient name or address'}
+                      value={toAddress}
+                      onChange={(e) => setToAddress(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="from-address" className="text-sm font-medium">
+                      {language === 'ar' ? 'من المنزل' : 'From home'}
+                    </Label>
+                    <Input
+                      id="from-address"
+                      placeholder={language === 'ar' ? 'اسم المرسل أو عنوانه' : 'Sender name or address'}
+                      value={fromAddress}
+                      onChange={(e) => setFromAddress(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="reply" className="space-y-4 mt-4">
