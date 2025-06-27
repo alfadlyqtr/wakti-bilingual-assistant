@@ -34,7 +34,7 @@ export function ExtraPanel({
   isLoading
 }: ExtraPanelProps) {
   const { language } = useTheme();
-  const [conversationsOpen, setConversationsOpen] = useState(true);
+  const [conversationsOpen, setConversationsOpen] = useState(false);
 
   return (
     <div className="h-full overflow-y-auto space-y-4">
