@@ -3,11 +3,12 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MessageSquare, Search, Image, PenTool, Mic, Volume2, Zap, Gamepad2 } from 'lucide-react';
-import { TextGeneratorPopup } from './TextGeneratorPopup';
+import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 import { GameModeModal } from './GameModeModal';
+
 interface QuickActionsProps {
   onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
   activeTrigger: string;

@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Wand2, Reply, FileText, Separator } from 'lucide-react';
+import { Loader2, Wand2, Reply, FileText } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 
 interface TextGeneratorPopupProps {
