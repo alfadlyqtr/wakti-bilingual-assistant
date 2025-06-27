@@ -299,7 +299,7 @@ const WaktiAIV2 = () => {
         attachedFiles || []
       );
 
-      // ULTRA-FAST: Create assistant message immediately
+      // ULTRA-FAST: Create assistant message immediately with ALL response properties
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -307,7 +307,10 @@ const WaktiAIV2 = () => {
         timestamp: new Date(),
         intent: response.intent || 'chat_response',
         confidence: response.confidence || 'high',
-        actionTaken: response.actionTaken || false
+        actionTaken: response.actionTaken || false,
+        imageUrl: response.imageUrl, // ADD: Include generated image URL
+        browsingUsed: response.browsingUsed, // ADD: Include browsing status
+        browsingData: response.browsingData // ADD: Include browsing data
       };
 
       const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
