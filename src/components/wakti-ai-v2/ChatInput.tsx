@@ -41,8 +41,8 @@ export function ChatInput({
     transcript,
     startListening,
     stopListening,
-    resetTranscript,
-    browserSupportsSpeechRecognition
+    clearTranscript,
+    isSupported
   } = useBrowserSpeechRecognition();
 
   // Auto-resize textarea
@@ -76,7 +76,7 @@ export function ChatInput({
       setMessage('');
       setUploadedFiles([]);
       setShowFileUpload(false);
-      resetTranscript();
+      clearTranscript();
     }
   };
 
@@ -141,7 +141,7 @@ export function ChatInput({
         </div>
 
         {/* Voice Input Button */}
-        {showVoiceInput && browserSupportsSpeechRecognition && (
+        {showVoiceInput && isSupported && (
           <Button
             type="button"
             variant={isListening ? "destructive" : "outline"}

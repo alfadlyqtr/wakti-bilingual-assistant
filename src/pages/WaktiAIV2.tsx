@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,6 +38,7 @@ export default function WaktiAIV2() {
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   
   const [inputMessage, setInputMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -50,6 +52,7 @@ export default function WaktiAIV2() {
   const [showTaskConfirmation, setShowTaskConfirmation] = useState(false);
   const [pendingTaskData, setPendingTaskData] = useState<TaskData | null>(null);
   const [pendingReminderData, setPendingReminderData] = useState<TaskData | null>(null);
+  const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
 
   const handleSendMessage = async (
     messageText: string, 
@@ -71,7 +74,7 @@ export default function WaktiAIV2() {
         role: 'user',
         content: messageText,
         timestamp: Date.now(),
-        visionFiles: visionFiles // NEW: Include vision files in message
+        visionFiles: visionFiles
       };
 
       setMessages(prev => [...prev, userMessage]);
@@ -206,6 +209,19 @@ export default function WaktiAIV2() {
     }]);
   };
 
+  const handleClearChat = () => {
+    setMessages([]);
+    setCurrentConversationId(null);
+    setMessages([{
+      id: 'welcome',
+      role: 'assistant',
+      content: language === 'ar'
+        ? 'مرحباً! كيف يمكنني مساعدتك اليوم؟'
+        : 'Hello! How can I help you today?',
+      timestamp: Date.now()
+    }]);
+  };
+
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply', isTextGenerated: boolean = true) => {
     setInputMessage(text);
     if (isTextGenerated) {
@@ -274,19 +290,48 @@ export default function WaktiAIV2() {
     // Re-enable editing or show the task details in editable format
   };
 
+  const handleSearchConfirmation = () => {
+    setSearchConfirmationRequired(false);
+    // Handle search confirmation logic
+  };
+
+  const handleQuotaRefresh = () => {
+    // Handle quota refresh logic
+  };
+
+  const handleSelectConversation = (id: string) => {
+    setCurrentConversationId(id);
+    // Load conversation messages
+  };
+
+  const handleDeleteConversation = (id: string) => {
+    // Handle conversation deletion
+  };
+
+  const fetchConversations = () => {
+    // Fetch conversations logic
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       {/* Header */}
       <ChatHeader
+        currentConversationId={currentConversationId}
         activeTrigger={activeTrigger}
-        onTriggerChange={setActiveTrigger}
-        onToggleDrawer={() => setShowQuickActions(!showQuickActions)}
         onToggleConversations={() => setShowConversations(!showConversations)}
         onNewConversation={handleNewConversation}
+        onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
+        onTriggerChange={setActiveTrigger}
+        onClearChat={handleClearChat}
+        hasMessages={messages.length > 1}
       />
 
       {/* Notification Bars */}
-      <NotificationBars />
+      <NotificationBars 
+        searchConfirmationRequired={searchConfirmationRequired}
+        onSearchConfirmation={handleSearchConfirmation}
+        onQuotaRefresh={handleQuotaRefresh}
+      />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Main Chat Area */}
@@ -295,13 +340,18 @@ export default function WaktiAIV2() {
           <div className="flex-1 overflow-y-auto px-4 py-2">
             <div className="max-w-4xl mx-auto space-y-4">
               <ChatMessages 
-                messages={messages}
-                isTyping={isTyping}
-                onTaskConfirm={handleTaskConfirm}
-                onTaskEdit={handleTaskEdit}
+                sessionMessages={messages}
+                isLoading={isTyping}
+                activeTrigger={activeTrigger}
+                scrollAreaRef={scrollAreaRef}
+                userProfile={null}
                 showTaskConfirmation={showTaskConfirmation}
                 pendingTaskData={pendingTaskData}
                 pendingReminderData={pendingReminderData}
+                taskConfirmationLoading={isLoading}
+                onTaskConfirmation={handleTaskConfirm}
+                onReminderConfirmation={handleTaskConfirm}
+                onCancelTaskConfirmation={handleTaskEdit}
               />
               <div ref={messagesEndRef} />
             </div>
@@ -326,14 +376,23 @@ export default function WaktiAIV2() {
 
         {/* Drawers */}
         <ChatDrawers
-          showQuickActions={showQuickActions}
           showConversations={showConversations}
-          onCloseQuickActions={() => setShowQuickActions(false)}
-          onCloseConversations={() => setShowConversations(false)}
+          setShowConversations={setShowConversations}
+          showQuickActions={showQuickActions}
+          setShowQuickActions={setShowQuickActions}
+          conversations={[]}
+          currentConversationId={currentConversationId}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
+          fetchConversations={fetchConversations}
           onSendMessage={handleSendMessage}
           activeTrigger={activeTrigger}
           onTriggerChange={setActiveTrigger}
           onTextGenerated={handleTextGenerated}
+          onNewConversation={handleNewConversation}
+          onClearChat={handleClearChat}
+          sessionMessages={messages}
+          isLoading={isLoading}
         />
       </div>
     </div>
