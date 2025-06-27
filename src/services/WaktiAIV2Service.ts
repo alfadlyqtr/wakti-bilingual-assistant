@@ -32,73 +32,61 @@ export interface AIConversation {
   message_count: number;
 }
 
-// ULTRA-FAST: Optimized message compression with size limits
+// ULTRA-FAST: Message compression utilities
 class MessageCompressor {
   static compressHistory(messages: AIMessage[]): { summary: string; recentMessages: AIMessage[] } {
-    // Reduced from 5 to 3 messages for faster processing
-    if (messages.length <= 3) {
+    if (messages.length <= 5) {
       return { summary: '', recentMessages: messages };
     }
 
-    // Reduced from 3 to 2 recent messages for speed
-    const recentMessages = messages.slice(-2);
-    const oldMessages = messages.slice(0, -2);
+    const recentMessages = messages.slice(-3); // Keep last 3 messages
+    const oldMessages = messages.slice(0, -3);
     
-    // Skip compression for very short conversations (speed optimization)
-    if (oldMessages.length <= 2) {
-      return { summary: '', recentMessages: messages.slice(-3) };
-    }
-    
-    // Create minimal summary of older messages
-    const summary = this.createMinimalSummary(oldMessages);
+    // Create simple summary of older messages
+    const summary = this.createSummary(oldMessages);
     
     return { summary, recentMessages };
   }
 
-  private static createMinimalSummary(messages: AIMessage[]): string {
+  private static createSummary(messages: AIMessage[]): string {
     if (messages.length === 0) return '';
     
-    // Simplified summary creation for speed
     const topics = new Set<string>();
-    let actionCount = 0;
+    const actions = [];
     
     messages.forEach(msg => {
-      if (msg.intent && msg.intent !== 'chat_response') topics.add(msg.intent);
-      if (msg.actionTaken) actionCount++;
+      if (msg.intent) topics.add(msg.intent);
+      if (msg.actionTaken) actions.push(msg.content.substring(0, 50));
     });
     
-    // Minimal summary format for faster processing
-    let summary = '';
-    if (topics.size > 0) {
-      summary = `Previous: ${Array.from(topics).join(', ')}.`;
-    }
-    if (actionCount > 0) {
-      summary += ` Actions: ${actionCount}.`;
+    let summary = `Previous conversation covered: ${Array.from(topics).join(', ')}.`;
+    if (actions.length > 0) {
+      summary += ` Actions taken: ${actions.join('; ')}.`;
     }
     
-    return summary || 'Previous conversation context.';
+    return summary;
   }
 }
 
-// ULTRA-FAST: Auth cache manager with longer cache duration
+// ULTRA-FAST: Auth cache manager
 class AuthCache {
   private static cache: { userId: string; token: string; expires: number } | null = null;
   
   static async getValidAuth(): Promise<{ userId: string; token: string } | null> {
-    // Check cache first - extended cache time for speed
+    // Check cache first
     if (this.cache && Date.now() < this.cache.expires) {
       return { userId: this.cache.userId, token: this.cache.token };
     }
     
-    // Get fresh auth using getSession
+    // Get fresh auth using getSession to get both user and session
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user || !session) return null;
     
-    // Extended cache for 15 minutes (was 10) for better performance
+    // Cache for 10 minutes
     this.cache = {
       userId: session.user.id,
       token: session.access_token,
-      expires: Date.now() + (15 * 60 * 1000)
+      expires: Date.now() + (10 * 60 * 1000)
     };
     
     return { userId: session.user.id, token: session.access_token };
@@ -109,24 +97,16 @@ class AuthCache {
   }
 }
 
-// ULTRA-FAST: Local memory cache with optimized storage
+// ULTRA-FAST: Local memory cache
 class LocalMemoryCache {
   private static readonly STORAGE_KEY = 'wakti_ai_memory';
-  private static readonly MAX_MESSAGES = 4; // Reduced from 5 for speed
+  private static readonly MAX_MESSAGES = 5;
   
   static saveMessages(conversationId: string | null, messages: AIMessage[]) {
     try {
-      // Only save essential data for speed
       const memory = {
         conversationId,
-        messages: messages.slice(-this.MAX_MESSAGES).map(msg => ({
-          id: msg.id,
-          role: msg.role,
-          content: msg.content.substring(0, 500), // Truncate long content for speed
-          timestamp: msg.timestamp,
-          intent: msg.intent,
-          confidence: msg.confidence
-        })),
+        messages: messages.slice(-this.MAX_MESSAGES),
         timestamp: Date.now()
       };
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(memory));
@@ -142,8 +122,8 @@ class LocalMemoryCache {
       
       const memory = JSON.parse(stored);
       
-      // Check if memory is less than 30 minutes old (reduced from 1 hour)
-      if (Date.now() - memory.timestamp > 30 * 60 * 1000) {
+      // Check if memory is less than 1 hour old
+      if (Date.now() - memory.timestamp > 60 * 60 * 1000) {
         localStorage.removeItem(this.STORAGE_KEY);
         return null;
       }
@@ -184,28 +164,32 @@ function loadWaktiPersonalTouch(): PersonalTouchData | null {
   }
 }
 
-function buildOptimizedSystemPrompt(data: PersonalTouchData | null): string {
-  // Simplified system prompt for speed
+function buildSystemPromptFromPersonalTouch(data: PersonalTouchData | null): string {
+  if (!data) return "You are Wakti AI.";
+
   let prompt = "You are Wakti AI.";
   
-  if (data?.nickname) {
-    prompt += ` Call user "${data.nickname}".`;
+  if (data.nickname) {
+    prompt += `\nCall the user "${data.nickname}".`;
   }
   
-  if (data?.tone && data.tone !== 'neutral') {
-    prompt += ` ${data.tone} tone.`;
+  if (data.tone && data.tone !== 'neutral') {
+    prompt += `\nUse a ${data.tone} tone.`;
   }
   
-  if (data?.instruction) {
-    // Truncate long instructions for speed
-    prompt += ` ${data.instruction.substring(0, 100)}`;
+  if (data.style) {
+    prompt += `\nRespond using ${data.style}.`;
   }
   
-  return prompt;
+  if (data.instruction) {
+    prompt += `\nImportant: ${data.instruction}`;
+  }
+  
+  return prompt.trim();
 }
 
 export class WaktiAIV2ServiceClass {
-  // ULTRA-FAST: Enhanced message sending with aggressive optimization
+  // ULTRA-FAST: Enhanced message sending with aggressive caching
   static async sendMessage(
     message: string,
     userId?: string,
@@ -231,9 +215,9 @@ export class WaktiAIV2ServiceClass {
       console.log('⚡ ULTRA-FAST AI: Message processing initiated');
       const startTime = Date.now();
       
-      // ULTRA-FAST: Enhanced cache check with user patterns
-      if (!attachedFiles?.length && activeTrigger === 'chat' && message.length < 150) {
-        const cachedResponse = AIResponseCache.getCachedResponse(message, userId);
+      // ULTRA-FAST: Check cache first for basic responses (but skip for files)
+      if (!attachedFiles?.length && activeTrigger === 'chat' && message.length < 100) {
+        const cachedResponse = AIResponseCache.getCachedResponse(message);
         if (cachedResponse) {
           console.log('⚡ CACHE HIT: Returning cached response instantly');
           return {
@@ -252,20 +236,20 @@ export class WaktiAIV2ServiceClass {
       const auth = await AuthCache.getValidAuth();
       if (!auth) throw new Error('Authentication failed');
       
-      // ULTRA-FAST: Optimized message compression
+      // ULTRA-FAST: Compress message history
       const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory);
       
-      // ULTRA-FAST: Optimized file processing
-      let processedFiles = [];
+      // ULTRA-FAST: Process attached files with document support
+      let processedFiles = attachedFiles;
       if (attachedFiles?.length > 0) {
-        processedFiles = await this.processUltraFastFiles(attachedFiles);
+        processedFiles = await this.processOptimizedFiles(attachedFiles);
       }
       
-      // ULTRA-FAST: Minimal personal touch integration
+      // NEW: Load personal touch settings and build custom system prompt
       const personalTouch = loadWaktiPersonalTouch();
-      const customSystemPrompt = buildOptimizedSystemPrompt(personalTouch);
+      const customSystemPrompt = buildSystemPromptFromPersonalTouch(personalTouch);
       
-      // ULTRA-FAST: Streamlined API call
+      // ULTRA-FAST: Direct API call with optimized payload and personalized system prompt
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -276,10 +260,10 @@ export class WaktiAIV2ServiceClass {
           activeTrigger,
           attachedFiles: processedFiles,
           conversationSummary: summary,
-          recentMessages: recentMessages.slice(-2), // Further reduced context
-          customSystemPrompt,
-          ultraFastMode: true,
-          minimalContext: true // New flag for minimal processing
+          recentMessages: recentMessages.slice(-3),
+          customSystemPrompt, // Inject personalized system prompt
+          // Ultra-fast mode flag
+          ultraFastMode: true
         },
         headers: {
           'x-auth-token': auth.token,
@@ -294,13 +278,15 @@ export class WaktiAIV2ServiceClass {
         throw new Error(response.error.message || 'AI service error');
       }
       
-      // Enhanced caching for better performance
-      if (activeTrigger === 'chat' && !attachedFiles?.length && message.length < 100 && response.data.response) {
-        AIResponseCache.setCachedResponse(message, response.data.response, userId);
+      // Cache simple responses for future use (only basic chat without files)
+      if (activeTrigger === 'chat' && !attachedFiles?.length && message.length < 50) {
+        AIResponseCache.setCachedResponse(message, response.data.response);
       }
       
-      // FIRE-AND-FORGET: Background logging
-      this.logQuotaAsync(auth.userId, inputType, responseTime).catch(() => {});
+      // FIRE-AND-FORGET: Quota logging
+      this.logQuotaAsync(auth.userId, inputType, responseTime).catch(e => 
+        console.warn('Quota logging failed silently:', e)
+      );
       
       return response.data;
     } catch (error: any) {
@@ -309,26 +295,42 @@ export class WaktiAIV2ServiceClass {
     }
   }
   
-  // Ultra-fast file processing with direct URL handling
-  private static async processUltraFastFiles(attachedFiles: any[]): Promise<any[]> {
+  // Enhanced file processing with document support
+  private static async processOptimizedFiles(attachedFiles: any[]): Promise<any[]> {
     if (!attachedFiles?.length) return [];
     
     return attachedFiles.map(file => {
-      // Direct URL handling for optimized files (no conversion)
-      if (file.optimized && file.publicUrl) {
+      // Handle different file types
+      if (file.type?.startsWith('image/')) {
+        // Image files for OpenAI Vision
+        if (file.optimized && file.publicUrl) {
+          return {
+            type: 'image_url',
+            image_url: {
+              url: file.publicUrl
+            },
+            name: file.name
+          };
+        }
+        
+        if (file.content) {
+          return {
+            type: 'image_url',
+            image_url: {
+              url: `data:${file.type};base64,${file.content}`
+            },
+            name: file.name
+          };
+        }
+      } else if (file.type === 'text/plain' || 
+                 file.type === 'application/pdf' || 
+                 file.type?.includes('document')) {
+        // Document files
         return {
-          type: 'image_url',
-          image_url: { url: file.publicUrl },
-          name: file.name
-        };
-      }
-      
-      // Skip heavy processing for non-optimized files
-      if (file.content && file.content.length < 500000) { // 500KB limit for speed
-        return {
-          type: 'image_url',
-          image_url: { url: `data:${file.type};base64,${file.content}` },
-          name: file.name
+          type: 'document',
+          content: file.content,
+          name: file.name,
+          fileType: file.type
         };
       }
       
@@ -343,13 +345,14 @@ export class WaktiAIV2ServiceClass {
   // FIRE-AND-FORGET: Non-blocking quota logging
   private static async logQuotaAsync(userId: string, inputType: string, responseTime: number) {
     try {
+      // This runs in background without blocking user experience
       setTimeout(async () => {
         await supabase.functions.invoke('log-quota-usage', {
           body: { userId, inputType, responseTime }
         });
       }, 0);
     } catch (e) {
-      // Silent failure
+      // Silent failure - never block user experience
     }
   }
   
@@ -395,7 +398,7 @@ export class WaktiAIV2ServiceClass {
     );
   }
   
-  
+  // ULTRA-FAST: Streamlined conversation operations
   static async getConversations(): Promise<AIConversation[]> {
     try {
       const auth = await AuthCache.getValidAuth();
@@ -406,7 +409,7 @@ export class WaktiAIV2ServiceClass {
         .select('*')
         .eq('user_id', auth.userId)
         .order('last_message_at', { ascending: false })
-        .limit(15); // Reduced from 20 for speed
+        .limit(20);
       
       if (error) throw error;
       return data || [];
@@ -427,7 +430,7 @@ export class WaktiAIV2ServiceClass {
         .select('*')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
-        .limit(30); // Reduced from 50 for speed
+        .limit(50);
       
       if (error) throw error;
       return data || [];

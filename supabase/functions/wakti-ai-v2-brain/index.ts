@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -14,7 +13,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("⚡ WAKTI AI ULTRA-FAST: Optimized processing pipeline loaded");
+console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing pipeline loaded with image optimization");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,25 +21,28 @@ serve(async (req) => {
   }
 
   try {
-    console.log("⚡ WAKTI AI ULTRA-FAST: Processing with maximum optimization");
+    console.log("⚡ WAKTI AI ULTRA-FAST: Processing request with minimal overhead");
     const startTime = Date.now();
 
-    // ULTRA-FAST: Enhanced auth with longer cache validation
+    // ULTRA-FAST: Skip full auth if cached token provided
     const skipAuth = req.headers.get('x-skip-auth') === 'true';
     const authToken = req.headers.get('x-auth-token');
     
     let user;
     if (skipAuth && authToken) {
+      // Minimal token validation instead of full getUser()
       try {
         const { data } = await supabase.auth.getUser(authToken);
         user = data.user;
       } catch (e) {
+        // Fallback to full auth if token invalid
         const authHeader = req.headers.get('authorization');
         if (!authHeader) throw new Error('Authentication required');
         const { data } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
         user = data.user;
       }
     } else {
+      // Standard auth for non-optimized requests
       const authHeader = req.headers.get('authorization');
       if (!authHeader) throw new Error('Authentication required');
       const { data } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
@@ -67,8 +69,7 @@ serve(async (req) => {
       activeTrigger = 'chat',
       attachedFiles = [],
       conversationSummary = '',
-      recentMessages = [],
-      minimalContext = false
+      recentMessages = []
     } = requestBody;
 
     if (userId !== user.id) {
@@ -93,13 +94,14 @@ serve(async (req) => {
 
     console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing for user:", user.id);
 
-    // ULTRA-FAST: Optimized file processing with direct URL handling
+    // OPTIMIZED: Process attached files with URL handling
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      processedFiles = await processAttachedFilesUltraFast(attachedFiles);
-      console.log(`⚡ OPTIMIZED: Processed ${processedFiles.length} files with direct URL handling`);
+      processedFiles = await processAttachedFilesOptimized(attachedFiles);
+      console.log(`⚡ OPTIMIZED: Processed ${processedFiles.length} files with URL optimization`);
     }
 
+    // ULTRA-FAST: Smart keyword detection for task creation
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -109,11 +111,11 @@ serve(async (req) => {
     let pendingTaskData = null;
     let pendingReminderData = null;
 
-    // ULTRA-FAST: Quick task detection with minimal analysis
+    // ULTRA-FAST: Quick task detection without heavy analysis
     const hasTaskKeywords = /create task|add task|أنشئ مهمة|create reminder|add reminder/i.test(message);
 
     if (hasTaskKeywords) {
-      console.log("⚡ ULTRA-FAST: Task creation detected");
+      console.log("⚡ ULTRA-FAST: Task creation detected, minimal analysis");
       const taskAnalysis = await analyzeTaskIntent(message, language);
       
       if (taskAnalysis.isTask || taskAnalysis.isReminder) {
@@ -133,7 +135,7 @@ serve(async (req) => {
       }
     }
 
-    // ULTRA-FAST: Optimized processing by trigger type
+    // ULTRA-FAST: Direct processing based on trigger without analysis
     if (!needsConfirmation) {
       switch (activeTrigger) {
         case 'search':
@@ -142,9 +144,9 @@ serve(async (req) => {
           if (searchResult.success) {
             browsingUsed = true;
             browsingData = searchResult.data;
-            // ULTRA-FAST: Minimal context for search
-            const context = minimalContext && conversationSummary ? 
-              `${conversationSummary}\n\nResults: ${searchResult.context.substring(0, 1000)}` : // Truncated for speed
+            // ULTRA-FAST: Use compressed context instead of full history
+            const context = conversationSummary ? 
+              `${conversationSummary}\n\nRecent context: ${recentMessages.slice(-2).map(m => m.content).join(' ')}\n\nSearch results: ${searchResult.context}` :
               searchResult.context;
             response = await processWithBuddyChatAI(
               message, 
@@ -159,7 +161,7 @@ serve(async (req) => {
           } else {
             response = await processWithBuddyChatAI(
               message, 
-              minimalContext ? '' : conversationSummary, 
+              conversationSummary, 
               language, 
               [],
               '',
@@ -202,13 +204,10 @@ serve(async (req) => {
 
         case 'chat':
         default:
-          console.log("⚡ ULTRA-FAST: Direct chat processing with minimal context");
-          // ULTRA-FAST: Minimal context for faster processing
-          const chatContext = minimalContext ? 
-            (conversationSummary ? `Context: ${conversationSummary.substring(0, 200)}` : null) :
-            (conversationSummary ? 
-              `${conversationSummary}\n\nRecent: ${recentMessages.slice(-1).map(m => `${m.role}: ${m.content}`).join('\n')}` :
-              null);
+          console.log("⚡ ULTRA-FAST: Direct chat processing with optimized files");
+          const chatContext = conversationSummary ? 
+            `${conversationSummary}\n\nRecent messages: ${recentMessages.slice(-2).map(m => `${m.role}: ${m.content}`).join('\n')}` :
+            null;
           response = await processWithBuddyChatAI(
             message, 
             chatContext, 
@@ -217,7 +216,7 @@ serve(async (req) => {
             '',
             activeTrigger,
             'direct_chat',
-            processedFiles
+            processedFiles // Use optimized files
           );
           break;
       }
@@ -226,7 +225,7 @@ serve(async (req) => {
     const processingTime = Date.now() - startTime;
     console.log(`⚡ WAKTI AI ULTRA-FAST: Processed in ${processingTime}ms`);
 
-    // ULTRA-FAST: Minimal response structure for speed
+    // ULTRA-FAST: Minimal response structure
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
@@ -260,30 +259,28 @@ serve(async (req) => {
   }
 });
 
-// ULTRA-FAST: Direct URL file processing without heavy conversion
-async function processAttachedFilesUltraFast(attachedFiles: any[]): Promise<any[]> {
+// OPTIMIZED: Process files with URL handling instead of Base64
+async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[]> {
   if (!attachedFiles || attachedFiles.length === 0) return [];
 
   return attachedFiles.map(file => {
-    // Direct URL handling for optimized files (fastest path)
-    if (file.optimized && file.publicUrl) {
+    // If file is optimized (has URL), use it directly for OpenAI Vision
+    if (file.optimized && file.url) {
       return {
         type: 'image_url',
         image_url: {
-          url: file.publicUrl
-        },
-        name: file.name
+          url: file.url
+        }
       };
     }
     
-    // Skip processing large files for speed
-    if (file.content && file.content.length < 500000) { // 500KB limit
+    // Fallback to existing Base64 processing for non-optimized files
+    if (file.content) {
       return {
         type: 'image_url',
         image_url: {
           url: `data:${file.type};base64,${file.content}`
-        },
-        name: file.name
+        }
       };
     }
     
