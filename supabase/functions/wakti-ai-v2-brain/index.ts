@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,7 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing pipeline loaded with image optimization");
+console.log("⚡ WAKTI AI SPEED-OPTIMIZED: Ultra-fast processing pipeline with smart optimizations");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -21,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("⚡ WAKTI AI ULTRA-FAST: Processing request with minimal overhead");
+    console.log("⚡ WAKTI AI SPEED-OPTIMIZED: Processing with minimal overhead");
     const startTime = Date.now();
 
     // ULTRA-FAST: Skip full auth if cached token provided
@@ -69,7 +70,11 @@ serve(async (req) => {
       activeTrigger = 'chat',
       attachedFiles = [],
       conversationSummary = '',
-      recentMessages = []
+      recentMessages = [],
+      customSystemPrompt = '',
+      maxTokens = 600,
+      userStyle = 'detailed',
+      speedOptimized = false
     } = requestBody;
 
     if (userId !== user.id) {
@@ -92,16 +97,16 @@ serve(async (req) => {
       });
     }
 
-    console.log("⚡ WAKTI AI ULTRA-FAST: Direct processing for user:", user.id);
+    console.log(`⚡ SPEED-OPTIMIZED: Processing for user ${user.id} with style: ${userStyle}, tokens: ${maxTokens}`);
 
     // OPTIMIZED: Process attached files with URL handling
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
       processedFiles = await processAttachedFilesOptimized(attachedFiles);
-      console.log(`⚡ OPTIMIZED: Processed ${processedFiles.length} files with URL optimization`);
+      console.log(`⚡ OPTIMIZED: Processed ${processedFiles.length} files`);
     }
 
-    // ULTRA-FAST: Smart keyword detection for task creation
+    // SPEED-OPTIMIZED: Smart processing pipeline
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -111,11 +116,11 @@ serve(async (req) => {
     let pendingTaskData = null;
     let pendingReminderData = null;
 
-    // ULTRA-FAST: Quick task detection without heavy analysis
+    // SPEED-OPTIMIZED: Quick task detection for high-priority keywords only
     const hasTaskKeywords = /create task|add task|أنشئ مهمة|create reminder|add reminder/i.test(message);
 
     if (hasTaskKeywords) {
-      console.log("⚡ ULTRA-FAST: Task creation detected, minimal analysis");
+      console.log("⚡ SPEED-OPTIMIZED: Task creation detected");
       const taskAnalysis = await analyzeTaskIntent(message, language);
       
       if (taskAnalysis.isTask || taskAnalysis.isReminder) {
@@ -135,18 +140,18 @@ serve(async (req) => {
       }
     }
 
-    // ULTRA-FAST: Direct processing based on trigger without analysis
+    // SPEED-OPTIMIZED: Direct processing based on trigger
     if (!needsConfirmation) {
       switch (activeTrigger) {
         case 'search':
-          console.log("⚡ ULTRA-FAST: Direct search execution");
+          console.log("⚡ SPEED-OPTIMIZED: Direct search execution");
           const searchResult = await executeRegularSearch(message, language);
           if (searchResult.success) {
             browsingUsed = true;
             browsingData = searchResult.data;
-            // ULTRA-FAST: Use compressed context instead of full history
-            const context = conversationSummary ? 
-              `${conversationSummary}\n\nRecent context: ${recentMessages.slice(-2).map(m => m.content).join(' ')}\n\nSearch results: ${searchResult.context}` :
+            // SPEED-OPTIMIZED: Use minimal context for search
+            const context = userStyle === 'short answers' ? 
+              searchResult.context.substring(0, 500) : // Limit context for short answers
               searchResult.context;
             response = await processWithBuddyChatAI(
               message, 
@@ -156,24 +161,28 @@ serve(async (req) => {
               '',
               activeTrigger,
               'search_results',
-              attachedFiles
+              attachedFiles,
+              customSystemPrompt,
+              maxTokens
             );
           } else {
             response = await processWithBuddyChatAI(
               message, 
-              conversationSummary, 
+              '', 
               language, 
               [],
               '',
               activeTrigger,
               'search_failed',
-              attachedFiles
+              attachedFiles,
+              customSystemPrompt,
+              maxTokens
             );
           }
           break;
 
         case 'image':
-          console.log("⚡ ULTRA-FAST: Direct image generation");
+          console.log("⚡ SPEED-OPTIMIZED: Direct image generation");
           try {
             const imageResult = await generateImageWithRunware(message, user.id, language);
             
@@ -204,10 +213,14 @@ serve(async (req) => {
 
         case 'chat':
         default:
-          console.log("⚡ ULTRA-FAST: Direct chat processing with optimized files");
-          const chatContext = conversationSummary ? 
-            `${conversationSummary}\n\nRecent messages: ${recentMessages.slice(-2).map(m => `${m.role}: ${m.content}`).join('\n')}` :
-            null;
+          console.log("⚡ SPEED-OPTIMIZED: Direct chat processing");
+          // SPEED-OPTIMIZED: Build minimal chat context
+          const chatContext = userStyle === 'short answers' ? 
+            null : // Skip context for short answers
+            (conversationSummary ? 
+              `${conversationSummary}\n\nRecent: ${recentMessages.slice(-1).map(m => `${m.role}: ${m.content.substring(0, 100)}`).join('\n')}` :
+              null);
+          
           response = await processWithBuddyChatAI(
             message, 
             chatContext, 
@@ -215,21 +228,23 @@ serve(async (req) => {
             [],
             '',
             activeTrigger,
-            'direct_chat',
-            processedFiles // Use optimized files
+            'speed_optimized_chat',
+            processedFiles,
+            customSystemPrompt,
+            maxTokens
           );
           break;
       }
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`⚡ WAKTI AI ULTRA-FAST: Processed in ${processingTime}ms`);
+    console.log(`⚡ SPEED-OPTIMIZED: Processed in ${processingTime}ms (target: <6000ms)`);
 
-    // ULTRA-FAST: Minimal response structure
+    // SPEED-OPTIMIZED: Minimal response structure
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'processed',
+      intent: 'speed_optimized',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -239,7 +254,9 @@ serve(async (req) => {
       pendingTaskData,
       pendingReminderData,
       success: true,
-      processingTime
+      processingTime,
+      speedOptimized: true,
+      tokensUsed: maxTokens
     };
 
     return new Response(JSON.stringify(result), {
@@ -247,7 +264,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("⚡ WAKTI AI ULTRA-FAST: Error:", error);
+    console.error("⚡ SPEED-OPTIMIZED: Error:", error);
     
     return new Response(JSON.stringify({
       error: error.message || 'Processing error',

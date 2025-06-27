@@ -32,17 +32,31 @@ export interface AIConversation {
   message_count: number;
 }
 
-// ULTRA-FAST: Message compression utilities
+// ULTRA-FAST: Message compression utilities with style-based optimization
 class MessageCompressor {
-  static compressHistory(messages: AIMessage[]): { summary: string; recentMessages: AIMessage[] } {
-    if (messages.length <= 5) {
+  static compressHistory(messages: AIMessage[], userStyle: string = 'detailed'): { summary: string; recentMessages: AIMessage[] } {
+    // Smart context reduction based on user style
+    const contextLimits = {
+      'short answers': 1,
+      'bullet points': 2,
+      'detailed': 3,
+      'step-by-step': 2
+    };
+    
+    const limit = contextLimits[userStyle] || 2;
+    
+    if (messages.length <= limit) {
       return { summary: '', recentMessages: messages };
     }
 
-    const recentMessages = messages.slice(-3); // Keep last 3 messages
-    const oldMessages = messages.slice(0, -3);
+    const recentMessages = messages.slice(-limit);
     
-    // Create simple summary of older messages
+    // Skip summary for simple styles to save processing time
+    if (userStyle === 'short answers') {
+      return { summary: '', recentMessages };
+    }
+    
+    const oldMessages = messages.slice(0, -limit);
     const summary = this.createSummary(oldMessages);
     
     return { summary, recentMessages };
@@ -56,12 +70,12 @@ class MessageCompressor {
     
     messages.forEach(msg => {
       if (msg.intent) topics.add(msg.intent);
-      if (msg.actionTaken) actions.push(msg.content.substring(0, 50));
+      if (msg.actionTaken) actions.push(msg.content.substring(0, 30)); // Shorter for speed
     });
     
-    let summary = `Previous conversation covered: ${Array.from(topics).join(', ')}.`;
+    let summary = `Previous: ${Array.from(topics).slice(0, 3).join(', ')}.`; // Limit topics
     if (actions.length > 0) {
-      summary += ` Actions taken: ${actions.join('; ')}.`;
+      summary += ` Actions: ${actions.slice(0, 2).join('; ')}.`; // Limit actions
     }
     
     return summary;
@@ -155,41 +169,106 @@ interface PersonalTouchData {
   instruction: string;
 }
 
-function loadWaktiPersonalTouch(): PersonalTouchData | null {
-  try {
-    const stored = localStorage.getItem(PERSONAL_TOUCH_KEY);
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    return null;
+// SPEED-OPTIMIZED: Personal touch cache
+class PersonalTouchCache {
+  private static cache: { data: PersonalTouchData | null; expires: number } | null = null;
+  
+  static loadWaktiPersonalTouch(): PersonalTouchData | null {
+    // Check cache first (5 minute cache)
+    if (this.cache && Date.now() < this.cache.expires) {
+      return this.cache.data;
+    }
+    
+    try {
+      const stored = localStorage.getItem(PERSONAL_TOUCH_KEY);
+      const data = stored ? JSON.parse(stored) : null;
+      
+      // Cache for 5 minutes
+      this.cache = {
+        data,
+        expires: Date.now() + (5 * 60 * 1000)
+      };
+      
+      return data;
+    } catch {
+      return null;
+    }
+  }
+  
+  static clearCache() {
+    this.cache = null;
   }
 }
 
-function buildSystemPromptFromPersonalTouch(data: PersonalTouchData | null): string {
-  if (!data) return "You are Wakti AI.";
+// SPEED-OPTIMIZED: Build minimal system prompt
+function buildOptimizedSystemPrompt(data: PersonalTouchData | null): string {
+  if (!data) return "You are Wakti AI. Be helpful and concise.";
 
   let prompt = "You are Wakti AI.";
   
   if (data.nickname) {
-    prompt += `\nCall the user "${data.nickname}".`;
+    prompt += ` Call user "${data.nickname}".`;
   }
   
   if (data.tone && data.tone !== 'neutral') {
-    prompt += `\nUse a ${data.tone} tone.`;
+    prompt += ` Use ${data.tone} tone.`;
   }
   
   if (data.style) {
-    prompt += `\nRespond using ${data.style}.`;
+    // Optimize for different styles
+    switch (data.style) {
+      case 'short answers':
+        prompt += ` Be very brief and direct.`;
+        break;
+      case 'bullet points':
+        prompt += ` Use bullet points when helpful.`;
+        break;
+      case 'step-by-step':
+        prompt += ` Structure responses step-by-step.`;
+        break;
+      default:
+        prompt += ` Respond using ${data.style}.`;
+    }
   }
   
   if (data.instruction) {
-    prompt += `\nImportant: ${data.instruction}`;
+    // Limit instruction length for speed
+    const shortInstruction = data.instruction.substring(0, 100);
+    prompt += ` Note: ${shortInstruction}`;
   }
   
   return prompt.trim();
 }
 
+// SPEED-OPTIMIZED: Get smart token limits based on style
+function getSmartTokenLimits(style: string): number {
+  const tokenLimits = {
+    'short answers': 300,
+    'bullet points': 400,
+    'detailed': 800,
+    'step-by-step': 600,
+    'casual': 500,
+    'neutral': 600
+  };
+  
+  return tokenLimits[style] || 600;
+}
+
+// SPEED-OPTIMIZED: Detect if query is simple
+function isSimpleQuery(message: string): boolean {
+  const simplePatterns = [
+    /^(hi|hello|hey|مرحبا|أهلا)$/i,
+    /^(how are you|كيف حالك)\??$/i,
+    /^(thanks?|thank you|شكرا)$/i,
+    /^(bye|goodbye|مع السلامة)$/i,
+    /^(yes|no|نعم|لا)$/i
+  ];
+  
+  return simplePatterns.some(pattern => pattern.test(message.trim()));
+}
+
 export class WaktiAIV2ServiceClass {
-  // ULTRA-FAST: Enhanced message sending with aggressive caching
+  // ULTRA-FAST: Enhanced message sending with speed optimizations
   static async sendMessage(
     message: string,
     userId?: string,
@@ -212,14 +291,18 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('⚡ ULTRA-FAST AI: Message processing initiated');
+      console.log('⚡ ULTRA-FAST AI: Speed-optimized processing initiated');
       const startTime = Date.now();
       
-      // ULTRA-FAST: Check cache first for basic responses (but skip for files)
-      if (!attachedFiles?.length && activeTrigger === 'chat' && message.length < 100) {
+      // SPEED-OPTIMIZED: Load personal touch settings with caching
+      const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
+      const userStyle = personalTouch?.style || 'detailed';
+      
+      // SPEED-OPTIMIZED: Check cache first for simple queries
+      if (!attachedFiles?.length && activeTrigger === 'chat' && isSimpleQuery(message)) {
         const cachedResponse = AIResponseCache.getCachedResponse(message);
         if (cachedResponse) {
-          console.log('⚡ CACHE HIT: Returning cached response instantly');
+          console.log('⚡ INSTANT CACHE HIT: Returning cached response');
           return {
             response: cachedResponse,
             conversationId: conversationId || this.generateConversationId(),
@@ -236,20 +319,22 @@ export class WaktiAIV2ServiceClass {
       const auth = await AuthCache.getValidAuth();
       if (!auth) throw new Error('Authentication failed');
       
-      // ULTRA-FAST: Compress message history
-      const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory);
+      // SPEED-OPTIMIZED: Compress message history based on user style
+      const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory, userStyle);
       
-      // ULTRA-FAST: Process attached files with document support
+      // SPEED-OPTIMIZED: Process attached files (keep existing optimization)
       let processedFiles = attachedFiles;
       if (attachedFiles?.length > 0) {
         processedFiles = await this.processOptimizedFiles(attachedFiles);
       }
       
-      // NEW: Load personal touch settings and build custom system prompt
-      const personalTouch = loadWaktiPersonalTouch();
-      const customSystemPrompt = buildSystemPromptFromPersonalTouch(personalTouch);
+      // SPEED-OPTIMIZED: Build minimal custom system prompt
+      const customSystemPrompt = buildOptimizedSystemPrompt(personalTouch);
       
-      // ULTRA-FAST: Direct API call with optimized payload and personalized system prompt
+      // SPEED-OPTIMIZED: Get smart token limits
+      const maxTokens = getSmartTokenLimits(userStyle);
+      
+      // ULTRA-FAST: Direct API call with speed-optimized payload
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -259,11 +344,14 @@ export class WaktiAIV2ServiceClass {
           inputType,
           activeTrigger,
           attachedFiles: processedFiles,
-          conversationSummary: summary,
-          recentMessages: recentMessages.slice(-3),
-          customSystemPrompt, // Inject personalized system prompt
+          conversationSummary: userStyle === 'short answers' ? '' : summary, // Skip summary for short answers
+          recentMessages: recentMessages.slice(-1), // Further reduce context
+          customSystemPrompt,
+          maxTokens, // Pass smart token limit
+          userStyle, // Pass user style for further optimization
           // Ultra-fast mode flag
-          ultraFastMode: true
+          ultraFastMode: true,
+          speedOptimized: true
         },
         headers: {
           'x-auth-token': auth.token,
@@ -272,14 +360,14 @@ export class WaktiAIV2ServiceClass {
       });
       
       const responseTime = Date.now() - startTime;
-      console.log(`⚡ ULTRA-FAST AI: Response received in ${responseTime}ms`);
+      console.log(`⚡ ULTRA-FAST AI: Speed-optimized response in ${responseTime}ms`);
       
       if (response.error) {
         throw new Error(response.error.message || 'AI service error');
       }
       
       // Cache simple responses for future use (only basic chat without files)
-      if (activeTrigger === 'chat' && !attachedFiles?.length && message.length < 50) {
+      if (activeTrigger === 'chat' && !attachedFiles?.length && isSimpleQuery(message)) {
         AIResponseCache.setCachedResponse(message, response.data.response);
       }
       
