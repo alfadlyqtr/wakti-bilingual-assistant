@@ -159,8 +159,12 @@ export function QuickActionsPanel({
           </div>
         </div>
 
-        {/* Text Generator Popup */}
-        <TextGeneratorPopup open={showTextGen} onOpenChange={setShowTextGen} onGenerated={onTextGenerated} />
+        {/* Text Generator Popup - FIXED: Using correct props */}
+        <TextGeneratorPopup 
+          isOpen={showTextGen} 
+          onClose={() => setShowTextGen(false)} 
+          onTextGenerated={onTextGenerated} 
+        />
 
         {/* Voice Translator Popup */}
         <VoiceTranslatorPopup open={showVoiceTranslator} onOpenChange={setShowVoiceTranslator} />
