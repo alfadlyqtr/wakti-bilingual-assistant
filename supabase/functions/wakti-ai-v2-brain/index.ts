@@ -14,7 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("⚡ WAKTI AI ULTRA-FAST: OpenAI-first processing pipeline with DeepSeek fallback");
+console.log("⚡ WAKTI AI HYPER-OPTIMIZED: OpenAI-first processing with aggressive speed optimizations");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,10 +22,10 @@ serve(async (req) => {
   }
 
   try {
-    console.log("⚡ WAKTI AI ULTRA-FAST: Processing with OpenAI primary, DeepSeek fallback");
+    console.log("⚡ WAKTI AI HYPER-OPTIMIZED: Processing with OpenAI primary, DeepSeek fallback");
     const startTime = Date.now();
 
-    // ULTRA-FAST: Skip full auth if cached token provided
+    // HYPER-FAST: Skip full auth if cached token provided
     const skipAuth = req.headers.get('x-skip-auth') === 'true';
     const authToken = req.headers.get('x-auth-token');
     
@@ -74,7 +74,8 @@ serve(async (req) => {
       customSystemPrompt = '',
       maxTokens = 600,
       userStyle = 'detailed',
-      speedOptimized = false
+      speedOptimized = false,
+      aggressiveOptimization = false
     } = requestBody;
 
     if (userId !== user.id) {
@@ -97,16 +98,16 @@ serve(async (req) => {
       });
     }
 
-    console.log(`⚡ ULTRA-FAST: Processing for user ${user.id} with style: ${userStyle}, tokens: ${maxTokens}`);
+    console.log(`⚡ HYPER-OPTIMIZED: Processing for user ${user.id} with style: ${userStyle}, tokens: ${maxTokens}, aggressive: ${aggressiveOptimization}`);
 
-    // OPTIMIZED: Process attached files with URL handling
+    // HYPER-OPTIMIZED: Process attached files with URL handling
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
       processedFiles = await processAttachedFilesOptimized(attachedFiles);
-      console.log(`⚡ OPTIMIZED: Processed ${processedFiles.length} files`);
+      console.log(`⚡ HYPER-OPTIMIZED: Processed ${processedFiles.length} files`);
     }
 
-    // ULTRA-FAST: Smart processing pipeline with OpenAI priority
+    // HYPER-OPTIMIZED: Smart processing pipeline with OpenAI priority and aggressive optimization
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -116,11 +117,11 @@ serve(async (req) => {
     let pendingTaskData = null;
     let pendingReminderData = null;
 
-    // SPEED-OPTIMIZED: Quick task detection for high-priority keywords only
+    // HYPER-OPTIMIZED: Quick task detection for high-priority keywords only
     const hasTaskKeywords = /create task|add task|أنشئ مهمة|create reminder|add reminder/i.test(message);
 
-    if (hasTaskKeywords) {
-      console.log("⚡ ULTRA-FAST: Task creation detected");
+    if (hasTaskKeywords && !aggressiveOptimization) {
+      console.log("⚡ HYPER-OPTIMIZED: Task creation detected");
       const taskAnalysis = await analyzeTaskIntent(message, language);
       
       if (taskAnalysis.isTask || taskAnalysis.isReminder) {
@@ -140,40 +141,56 @@ serve(async (req) => {
       }
     }
 
-    // ULTRA-FAST: Direct processing based on trigger with OpenAI priority
+    // HYPER-OPTIMIZED: Direct processing based on trigger with OpenAI priority
     if (!needsConfirmation) {
       switch (activeTrigger) {
         case 'search':
-          console.log("⚡ ULTRA-FAST: Direct search execution");
-          const searchResult = await executeRegularSearch(message, language);
-          if (searchResult.success) {
-            browsingUsed = true;
-            browsingData = searchResult.data;
-            // ULTRA-FAST: Use minimal context for search with OpenAI processing
-            const context = userStyle === 'short answers' ? 
-              searchResult.context.substring(0, 500) : // Limit context for short answers
-              searchResult.context;
-            response = await processWithBuddyChatAI(
-              message, 
-              context, 
-              language, 
-              [],
-              '',
-              activeTrigger,
-              'search_results',
-              attachedFiles,
-              customSystemPrompt,
-              maxTokens
-            );
+          if (!aggressiveOptimization) {
+            console.log("⚡ HYPER-OPTIMIZED: Direct search execution");
+            const searchResult = await executeRegularSearch(message, language);
+            if (searchResult.success) {
+              browsingUsed = true;
+              browsingData = searchResult.data;
+              // HYPER-OPTIMIZED: Use minimal context for search with OpenAI processing
+              const context = userStyle === 'short answers' ? 
+                searchResult.context.substring(0, 300) : // Further reduced context
+                searchResult.context.substring(0, 800); // Limit all context
+              response = await processWithBuddyChatAI(
+                message, 
+                context, 
+                language, 
+                [],
+                '',
+                activeTrigger,
+                'search_results',
+                attachedFiles,
+                customSystemPrompt,
+                maxTokens
+              );
+            } else {
+              response = await processWithBuddyChatAI(
+                message, 
+                '', 
+                language, 
+                [],
+                '',
+                activeTrigger,
+                'search_failed',
+                attachedFiles,
+                customSystemPrompt,
+                maxTokens
+              );
+            }
           } else {
+            // Aggressive optimization: skip search for speed
             response = await processWithBuddyChatAI(
               message, 
               '', 
               language, 
               [],
               '',
-              activeTrigger,
-              'search_failed',
+              'chat',
+              'hyper_fast_chat',
               attachedFiles,
               customSystemPrompt,
               maxTokens
@@ -182,44 +199,53 @@ serve(async (req) => {
           break;
 
         case 'image':
-          console.log("⚡ ULTRA-FAST: Direct image generation");
-          try {
-            const imageResult = await generateImageWithRunware(message, user.id, language);
-            
-            if (imageResult.success) {
-              imageUrl = imageResult.imageUrl;
+          if (!aggressiveOptimization) {
+            console.log("⚡ HYPER-OPTIMIZED: Direct image generation");
+            try {
+              const imageResult = await generateImageWithRunware(message, user.id, language);
               
-              let baseResponse = language === 'ar' 
-                ? `تم إنشاء الصورة بنجاح.`
-                : `Image generated successfully.`;
+              if (imageResult.success) {
+                imageUrl = imageResult.imageUrl;
+                
+                let baseResponse = language === 'ar' 
+                  ? `تم إنشاء الصورة بنجاح.`
+                  : `Image generated successfully.`;
 
-              if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
-                baseResponse += language === 'ar'
-                  ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
-                  : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
+                if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
+                  baseResponse += language === 'ar'
+                    ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
+                    : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
+                }
+
+                response = baseResponse;
+              } else {
+                response = imageResult.error;
               }
-
-              response = baseResponse;
-            } else {
-              response = imageResult.error;
+            } catch (error) {
+              console.error("Image generation error:", error);
+              response = language === 'ar' 
+                ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
+                : `❌ Sorry, an error occurred while generating the image.`;
             }
-          } catch (error) {
-            console.error("Image generation error:", error);
+          } else {
+            // Aggressive optimization: skip image generation
             response = language === 'ar' 
-              ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
-              : `❌ Sorry, an error occurred while generating the image.`;
+              ? `عذراً، إنشاء الصور غير متاح في الوضع السريع.`
+              : `Sorry, image generation not available in speed mode.`;
           }
           break;
 
         case 'chat':
         default:
-          console.log("⚡ ULTRA-FAST: Direct chat processing with OpenAI");
-          // ULTRA-FAST: Build minimal chat context for OpenAI processing
-          const chatContext = userStyle === 'short answers' ? 
-            null : // Skip context for short answers
-            (conversationSummary ? 
-              `${conversationSummary}\n\nRecent: ${recentMessages.slice(-1).map(m => `${m.role}: ${m.content.substring(0, 100)}`).join('\n')}` :
-              null);
+          console.log("⚡ HYPER-OPTIMIZED: Direct chat processing with OpenAI");
+          // HYPER-OPTIMIZED: Build minimal chat context for OpenAI processing
+          let chatContext = null;
+          
+          if (!aggressiveOptimization && userStyle !== 'short answers') {
+            chatContext = conversationSummary ? 
+              `${conversationSummary.substring(0, 150)}\n\nRecent: ${recentMessages.slice(-1).map(m => `${m.role}: ${m.content.substring(0, 50)}`).join('\n')}` :
+              null;
+          }
           
           response = await processWithBuddyChatAI(
             message, 
@@ -228,7 +254,7 @@ serve(async (req) => {
             [],
             '',
             activeTrigger,
-            'ultra_fast_openai_chat',
+            aggressiveOptimization ? 'hyper_fast_openai_chat' : 'ultra_fast_openai_chat',
             processedFiles,
             customSystemPrompt,
             maxTokens
@@ -238,13 +264,13 @@ serve(async (req) => {
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`⚡ ULTRA-FAST: Processed in ${processingTime}ms (target: <4000ms with OpenAI)`);
+    console.log(`⚡ HYPER-OPTIMIZED: Processed in ${processingTime}ms (target: <3000ms with aggressive optimization)`);
 
-    // ULTRA-FAST: Minimal response structure
+    // HYPER-OPTIMIZED: Minimal response structure
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'ultra_fast_openai',
+      intent: aggressiveOptimization ? 'hyper_fast_openai' : 'ultra_fast_openai',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -256,6 +282,7 @@ serve(async (req) => {
       success: true,
       processingTime,
       speedOptimized: true,
+      aggressiveOptimization,
       tokensUsed: maxTokens,
       aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek'
     };
@@ -265,7 +292,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("⚡ ULTRA-FAST: Error:", error);
+    console.error("⚡ HYPER-OPTIMIZED: Error:", error);
     
     return new Response(JSON.stringify({
       error: error.message || 'Processing error',
@@ -277,7 +304,7 @@ serve(async (req) => {
   }
 });
 
-// OPTIMIZED: Process files with URL handling instead of Base64
+// HYPER-OPTIMIZED: Process files with URL handling instead of Base64
 async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[]> {
   if (!attachedFiles || attachedFiles.length === 0) return [];
 

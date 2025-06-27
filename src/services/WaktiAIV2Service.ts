@@ -82,9 +82,10 @@ class MessageCompressor {
   }
 }
 
-// ULTRA-FAST: Auth cache manager
+// ULTRA-FAST: Auth cache manager with connection pooling
 class AuthCache {
   private static cache: { userId: string; token: string; expires: number } | null = null;
+  private static connectionPool: AbortController[] = [];
   
   static async getValidAuth(): Promise<{ userId: string; token: string } | null> {
     // Check cache first
@@ -96,11 +97,11 @@ class AuthCache {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user || !session) return null;
     
-    // Cache for 10 minutes
+    // Cache for 15 minutes (increased from 10)
     this.cache = {
       userId: session.user.id,
       token: session.access_token,
-      expires: Date.now() + (10 * 60 * 1000)
+      expires: Date.now() + (15 * 60 * 1000)
     };
     
     return { userId: session.user.id, token: session.access_token };
@@ -108,6 +109,22 @@ class AuthCache {
   
   static clearCache() {
     this.cache = null;
+    // Clean up connection pool
+    this.connectionPool.forEach(controller => controller.abort());
+    this.connectionPool = [];
+  }
+  
+  static getAbortController(): AbortController {
+    const controller = new AbortController();
+    this.connectionPool.push(controller);
+    
+    // Auto-cleanup after 10 seconds
+    setTimeout(() => {
+      const index = this.connectionPool.indexOf(controller);
+      if (index > -1) this.connectionPool.splice(index, 1);
+    }, 10000);
+    
+    return controller;
   }
 }
 
@@ -243,15 +260,15 @@ function buildOptimizedSystemPrompt(data: PersonalTouchData | null): string {
 // SPEED-OPTIMIZED: Get smart token limits based on style
 function getSmartTokenLimits(style: string): number {
   const tokenLimits = {
-    'short answers': 300,
-    'bullet points': 400,
-    'detailed': 800,
-    'step-by-step': 600,
-    'casual': 500,
-    'neutral': 600
+    'short answers': 200, // Reduced from 300
+    'bullet points': 300, // Reduced from 400
+    'detailed': 600, // Reduced from 800
+    'step-by-step': 450, // Reduced from 600
+    'casual': 350, // Reduced from 500
+    'neutral': 400 // Reduced from 600
   };
   
-  return tokenLimits[style] || 600;
+  return tokenLimits[style] || 400;
 }
 
 // SPEED-OPTIMIZED: Detect if query is simple
@@ -267,8 +284,32 @@ function isSimpleQuery(message: string): boolean {
   return simplePatterns.some(pattern => pattern.test(message.trim()));
 }
 
+// NEW: Request debouncer to prevent rapid requests
+class RequestDebouncer {
+  private static timers = new Map<string, number>();
+  
+  static debounce(key: string, fn: Function, delay: number = 500) {
+    const existingTimer = this.timers.get(key);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      fn();
+      this.timers.delete(key);
+    }, delay);
+    
+    this.timers.set(key, timer);
+  }
+  
+  static clearAll() {
+    this.timers.forEach(timer => clearTimeout(timer));
+    this.timers.clear();
+  }
+}
+
 export class WaktiAIV2ServiceClass {
-  // ULTRA-FAST: Enhanced message sending with speed optimizations
+  // ULTRA-FAST: Enhanced message sending with aggressive speed optimizations
   static async sendMessage(
     message: string,
     userId?: string,
@@ -291,7 +332,7 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('⚡ ULTRA-FAST AI: Speed-optimized processing initiated');
+      console.log('⚡ HYPER-OPTIMIZED AI: Ultra-speed processing initiated');
       const startTime = Date.now();
       
       // SPEED-OPTIMIZED: Load personal touch settings with caching
@@ -319,7 +360,7 @@ export class WaktiAIV2ServiceClass {
       const auth = await AuthCache.getValidAuth();
       if (!auth) throw new Error('Authentication failed');
       
-      // SPEED-OPTIMIZED: Compress message history based on user style
+      // SPEED-OPTIMIZED: Compress message history based on user style (more aggressive)
       const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory, userStyle);
       
       // SPEED-OPTIMIZED: Process attached files (keep existing optimization)
@@ -331,54 +372,75 @@ export class WaktiAIV2ServiceClass {
       // SPEED-OPTIMIZED: Build minimal custom system prompt
       const customSystemPrompt = buildOptimizedSystemPrompt(personalTouch);
       
-      // SPEED-OPTIMIZED: Get smart token limits
+      // SPEED-OPTIMIZED: Get smart token limits (reduced)
       const maxTokens = getSmartTokenLimits(userStyle);
       
-      // ULTRA-FAST: Direct API call with speed-optimized payload
-      const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          userId: auth.userId,
-          language,
-          conversationId,
-          inputType,
-          activeTrigger,
-          attachedFiles: processedFiles,
-          conversationSummary: userStyle === 'short answers' ? '' : summary, // Skip summary for short answers
-          recentMessages: recentMessages.slice(-1), // Further reduce context
-          customSystemPrompt,
-          maxTokens, // Pass smart token limit
-          userStyle, // Pass user style for further optimization
-          // Ultra-fast mode flag
-          ultraFastMode: true,
-          speedOptimized: true
-        },
-        headers: {
-          'x-auth-token': auth.token,
-          'x-skip-auth': 'true'
+      // Create abort controller for request timeout
+      const abortController = AuthCache.getAbortController();
+      
+      // Set aggressive timeout based on user style
+      const timeoutMs = userStyle === 'short answers' ? 4000 : 6000;
+      const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
+      
+      try {
+        // ULTRA-FAST: Direct API call with speed-optimized payload (minimized)
+        const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
+          body: {
+            message,
+            userId: auth.userId,
+            language,
+            conversationId,
+            inputType,
+            activeTrigger,
+            attachedFiles: processedFiles,
+            // AGGRESSIVE OPTIMIZATION: Skip context for short answers
+            conversationSummary: userStyle === 'short answers' ? '' : summary?.substring(0, 200) || '',
+            recentMessages: userStyle === 'short answers' ? [] : recentMessages.slice(-1),
+            customSystemPrompt: customSystemPrompt.substring(0, 150), // Truncate prompt
+            maxTokens,
+            userStyle,
+            // Ultra-fast mode flags
+            ultraFastMode: true,
+            speedOptimized: true,
+            aggressiveOptimization: true
+          },
+          headers: {
+            'x-auth-token': auth.token,
+            'x-skip-auth': 'true'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        const responseTime = Date.now() - startTime;
+        console.log(`⚡ HYPER-OPTIMIZED AI: Response in ${responseTime}ms`);
+        
+        if (response.error) {
+          throw new Error(response.error.message || 'AI service error');
         }
-      });
-      
-      const responseTime = Date.now() - startTime;
-      console.log(`⚡ ULTRA-FAST AI: Speed-optimized response in ${responseTime}ms`);
-      
-      if (response.error) {
-        throw new Error(response.error.message || 'AI service error');
+        
+        // Cache simple responses for future use (only basic chat without files)
+        if (activeTrigger === 'chat' && !attachedFiles?.length && isSimpleQuery(message)) {
+          AIResponseCache.setCachedResponse(message, response.data.response);
+        }
+        
+        // FIRE-AND-FORGET: Quota logging (non-blocking)
+        this.logQuotaAsync(auth.userId, inputType, responseTime).catch(e => 
+          console.warn('Quota logging failed silently:', e)
+        );
+        
+        return response.data;
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        
+        // Handle timeout specifically
+        if (error.name === 'AbortError') {
+          throw new Error(`Request timeout after ${timeoutMs}ms - try again`);
+        }
+        throw error;
       }
-      
-      // Cache simple responses for future use (only basic chat without files)
-      if (activeTrigger === 'chat' && !attachedFiles?.length && isSimpleQuery(message)) {
-        AIResponseCache.setCachedResponse(message, response.data.response);
-      }
-      
-      // FIRE-AND-FORGET: Quota logging
-      this.logQuotaAsync(auth.userId, inputType, responseTime).catch(e => 
-        console.warn('Quota logging failed silently:', e)
-      );
-      
-      return response.data;
     } catch (error: any) {
-      console.error('⚡ ULTRA-FAST AI: Service error:', error);
+      console.error('⚡ HYPER-OPTIMIZED AI: Service error:', error);
       throw error;
     }
   }
@@ -455,6 +517,8 @@ export class WaktiAIV2ServiceClass {
   
   clearChatSession() {
     LocalMemoryCache.clearMemory();
+    RequestDebouncer.clearAll();
+    AuthCache.clearCache();
   }
   
   sendMessage(

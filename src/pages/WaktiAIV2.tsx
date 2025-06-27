@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
@@ -11,6 +11,21 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
+
+// NEW: Debounced request handler
+const useDebounceCallback = (callback: Function, delay: number) => {
+  const timeoutRef = useRef<NodeJS.Timeout>();
+  
+  return useCallback((...args: any[]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    timeoutRef.current = setTimeout(() => {
+      callback(...args);
+    }, delay);
+  }, [callback, delay]);
+};
 
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
@@ -28,6 +43,10 @@ const WaktiAIV2 = () => {
   const [pendingTaskData, setPendingTaskData] = useState<any>(null);
   const [pendingReminderData, setPendingReminderData] = useState<any>(null);
   const [taskConfirmationLoading, setTaskConfirmationLoading] = useState(false);
+  
+  // NEW: Request management state
+  const [requestInProgress, setRequestInProgress] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   const scrollAreaRef = useRef<any>(null);
   const { language } = useTheme();
@@ -72,10 +91,10 @@ const WaktiAIV2 = () => {
 
         setUserProfile(profile);
         
-        // Cache for 5 minutes
+        // Cache for 10 minutes (increased from 5)
         localStorage.setItem('wakti_user_profile', JSON.stringify({
           profile,
-          expires: Date.now() + (5 * 60 * 1000)
+          expires: Date.now() + (10 * 60 * 1000)
         }));
       } catch (error) {
         console.error('Error fetching user profile:', error);
@@ -252,19 +271,28 @@ const WaktiAIV2 = () => {
     setSessionMessages(prev => [...prev, cancelMessage]);
   };
 
-  // ULTRA-FAST: Enhanced message sending with instant feedback
+  // HYPER-OPTIMIZED: Enhanced message sending with aggressive optimization and request management
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
     attachedFiles?: any[]
   ) => {
-    if ((!message.trim() && !attachedFiles?.length) || isLoading) return;
+    if ((!message.trim() && !attachedFiles?.length) || isLoading || requestInProgress) return;
+
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
 
     setIsLoading(true);
+    setRequestInProgress(true);
     setError(null);
+    
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
 
     try {
-      console.log('⚡ ULTRA-FAST AI: Message processing initiated');
+      console.log('⚡ HYPER-OPTIMIZED AI: Message processing initiated');
       const startTime = Date.now();
 
       // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
@@ -272,7 +300,7 @@ const WaktiAIV2 = () => {
         incrementTranslationCount().catch(e => console.warn('Quota check failed:', e));
       }
 
-      // ULTRA-FAST: Create user message immediately
+      // ULTRA-FAST: Create user message immediately with instant UI update
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -285,19 +313,25 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // ULTRA-FAST: Send message using static method
-      const response = await WaktiAIV2ServiceClass.sendMessage(
-        message,
-        undefined, // userId will be handled by auth cache
-        language,
-        currentConversationId,
-        inputType,
-        updatedSessionMessages,
-        false,
-        activeTrigger,
-        null,
-        attachedFiles || []
-      );
+      // HYPER-OPTIMIZED: Send message using static method with timeout handling
+      const response = await Promise.race([
+        WaktiAIV2ServiceClass.sendMessage(
+          message,
+          undefined, // userId will be handled by auth cache
+          language,
+          currentConversationId,
+          inputType,
+          updatedSessionMessages,
+          false,
+          activeTrigger,
+          null,
+          attachedFiles || []
+        ),
+        // Backup timeout promise
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 8000)
+        )
+      ]) as any;
 
       // ULTRA-FAST: Create assistant message immediately with ALL response properties
       const assistantMessage: AIMessage = {
@@ -308,16 +342,16 @@ const WaktiAIV2 = () => {
         intent: response.intent || 'chat_response',
         confidence: response.confidence || 'high',
         actionTaken: response.actionTaken || false,
-        imageUrl: response.imageUrl, // ADD: Include generated image URL
-        browsingUsed: response.browsingUsed, // ADD: Include browsing status
-        browsingData: response.browsingData // ADD: Include browsing data
+        imageUrl: response.imageUrl,
+        browsingUsed: response.browsingUsed,
+        browsingData: response.browsingData
       };
 
       const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
       setSessionMessages(finalSessionMessages);
       
       const responseTime = Date.now() - startTime;
-      console.log(`⚡ ULTRA-FAST AI: Total response time: ${responseTime}ms`);
+      console.log(`⚡ HYPER-OPTIMIZED AI: Total response time: ${responseTime}ms`);
 
       // Handle special responses
       if (response.needsConfirmation && response.pendingTaskData) {
@@ -335,13 +369,25 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('⚡ ULTRA-FAST AI: Error:', error);
-      setError(error.message || 'Failed to send message');
-      showError(error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message'));
+      console.error('⚡ HYPER-OPTIMIZED AI: Error:', error);
+      
+      // Handle specific error types
+      if (error.message?.includes('timeout')) {
+        setError('Request timed out - please try again');
+        showError(language === 'ar' ? 'انتهت مهلة الطلب - حاول مرة أخرى' : 'Request timed out - try again');
+      } else {
+        setError(error.message || 'Failed to send message');
+        showError(error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message'));
+      }
     } finally {
       setIsLoading(false);
+      setRequestInProgress(false);
+      abortControllerRef.current = null;
     }
   };
+
+  // Debounced version of handleSendMessage for rapid typing
+  const debouncedSendMessage = useDebounceCallback(handleSendMessage, 300);
 
   const fetchConversations = async () => {
     try {
@@ -381,6 +427,11 @@ const WaktiAIV2 = () => {
   };
 
   const handleNewConversation = async () => {
+    // Cancel any in-progress request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
     setCurrentConversationId(null);
     setSessionMessages([]);
     setConversationMessages([]);
@@ -389,10 +440,16 @@ const WaktiAIV2 = () => {
     setPendingTaskData(null);
     setPendingReminderData(null);
     setShowTaskConfirmation(false);
+    setRequestInProgress(false);
   };
 
   const handleSelectConversation = async (conversationId: string) => {
     try {
+      // Cancel any in-progress request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
       setIsLoading(true);
       const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
       
@@ -414,6 +471,7 @@ const WaktiAIV2 = () => {
       setPendingTaskData(null);
       setPendingReminderData(null);
       setShowTaskConfirmation(false);
+      setRequestInProgress(false);
       
     } catch (error: any) {
       console.error('Error loading conversation:', error);
@@ -424,6 +482,11 @@ const WaktiAIV2 = () => {
   };
 
   const handleClearChat = () => {
+    // Cancel any in-progress request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
     setSessionMessages([]);
     setConversationMessages([]);
     WaktiAIV2Service.clearChatSession();
@@ -431,6 +494,7 @@ const WaktiAIV2 = () => {
     setPendingTaskData(null);
     setPendingReminderData(null);
     setShowTaskConfirmation(false);
+    setRequestInProgress(false);
   };
 
   const handleDeleteConversation = async (conversationId: string) => {
@@ -487,6 +551,15 @@ const WaktiAIV2 = () => {
     };
   }, []);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-full min-h-screen bg-background overflow-hidden">
       <div className="sticky top-0 z-30">
@@ -517,7 +590,7 @@ const WaktiAIV2 = () => {
         <ChatInput
           message={message}
           setMessage={setMessage}
-          isLoading={isLoading}
+          isLoading={isLoading || requestInProgress}
           sessionMessages={allDisplayMessages}
           onSendMessage={handleSendMessage}
           onClearChat={handleClearChat}

@@ -1,6 +1,6 @@
 
 /**
- * Speed-optimized Buddy Chat, Mode Analysis, and AI processing for Wakti Edge Function
+ * Hyper-optimized Buddy Chat, Mode Analysis, and AI processing for Wakti Edge Function
  */
 import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 
@@ -77,20 +77,20 @@ export async function processWithBuddyChatAI(
   maxTokens: number = 600
 ) {
   try {
-    console.log(`⚡ SPEED-OPTIMIZED BUDDY-CHAT: Processing with ${maxTokens} tokens limit`);
+    console.log(`⚡ HYPER-OPTIMIZED BUDDY-CHAT: Processing with ${maxTokens} tokens limit`);
     if (attachedFiles.length > 0) {
-      console.log(`⚡ SPEED-OPTIMIZED: Processing with ${attachedFiles.length} file(s)`);
+      console.log(`⚡ HYPER-OPTIMIZED: Processing with ${attachedFiles.length} file(s)`);
     }
     
-    // SPEED-OPTIMIZED: Use OpenAI as primary for faster responses (2-4s vs 9-10s)
+    // HYPER-OPTIMIZED: Use OpenAI as primary for fastest responses (1-3s vs 9-10s)
     let apiKey = OPENAI_API_KEY;
     let apiUrl = 'https://api.openai.com/v1/chat/completions';
-    let model = 'gpt-4o-mini'; // Fast and capable model with vision support
+    let model = 'gpt-4o-mini'; // Fastest model with vision support
     let usingOpenAI = true;
     
     // Fallback to DeepSeek if OpenAI is not available
     if (!apiKey) {
-      console.log("⚡ SPEED-OPTIMIZED: OpenAI unavailable, falling back to DeepSeek");
+      console.log("⚡ HYPER-OPTIMIZED: OpenAI unavailable, falling back to DeepSeek");
       apiKey = DEEPSEEK_API_KEY;
       apiUrl = 'https://api.deepseek.com/v1/chat/completions';
       model = 'deepseek-chat';
@@ -101,39 +101,41 @@ export async function processWithBuddyChatAI(
       throw new Error("No AI API key configured");
     }
 
-    // SPEED-OPTIMIZED: Use custom system prompt or minimal default
+    // HYPER-OPTIMIZED: Use custom system prompt or ultra-minimal default
     const systemPrompt = customSystemPrompt || (language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي ودود. كن مفيداً ومختصراً.`
-      : `You are WAKTI, a friendly AI assistant. Be helpful and concise.`);
+      ? `أنت WAKTI. كن مختصراً.`
+      : `You are WAKTI. Be concise.`);
     
     const messages: any[] = [
       { role: 'system', content: systemPrompt }
     ];
     
-    // SPEED-OPTIMIZED: Skip enhanced context for speed
-    if (context && context.length < 200) { // Only add short context
+    // HYPER-OPTIMIZED: Skip context for hyper-fast modes
+    const isHyperFast = interactionType.includes('hyper_fast');
+    
+    if (!isHyperFast && context && context.length < 150) { // Only add very short context
       messages.push({ 
         role: 'assistant', 
-        content: `Context: ${context}` 
+        content: `Context: ${context.substring(0, 100)}` 
       });
     }
     
-    // SPEED-OPTIMIZED: Limit context messages to 1 for speed
-    if (contextMessages && contextMessages.length > 0) {
+    // HYPER-OPTIMIZED: Skip context messages for hyper-fast modes
+    if (!isHyperFast && contextMessages && contextMessages.length > 0) {
       const recentMessage = contextMessages.slice(-1)[0]; // Only last message
       if (recentMessage) {
         let content = recentMessage.content;
         if (typeof content !== 'string') {
           if (Array.isArray(content) && content.length > 0) {
             const textPart = content.find(p => p.type === 'text');
-            content = textPart ? textPart.text.substring(0, 100) : '[attachment]'; // Limit length
+            content = textPart ? textPart.text.substring(0, 50) : '[attachment]'; // Further reduced
           } else {
             content = '[attachment]';
           }
         }
         messages.push({
           role: recentMessage.role,
-          content: content
+          content: content.substring(0, 100) // Limit all content
         });
       }
     }
@@ -161,7 +163,7 @@ export async function processWithBuddyChatAI(
 
     messages.push({ role: 'user', content: userContent });
     
-    console.log(`⚡ SPEED-OPTIMIZED: Using ${usingOpenAI ? 'OpenAI (fast)' : 'DeepSeek (fallback)'}`);
+    console.log(`⚡ HYPER-OPTIMIZED: Using ${usingOpenAI ? 'OpenAI (fastest)' : 'DeepSeek (fallback)'}`);
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -172,7 +174,7 @@ export async function processWithBuddyChatAI(
       body: JSON.stringify({
         model: model,
         messages: messages,
-        temperature: 0.7, // Slightly reduced for faster processing
+        temperature: isHyperFast ? 0.3 : 0.7, // Lower temperature for speed
         max_tokens: maxTokens // Use dynamic token limit
       })
     });
@@ -183,7 +185,7 @@ export async function processWithBuddyChatAI(
       
       // If OpenAI fails, try DeepSeek as fallback
       if (usingOpenAI && DEEPSEEK_API_KEY) {
-        console.log("⚡ SPEED-OPTIMIZED: OpenAI failed, trying DeepSeek fallback");
+        console.log("⚡ HYPER-OPTIMIZED: OpenAI failed, trying DeepSeek fallback");
         return processWithBuddyChatAI(
           message, context, language, contextMessages, enhancedContext,
           activeTrigger, interactionType, attachedFiles, customSystemPrompt, maxTokens
@@ -197,11 +199,11 @@ export async function processWithBuddyChatAI(
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error("⚡ SPEED-OPTIMIZED BUDDY-CHAT: Processing error:", error);
+    console.error("⚡ HYPER-OPTIMIZED BUDDY-CHAT: Processing error:", error);
     
-    // SPEED-OPTIMIZED: Shorter fallback responses
+    // HYPER-OPTIMIZED: Shorter fallback responses
     return language === 'ar' 
-      ? `عذراً، مشكلة مؤقتة. جرب مرة أخرى! 😊`
-      : `Sorry, temporary issue. Try again! 😊`;
+      ? `عذراً، مشكلة مؤقتة. 😊`
+      : `Sorry, temporary issue. 😊`;
   }
 }
