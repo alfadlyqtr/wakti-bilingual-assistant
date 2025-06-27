@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { AIResponseCache } from './AIResponseCache';
 
@@ -147,6 +146,48 @@ class LocalMemoryCache {
   }
 }
 
+const PERSONAL_TOUCH_KEY = "wakti_personal_touch";
+
+interface PersonalTouchData {
+  nickname: string;
+  tone: string;
+  style: string;
+  instruction: string;
+}
+
+function loadWaktiPersonalTouch(): PersonalTouchData | null {
+  try {
+    const stored = localStorage.getItem(PERSONAL_TOUCH_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildSystemPromptFromPersonalTouch(data: PersonalTouchData | null): string {
+  if (!data) return "You are Wakti AI.";
+
+  let prompt = "You are Wakti AI.";
+  
+  if (data.nickname) {
+    prompt += `\nCall the user "${data.nickname}".`;
+  }
+  
+  if (data.tone && data.tone !== 'neutral') {
+    prompt += `\nUse a ${data.tone} tone.`;
+  }
+  
+  if (data.style) {
+    prompt += `\nRespond using ${data.style}.`;
+  }
+  
+  if (data.instruction) {
+    prompt += `\nImportant: ${data.instruction}`;
+  }
+  
+  return prompt.trim();
+}
+
 export class WaktiAIV2ServiceClass {
   // ULTRA-FAST: Enhanced message sending with aggressive caching
   static async sendMessage(
@@ -204,7 +245,11 @@ export class WaktiAIV2ServiceClass {
         processedFiles = await this.processOptimizedFiles(attachedFiles);
       }
       
-      // ULTRA-FAST: Direct API call with optimized payload
+      // NEW: Load personal touch settings and build custom system prompt
+      const personalTouch = loadWaktiPersonalTouch();
+      const customSystemPrompt = buildSystemPromptFromPersonalTouch(personalTouch);
+      
+      // ULTRA-FAST: Direct API call with optimized payload and personalized system prompt
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -216,6 +261,7 @@ export class WaktiAIV2ServiceClass {
           attachedFiles: processedFiles,
           conversationSummary: summary,
           recentMessages: recentMessages.slice(-3),
+          customSystemPrompt, // Inject personalized system prompt
           // Ultra-fast mode flag
           ultraFastMode: true
         },
