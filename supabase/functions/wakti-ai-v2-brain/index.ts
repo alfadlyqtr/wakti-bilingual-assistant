@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,7 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("⚡ WAKTI AI ENHANCED: Personality-first processing with smart optimization");
+console.log("⚡ WAKTI AI ENHANCED: Full personality restoration with task creation");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -21,10 +22,10 @@ serve(async (req) => {
   }
 
   try {
-    console.log("⚡ WAKTI AI ENHANCED: Processing with personality and task creation");
+    console.log("⚡ WAKTI AI ENHANCED: Processing with restored personality and task creation");
     const startTime = Date.now();
 
-    // HYPER-FAST: Skip full auth if cached token provided
+    // Auth handling
     const skipAuth = req.headers.get('x-skip-auth') === 'true';
     const authToken = req.headers.get('x-auth-token');
     
@@ -74,7 +75,9 @@ serve(async (req) => {
       speedOptimized = false,
       aggressiveOptimization = false,
       hasTaskIntent = false,
-      personalityEnabled = true
+      personalityEnabled = true,
+      enableTaskCreation = true,
+      enablePersonality = true
     } = requestBody;
 
     if (userId !== user.id) {
@@ -97,16 +100,16 @@ serve(async (req) => {
       });
     }
 
-    console.log(`⚡ ENHANCED: Processing for user ${user.id} with style: ${userStyle}, tone: ${userTone}, tokens: ${maxTokens}, personality: ${personalityEnabled}`);
+    console.log(`⚡ ENHANCED: User ${user.id} | Style: ${userStyle} | Tone: ${userTone} | Tokens: ${maxTokens} | Personality: ${personalityEnabled} | Task Creation: ${enableTaskCreation}`);
 
-    // HYPER-OPTIMIZED: Process attached files with URL handling
+    // ENHANCED: Process attached files with URL handling
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
       processedFiles = await processAttachedFilesOptimized(attachedFiles);
       console.log(`⚡ ENHANCED: Processed ${processedFiles.length} files`);
     }
 
-    // ENHANCED: Smart processing pipeline with task creation restoration
+    // ENHANCED: Smart processing pipeline with full task creation restoration
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -116,49 +119,58 @@ serve(async (req) => {
     let pendingTaskData = null;
     let pendingReminderData = null;
 
-    // ENHANCED: Task detection with restored logic
-    if (hasTaskIntent || (!aggressiveOptimization && activeTrigger === 'chat')) {
-      console.log("⚡ ENHANCED: Checking for task creation intent");
-      const taskAnalysis = await analyzeTaskIntent(message, language);
+    // ENHANCED: Full task detection logic restoration
+    if (enableTaskCreation && (hasTaskIntent || (!aggressiveOptimization && activeTrigger === 'chat'))) {
+      console.log("⚡ ENHANCED: Analyzing for task/reminder creation intent");
       
-      if (taskAnalysis.isTask || taskAnalysis.isReminder) {
-        console.log("⚡ ENHANCED: Task/reminder creation detected");
-        needsConfirmation = true;
+      try {
+        const taskAnalysis = await analyzeTaskIntent(message, language);
+        console.log("⚡ TASK ANALYSIS RESULT:", JSON.stringify(taskAnalysis, null, 2));
         
-        if (taskAnalysis.isTask) {
-          pendingTaskData = taskAnalysis.taskData;
-          response = language === 'ar' 
-            ? `اكتشفت أنك تريد إنشاء مهمة! 📝 راجع التفاصيل وتأكد:`
-            : `I detected you want to create a task! 📝 Please review and confirm:`;
-        } else {
-          pendingReminderData = taskAnalysis.reminderData;
-          response = language === 'ar' 
-            ? `اكتشفت أنك تريد إنشاء تذكير! ⏰ راجع التفاصيل وتأكد:`
-            : `I detected you want to create a reminder! ⏰ Please review and confirm:`;
+        if (taskAnalysis.isTask || taskAnalysis.isReminder) {
+          console.log(`⚡ ENHANCED: ${taskAnalysis.isTask ? 'Task' : 'Reminder'} creation detected!`);
+          needsConfirmation = true;
+          
+          if (taskAnalysis.isTask && taskAnalysis.taskData) {
+            pendingTaskData = taskAnalysis.taskData;
+            response = language === 'ar' 
+              ? `🚀 اكتشفت أنك تريد إنشاء مهمة! 📝\n\n**المهمة:** ${taskAnalysis.taskData.title}\n${taskAnalysis.taskData.description ? `**الوصف:** ${taskAnalysis.taskData.description}\n` : ''}${taskAnalysis.taskData.due_date ? `**التاريخ:** ${taskAnalysis.taskData.due_date}\n` : ''}${taskAnalysis.taskData.due_time ? `**الوقت:** ${taskAnalysis.taskData.due_time}\n` : ''}${taskAnalysis.taskData.priority ? `**الأولوية:** ${taskAnalysis.taskData.priority}\n` : ''}\nراجع التفاصيل وتأكد! 👍`
+              : `🚀 I detected you want to create a task! 📝\n\n**Task:** ${taskAnalysis.taskData.title}\n${taskAnalysis.taskData.description ? `**Description:** ${taskAnalysis.taskData.description}\n` : ''}${taskAnalysis.taskData.due_date ? `**Date:** ${taskAnalysis.taskData.due_date}\n` : ''}${taskAnalysis.taskData.due_time ? `**Time:** ${taskAnalysis.taskData.due_time}\n` : ''}${taskAnalysis.taskData.priority ? `**Priority:** ${taskAnalysis.taskData.priority}\n` : ''}\nPlease review and confirm! 👍`;
+          } else if (taskAnalysis.isReminder && taskAnalysis.reminderData) {
+            pendingReminderData = taskAnalysis.reminderData;
+            response = language === 'ar' 
+              ? `⏰ اكتشفت أنك تريد إنشاء تذكير!\n\n**التذكير:** ${taskAnalysis.reminderData.title}\n${taskAnalysis.reminderData.description ? `**الوصف:** ${taskAnalysis.reminderData.description}\n` : ''}${taskAnalysis.reminderData.due_date ? `**التاريخ:** ${taskAnalysis.reminderData.due_date}\n` : ''}${taskAnalysis.reminderData.due_time ? `**الوقت:** ${taskAnalysis.reminderData.due_time}\n` : ''}\nراجع التفاصيل وتأكد! 👍`
+              : `⏰ I detected you want to create a reminder!\n\n**Reminder:** ${taskAnalysis.reminderData.title}\n${taskAnalysis.reminderData.description ? `**Description:** ${taskAnalysis.reminderData.description}\n` : ''}${taskAnalysis.reminderData.due_date ? `**Date:** ${taskAnalysis.reminderData.due_date}\n` : ''}${taskAnalysis.reminderData.due_time ? `**Time:** ${taskAnalysis.reminderData.due_time}\n` : ''}\nPlease review and confirm! 👍`;
+          }
         }
+      } catch (taskError) {
+        console.error("⚡ TASK ANALYSIS ERROR:", taskError);
+        // Continue with normal processing if task analysis fails
       }
     }
 
-    // ENHANCED: Processing with personality restoration
+    // ENHANCED: Main processing with full personality restoration
     if (!needsConfirmation) {
       switch (activeTrigger) {
         case 'search':
           if (!aggressiveOptimization) {
-            console.log("⚡ ENHANCED: Search with personality");
+            console.log("⚡ ENHANCED: Search with full personality");
             const searchResult = await executeRegularSearch(message, language);
             if (searchResult.success) {
               browsingUsed = true;
               browsingData = searchResult.data;
-              // ENHANCED: Better context handling
+              // Enhanced context for detailed users
               const context = userStyle === 'short answers' ? 
                 searchResult.context.substring(0, 400) : 
+                userStyle === 'detailed' ? searchResult.context.substring(0, 1500) :
                 searchResult.context.substring(0, 1000);
+              
               response = await processWithBuddyChatAI(
                 message, 
                 context, 
                 language, 
-                recentMessages.slice(-2), // More context for personality
-                '',
+                personalityEnabled ? recentMessages.slice(-3) : recentMessages.slice(-1),
+                conversationSummary,
                 activeTrigger,
                 personalityEnabled ? 'personality_search' : 'search_results',
                 attachedFiles,
@@ -180,6 +192,7 @@ serve(async (req) => {
               );
             }
           } else {
+            // Fallback for speed mode
             response = await processWithBuddyChatAI(
               message, 
               '', 
@@ -214,15 +227,19 @@ serve(async (req) => {
                     : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
                 }
 
-                // ENHANCED: Add personality to image responses
+                // ENHANCED: Full personality implementation for image responses
                 if (userTone === 'funny') {
                   baseResponse += language === 'ar' 
-                    ? `\n\nأتمنى أن تعجبك! 😄🖼️`
-                    : `\n\nHope you love it! 😄🖼️`;
+                    ? `\n\nأتمنى أن تحب هذه التحفة الفنية! 😄🖼️ هل تريد المزيد من الإبداع؟`
+                    : `\n\nHope you love this masterpiece! 😄🖼️ Want me to create more artistic magic?`;
                 } else if (userTone === 'casual') {
                   baseResponse += language === 'ar' 
-                    ? `\n\nشو رأيك؟ 😊`
-                    : `\n\nWhat do you think? 😊`;
+                    ? `\n\nشو رأيك؟ طلعت حلوة؟ 😊`
+                    : `\n\nWhat do you think? Turned out pretty cool, right? 😊`;
+                } else if (userTone === 'encouraging') {
+                  baseResponse += language === 'ar' 
+                    ? `\n\nرائع! صورة مذهلة تعكس إبداعك! 💪✨`
+                    : `\n\nAmazing! This stunning image reflects your creativity! 💪✨`;
                 }
 
                 response = baseResponse;
@@ -244,30 +261,37 @@ serve(async (req) => {
 
         case 'chat':
         default:
-          console.log(`⚡ ENHANCED: Chat processing with ${personalityEnabled ? 'personality' : 'speed'} mode`);
-          // ENHANCED: Build better chat context with personality
+          console.log(`⚡ ENHANCED: Chat processing with ${personalityEnabled ? 'FULL PERSONALITY' : 'SPEED'} mode`);
+          
+          // ENHANCED: Build better chat context with full personality
           let chatContext = null;
           
           if (!aggressiveOptimization) {
-            chatContext = conversationSummary ? 
-              `${conversationSummary}\n\nRecent: ${recentMessages.slice(-2).map(m => `${m.role}: ${m.content.substring(0, 100)}`).join('\n')}` :
-              null;
+            // Enhanced context building for personality
+            if (conversationSummary && personalityEnabled) {
+              chatContext = `${conversationSummary}\n\nRecent conversation:\n${recentMessages.slice(-3).map(m => `${m.role}: ${typeof m.content === 'string' ? m.content.substring(0, 150) : '[attachment]'}`).join('\n')}`;
+            } else if (conversationSummary) {
+              chatContext = `${conversationSummary}\n\nRecent: ${recentMessages.slice(-1).map(m => `${m.role}: ${typeof m.content === 'string' ? m.content.substring(0, 100) : '[attachment]'}`).join('\n')}`;
+            }
           }
           
+          // ENHANCED: Determine interaction type based on personality settings
           const interactionType = aggressiveOptimization ? 'hyper_fast_openai_chat' : 
                                  personalityEnabled ? 'personality_enhanced_chat' : 
                                  'balanced_chat';
+          
+          console.log(`⚡ CHAT MODE: ${interactionType} | Context Length: ${chatContext?.length || 0} | Messages: ${recentMessages.length}`);
           
           response = await processWithBuddyChatAI(
             message, 
             chatContext, 
             language, 
-            personalityEnabled ? recentMessages.slice(-2) : [],
-            '',
+            personalityEnabled ? recentMessages.slice(-3) : recentMessages.slice(-1),
+            conversationSummary,
             activeTrigger,
             interactionType,
             processedFiles,
-            customSystemPrompt,
+            customSystemPrompt, // Full system prompt without truncation
             maxTokens
           );
           break;
@@ -275,9 +299,9 @@ serve(async (req) => {
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`⚡ ENHANCED: Processed in ${processingTime}ms (${personalityEnabled ? 'personality' : 'speed'} mode)`);
+    console.log(`⚡ ENHANCED: Processed in ${processingTime}ms (${personalityEnabled ? 'PERSONALITY' : aggressiveOptimization ? 'SPEED' : 'BALANCED'} mode)`);
 
-    // ENHANCED: Response structure with personality indicators
+    // ENHANCED: Response structure with full personality context
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
@@ -297,7 +321,13 @@ serve(async (req) => {
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek'
+      aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek',
+      taskCreationEnabled: enableTaskCreation,
+      personalityContext: personalityEnabled ? {
+        systemPromptLength: customSystemPrompt.length,
+        contextMessages: recentMessages.length,
+        summaryLength: conversationSummary.length
+      } : null
     };
 
     return new Response(JSON.stringify(result), {

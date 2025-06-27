@@ -1,6 +1,6 @@
 
 /**
- * Enhanced chat analysis with personality restoration for Wakti Edge Function
+ * Enhanced chat analysis with full personality restoration for Wakti Edge Function
  */
 import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 
@@ -80,6 +80,7 @@ export async function processWithBuddyChatAI(
 ) {
   try {
     console.log(`⚡ ENHANCED CHAT: Processing ${interactionType} with ${maxTokens} tokens`);
+    console.log(`⚡ SYSTEM PROMPT: ${customSystemPrompt.substring(0, 100)}...`);
     if (attachedFiles.length > 0) {
       console.log(`⚡ ENHANCED: Processing with ${attachedFiles.length} file(s)`);
     }
@@ -103,30 +104,38 @@ export async function processWithBuddyChatAI(
       throw new Error("No AI API key configured");
     }
 
-    // ENHANCED: Use full system prompt for personality
+    // ENHANCED: Use full system prompt for personality (NO TRUNCATION)
     const systemPrompt = customSystemPrompt || (language === 'ar' 
       ? `أنت WAKTI AI، مساعد ذكي ومفيد. كن ودوداً ومفيداً.`
       : `You are WAKTI AI, a smart and helpful assistant. Be friendly and helpful.`);
+    
+    console.log(`⚡ FULL SYSTEM PROMPT LENGTH: ${systemPrompt.length} characters`);
     
     const messages: any[] = [
       { role: 'system', content: systemPrompt }
     ];
     
-    // ENHANCED: Smart context inclusion based on interaction type
+    // ENHANCED: Smart context inclusion based on interaction type and personality
     const includeFullContext = !interactionType.includes('hyper_fast');
+    const isPersonalityMode = interactionType.includes('personality');
     
     if (includeFullContext && context && context.length > 0) {
+      const contextToInclude = isPersonalityMode ? context : context.substring(0, 800);
       messages.push({ 
         role: 'assistant', 
-        content: `Context: ${context}` 
+        content: `Context: ${contextToInclude}` 
       });
+      console.log(`⚡ CONTEXT INCLUDED: ${contextToInclude.length} characters`);
     }
     
     // ENHANCED: Include more context messages for personality
     if (includeFullContext && contextMessages && contextMessages.length > 0) {
-      const messagesToInclude = interactionType.includes('personality') ? 
-        contextMessages.slice(-2) : contextMessages.slice(-1);
+      const messagesToInclude = isPersonalityMode ? 
+        contextMessages.slice(-3) : // More messages for personality
+        contextMessages.slice(-1);
         
+      console.log(`⚡ CONTEXT MESSAGES: Including ${messagesToInclude.length} messages`);
+      
       messagesToInclude.forEach(recentMessage => {
         if (recentMessage) {
           let content = recentMessage.content;
@@ -138,12 +147,25 @@ export async function processWithBuddyChatAI(
               content = '[attachment]';
             }
           }
+          
+          // Longer content for personality mode
+          const maxContentLength = isPersonalityMode ? 300 : 200;
           messages.push({
             role: recentMessage.role,
-            content: content.substring(0, 200) // More content for personality
+            content: content.substring(0, maxContentLength)
           });
         }
       });
+    }
+    
+    // Enhanced context from conversation summary
+    if (includeFullContext && enhancedContext && enhancedContext.length > 0) {
+      const summaryToInclude = isPersonalityMode ? enhancedContext : enhancedContext.substring(0, 400);
+      messages.push({
+        role: 'assistant',
+        content: `Previous conversation summary: ${summaryToInclude}`
+      });
+      console.log(`⚡ SUMMARY CONTEXT: ${summaryToInclude.length} characters`);
     }
     
     // Construct user message content
@@ -169,11 +191,20 @@ export async function processWithBuddyChatAI(
 
     messages.push({ role: 'user', content: userContent });
     
-    console.log(`⚡ ENHANCED: Using ${usingOpenAI ? 'OpenAI' : 'DeepSeek'} for ${interactionType}`);
+    console.log(`⚡ ENHANCED: Using ${usingOpenAI ? 'OpenAI' : 'DeepSeek'} for ${interactionType} with ${messages.length} messages`);
     
-    // ENHANCED: Temperature based on interaction type
-    const temperature = interactionType.includes('personality') ? 0.8 : 
-                       interactionType.includes('hyper_fast') ? 0.3 : 0.7;
+    // ENHANCED: Temperature based on interaction type and personality
+    let temperature = 0.7; // Default balanced temperature
+    
+    if (interactionType.includes('personality')) {
+      temperature = 0.8; // Higher creativity for personality
+    } else if (interactionType.includes('hyper_fast')) {
+      temperature = 0.3; // Lower for consistency in speed mode
+    } else if (interactionType.includes('funny') || interactionType.includes('casual')) {
+      temperature = 0.9; // Even higher for humor and casual conversation
+    }
+    
+    console.log(`⚡ TEMPERATURE: ${temperature} for ${interactionType}`);
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -206,16 +237,19 @@ export async function processWithBuddyChatAI(
     }
     
     const result = await response.json();
-    return result.choices[0].message.content;
+    const aiResponse = result.choices[0].message.content;
+    
+    console.log(`⚡ AI RESPONSE LENGTH: ${aiResponse.length} characters`);
+    return aiResponse;
     
   } catch (error) {
     console.error("⚡ ENHANCED CHAT: Processing error:", error);
     
-    // ENHANCED: Better fallback responses with some personality
+    // ENHANCED: Better fallback responses with personality
     if (language === 'ar') {
-      return `عذراً، مشكلة مؤقتة. سأعود قريباً! 😊`;
+      return `عذراً، مشكلة مؤقتة. سأعود قريباً بشخصيتي الكاملة! 😊`;
     } else {
-      return `Sorry, temporary issue. I'll be back soon! 😊`;
+      return `Sorry, temporary issue. I'll be back soon with my full personality! 😊`;
     }
   }
 }
