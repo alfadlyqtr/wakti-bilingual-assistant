@@ -39,11 +39,13 @@ class MessageCompressor {
     const contextLimits = {
       'short answers': 1,
       'bullet points': 2,
-      'detailed': 3,
-      'step-by-step': 2
+      'detailed': 4, // Increased for better context
+      'step-by-step': 3,
+      'casual': 3,
+      'funny': 3
     };
     
-    const limit = contextLimits[userStyle] || 2;
+    const limit = contextLimits[userStyle] || 3;
     
     if (messages.length <= limit) {
       return { summary: '', recentMessages: messages };
@@ -70,12 +72,12 @@ class MessageCompressor {
     
     messages.forEach(msg => {
       if (msg.intent) topics.add(msg.intent);
-      if (msg.actionTaken) actions.push(msg.content.substring(0, 30)); // Shorter for speed
+      if (msg.actionTaken) actions.push(msg.content.substring(0, 40));
     });
     
-    let summary = `Previous: ${Array.from(topics).slice(0, 3).join(', ')}.`; // Limit topics
+    let summary = `Previous: ${Array.from(topics).slice(0, 4).join(', ')}.`;
     if (actions.length > 0) {
-      summary += ` Actions: ${actions.slice(0, 2).join('; ')}.`; // Limit actions
+      summary += ` Actions: ${actions.slice(0, 3).join('; ')}.`;
     }
     
     return summary;
@@ -186,7 +188,7 @@ interface PersonalTouchData {
   instruction: string;
 }
 
-// SPEED-OPTIMIZED: Personal touch cache
+// ENHANCED: Personal touch cache with better personality building
 class PersonalTouchCache {
   private static cache: { data: PersonalTouchData | null; expires: number } | null = null;
   
@@ -217,61 +219,113 @@ class PersonalTouchCache {
   }
 }
 
-// SPEED-OPTIMIZED: Build minimal system prompt
-function buildOptimizedSystemPrompt(data: PersonalTouchData | null): string {
-  if (!data) return "You are Wakti AI. Be helpful and concise.";
+// ENHANCED: Build comprehensive system prompt with personality
+function buildPersonalizedSystemPrompt(data: PersonalTouchData | null, language: string = 'en'): string {
+  let basePrompt = language === 'ar' 
+    ? "أنت وقتي AI، مساعد ذكي ومفيد."
+    : "You are Wakti AI, a smart and helpful assistant.";
 
-  let prompt = "You are Wakti AI.";
-  
+  if (!data) return basePrompt;
+
+  // Add nickname
   if (data.nickname) {
-    prompt += ` Call user "${data.nickname}".`;
+    basePrompt += language === 'ar' 
+      ? ` اسم المستخدم "${data.nickname}".`
+      : ` Call the user "${data.nickname}".`;
   }
   
+  // Add tone with personality instructions
   if (data.tone && data.tone !== 'neutral') {
-    prompt += ` Use ${data.tone} tone.`;
-  }
-  
-  if (data.style) {
-    // Optimize for different styles
-    switch (data.style) {
-      case 'short answers':
-        prompt += ` Be very brief and direct.`;
+    switch (data.tone) {
+      case 'funny':
+        basePrompt += language === 'ar'
+          ? " كن مرحاً ولطيفاً، استخدم النكات والرموز التعبيرية 😄"
+          : " Be funny and playful! Use jokes, puns, and emojis 😄. Keep things light and entertaining.";
         break;
-      case 'bullet points':
-        prompt += ` Use bullet points when helpful.`;
+      case 'casual':
+        basePrompt += language === 'ar'
+          ? " كن ودوداً وعادياً، استخدم الرموز التعبيرية 😊"
+          : " Be casual and friendly! Use emojis 😊, contractions, and conversational language.";
         break;
-      case 'step-by-step':
-        prompt += ` Structure responses step-by-step.`;
+      case 'encouraging':
+        basePrompt += language === 'ar'
+          ? " كن محفزاً ومشجعاً، استخدم عبارات إيجابية 💪"
+          : " Be encouraging and motivating! Use positive language and supportive emojis 💪✨";
+        break;
+      case 'serious':
+        basePrompt += language === 'ar'
+          ? " كن جدياً ومهنياً في ردودك"
+          : " Be serious and professional in your responses.";
         break;
       default:
-        prompt += ` Respond using ${data.style}.`;
+        basePrompt += language === 'ar'
+          ? ` استخدم نبرة ${data.tone}`
+          : ` Use a ${data.tone} tone.`;
     }
   }
   
-  if (data.instruction) {
-    // Limit instruction length for speed
-    const shortInstruction = data.instruction.substring(0, 100);
-    prompt += ` Note: ${shortInstruction}`;
+  // Add style with detailed instructions
+  if (data.style) {
+    switch (data.style) {
+      case 'short answers':
+        basePrompt += language === 'ar'
+          ? " اجعل إجاباتك مختصرة ومباشرة."
+          : " Keep your answers brief and to the point.";
+        break;
+      case 'bullet points':
+        basePrompt += language === 'ar'
+          ? " استخدم النقاط والقوائم لتنظيم المعلومات."
+          : " Use bullet points and lists to organize information clearly.";
+        break;
+      case 'detailed':
+        basePrompt += language === 'ar'
+          ? " قدم إجابات مفصلة وشاملة مع أمثلة وتوضيحات."
+          : " Provide detailed, comprehensive answers with examples and explanations.";
+        break;
+      case 'step-by-step':
+        basePrompt += language === 'ar'
+          ? " قسم إجاباتك إلى خطوات واضحة ومرقمة."
+          : " Break down your responses into clear, numbered steps.";
+        break;
+      default:
+        basePrompt += language === 'ar'
+          ? ` اتبع أسلوب ${data.style}`
+          : ` Follow a ${data.style} style.`;
+    }
   }
   
-  return prompt.trim();
+  // Add custom instruction
+  if (data.instruction && data.instruction.trim()) {
+    basePrompt += language === 'ar'
+      ? ` تعليمات إضافية: ${data.instruction}`
+      : ` Additional instruction: ${data.instruction}`;
+  }
+  
+  return basePrompt;
 }
 
-// SPEED-OPTIMIZED: Get smart token limits based on style
-function getSmartTokenLimits(style: string): number {
-  const tokenLimits = {
-    'short answers': 150, // Further reduced for ultra speed
-    'bullet points': 200, // Further reduced for ultra speed
-    'detailed': 400, // Further reduced for ultra speed
-    'step-by-step': 300, // Further reduced for ultra speed
-    'casual': 250, // Further reduced for ultra speed
-    'neutral': 300 // Further reduced for ultra speed
+// ENHANCED: Get smart token limits with better allocation for personality
+function getPersonalizedTokenLimits(style: string, tone: string): number {
+  const baseTokens = {
+    'short answers': 200,    // Increased from 150
+    'bullet points': 300,    // Increased from 200
+    'detailed': 600,         // Increased from 400
+    'step-by-step': 400,     // Increased from 300
+    'casual': 350,           // Increased from 250
+    'neutral': 300           // Same
   };
   
-  return tokenLimits[style] || 300;
+  let tokens = baseTokens[style] || 350;
+  
+  // Add extra tokens for personality tones
+  if (tone === 'funny' || tone === 'casual') {
+    tokens += 100; // Extra space for jokes and emojis
+  }
+  
+  return tokens;
 }
 
-// SPEED-OPTIMIZED: Detect if query is simple
+// ENHANCED: Detect if query is simple or needs personality
 function isSimpleQuery(message: string): boolean {
   const simplePatterns = [
     /^(hi|hello|hey|مرحبا|أهلا)$/i,
@@ -282,6 +336,19 @@ function isSimpleQuery(message: string): boolean {
   ];
   
   return simplePatterns.some(pattern => pattern.test(message.trim()));
+}
+
+// ENHANCED: Detect task creation intent
+function hasTaskCreationIntent(message: string): boolean {
+  const taskKeywords = [
+    'create task', 'add task', 'make task', 'new task',
+    'create reminder', 'add reminder', 'set reminder',
+    'أنشئ مهمة', 'أضف مهمة', 'أنشئ تذكير',
+    'remind me', 'ذكرني'
+  ];
+  
+  const lowerMessage = message.toLowerCase();
+  return taskKeywords.some(keyword => lowerMessage.includes(keyword));
 }
 
 // FIXED: Request debouncer with proper typing
@@ -309,7 +376,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ULTRA-FAST: Enhanced message sending with aggressive speed optimizations
+  // ENHANCED: Message sending with restored personality and task creation
   static async sendMessage(
     message: string,
     userId?: string,
@@ -324,7 +391,7 @@ export class WaktiAIV2ServiceClass {
     calendarContext: any = null,
     userContext: any = null,
     enableAdvancedIntegration: boolean = true,
-    enablePredictiveInsights: boolean = true,
+    enablePredictiveIntegration: boolean = true,
     enableWorkflowAutomation: boolean = true,
     confirmTask: boolean = false,
     confirmReminder: boolean = false,
@@ -332,15 +399,21 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('⚡ ULTRA-FAST AI: Hyper-speed processing initiated');
+      console.log('⚡ ENHANCED AI: Processing with personality restoration');
       const startTime = Date.now();
       
-      // ULTRA-FAST: Load personal touch settings with caching
+      // ENHANCED: Load personal touch settings
       const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
       const userStyle = personalTouch?.style || 'detailed';
+      const userTone = personalTouch?.tone || 'neutral';
       
-      // ULTRA-FAST: Aggressive caching for simple queries
-      if (!attachedFiles?.length && activeTrigger === 'chat' && isSimpleQuery(message)) {
+      // ENHANCED: Smart optimization based on query complexity
+      const isSimple = isSimpleQuery(message);
+      const hasTaskIntent = hasTaskCreationIntent(message);
+      const useAggressiveOptimization = isSimple && !hasTaskIntent && activeTrigger === 'chat';
+      
+      // ENHANCED: Aggressive caching only for simple queries
+      if (useAggressiveOptimization && !attachedFiles?.length) {
         const cachedResponse = AIResponseCache.getCachedResponse(message);
         if (cachedResponse) {
           console.log('⚡ INSTANT CACHE HIT: Returning cached response');
@@ -370,16 +443,16 @@ export class WaktiAIV2ServiceClass {
       }
       
       // ULTRA-FAST: Build ultra-minimal custom system prompt
-      const customSystemPrompt = buildOptimizedSystemPrompt(personalTouch);
+      const customSystemPrompt = buildPersonalizedSystemPrompt(personalTouch, language);
       
       // ULTRA-FAST: Get smart token limits (further reduced)
-      const maxTokens = getSmartTokenLimits(userStyle);
+      const maxTokens = getPersonalizedTokenLimits(userStyle, userTone);
       
       // Create abort controller for request timeout
       const abortController = AuthCache.getAbortController();
       
       // ULTRA-FAST: Aggressive timeout based on user style
-      const timeoutMs = userStyle === 'short answers' ? 3000 : 4000; // Reduced timeouts
+      const timeoutMs = useAggressiveOptimization ? 4000 : 6000; // Reduced timeouts
       const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
       
       try {
@@ -394,15 +467,18 @@ export class WaktiAIV2ServiceClass {
             activeTrigger,
             attachedFiles: processedFiles,
             // ULTRA-FAST: Skip most context for speed
-            conversationSummary: userStyle === 'short answers' ? '' : summary?.substring(0, 100) || '',
-            recentMessages: userStyle === 'short answers' ? [] : recentMessages.slice(-1),
+            conversationSummary: useAggressiveOptimization ? '' : summary?.substring(0, 100) || '',
+            recentMessages: useAggressiveOptimization ? [] : recentMessages.slice(-1),
             customSystemPrompt: customSystemPrompt.substring(0, 100), // Further truncate
             maxTokens,
             userStyle,
+            userTone,
             // Ultra-fast mode flags
             ultraFastMode: true,
             speedOptimized: true,
-            aggressiveOptimization: true
+            aggressiveOptimization: useAggressiveOptimization,
+            hasTaskIntent,
+            personalityEnabled: !useAggressiveOptimization
           },
           headers: {
             'x-auth-token': auth.token,
@@ -413,14 +489,14 @@ export class WaktiAIV2ServiceClass {
         clearTimeout(timeoutId);
         
         const responseTime = Date.now() - startTime;
-        console.log(`⚡ ULTRA-FAST AI: Response in ${responseTime}ms`);
+        console.log(`⚡ ENHANCED AI: Response in ${responseTime}ms (${useAggressiveOptimization ? 'speed' : 'personality'} mode)`);
         
         if (response.error) {
           throw new Error(response.error.message || 'AI service error');
         }
         
         // ULTRA-FAST: Cache simple responses immediately
-        if (activeTrigger === 'chat' && !attachedFiles?.length && isSimpleQuery(message)) {
+        if (useAggressiveOptimization && !attachedFiles?.length) {
           AIResponseCache.setCachedResponse(message, response.data.response);
         }
         
@@ -440,7 +516,7 @@ export class WaktiAIV2ServiceClass {
         throw error;
       }
     } catch (error: any) {
-      console.error('⚡ ULTRA-FAST AI: Service error:', error);
+      console.error('⚡ ENHANCED AI: Service error:', error);
       throw error;
     }
   }
@@ -535,7 +611,7 @@ export class WaktiAIV2ServiceClass {
     calendarContext: any = null,
     userContext: any = null,
     enableAdvancedIntegration: boolean = true,
-    enablePredictiveInsights: boolean = true,
+    enablePredictiveIntegration: boolean = true,
     enableWorkflowAutomation: boolean = true,
     confirmTask: boolean = false,
     confirmReminder: boolean = false,
@@ -545,7 +621,7 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.sendMessage(
       message, userId, language, conversationId, inputType, conversationHistory,
       confirmSearch, activeTrigger, textGenParams, attachedFiles, calendarContext,
-      userContext, enableAdvancedIntegration, enablePredictiveInsights,
+      userContext, enableAdvancedIntegration, enablePredictiveIntegration,
       enableWorkflowAutomation, confirmTask, confirmReminder, pendingTaskData, pendingReminderData
     );
   }

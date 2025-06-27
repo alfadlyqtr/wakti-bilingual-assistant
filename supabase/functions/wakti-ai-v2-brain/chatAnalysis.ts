@@ -1,25 +1,27 @@
 
 /**
- * Hyper-optimized Buddy Chat, Mode Analysis, and AI processing for Wakti Edge Function
+ * Enhanced chat analysis with personality restoration for Wakti Edge Function
  */
 import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 
 export function analyzeBuddyChatIntent(message: string, activeTrigger: string, enhancedContext: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
-  // SPEED-OPTIMIZED: Reduced pattern matching for faster processing
-  const quickPatterns = {
-    greeting: ['hi', 'hello', 'hey', 'مرحبا', 'أهلا'],
-    question: ['what', 'how', 'when', 'ما', 'كيف', 'متى', '?'],
-    thanks: ['thanks', 'thank', 'شكرا']
+  // ENHANCED: Better pattern matching for personality
+  const patterns = {
+    greeting: ['hi', 'hello', 'hey', 'مرحبا', 'أهلا', 'السلام عليكم'],
+    question: ['what', 'how', 'when', 'why', 'where', 'ما', 'كيف', 'متى', 'لماذا', 'أين', '?'],
+    thanks: ['thanks', 'thank', 'شكرا', 'شكراً'],
+    task: ['create task', 'add task', 'أنشئ مهمة', 'أضف مهمة'],
+    reminder: ['remind me', 'set reminder', 'ذكرني', 'أنشئ تذكير']
   };
   
   let intent = 'general_chat';
   let confidence = 'medium';
   
-  // Quick intent detection
-  for (const [intentType, patterns] of Object.entries(quickPatterns)) {
-    if (patterns.some(pattern => lowerMessage.includes(pattern))) {
+  // Enhanced intent detection
+  for (const [intentType, patternList] of Object.entries(patterns)) {
+    if (patternList.some(pattern => lowerMessage.includes(pattern))) {
       intent = intentType;
       confidence = 'high';
       break;
@@ -37,19 +39,19 @@ export function analyzeBuddyChatIntent(message: string, activeTrigger: string, e
 export function analyzeSmartModeIntent(message: string, activeTrigger: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
-  // SPEED-OPTIMIZED: Simplified mode detection
-  const quickModePatterns = {
-    search: ['weather', 'news', 'price', 'طقس', 'أخبار'],
-    image: ['create image', 'draw', 'أنشئ صورة', 'ارسم'],
-    chat: ['chat', 'talk', 'تحدث']
+  // ENHANCED: Better mode detection with personality
+  const modePatterns = {
+    search: ['weather', 'news', 'price', 'search for', 'طقس', 'أخبار', 'ابحث عن'],
+    image: ['create image', 'draw', 'generate image', 'أنشئ صورة', 'ارسم'],
+    chat: ['chat', 'talk', 'conversation', 'تحدث', 'محادثة']
   };
   
   let suggestMode = null;
   let allowInMode = true;
   
-  // Quick mode suggestion for chat
+  // Enhanced mode suggestion
   if (activeTrigger === 'chat') {
-    for (const [mode, patterns] of Object.entries(quickModePatterns)) {
+    for (const [mode, patterns] of Object.entries(modePatterns)) {
       if (mode !== 'chat' && patterns.some(pattern => lowerMessage.includes(pattern))) {
         suggestMode = mode;
         break;
@@ -77,20 +79,20 @@ export async function processWithBuddyChatAI(
   maxTokens: number = 600
 ) {
   try {
-    console.log(`⚡ HYPER-OPTIMIZED BUDDY-CHAT: Processing with ${maxTokens} tokens limit`);
+    console.log(`⚡ ENHANCED CHAT: Processing ${interactionType} with ${maxTokens} tokens`);
     if (attachedFiles.length > 0) {
-      console.log(`⚡ HYPER-OPTIMIZED: Processing with ${attachedFiles.length} file(s)`);
+      console.log(`⚡ ENHANCED: Processing with ${attachedFiles.length} file(s)`);
     }
     
-    // HYPER-OPTIMIZED: Use OpenAI as primary for fastest responses (1-3s vs 9-10s)
+    // ENHANCED: Use OpenAI as primary for best personality support
     let apiKey = OPENAI_API_KEY;
     let apiUrl = 'https://api.openai.com/v1/chat/completions';
-    let model = 'gpt-4o-mini'; // Fastest model with vision support
+    let model = 'gpt-4o-mini'; // Best balance of speed and capability
     let usingOpenAI = true;
     
     // Fallback to DeepSeek if OpenAI is not available
     if (!apiKey) {
-      console.log("⚡ HYPER-OPTIMIZED: OpenAI unavailable, falling back to DeepSeek");
+      console.log("⚡ ENHANCED: OpenAI unavailable, falling back to DeepSeek");
       apiKey = DEEPSEEK_API_KEY;
       apiUrl = 'https://api.deepseek.com/v1/chat/completions';
       model = 'deepseek-chat';
@@ -101,43 +103,47 @@ export async function processWithBuddyChatAI(
       throw new Error("No AI API key configured");
     }
 
-    // HYPER-OPTIMIZED: Use custom system prompt or ultra-minimal default
+    // ENHANCED: Use full system prompt for personality
     const systemPrompt = customSystemPrompt || (language === 'ar' 
-      ? `أنت WAKTI. كن مختصراً.`
-      : `You are WAKTI. Be concise.`);
+      ? `أنت WAKTI AI، مساعد ذكي ومفيد. كن ودوداً ومفيداً.`
+      : `You are WAKTI AI, a smart and helpful assistant. Be friendly and helpful.`);
     
     const messages: any[] = [
       { role: 'system', content: systemPrompt }
     ];
     
-    // HYPER-OPTIMIZED: Skip context for hyper-fast modes
-    const isHyperFast = interactionType.includes('hyper_fast');
+    // ENHANCED: Smart context inclusion based on interaction type
+    const includeFullContext = !interactionType.includes('hyper_fast');
     
-    if (!isHyperFast && context && context.length < 150) { // Only add very short context
+    if (includeFullContext && context && context.length > 0) {
       messages.push({ 
         role: 'assistant', 
-        content: `Context: ${context.substring(0, 100)}` 
+        content: `Context: ${context}` 
       });
     }
     
-    // HYPER-OPTIMIZED: Skip context messages for hyper-fast modes
-    if (!isHyperFast && contextMessages && contextMessages.length > 0) {
-      const recentMessage = contextMessages.slice(-1)[0]; // Only last message
-      if (recentMessage) {
-        let content = recentMessage.content;
-        if (typeof content !== 'string') {
-          if (Array.isArray(content) && content.length > 0) {
-            const textPart = content.find(p => p.type === 'text');
-            content = textPart ? textPart.text.substring(0, 50) : '[attachment]'; // Further reduced
-          } else {
-            content = '[attachment]';
+    // ENHANCED: Include more context messages for personality
+    if (includeFullContext && contextMessages && contextMessages.length > 0) {
+      const messagesToInclude = interactionType.includes('personality') ? 
+        contextMessages.slice(-2) : contextMessages.slice(-1);
+        
+      messagesToInclude.forEach(recentMessage => {
+        if (recentMessage) {
+          let content = recentMessage.content;
+          if (typeof content !== 'string') {
+            if (Array.isArray(content) && content.length > 0) {
+              const textPart = content.find(p => p.type === 'text');
+              content = textPart ? textPart.text : '[attachment]';
+            } else {
+              content = '[attachment]';
+            }
           }
+          messages.push({
+            role: recentMessage.role,
+            content: content.substring(0, 200) // More content for personality
+          });
         }
-        messages.push({
-          role: recentMessage.role,
-          content: content.substring(0, 100) // Limit all content
-        });
-      }
+      });
     }
     
     // Construct user message content
@@ -163,7 +169,11 @@ export async function processWithBuddyChatAI(
 
     messages.push({ role: 'user', content: userContent });
     
-    console.log(`⚡ HYPER-OPTIMIZED: Using ${usingOpenAI ? 'OpenAI (fastest)' : 'DeepSeek (fallback)'}`);
+    console.log(`⚡ ENHANCED: Using ${usingOpenAI ? 'OpenAI' : 'DeepSeek'} for ${interactionType}`);
+    
+    // ENHANCED: Temperature based on interaction type
+    const temperature = interactionType.includes('personality') ? 0.8 : 
+                       interactionType.includes('hyper_fast') ? 0.3 : 0.7;
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -174,8 +184,8 @@ export async function processWithBuddyChatAI(
       body: JSON.stringify({
         model: model,
         messages: messages,
-        temperature: isHyperFast ? 0.3 : 0.7, // Lower temperature for speed
-        max_tokens: maxTokens // Use dynamic token limit
+        temperature: temperature,
+        max_tokens: maxTokens
       })
     });
     
@@ -185,7 +195,7 @@ export async function processWithBuddyChatAI(
       
       // If OpenAI fails, try DeepSeek as fallback
       if (usingOpenAI && DEEPSEEK_API_KEY) {
-        console.log("⚡ HYPER-OPTIMIZED: OpenAI failed, trying DeepSeek fallback");
+        console.log("⚡ ENHANCED: OpenAI failed, trying DeepSeek fallback");
         return processWithBuddyChatAI(
           message, context, language, contextMessages, enhancedContext,
           activeTrigger, interactionType, attachedFiles, customSystemPrompt, maxTokens
@@ -199,11 +209,13 @@ export async function processWithBuddyChatAI(
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error("⚡ HYPER-OPTIMIZED BUDDY-CHAT: Processing error:", error);
+    console.error("⚡ ENHANCED CHAT: Processing error:", error);
     
-    // HYPER-OPTIMIZED: Shorter fallback responses
-    return language === 'ar' 
-      ? `عذراً، مشكلة مؤقتة. 😊`
-      : `Sorry, temporary issue. 😊`;
+    // ENHANCED: Better fallback responses with some personality
+    if (language === 'ar') {
+      return `عذراً، مشكلة مؤقتة. سأعود قريباً! 😊`;
+    } else {
+      return `Sorry, temporary issue. I'll be back soon! 😊`;
+    }
   }
 }
