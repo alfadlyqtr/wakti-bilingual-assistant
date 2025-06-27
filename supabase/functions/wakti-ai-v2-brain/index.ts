@@ -14,7 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("⚡ WAKTI AI ENHANCED: Full personality restoration with task creation");
+console.log("⚡ WAKTI AI ENHANCED: Full personality restoration with task creation and vision support");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("⚡ WAKTI AI ENHANCED: Processing with restored personality and task creation");
+    console.log("⚡ WAKTI AI ENHANCED: Processing with restored personality, task creation, and vision support");
     const startTime = Date.now();
 
     // Auth handling
@@ -66,6 +66,7 @@ serve(async (req) => {
       inputType = 'text',
       activeTrigger = 'chat',
       attachedFiles = [],
+      visionFiles = [], // NEW: Support for vision files
       conversationSummary = '',
       recentMessages = [],
       customSystemPrompt = '',
@@ -90,9 +91,9 @@ serve(async (req) => {
       });
     }
 
-    if (!message?.trim() && !attachedFiles?.length) {
+    if (!message?.trim() && !attachedFiles?.length && !visionFiles?.length) {
       return new Response(JSON.stringify({ 
-        error: "Message or attachment required",
+        error: "Message, attachment, or vision file required",
         success: false
       }), {
         status: 400,
@@ -100,13 +101,20 @@ serve(async (req) => {
       });
     }
 
-    console.log(`⚡ ENHANCED: User ${user.id} | Style: ${userStyle} | Tone: ${userTone} | Tokens: ${maxTokens} | Personality: ${personalityEnabled} | Task Creation: ${enableTaskCreation}`);
+    console.log(`⚡ ENHANCED: User ${user.id} | Style: ${userStyle} | Tone: ${userTone} | Tokens: ${maxTokens} | Personality: ${personalityEnabled} | Task Creation: ${enableTaskCreation} | Vision Files: ${visionFiles?.length || 0}`);
 
-    // ENHANCED: Process attached files with URL handling
+    // ENHANCED: Process attached files with URL handling + vision files
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
       processedFiles = await processAttachedFilesOptimized(attachedFiles);
-      console.log(`⚡ ENHANCED: Processed ${processedFiles.length} files`);
+      console.log(`⚡ ENHANCED: Processed ${processedFiles.length} regular files`);
+    }
+    
+    // NEW: Process vision files for OpenAI Vision API
+    if (visionFiles && visionFiles.length > 0) {
+      const visionProcessedFiles = await processVisionFiles(visionFiles);
+      processedFiles = [...processedFiles, ...visionProcessedFiles];
+      console.log(`⚡ VISION: Processed ${visionProcessedFiles.length} vision files`);
     }
 
     // ENHANCED: Smart processing pipeline with full task creation restoration
@@ -173,7 +181,7 @@ serve(async (req) => {
                 conversationSummary,
                 activeTrigger,
                 personalityEnabled ? 'personality_search' : 'search_results',
-                attachedFiles,
+                processedFiles, // Include vision files
                 customSystemPrompt,
                 maxTokens
               );
@@ -186,7 +194,7 @@ serve(async (req) => {
                 '',
                 activeTrigger,
                 'search_failed',
-                attachedFiles,
+                processedFiles, // Include vision files
                 customSystemPrompt,
                 maxTokens
               );
@@ -201,7 +209,7 @@ serve(async (req) => {
               '',
               'chat',
               'hyper_fast_chat',
-              attachedFiles,
+              processedFiles, // Include vision files
               customSystemPrompt,
               Math.min(maxTokens, 200)
             );
@@ -280,7 +288,7 @@ serve(async (req) => {
                                  personalityEnabled ? 'personality_enhanced_chat' : 
                                  'balanced_chat';
           
-          console.log(`⚡ CHAT MODE: ${interactionType} | Context Length: ${chatContext?.length || 0} | Messages: ${recentMessages.length}`);
+          console.log(`⚡ CHAT MODE: ${interactionType} | Context Length: ${chatContext?.length || 0} | Messages: ${recentMessages.length} | Vision Files: ${visionFiles?.length || 0}`);
           
           response = await processWithBuddyChatAI(
             message, 
@@ -290,7 +298,7 @@ serve(async (req) => {
             conversationSummary,
             activeTrigger,
             interactionType,
-            processedFiles,
+            processedFiles, // Include both regular and vision files
             customSystemPrompt, // Full system prompt without truncation
             maxTokens
           );
@@ -301,7 +309,7 @@ serve(async (req) => {
     const processingTime = Date.now() - startTime;
     console.log(`⚡ ENHANCED: Processed in ${processingTime}ms (${personalityEnabled ? 'PERSONALITY' : aggressiveOptimization ? 'SPEED' : 'BALANCED'} mode)`);
 
-    // ENHANCED: Response structure with full personality context
+    // ENHANCED: Response structure with full personality context + vision support
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
@@ -323,6 +331,7 @@ serve(async (req) => {
       tokensUsed: maxTokens,
       aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek',
       taskCreationEnabled: enableTaskCreation,
+      visionSupported: true, // NEW: Indicate vision support
       personalityContext: personalityEnabled ? {
         systemPromptLength: customSystemPrompt.length,
         contextMessages: recentMessages.length,
@@ -372,6 +381,30 @@ async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[
       };
     }
     
+    return null;
+  }).filter(Boolean);
+}
+
+// NEW: Process vision files for OpenAI Vision API
+async function processVisionFiles(visionFiles: any[]): Promise<any[]> {
+  if (!visionFiles || visionFiles.length === 0) return [];
+
+  console.log(`⚡ VISION: Processing ${visionFiles.length} vision files`);
+  
+  return visionFiles.map(file => {
+    // Use the public URL from vision uploads bucket
+    if (file.publicUrl) {
+      console.log(`⚡ VISION: Using public URL for file ${file.name}: ${file.publicUrl}`);
+      return {
+        type: 'image_url',
+        image_url: {
+          url: file.publicUrl,
+          detail: 'high' // Use high detail for better vision analysis
+        }
+      };
+    }
+    
+    console.warn(`⚡ VISION: No public URL found for file ${file.id}`);
     return null;
   }).filter(Boolean);
 }
