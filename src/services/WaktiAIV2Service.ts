@@ -460,7 +460,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ENHANCED: Main message sending with PROPER TASK DETECTION AND CONFIRMATION FLOW
+  // ENHANCED: Main message sending with SMART MEMORY MANAGEMENT + PERSONALIZATION ENFORCEMENT
   static async sendMessage(
     message: string,
     userId?: string,
@@ -478,7 +478,7 @@ export class WaktiAIV2ServiceClass {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
 
-      console.log('🚀 ENHANCED AI: Starting with TASK DETECTION + SMART MEMORY + PERSONALIZATION');
+      console.log('🚀 ENHANCED AI: Starting with SMART MEMORY + PERSONALIZATION ENFORCEMENT');
 
       // STEP 1: Load personal touch settings (cached)
       const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
@@ -554,46 +554,11 @@ export class WaktiAIV2ServiceClass {
       const apiTime = Date.now() - startTime;
       console.log(`⚡ API SUCCESS: Completed in ${apiTime}ms`);
 
-      // CRITICAL DEBUG: Log the raw response from AI brain
-      console.log('🔍 RAW AI BRAIN RESPONSE:', {
-        needsConfirmation: data.needsConfirmation,
-        pendingTaskData: data.pendingTaskData,
-        pendingReminderData: data.pendingReminderData,
-        response: data.response?.substring(0, 100) + '...'
-      });
-
-      // STEP 4: Handle task/reminder confirmation BEFORE personalization
-      if (data.needsConfirmation) {
-        if (data.pendingTaskData) {
-          console.log('✅ TASK CONFIRMATION NEEDED - Returning with task data');
-          return {
-            ...data,
-            needsConfirmation: true,
-            pendingTaskData: data.pendingTaskData,
-            response: data.response, // Keep original response
-            processingTime: Date.now() - startTime,
-            apiTime,
-            taskConfirmationRequired: true
-          };
-        } else if (data.pendingReminderData) {
-          console.log('✅ REMINDER CONFIRMATION NEEDED - Returning with reminder data');
-          return {
-            ...data,
-            needsConfirmation: true,
-            pendingReminderData: data.pendingReminderData,
-            response: data.response, // Keep original response
-            processingTime: Date.now() - startTime,
-            apiTime,
-            reminderConfirmationRequired: true
-          };
-        }
-      }
-
-      // STEP 5: Apply PersonalizationProcessor ONLY for regular chat responses
+      // CRITICAL: Apply PersonalizationProcessor with ENFORCEMENT for full personalization
       let finalResponse = data.response;
       
-      if (personalTouch && !data.needsConfirmation) {
-        console.log('🎨 PERSONALIZATION ENFORCEMENT: Applying for regular chat response');
+      if (personalTouch) {
+        console.log('🎨 PERSONALIZATION ENFORCEMENT: Applying strict personalization matching');
         finalResponse = PersonalizationProcessor.enhanceResponse(
           data.response,
           {
@@ -613,23 +578,20 @@ export class WaktiAIV2ServiceClass {
             aiNickname: personalTouch.aiNickname ? 'Yes' : 'No'
           }
         });
-      } else if (data.needsConfirmation) {
-        console.log('⚠️ SKIPPING PERSONALIZATION: Task/Reminder confirmation mode');
       }
 
       const totalTime = Date.now() - startTime;
-      console.log(`🚀 TOTAL SUCCESS: ${totalTime}ms (Smart Memory: ${!!enhancedSummary}, Task Mode: ${!!data.needsConfirmation}, Personalized: ${!!personalTouch && !data.needsConfirmation})`);
+      console.log(`🚀 TOTAL SUCCESS: ${totalTime}ms (Smart Memory: ${!!enhancedSummary}, Personalization Enforced: ${!!personalTouch})`);
 
       return {
         ...data,
         response: finalResponse,
         processingTime: totalTime,
         apiTime,
-        personalizedResponse: !!personalTouch && !data.needsConfirmation,
+        personalizedResponse: !!personalTouch,
         enhancedMemory: true,
         smartSummaryUsed: !!enhancedSummary,
-        personalizationEnforced: !!personalTouch && !data.needsConfirmation,
-        taskConfirmationMode: !!data.needsConfirmation
+        personalizationEnforced: !!personalTouch
       };
 
     } catch (error) {
