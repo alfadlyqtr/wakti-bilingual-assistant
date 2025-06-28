@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Wand2, Reply, FileText, Copy, RotateCcw, CheckCircle } from 'lucide-react';
+import { Loader2, Wand2, Reply, FileText, Copy, RotateCcw, CheckCircle, AlertCircle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 
 interface TextGeneratorPopupProps {
@@ -30,6 +30,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [generatedText, setGeneratedText] = useState('');
   const [isCopied, setIsCopied] = useState(false);
+  const [lastError, setLastError] = useState<string>('');
   
   // Compose tab state
   const [composePrompt, setComposePrompt] = useState('');
@@ -88,6 +89,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     }
 
     setIsLoading(true);
+    setLastError('');
     
     try {
       let prompt = '';
@@ -149,7 +151,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         }
       }
 
-      console.log('🎯 Text Generator: Using DeepSeek for generation');
+      console.log('🎯 Text Generator: Starting generation with DeepSeek');
       
       const { data, error } = await supabase.functions.invoke('text-generator', {
         body: {
@@ -161,11 +163,22 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
       if (error) {
         console.error('Text generation error:', error);
-        throw new Error(error.message || 'Text generation failed');
+        const errorMessage = error.message || 'Text generation failed';
+        setLastError(errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      if (!data?.success) {
+        const errorMessage = data?.error || 'Text generation failed';
+        console.error('Text generation failed:', errorMessage);
+        setLastError(errorMessage);
+        throw new Error(errorMessage);
       }
 
       if (!data?.generatedText) {
-        throw new Error('No text generated');
+        const errorMessage = 'No text generated';
+        setLastError(errorMessage);
+        throw new Error(errorMessage);
       }
 
       setGeneratedText(data.generatedText);
@@ -174,7 +187,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       
     } catch (error: any) {
       console.error('Text generation error:', error);
-      showError(error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text'));
+      const errorMessage = error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text');
+      setLastError(errorMessage);
+      showError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -229,6 +244,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     setToAddress('');
     setFromAddress('');
     setIsCopied(false);
+    setLastError('');
     onClose();
   };
 
@@ -241,6 +257,23 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             {language === 'ar' ? 'منشئ النصوص الذكي' : 'Smart Text Generator'}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Error Display */}
+        {lastError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 text-sm">
+            <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+            <div className="text-red-700">
+              <strong>{language === 'ar' ? 'خطأ:' : 'Error:'}</strong>
+              <br />
+              {lastError}
+              {lastError.includes('DEEPSEEK_API_KEY') && (
+                <div className="mt-2 text-xs">
+                  {language === 'ar' ? 'يرجى التواصل مع المطور لإضافة مفتاح API' : 'Please contact the developer to add the API key'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-4">

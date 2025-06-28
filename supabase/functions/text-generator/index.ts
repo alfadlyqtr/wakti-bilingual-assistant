@@ -17,24 +17,35 @@ serve(async (req) => {
 
   try {
     console.log("🎯 Text Generator: Processing request");
-    const { prompt, mode, language, messageAnalysis } = await req.json();
-
-    if (!prompt) {
+    
+    if (!DEEPSEEK_API_KEY) {
+      console.error("🚨 Text Generator: DEEPSEEK_API_KEY not found in environment");
       return new Response(
-        JSON.stringify({ error: "Prompt is required" }),
+        JSON.stringify({ 
+          success: false,
+          error: "DeepSeek API key not configured. Please add DEEPSEEK_API_KEY to Supabase Edge Function Secrets." 
+        }),
         { 
-          status: 400, 
+          status: 500, 
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         }
       );
     }
 
-    if (!DEEPSEEK_API_KEY) {
-      console.error("🎯 Text Generator: DeepSeek API key not configured");
+    const requestBody = await req.json().catch(() => ({}));
+    const { prompt, mode, language, messageAnalysis } = requestBody;
+
+    console.log("🎯 Request body:", { prompt: prompt?.substring(0, 100) + "...", mode, language });
+
+    if (!prompt) {
+      console.error("🎯 Text Generator: Missing prompt in request");
       return new Response(
-        JSON.stringify({ error: "DeepSeek API key not configured" }),
+        JSON.stringify({ 
+          success: false,
+          error: "Prompt is required" 
+        }),
         { 
-          status: 500, 
+          status: 400, 
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         }
       );
@@ -69,16 +80,40 @@ serve(async (req) => {
     console.log(`🎯 Text Generator: DeepSeek request completed in ${duration}ms`);
 
     if (!deepseekResponse.ok) {
-      const errorData = await deepseekResponse.json();
-      console.error("🎯 Text Generator: DeepSeek API error:", errorData);
-      throw new Error(`DeepSeek API failed: ${JSON.stringify(errorData)}`);
+      const errorText = await deepseekResponse.text();
+      console.error("🎯 Text Generator: DeepSeek API error:", {
+        status: deepseekResponse.status,
+        statusText: deepseekResponse.statusText,
+        error: errorText
+      });
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: `DeepSeek API failed (${deepseekResponse.status}): ${errorText}` 
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
     }
 
     const result = await deepseekResponse.json();
-    const generatedText = result.choices[0]?.message?.content || "";
+    const generatedText = result.choices?.[0]?.message?.content || "";
 
     if (!generatedText) {
-      throw new Error("No text generated from DeepSeek API");
+      console.error("🎯 Text Generator: No text generated from DeepSeek API");
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "No text generated from AI API" 
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
     }
 
     console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length);
@@ -94,7 +129,7 @@ serve(async (req) => {
     );
     
   } catch (error: any) {
-    console.error("🎯 Text Generator: Error:", {
+    console.error("🎯 Text Generator: Unexpected error:", {
       name: error.name,
       message: error.message,
       stack: error.stack
@@ -103,7 +138,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error.message || "Text generation failed" 
+        error: `Text generation failed: ${error.message}` 
       }),
       { 
         status: 500, 
@@ -140,35 +175,4 @@ Guidelines:
 - Focus only on text generation`;
 
   return basePrompt + guidelines;
-}
-
-// Simple message analysis for smart replies (completely isolated)
-function analyzeMessageSimple(message: string, language: string) {
-  const lowerText = message.toLowerCase();
-  
-  // Basic analysis without any task detection
-  const analysis = {
-    messageType: "message",
-    intent: "communication",
-    mainPoints: [message.substring(0, 100) + (message.length > 100 ? "..." : "")],
-    questionsAsked: [],
-    urgency: "medium",
-    tone: "neutral"
-  };
-
-  // Detect basic patterns
-  if (lowerText.includes("urgent") || lowerText.includes("asap")) {
-    analysis.urgency = "high";
-  }
-  
-  if (lowerText.includes("thank") || lowerText.includes("please")) {
-    analysis.tone = "polite";
-  }
-  
-  if (lowerText.includes("?")) {
-    analysis.intent = "inquiry";
-    analysis.questionsAsked = ["Question detected in message"];
-  }
-
-  return analysis;
 }
