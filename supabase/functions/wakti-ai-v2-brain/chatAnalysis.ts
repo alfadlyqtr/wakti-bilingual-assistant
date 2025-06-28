@@ -1,5 +1,6 @@
+
 /**
- * Enhanced chat analysis with full personality restoration for Wakti Edge Function
+ * Enhanced chat analysis with full personality integration for Wakti Edge Function
  */
 import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 
@@ -65,38 +66,8 @@ export function analyzeSmartModeIntent(message: string, activeTrigger: string, l
   };
 }
 
-// ENHANCED: System prompts with conversation awareness
-const getEnhancedSystemPrompt = (interactionType: string, language: string, customPrompt?: string) => {
-  const basePersonality = language === 'ar' 
-    ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود. كن مرحاً ومرحاً! استخدم النكات والتورية والمرح في ردودك. اجعل المحادثات ممتعة وجذابة. تذكر السياق والمواضيع السابقة في المحادثة واشر إليها بشكل طبيعي.'
-    : 'You are Wakti AI, a smart, helpful, and friendly assistant. Be funny and playful! Use jokes, puns, and humor in your responses. Make conversations enjoyable and engaging. Remember previous context and topics in the conversation and reference them naturally.';
-
-  let systemPrompt = customPrompt || basePersonality;
-
-  // ENHANCED: Add conversation-specific instructions
-  switch (interactionType) {
-    case 'personality_enhanced_conversation':
-      systemPrompt += language === 'ar' 
-        ? '\n\nكن متفاعلاً ومهتماً بالمحادثة. اطرح أسئلة متابعة ذكية واربط الردود بما قاله المستخدم سابقاً. اجعل المحادثة تبدو طبيعية ومتدفقة.'
-        : '\n\nBe interactive and engaged in the conversation. Ask smart follow-up questions and connect responses to what the user said previously. Make the conversation feel natural and flowing.';
-      break;
-    case 'personality_search_enhanced':
-      systemPrompt += language === 'ar' 
-        ? '\n\nاستخدم المعلومات المقدمة واربطها بسياق المحادثة السابقة إذا كان ذلك مناسباً.'
-        : '\n\nUse the provided information and connect it to previous conversation context when appropriate.';
-      break;
-    case 'hyper_fast_openai_chat':
-      systemPrompt = language === 'ar' 
-        ? 'أنت Wakti AI. كن مفيداً ومختصراً.'
-        : 'You are Wakti AI. Be helpful and concise.';
-      break;
-  }
-
-  return systemPrompt;
-};
-
-// ENHANCED: Build conversation-aware messages
-const buildConversationMessages = (
+// ENHANCED: Build personalized conversation messages with natural follow-up integration
+const buildPersonalizedMessages = (
   userMessage: string, 
   context: string | null, 
   recentMessages: any[], 
@@ -109,7 +80,7 @@ const buildConversationMessages = (
   if (context && interactionType.includes('enhanced')) {
     messages.push({
       role: 'system',
-      content: `Context: ${context}`
+      content: `Previous conversation context: ${context}`
     });
   } else if (context) {
     messages.push({
@@ -123,7 +94,7 @@ const buildConversationMessages = (
     const conversationHistory = recentMessages.slice(-5).map(msg => ({
       role: msg.role === 'user' ? 'user' : 'assistant',
       content: typeof msg.content === 'string' 
-        ? (interactionType.includes('enhanced') ? msg.content : msg.content.substring(0, 200))
+        ? msg.content
         : '[Message with attachment]'
     }));
     
@@ -136,7 +107,7 @@ const buildConversationMessages = (
   return messages;
 };
 
-// ENHANCED: Main processing function with conversation awareness
+// ENHANCED: Main processing function with integrated personal conversation flow
 export async function processWithBuddyChatAI(
   userMessage: string,
   context: string | null = null,
@@ -147,15 +118,25 @@ export async function processWithBuddyChatAI(
   interactionType: string = 'personality_enhanced_conversation',
   attachedFiles: any[] = [],
   customSystemPrompt: string = '',
-  maxTokens: number = 600
+  maxTokens: number = 500
 ): Promise<string> {
   
-  console.log(`⚡ ENHANCED CHAT: Processing ${interactionType} with ${maxTokens} tokens`);
+  console.log(`⚡ PERSONAL CHAT: Processing with personalization - ${interactionType} (${maxTokens} tokens)`);
   
-  // Build enhanced system prompt
-  const systemPrompt = getEnhancedSystemPrompt(interactionType, language, customSystemPrompt);
-  console.log(`⚡ ENHANCED SYSTEM PROMPT: ${systemPrompt.substring(0, 100)}...`);
-  console.log(`⚡ FULL SYSTEM PROMPT LENGTH: ${systemPrompt.length} characters`);
+  // ENHANCED: Use custom system prompt for personalization
+  let systemPrompt = customSystemPrompt;
+  if (!systemPrompt) {
+    systemPrompt = language === 'ar' 
+      ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود. كن متفاعلاً وشخصياً في المحادثة.'
+      : 'You are Wakti AI, a smart, helpful, and friendly assistant. Be interactive and personal in conversation.';
+  }
+
+  // ENHANCED: Add natural conversation flow instructions
+  systemPrompt += language === 'ar'
+    ? '\n\nاجعل المحادثة طبيعية ومتدفقة. إذا كان لديك سؤال متابعة، أدرجه في نهاية ردك بشكل طبيعي.'
+    : '\n\nMake conversation natural and flowing. If you have a follow-up question, include it naturally at the end of your response.';
+  
+  console.log(`⚡ PERSONALIZED SYSTEM PROMPT: ${systemPrompt.substring(0, 100)}...`);
   
   // ENHANCED: Build context with conversation awareness
   let enhancedContext = context;
@@ -175,7 +156,7 @@ export async function processWithBuddyChatAI(
   }
 
   // Build conversation messages
-  const messages = buildConversationMessages(
+  const messages = buildPersonalizedMessages(
     userMessage,
     enhancedContext,
     recentMessages,
@@ -186,19 +167,17 @@ export async function processWithBuddyChatAI(
   try {
     let response;
     
-    // ENHANCED: Choose AI provider based on interaction type
-    if (OPENAI_API_KEY && (interactionType.includes('enhanced') || interactionType.includes('openai'))) {
-      console.log(`⚡ ENHANCED: Using OpenAI for ${interactionType} with ${messages.length} messages`);
+    // ENHANCED: Choose AI provider based on interaction type - prioritize OpenAI for personality
+    if (OPENAI_API_KEY) {
+      console.log(`⚡ PERSONAL: Using OpenAI for personalized conversation with ${messages.length} messages`);
       
-      // Enhanced temperature based on interaction type
-      let temperature = 0.7;
-      if (interactionType.includes('personality') || interactionType.includes('enhanced')) {
-        temperature = 0.8;
-      } else if (interactionType.includes('hyper_fast')) {
-        temperature = 0.5;
+      // Enhanced temperature for more personality
+      let temperature = 0.8; // Higher for more personality
+      if (interactionType.includes('hyper_fast')) {
+        temperature = 0.6;
       }
       
-      console.log(`⚡ TEMPERATURE: ${temperature} for ${interactionType}`);
+      console.log(`⚡ TEMPERATURE: ${temperature} for personalized conversation`);
       
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -213,11 +192,11 @@ export async function processWithBuddyChatAI(
           temperature: temperature,
           top_p: 0.9,
           frequency_penalty: 0.1,
-          presence_penalty: 0.1
+          presence_penalty: 0.2 // Higher for more conversational variety
         }),
       });
     } else {
-      console.log(`⚡ ENHANCED: Using DeepSeek for ${interactionType} with ${messages.length} messages`);
+      console.log(`⚡ PERSONAL: Using DeepSeek for personalized conversation with ${messages.length} messages`);
       
       response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
@@ -229,7 +208,7 @@ export async function processWithBuddyChatAI(
           model: 'deepseek-chat',
           messages: messages,
           max_tokens: maxTokens,
-          temperature: interactionType.includes('enhanced') ? 0.8 : 0.7,
+          temperature: 0.8,
           top_p: 0.9
         }),
       });
@@ -242,17 +221,17 @@ export async function processWithBuddyChatAI(
     const data = await response.json();
     const aiResponse = data.choices[0].message.content;
     
-    console.log(`⚡ AI RESPONSE LENGTH: ${aiResponse.length} characters`);
+    console.log(`⚡ PERSONAL AI RESPONSE LENGTH: ${aiResponse.length} characters`);
     
     return aiResponse;
     
   } catch (error) {
-    console.error('⚡ ENHANCED CHAT ERROR:', error);
+    console.error('⚡ PERSONAL CHAT ERROR:', error);
     
-    // Fallback response with conversation awareness
+    // Fallback response with personalization
     const fallbackResponse = language === 'ar' 
-      ? 'عذراً، حدث خطأ في المعالجة. يمكنك المحاولة مرة أخرى أو طرح سؤال آخر.'
-      : 'Sorry, there was a processing error. You can try again or ask another question.';
+      ? 'عذراً، حدث خطأ مؤقت. يمكنك المحاولة مرة أخرى أو طرح سؤال آخر.'
+      : 'Sorry, there was a temporary error. You can try again or ask another question.';
     
     return fallbackResponse;
   }

@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { AIResponseCache } from './AIResponseCache';
 
@@ -15,8 +16,6 @@ export interface AIMessage {
   browsingUsed?: boolean;
   browsingData?: any;
   isTextGenerated?: boolean;
-  followUpQuestion?: string; // ENHANCED: New field for follow-up questions
-  conversationTopics?: string[]; // ENHANCED: Topics discussed in the conversation
 }
 
 export interface AIConversation {
@@ -188,6 +187,7 @@ class LocalMemoryCache {
   }
 }
 
+// ENHANCED: Personal touch integration
 const PERSONAL_TOUCH_KEY = "wakti_personal_touch";
 
 interface PersonalTouchData {
@@ -226,152 +226,11 @@ class PersonalTouchCache {
   }
 }
 
-// ENHANCED: Build full system prompt with complete personality instructions
-function buildPersonalizedSystemPrompt(data: PersonalTouchData | null, language: string = 'en'): string {
-  let basePrompt = language === 'ar' 
-    ? "أنت وقتي AI، مساعد ذكي ومفيد وودود."
-    : "You are Wakti AI, a smart, helpful, and friendly assistant.";
-
-  if (!data) return basePrompt;
-
-  // Add nickname with personality
-  if (data.nickname) {
-    basePrompt += language === 'ar' 
-      ? ` اسم المستخدم "${data.nickname}". كن شخصياً ومألوفاً معهم.`
-      : ` Call the user "${data.nickname}". Be personal and familiar with them.`;
-  }
-  
-  // ENHANCED: Full tone implementation with specific instructions
-  if (data.tone && data.tone !== 'neutral') {
-    switch (data.tone) {
-      case 'funny':
-        basePrompt += language === 'ar'
-          ? " كن مرحاً ولطيفاً! استخدم النكات والرموز التعبيرية 😄🎉. اجعل المحادثة ممتعة ومسلية. اضف الدعابة والتعليقات الطريفة."
-          : " Be funny and playful! Use jokes, puns, and emojis 😄🎉. Make conversations entertaining and light-hearted. Add humor and witty comments wherever appropriate.";
-        break;
-      case 'casual':
-        basePrompt += language === 'ar'
-          ? " كن ودوداً وعادياً! استخدم الرموز التعبيرية 😊 واللغة المألوفة. تحدث كما لو كنت صديق مقرب."
-          : " Be casual and friendly! Use emojis 😊, contractions, and conversational language. Talk like you're a close friend having a relaxed chat.";
-        break;
-      case 'encouraging':
-        basePrompt += language === 'ar'
-          ? " كن محفزاً ومشجعاً! استخدم عبارات إيجابية والرموز التعبيرية المحفزة 💪✨. ادعم المستخدم وشجعه."
-          : " Be encouraging and motivating! Use positive language, supportive phrases, and motivating emojis 💪✨. Uplift and inspire the user in every response.";
-        break;
-      case 'serious':
-        basePrompt += language === 'ar'
-          ? " كن جدياً ومهنياً في ردودك. استخدم لغة رسمية ومناسبة."
-          : " Be serious and professional in your responses. Use formal language and maintain a professional tone.";
-        break;
-    }
-  }
-  
-  // ENHANCED: Full style implementation with detailed instructions
-  if (data.style) {
-    switch (data.style) {
-      case 'short answers':
-        basePrompt += language === 'ar'
-          ? " اجعل إجاباتك مختصرة ومباشرة. لا تزد عن 2-3 جمل إلا إذا كان ضرورياً."
-          : " Keep your answers brief and to the point. Stick to 2-3 sentences unless more detail is absolutely necessary.";
-        break;
-      case 'bullet points':
-        basePrompt += language === 'ar'
-          ? " استخدم النقاط والقوائم لتنظيم المعلومات بوضوح. قسم الإجابات إلى نقاط منطقية."
-          : " Use bullet points and lists to organize information clearly. Break down responses into logical, easy-to-read points.";
-        break;
-      case 'detailed':
-        basePrompt += language === 'ar'
-          ? " قدم إجابات مفصلة وشاملة مع أمثلة وتوضيحات وافية. اشرح المفاهيم بعمق وأضف السياق المناسب."
-          : " Provide detailed, comprehensive answers with examples, explanations, and context. Explain concepts thoroughly and add relevant background information.";
-        break;
-      case 'step-by-step':
-        basePrompt += language === 'ar'
-          ? " قسم إجاباتك إلى خطوات واضحة ومرقمة. اجعل كل خطوة واضحة ومفهومة."
-          : " Break down your responses into clear, numbered steps. Make each step actionable and easy to understand.";
-        break;
-    }
-  }
-  
-  // Add custom instruction with full context
-  if (data.instruction && data.instruction.trim()) {
-    basePrompt += language === 'ar'
-      ? ` تعليمات إضافية مهمة: ${data.instruction}`
-      : ` Important additional instruction: ${data.instruction}`;
-  }
-  
-  return basePrompt;
-}
-
-// ENHANCED: Better token allocation based on style and tone
-function getPersonalizedTokenLimits(style: string, tone: string): number {
-  const baseTokens = {
-    'short answers': 250,    // Increased for personality
-    'bullet points': 400,    // Increased for formatting
-    'detailed': 700,         // Significantly increased
-    'step-by-step': 500,     // Increased for explanations
-    'casual': 450,           // Increased for conversation
-    'neutral': 400
-  };
-  
-  let tokens = baseTokens[style] || 450;
-  
-  // Add extra tokens for personality-rich tones
-  if (tone === 'funny') {
-    tokens += 150; // Extra space for jokes and personality
-  } else if (tone === 'casual') {
-    tokens += 100; // Extra space for friendly conversation
-  } else if (tone === 'encouraging') {
-    tokens += 100; // Extra space for motivational content
-  }
-  
-  return tokens;
-}
-
-// ENHANCED: Better simple query detection - only truly simple queries
-function isSimpleQuery(message: string): boolean {
-  const trimmed = message.trim().toLowerCase();
-  
-  // Only very basic greetings and acknowledgments
-  const simplePatterns = [
-    /^(hi|hello|hey)$/,
-    /^(thanks?|thank you)$/,
-    /^(yes|no|ok|okay)$/,
-    /^(bye|goodbye)$/,
-    /^(مرحبا|أهلا|شكرا|نعم|لا|وداعا)$/
-  ];
-  
-  return simplePatterns.some(pattern => pattern.test(trimmed)) && trimmed.length < 10;
-}
-
-// ENHANCED: Better task creation intent detection
-function hasTaskCreationIntent(message: string): boolean {
-  const taskKeywords = [
-    // English patterns
-    'create task', 'add task', 'make task', 'new task',
-    'create reminder', 'add reminder', 'set reminder', 'remind me',
-    'schedule', 'appointment', 'meeting',
-    'tomorrow', 'next week', 'at 2pm', 'at 3:00',
-    'shopping', 'buy', 'pickup', 'call',
-    
-    // Arabic patterns
-    'أنشئ مهمة', 'أضف مهمة', 'أنشئ تذكير', 'ذكرني',
-    'موعد', 'اجتماع', 'غدا', 'بكرة'
-  ];
-  
-  const lowerMessage = message.toLowerCase();
-  return taskKeywords.some(keyword => lowerMessage.includes(keyword)) ||
-         // Detect time patterns
-         /\d{1,2}:\d{2}|(\d{1,2}\s?(am|pm))/i.test(message) ||
-         // Detect date patterns
-         /(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i.test(message);
-}
-
 // FIXED: Request debouncer with proper typing
 class RequestDebouncer {
   private static timers = new Map<string, ReturnType<typeof setTimeout>>();
   
-  static debounce(key: string, fn: Function, delay: number = 300) { // Reduced delay
+  static debounce(key: string, fn: Function, delay: number = 200) { // Reduced delay for speed
     const existingTimer = this.timers.get(key);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -392,7 +251,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ENHANCED: Restored full personality and task creation
+  // ENHANCED: Fast personalized message sending with integrated personal touch
   static async sendMessage(
     message: string,
     userId?: string,
@@ -402,15 +261,19 @@ export class WaktiAIV2ServiceClass {
     sessionMessages: AIMessage[] = [],
     streamResponse: boolean = false,
     activeTrigger: string = 'chat',
-    conversationSummary: string = '', // ENHANCED: Better conversation summary handling
+    conversationSummary: string = '',
     attachedFiles: any[] = []
   ): Promise<any> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
 
+      // ENHANCED: Load personal touch settings for personalization
+      const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
+      console.log('🎯 Personal Touch Data:', personalTouch);
+
       // ENHANCED: Build enhanced recent messages for better context
-      const recentMessages = sessionMessages.slice(-7).map(msg => ({
+      const recentMessages = sessionMessages.slice(-6).map(msg => ({
         role: msg.role,
         content: msg.content,
         timestamp: msg.timestamp,
@@ -418,11 +281,93 @@ export class WaktiAIV2ServiceClass {
         attachedFiles: msg.attachedFiles
       }));
 
-      // ENHANCED: Determine user preferences from session messages
-      const userStyle = this.determineUserStyle(sessionMessages);
-      const userTone = this.determineUserTone(sessionMessages);
-      
-      console.log(`⚡ ENHANCED SERVICE: Sending with style: ${userStyle}, tone: ${userTone}`);
+      // ENHANCED: Build personalized system prompt
+      let customSystemPrompt = '';
+      if (personalTouch) {
+        const { nickname, tone, style, instruction } = personalTouch;
+        
+        customSystemPrompt = language === 'ar' 
+          ? `أنت Wakti AI، مساعد ذكي ومفيد وودود.`
+          : `You are Wakti AI, a smart, helpful, and friendly assistant.`;
+
+        // Add personalization
+        if (nickname) {
+          customSystemPrompt += language === 'ar' 
+            ? ` اسم المستخدم "${nickname}". استخدم اسمهم في المحادثة بشكل طبيعي.`
+            : ` The user's name is "${nickname}". Use their name naturally in conversation.`;
+        }
+
+        // Apply tone with detailed personality instructions
+        if (tone && tone !== 'neutral') {
+          switch (tone) {
+            case 'funny':
+              customSystemPrompt += language === 'ar'
+                ? ' كن مرحاً ولطيفاً! استخدم النكات والرموز التعبيرية. اجعل المحادثة ممتعة ومسلية.'
+                : ' Be funny and playful! Use jokes, puns, and emojis. Make conversations entertaining and light-hearted.';
+              break;
+            case 'casual':
+              customSystemPrompt += language === 'ar'
+                ? ' كن ودوداً وعادياً! استخدم الرموز التعبيرية واللغة المألوفة. تحدث كصديق مقرب.'
+                : ' Be casual and friendly! Use emojis and conversational language. Talk like you\'re a close friend.';
+              break;
+            case 'encouraging':
+              customSystemPrompt += language === 'ar'
+                ? ' كن محفزاً ومشجعاً! استخدم عبارات إيجابية والرموز التعبيرية المحفزة. ادعم المستخدم وشجعه.'
+                : ' Be encouraging and motivating! Use positive language and supportive phrases. Uplift and inspire the user.';
+              break;
+            case 'serious':
+              customSystemPrompt += language === 'ar'
+                ? ' كن جدياً ومهنياً في ردودك. استخدم لغة رسمية ومناسبة.'
+                : ' Be serious and professional in your responses. Use formal language and maintain professionalism.';
+              break;
+          }
+        }
+
+        // Apply reply style
+        if (style) {
+          switch (style) {
+            case 'short answers':
+              customSystemPrompt += language === 'ar'
+                ? ' اجعل إجاباتك مختصرة ومباشرة. لا تزد عن 2-3 جمل.'
+                : ' Keep your answers brief and to the point. Stick to 2-3 sentences unless more detail is needed.';
+              break;
+            case 'bullet points':
+              customSystemPrompt += language === 'ar'
+                ? ' استخدم النقاط والقوائم لتنظيم المعلومات بوضوح.'
+                : ' Use bullet points and lists to organize information clearly.';
+              break;
+            case 'detailed':
+              customSystemPrompt += language === 'ar'
+                ? ' قدم إجابات مفصلة وشاملة مع أمثلة وتوضيحات.'
+                : ' Provide detailed, comprehensive answers with examples and explanations.';
+              break;
+            case 'step-by-step':
+              customSystemPrompt += language === 'ar'
+                ? ' قسم إجاباتك إلى خطوات واضحة ومرقمة.'
+                : ' Break down your responses into clear, numbered steps.';
+              break;
+          }
+        }
+
+        // Add custom instruction
+        if (instruction && instruction.trim()) {
+          customSystemPrompt += language === 'ar'
+            ? ` تعليمات إضافية: ${instruction}`
+            : ` Additional instruction: ${instruction}`;
+        }
+
+        console.log('🎯 Personalized System Prompt:', customSystemPrompt);
+      }
+
+      // ENHANCED: Determine optimal token limits based on personalization
+      let maxTokens = 500; // Default fast response
+      if (personalTouch?.style === 'detailed') {
+        maxTokens = 700;
+      } else if (personalTouch?.style === 'short answers') {
+        maxTokens = 250;
+      }
+
+      console.log(`⚡ PERSONALIZED SERVICE: Sending with personalization - Nickname: ${personalTouch?.nickname}, Tone: ${personalTouch?.tone}, Style: ${personalTouch?.style}`);
 
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
@@ -433,16 +378,16 @@ export class WaktiAIV2ServiceClass {
           inputType,
           activeTrigger,
           attachedFiles,
-          conversationSummary, // Enhanced summary
-          recentMessages, // Enhanced message history
-          customSystemPrompt: '',
-          maxTokens: 850, // Increased for enhanced responses
-          userStyle,
-          userTone,
-          speedOptimized: false,
+          conversationSummary,
+          recentMessages,
+          customSystemPrompt, // Pass personalized system prompt
+          maxTokens,
+          userStyle: personalTouch?.style || 'balanced',
+          userTone: personalTouch?.tone || 'neutral',
+          speedOptimized: true, // Always optimized for speed
           aggressiveOptimization: false,
           hasTaskIntent: false,
-          personalityEnabled: true, // Always enabled for enhanced conversation
+          personalityEnabled: true,
           enableTaskCreation: true,
           enablePersonality: true
         }
@@ -454,38 +399,6 @@ export class WaktiAIV2ServiceClass {
       console.error('Enhanced send message error:', error);
       throw error;
     }
-  }
-
-  // ENHANCED: Determine user communication style from conversation history
-  private static determineUserStyle(messages: AIMessage[]): 'short answers' | 'detailed' | 'balanced' {
-    if (messages.length < 3) return 'detailed';
-    
-    const userMessages = messages.filter(m => m.role === 'user');
-    const avgLength = userMessages.reduce((sum, msg) => sum + msg.content.length, 0) / userMessages.length;
-    
-    if (avgLength < 50) return 'short answers';
-    if (avgLength > 150) return 'detailed';
-    return 'balanced';
-  }
-
-  // ENHANCED: Determine user tone from conversation history
-  private static determineUserTone(messages: AIMessage[]): 'neutral' | 'funny' | 'casual' | 'encouraging' {
-    if (messages.length < 2) return 'neutral';
-    
-    const userMessages = messages.filter(m => m.role === 'user').slice(-3);
-    const text = userMessages.map(m => m.content.toLowerCase()).join(' ');
-    
-    if (text.includes('haha') || text.includes('lol') || text.includes('😄') || text.includes('funny')) {
-      return 'funny';
-    }
-    if (text.includes('thanks') || text.includes('great') || text.includes('awesome') || text.includes('👍')) {
-      return 'encouraging';
-    }
-    if (text.includes('hey') || text.includes('sup') || text.includes('whats up')) {
-      return 'casual';
-    }
-    
-    return 'neutral';
   }
 
   // Enhanced file processing with document support
