@@ -16,7 +16,9 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🎯 Text Generator: Processing request");
+    console.log("🎯 Text Generator: Function called successfully - Processing request");
+    console.log("🎯 Text Generator: Request method:", req.method);
+    console.log("🎯 Text Generator: Request headers:", Object.fromEntries(req.headers.entries()));
     
     if (!DEEPSEEK_API_KEY) {
       console.error("🚨 Text Generator: DEEPSEEK_API_KEY not found in environment");
@@ -32,10 +34,23 @@ serve(async (req) => {
       );
     }
 
-    const requestBody = await req.json().catch(() => ({}));
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log("🎯 Text Generator: Request body parsed successfully");
+    } catch (parseError) {
+      console.error("🎯 Text Generator: Failed to parse request body:", parseError);
+      requestBody = {};
+    }
+
     const { prompt, mode, language, messageAnalysis } = requestBody;
 
-    console.log("🎯 Request body:", { prompt: prompt?.substring(0, 100) + "...", mode, language });
+    console.log("🎯 Request details:", { 
+      promptLength: prompt?.length || 0, 
+      mode, 
+      language,
+      hasMessageAnalysis: !!messageAnalysis
+    });
 
     if (!prompt) {
       console.error("🎯 Text Generator: Missing prompt in request");
@@ -59,6 +74,8 @@ serve(async (req) => {
     const systemPrompt = getSystemPrompt(language);
     
     const startTime = Date.now();
+    
+    console.log("🎯 Text Generator: Making request to DeepSeek API...");
     const deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -78,6 +95,7 @@ serve(async (req) => {
 
     const duration = Date.now() - startTime;
     console.log(`🎯 Text Generator: DeepSeek request completed in ${duration}ms`);
+    console.log(`🎯 Text Generator: DeepSeek response status: ${deepseekResponse.status}`);
 
     if (!deepseekResponse.ok) {
       const errorText = await deepseekResponse.text();
@@ -100,10 +118,13 @@ serve(async (req) => {
     }
 
     const result = await deepseekResponse.json();
+    console.log("🎯 Text Generator: DeepSeek response received successfully");
+    
     const generatedText = result.choices?.[0]?.message?.content || "";
 
     if (!generatedText) {
       console.error("🎯 Text Generator: No text generated from DeepSeek API");
+      console.error("🎯 Text Generator: DeepSeek response structure:", JSON.stringify(result, null, 2));
       return new Response(
         JSON.stringify({ 
           success: false,
