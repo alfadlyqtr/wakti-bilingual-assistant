@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -102,10 +103,9 @@ serve(async (req) => {
 
     console.log(`🚀 ULTRA-FAST: User ${user.id} | Personal Touch: ${!!personalTouch} | Speed Mode: ${speedOptimized} | Aggressive: ${aggressiveOptimization}`);
 
-    // ENHANCED: Process attached files with optimized URL handling for Vision
+    // ULTRA-FAST: Process attached files with minimal overhead (ENHANCED for Vision)
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`🔍 PROCESSING FILES: ${attachedFiles.length} files received`);
       processedFiles = await processAttachedFilesOptimized(attachedFiles);
       console.log(`🚀 ULTRA-FAST: Processed ${processedFiles.length} files (Vision-ready)`);
     }
@@ -353,51 +353,45 @@ serve(async (req) => {
   }
 });
 
-// ENHANCED: Process files with proper URL handling for Vision API
+// HYPER-OPTIMIZED: Process files with URL handling for Vision API
 async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[]> {
   if (!attachedFiles || attachedFiles.length === 0) return [];
 
   return attachedFiles.map(file => {
-    console.log(`🔍 PROCESSING FILE:`, {
-      type: file.type,
-      hasPublicUrl: !!file.publicUrl,
-      hasUrl: !!file.url,
-      optimized: file.optimized
-    });
-
     // ENHANCED: For Vision API, we need the public URL
     if (file.type && file.type.startsWith('image/')) {
-      // Use optimized public URL first (best for Vision)
+      // If file is optimized with public URL, use it directly for Vision
       if (file.optimized && file.publicUrl) {
         console.log("🔍 VISION: Using optimized public URL for Vision API");
         return {
-          type: file.type,
+          type: 'image',
           publicUrl: file.publicUrl,
-          url: file.publicUrl, // Use publicUrl as the main URL for Vision
           optimized: true,
-          name: file.name,
-          size: file.size
+          ...file
         };
       }
       
-      // Fallback to regular URL
+      // If we have a regular URL, use it
       if (file.url) {
         console.log("🔍 VISION: Using regular URL for Vision API");
         return {
-          type: file.type,
+          type: 'image',
           url: file.url,
-          name: file.name,
-          size: file.size
+          ...file
         };
       }
     }
     
-    // For non-Vision files, keep existing structure
-    return {
-      type: file.type,
-      url: file.url || file.publicUrl,
-      name: file.name,
-      size: file.size
-    };
+    // Fallback to existing Base64 processing for non-Vision files
+    if (file.content) {
+      return {
+        type: 'image_url',
+        image_url: {
+          url: `data:${file.type};base64,${file.content}`
+        }
+      };
+    }
+    
+    return null;
   }).filter(Boolean);
 }

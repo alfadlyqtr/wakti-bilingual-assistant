@@ -11,7 +11,6 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
-import { useOptimizedFileUpload, OptimizedUploadedFile } from '@/hooks/useOptimizedFileUpload';
 
 // Debounced request handler
 const useDebounceCallback = (callback: Function, delay: number) => {
@@ -176,8 +175,6 @@ const WaktiAIV2 = () => {
     }
   }, [showConversations, conversations.length]);
 
-  const { isUploading, uploadedFiles, uploadFiles, removeFile, clearFiles } = useOptimizedFileUpload();
-
   const handleTaskConfirmation = async (taskData: any) => {
     setTaskConfirmationLoading(true);
     try {
@@ -311,7 +308,7 @@ const WaktiAIV2 = () => {
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
-    attachedFiles?: OptimizedUploadedFile[]
+    attachedFiles?: any[]
   ) => {
     if ((!message.trim() && !attachedFiles?.length) || isLoading || requestInProgress) return;
 
@@ -337,16 +334,6 @@ const WaktiAIV2 = () => {
         incrementTranslationCount().catch(e => console.warn('Quota check failed:', e));
       }
 
-      // ENHANCED: Format attached files for AI processing
-      const formattedFiles = attachedFiles?.map(file => ({
-        type: file.type,
-        url: file.url,
-        publicUrl: file.publicUrl,
-        name: file.name,
-        size: file.size,
-        optimized: true
-      })) || [];
-
       // ULTRA-FAST: Create user message immediately with instant UI update
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
@@ -354,14 +341,11 @@ const WaktiAIV2 = () => {
         content: message || '[File attachment]',
         timestamp: new Date(),
         inputType,
-        attachedFiles: formattedFiles
+        attachedFiles: attachedFiles || []
       };
 
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
-
-      // Clear uploaded files after adding to message
-      clearFiles();
 
       // ENHANCED: Timeout-protected API call with FULL personalization
       const response = await Promise.race([
@@ -375,7 +359,7 @@ const WaktiAIV2 = () => {
           false,
           activeTrigger,
           '', // Let service handle conversation summary
-          formattedFiles
+          attachedFiles || []
         ),
         // Timeout protection
         new Promise((_, reject) => {
@@ -676,10 +660,6 @@ const WaktiAIV2 = () => {
           onClearChat={handleClearChat}
           onOpenPlusDrawer={handleOpenPlusDrawer}
           activeTrigger={activeTrigger}
-          uploadedFiles={uploadedFiles}
-          onUploadFiles={uploadFiles}
-          onRemoveFile={removeFile}
-          isUploading={isUploading}
         />
       </div>
       <ChatDrawers

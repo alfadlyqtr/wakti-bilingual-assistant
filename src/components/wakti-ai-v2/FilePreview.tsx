@@ -4,10 +4,9 @@ import { Button } from '@/components/ui/button';
 import { X, Image, FileText, Eye, Download } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { UploadedFile } from '@/hooks/useFileUpload';
-import { OptimizedUploadedFile } from '@/hooks/useOptimizedFileUpload';
 
 interface FilePreviewProps {
-  file: UploadedFile | OptimizedUploadedFile;
+  file: UploadedFile;
   index: number;
   onRemove: (index: number) => void;
   showRemoveButton?: boolean;
@@ -27,10 +26,6 @@ export function FilePreview({
   const isPDF = file.type === 'application/pdf';
   const isText = file.type === 'text/plain';
   
-  // Handle both optimized and regular uploads
-  const imageUrl = 'publicUrl' in file ? file.publicUrl : file.url;
-  const thumbnailUrl = 'thumbnail' in file ? file.thumbnail : ('preview' in file ? file.preview : imageUrl);
-  
   const sizeClasses = {
     sm: 'w-16 h-16',
     md: 'w-20 h-20',
@@ -47,7 +42,7 @@ export function FilePreview({
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(imageUrl);
+      const response = await fetch(file.url);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -68,18 +63,12 @@ export function FilePreview({
       <div className="relative group">
         <div className={`${sizeClasses[size]} border-2 border-border rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center relative`}>
           {/* Image Preview */}
-          {isImage && thumbnailUrl && (
+          {isImage && (file.thumbnail || file.preview) && (
             <img
-              src={thumbnailUrl}
+              src={file.thumbnail || file.preview}
               alt={file.name}
               className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => setShowModal(true)}
-              onError={(e) => {
-                // Fallback to main URL if thumbnail fails
-                if (e.currentTarget.src !== imageUrl) {
-                  e.currentTarget.src = imageUrl;
-                }
-              }}
             />
           )}
           
@@ -171,7 +160,7 @@ export function FilePreview({
             </DialogHeader>
             <div className="flex items-center justify-center">
               <img
-                src={imageUrl}
+                src={file.url}
                 alt={file.name}
                 className="max-w-full max-h-[70vh] object-contain"
               />
