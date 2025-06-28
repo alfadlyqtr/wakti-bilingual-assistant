@@ -1,6 +1,3 @@
-
-import { PersonalizationProcessor } from '../../../src/services/PersonalizationProcessor.ts';
-
 const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
@@ -10,6 +7,529 @@ interface PersonalTouchData {
   style: string;
   instruction: string;
   aiNickname?: string;
+}
+
+// ENHANCED: PersonalizationProcessor logic moved directly into edge function
+class PersonalizationProcessor {
+  /**
+   * ENHANCED: Main post-processing function with AGGRESSIVE personalization enforcement
+   */
+  static enhanceResponse(
+    originalResponse: string,
+    options: { personalTouch: PersonalTouchData | null; language: string; }
+  ): string {
+    if (!options.personalTouch) {
+      return originalResponse;
+    }
+
+    console.log('🎨 PERSONALIZATION PROCESSOR: Starting AGGRESSIVE enhancement and enforcement');
+
+    // STEP 1: Apply AGGRESSIVE enforcement to ensure response matches user preferences
+    const enforcedResponse = PersonalizationEnforcer.enforcePersonalization(
+      originalResponse,
+      {
+        personalTouch: options.personalTouch,
+        language: options.language,
+        originalResponse
+      }
+    );
+
+    // STEP 2: Apply additional AGGRESSIVE enhancements
+    let enhancedResponse = enforcedResponse;
+
+    // AGGRESSIVE: Apply custom instructions if provided
+    if (options.personalTouch.instruction && options.personalTouch.instruction.trim()) {
+      enhancedResponse = this.applyCustomInstructions(
+        enhancedResponse,
+        options.personalTouch.instruction,
+        options.language
+      );
+      console.log('📝 CUSTOM INSTRUCTION: AGGRESSIVELY applied user custom instruction');
+    }
+
+    // AGGRESSIVE: Final personality double-check
+    enhancedResponse = this.finalPersonalityCheck(
+      enhancedResponse,
+      options.personalTouch,
+      options.language
+    );
+
+    console.log('✅ PERSONALIZATION PROCESSOR: AGGRESSIVELY completed', {
+      originalLength: originalResponse.length,
+      finalLength: enhancedResponse.length,
+      enforcementApplied: enforcedResponse !== originalResponse,
+      majorChanges: enhancedResponse.length > originalResponse.length * 1.2
+    });
+
+    return enhancedResponse;
+  }
+
+  /**
+   * AGGRESSIVE: Apply custom instructions to the response
+   */
+  private static applyCustomInstructions(
+    response: string,
+    instruction: string,
+    language: string
+  ): string {
+    // If instruction mentions "steps" or "break down", enforce step format
+    if (instruction.toLowerCase().includes('step') || instruction.toLowerCase().includes('break')) {
+      const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 10);
+      if (sentences.length > 1) {
+        const stepPrefix = language === 'ar' ? 'خطوة' : 'Step';
+        return sentences.map((step, index) => 
+          `${stepPrefix} ${index + 1}: ${step.trim()}`
+        ).join('\n\n');
+      }
+    }
+
+    // If instruction mentions "simple" or "baby steps", make it simpler
+    if (instruction.toLowerCase().includes('simple') || instruction.toLowerCase().includes('baby')) {
+      return response.replace(/\b\w{8,}\b/g, (word) => {
+        // Replace complex words with simpler alternatives
+        const simpleReplacements: { [key: string]: string } = {
+          'complicated': 'hard',
+          'sophisticated': 'smart',
+          'implementation': 'setup',
+          'configuration': 'setting',
+          'optimization': 'making better'
+        };
+        return simpleReplacements[word.toLowerCase()] || word;
+      });
+    }
+
+    return response;
+  }
+
+  /**
+   * AGGRESSIVE: Final personality enforcement check
+   */
+  private static finalPersonalityCheck(
+    response: string,
+    personalTouch: PersonalTouchData,
+    language: string
+  ): string {
+    let finalResponse = response;
+
+    // AGGRESSIVE TONE CHECK
+    switch (personalTouch.tone) {
+      case 'funny':
+        if (!/[😄😆🤪🎉😊🙃]|haha|ههه|funny|joke|lol/i.test(finalResponse)) {
+          const funnyAddition = language === 'ar' 
+            ? ' 😄 هههه، هذا ممتع!'
+            : ' 😄 Haha, this is fun!';
+          finalResponse += funnyAddition;
+        }
+        break;
+
+      case 'casual':
+        if (!/[😊👍✨💫🙂]|awesome|cool|nice|يلا|طيب|حلو/i.test(finalResponse)) {
+          const casualAddition = language === 'ar' 
+            ? ' 😊 يلا، هيك أحسن!'
+            : ' 😊 Awesome, that\'s better!';
+          finalResponse += casualAddition;
+        }
+        break;
+
+      case 'encouraging':
+        if (!/[💪🌟✨🚀👏🎯]|you got|amazing|great|excellent|تستطيع|رائع|ممتاز|عظيم/i.test(finalResponse)) {
+          const encouragingAddition = language === 'ar' 
+            ? ' 💪 أنت تستطيع فعل هذا! رائع!'
+            : ' 💪 You got this! Amazing work!';
+          finalResponse += encouragingAddition;
+        }
+        break;
+    }
+
+    // AGGRESSIVE NICKNAME CHECK
+    if (personalTouch.nickname && personalTouch.nickname.trim() && finalResponse.length > 100) {
+      if (!finalResponse.toLowerCase().includes(personalTouch.nickname.toLowerCase())) {
+        // 70% chance to add nickname for longer responses
+        if (Math.random() < 0.7) {
+          const greetings = language === 'ar' ? [
+            `${personalTouch.nickname}، `,
+            `أهلاً ${personalTouch.nickname}! `,
+            `استمع ${personalTouch.nickname}، `
+          ] : [
+            `${personalTouch.nickname}, `,
+            `Hey ${personalTouch.nickname}! `,
+            `Listen ${personalTouch.nickname}, `
+          ];
+          const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+          finalResponse = randomGreeting + finalResponse;
+        }
+      }
+    }
+
+    return finalResponse;
+  }
+}
+
+// ENHANCED: PersonalizationEnforcer logic moved directly into edge function
+class PersonalizationEnforcer {
+  /**
+   * ENHANCED: Main enforcement function with AGGRESSIVE personalization
+   */
+  static enforcePersonalization(
+    originalResponse: string,
+    options: { personalTouch: PersonalTouchData | null; language: string; originalResponse: string; }
+  ): string {
+    if (!options.personalTouch) {
+      return originalResponse;
+    }
+
+    let enforcedResponse = originalResponse;
+    const { personalTouch, language } = options;
+
+    console.log('🎯 PERSONALIZATION ENFORCER: Starting AGGRESSIVE enforcement', {
+      tone: personalTouch.tone,
+      style: personalTouch.style,
+      originalLength: originalResponse.length
+    });
+
+    // 1. AGGRESSIVE: Enforce style preferences (length, format)
+    enforcedResponse = this.enforceStylePreferences(
+      enforcedResponse,
+      personalTouch.style,
+      language
+    );
+
+    // 2. AGGRESSIVE: Enforce tone consistency
+    enforcedResponse = this.enforceToneConsistency(
+      enforcedResponse,
+      personalTouch.tone,
+      language
+    );
+
+    // 3. AGGRESSIVE: Add nickname usage
+    enforcedResponse = this.enforceNicknameUsage(
+      enforcedResponse,
+      personalTouch.nickname,
+      language
+    );
+
+    // 4. AGGRESSIVE: Add AI nickname signature
+    enforcedResponse = this.enforceAINickname(
+      enforcedResponse,
+      personalTouch.aiNickname,
+      language
+    );
+
+    console.log('✅ PERSONALIZATION ENFORCER: AGGRESSIVELY completed', {
+      originalLength: originalResponse.length,
+      enforcedLength: enforcedResponse.length,
+      changesApplied: enforcedResponse !== originalResponse
+    });
+
+    return enforcedResponse;
+  }
+
+  /**
+   * AGGRESSIVE: Enforce style preferences (short answers, bullet points, etc.)
+   */
+  private static enforceStylePreferences(
+    response: string,
+    style: string,
+    language: string
+  ): string {
+    switch (style) {
+      case 'short answers':
+        return this.enforceShortAnswers(response, language);
+      case 'bullet points':
+        return this.enforceBulletPoints(response, language);
+      case 'step-by-step':
+        return this.enforceStepByStep(response, language);
+      case 'detailed':
+        // Detailed responses are kept as-is
+        return response;
+      default:
+        return response;
+    }
+  }
+
+  /**
+   * AGGRESSIVE: Enforce short answer preference
+   */
+  private static enforceShortAnswers(response: string, language: string): string {
+    // If response is already short (< 100 chars), keep it
+    if (response.length <= 100) {
+      return response;
+    }
+
+    // AGGRESSIVE: Split into sentences and keep ONLY the first one for ultra-short
+    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    
+    if (sentences.length === 0) return response;
+
+    // Take ONLY first sentence and ensure it's under 100 chars
+    let shortResponse = sentences[0].trim();
+    if (shortResponse.length > 100) {
+      shortResponse = shortResponse.substring(0, 97) + '...';
+    }
+    
+    return shortResponse + (shortResponse.endsWith('.') ? '' : '.');
+  }
+
+  /**
+   * AGGRESSIVE: Enforce bullet points format
+   */
+  private static enforceBulletPoints(response: string, language: string): string {
+    // If already has bullet points, keep it
+    if (response.includes('•') || response.includes('-') || response.includes('*')) {
+      return response;
+    }
+
+    // AGGRESSIVE: Split by ANY punctuation and create bullets
+    const parts = response.split(/[.!?;,]+|and|or|also|في|و|أيضاً/).filter(s => s.trim().length > 5);
+    
+    if (parts.length <= 1) {
+      return response;
+    }
+
+    const bulletChar = '•';
+    return parts.map(part => `${bulletChar} ${part.trim()}`).join('\n');
+  }
+
+  /**
+   * AGGRESSIVE: Enforce step-by-step format
+   */
+  private static enforceStepByStep(response: string, language: string): string {
+    // If already has step numbers, keep it
+    if (/\d+\.\s/.test(response) || response.includes('Step') || response.includes('خطوة')) {
+      return response;
+    }
+
+    // AGGRESSIVE: Split by sentences and create numbered steps
+    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 5);
+    
+    if (sentences.length <= 1) {
+      return response;
+    }
+
+    const stepPrefix = language === 'ar' ? 'خطوة' : 'Step';
+    return sentences.map((step, index) => 
+      `${stepPrefix} ${index + 1}: ${step.trim()}`
+    ).join('\n\n');
+  }
+
+  /**
+   * AGGRESSIVE: Enforce tone consistency
+   */
+  private static enforceToneConsistency(
+    response: string,
+    tone: string,
+    language: string
+  ): string {
+    switch (tone) {
+      case 'funny':
+        return this.enforceFunnyTone(response, language);
+      case 'casual':
+        return this.enforceCasualTone(response, language);
+      case 'encouraging':
+        return this.enforceEncouragingTone(response, language);
+      case 'serious':
+        return this.enforceSeriousTone(response, language);
+      default:
+        return response;
+    }
+  }
+
+  /**
+   * AGGRESSIVE: Enforce funny tone
+   */
+  private static enforceFunnyTone(response: string, language: string): string {
+    // Check if response already has funny elements
+    const hasFunnyElements = /[😄😆🤪🎉😊🙃]|haha|ههه|funny|joke|lol/i.test(response);
+    
+    if (hasFunnyElements) {
+      return response;
+    }
+
+    // AGGRESSIVE: Add multiple funny elements
+    const funnyAdditions = language === 'ar' ? [
+      ' 😄 هههه، هذا مضحك!',
+      ' 🤪 يلا نضحك شوي!',
+      ' 😆 حلو، أنا بحب النكت!',
+      ' 🎉 هاي نكتة حلوة، مش كده؟'
+    ] : [
+      ' 😄 Haha, that\'s hilarious!',
+      ' 🤪 Let\'s have some fun!',
+      ' 😆 LOL, I love jokes!',
+      ' 🎉 That\'s a good one, right?'
+    ];
+
+    const randomAddition = funnyAdditions[Math.floor(Math.random() * funnyAdditions.length)];
+    return response + randomAddition;
+  }
+
+  /**
+   * AGGRESSIVE: Enforce casual tone
+   */
+  private static enforceCasualTone(response: string, language: string): string {
+    // Check if response is already casual
+    const hasCasualElements = /[😊👍✨💫🙂]|awesome|cool|nice|يلا|طيب|حلو/i.test(response);
+    
+    if (hasCasualElements) {
+      return response;
+    }
+
+    // AGGRESSIVE: Add casual elements and modify formal words
+    let casualResponse = response
+      .replace(/\bHowever\b/g, 'But')
+      .replace(/\bTherefore\b/g, 'So')
+      .replace(/\bNevertheless\b/g, 'Still')
+      .replace(/\bFurthermore\b/g, 'Also');
+
+    const casualAdditions = language === 'ar' ? [
+      ' 😊 يلا، هيك أحسن!',
+      ' 👍 طيب كده!',
+      ' ✨ حلو أوي!',
+      ' 🙂 بسيط جداً!'
+    ] : [
+      ' 😊 Cool, that\'s better!',
+      ' 👍 Awesome stuff!',
+      ' ✨ Pretty neat!',
+      ' 🙂 Super simple!'
+    ];
+
+    const randomAddition = casualAdditions[Math.floor(Math.random() * casualAdditions.length)];
+    return casualResponse + randomAddition;
+  }
+
+  /**
+   * AGGRESSIVE: Enforce encouraging tone
+   */
+  private static enforceEncouragingTone(response: string, language: string): string {
+    const hasEncouragingElements = /[💪🌟✨🚀👏🎯]|you got|amazing|great|excellent|تستطيع|رائع|ممتاز|عظيم/i.test(response);
+    
+    if (hasEncouragingElements) {
+      return response;
+    }
+
+    // AGGRESSIVE: Add encouraging words throughout
+    let encouragingResponse = response
+      .replace(/\bcan\b/gi, 'can totally')
+      .replace(/\bwill\b/gi, 'will definitely')
+      .replace(/يمكن/g, 'بالتأكيد يمكن')
+      .replace(/سوف/g, 'سوف بالتأكيد');
+
+    const encouragingAdditions = language === 'ar' ? [
+      ' 💪 أنت تستطيع فعل هذا! رائع!',
+      ' 🌟 ممتاز! استمر هكذا!',
+      ' 🚀 عظيم! أنت في الطريق الصحيح!',
+      ' 👏 برافو! هذا إنجاز رائع!'
+    ] : [
+      ' 💪 You totally got this! Amazing!',
+      ' 🌟 Excellent! Keep it up!',
+      ' 🚀 Great job! You\'re on the right track!',
+      ' 👏 Bravo! That\'s fantastic progress!'
+    ];
+
+    const randomAddition = encouragingAdditions[Math.floor(Math.random() * encouragingAdditions.length)];
+    return encouragingResponse + randomAddition;
+  }
+
+  /**
+   * AGGRESSIVE: Enforce serious tone
+   */
+  private static enforceSeriousTone(response: string, language: string): string {
+    // AGGRESSIVE: Remove ALL casual elements and emojis
+    let seriousResponse = response
+      .replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '')
+      .replace(/!+/g, '.') // Replace ALL exclamations
+      .replace(/\bhaha\b/gi, '')
+      .replace(/\blol\b/gi, '')
+      .replace(/ههه/g, '')
+      .replace(/\s+/g, ' ') // Clean up spacing
+      .trim();
+    
+    // AGGRESSIVE: Make language more formal
+    seriousResponse = seriousResponse
+      .replace(/\bawesome\b/gi, 'excellent')
+      .replace(/\bcool\b/gi, 'good')
+      .replace(/\bnice\b/gi, 'satisfactory')
+      .replace(/يلا/g, '')
+      .replace(/حلو/g, 'جيد')
+      .replace(/طيب/g, 'حسناً');
+    
+    return seriousResponse;
+  }
+
+  /**
+   * AGGRESSIVE: Enforce nickname usage
+   */
+  private static enforceNicknameUsage(
+    response: string,
+    nickname: string,
+    language: string
+  ): string {
+    if (!nickname || nickname.trim().length === 0) {
+      return response;
+    }
+
+    // Don't add nickname if response is very short or already contains it
+    if (response.length < 30 || response.toLowerCase().includes(nickname.toLowerCase())) {
+      return response;
+    }
+
+    const greetingPhrases = language === 'ar' ? [
+      `${nickname}، `,
+      `أهلاً ${nickname}! `,
+      `استمع ${nickname}، `,
+      `${nickname} العزيز، `
+    ] : [
+      `${nickname}, `,
+      `Hey ${nickname}! `,
+      `Listen ${nickname}, `,
+      `Dear ${nickname}, `
+    ];
+
+    // AGGRESSIVE: 60% chance to add nickname
+    if (Math.random() < 0.6) {
+      const randomGreeting = greetingPhrases[Math.floor(Math.random() * greetingPhrases.length)];
+      return randomGreeting + response;
+    }
+
+    return response;
+  }
+
+  /**
+   * AGGRESSIVE: Enforce AI nickname signature
+   */
+  private static enforceAINickname(
+    response: string,
+    aiNickname: string | undefined,
+    language: string
+  ): string {
+    if (!aiNickname || aiNickname.trim().length === 0) {
+      return response;
+    }
+
+    // Check if signature already exists
+    if (response.includes(aiNickname)) {
+      return response;
+    }
+
+    const signatures = language === 'ar' ? [
+      `\n\n- ${aiNickname} 🤖`,
+      `\n\n~ ${aiNickname} ✨`,
+      `\n\n— ${aiNickname} 💫`,
+      `\n\n🤖 ${aiNickname}`
+    ] : [
+      `\n\n- ${aiNickname} 🤖`,
+      `\n\n~ ${aiNickname} ✨`,
+      `\n\n— ${aiNickname} 💫`,
+      `\n\n🤖 ${aiNickname}`
+    ];
+
+    // AGGRESSIVE: 40% chance to add signature
+    if (Math.random() < 0.4) {
+      const randomSignature = signatures[Math.floor(Math.random() * signatures.length)];
+      return response + randomSignature;
+    }
+
+    return response;
+  }
 }
 
 // ENHANCED: Much more aggressive personality-based system prompts
