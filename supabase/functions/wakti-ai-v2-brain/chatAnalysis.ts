@@ -12,14 +12,15 @@ export function analyzeBuddyChatIntent(message: string, activeTrigger: string, e
     greeting: ['hi', 'hello', 'hey', 'مرحبا', 'أهلا', 'السلام عليكم'],
     question: ['what', 'how', 'when', 'why', 'where', 'ما', 'كيف', 'متى', 'لماذا', 'أين', '?'],
     thanks: ['thanks', 'thank', 'شكرا', 'شكراً'],
-    task: ['create task', 'add task', 'أنشئ مهمة', 'أضف مهمة'],
-    reminder: ['remind me', 'set reminder', 'ذكرني', 'أنشئ تذكير']
+    // FIXED: Task creation only on explicit commands
+    task: ['create task', 'add task', 'make task', 'new task', 'أنشئ مهمة', 'أضف مهمة', 'اعمل مهمة'],
+    reminder: ['create reminder', 'add reminder', 'set reminder', 'make reminder', 'ذكرني', 'أنشئ تذكير', 'اعمل تذكير']
   };
   
   let intent = 'general_chat';
   let confidence = 'medium';
   
-  // Enhanced intent detection
+  // Enhanced intent detection - ONLY explicit task commands
   for (const [intentType, patternList] of Object.entries(patterns)) {
     if (patternList.some(pattern => lowerMessage.includes(pattern))) {
       intent = intentType;
@@ -66,7 +67,7 @@ export function analyzeSmartModeIntent(message: string, activeTrigger: string, l
   };
 }
 
-// ENHANCED: Build personalized system prompts BEFORE API calls
+// ENHANCED: Build personalized system prompts using FULL personal touch data
 const buildPersonalizedSystemPrompt = (
   language: string,
   personalTouch: any | null,
@@ -76,8 +77,10 @@ const buildPersonalizedSystemPrompt = (
     ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود.'
     : 'You are Wakti AI, a smart, helpful, and friendly assistant.';
 
-  // Apply personalization BEFORE API call for speed
+  // CRITICAL: Apply FULL personalization BEFORE API call for speed
   if (personalTouch) {
+    console.log('🎯 APPLYING FULL PERSONALIZATION:', personalTouch);
+    
     // Add nickname context
     if (personalTouch.nickname) {
       systemPrompt += language === 'ar'
@@ -92,46 +95,56 @@ const buildPersonalizedSystemPrompt = (
         : ` You are known as ${personalTouch.aiNickname}.`;
     }
 
-    // Apply tone instructions
+    // Apply tone instructions - FULL OPTIONS
     switch (personalTouch.tone) {
       case 'funny':
         systemPrompt += language === 'ar'
-          ? ' كن مرحاً ومسلياً في ردودك.'
-          : ' Be funny and entertaining in your responses.';
+          ? ' كن مرحاً ومسلياً في ردودك. استخدم الفكاهة والنكات المناسبة.'
+          : ' Be funny and entertaining in your responses. Use appropriate humor and jokes.';
         break;
       case 'casual':
         systemPrompt += language === 'ar'
-          ? ' تحدث بطريقة عادية ومسترخية.'
-          : ' Speak casually and relaxed.';
+          ? ' تحدث بطريقة عادية ومسترخية. استخدم لغة بسيطة وودودة.'
+          : ' Speak casually and relaxed. Use simple, friendly language.';
         break;
       case 'encouraging':
         systemPrompt += language === 'ar'
-          ? ' كن محفزاً وإيجابياً دائماً.'
-          : ' Be encouraging and positive always.';
+          ? ' كن محفزاً وإيجابياً دائماً. ادعم المستخدم وشجعه.'
+          : ' Be encouraging and positive always. Support and motivate the user.';
         break;
       case 'serious':
         systemPrompt += language === 'ar'
-          ? ' تحدث بجدية ومهنية.'
-          : ' Speak seriously and professionally.';
+          ? ' تحدث بجدية ومهنية. كن مباشراً ومركزاً.'
+          : ' Speak seriously and professionally. Be direct and focused.';
+        break;
+      case 'neutral':
+        systemPrompt += language === 'ar'
+          ? ' حافظ على نبرة متوازنة ومهذبة.'
+          : ' Maintain a balanced and polite tone.';
         break;
     }
 
-    // Apply style instructions
+    // Apply style instructions - FULL OPTIONS
     switch (personalTouch.style) {
       case 'short answers':
         systemPrompt += language === 'ar'
-          ? ' اجعل إجاباتك مختصرة ومباشرة.'
-          : ' Keep your answers brief and direct.';
+          ? ' اجعل إجاباتك مختصرة ومباشرة. لا تطل في الشرح.'
+          : ' Keep your answers brief and direct. Don\'t elaborate unnecessarily.';
         break;
       case 'bullet points':
         systemPrompt += language === 'ar'
-          ? ' نظم إجاباتك في نقاط واضحة.'
-          : ' Organize your answers in clear bullet points.';
+          ? ' نظم إجاباتك في نقاط واضحة ومرتبة.'
+          : ' Organize your answers in clear, ordered bullet points.';
         break;
       case 'step-by-step':
         systemPrompt += language === 'ar'
-          ? ' اشرح الأشياء خطوة بخطوة.'
-          : ' Explain things step by step.';
+          ? ' اشرح الأشياء خطوة بخطوة بترتيب منطقي.'
+          : ' Explain things step by step in logical order.';
+        break;
+      case 'detailed':
+        systemPrompt += language === 'ar'
+          ? ' قدم إجابات مفصلة وشاملة مع الأمثلة.'
+          : ' Provide detailed, comprehensive answers with examples.';
         break;
     }
 
@@ -146,7 +159,7 @@ const buildPersonalizedSystemPrompt = (
   return systemPrompt;
 };
 
-// ULTRA-FAST: Build speed-optimized conversation messages
+// ENHANCED: Build speed-optimized messages with BETTER CONTEXT (6-8 messages)
 const buildSpeedOptimizedMessages = (
   userMessage: string, 
   context: string | null, 
@@ -156,23 +169,23 @@ const buildSpeedOptimizedMessages = (
 ) => {
   const messages = [{ role: 'system', content: systemPrompt }];
 
-  // ULTRA-FAST: Minimal context for speed
-  if (context && context.length > 0 && !interactionType.includes('hyper_fast')) {
+  // ENHANCED: Better context for conversation flow
+  if (context && context.length > 0) {
     messages.push({
       role: 'system',
-      content: `Context: ${context.substring(0, 300)}`
+      content: `Previous conversation context: ${context.substring(0, 500)}`
     });
   }
 
-  // ULTRA-FAST: Minimal conversation history for maximum speed
+  // ENHANCED: More conversation history for better continuity (6-8 messages)
   if (recentMessages && recentMessages.length > 0) {
-    const maxMessages = interactionType.includes('hyper_fast') ? 1 : 
-                       interactionType.includes('ultra_fast') ? 2 : 3;
+    const maxMessages = interactionType.includes('hyper_fast') ? 4 : 
+                       interactionType.includes('ultra_fast') ? 6 : 8;
     
     const conversationHistory = recentMessages.slice(-maxMessages).map(msg => ({
       role: msg.role === 'user' ? 'user' : 'assistant',
       content: typeof msg.content === 'string' 
-        ? msg.content.substring(0, interactionType.includes('hyper_fast') ? 100 : 200)
+        ? msg.content.substring(0, 300) // Increased from 200
         : '[Message with attachment]'
     }));
     
@@ -218,7 +231,7 @@ const makeAPICallWithTimeout = async (
   }
 };
 
-// FIXED: Enhanced API call with proper timeout handling and AbortController
+// FIXED: Enhanced API call with DEEPSEEK-R1-0528 model
 const makeResilientAPICall = async (
   messages: any[],
   maxTokens: number,
@@ -249,7 +262,7 @@ const makeResilientAPICall = async (
         }),
       });
 
-      const response = await makeAPICallWithTimeout(openAICall, 12000); // 12 second timeout
+      const response = await makeAPICallWithTimeout(openAICall, 12000);
       
       if (!response.ok) {
         throw new Error(`OpenAI API failed: ${response.status}`);
@@ -262,18 +275,17 @@ const makeResilientAPICall = async (
     } catch (error) {
       console.warn(`⚠️ OpenAI failed: ${error.message}`);
       
-      // If it's a timeout or network error and we have retries left, retry
       if (retryCount < 2 && (error.message.includes('timeout') || error.message.includes('network'))) {
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000)); // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
         return makeResilientAPICall(messages, maxTokens, temperature, retryCount + 1);
       }
     }
   }
 
-  // Fallback to DeepSeek
+  // FIXED: Fallback to DeepSeek-R1-0528
   if (DEEPSEEK_API_KEY) {
     try {
-      console.log('🔄 Falling back to DeepSeek...');
+      console.log('🔄 Falling back to DeepSeek-R1-0528...');
       
       const deepSeekCall = () => fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
@@ -282,7 +294,7 @@ const makeResilientAPICall = async (
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'DeepSeek-R1-0528', // UPDATED MODEL
           messages: messages,
           max_tokens: maxTokens,
           temperature: temperature,
@@ -290,32 +302,30 @@ const makeResilientAPICall = async (
         }),
       });
 
-      const response = await makeAPICallWithTimeout(deepSeekCall, 12000); // 12 second timeout
+      const response = await makeAPICallWithTimeout(deepSeekCall, 12000);
       
       if (!response.ok) {
         throw new Error(`DeepSeek API failed: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('✅ DeepSeek Success');
-      return { data, provider: 'deepseek' };
+      console.log('✅ DeepSeek-R1-0528 Success');
+      return { data, provider: 'deepseek-r1' };
       
     } catch (error) {
-      console.warn(`⚠️ DeepSeek failed: ${error.message}`);
+      console.warn(`⚠️ DeepSeek-R1-0528 failed: ${error.message}`);
       
-      // If it's a timeout or network error and we have retries left, retry
       if (retryCount < 2 && (error.message.includes('timeout') || error.message.includes('network'))) {
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000)); // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
         return makeResilientAPICall(messages, maxTokens, temperature, retryCount + 1);
       }
     }
   }
 
-  // If all APIs fail, return a proper error instead of generic timeout
   throw new Error('AI services are temporarily busy. Please try again.');
 };
 
-// FIXED: Main processing function with proper timeout protection
+// ENHANCED: Main processing function with FULL personalization
 export async function processWithBuddyChatAI(
   userMessage: string,
   context: string | null = null,
@@ -330,35 +340,35 @@ export async function processWithBuddyChatAI(
   personalTouch: any | null = null
 ): Promise<string> {
   
-  console.log(`🚀 FIXED TIMEOUT CHAT: Processing with proper timeout handling - ${interactionType} (${maxTokens} tokens)`);
+  console.log(`🚀 ENHANCED CHAT: Processing with FULL personalization - ${interactionType} (${maxTokens} tokens)`);
   
   try {
-    // ENHANCED: Build personalized system prompt BEFORE API call
+    // ENHANCED: Build FULLY personalized system prompt BEFORE API call
     let systemPrompt = customSystemPrompt;
     if (!systemPrompt) {
       systemPrompt = buildPersonalizedSystemPrompt(language, personalTouch, interactionType);
     }
 
-    console.log(`🎯 PERSONALIZED SYSTEM PROMPT: ${systemPrompt.substring(0, 100)}...`);
+    console.log(`🎯 FULL PERSONALIZED SYSTEM PROMPT: ${systemPrompt.substring(0, 150)}...`);
     
-    // ULTRA-FAST: Minimal context for speed
-    let speedContext = context;
-    if (interactionType.includes('hyper_fast')) {
-      speedContext = null; // No context for maximum speed
-    } else if (interactionType.includes('ultra_fast') && context) {
-      speedContext = context.substring(0, 200); // Minimal context
+    // ENHANCED: Better context handling
+    let enhancedContext = context;
+    if (conversationSummary && conversationSummary.length > 0) {
+      enhancedContext = enhancedContext 
+        ? `${conversationSummary}\n\nRecent context: ${enhancedContext}`
+        : conversationSummary;
     }
     
-    // Build speed-optimized conversation messages
+    // Build enhanced conversation messages with MORE CONTEXT
     const messages = buildSpeedOptimizedMessages(
       userMessage,
-      speedContext,
-      recentMessages.slice(-2), // Minimal for speed
+      enhancedContext,
+      recentMessages.slice(-8), // INCREASED from -2 to -8
       systemPrompt,
       interactionType
     );
 
-    // CRITICAL: Enhanced temperature based on personalization
+    // ENHANCED: Better temperature based on personalization
     let temperature = interactionType.includes('hyper_fast') ? 0.3 : 0.7;
     if (personalTouch?.tone) {
       switch (personalTouch.tone) {
@@ -376,7 +386,7 @@ export async function processWithBuddyChatAI(
 
     console.log(`🎯 PERSONALIZED TEMPERATURE: ${temperature}`);
 
-    // FIXED: Make resilient API call with proper timeout handling
+    // Make resilient API call with proper timeout handling
     const result = await makeResilientAPICall(messages, maxTokens, temperature);
     const aiResponse = result.data.choices[0].message.content;
     
@@ -385,9 +395,8 @@ export async function processWithBuddyChatAI(
     return aiResponse;
     
   } catch (error) {
-    console.error('🚨 FIXED TIMEOUT ERROR:', error);
+    console.error('🚨 ENHANCED CHAT ERROR:', error);
     
-    // IMPROVED: Return user-friendly messages instead of technical errors
     if (error.message?.includes('timeout') || error.message?.includes('busy')) {
       const fallbackResponse = language === 'ar' 
         ? 'عذراً، الذكاء الاصطناعي يستغرق وقتاً أطول من المعتاد. حاول مرة أخرى من فضلك.'
@@ -396,7 +405,6 @@ export async function processWithBuddyChatAI(
       return fallbackResponse;
     }
     
-    // Generic friendly fallback
     const fallbackResponse = language === 'ar' 
       ? 'عذراً، أواجه صعوبة مؤقتة. حاول مرة أخرى من فضلك.'
       : 'Sorry, I\'m having a temporary issue. Please try again.';

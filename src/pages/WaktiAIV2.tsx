@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -13,7 +12,7 @@ import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 
-// NEW: Debounced request handler
+// Debounced request handler
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
   
@@ -39,13 +38,13 @@ const WaktiAIV2 = () => {
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
   const [userProfile, setUserProfile] = useState<any>(null);
   
-  // Enhanced task confirmation state
+  // ENHANCED: Task confirmation state - ONLY for explicit task creation
   const [showTaskConfirmation, setShowTaskConfirmation] = useState(false);
   const [pendingTaskData, setPendingTaskData] = useState<any>(null);
   const [pendingReminderData, setPendingReminderData] = useState<any>(null);
   const [taskConfirmationLoading, setTaskConfirmationLoading] = useState(false);
   
-  // NEW: Request management state with timeout protection
+  // Request management state with timeout protection
   const [requestInProgress, setRequestInProgress] = useState(false);
   const [requestTimeout, setRequestTimeout] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -125,7 +124,7 @@ const WaktiAIV2 = () => {
 
         setUserProfile(profile);
         
-        // Cache for 10 minutes (increased from 5)
+        // Cache for 10 minutes
         localStorage.setItem('wakti_user_profile', JSON.stringify({
           profile,
           expires: Date.now() + (10 * 60 * 1000)
@@ -305,7 +304,7 @@ const WaktiAIV2 = () => {
     setSessionMessages(prev => [...prev, cancelMessage]);
   };
 
-  // ULTRA-FAST: Lightning-fast message sending with FIXED timeout handling
+  // ENHANCED: Lightning-fast message sending with FULL personalization
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
@@ -327,7 +326,7 @@ const WaktiAIV2 = () => {
     abortControllerRef.current = new AbortController();
 
     try {
-      console.log('🚀 FIXED TIMEOUT AI: Lightning speed processing with 15-second timeout');
+      console.log('🚀 ENHANCED AI: Lightning speed processing with FULL personalization');
       const startTime = Date.now();
 
       // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
@@ -348,7 +347,7 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // FIXED: Timeout-protected API call with 15-second timeout
+      // ENHANCED: Timeout-protected API call with FULL personalization
       const response = await Promise.race([
         WaktiAIV2ServiceClass.sendMessage(
           message,
@@ -356,18 +355,18 @@ const WaktiAIV2 = () => {
           language,
           currentConversationId,
           inputType,
-          updatedSessionMessages.slice(-4), // Minimal context for speed
+          updatedSessionMessages.slice(-8), // ENHANCED context
           false,
           activeTrigger,
-          '', // Minimal conversation summary for speed
+          '', // Let service handle conversation summary
           attachedFiles || []
         ),
-        // FIXED: Increased timeout to 15 seconds
+        // Timeout protection
         new Promise((_, reject) => {
           const timeoutId = setTimeout(() => {
             setRequestTimeout(true);
             reject(new Error('AI is taking longer than expected - please try again'));
-          }, 15000); // INCREASED from 10s to 15s
+          }, 15000);
           
           // Cleanup timeout if request completes
           abortControllerRef.current?.signal.addEventListener('abort', () => {
@@ -376,13 +375,13 @@ const WaktiAIV2 = () => {
         })
       ]) as any;
 
-      // ENHANCED: Create assistant message with enhanced response
+      // ENHANCED: Create assistant message with FULL personalization applied
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: response.response, // Already personalized
+        content: response.response, // Already fully personalized
         timestamp: new Date(),
-        intent: response.intent || 'ultra_fast_chat',
+        intent: response.intent || 'enhanced_chat',
         confidence: response.confidence || 'high',
         actionTaken: response.actionTaken || false,
         imageUrl: response.imageUrl,
@@ -394,13 +393,15 @@ const WaktiAIV2 = () => {
       setSessionMessages(finalSessionMessages);
       
       const responseTime = Date.now() - startTime;
-      console.log(`🚀 FIXED TIMEOUT AI: Total time: ${responseTime}ms (Timeout Fixed: 15s)`);
+      console.log(`🚀 ENHANCED AI: Total time: ${responseTime}ms (FULLY PERSONALIZED)`);
 
-      // Handle special responses
+      // FIXED: Handle EXPLICIT task creation only
       if (response.needsConfirmation && response.pendingTaskData) {
+        console.log('📝 EXPLICIT TASK CREATION: Showing confirmation form');
         setPendingTaskData(response.pendingTaskData);
         setShowTaskConfirmation(true);
       } else if (response.needsConfirmation && response.pendingReminderData) {
+        console.log('⏰ EXPLICIT REMINDER CREATION: Showing confirmation form');
         setPendingReminderData(response.pendingReminderData);
         setShowTaskConfirmation(true);
       }
@@ -412,9 +413,9 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🚨 FIXED TIMEOUT AI: Error:', error);
+      console.error('🚨 ENHANCED AI: Error:', error);
       
-      // IMPROVED: Better error messages - no more "trouble connecting"
+      // IMPROVED: Better error messages
       if (error.message?.includes('timeout') || error.message?.includes('longer than expected')) {
         setRequestTimeout(true);
         setError('AI is taking longer than usual - please try again');
@@ -439,6 +440,7 @@ const WaktiAIV2 = () => {
   // Debounced version of handleSendMessage for rapid typing
   const debouncedSendMessage = useDebounceCallback(handleSendMessage, 300);
 
+  // fetchConversations
   const fetchConversations = async () => {
     try {
       const fetchedConversations = await WaktiAIV2Service.getConversations();
@@ -449,6 +451,7 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // loadFullConversationHistory
   const loadFullConversationHistory = async (conversationId: string) => {
     try {
       console.log('📚 Loading full conversation history for:', conversationId);
@@ -476,6 +479,7 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // handleNewConversation
   const handleNewConversation = async () => {
     // Cancel any in-progress request
     if (abortControllerRef.current) {
@@ -493,6 +497,7 @@ const WaktiAIV2 = () => {
     setRequestInProgress(false);
   };
 
+  // handleSelectConversation
   const handleSelectConversation = async (conversationId: string) => {
     try {
       // Cancel any in-progress request
@@ -531,6 +536,7 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // handleClearChat
   const handleClearChat = () => {
     // Cancel any in-progress request
     if (abortControllerRef.current) {
@@ -547,6 +553,7 @@ const WaktiAIV2 = () => {
     setRequestInProgress(false);
   };
 
+  // handleDeleteConversation
   const handleDeleteConversation = async (conversationId: string) => {
     try {
       await WaktiAIV2Service.deleteConversation(conversationId);
@@ -563,10 +570,12 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // handleTriggerChange
   const handleTriggerChange = (trigger: string) => {
     setActiveTrigger(trigger);
   };
 
+  // handleTextGenerated
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply', isTextGenerated: boolean = true) => {
     const assistantMessage: AIMessage = {
       id: `assistant-textgen-${Date.now()}`,
@@ -584,7 +593,7 @@ const WaktiAIV2 = () => {
     showSuccess(language === 'ar' ? 'تم إنشاء النص' : 'Text generated');
   };
 
-  // Enhanced display messages without streaming - REMOVED follow-up question display
+  // Enhanced display messages without streaming
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
   const handleOpenPlusDrawer = () => {
@@ -622,7 +631,6 @@ const WaktiAIV2 = () => {
           onTimeoutRetry={() => {
             setRequestTimeout(false);
             setError(null);
-            // Optionally retry the last message
           }}
         />
       </div>

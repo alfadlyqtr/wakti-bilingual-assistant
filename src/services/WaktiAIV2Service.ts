@@ -28,20 +28,125 @@ export interface AIConversation {
   message_count: number;
 }
 
+// ENHANCED: Advanced conversation summary management
+class ConversationSummaryManager {
+  private static readonly SUMMARY_THRESHOLD = 20; // Summarize every 20 messages
+  private static readonly MAX_SUMMARY_LENGTH = 500;
+
+  static async createOrUpdateSummary(
+    userId: string,
+    conversationId: string | null,
+    messages: AIMessage[]
+  ): Promise<string | null> {
+    if (!conversationId || messages.length < this.SUMMARY_THRESHOLD) return null;
+
+    try {
+      // Get existing summary
+      const { data: existingSummary } = await supabase
+        .from('ai_conversation_summaries')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('conversation_id', conversationId)
+        .single();
+
+      // Create smart summary from recent messages
+      const recentMessages = messages.slice(-this.SUMMARY_THRESHOLD);
+      const summaryText = this.generateSmartSummary(recentMessages);
+
+      if (existingSummary) {
+        // Update existing summary
+        await supabase
+          .from('ai_conversation_summaries')
+          .update({
+            summary_text: summaryText,
+            message_count: messages.length,
+            last_message_date: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSummary.id);
+      } else {
+        // Create new summary
+        await supabase
+          .from('ai_conversation_summaries')
+          .insert({
+            user_id: userId,
+            conversation_id: conversationId,
+            summary_text: summaryText,
+            message_count: messages.length,
+            last_message_date: new Date().toISOString()
+          });
+      }
+
+      return summaryText;
+    } catch (error) {
+      console.error('Error managing conversation summary:', error);
+      return null;
+    }
+  }
+
+  static async getSummary(userId: string, conversationId: string): Promise<string | null> {
+    try {
+      const { data } = await supabase
+        .from('ai_conversation_summaries')
+        .select('summary_text')
+        .eq('user_id', userId)
+        .eq('conversation_id', conversationId)
+        .single();
+
+      return data?.summary_text || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static generateSmartSummary(messages: AIMessage[]): string {
+    const topics = new Set<string>();
+    const userPreferences = [];
+    const keyPoints = [];
+
+    messages.forEach(msg => {
+      if (msg.intent && msg.intent !== 'general_chat') topics.add(msg.intent);
+      if (msg.actionTaken) keyPoints.push(msg.content.substring(0, 80));
+      
+      // Extract user preferences
+      const content = msg.content.toLowerCase();
+      if (content.includes('like') || content.includes('prefer') || content.includes('want')) {
+        userPreferences.push(msg.content.substring(0, 100));
+      }
+    });
+
+    let summary = 'Conversation summary:\n';
+    
+    if (topics.size > 0) {
+      summary += `Topics: ${Array.from(topics).slice(0, 5).join(', ')}\n`;
+    }
+    
+    if (keyPoints.length > 0) {
+      summary += `Key actions: ${keyPoints.slice(0, 3).join('; ')}\n`;
+    }
+    
+    if (userPreferences.length > 0) {
+      summary += `User preferences: ${userPreferences.slice(0, 2).join('; ')}\n`;
+    }
+
+    return summary.substring(0, ConversationSummaryManager.MAX_SUMMARY_LENGTH);
+  }
+}
+
 // ENHANCED: Better message compression with personality awareness
 class MessageCompressor {
   static compressHistory(messages: AIMessage[], userStyle: string = 'detailed'): { summary: string; recentMessages: AIMessage[] } {
     // Enhanced context limits based on user style
     const contextLimits = {
-      'short answers': 2,
-      'bullet points': 3,
-      'detailed': 4,        // Keep more for detailed users
-      'step-by-step': 4,
-      'casual': 3,
-      'funny': 3
+      'short answers': 4,
+      'bullet points': 6,
+      'detailed': 8,        // Keep more for detailed users
+      'step-by-step': 8,
+      'casual': 6,
+      'funny': 6
     };
     
-    const limit = contextLimits[userStyle] || 3;
+    const limit = contextLimits[userStyle] || 6; // INCREASED default from 3 to 6
     
     if (messages.length <= limit) {
       return { summary: '', recentMessages: messages };
@@ -132,16 +237,16 @@ class AuthCache {
     setTimeout(() => {
       const index = this.connectionPool.indexOf(controller);
       if (index > -1) this.connectionPool.splice(index, 1);
-    }, 20000); // Increased from 15s to 20s
+    }, 20000);
     
     return controller;
   }
 }
 
-// ULTRA-FAST: Local memory cache
+// ENHANCED: Local memory cache with better persistence
 class LocalMemoryCache {
   private static readonly STORAGE_KEY = 'wakti_ai_memory';
-  private static readonly MAX_MESSAGES = 5;
+  private static readonly MAX_MESSAGES = 8; // INCREASED from 5 to 8
   
   static saveMessages(conversationId: string | null, messages: AIMessage[]) {
     try {
@@ -163,8 +268,8 @@ class LocalMemoryCache {
       
       const memory = JSON.parse(stored);
       
-      // Check if memory is less than 1 hour old
-      if (Date.now() - memory.timestamp > 60 * 60 * 1000) {
+      // Check if memory is less than 2 hours old (increased from 1 hour)
+      if (Date.now() - memory.timestamp > 2 * 60 * 60 * 1000) {
         localStorage.removeItem(this.STORAGE_KEY);
         return null;
       }
@@ -187,7 +292,7 @@ class LocalMemoryCache {
   }
 }
 
-// ENHANCED: Personal touch integration
+// ENHANCED: Personal touch integration with full options
 const PERSONAL_TOUCH_KEY = "wakti_personal_touch";
 
 interface PersonalTouchData {
@@ -227,7 +332,7 @@ class PersonalTouchCache {
   }
 }
 
-// FIXED: Request debouncer with proper typing
+// Request debouncer
 class RequestDebouncer {
   private static timers = new Map<string, ReturnType<typeof setTimeout>>();
   
@@ -252,7 +357,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // FIXED: Increased timeout to 15 seconds with better error handling
+  // ENHANCED: Main message sending with FULL personalization and better memory
   static async sendMessage(
     message: string,
     userId?: string,
@@ -270,24 +375,39 @@ export class WaktiAIV2ServiceClass {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
 
-      console.log('🚀 FIXED TIMEOUT AI: Starting with 15-second timeout protection');
+      console.log('🚀 ENHANCED AI: Starting with FULL personalization and better memory');
 
       // STEP 1: Load personal touch settings (cached)
       const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
       console.log('🎯 Personal Touch:', personalTouch);
 
-      // STEP 2: Build minimal context for speed
-      const recentMessages = sessionMessages.slice(-4).map(msg => ({
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp
-      }));
+      // STEP 2: Get or create conversation summary for better context
+      let enhancedSummary = conversationSummary;
+      if (conversationId && sessionMessages.length >= 10) {
+        const summary = await ConversationSummaryManager.createOrUpdateSummary(
+          user.id,
+          conversationId,
+          sessionMessages
+        );
+        if (summary) enhancedSummary = summary;
+      } else if (conversationId) {
+        const existingSummary = await ConversationSummaryManager.getSummary(user.id, conversationId);
+        if (existingSummary) enhancedSummary = existingSummary;
+      }
 
-      // STEP 3: Create timeout-protected API call with INCREASED timeout
-      console.log('⚡ FIXED TIMEOUT: Making AI call with 15-second timeout (was 10s)');
+      // STEP 3: Build ENHANCED context with better message compression
+      const userStyle = personalTouch?.style || 'detailed';
+      const { summary: contextSummary, recentMessages } = MessageCompressor.compressHistory(
+        sessionMessages,
+        userStyle
+      );
+
+      const finalContext = [enhancedSummary, contextSummary].filter(Boolean).join('\n\n');
+
+      console.log('⚡ ENHANCED CONTEXT: Making AI call with full personalization');
 
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000); // INCREASED from 10s
+        setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000);
       });
 
       const apiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
@@ -299,20 +419,19 @@ export class WaktiAIV2ServiceClass {
           inputType,
           activeTrigger,
           attachedFiles,
-          conversationSummary: '', // Minimal for speed
-          recentMessages: recentMessages.slice(-2), // Minimal context
-          customSystemPrompt: '', // Let edge function handle personalization
-          maxTokens: personalTouch?.style === 'short answers' ? 200 : 400,
+          conversationSummary: finalContext,
+          recentMessages: recentMessages.slice(-8), // INCREASED context
+          customSystemPrompt: '',
+          maxTokens: personalTouch?.style === 'short answers' ? 200 : 500, // INCREASED
           speedOptimized: true,
-          aggressiveOptimization: true,
-          personalityEnabled: true, // Enable personalization
+          aggressiveOptimization: false, // DISABLED for better responses
+          personalityEnabled: true,
           enableTaskCreation: true,
-          enablePersonality: true, // Enable personalization
-          personalTouch: personalTouch // Pass personal touch to edge function
+          enablePersonality: true,
+          personalTouch: personalTouch
         }
       });
 
-      // Race between API call and timeout with INCREASED timeout
       const { data, error } = await Promise.race([apiPromise, timeoutPromise]) as any;
 
       if (error) {
@@ -323,12 +442,11 @@ export class WaktiAIV2ServiceClass {
       const apiTime = Date.now() - startTime;
       console.log(`⚡ SUCCESS: Completed in ${apiTime}ms`);
 
-      // STEP 4: Minimal post-processing (most personalization done in edge function)
+      // CRITICAL: Apply PersonalizationProcessor POST-RESPONSE for full personalization
       let finalResponse = data.response;
       
-      // Only apply minimal post-processing if needed
-      if (personalTouch && !data.personalizedResponse) {
-        console.log('🎨 MINIMAL POST-PROCESSING: Applying final touches');
+      if (personalTouch) {
+        console.log('🎨 POST-RESPONSE PERSONALIZATION: Applying final touches');
         finalResponse = PersonalizationProcessor.enhanceResponse(
           data.response,
           {
@@ -340,22 +458,20 @@ export class WaktiAIV2ServiceClass {
       }
 
       const totalTime = Date.now() - startTime;
-      console.log(`🚀 TOTAL TIME: ${totalTime}ms (Timeout Fixed: 15s, Personalized: ${!!personalTouch})`);
+      console.log(`🚀 TOTAL TIME: ${totalTime}ms (Fully Personalized: ${!!personalTouch})`);
 
-      // Return enhanced response
       return {
         ...data,
         response: finalResponse,
         processingTime: totalTime,
         apiTime,
         personalizedResponse: !!personalTouch,
-        timeoutProtected: true
+        enhancedMemory: true
       };
 
     } catch (error) {
-      console.error('🚨 FIXED TIMEOUT Error:', error);
+      console.error('🚨 ENHANCED AI Error:', error);
       
-      // IMPROVED: Better error handling - never show "trouble connecting"
       if (error.message?.includes('timeout')) {
         throw new Error('AI response is taking longer than expected. Please try again.');
       }
@@ -364,7 +480,6 @@ export class WaktiAIV2ServiceClass {
         throw new Error('Network connection issue. Please check your internet and try again.');
       }
       
-      // Generic fallback
       throw new Error('AI service is temporarily unavailable. Please try again in a moment.');
     }
   }

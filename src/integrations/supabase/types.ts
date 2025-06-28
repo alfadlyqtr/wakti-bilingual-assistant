@@ -233,6 +233,47 @@ export type Database = {
           },
         ]
       }
+      ai_conversation_summaries: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          id: string
+          last_message_date: string
+          message_count: number
+          summary_text: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          last_message_date?: string
+          message_count?: number
+          summary_text: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          last_message_date?: string
+          message_count?: number
+          summary_text?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversation_summaries_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_conversations: {
         Row: {
           created_at: string
