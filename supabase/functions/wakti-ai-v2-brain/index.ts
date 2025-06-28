@@ -75,10 +75,10 @@ serve(async (req) => {
       speedOptimized = true,
       aggressiveOptimization = true,
       hasTaskIntent = false,
-      personalityEnabled = true, // Enable personalization
+      personalityEnabled = true,
       enableTaskCreation = true,
-      enablePersonality = true, // Enable personalization
-      personalTouch = null // Personal touch data from frontend
+      enablePersonality = true,
+      personalTouch = null
     } = requestBody;
 
     if (userId !== user.id) {
@@ -116,98 +116,92 @@ serve(async (req) => {
     
     console.log(`🚀 SPEED MODE: Context messages: ${minimalRecentMessages.length}, Summary: ${minimalConversationSummary.length} chars`);
 
-    // SMART: Only analyze tasks for explicit keywords
-    const shouldAnalyzeTask = enableTaskCreation && 
-                             !aggressiveOptimization && 
-                             (hasTaskIntent || 
-                              message.toLowerCase().includes('create task') ||
-                              message.toLowerCase().includes('add task') ||
-                              message.toLowerCase().includes('remind me') ||
-                              message.toLowerCase().includes('set reminder') ||
-                              message.toLowerCase().includes('أنشئ مهمة') ||
-                              message.toLowerCase().includes('أضف مهمة') ||
-                              message.toLowerCase().includes('ذكرني') ||
-                              message.toLowerCase().includes('أنشئ تذكير'));
+    // ENHANCED: Task detection for ALL chat triggers (not just when enableTaskCreation)
+    let taskAnalysisResult = null;
+    try {
+      console.log("🔍 TASK DETECTION: Analyzing message for task intent");
+      taskAnalysisResult = await analyzeTaskIntent(message, language);
+      console.log("🔍 TASK ANALYSIS RESULT:", JSON.stringify(taskAnalysisResult, null, 2));
+    } catch (taskError) {
+      console.error("🔍 TASK ANALYSIS ERROR:", taskError);
+    }
 
-    // ULTRA-FAST: Smart processing pipeline with speed optimization
+    // CRITICAL FIX: Return structured confirmation data when task is detected
+    if (taskAnalysisResult && (taskAnalysisResult.isTask || taskAnalysisResult.isReminder)) {
+      console.log(`🔍 TASK DETECTED: ${taskAnalysisResult.isTask ? 'Task' : 'Reminder'} - Returning confirmation data`);
+      
+      const processingTime = Date.now() - startTime;
+      
+      // Return structured confirmation response (NO text response)
+      const result = {
+        response: '', // Empty response - let the UI handle the confirmation
+        conversationId: conversationId || generateConversationId(),
+        intent: taskAnalysisResult.isTask ? 'task_creation' : 'reminder_creation',
+        confidence: 'high',
+        actionTaken: false,
+        imageUrl: null,
+        browsingUsed: false,
+        browsingData: null,
+        needsConfirmation: true, // CRITICAL: This triggers the confirmation form
+        pendingTaskData: taskAnalysisResult.isTask ? taskAnalysisResult.taskData : null,
+        pendingReminderData: taskAnalysisResult.isReminder ? taskAnalysisResult.reminderData : null,
+        success: true,
+        processingTime,
+        speedOptimized: true,
+        aggressiveOptimization,
+        userStyle,
+        userTone,
+        tokensUsed: 0, // No AI tokens used for task detection
+        aiProvider: 'task_parser',
+        taskCreationEnabled: true,
+        personalizedResponse: false,
+        taskDetected: true,
+        ultraFastMode: {
+          speedOptimized,
+          aggressiveOptimization,
+          contextMessages: 0,
+          summaryLength: 0,
+          tokensLimit: 0,
+          personalTouch: false
+        }
+      };
+
+      console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // ULTRA-FAST: Main processing with timeout protection (only if no task detected)
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
     let browsingData = null;
     let actionTaken = null;
-    let needsConfirmation = false;
-    let pendingTaskData = null;
-    let pendingReminderData = null;
 
-    // SMART: Task detection only for explicit keywords
-    if (shouldAnalyzeTask) {
-      console.log("🔍 SMART TASK: Analyzing explicit task request");
-      
-      try {
-        const taskAnalysis = await analyzeTaskIntent(message, language);
-        console.log("🔍 TASK RESULT:", JSON.stringify(taskAnalysis, null, 2));
-        
-        if (taskAnalysis.isTask || taskAnalysis.isReminder) {
-          console.log(`🔍 SMART TASK: ${taskAnalysis.isTask ? 'Task' : 'Reminder'} detected!`);
-          needsConfirmation = true;
-          
-          if (taskAnalysis.isTask && taskAnalysis.taskData) {
-            pendingTaskData = taskAnalysis.taskData;
-            response = language === 'ar' 
-              ? `🚀 اكتشفت أنك تريد إنشاء مهمة! 📝\n\n**المهمة:** ${taskAnalysis.taskData.title}\n${taskAnalysis.taskData.description ? `**الوصف:** ${taskAnalysis.taskData.description}\n` : ''}${taskAnalysis.taskData.due_date ? `**التاريخ:** ${taskAnalysis.taskData.due_date}\n` : ''}${taskAnalysis.taskData.due_time ? `**الوقت:** ${taskAnalysis.taskData.due_time}\n` : ''}${taskAnalysis.taskData.priority ? `**الأولوية:** ${taskAnalysis.taskData.priority}\n` : ''}\nراجع التفاصيل وتأكد! 👍`
-              : `🚀 I detected you want to create a task! 📝\n\n**Task:** ${taskAnalysis.taskData.title}\n${taskAnalysis.taskData.description ? `**Description:** ${taskAnalysis.taskData.description}\n` : ''}${taskAnalysis.taskData.due_date ? `**Date:** ${taskAnalysis.taskData.due_date}\n` : ''}${taskAnalysis.taskData.due_time ? `**Time:** ${taskAnalysis.taskData.due_time}\n` : ''}${taskAnalysis.taskData.priority ? `**Priority:** ${taskAnalysis.taskData.priority}\n` : ''}\nPlease review and confirm! 👍`;
-          } else if (taskAnalysis.isReminder && taskAnalysis.reminderData) {
-            pendingReminderData = taskAnalysis.reminderData;
-            response = language === 'ar' 
-              ? `⏰ اكتشفت أنك تريد إنشاء تذكير!\n\n**التذكير:** ${taskAnalysis.reminderData.title}\n${taskAnalysis.reminderData.description ? `**الوصف:** ${taskAnalysis.reminderData.description}\n` : ''}${taskAnalysis.reminderData.due_date ? `**التاريخ:** ${taskAnalysis.reminderData.due_date}\n` : ''}${taskAnalysis.reminderData.due_time ? `**الوقت:** ${taskAnalysis.reminderData.due_time}\n` : ''}\nراجع التفاصيل وتأكد! 👍`
-              : `⏰ I detected you want to create a reminder!\n\n**Reminder:** ${taskAnalysis.reminderData.title}\n${taskAnalysis.reminderData.description ? `**Description:** ${taskAnalysis.reminderData.description}\n` : ''}${taskAnalysis.reminderData.due_date ? `**Date:** ${taskAnalysis.reminderData.due_date}\n` : ''}${taskAnalysis.reminderData.due_time ? `**Time:** ${taskAnalysis.reminderData.due_time}\n` : ''}\nPlease review and confirm! 👍`;
-          }
-        }
-      } catch (taskError) {
-        console.error("🔍 SMART TASK ERROR:", taskError);
-      }
-    }
-
-    // ULTRA-FAST: Main processing with timeout protection
-    if (!needsConfirmation) {
-      switch (activeTrigger) {
-        case 'search':
-          if (!aggressiveOptimization) {
-            console.log("🔍 FAST SEARCH: Speed-optimized search");
-            const searchResult = await executeRegularSearch(message, language);
-            if (searchResult.success) {
-              browsingUsed = true;
-              browsingData = searchResult.data;
-              const context = searchResult.context.substring(0, aggressiveOptimization ? 300 : 800);
-              
-              response = await processWithBuddyChatAI(
-                message, 
-                context, 
-                language, 
-                minimalRecentMessages,
-                minimalConversationSummary,
-                activeTrigger,
-                'ultra_fast_search',
-                attachedFiles,
-                customSystemPrompt,
-                Math.min(maxTokens, 300),
-                personalTouch
-              );
-            } else {
-              response = await processWithBuddyChatAI(
-                message, 
-                '', 
-                language, 
-                [],
-                '',
-                activeTrigger,
-                'ultra_fast_search_failed',
-                attachedFiles,
-                customSystemPrompt,
-                Math.min(maxTokens, 200),
-                personalTouch
-              );
-            }
+    switch (activeTrigger) {
+      case 'search':
+        if (!aggressiveOptimization) {
+          console.log("🔍 FAST SEARCH: Speed-optimized search");
+          const searchResult = await executeRegularSearch(message, language);
+          if (searchResult.success) {
+            browsingUsed = true;
+            browsingData = searchResult.data;
+            const context = searchResult.context.substring(0, aggressiveOptimization ? 300 : 800);
+            
+            response = await processWithBuddyChatAI(
+              message, 
+              context, 
+              language, 
+              minimalRecentMessages,
+              minimalConversationSummary,
+              activeTrigger,
+              'ultra_fast_search',
+              attachedFiles,
+              customSystemPrompt,
+              Math.min(maxTokens, 300),
+              personalTouch
+            );
           } else {
             response = await processWithBuddyChatAI(
               message, 
@@ -215,81 +209,95 @@ serve(async (req) => {
               language, 
               [],
               '',
-              'chat',
-              'hyper_fast_chat',
+              activeTrigger,
+              'ultra_fast_search_failed',
               attachedFiles,
               customSystemPrompt,
-              Math.min(maxTokens, 150),
+              Math.min(maxTokens, 200),
               personalTouch
             );
           }
-          break;
-
-        case 'image':
-          if (!aggressiveOptimization) {
-            console.log("🎨 FAST IMAGE: Speed-optimized image generation");
-            try {
-              const imageResult = await generateImageWithRunware(message, user.id, language);
-              
-              if (imageResult.success) {
-                imageUrl = imageResult.imageUrl;
-                
-                let baseResponse = language === 'ar' 
-                  ? `تم إنشاء الصورة بنجاح! 🎨✨`
-                  : `Image generated successfully! 🎨✨`;
-
-                if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
-                  baseResponse += language === 'ar'
-                    ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
-                    : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
-                }
-
-                response = baseResponse;
-              } else {
-                response = imageResult.error;
-              }
-            } catch (error) {
-              console.error("Fast image generation error:", error);
-              response = language === 'ar' 
-                ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
-                : `❌ Sorry, an error occurred while generating the image.`;
-            }
-          } else {
-            response = language === 'ar' 
-              ? `عذراً، إنشاء الصور غير متاح في الوضع السريع.`
-              : `Sorry, image generation not available in ultra-fast mode.`;
-          }
-          break;
-
-        case 'chat':
-        default:
-          console.log(`🚀 ULTRA-FAST CHAT: Processing with timeout protection and personalization`);
-          
-          // ULTRA-FAST: Minimal context for lightning speed
-          let chatContext = aggressiveOptimization ? null : minimalConversationSummary;
-          
-          // ULTRA-FAST: Determine interaction type for maximum speed
-          const interactionType = aggressiveOptimization ? 'hyper_fast_openai_chat' : 
-                                 speedOptimized ? 'ultra_fast_chat' : 
-                                 'speed_optimized_chat';
-          
-          console.log(`🚀 ULTRA-FAST CHAT: ${interactionType} | Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
-          
+        } else {
           response = await processWithBuddyChatAI(
             message, 
-            chatContext, 
+            '', 
             language, 
-            minimalRecentMessages,
-            minimalConversationSummary,
-            activeTrigger,
-            interactionType,
-            processedFiles,
+            [],
+            '',
+            'chat',
+            'hyper_fast_chat',
+            attachedFiles,
             customSystemPrompt,
-            maxTokens,
-            personalTouch // Pass personal touch for pre-processing
+            Math.min(maxTokens, 150),
+            personalTouch
           );
-          break;
-      }
+        }
+        break;
+
+      case 'image':
+        if (!aggressiveOptimization) {
+          console.log("🎨 FAST IMAGE: Speed-optimized image generation");
+          try {
+            const imageResult = await generateImageWithRunware(message, user.id, language);
+            
+            if (imageResult.success) {
+              imageUrl = imageResult.imageUrl;
+              
+              let baseResponse = language === 'ar' 
+                ? `تم إنشاء الصورة بنجاح! 🎨✨`
+                : `Image generated successfully! 🎨✨`;
+
+              if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
+                baseResponse += language === 'ar'
+                  ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
+                  : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
+              }
+
+              response = baseResponse;
+            } else {
+              response = imageResult.error;
+            }
+          } catch (error) {
+            console.error("Fast image generation error:", error);
+            response = language === 'ar' 
+              ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
+              : `❌ Sorry, an error occurred while generating the image.`;
+          }
+        } else {
+          response = language === 'ar' 
+            ? `عذراً، إنشاء الصور غير متاح في الوضع السريع.`
+            : `Sorry, image generation not available in ultra-fast mode.`;
+        }
+        break;
+
+      case 'chat':
+      default:
+        console.log(`🚀 ULTRA-FAST CHAT: Processing with timeout protection and personalization`);
+        
+        // ULTRA-FAST: Minimal context for lightning speed
+        let chatContext = aggressiveOptimization ? null : minimalConversationSummary;
+        
+        // ULTRA-FAST: Determine interaction type for maximum speed
+        const interactionType = aggressiveOptimization ? 'hyper_fast_openai_chat' : 
+                               speedOptimized ? 'ultra_fast_chat' : 
+                               'speed_optimized_chat';
+        
+        console.log(`🚀 ULTRA-FAST CHAT: ${interactionType} | Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
+        
+        response = await processWithBuddyChatAI(
+          message, 
+          chatContext, 
+          language, 
+          minimalRecentMessages,
+          minimalConversationSummary,
+          activeTrigger,
+          interactionType,
+          processedFiles,
+          customSystemPrompt,
+          maxTokens,
+          personalTouch
+        );
+        break;
     }
 
     const processingTime = Date.now() - startTime;
@@ -305,9 +313,9 @@ serve(async (req) => {
       imageUrl,
       browsingUsed,
       browsingData,
-      needsConfirmation,
-      pendingTaskData,
-      pendingReminderData,
+      needsConfirmation: false, // No confirmation needed for regular chat
+      pendingTaskData: null,
+      pendingReminderData: null,
       success: true,
       processingTime,
       speedOptimized: true,
