@@ -1,4 +1,3 @@
-
 /**
  * Enhanced chat analysis with full personality restoration for Wakti Edge Function
  */
@@ -66,190 +65,195 @@ export function analyzeSmartModeIntent(message: string, activeTrigger: string, l
   };
 }
 
-export async function processWithBuddyChatAI(
-  message: string, 
+// ENHANCED: System prompts with conversation awareness
+const getEnhancedSystemPrompt = (interactionType: string, language: string, customPrompt?: string) => {
+  const basePersonality = language === 'ar' 
+    ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود. كن مرحاً ومرحاً! استخدم النكات والتورية والمرح في ردودك. اجعل المحادثات ممتعة وجذابة. تذكر السياق والمواضيع السابقة في المحادثة واشر إليها بشكل طبيعي.'
+    : 'You are Wakti AI, a smart, helpful, and friendly assistant. Be funny and playful! Use jokes, puns, and humor in your responses. Make conversations enjoyable and engaging. Remember previous context and topics in the conversation and reference them naturally.';
+
+  let systemPrompt = customPrompt || basePersonality;
+
+  // ENHANCED: Add conversation-specific instructions
+  switch (interactionType) {
+    case 'personality_enhanced_conversation':
+      systemPrompt += language === 'ar' 
+        ? '\n\nكن متفاعلاً ومهتماً بالمحادثة. اطرح أسئلة متابعة ذكية واربط الردود بما قاله المستخدم سابقاً. اجعل المحادثة تبدو طبيعية ومتدفقة.'
+        : '\n\nBe interactive and engaged in the conversation. Ask smart follow-up questions and connect responses to what the user said previously. Make the conversation feel natural and flowing.';
+      break;
+    case 'personality_search_enhanced':
+      systemPrompt += language === 'ar' 
+        ? '\n\nاستخدم المعلومات المقدمة واربطها بسياق المحادثة السابقة إذا كان ذلك مناسباً.'
+        : '\n\nUse the provided information and connect it to previous conversation context when appropriate.';
+      break;
+    case 'hyper_fast_openai_chat':
+      systemPrompt = language === 'ar' 
+        ? 'أنت Wakti AI. كن مفيداً ومختصراً.'
+        : 'You are Wakti AI. Be helpful and concise.';
+      break;
+  }
+
+  return systemPrompt;
+};
+
+// ENHANCED: Build conversation-aware messages
+const buildConversationMessages = (
+  userMessage: string, 
   context: string | null, 
-  language: string = 'en', 
-  contextMessages: any[] = [],
-  enhancedContext: string = '',
+  recentMessages: any[], 
+  systemPrompt: string,
+  interactionType: string
+) => {
+  const messages = [{ role: 'system', content: systemPrompt }];
+
+  // ENHANCED: Add conversation context more intelligently
+  if (context && interactionType.includes('enhanced')) {
+    messages.push({
+      role: 'system',
+      content: `Context: ${context}`
+    });
+  } else if (context) {
+    messages.push({
+      role: 'system',
+      content: `Information: ${context}`
+    });
+  }
+
+  // ENHANCED: Include conversation history with better context awareness
+  if (recentMessages && recentMessages.length > 0) {
+    const conversationHistory = recentMessages.slice(-5).map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: typeof msg.content === 'string' 
+        ? (interactionType.includes('enhanced') ? msg.content : msg.content.substring(0, 200))
+        : '[Message with attachment]'
+    }));
+    
+    messages.push(...conversationHistory);
+  }
+
+  // Add current user message
+  messages.push({ role: 'user', content: userMessage });
+
+  return messages;
+};
+
+// ENHANCED: Main processing function with conversation awareness
+export async function processWithBuddyChatAI(
+  userMessage: string,
+  context: string | null = null,
+  language: string = 'en',
+  recentMessages: any[] = [],
+  conversationSummary: string = '',
   activeTrigger: string = 'chat',
-  interactionType: string = 'buddy_chat',
+  interactionType: string = 'personality_enhanced_conversation',
   attachedFiles: any[] = [],
   customSystemPrompt: string = '',
   maxTokens: number = 600
-) {
+): Promise<string> {
+  
+  console.log(`⚡ ENHANCED CHAT: Processing ${interactionType} with ${maxTokens} tokens`);
+  
+  // Build enhanced system prompt
+  const systemPrompt = getEnhancedSystemPrompt(interactionType, language, customSystemPrompt);
+  console.log(`⚡ ENHANCED SYSTEM PROMPT: ${systemPrompt.substring(0, 100)}...`);
+  console.log(`⚡ FULL SYSTEM PROMPT LENGTH: ${systemPrompt.length} characters`);
+  
+  // ENHANCED: Build context with conversation awareness
+  let enhancedContext = context;
+  if (conversationSummary && interactionType.includes('enhanced')) {
+    enhancedContext = conversationSummary + (context ? `\n\nCurrent context: ${context}` : '');
+    console.log(`⚡ ENHANCED CONTEXT: Combined summary and context (${enhancedContext.length} chars)`);
+  }
+  
+  if (enhancedContext) {
+    console.log(`⚡ CONTEXT INCLUDED: ${enhancedContext.length} characters`);
+  }
+  
+  // Enhanced message history inclusion
+  if (recentMessages && recentMessages.length > 0) {
+    console.log(`⚡ CONTEXT MESSAGES: Including ${recentMessages.length} messages`);
+    console.log(`⚡ SUMMARY CONTEXT: ${conversationSummary.length} characters`);
+  }
+
+  // Build conversation messages
+  const messages = buildConversationMessages(
+    userMessage,
+    enhancedContext,
+    recentMessages,
+    systemPrompt,
+    interactionType
+  );
+
   try {
-    console.log(`⚡ ENHANCED CHAT: Processing ${interactionType} with ${maxTokens} tokens`);
-    console.log(`⚡ SYSTEM PROMPT: ${customSystemPrompt.substring(0, 100)}...`);
-    if (attachedFiles.length > 0) {
-      console.log(`⚡ ENHANCED: Processing with ${attachedFiles.length} file(s)`);
-    }
+    let response;
     
-    // ENHANCED: Use OpenAI as primary for best personality support
-    let apiKey = OPENAI_API_KEY;
-    let apiUrl = 'https://api.openai.com/v1/chat/completions';
-    let model = 'gpt-4o-mini'; // Best balance of speed and capability
-    let usingOpenAI = true;
-    
-    // Fallback to DeepSeek if OpenAI is not available
-    if (!apiKey) {
-      console.log("⚡ ENHANCED: OpenAI unavailable, falling back to DeepSeek");
-      apiKey = DEEPSEEK_API_KEY;
-      apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-      model = 'deepseek-chat';
-      usingOpenAI = false;
-    }
-    
-    if (!apiKey) {
-      throw new Error("No AI API key configured");
-    }
-
-    // ENHANCED: Use full system prompt for personality (NO TRUNCATION)
-    const systemPrompt = customSystemPrompt || (language === 'ar' 
-      ? `أنت WAKTI AI، مساعد ذكي ومفيد. كن ودوداً ومفيداً.`
-      : `You are WAKTI AI, a smart and helpful assistant. Be friendly and helpful.`);
-    
-    console.log(`⚡ FULL SYSTEM PROMPT LENGTH: ${systemPrompt.length} characters`);
-    
-    const messages: any[] = [
-      { role: 'system', content: systemPrompt }
-    ];
-    
-    // ENHANCED: Smart context inclusion based on interaction type and personality
-    const includeFullContext = !interactionType.includes('hyper_fast');
-    const isPersonalityMode = interactionType.includes('personality');
-    
-    if (includeFullContext && context && context.length > 0) {
-      const contextToInclude = isPersonalityMode ? context : context.substring(0, 800);
-      messages.push({ 
-        role: 'assistant', 
-        content: `Context: ${contextToInclude}` 
-      });
-      console.log(`⚡ CONTEXT INCLUDED: ${contextToInclude.length} characters`);
-    }
-    
-    // ENHANCED: Include more context messages for personality
-    if (includeFullContext && contextMessages && contextMessages.length > 0) {
-      const messagesToInclude = isPersonalityMode ? 
-        contextMessages.slice(-3) : // More messages for personality
-        contextMessages.slice(-1);
-        
-      console.log(`⚡ CONTEXT MESSAGES: Including ${messagesToInclude.length} messages`);
+    // ENHANCED: Choose AI provider based on interaction type
+    if (OPENAI_API_KEY && (interactionType.includes('enhanced') || interactionType.includes('openai'))) {
+      console.log(`⚡ ENHANCED: Using OpenAI for ${interactionType} with ${messages.length} messages`);
       
-      messagesToInclude.forEach(recentMessage => {
-        if (recentMessage) {
-          let content = recentMessage.content;
-          if (typeof content !== 'string') {
-            if (Array.isArray(content) && content.length > 0) {
-              const textPart = content.find(p => p.type === 'text');
-              content = textPart ? textPart.text : '[attachment]';
-            } else {
-              content = '[attachment]';
-            }
-          }
-          
-          // Longer content for personality mode
-          const maxContentLength = isPersonalityMode ? 300 : 200;
-          messages.push({
-            role: recentMessage.role,
-            content: content.substring(0, maxContentLength)
-          });
-        }
-      });
-    }
-    
-    // Enhanced context from conversation summary
-    if (includeFullContext && enhancedContext && enhancedContext.length > 0) {
-      const summaryToInclude = isPersonalityMode ? enhancedContext : enhancedContext.substring(0, 400);
-      messages.push({
-        role: 'assistant',
-        content: `Previous conversation summary: ${summaryToInclude}`
-      });
-      console.log(`⚡ SUMMARY CONTEXT: ${summaryToInclude.length} characters`);
-    }
-    
-    // Construct user message content
-    let userContent: any = message;
-    
-    // If there are files, build a multipart message for vision-capable models
-    if (attachedFiles && attachedFiles.length > 0) {
-      const contentParts: any[] = [{ type: 'text', text: message }];
-
-      attachedFiles.forEach(file => {
-        if (file.type && file.type.startsWith('image/')) {
-          contentParts.push({
-            type: 'image_url',
-            image_url: {
-              url: `data:${file.type};base64,${file.content}`
-            }
-          });
-        }
-      });
-      
-      userContent = contentParts;
-    }
-
-    messages.push({ role: 'user', content: userContent });
-    
-    console.log(`⚡ ENHANCED: Using ${usingOpenAI ? 'OpenAI' : 'DeepSeek'} for ${interactionType} with ${messages.length} messages`);
-    
-    // ENHANCED: Temperature based on interaction type and personality
-    let temperature = 0.7; // Default balanced temperature
-    
-    if (interactionType.includes('personality')) {
-      temperature = 0.8; // Higher creativity for personality
-    } else if (interactionType.includes('hyper_fast')) {
-      temperature = 0.3; // Lower for consistency in speed mode
-    } else if (interactionType.includes('funny') || interactionType.includes('casual')) {
-      temperature = 0.9; // Even higher for humor and casual conversation
-    }
-    
-    console.log(`⚡ TEMPERATURE: ${temperature} for ${interactionType}`);
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: temperature,
-        max_tokens: maxTokens
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`AI API failed: ${response.status}`, errorText);
-      
-      // If OpenAI fails, try DeepSeek as fallback
-      if (usingOpenAI && DEEPSEEK_API_KEY) {
-        console.log("⚡ ENHANCED: OpenAI failed, trying DeepSeek fallback");
-        return processWithBuddyChatAI(
-          message, context, language, contextMessages, enhancedContext,
-          activeTrigger, interactionType, attachedFiles, customSystemPrompt, maxTokens
-        );
+      // Enhanced temperature based on interaction type
+      let temperature = 0.7;
+      if (interactionType.includes('personality') || interactionType.includes('enhanced')) {
+        temperature = 0.8;
+      } else if (interactionType.includes('hyper_fast')) {
+        temperature = 0.5;
       }
       
-      throw new Error(`AI API failed: ${response.status} - ${errorText}`);
+      console.log(`⚡ TEMPERATURE: ${temperature} for ${interactionType}`);
+      
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          max_tokens: maxTokens,
+          temperature: temperature,
+          top_p: 0.9,
+          frequency_penalty: 0.1,
+          presence_penalty: 0.1
+        }),
+      });
+    } else {
+      console.log(`⚡ ENHANCED: Using DeepSeek for ${interactionType} with ${messages.length} messages`);
+      
+      response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: messages,
+          max_tokens: maxTokens,
+          temperature: interactionType.includes('enhanced') ? 0.8 : 0.7,
+          top_p: 0.9
+        }),
+      });
     }
-    
-    const result = await response.json();
-    const aiResponse = result.choices[0].message.content;
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices[0].message.content;
     
     console.log(`⚡ AI RESPONSE LENGTH: ${aiResponse.length} characters`);
+    
     return aiResponse;
     
   } catch (error) {
-    console.error("⚡ ENHANCED CHAT: Processing error:", error);
+    console.error('⚡ ENHANCED CHAT ERROR:', error);
     
-    // ENHANCED: Better fallback responses with personality
-    if (language === 'ar') {
-      return `عذراً، مشكلة مؤقتة. سأعود قريباً بشخصيتي الكاملة! 😊`;
-    } else {
-      return `Sorry, temporary issue. I'll be back soon with my full personality! 😊`;
-    }
+    // Fallback response with conversation awareness
+    const fallbackResponse = language === 'ar' 
+      ? 'عذراً، حدث خطأ في المعالجة. يمكنك المحاولة مرة أخرى أو طرح سؤال آخر.'
+      : 'Sorry, there was a processing error. You can try again or ask another question.';
+    
+    return fallbackResponse;
   }
 }

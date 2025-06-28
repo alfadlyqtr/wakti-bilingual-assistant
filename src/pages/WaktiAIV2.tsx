@@ -148,7 +148,7 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const { error } = await supabase
+      const { error } } = await supabase
         .from('tr_tasks')
         .insert({
           user_id: user.id,
@@ -271,6 +271,10 @@ const WaktiAIV2 = () => {
     setSessionMessages(prev => [...prev, cancelMessage]);
   };
 
+  // ENHANCED: New state for conversation features
+  const [conversationTopics, setConversationTopics] = useState<string[]>([]);
+  const [lastFollowUpQuestion, setLastFollowUpQuestion] = useState<string | null>(null);
+
   // HYPER-OPTIMIZED: Enhanced message sending with aggressive optimization and request management
   const handleSendMessage = async (
     message: string, 
@@ -292,15 +296,15 @@ const WaktiAIV2 = () => {
     abortControllerRef.current = new AbortController();
 
     try {
-      console.log('⚡ HYPER-OPTIMIZED AI: Message processing initiated');
+      console.log('⚡ ENHANCED AI: Enhanced conversation processing initiated');
       const startTime = Date.now();
 
-      // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
+      // ENHANCED: Handle Voice quota check only if needed (non-blocking)
       if (inputType === 'voice') {
         incrementTranslationCount().catch(e => console.warn('Quota check failed:', e));
       }
 
-      // ULTRA-FAST: Create user message immediately with instant UI update
+      // ENHANCED: Create user message immediately with instant UI update
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -313,7 +317,12 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // HYPER-OPTIMIZED: Send message using static method with timeout handling
+      // ENHANCED: Enhanced conversation context building
+      const conversationSummary = sessionMessages.length > 5 
+        ? `Recent conversation topics: ${conversationTopics.join(', ')}. Previous discussion context available.`
+        : '';
+
+      // ENHANCED: Send message with enhanced conversation parameters
       const response = await Promise.race([
         WaktiAIV2ServiceClass.sendMessage(
           message,
@@ -321,37 +330,50 @@ const WaktiAIV2 = () => {
           language,
           currentConversationId,
           inputType,
-          updatedSessionMessages,
+          updatedSessionMessages.slice(-7), // Enhanced context window
           false,
           activeTrigger,
-          null,
+          conversationSummary, // Enhanced conversation summary
           attachedFiles || []
         ),
         // Backup timeout promise
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 8000)
+          setTimeout(() => reject(new Error('Request timeout')), 10000) // Slightly increased timeout for enhanced processing
         )
       ]) as any;
 
-      // ULTRA-FAST: Create assistant message immediately with ALL response properties
+      // ENHANCED: Create assistant message with enhanced properties
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: response.response,
         timestamp: new Date(),
-        intent: response.intent || 'chat_response',
+        intent: response.intent || 'conversation_enhanced',
         confidence: response.confidence || 'high',
         actionTaken: response.actionTaken || false,
         imageUrl: response.imageUrl,
         browsingUsed: response.browsingUsed,
-        browsingData: response.browsingData
+        browsingData: response.browsingData,
+        followUpQuestion: response.followUpQuestion // New field for follow-up questions
       };
 
       const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
       setSessionMessages(finalSessionMessages);
       
+      // ENHANCED: Handle conversation enhancements
+      if (response.followUpQuestion) {
+        setLastFollowUpQuestion(response.followUpQuestion);
+      }
+      
+      if (response.conversationTopics && response.conversationTopics.length > 0) {
+        setConversationTopics(prev => {
+          const newTopics = [...prev, ...response.conversationTopics];
+          return [...new Set(newTopics)].slice(-10); // Keep last 10 unique topics
+        });
+      }
+      
       const responseTime = Date.now() - startTime;
-      console.log(`⚡ HYPER-OPTIMIZED AI: Total response time: ${responseTime}ms`);
+      console.log(`⚡ ENHANCED AI: Total response time: ${responseTime}ms (Enhanced conversation mode)`);
 
       // Handle special responses
       if (response.needsConfirmation && response.pendingTaskData) {
@@ -369,7 +391,7 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('⚡ HYPER-OPTIMIZED AI: Error:', error);
+      console.error('⚡ ENHANCED AI: Error:', error);
       
       // Handle specific error types
       if (error.message?.includes('timeout')) {
@@ -435,6 +457,8 @@ const WaktiAIV2 = () => {
     setCurrentConversationId(null);
     setSessionMessages([]);
     setConversationMessages([]);
+    setConversationTopics([]); // Clear conversation topics
+    setLastFollowUpQuestion(null); // Clear follow-up question
     WaktiAIV2Service.clearChatSession();
     setError(null);
     setPendingTaskData(null);
@@ -489,6 +513,8 @@ const WaktiAIV2 = () => {
     
     setSessionMessages([]);
     setConversationMessages([]);
+    setConversationTopics([]); // Clear conversation topics
+    setLastFollowUpQuestion(null); // Clear follow-up question
     WaktiAIV2Service.clearChatSession();
     setError(null);
     setPendingTaskData(null);
@@ -585,6 +611,28 @@ const WaktiAIV2 = () => {
           onReminderConfirmation={handleReminderConfirmation}
           onCancelTaskConfirmation={handleCancelTaskConfirmation}
         />
+        
+        {/* ENHANCED: Show follow-up question if available */}
+        {lastFollowUpQuestion && !isLoading && (
+          <div className="px-4 mb-4">
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-primary/5 border border-primary/20 rounded-2xl p-3">
+                <p className="text-sm text-primary/80 mb-2">
+                  {language === 'ar' ? '💭 سؤال متابعة:' : '💭 Follow-up:'}
+                </p>
+                <button
+                  onClick={() => {
+                    setMessage(lastFollowUpQuestion);
+                    setLastFollowUpQuestion(null);
+                  }}
+                  className="text-sm text-foreground hover:text-primary transition-colors text-left w-full"
+                >
+                  {lastFollowUpQuestion}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-t border-border">
         <ChatInput

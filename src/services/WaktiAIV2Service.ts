@@ -8,18 +8,15 @@ export interface AIMessage {
   timestamp: Date;
   intent?: string;
   confidence?: 'high' | 'medium' | 'low';
-  actionTaken?: boolean | string;
+  actionTaken?: boolean;
   inputType?: 'text' | 'voice';
+  attachedFiles?: any[];
+  imageUrl?: string;
   browsingUsed?: boolean;
   browsingData?: any;
-  imageUrl?: string;
   isTextGenerated?: boolean;
-  actionResult?: any;
-  userProfile?: any;
-  needsConfirmation?: boolean;
-  pendingTaskData?: any;
-  pendingReminderData?: any;
-  attachedFiles?: any[];
+  followUpQuestion?: string; // ENHANCED: New field for follow-up questions
+  conversationTopics?: string[]; // ENHANCED: Topics discussed in the conversation
 }
 
 export interface AIConversation {
@@ -400,148 +397,99 @@ export class WaktiAIV2ServiceClass {
     message: string,
     userId?: string,
     language: string = 'en',
-    conversationId?: string | null,
+    conversationId: string | null = null,
     inputType: 'text' | 'voice' = 'text',
-    conversationHistory: any[] = [],
-    confirmSearch: boolean = false,
+    sessionMessages: AIMessage[] = [],
+    streamResponse: boolean = false,
     activeTrigger: string = 'chat',
-    textGenParams: any = null,
-    attachedFiles: any[] = [],
-    calendarContext: any = null,
-    userContext: any = null,
-    enableAdvancedIntegration: boolean = true,
-    enablePredictiveIntegration: boolean = true,
-    enableWorkflowAutomation: boolean = true,
-    confirmTask: boolean = false,
-    confirmReminder: boolean = false,
-    pendingTaskData: any = null,
-    pendingReminderData: any = null
-  ) {
+    conversationSummary: string = '', // ENHANCED: Better conversation summary handling
+    attachedFiles: any[] = []
+  ): Promise<any> {
     try {
-      console.log('⚡ ENHANCED AI: Processing with full personality and task creation restored');
-      const startTime = Date.now();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Authentication required');
+
+      // ENHANCED: Build enhanced recent messages for better context
+      const recentMessages = sessionMessages.slice(-7).map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        inputType: msg.inputType,
+        attachedFiles: msg.attachedFiles
+      }));
+
+      // ENHANCED: Determine user preferences from session messages
+      const userStyle = this.determineUserStyle(sessionMessages);
+      const userTone = this.determineUserTone(sessionMessages);
       
-      // ENHANCED: Load personal touch settings
-      const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
-      const userStyle = personalTouch?.style || 'detailed';
-      const userTone = personalTouch?.tone || 'neutral';
-      
-      // ENHANCED: Better optimization logic - only for truly simple queries
-      const isSimple = isSimpleQuery(message);
-      const hasTaskIntent = hasTaskCreationIntent(message);
-      const useAggressiveOptimization = isSimple && !hasTaskIntent && activeTrigger === 'chat' && !attachedFiles?.length;
-      
-      console.log(`⚡ ENHANCED AI: Mode - ${useAggressiveOptimization ? 'SPEED' : 'PERSONALITY'} | Style: ${userStyle} | Tone: ${userTone} | Task Intent: ${hasTaskIntent}`);
-      
-      // ENHANCED: Cached responses only for truly simple queries
-      if (useAggressiveOptimization) {
-        const cachedResponse = AIResponseCache.getCachedResponse(message);
-        if (cachedResponse) {
-          console.log('⚡ INSTANT CACHE HIT: Returning cached response');
-          return {
-            response: cachedResponse,
-            conversationId: conversationId || this.generateConversationId(),
-            intent: 'cached_response',
-            confidence: 'high',
-            success: true,
-            cached: true,
-            processingTime: Date.now() - startTime
-          };
+      console.log(`⚡ ENHANCED SERVICE: Sending with style: ${userStyle}, tone: ${userTone}`);
+
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message,
+          userId: user.id,
+          language,
+          conversationId,
+          inputType,
+          activeTrigger,
+          attachedFiles,
+          conversationSummary, // Enhanced summary
+          recentMessages, // Enhanced message history
+          customSystemPrompt: '',
+          maxTokens: 850, // Increased for enhanced responses
+          userStyle,
+          userTone,
+          speedOptimized: false,
+          aggressiveOptimization: false,
+          hasTaskIntent: false,
+          personalityEnabled: true, // Always enabled for enhanced conversation
+          enableTaskCreation: true,
+          enablePersonality: true
         }
-      }
-      
-      const auth = await AuthCache.getValidAuth();
-      if (!auth) throw new Error('Authentication failed');
-      
-      // ENHANCED: Better conversation compression with personality awareness
-      const { summary, recentMessages } = MessageCompressor.compressHistory(conversationHistory, userStyle);
-      
-      // ENHANCED: Process attached files
-      let processedFiles = attachedFiles;
-      if (attachedFiles?.length > 0) {
-        processedFiles = await this.processOptimizedFiles(attachedFiles);
-      }
-      
-      // ENHANCED: Build full system prompt without truncation
-      const customSystemPrompt = buildPersonalizedSystemPrompt(personalTouch, language);
-      console.log(`⚡ SYSTEM PROMPT LENGTH: ${customSystemPrompt.length} characters`);
-      
-      // ENHANCED: Proper token allocation
-      const maxTokens = getPersonalizedTokenLimits(userStyle, userTone);
-      
-      const abortController = AuthCache.getAbortController();
-      const timeoutMs = useAggressiveOptimization ? 4000 : 8000; // More time for personality
-      const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
-      
-      try {
-        const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
-          body: {
-            message,
-            userId: auth.userId,
-            language,
-            conversationId,
-            inputType,
-            activeTrigger,
-            attachedFiles: processedFiles,
-            
-            // ENHANCED: Full context for personality and memory
-            conversationSummary: useAggressiveOptimization ? '' : summary || '',
-            recentMessages: useAggressiveOptimization ? [] : recentMessages,
-            customSystemPrompt: customSystemPrompt, // Full prompt without truncation
-            maxTokens,
-            userStyle,
-            userTone,
-            
-            // Enhanced optimization flags
-            speedOptimized: useAggressiveOptimization,
-            aggressiveOptimization: useAggressiveOptimization,
-            hasTaskIntent,
-            personalityEnabled: !useAggressiveOptimization, // Enable personality for non-simple queries
-            
-            // Enhanced context
-            enableTaskCreation: true,
-            enablePersonality: !useAggressiveOptimization
-          },
-          headers: {
-            'x-auth-token': auth.token,
-            'x-skip-auth': 'true'
-          }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        const responseTime = Date.now() - startTime;
-        console.log(`⚡ ENHANCED AI: Response in ${responseTime}ms (${useAggressiveOptimization ? 'SPEED' : 'PERSONALITY'} mode)`);
-        
-        if (response.error) {
-          throw new Error(response.error.message || 'AI service error');
-        }
-        
-        // Cache only simple responses
-        if (useAggressiveOptimization && !attachedFiles?.length) {
-          AIResponseCache.setCachedResponse(message, response.data.response);
-        }
-        
-        // Fire-and-forget quota logging
-        this.logQuotaAsync(auth.userId, inputType, responseTime).catch(e => 
-          console.warn('Quota logging failed silently:', e)
-        );
-        
-        return response.data;
-      } catch (error: any) {
-        clearTimeout(timeoutId);
-        
-        if (error.name === 'AbortError') {
-          throw new Error(`Request timeout after ${timeoutMs}ms - try again`);
-        }
-        throw error;
-      }
-    } catch (error: any) {
-      console.error('⚡ ENHANCED AI: Service error:', error);
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Enhanced send message error:', error);
       throw error;
     }
   }
-  
+
+  // ENHANCED: Determine user communication style from conversation history
+  private static determineUserStyle(messages: AIMessage[]): 'short answers' | 'detailed' | 'balanced' {
+    if (messages.length < 3) return 'detailed';
+    
+    const userMessages = messages.filter(m => m.role === 'user');
+    const avgLength = userMessages.reduce((sum, msg) => sum + msg.content.length, 0) / userMessages.length;
+    
+    if (avgLength < 50) return 'short answers';
+    if (avgLength > 150) return 'detailed';
+    return 'balanced';
+  }
+
+  // ENHANCED: Determine user tone from conversation history
+  private static determineUserTone(messages: AIMessage[]): 'neutral' | 'funny' | 'casual' | 'encouraging' {
+    if (messages.length < 2) return 'neutral';
+    
+    const userMessages = messages.filter(m => m.role === 'user').slice(-3);
+    const text = userMessages.map(m => m.content.toLowerCase()).join(' ');
+    
+    if (text.includes('haha') || text.includes('lol') || text.includes('😄') || text.includes('funny')) {
+      return 'funny';
+    }
+    if (text.includes('thanks') || text.includes('great') || text.includes('awesome') || text.includes('👍')) {
+      return 'encouraging';
+    }
+    if (text.includes('hey') || text.includes('sup') || text.includes('whats up')) {
+      return 'casual';
+    }
+    
+    return 'neutral';
+  }
+
+  // ... keep existing code (other methods)
+
   // Enhanced file processing with document support
   private static async processOptimizedFiles(attachedFiles: any[]): Promise<any[]> {
     if (!attachedFiles?.length) return [];
