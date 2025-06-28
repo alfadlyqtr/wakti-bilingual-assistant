@@ -14,7 +14,7 @@ interface EnforcementOptions {
 
 export class PersonalizationEnforcer {
   /**
-   * Main enforcement function that ensures AI responses match user preferences
+   * ENHANCED: Main enforcement function with AGGRESSIVE personalization
    */
   static enforcePersonalization(
     originalResponse: string,
@@ -27,41 +27,41 @@ export class PersonalizationEnforcer {
     let enforcedResponse = originalResponse;
     const { personalTouch, language } = options;
 
-    console.log('🎯 PERSONALIZATION ENFORCER: Starting enforcement', {
+    console.log('🎯 PERSONALIZATION ENFORCER: Starting AGGRESSIVE enforcement', {
       tone: personalTouch.tone,
       style: personalTouch.style,
       originalLength: originalResponse.length
     });
 
-    // 1. Enforce style preferences (length, format)
+    // 1. AGGRESSIVE: Enforce style preferences (length, format)
     enforcedResponse = this.enforceStylePreferences(
       enforcedResponse,
       personalTouch.style,
       language
     );
 
-    // 2. Enforce tone consistency
+    // 2. AGGRESSIVE: Enforce tone consistency
     enforcedResponse = this.enforceToneConsistency(
       enforcedResponse,
       personalTouch.tone,
       language
     );
 
-    // 3. Add nickname usage
+    // 3. AGGRESSIVE: Add nickname usage
     enforcedResponse = this.enforceNicknameUsage(
       enforcedResponse,
       personalTouch.nickname,
       language
     );
 
-    // 4. Add AI nickname signature
+    // 4. AGGRESSIVE: Add AI nickname signature
     enforcedResponse = this.enforceAINickname(
       enforcedResponse,
       personalTouch.aiNickname,
       language
     );
 
-    console.log('✅ PERSONALIZATION ENFORCER: Completed', {
+    console.log('✅ PERSONALIZATION ENFORCER: AGGRESSIVELY completed', {
       originalLength: originalResponse.length,
       enforcedLength: enforcedResponse.length,
       changesApplied: enforcedResponse !== originalResponse
@@ -71,7 +71,7 @@ export class PersonalizationEnforcer {
   }
 
   /**
-   * Enforce style preferences (short answers, bullet points, etc.)
+   * AGGRESSIVE: Enforce style preferences (short answers, bullet points, etc.)
    */
   private static enforceStylePreferences(
     response: string,
@@ -94,28 +94,30 @@ export class PersonalizationEnforcer {
   }
 
   /**
-   * Enforce short answer preference
+   * AGGRESSIVE: Enforce short answer preference
    */
   private static enforceShortAnswers(response: string, language: string): string {
-    // If response is already short (< 150 chars), keep it
-    if (response.length <= 150) {
+    // If response is already short (< 100 chars), keep it
+    if (response.length <= 100) {
       return response;
     }
 
-    // Split into sentences and keep first 2
+    // AGGRESSIVE: Split into sentences and keep ONLY the first one for ultra-short
     const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 0);
     
-    if (sentences.length <= 2) {
-      return response;
-    }
+    if (sentences.length === 0) return response;
 
-    // Take first 2 sentences and ensure proper ending
-    const shortResponse = sentences.slice(0, 2).join('. ').trim();
+    // Take ONLY first sentence and ensure it's under 100 chars
+    let shortResponse = sentences[0].trim();
+    if (shortResponse.length > 100) {
+      shortResponse = shortResponse.substring(0, 97) + '...';
+    }
+    
     return shortResponse + (shortResponse.endsWith('.') ? '' : '.');
   }
 
   /**
-   * Enforce bullet points format
+   * AGGRESSIVE: Enforce bullet points format
    */
   private static enforceBulletPoints(response: string, language: string): string {
     // If already has bullet points, keep it
@@ -123,19 +125,19 @@ export class PersonalizationEnforcer {
       return response;
     }
 
-    // Split by sentences or key phrases
-    const points = response.split(/[.!?]+|,\s*(?=\w)/).filter(s => s.trim().length > 15);
+    // AGGRESSIVE: Split by ANY punctuation and create bullets
+    const parts = response.split(/[.!?;,]+|and|or|also|في|و|أيضاً/).filter(s => s.trim().length > 5);
     
-    if (points.length <= 1) {
+    if (parts.length <= 1) {
       return response;
     }
 
     const bulletChar = '•';
-    return points.map(point => `${bulletChar} ${point.trim()}`).join('\n');
+    return parts.map(part => `${bulletChar} ${part.trim()}`).join('\n');
   }
 
   /**
-   * Enforce step-by-step format
+   * AGGRESSIVE: Enforce step-by-step format
    */
   private static enforceStepByStep(response: string, language: string): string {
     // If already has step numbers, keep it
@@ -143,7 +145,8 @@ export class PersonalizationEnforcer {
       return response;
     }
 
-    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    // AGGRESSIVE: Split by sentences and create numbered steps
+    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 5);
     
     if (sentences.length <= 1) {
       return response;
@@ -156,7 +159,7 @@ export class PersonalizationEnforcer {
   }
 
   /**
-   * Enforce tone consistency
+   * AGGRESSIVE: Enforce tone consistency
    */
   private static enforceToneConsistency(
     response: string,
@@ -178,27 +181,27 @@ export class PersonalizationEnforcer {
   }
 
   /**
-   * Enforce funny tone
+   * AGGRESSIVE: Enforce funny tone
    */
   private static enforceFunnyTone(response: string, language: string): string {
     // Check if response already has funny elements
-    const hasFunnyElements = /[😄😆🤪🎉😊🙃]|haha|هههه/.test(response);
+    const hasFunnyElements = /[😄😆🤪🎉😊🙃]|haha|ههه|funny|joke|lol/i.test(response);
     
     if (hasFunnyElements) {
       return response;
     }
 
-    // Add funny elements
+    // AGGRESSIVE: Add multiple funny elements
     const funnyAdditions = language === 'ar' ? [
-      ' 😄',
-      ' هههه',
-      '! يلا نشوف',
-      '! حلو كده'
+      ' 😄 هههه، هذا مضحك!',
+      ' 🤪 يلا نضحك شوي!',
+      ' 😆 حلو، أنا بحب النكت!',
+      ' 🎉 هاي نكتة حلوة، مش كده؟'
     ] : [
-      ' 😄',
-      ' haha',
-      '! That\'s fun',
-      '! Cool beans'
+      ' 😄 Haha, that\'s hilarious!',
+      ' 🤪 Let\'s have some fun!',
+      ' 😆 LOL, I love jokes!',
+      ' 🎉 That\'s a good one, right?'
     ];
 
     const randomAddition = funnyAdditions[Math.floor(Math.random() * funnyAdditions.length)];
@@ -206,68 +209,100 @@ export class PersonalizationEnforcer {
   }
 
   /**
-   * Enforce casual tone
+   * AGGRESSIVE: Enforce casual tone
    */
   private static enforceCasualTone(response: string, language: string): string {
     // Check if response is already casual
-    const hasCasualElements = /[😊👍✨💫🙂]|awesome|cool|يلا|طيب/.test(response.toLowerCase());
+    const hasCasualElements = /[😊👍✨💫🙂]|awesome|cool|nice|يلا|طيب|حلو/i.test(response);
     
     if (hasCasualElements) {
       return response;
     }
 
+    // AGGRESSIVE: Add casual elements and modify formal words
+    let casualResponse = response
+      .replace(/\bHowever\b/g, 'But')
+      .replace(/\bTherefore\b/g, 'So')
+      .replace(/\bNevertheless\b/g, 'Still')
+      .replace(/\bFurthermore\b/g, 'Also');
+
     const casualAdditions = language === 'ar' ? [
-      ' 😊',
-      '! يلا',
-      '! طيب'
+      ' 😊 يلا، هيك أحسن!',
+      ' 👍 طيب كده!',
+      ' ✨ حلو أوي!',
+      ' 🙂 بسيط جداً!'
     ] : [
-      ' 😊',
-      '! Awesome',
-      '! Cool'
+      ' 😊 Cool, that\'s better!',
+      ' 👍 Awesome stuff!',
+      ' ✨ Pretty neat!',
+      ' 🙂 Super simple!'
     ];
 
     const randomAddition = casualAdditions[Math.floor(Math.random() * casualAdditions.length)];
-    return response + randomAddition;
+    return casualResponse + randomAddition;
   }
 
   /**
-   * Enforce encouraging tone
+   * AGGRESSIVE: Enforce encouraging tone
    */
   private static enforceEncouragingTone(response: string, language: string): string {
-    const hasEncouragingElements = /[💪🌟✨🚀👏🎯]|you got this|amazing|excellent|تستطيع|رائع|ممتاز/.test(response.toLowerCase());
+    const hasEncouragingElements = /[💪🌟✨🚀👏🎯]|you got|amazing|great|excellent|تستطيع|رائع|ممتاز/i.test(response);
     
     if (hasEncouragingElements) {
       return response;
     }
 
+    // AGGRESSIVE: Add encouraging words throughout
+    let encouragingResponse = response
+      .replace(/\bcan\b/gi, 'can totally')
+      .replace(/\bwill\b/gi, 'will definitely')
+      .replace(/يمكن/g, 'بالتأكيد يمكن')
+      .replace(/سوف/g, 'سوف بالتأكيد');
+
     const encouragingAdditions = language === 'ar' ? [
-      '! أنت تستطيع 💪',
-      '! رائع',
-      '! ممتاز ✨'
+      ' 💪 أنت تستطيع فعل هذا! رائع!',
+      ' 🌟 ممتاز! استمر هكذا!',
+      ' 🚀 عظيم! أنت في الطريق الصحيح!',
+      ' 👏 برافو! هذا إنجاز رائع!'
     ] : [
-      '! You got this 💪',
-      '! Amazing',
-      '! Excellent ✨'
+      ' 💪 You totally got this! Amazing!',
+      ' 🌟 Excellent! Keep it up!',
+      ' 🚀 Great job! You\'re on the right track!',
+      ' 👏 Bravo! That\'s fantastic progress!'
     ];
 
     const randomAddition = encouragingAdditions[Math.floor(Math.random() * encouragingAdditions.length)];
-    return response + randomAddition;
+    return encouragingResponse + randomAddition;
   }
 
   /**
-   * Enforce serious tone
+   * AGGRESSIVE: Enforce serious tone
    */
   private static enforceSeriousTone(response: string, language: string): string {
-    // Remove casual elements and emojis for serious tone
-    let seriousResponse = response.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
-    seriousResponse = seriousResponse.replace(/!+/g, '.'); // Replace exclamations with periods
-    seriousResponse = seriousResponse.replace(/\s+/g, ' ').trim(); // Clean up spacing
+    // AGGRESSIVE: Remove ALL casual elements and emojis
+    let seriousResponse = response
+      .replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '')
+      .replace(/!+/g, '.') // Replace ALL exclamations
+      .replace(/\bhaha\b/gi, '')
+      .replace(/\blol\b/gi, '')
+      .replace(/ههه/g, '')
+      .replace(/\s+/g, ' ') // Clean up spacing
+      .trim();
+    
+    // AGGRESSIVE: Make language more formal
+    seriousResponse = seriousResponse
+      .replace(/\bawesome\b/gi, 'excellent')
+      .replace(/\bcool\b/gi, 'good')
+      .replace(/\bnice\b/gi, 'satisfactory')
+      .replace(/يلا/g, '')
+      .replace(/حلو/g, 'جيد')
+      .replace(/طيب/g, 'حسناً');
     
     return seriousResponse;
   }
 
   /**
-   * Enforce nickname usage
+   * AGGRESSIVE: Enforce nickname usage
    */
   private static enforceNicknameUsage(
     response: string,
@@ -279,22 +314,24 @@ export class PersonalizationEnforcer {
     }
 
     // Don't add nickname if response is very short or already contains it
-    if (response.length < 50 || response.toLowerCase().includes(nickname.toLowerCase())) {
+    if (response.length < 30 || response.toLowerCase().includes(nickname.toLowerCase())) {
       return response;
     }
 
     const greetingPhrases = language === 'ar' ? [
       `${nickname}، `,
       `أهلاً ${nickname}! `,
-      `طيب ${nickname}، `
+      `استمع ${nickname}، `,
+      `${nickname} العزيز، `
     ] : [
       `${nickname}, `,
       `Hey ${nickname}! `,
-      `Alright ${nickname}, `
+      `Listen ${nickname}, `,
+      `Dear ${nickname}, `
     ];
 
-    // 30% chance to add nickname
-    if (Math.random() < 0.3) {
+    // AGGRESSIVE: 60% chance to add nickname
+    if (Math.random() < 0.6) {
       const randomGreeting = greetingPhrases[Math.floor(Math.random() * greetingPhrases.length)];
       return randomGreeting + response;
     }
@@ -303,7 +340,7 @@ export class PersonalizationEnforcer {
   }
 
   /**
-   * Enforce AI nickname signature
+   * AGGRESSIVE: Enforce AI nickname signature
    */
   private static enforceAINickname(
     response: string,
@@ -321,16 +358,18 @@ export class PersonalizationEnforcer {
 
     const signatures = language === 'ar' ? [
       `\n\n- ${aiNickname} 🤖`,
-      `\n\n~ ${aiNickname}`,
-      `\n\n— ${aiNickname} ✨`
+      `\n\n~ ${aiNickname} ✨`,
+      `\n\n— ${aiNickname} 💫`,
+      `\n\n🤖 ${aiNickname}`
     ] : [
       `\n\n- ${aiNickname} 🤖`,
-      `\n\n~ ${aiNickname}`,
-      `\n\n— ${aiNickname} ✨`
+      `\n\n~ ${aiNickname} ✨`,
+      `\n\n— ${aiNickname} 💫`,
+      `\n\n🤖 ${aiNickname}`
     ];
 
-    // 25% chance to add signature
-    if (Math.random() < 0.25) {
+    // AGGRESSIVE: 40% chance to add signature
+    if (Math.random() < 0.4) {
       const randomSignature = signatures[Math.floor(Math.random() * signatures.length)];
       return response + randomSignature;
     }

@@ -1,67 +1,161 @@
 
-import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
+import { PersonalizationProcessor } from '../../../src/services/PersonalizationProcessor.ts';
+
+const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+
+interface PersonalTouchData {
+  nickname: string;
+  tone: string;
+  style: string;
+  instruction: string;
+  aiNickname?: string;
+}
+
+// ENHANCED: Much more aggressive personality-based system prompts
+function buildPersonalizedSystemPrompt(personalTouch: PersonalTouchData | null, language: string): string {
+  let basePrompt = language === 'ar' 
+    ? "أنت وقتي AI، مساعد ذكي ومفيد وودود."
+    : "You are Wakti AI, a smart, helpful, and friendly assistant.";
+
+  if (!personalTouch) {
+    return basePrompt + (language === 'ar' 
+      ? " قدم إجابات مفصلة وشاملة."
+      : " Provide detailed and comprehensive answers.");
+  }
+
+  // AGGRESSIVE PERSONALITY ENFORCEMENT
+  const { nickname, tone, style, instruction, aiNickname } = personalTouch;
+
+  // Build personality-focused prompt
+  let personalityPrompt = basePrompt;
+
+  // AGGRESSIVE TONE ENFORCEMENT
+  switch (tone) {
+    case 'funny':
+      personalityPrompt += language === 'ar' 
+        ? " كن مرحاً ومضحكاً! استخدم النكت والتعليقات الطريفة والإيموجي المرحة. اجعل كل إجابة ممتعة ومسلية!"
+        : " Be FUNNY and HILARIOUS! Use jokes, witty comments, and fun emojis. Make EVERY response entertaining and amusing!";
+      break;
+    case 'casual':
+      personalityPrompt += language === 'ar' 
+        ? " كن عادياً ومريحاً! استخدم لغة بسيطة وودية. تكلم كصديق مقرب!"
+        : " Be SUPER CASUAL and relaxed! Use simple, friendly language. Talk like a close friend!";
+      break;
+    case 'encouraging':
+      personalityPrompt += language === 'ar' 
+        ? " كن محفزاً ومشجعاً! استخدم كلمات الدعم والتحفيز. اجعل المستخدم يشعر بالثقة!"
+        : " Be VERY ENCOURAGING and supportive! Use motivational words. Make the user feel confident and capable!";
+      break;
+    case 'serious':
+      personalityPrompt += language === 'ar' 
+        ? " كن جدياً ومهنياً. تجنب الإيموجي والنكت. استخدم لغة رسمية."
+        : " Be SERIOUS and professional. Avoid emojis and jokes. Use formal language.";
+      break;
+  }
+
+  // AGGRESSIVE STYLE ENFORCEMENT
+  switch (style) {
+    case 'short answers':
+      personalityPrompt += language === 'ar' 
+        ? " اجعل إجاباتك قصيرة جداً ومباشرة! لا تتجاوز جملتين."
+        : " Keep answers VERY SHORT and direct! Maximum 2 sentences.";
+      break;
+    case 'bullet points':
+      personalityPrompt += language === 'ar' 
+        ? " استخدم النقاط دائماً! قسم كل إجابة إلى نقاط واضحة."
+        : " ALWAYS use bullet points! Break every answer into clear points.";
+      break;
+    case 'step-by-step':
+      personalityPrompt += language === 'ar' 
+        ? " قسم كل شيء إلى خطوات واضحة ومرقمة!"
+        : " Break EVERYTHING into clear, numbered steps!";
+      break;
+  }
+
+  // NICKNAME USAGE
+  if (nickname && nickname.trim()) {
+    personalityPrompt += language === 'ar' 
+      ? ` ناد المستخدم باسم "${nickname}" في إجاباتك!`
+      : ` Address the user as "${nickname}" in your responses!`;
+  }
+
+  // AI NICKNAME
+  if (aiNickname && aiNickname.trim()) {
+    personalityPrompt += language === 'ar' 
+      ? ` قدم نفسك كـ "${aiNickname}" أحياناً.`
+      : ` Sometimes introduce yourself as "${aiNickname}".`;
+  }
+
+  // CUSTOM INSTRUCTIONS
+  if (instruction && instruction.trim()) {
+    personalityPrompt += language === 'ar' 
+      ? ` تعليمات خاصة: ${instruction}`
+      : ` Special instructions: ${instruction}`;
+  }
+
+  return personalityPrompt;
+}
+
+// ENHANCED: Aggressive temperature based on personality
+function getPersonalizedTemperature(personalTouch: PersonalTouchData | null): number {
+  if (!personalTouch) return 0.7;
+
+  switch (personalTouch.tone) {
+    case 'funny': return 0.9; // High creativity for humor
+    case 'casual': return 0.8; // High for casual conversation
+    case 'encouraging': return 0.8; // High for varied encouragement
+    case 'serious': return 0.3; // Low for consistency
+    default: return 0.7;
+  }
+}
 
 export async function processWithBuddyChatAI(
   message: string,
   context: string | null,
-  language: string,
-  recentMessages: any[],
-  conversationSummary: string,
-  activeTrigger: string,
-  interactionType: string,
-  attachedFiles: any[] = [],
+  language: string = 'en',
+  recentMessages: any[] = [],
+  conversationSummary: string = '',
+  activeTrigger: string = 'chat',
+  interactionType: string = 'enhanced_chat',
+  processedFiles: any[] = [],
   customSystemPrompt: string = '',
-  maxTokens: number = 400,
-  personalTouch: any = null
+  maxTokens: number = 600,
+  personalTouch: PersonalTouchData | null = null
 ): Promise<string> {
-  
-  console.log(`🚀 ENHANCED CHAT: Processing with SMART MEMORY (${recentMessages.length}+ trigger) - ${interactionType} (${maxTokens} tokens)`);
-
-  // ENHANCED: Check if we have images attached for Vision
-  const hasImages = attachedFiles && attachedFiles.length > 0 && 
-    attachedFiles.some(file => file.type && file.type.startsWith('image/'));
-
-  if (hasImages) {
-    console.log(`🔍 VISION MODE: Processing ${attachedFiles.length} attached files`);
-    return await processWithOpenAIVision(message, attachedFiles, language, personalTouch, maxTokens);
-  }
-
-  // ENHANCED: Apply FULL personalization from the start
-  let personalizedSystemPrompt = buildPersonalizedSystemPrompt(language, personalTouch);
-  
-  if (customSystemPrompt && customSystemPrompt.trim()) {
-    personalizedSystemPrompt += `\n\nAdditional Instructions: ${customSystemPrompt}`;
-  }
-
-  console.log("🎯 APPLYING FULL PERSONALIZATION:", {
-    nickname: personalTouch?.nickname || 'none',
-    tone: personalTouch?.tone || 'neutral',
-    style: personalTouch?.style || 'detailed',
-    instruction: personalTouch?.instruction || ''
-  });
-
-  console.log("🎯 FULL PERSONALIZED SYSTEM PROMPT:", personalizedSystemPrompt.substring(0, 100) + "...");
-
-  // ENHANCED: Build conversation context with smart memory
-  const messages = [];
-  
-  messages.push({
-    role: "system",
-    content: personalizedSystemPrompt
-  });
-
-  // ENHANCED: Add conversation context for continuity (SMART MEMORY)
-  if (conversationSummary && conversationSummary.trim()) {
-    console.log("🧠 SMART MEMORY: Using enhanced conversation context");
-    messages.push({
-      role: "system",
-      content: `Previous conversation context: ${conversationSummary}`
+  try {
+    console.log('🎯 APPLYING FULL PERSONALIZATION:', {
+      nickname: personalTouch?.nickname || 'none',
+      tone: personalTouch?.tone || 'neutral',
+      style: personalTouch?.style || 'detailed',
+      instruction: personalTouch?.instruction || ''
     });
-  }
 
-  // ENHANCED: Add recent messages for better context understanding
-  if (recentMessages && recentMessages.length > 0) {
-    console.log(`🧠 CONTEXT: Using ${recentMessages.length} recent messages for continuity`);
+    // ENHANCED: Build aggressive personalized system prompt
+    const personalizedSystemPrompt = buildPersonalizedSystemPrompt(personalTouch, language);
+    console.log('🎯 FULL PERSONALIZED SYSTEM PROMPT:', personalizedSystemPrompt.substring(0, 200) + '...');
+
+    // ENHANCED: Get personality-based temperature
+    const personalizedTemperature = getPersonalizedTemperature(personalTouch);
+    console.log('🎯 PERSONALIZED TEMPERATURE:', personalizedTemperature);
+
+    // Build context for AI
+    let fullContext = '';
+    if (context) fullContext += `Context: ${context}\n\n`;
+    if (conversationSummary) fullContext += `Previous conversation: ${conversationSummary}\n\n`;
+
+    // Build message history
+    const messages = [
+      { role: 'system', content: personalizedSystemPrompt }
+    ];
+
+    // Add context if available
+    if (fullContext.trim()) {
+      messages.push({ role: 'system', content: fullContext });
+    }
+
+    // Add recent messages for continuity
+    console.log('🧠 CONTEXT: Using', recentMessages.length, 'recent messages for continuity');
     recentMessages.forEach(msg => {
       if (msg.role && msg.content) {
         messages.push({
@@ -70,317 +164,162 @@ export async function processWithBuddyChatAI(
         });
       }
     });
-  }
 
-  // Add current user message
-  messages.push({
-    role: "user",
-    content: message
-  });
-
-  console.log(`🧠 MESSAGE COUNT: System(1) + Context(${conversationSummary ? 1 : 0}) + History(${recentMessages.length}) + Current(1) = ${messages.length}`);
-
-  // ENHANCED: Personalized temperature based on tone
-  const temperature = personalTouch?.tone === 'serious' ? 0.3 : 
-                     personalTouch?.tone === 'casual' ? 0.7 : 0.5;
-  console.log(`🎯 PERSONALIZED TEMPERATURE: ${temperature}`);
-
-  return await makeAPICall(messages, maxTokens, temperature);
-}
-
-async function processWithOpenAIVision(
-  message: string, 
-  attachedFiles: any[], 
-  language: string, 
-  personalTouch: any, 
-  maxTokens: number
-): Promise<string> {
-  
-  console.log("🔍 VISION PROCESSING: Starting OpenAI Vision analysis");
-  
-  if (!OPENAI_API_KEY) {
-    return language === 'ar' 
-      ? 'عذراً، مفتاح OpenAI غير متوفر لتحليل الصور.'
-      : 'Sorry, OpenAI API key is not available for image analysis.';
-  }
-
-  // Build personalized system prompt for vision
-  const personalizedSystemPrompt = buildPersonalizedSystemPrompt(language, personalTouch);
-
-  // Build vision message content
-  const messageContent = [
-    {
-      type: "text",
-      text: message || (language === 'ar' ? 'حلل هذه الصورة' : 'Analyze this image')
-    }
-  ];
-
-  // Add images to message content
-  attachedFiles.forEach(file => {
-    if (file.type && file.type.startsWith('image/')) {
-      if (file.optimized && file.publicUrl) {
-        // Use optimized URL for Vision
-        messageContent.push({
-          type: "image_url",
-          image_url: {
-            url: file.publicUrl,
-            detail: "high" // High detail for better analysis
+    // ENHANCED: Vision support for attached files
+    if (processedFiles && processedFiles.length > 0) {
+      console.log('🔍 VISION MODE: Processing', processedFiles.length, 'attached files');
+      
+      const imageFiles = processedFiles.filter(file => 
+        file.type === 'image' || (file.publicUrl && file.type?.startsWith('image/'))
+      );
+      
+      if (imageFiles.length > 0) {
+        console.log('🔍 VISION PROCESSING: Starting OpenAI Vision analysis');
+        
+        const visionContent = [
+          { type: 'text', text: message }
+        ];
+        
+        imageFiles.forEach(file => {
+          if (file.publicUrl) {
+            console.log('🔍 VISION: Added optimized image URL');
+            visionContent.push({
+              type: 'image_url',
+              image_url: { url: file.publicUrl }
+            });
           }
         });
-        console.log(`🔍 VISION: Added optimized image URL`);
-      } else if (file.url) {
-        // Fallback to regular URL
-        messageContent.push({
-          type: "image_url",
-          image_url: {
-            url: file.url,
-            detail: "high"
-          }
+        
+        messages.push({ role: 'user', content: visionContent });
+        
+        // Use OpenAI for Vision
+        console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4o');
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o',
+            messages: messages,
+            max_tokens: maxTokens,
+            temperature: personalizedTemperature
+          }),
         });
-        console.log(`🔍 VISION: Added fallback image URL`);
-      }
-    }
-  });
 
-  const messages = [
-    {
-      role: "system",
-      content: personalizedSystemPrompt
-    },
-    {
-      role: "user",
-      content: messageContent
-    }
-  ];
-
-  try {
-    console.log("🔍 VISION API: Calling OpenAI Vision with gpt-4o");
-    
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o', // Vision-capable model
-        messages: messages,
-        max_tokens: Math.min(maxTokens, 1000), // Vision responses can be longer
-        temperature: personalTouch?.tone === 'serious' ? 0.3 : 0.5
-      }),
-    });
-
-    if (!response.ok) {
-      console.error("🔍 VISION ERROR: API call failed", response.status);
-      throw new Error(`OpenAI Vision API error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const content = result.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No content received from Vision API');
-    }
-
-    console.log(`🔍 VISION SUCCESS: Generated ${content.length} characters`);
-    return content;
-
-  } catch (error) {
-    console.error("🔍 VISION ERROR:", error);
-    
-    // Fallback to text-only mode
-    const fallbackMessage = language === 'ar' 
-      ? `عذراً، لم أتمكن من تحليل الصورة. يمكنني مساعدتك بالنص فقط: ${message}`
-      : `Sorry, I couldn't analyze the image. I can help with text only: ${message}`;
-    
-    return await processTextOnly(fallbackMessage, language, personalTouch, maxTokens);
-  }
-}
-
-async function processTextOnly(
-  message: string, 
-  language: string, 
-  personalTouch: any, 
-  maxTokens: number
-): Promise<string> {
-  
-  const personalizedSystemPrompt = buildPersonalizedSystemPrompt(language, personalTouch);
-  
-  const messages = [
-    {
-      role: "system",
-      content: personalizedSystemPrompt
-    },
-    {
-      role: "user",
-      content: message
-    }
-  ];
-
-  return await makeAPICall(messages, maxTokens, 0.5);
-}
-
-function buildPersonalizedSystemPrompt(language: string, personalTouch: any): string {
-  let systemPrompt = language === 'ar' 
-    ? "أنت وقتي AI، مساعد ذكي ومفيد وودود."
-    : "You are Wakti AI, a smart, helpful, and friendly assistant.";
-
-  if (personalTouch) {
-    // Add nickname
-    if (personalTouch.nickname && personalTouch.nickname.trim()) {
-      systemPrompt += language === 'ar' 
-        ? ` المستخدم يفضل أن تناديه ${personalTouch.nickname.trim()}.`
-        : ` The user prefers to be called ${personalTouch.nickname.trim()}.`;
-    }
-
-    // Add tone
-    if (personalTouch.tone) {
-      switch (personalTouch.tone) {
-        case 'serious':
-          systemPrompt += language === 'ar' 
-            ? " تحدث بجدية ومهنية."
-            : " Speak seriously and professionally.";
-          break;
-        case 'casual':
-          systemPrompt += language === 'ar' 
-            ? " تحدث بطريقة غير رسمية وودية."
-            : " Speak casually and friendly.";
-          break;
-        case 'humorous':
-          systemPrompt += language === 'ar' 
-            ? " أضف لمسة من الفكاهة إلى إجاباتك."
-            : " Add humor to your responses.";
-          break;
-      }
-    }
-
-    // Add style
-    if (personalTouch.style) {
-      switch (personalTouch.style) {
-        case 'short answers':
-          systemPrompt += language === 'ar' 
-            ? " كن مباشراً ومختصراً."
-            : " Be direct and concise.";
-          break;
-        case 'detailed':
-          systemPrompt += language === 'ar' 
-            ? " قدم إجابات مفصلة وشاملة."
-            : " Provide detailed and comprehensive answers.";
-          break;
-      }
-    }
-
-    // Add custom instruction
-    if (personalTouch.instruction && personalTouch.instruction.trim()) {
-      systemPrompt += ` ${personalTouch.instruction.trim()}`;
-    }
-  }
-
-  // Add language-specific guidance
-  if (language === 'ar') {
-    systemPrompt += " أجب باللغة العربية دائماً.";
-  } else {
-    systemPrompt += " Always respond in English.";
-  }
-
-  return systemPrompt;
-}
-
-async function makeAPICall(messages: any[], maxTokens: number, temperature: number): Promise<string> {
-  const maxRetries = 3;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    console.log(`🔄 API Call Attempt ${attempt}/${maxRetries}`);
-    
-    try {
-      // Try OpenAI first if available
-      if (OPENAI_API_KEY) {
-        console.log("🚀 Trying OpenAI with proper timeout handling...");
+        if (!response.ok) throw new Error(`Vision API error: ${response.status}`);
         
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 second timeout
+        const data = await response.json();
+        const rawResponse = data.choices[0].message.content;
         
-        try {
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${OPENAI_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              messages: messages,
-              max_tokens: maxTokens,
-              temperature: temperature
-            }),
-            signal: controller.signal
+        console.log('🔍 VISION SUCCESS: Generated', rawResponse.length, 'characters');
+        
+        // CRITICAL: Apply post-processing personalization
+        const enhancedResponse = PersonalizationProcessor.enhanceResponse(rawResponse, {
+          personalTouch,
+          language
+        });
+        
+        return enhancedResponse;
+      }
+    }
+
+    // Add current user message
+    messages.push({ role: 'user', content: message });
+
+    console.log('🧠 MESSAGE COUNT: System(' + messages.filter(m => m.role === 'system').length + 
+                ') + Context(' + (fullContext ? 1 : 0) + 
+                ') + History(' + recentMessages.length + 
+                ') + Current(1) = ' + messages.length);
+
+    // Try OpenAI first if available
+    if (OPENAI_API_KEY) {
+      console.log('🔄 API Call Attempt 1/3');
+      console.log('🚀 Trying OpenAI with proper timeout handling...');
+      
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: messages,
+            max_tokens: maxTokens,
+            temperature: personalizedTemperature
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const rawResponse = data.choices[0].message.content;
+          console.log('✅ OpenAI Success');
+          console.log('✅ SUCCESS via OPENAI:', rawResponse.length, 'characters (SMART MEMORY ENABLED)');
+          
+          // CRITICAL: Apply post-processing personalization
+          const enhancedResponse = PersonalizationProcessor.enhanceResponse(rawResponse, {
+            personalTouch,
+            language
           });
           
-          clearTimeout(timeoutId);
-          
-          if (response.ok) {
-            const result = await response.json();
-            const content = result.choices?.[0]?.message?.content;
-            if (content) {
-              console.log("✅ OpenAI Success");
-              console.log(`✅ SUCCESS via OPENAI: ${content.length} characters (SMART MEMORY ENABLED)`);
-              return content;
-            }
-          }
-        } catch (error: any) {
-          clearTimeout(timeoutId);
-          if (error.name === 'AbortError') {
-            console.log("⏰ OpenAI timeout, trying DeepSeek...");
-          } else {
-            console.log("❌ OpenAI failed, trying DeepSeek...");
-          }
+          return enhancedResponse;
         }
+      } catch (error) {
+        console.error('OpenAI failed, trying DeepSeek...', error);
       }
+    }
 
-      // Fallback to DeepSeek
-      if (DEEPSEEK_API_KEY) {
-        console.log("🚀 Trying DeepSeek as fallback...");
-        
-        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    // Fallback to DeepSeek
+    if (DEEPSEEK_API_KEY) {
+      console.log('🔄 API Call Attempt 2/3');
+      console.log('🚀 Trying DeepSeek...');
+      
+      try {
+        const response = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             model: 'deepseek-chat',
             messages: messages,
             max_tokens: maxTokens,
-            temperature: temperature
-          })
+            temperature: personalizedTemperature
+          }),
         });
 
         if (response.ok) {
-          const result = await response.json();
-          const content = result.choices?.[0]?.message?.content;
-          if (content) {
-            console.log("✅ DeepSeek Success");
-            console.log(`✅ SUCCESS via DEEPSEEK: ${content.length} characters (SMART MEMORY ENABLED)`);
-            return content;
-          }
+          const data = await response.json();
+          const rawResponse = data.choices[0].message.content;
+          console.log('✅ DeepSeek Success');
+          console.log('✅ SUCCESS via DEEPSEEK:', rawResponse.length, 'characters (SMART MEMORY ENABLED)');
+          
+          // CRITICAL: Apply post-processing personalization
+          const enhancedResponse = PersonalizationProcessor.enhanceResponse(rawResponse, {
+            personalTouch,
+            language
+          });
+          
+          return enhancedResponse;
         }
-      }
-
-      // If we get here, both APIs failed this attempt
-      if (attempt === maxRetries) {
-        throw new Error("All AI services are currently unavailable");
-      }
-      
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      
-    } catch (error) {
-      console.error(`❌ Attempt ${attempt} failed:`, error);
-      if (attempt === maxRetries) {
-        throw error;
+      } catch (error) {
+        console.error('DeepSeek failed:', error);
       }
     }
-  }
 
-  throw new Error("Failed to get AI response after all retries");
+    // Final fallback
+    return language === 'ar' 
+      ? 'عذراً، حدث خطأ في الاتصال بخدمة الذكاء الاصطناعي.'
+      : 'Sorry, there was an error connecting to the AI service.';
+
+  } catch (error) {
+    console.error('🚨 ENHANCED CHAT ERROR:', error);
+    return language === 'ar' 
+      ? 'عذراً، حدث خطأ أثناء معالجة طلبك.'
+      : 'Sorry, there was an error processing your request.';
+  }
 }
