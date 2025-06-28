@@ -488,8 +488,6 @@ export class WaktiAIV2ServiceClass {
     return 'neutral';
   }
 
-  // ... keep existing code (other methods)
-
   // Enhanced file processing with document support
   private static async processOptimizedFiles(attachedFiles: any[]): Promise<any[]> {
     if (!attachedFiles?.length) return [];
@@ -573,25 +571,22 @@ export class WaktiAIV2ServiceClass {
     conversationId?: string | null,
     inputType: 'text' | 'voice' = 'text',
     conversationHistory: any[] = [],
-    confirmSearch: boolean = false,
+    streamResponse: boolean = false,
     activeTrigger: string = 'chat',
-    textGenParams: any = null,
-    attachedFiles: any[] = [],
-    calendarContext: any = null,
-    userContext: any = null,
-    enableAdvancedIntegration: boolean = true,
-    enablePredictiveIntegration: boolean = true,
-    enableWorkflowAutomation: boolean = true,
-    confirmTask: boolean = false,
-    confirmReminder: boolean = false,
-    pendingTaskData: any = null,
-    pendingReminderData: any = null
+    conversationSummary: string = '',
+    attachedFiles: any[] = []
   ) {
     return WaktiAIV2ServiceClass.sendMessage(
-      message, userId, language, conversationId, inputType, conversationHistory,
-      confirmSearch, activeTrigger, textGenParams, attachedFiles, calendarContext,
-      userContext, enableAdvancedIntegration, enablePredictiveIntegration,
-      enableWorkflowAutomation, confirmTask, confirmReminder, pendingTaskData, pendingReminderData
+      message,
+      userId,
+      language,
+      conversationId,
+      inputType,
+      conversationHistory,
+      streamResponse,
+      activeTrigger,
+      conversationSummary,
+      attachedFiles
     );
   }
   
