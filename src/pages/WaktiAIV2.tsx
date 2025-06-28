@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -148,7 +149,7 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const { error } } = await supabase
+      const { error } = await supabase
         .from('tr_tasks')
         .insert({
           user_id: user.id,
