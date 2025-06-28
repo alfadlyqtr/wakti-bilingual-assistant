@@ -460,7 +460,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ENHANCED: Main message sending with SMART MEMORY MANAGEMENT
+  // ENHANCED: Main message sending with SMART MEMORY MANAGEMENT + PERSONALIZATION ENFORCEMENT
   static async sendMessage(
     message: string,
     userId?: string,
@@ -478,11 +478,11 @@ export class WaktiAIV2ServiceClass {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
 
-      console.log('🚀 ENHANCED AI: Starting with SMART MEMORY (10+ trigger, 2-week retention)');
+      console.log('🚀 ENHANCED AI: Starting with SMART MEMORY + PERSONALIZATION ENFORCEMENT');
 
       // STEP 1: Load personal touch settings (cached)
       const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
-      console.log('🎯 Personal Touch:', personalTouch);
+      console.log('🎯 Personal Touch Loaded:', personalTouch);
 
       // STEP 2: SMART SUMMARY MANAGEMENT - Check and create/update if needed
       let enhancedSummary = conversationSummary;
@@ -552,13 +552,13 @@ export class WaktiAIV2ServiceClass {
       }
 
       const apiTime = Date.now() - startTime;
-      console.log(`⚡ SUCCESS: Completed in ${apiTime}ms`);
+      console.log(`⚡ API SUCCESS: Completed in ${apiTime}ms`);
 
-      // CRITICAL: Apply PersonalizationProcessor POST-RESPONSE for full personalization
+      // CRITICAL: Apply PersonalizationProcessor with ENFORCEMENT for full personalization
       let finalResponse = data.response;
       
       if (personalTouch) {
-        console.log('🎨 POST-RESPONSE PERSONALIZATION: Applying final touches');
+        console.log('🎨 PERSONALIZATION ENFORCEMENT: Applying strict personalization matching');
         finalResponse = PersonalizationProcessor.enhanceResponse(
           data.response,
           {
@@ -567,10 +567,21 @@ export class WaktiAIV2ServiceClass {
             responseTime: apiTime
           }
         );
+        
+        console.log('✅ PERSONALIZATION ENFORCEMENT: Applied', {
+          originalLength: data.response.length,
+          finalLength: finalResponse.length,
+          settingsApplied: {
+            tone: personalTouch.tone,
+            style: personalTouch.style,
+            nickname: personalTouch.nickname ? 'Yes' : 'No',
+            aiNickname: personalTouch.aiNickname ? 'Yes' : 'No'
+          }
+        });
       }
 
       const totalTime = Date.now() - startTime;
-      console.log(`🚀 TOTAL TIME: ${totalTime}ms (Smart Memory: ${!!enhancedSummary}, Personalized: ${!!personalTouch})`);
+      console.log(`🚀 TOTAL SUCCESS: ${totalTime}ms (Smart Memory: ${!!enhancedSummary}, Personalization Enforced: ${!!personalTouch})`);
 
       return {
         ...data,
@@ -579,7 +590,8 @@ export class WaktiAIV2ServiceClass {
         apiTime,
         personalizedResponse: !!personalTouch,
         enhancedMemory: true,
-        smartSummaryUsed: !!enhancedSummary
+        smartSummaryUsed: !!enhancedSummary,
+        personalizationEnforced: !!personalTouch
       };
 
     } catch (error) {
