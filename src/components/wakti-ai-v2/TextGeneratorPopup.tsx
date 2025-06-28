@@ -151,13 +151,18 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         }
       }
 
-      console.log('🎯 Text Generator: Starting generation with DeepSeek');
+      console.log('🎯 Text Generator: Using unified-ai-brain for text generation');
       
-      const { data, error } = await supabase.functions.invoke('text-generator', {
+      // FIXED: Use unified-ai-brain instead of text-generator
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
         body: {
-          prompt: prompt,
-          mode: activeTab,
-          language: language
+          message: prompt,
+          userId: (await supabase.auth.getUser()).data.user?.id,
+          language: language,
+          activeTrigger: 'chat',
+          inputType: 'text',
+          conversationId: null,
+          attachedFiles: []
         }
       });
 
@@ -175,13 +180,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         throw new Error(errorMessage);
       }
 
-      if (!data?.generatedText) {
+      if (!data?.response) {
         const errorMessage = 'No text generated';
         setLastError(errorMessage);
         throw new Error(errorMessage);
       }
 
-      setGeneratedText(data.generatedText);
+      setGeneratedText(data.response);
       setActiveTab('generated'); // Switch to generated text tab
       showSuccess(language === 'ar' ? 'تم إنشاء النص بنجاح!' : 'Text generated successfully!');
       
@@ -266,11 +271,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <strong>{language === 'ar' ? 'خطأ:' : 'Error:'}</strong>
               <br />
               {lastError}
-              {lastError.includes('DEEPSEEK_API_KEY') && (
-                <div className="mt-2 text-xs">
-                  {language === 'ar' ? 'يرجى التواصل مع المطور لإضافة مفتاح API' : 'Please contact the developer to add the API key'}
-                </div>
-              )}
             </div>
           </div>
         )}
