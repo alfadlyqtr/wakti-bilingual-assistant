@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -365,7 +366,7 @@ const WaktiAIV2 = () => {
         new Promise((_, reject) => {
           const timeoutId = setTimeout(() => {
             setRequestTimeout(true);
-            reject new Error('AI is taking longer than expected - please try again');
+            reject(new Error('AI is taking longer than expected - please try again'));
           }, 15000); // INCREASED from 10s to 15s
           
           // Cleanup timeout if request completes
