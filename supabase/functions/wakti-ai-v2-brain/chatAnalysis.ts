@@ -66,6 +66,86 @@ export function analyzeSmartModeIntent(message: string, activeTrigger: string, l
   };
 }
 
+// ENHANCED: Build personalized system prompts BEFORE API calls
+const buildPersonalizedSystemPrompt = (
+  language: string,
+  personalTouch: any | null,
+  interactionType: string
+) => {
+  let systemPrompt = language === 'ar' 
+    ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود.'
+    : 'You are Wakti AI, a smart, helpful, and friendly assistant.';
+
+  // Apply personalization BEFORE API call for speed
+  if (personalTouch) {
+    // Add nickname context
+    if (personalTouch.nickname) {
+      systemPrompt += language === 'ar'
+        ? ` المستخدم يفضل أن تناديه ${personalTouch.nickname}.`
+        : ` The user prefers to be called ${personalTouch.nickname}.`;
+    }
+
+    // Add AI nickname
+    if (personalTouch.aiNickname) {
+      systemPrompt += language === 'ar'
+        ? ` أنت معروف باسم ${personalTouch.aiNickname}.`
+        : ` You are known as ${personalTouch.aiNickname}.`;
+    }
+
+    // Apply tone instructions
+    switch (personalTouch.tone) {
+      case 'funny':
+        systemPrompt += language === 'ar'
+          ? ' كن مرحاً ومسلياً في ردودك.'
+          : ' Be funny and entertaining in your responses.';
+        break;
+      case 'casual':
+        systemPrompt += language === 'ar'
+          ? ' تحدث بطريقة عادية ومسترخية.'
+          : ' Speak casually and relaxed.';
+        break;
+      case 'encouraging':
+        systemPrompt += language === 'ar'
+          ? ' كن محفزاً وإيجابياً دائماً.'
+          : ' Be encouraging and positive always.';
+        break;
+      case 'serious':
+        systemPrompt += language === 'ar'
+          ? ' تحدث بجدية ومهنية.'
+          : ' Speak seriously and professionally.';
+        break;
+    }
+
+    // Apply style instructions
+    switch (personalTouch.style) {
+      case 'short answers':
+        systemPrompt += language === 'ar'
+          ? ' اجعل إجاباتك مختصرة ومباشرة.'
+          : ' Keep your answers brief and direct.';
+        break;
+      case 'bullet points':
+        systemPrompt += language === 'ar'
+          ? ' نظم إجاباتك في نقاط واضحة.'
+          : ' Organize your answers in clear bullet points.';
+        break;
+      case 'step-by-step':
+        systemPrompt += language === 'ar'
+          ? ' اشرح الأشياء خطوة بخطوة.'
+          : ' Explain things step by step.';
+        break;
+    }
+
+    // Add custom instructions
+    if (personalTouch.instruction && personalTouch.instruction.trim()) {
+      systemPrompt += language === 'ar'
+        ? ` تعليمات إضافية: ${personalTouch.instruction}`
+        : ` Additional instructions: ${personalTouch.instruction}`;
+    }
+  }
+
+  return systemPrompt;
+};
+
 // ULTRA-FAST: Build speed-optimized conversation messages
 const buildSpeedOptimizedMessages = (
   userMessage: string, 
@@ -105,7 +185,124 @@ const buildSpeedOptimizedMessages = (
   return messages;
 };
 
-// ULTRA-FAST: Main processing function with speed optimization
+// CRITICAL: Add timeout wrapper for API calls
+const makeAPICallWithTimeout = async (apiCall: Promise<Response>, timeoutMs: number = 8000): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await Promise.race([
+      apiCall,
+      fetch('', { signal: controller.signal }).catch(() => {
+        throw new Error('Request timeout');
+      })
+    ]);
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+};
+
+// CRITICAL: Enhanced API call with proper fallback
+const makeResilientAPICall = async (
+  messages: any[],
+  maxTokens: number,
+  temperature: number,
+  retryCount: number = 0
+): Promise<any> => {
+  console.log(`🔄 API Call Attempt ${retryCount + 1}/3`);
+  
+  // Try OpenAI first if available
+  if (OPENAI_API_KEY) {
+    try {
+      console.log('🚀 Trying OpenAI with timeout...');
+      
+      const openAICall = fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          max_tokens: maxTokens,
+          temperature: temperature,
+          top_p: 0.9,
+          frequency_penalty: 0,
+          presence_penalty: 0
+        }),
+      });
+
+      const response = await makeAPICallWithTimeout(openAICall, 8000);
+      
+      if (!response.ok) {
+        throw new Error(`OpenAI API failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ OpenAI Success');
+      return { data, provider: 'openai' };
+      
+    } catch (error) {
+      console.warn(`⚠️ OpenAI failed: ${error.message}`);
+      
+      // If it's a timeout or network error and we have retries left, retry
+      if (retryCount < 2 && (error.message.includes('timeout') || error.message.includes('network'))) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000)); // Exponential backoff
+        return makeResilientAPICall(messages, maxTokens, temperature, retryCount + 1);
+      }
+    }
+  }
+
+  // Fallback to DeepSeek
+  if (DEEPSEEK_API_KEY) {
+    try {
+      console.log('🔄 Falling back to DeepSeek...');
+      
+      const deepSeekCall = fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: messages,
+          max_tokens: maxTokens,
+          temperature: temperature,
+          top_p: 0.9
+        }),
+      });
+
+      const response = await makeAPICallWithTimeout(deepSeekCall, 8000);
+      
+      if (!response.ok) {
+        throw new Error(`DeepSeek API failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ DeepSeek Success');
+      return { data, provider: 'deepseek' };
+      
+    } catch (error) {
+      console.warn(`⚠️ DeepSeek failed: ${error.message}`);
+      
+      // If it's a timeout or network error and we have retries left, retry
+      if (retryCount < 2 && (error.message.includes('timeout') || error.message.includes('network'))) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000)); // Exponential backoff
+        return makeResilientAPICall(messages, maxTokens, temperature, retryCount + 1);
+      }
+    }
+  }
+
+  // If all APIs fail
+  throw new Error('All AI providers failed or timed out');
+};
+
+// ULTRA-FAST: Main processing function with timeout protection and personalization
 export async function processWithBuddyChatAI(
   userMessage: string,
   context: string | null = null,
@@ -116,121 +313,71 @@ export async function processWithBuddyChatAI(
   interactionType: string = 'ultra_fast_chat',
   attachedFiles: any[] = [],
   customSystemPrompt: string = '',
-  maxTokens: number = 400
+  maxTokens: number = 400,
+  personalTouch: any | null = null
 ): Promise<string> {
   
-  console.log(`🚀 ULTRA-FAST CHAT: Processing with maximum speed - ${interactionType} (${maxTokens} tokens)`);
+  console.log(`🚀 ULTRA-FAST CHAT: Processing with timeout protection - ${interactionType} (${maxTokens} tokens)`);
   
-  // ULTRA-FAST: Use minimal system prompt for speed
-  let systemPrompt = customSystemPrompt;
-  if (!systemPrompt) {
-    systemPrompt = language === 'ar' 
-      ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود.'
-      : 'You are Wakti AI, a smart, helpful, and friendly assistant.';
-  }
-
-  // ULTRA-FAST: Skip complex instructions for speed modes
-  if (!interactionType.includes('hyper_fast') && !interactionType.includes('ultra_fast')) {
-    systemPrompt += language === 'ar'
-      ? '\n\nاجعل المحادثة طبيعية ومفيدة.'
-      : '\n\nMake conversation natural and helpful.';
-  }
-  
-  console.log(`🚀 ULTRA-FAST SYSTEM PROMPT: ${systemPrompt.substring(0, 80)}...`);
-  
-  // ULTRA-FAST: Build minimal context
-  let speedContext = context;
-  if (interactionType.includes('hyper_fast')) {
-    speedContext = null; // No context for maximum speed
-  } else if (interactionType.includes('ultra_fast') && context) {
-    speedContext = context.substring(0, 200); // Minimal context
-  }
-  
-  if (speedContext) {
-    console.log(`🚀 SPEED CONTEXT: ${speedContext.length} characters`);
-  }
-  
-  // ULTRA-FAST: Minimal message history
-  const speedMessages = interactionType.includes('hyper_fast') ? [] : recentMessages.slice(-2);
-  if (speedMessages.length > 0) {
-    console.log(`🚀 SPEED MESSAGES: Including ${speedMessages.length} messages`);
-  }
-
-  // Build speed-optimized conversation messages
-  const messages = buildSpeedOptimizedMessages(
-    userMessage,
-    speedContext,
-    speedMessages,
-    systemPrompt,
-    interactionType
-  );
-
   try {
-    let response;
-    
-    // ULTRA-FAST: Prioritize OpenAI for speed, with speed-optimized settings
-    if (OPENAI_API_KEY) {
-      console.log(`🚀 ULTRA-FAST: Using OpenAI with speed optimization - ${messages.length} messages`);
-      
-      // ULTRA-FAST: Speed-optimized temperature
-      let temperature = interactionType.includes('hyper_fast') ? 0.3 : 
-                       interactionType.includes('ultra_fast') ? 0.5 : 0.7;
-      
-      console.log(`🚀 SPEED TEMPERATURE: ${temperature} for ultra-fast processing`);
-      
-      response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini', // Fastest model
-          messages: messages,
-          max_tokens: maxTokens,
-          temperature: temperature,
-          top_p: interactionType.includes('hyper_fast') ? 0.8 : 0.9,
-          frequency_penalty: 0,
-          presence_penalty: 0
-        }),
-      });
-    } else {
-      console.log(`🚀 ULTRA-FAST: Using DeepSeek with speed optimization - ${messages.length} messages`);
-      
-      response = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: messages,
-          max_tokens: maxTokens,
-          temperature: interactionType.includes('hyper_fast') ? 0.3 : 0.7,
-          top_p: 0.9
-        }),
-      });
+    // ENHANCED: Build personalized system prompt BEFORE API call
+    let systemPrompt = customSystemPrompt;
+    if (!systemPrompt) {
+      systemPrompt = buildPersonalizedSystemPrompt(language, personalTouch, interactionType);
     }
 
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
+    console.log(`🎯 PERSONALIZED SYSTEM PROMPT: ${systemPrompt.substring(0, 100)}...`);
+    
+    // ULTRA-FAST: Minimal context for speed
+    let speedContext = context;
+    if (interactionType.includes('hyper_fast')) {
+      speedContext = null; // No context for maximum speed
+    } else if (interactionType.includes('ultra_fast') && context) {
+      speedContext = context.substring(0, 200); // Minimal context
+    }
+    
+    // Build speed-optimized conversation messages
+    const messages = buildSpeedOptimizedMessages(
+      userMessage,
+      speedContext,
+      recentMessages.slice(-2), // Minimal for speed
+      systemPrompt,
+      interactionType
+    );
+
+    // CRITICAL: Enhanced temperature based on personalization
+    let temperature = interactionType.includes('hyper_fast') ? 0.3 : 0.7;
+    if (personalTouch?.tone) {
+      switch (personalTouch.tone) {
+        case 'funny':
+          temperature = Math.min(temperature + 0.2, 0.9);
+          break;
+        case 'serious':
+          temperature = Math.max(temperature - 0.2, 0.3);
+          break;
+        case 'casual':
+          temperature = Math.min(temperature + 0.1, 0.8);
+          break;
+      }
     }
 
-    const data = await response.json();
-    const aiResponse = data.choices[0].message.content;
+    console.log(`🎯 PERSONALIZED TEMPERATURE: ${temperature}`);
+
+    // CRITICAL: Make resilient API call with proper fallback
+    const result = await makeResilientAPICall(messages, maxTokens, temperature);
+    const aiResponse = result.data.choices[0].message.content;
     
-    console.log(`🚀 ULTRA-FAST AI RESPONSE LENGTH: ${aiResponse.length} characters`);
+    console.log(`✅ SUCCESS via ${result.provider.toUpperCase()}: ${aiResponse.length} characters`);
     
     return aiResponse;
     
   } catch (error) {
-    console.error('🚀 ULTRA-FAST CHAT ERROR:', error);
+    console.error('🚨 CRITICAL ERROR:', error);
     
-    // Ultra-fast fallback response
+    // NEVER return timeout errors to users - always provide fallback
     const fallbackResponse = language === 'ar' 
-      ? 'عذراً، حدث خطأ مؤقت. حاول مرة أخرى.'
-      : 'Sorry, there was a temporary error. Please try again.';
+      ? 'عذراً، أواجه صعوبة في الوصول للخدمة حالياً. حاول مرة أخرى من فضلك.'
+      : 'Sorry, I\'m having trouble connecting right now. Please try again.';
     
     return fallbackResponse;
   }

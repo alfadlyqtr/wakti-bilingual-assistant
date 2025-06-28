@@ -14,7 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("🚀 WAKTI AI ULTRA-FAST: Speed-optimized with post-processing personalization");
+console.log("🚀 WAKTI AI ULTRA-FAST: Timeout-protected with pre-processing personalization");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 ULTRA-FAST AI: Processing with lightning speed");
+    console.log("🚀 ULTRA-FAST AI: Processing with timeout protection");
     const startTime = Date.now();
 
     // Auth handling
@@ -69,15 +69,16 @@ serve(async (req) => {
       conversationSummary = '',
       recentMessages = [],
       customSystemPrompt = '',
-      maxTokens = 400, // Speed-optimized default
+      maxTokens = 400,
       userStyle = 'detailed',
       userTone = 'neutral',
-      speedOptimized = true, // Default to speed mode
-      aggressiveOptimization = true, // Enable ultra-fast mode
+      speedOptimized = true,
+      aggressiveOptimization = true,
       hasTaskIntent = false,
-      personalityEnabled = false, // Disable for API speed
+      personalityEnabled = true, // Enable personalization
       enableTaskCreation = true,
-      enablePersonality = false // Disable for API speed
+      enablePersonality = true, // Enable personalization
+      personalTouch = null // Personal touch data from frontend
     } = requestBody;
 
     if (userId !== user.id) {
@@ -100,7 +101,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🚀 ULTRA-FAST: User ${user.id} | Speed Mode: ${speedOptimized} | Aggressive: ${aggressiveOptimization} | Tokens: ${maxTokens}`);
+    console.log(`🚀 ULTRA-FAST: User ${user.id} | Personal Touch: ${!!personalTouch} | Speed Mode: ${speedOptimized} | Aggressive: ${aggressiveOptimization}`);
 
     // ULTRA-FAST: Process attached files with minimal overhead
     let processedFiles = [];
@@ -115,6 +116,19 @@ serve(async (req) => {
     
     console.log(`🚀 SPEED MODE: Context messages: ${minimalRecentMessages.length}, Summary: ${minimalConversationSummary.length} chars`);
 
+    // SMART: Only analyze tasks for explicit keywords
+    const shouldAnalyzeTask = enableTaskCreation && 
+                             !aggressiveOptimization && 
+                             (hasTaskIntent || 
+                              message.toLowerCase().includes('create task') ||
+                              message.toLowerCase().includes('add task') ||
+                              message.toLowerCase().includes('remind me') ||
+                              message.toLowerCase().includes('set reminder') ||
+                              message.toLowerCase().includes('أنشئ مهمة') ||
+                              message.toLowerCase().includes('أضف مهمة') ||
+                              message.toLowerCase().includes('ذكرني') ||
+                              message.toLowerCase().includes('أنشئ تذكير'));
+
     // ULTRA-FAST: Smart processing pipeline with speed optimization
     let response = '';
     let imageUrl = null;
@@ -125,16 +139,16 @@ serve(async (req) => {
     let pendingTaskData = null;
     let pendingReminderData = null;
 
-    // ULTRA-FAST: Task detection with speed optimization
-    if (enableTaskCreation && !aggressiveOptimization && (hasTaskIntent || activeTrigger === 'chat')) {
-      console.log("🚀 FAST TASK: Quick task analysis");
+    // SMART: Task detection only for explicit keywords
+    if (shouldAnalyzeTask) {
+      console.log("🔍 SMART TASK: Analyzing explicit task request");
       
       try {
         const taskAnalysis = await analyzeTaskIntent(message, language);
-        console.log("🚀 TASK RESULT:", JSON.stringify(taskAnalysis, null, 2));
+        console.log("🔍 TASK RESULT:", JSON.stringify(taskAnalysis, null, 2));
         
         if (taskAnalysis.isTask || taskAnalysis.isReminder) {
-          console.log(`🚀 FAST TASK: ${taskAnalysis.isTask ? 'Task' : 'Reminder'} detected!`);
+          console.log(`🔍 SMART TASK: ${taskAnalysis.isTask ? 'Task' : 'Reminder'} detected!`);
           needsConfirmation = true;
           
           if (taskAnalysis.isTask && taskAnalysis.taskData) {
@@ -150,21 +164,20 @@ serve(async (req) => {
           }
         }
       } catch (taskError) {
-        console.error("🚀 FAST TASK ERROR:", taskError);
+        console.error("🔍 SMART TASK ERROR:", taskError);
       }
     }
 
-    // ULTRA-FAST: Main processing with speed optimization
+    // ULTRA-FAST: Main processing with timeout protection
     if (!needsConfirmation) {
       switch (activeTrigger) {
         case 'search':
           if (!aggressiveOptimization) {
-            console.log("🚀 FAST SEARCH: Speed-optimized search");
+            console.log("🔍 FAST SEARCH: Speed-optimized search");
             const searchResult = await executeRegularSearch(message, language);
             if (searchResult.success) {
               browsingUsed = true;
               browsingData = searchResult.data;
-              // Minimal context for speed
               const context = searchResult.context.substring(0, aggressiveOptimization ? 300 : 800);
               
               response = await processWithBuddyChatAI(
@@ -177,7 +190,8 @@ serve(async (req) => {
                 'ultra_fast_search',
                 attachedFiles,
                 customSystemPrompt,
-                Math.min(maxTokens, 300) // Speed limit
+                Math.min(maxTokens, 300),
+                personalTouch
               );
             } else {
               response = await processWithBuddyChatAI(
@@ -190,7 +204,8 @@ serve(async (req) => {
                 'ultra_fast_search_failed',
                 attachedFiles,
                 customSystemPrompt,
-                Math.min(maxTokens, 200) // Speed limit
+                Math.min(maxTokens, 200),
+                personalTouch
               );
             }
           } else {
@@ -204,14 +219,15 @@ serve(async (req) => {
               'hyper_fast_chat',
               attachedFiles,
               customSystemPrompt,
-              Math.min(maxTokens, 150) // Ultra-fast
+              Math.min(maxTokens, 150),
+              personalTouch
             );
           }
           break;
 
         case 'image':
           if (!aggressiveOptimization) {
-            console.log("🚀 FAST IMAGE: Speed-optimized image generation");
+            console.log("🎨 FAST IMAGE: Speed-optimized image generation");
             try {
               const imageResult = await generateImageWithRunware(message, user.id, language);
               
@@ -247,7 +263,7 @@ serve(async (req) => {
 
         case 'chat':
         default:
-          console.log(`🚀 ULTRA-FAST CHAT: Processing with maximum speed optimization`);
+          console.log(`🚀 ULTRA-FAST CHAT: Processing with timeout protection and personalization`);
           
           // ULTRA-FAST: Minimal context for lightning speed
           let chatContext = aggressiveOptimization ? null : minimalConversationSummary;
@@ -257,7 +273,7 @@ serve(async (req) => {
                                  speedOptimized ? 'ultra_fast_chat' : 
                                  'speed_optimized_chat';
           
-          console.log(`🚀 ULTRA-FAST CHAT: ${interactionType} | Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length}`);
+          console.log(`🚀 ULTRA-FAST CHAT: ${interactionType} | Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
           
           response = await processWithBuddyChatAI(
             message, 
@@ -269,7 +285,8 @@ serve(async (req) => {
             interactionType,
             processedFiles,
             customSystemPrompt,
-            maxTokens
+            maxTokens,
+            personalTouch // Pass personal touch for pre-processing
           );
           break;
       }
@@ -300,12 +317,14 @@ serve(async (req) => {
       tokensUsed: maxTokens,
       aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek',
       taskCreationEnabled: enableTaskCreation,
+      personalizedResponse: !!personalTouch,
       ultraFastMode: {
         speedOptimized,
         aggressiveOptimization,
         contextMessages: minimalRecentMessages.length,
         summaryLength: minimalConversationSummary.length,
-        tokensLimit: maxTokens
+        tokensLimit: maxTokens,
+        personalTouch: !!personalTouch
       }
     };
 
@@ -314,7 +333,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚀 ULTRA-FAST: Error:", error);
+    console.error("🚨 ULTRA-FAST: Critical Error:", error);
     
     return new Response(JSON.stringify({
       error: error.message || 'Processing error',

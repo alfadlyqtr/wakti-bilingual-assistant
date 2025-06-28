@@ -196,7 +196,7 @@ interface PersonalTouchData {
   tone: string;
   style: string;
   instruction: string;
-  aiNickname?: string; // NEW: AI nickname
+  aiNickname?: string;
 }
 
 // ENHANCED: Better personal touch cache
@@ -232,7 +232,7 @@ class PersonalTouchCache {
 class RequestDebouncer {
   private static timers = new Map<string, ReturnType<typeof setTimeout>>();
   
-  static debounce(key: string, fn: Function, delay: number = 200) { // Reduced delay for speed
+  static debounce(key: string, fn: Function, delay: number = 200) {
     const existingTimer = this.timers.get(key);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -253,7 +253,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ENHANCED: Ultra-fast message sending with post-processing personalization
+  // ENHANCED: Timeout-protected message sending with personalization
   static async sendMessage(
     message: string,
     userId?: string,
@@ -271,7 +271,7 @@ export class WaktiAIV2ServiceClass {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
 
-      console.log('🚀 ULTRA-FAST AI: Starting speed-optimized processing');
+      console.log('🚀 ULTRA-FAST AI: Starting timeout-protected processing with personalization');
 
       // STEP 1: Load personal touch settings (cached)
       const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
@@ -284,24 +284,14 @@ export class WaktiAIV2ServiceClass {
         timestamp: msg.timestamp
       }));
 
-      // STEP 3: Fast API call with minimal system prompt
-      const fastApiStartTime = Date.now();
-      
-      // Build speed-optimized system prompt
-      let speedSystemPrompt = language === 'ar' 
-        ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود.'
-        : 'You are Wakti AI, a smart, helpful, and friendly assistant.';
+      // STEP 3: Create timeout-protected API call
+      console.log('⚡ TIMEOUT-PROTECTED: Making ultra-fast AI call with 10-second timeout');
 
-      // Only add basic personalization for API speed
-      if (personalTouch?.style === 'short answers') {
-        speedSystemPrompt += language === 'ar' 
-          ? ' اجعل إجاباتك مختصرة.'
-          : ' Keep answers brief.';
-      }
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000);
+      });
 
-      console.log('⚡ FAST API: Making ultra-fast AI call');
-
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+      const apiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
           userId: user.id,
@@ -312,28 +302,31 @@ export class WaktiAIV2ServiceClass {
           attachedFiles,
           conversationSummary: '', // Minimal for speed
           recentMessages: recentMessages.slice(-2), // Minimal context
-          customSystemPrompt: speedSystemPrompt,
-          maxTokens: personalTouch?.style === 'short answers' ? 200 : 400, // Speed-optimized
-          speedOptimized: true, // Enable speed mode
-          aggressiveOptimization: true, // Maximum speed
-          personalityEnabled: false, // Disable for API speed
+          customSystemPrompt: '', // Let edge function handle personalization
+          maxTokens: personalTouch?.style === 'short answers' ? 200 : 400,
+          speedOptimized: true,
+          aggressiveOptimization: true,
+          personalityEnabled: true, // Enable personalization
           enableTaskCreation: true,
-          enablePersonality: false // Disable for API speed
+          enablePersonality: true, // Enable personalization
+          personalTouch: personalTouch // Pass personal touch to edge function
         }
       });
 
+      // Race between API call and timeout
+      const { data, error } = await Promise.race([apiPromise, timeoutPromise]) as any;
+
       if (error) throw error;
 
-      const apiTime = Date.now() - fastApiStartTime;
-      console.log(`⚡ FAST API: Completed in ${apiTime}ms`);
+      const apiTime = Date.now() - startTime;
+      console.log(`⚡ TIMEOUT-PROTECTED API: Completed in ${apiTime}ms`);
 
-      // STEP 4: Post-processing personalization (lightning fast)
-      const postProcessStartTime = Date.now();
-      
+      // STEP 4: Minimal post-processing (most personalization done in edge function)
       let finalResponse = data.response;
       
-      if (personalTouch) {
-        console.log('🎨 POST-PROCESSING: Applying personalization');
+      // Only apply minimal post-processing if needed
+      if (personalTouch && !data.personalizedResponse) {
+        console.log('🎨 MINIMAL POST-PROCESSING: Applying final touches');
         finalResponse = PersonalizationProcessor.enhanceResponse(
           data.response,
           {
@@ -344,11 +337,8 @@ export class WaktiAIV2ServiceClass {
         );
       }
 
-      const postProcessTime = Date.now() - postProcessStartTime;
       const totalTime = Date.now() - startTime;
-      
-      console.log(`🎨 POST-PROCESSING: Completed in ${postProcessTime}ms`);
-      console.log(`🚀 TOTAL TIME: ${totalTime}ms (API: ${apiTime}ms + Processing: ${postProcessTime}ms)`);
+      console.log(`🚀 TOTAL TIME: ${totalTime}ms (Timeout-protected, Personalized: ${!!personalTouch})`);
 
       // Return enhanced response
       return {
@@ -356,13 +346,18 @@ export class WaktiAIV2ServiceClass {
         response: finalResponse,
         processingTime: totalTime,
         apiTime,
-        postProcessTime,
         personalizedResponse: !!personalTouch,
-        speedOptimized: true
+        timeoutProtected: true
       };
 
     } catch (error) {
-      console.error('Ultra-fast send message error:', error);
+      console.error('🚨 Timeout-protected send message error:', error);
+      
+      // Handle timeout specifically
+      if (error.message?.includes('timeout')) {
+        throw new Error('Request timed out - please try again');
+      }
+      
       throw error;
     }
   }

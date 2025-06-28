@@ -44,8 +44,9 @@ const WaktiAIV2 = () => {
   const [pendingReminderData, setPendingReminderData] = useState<any>(null);
   const [taskConfirmationLoading, setTaskConfirmationLoading] = useState(false);
   
-  // NEW: Request management state
+  // NEW: Request management state with timeout protection
   const [requestInProgress, setRequestInProgress] = useState(false);
+  const [requestTimeout, setRequestTimeout] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   
   // ENHANCED: Personal touch state
@@ -69,7 +70,7 @@ const WaktiAIV2 = () => {
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
 
-  // ENHANCED: Load personal touch settings
+  // ENHANCED: Load personal touch settings with better caching
   useEffect(() => {
     const loadPersonalTouch = () => {
       try {
@@ -78,6 +79,17 @@ const WaktiAIV2 = () => {
           const personalTouchData = JSON.parse(stored);
           setPersonalTouch(personalTouchData);
           console.log('🎯 Personal Touch Loaded:', personalTouchData);
+        } else {
+          // Set smart defaults based on language
+          const defaultPersonalTouch = {
+            nickname: '',
+            tone: 'neutral',
+            style: language === 'ar' ? 'detailed' : 'detailed',
+            instruction: '',
+            aiNickname: language === 'ar' ? 'وقتي' : 'Wakti'
+          };
+          setPersonalTouch(defaultPersonalTouch);
+          console.log('🎯 Default Personal Touch Set:', defaultPersonalTouch);
         }
       } catch (error) {
         console.warn('Failed to load personal touch settings:', error);
@@ -85,7 +97,7 @@ const WaktiAIV2 = () => {
     };
     
     loadPersonalTouch();
-  }, []);
+  }, [language]);
 
   // ULTRA-FAST: Minimal user profile loading with caching
   useEffect(() => {
@@ -307,13 +319,14 @@ const WaktiAIV2 = () => {
 
     setIsLoading(true);
     setRequestInProgress(true);
+    setRequestTimeout(false);
     setError(null);
     
-    // Create new abort controller
+    // Create new abort controller for timeout protection
     abortControllerRef.current = new AbortController();
 
     try {
-      console.log('🚀 ULTRA-FAST AI: Lightning speed processing initiated');
+      console.log('🚀 TIMEOUT-PROTECTED AI: Lightning speed processing initiated with personalization');
       const startTime = Date.now();
 
       // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
@@ -334,10 +347,7 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // ULTRA-FAST: Minimal conversation context for speed
-      const conversationSummary = '';
-
-      // ULTRA-FAST: Lightning-fast API call with post-processing personalization
+      // ENHANCED: Timeout-protected API call with personalization
       const response = await Promise.race([
         WaktiAIV2ServiceClass.sendMessage(
           message,
@@ -348,20 +358,28 @@ const WaktiAIV2 = () => {
           updatedSessionMessages.slice(-4), // Minimal context for speed
           false,
           activeTrigger,
-          conversationSummary,
+          '', // Minimal conversation summary for speed
           attachedFiles || []
         ),
-        // Ultra-fast timeout
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 6000) // Faster timeout
-        )
+        // Enhanced timeout handling
+        new Promise((_, reject) => {
+          const timeoutId = setTimeout(() => {
+            setRequestTimeout(true);
+            reject(new Error('Request timeout - AI is taking too long to respond'));
+          }, 10000); // 10 seconds timeout
+          
+          // Cleanup timeout if request completes
+          abortControllerRef.current?.signal.addEventListener('abort', () => {
+            clearTimeout(timeoutId);
+          });
+        })
       ]) as any;
 
-      // ULTRA-FAST: Create assistant message with personalized response
+      // ENHANCED: Create assistant message with enhanced response
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: response.response, // This is already personalized via post-processing
+        content: response.response, // Already personalized
         timestamp: new Date(),
         intent: response.intent || 'ultra_fast_chat',
         confidence: response.confidence || 'high',
@@ -375,7 +393,7 @@ const WaktiAIV2 = () => {
       setSessionMessages(finalSessionMessages);
       
       const responseTime = Date.now() - startTime;
-      console.log(`🚀 ULTRA-FAST AI: Total time: ${responseTime}ms (API: ${response.apiTime}ms + Processing: ${response.postProcessTime}ms)`);
+      console.log(`🚀 TIMEOUT-PROTECTED AI: Total time: ${responseTime}ms (Personalized: ${response.personalizedResponse}, Timeout Protected: ${response.timeoutProtected})`);
 
       // Handle special responses
       if (response.needsConfirmation && response.pendingTaskData) {
@@ -393,12 +411,16 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🚀 ULTRA-FAST AI: Error:', error);
+      console.error('🚨 TIMEOUT-PROTECTED AI: Error:', error);
       
-      // Handle specific error types
+      // Enhanced error handling for different error types
       if (error.message?.includes('timeout')) {
-        setError('Request timed out - please try again');
-        showError(language === 'ar' ? 'انتهت مهلة الطلب - حاول مرة أخرى' : 'Request timed out - try again');
+        setRequestTimeout(true);
+        setError('AI response timed out - please try again');
+        showError(language === 'ar' ? 'انتهت مهلة الاستجابة - حاول مرة أخرى' : 'AI response timed out - try again');
+      } else if (error.message?.includes('network')) {
+        setError('Network connection issue - check your internet');
+        showError(language === 'ar' ? 'مشكلة في الاتصال - تحقق من الإنترنت' : 'Network issue - check connection');
       } else {
         setError(error.message || 'Failed to send message');
         showError(error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message'));
@@ -592,6 +614,11 @@ const WaktiAIV2 = () => {
           searchConfirmationRequired={false}
           onSearchConfirmation={() => {}}
           onQuotaRefresh={() => fetchAIQuota(true)}
+          requestTimeout={requestTimeout}
+          onTimeoutRetry={() => {
+            setRequestTimeout(false);
+            setError(null);
+          }}
         />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[140px]">
