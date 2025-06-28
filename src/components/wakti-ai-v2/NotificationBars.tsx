@@ -8,13 +8,17 @@ interface NotificationBarsProps {
   onSearchConfirmation: () => void;
   onQuotaRefresh: () => void;
   quotaStatus?: any;
+  requestTimeout?: boolean;
+  onTimeoutRetry?: () => void;
 }
 
 export function NotificationBars({
   searchConfirmationRequired,
   onSearchConfirmation,
   onQuotaRefresh,
-  quotaStatus
+  quotaStatus,
+  requestTimeout = false,
+  onTimeoutRetry
 }: NotificationBarsProps) {
   const { language } = useTheme();
 
@@ -24,6 +28,22 @@ export function NotificationBars({
 
   return (
     <>
+      {/* Request Timeout Bar */}
+      {requestTimeout && (
+        <div className="bg-red-100 border-b p-4">
+          <p className="text-sm text-red-800">
+            {language === 'ar'
+              ? 'انتهت مهلة الطلب - حاول مرة أخرى'
+              : 'Request timed out - Please try again'}
+          </p>
+          <div className="mt-2">
+            <Button size="sm" onClick={onTimeoutRetry}>
+              {language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Search Confirmation */}
       {searchConfirmationRequired && (
         <div className="bg-yellow-100 border-b p-4">
