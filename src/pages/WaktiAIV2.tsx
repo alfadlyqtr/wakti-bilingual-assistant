@@ -304,7 +304,7 @@ const WaktiAIV2 = () => {
     setSessionMessages(prev => [...prev, cancelMessage]);
   };
 
-  // ULTRA-FAST: Lightning-fast message sending with post-processing personalization
+  // ULTRA-FAST: Lightning-fast message sending with FIXED timeout handling
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
@@ -326,7 +326,7 @@ const WaktiAIV2 = () => {
     abortControllerRef.current = new AbortController();
 
     try {
-      console.log('🚀 TIMEOUT-PROTECTED AI: Lightning speed processing initiated with personalization');
+      console.log('🚀 FIXED TIMEOUT AI: Lightning speed processing with 15-second timeout');
       const startTime = Date.now();
 
       // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
@@ -347,7 +347,7 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // ENHANCED: Timeout-protected API call with personalization
+      // FIXED: Timeout-protected API call with 15-second timeout
       const response = await Promise.race([
         WaktiAIV2ServiceClass.sendMessage(
           message,
@@ -361,12 +361,12 @@ const WaktiAIV2 = () => {
           '', // Minimal conversation summary for speed
           attachedFiles || []
         ),
-        // Enhanced timeout handling
+        // FIXED: Increased timeout to 15 seconds
         new Promise((_, reject) => {
           const timeoutId = setTimeout(() => {
             setRequestTimeout(true);
-            reject(new Error('Request timeout - AI is taking too long to respond'));
-          }, 10000); // 10 seconds timeout
+            reject new Error('AI is taking longer than expected - please try again');
+          }, 15000); // INCREASED from 10s to 15s
           
           // Cleanup timeout if request completes
           abortControllerRef.current?.signal.addEventListener('abort', () => {
@@ -393,7 +393,7 @@ const WaktiAIV2 = () => {
       setSessionMessages(finalSessionMessages);
       
       const responseTime = Date.now() - startTime;
-      console.log(`🚀 TIMEOUT-PROTECTED AI: Total time: ${responseTime}ms (Personalized: ${response.personalizedResponse}, Timeout Protected: ${response.timeoutProtected})`);
+      console.log(`🚀 FIXED TIMEOUT AI: Total time: ${responseTime}ms (Timeout Fixed: 15s)`);
 
       // Handle special responses
       if (response.needsConfirmation && response.pendingTaskData) {
@@ -411,19 +411,22 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🚨 TIMEOUT-PROTECTED AI: Error:', error);
+      console.error('🚨 FIXED TIMEOUT AI: Error:', error);
       
-      // Enhanced error handling for different error types
-      if (error.message?.includes('timeout')) {
+      // IMPROVED: Better error messages - no more "trouble connecting"
+      if (error.message?.includes('timeout') || error.message?.includes('longer than expected')) {
         setRequestTimeout(true);
-        setError('AI response timed out - please try again');
-        showError(language === 'ar' ? 'انتهت مهلة الاستجابة - حاول مرة أخرى' : 'AI response timed out - try again');
-      } else if (error.message?.includes('network')) {
+        setError('AI is taking longer than usual - please try again');
+        showError(language === 'ar' ? 'الذكاء الاصطناعي يستغرق وقتاً أطول - حاول مرة أخرى' : 'AI is taking longer than usual - try again');
+      } else if (error.message?.includes('network') || error.message?.includes('connection')) {
         setError('Network connection issue - check your internet');
         showError(language === 'ar' ? 'مشكلة في الاتصال - تحقق من الإنترنت' : 'Network issue - check connection');
+      } else if (error.message?.includes('unavailable') || error.message?.includes('busy')) {
+        setError('AI service is temporarily busy - please try again');
+        showError(language === 'ar' ? 'الخدمة مشغولة مؤقتاً - حاول مرة أخرى' : 'AI service is busy - try again');
       } else {
-        setError(error.message || 'Failed to send message');
-        showError(error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message'));
+        setError('Something went wrong - please try again');
+        showError(error.message || (language === 'ar' ? 'حدث خطأ - حاول مرة أخرى' : 'Something went wrong - try again'));
       }
     } finally {
       setIsLoading(false);
@@ -618,6 +621,7 @@ const WaktiAIV2 = () => {
           onTimeoutRetry={() => {
             setRequestTimeout(false);
             setError(null);
+            // Optionally retry the last message
           }}
         />
       </div>

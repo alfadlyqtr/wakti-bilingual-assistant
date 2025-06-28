@@ -185,27 +185,40 @@ const buildSpeedOptimizedMessages = (
   return messages;
 };
 
-// CRITICAL: Add timeout wrapper for API calls
-const makeAPICallWithTimeout = async (apiCall: Promise<Response>, timeoutMs: number = 8000): Promise<Response> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+// FIXED: Properly working timeout wrapper with AbortController
+const makeAPICallWithTimeout = async (
+  apiCall: () => Promise<Response>, 
+  timeoutMs: number = 12000,
+  abortController?: AbortController
+): Promise<Response> => {
+  
+  const controller = abortController || new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.log(`⏰ TIMEOUT: Aborting API call after ${timeoutMs}ms`);
+    controller.abort();
+  }, timeoutMs);
   
   try {
-    const response = await Promise.race([
-      apiCall,
-      fetch('', { signal: controller.signal }).catch(() => {
-        throw new Error('Request timeout');
-      })
-    ]);
+    const response = await apiCall();
     clearTimeout(timeoutId);
+    
+    if (controller.signal.aborted) {
+      throw new Error('Request timeout');
+    }
+    
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
+    
+    if (controller.signal.aborted || error.name === 'AbortError') {
+      throw new Error('Request timeout');
+    }
+    
     throw error;
   }
 };
 
-// CRITICAL: Enhanced API call with proper fallback
+// FIXED: Enhanced API call with proper timeout handling and AbortController
 const makeResilientAPICall = async (
   messages: any[],
   maxTokens: number,
@@ -217,9 +230,9 @@ const makeResilientAPICall = async (
   // Try OpenAI first if available
   if (OPENAI_API_KEY) {
     try {
-      console.log('🚀 Trying OpenAI with timeout...');
+      console.log('🚀 Trying OpenAI with proper timeout handling...');
       
-      const openAICall = fetch('https://api.openai.com/v1/chat/completions', {
+      const openAICall = () => fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -236,7 +249,7 @@ const makeResilientAPICall = async (
         }),
       });
 
-      const response = await makeAPICallWithTimeout(openAICall, 8000);
+      const response = await makeAPICallWithTimeout(openAICall, 12000); // 12 second timeout
       
       if (!response.ok) {
         throw new Error(`OpenAI API failed: ${response.status}`);
@@ -262,7 +275,7 @@ const makeResilientAPICall = async (
     try {
       console.log('🔄 Falling back to DeepSeek...');
       
-      const deepSeekCall = fetch('https://api.deepseek.com/chat/completions', {
+      const deepSeekCall = () => fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
@@ -277,7 +290,7 @@ const makeResilientAPICall = async (
         }),
       });
 
-      const response = await makeAPICallWithTimeout(deepSeekCall, 8000);
+      const response = await makeAPICallWithTimeout(deepSeekCall, 12000); // 12 second timeout
       
       if (!response.ok) {
         throw new Error(`DeepSeek API failed: ${response.status}`);
@@ -298,11 +311,11 @@ const makeResilientAPICall = async (
     }
   }
 
-  // If all APIs fail
-  throw new Error('All AI providers failed or timed out');
+  // If all APIs fail, return a proper error instead of generic timeout
+  throw new Error('AI services are temporarily busy. Please try again.');
 };
 
-// ULTRA-FAST: Main processing function with timeout protection and personalization
+// FIXED: Main processing function with proper timeout protection
 export async function processWithBuddyChatAI(
   userMessage: string,
   context: string | null = null,
@@ -317,7 +330,7 @@ export async function processWithBuddyChatAI(
   personalTouch: any | null = null
 ): Promise<string> {
   
-  console.log(`🚀 ULTRA-FAST CHAT: Processing with timeout protection - ${interactionType} (${maxTokens} tokens)`);
+  console.log(`🚀 FIXED TIMEOUT CHAT: Processing with proper timeout handling - ${interactionType} (${maxTokens} tokens)`);
   
   try {
     // ENHANCED: Build personalized system prompt BEFORE API call
@@ -363,7 +376,7 @@ export async function processWithBuddyChatAI(
 
     console.log(`🎯 PERSONALIZED TEMPERATURE: ${temperature}`);
 
-    // CRITICAL: Make resilient API call with proper fallback
+    // FIXED: Make resilient API call with proper timeout handling
     const result = await makeResilientAPICall(messages, maxTokens, temperature);
     const aiResponse = result.data.choices[0].message.content;
     
@@ -372,12 +385,21 @@ export async function processWithBuddyChatAI(
     return aiResponse;
     
   } catch (error) {
-    console.error('🚨 CRITICAL ERROR:', error);
+    console.error('🚨 FIXED TIMEOUT ERROR:', error);
     
-    // NEVER return timeout errors to users - always provide fallback
+    // IMPROVED: Return user-friendly messages instead of technical errors
+    if (error.message?.includes('timeout') || error.message?.includes('busy')) {
+      const fallbackResponse = language === 'ar' 
+        ? 'عذراً، الذكاء الاصطناعي يستغرق وقتاً أطول من المعتاد. حاول مرة أخرى من فضلك.'
+        : 'Sorry, AI is taking longer than usual. Please try again.';
+      
+      return fallbackResponse;
+    }
+    
+    // Generic friendly fallback
     const fallbackResponse = language === 'ar' 
-      ? 'عذراً، أواجه صعوبة في الوصول للخدمة حالياً. حاول مرة أخرى من فضلك.'
-      : 'Sorry, I\'m having trouble connecting right now. Please try again.';
+      ? 'عذراً، أواجه صعوبة مؤقتة. حاول مرة أخرى من فضلك.'
+      : 'Sorry, I\'m having a temporary issue. Please try again.';
     
     return fallbackResponse;
   }

@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { AIResponseCache } from './AIResponseCache';
 import { PersonalizationProcessor } from './PersonalizationProcessor';
@@ -133,7 +132,7 @@ class AuthCache {
     setTimeout(() => {
       const index = this.connectionPool.indexOf(controller);
       if (index > -1) this.connectionPool.splice(index, 1);
-    }, 15000);
+    }, 20000); // Increased from 15s to 20s
     
     return controller;
   }
@@ -253,7 +252,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ENHANCED: Timeout-protected message sending with personalization
+  // FIXED: Increased timeout to 15 seconds with better error handling
   static async sendMessage(
     message: string,
     userId?: string,
@@ -271,7 +270,7 @@ export class WaktiAIV2ServiceClass {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
 
-      console.log('🚀 ULTRA-FAST AI: Starting timeout-protected processing with personalization');
+      console.log('🚀 FIXED TIMEOUT AI: Starting with 15-second timeout protection');
 
       // STEP 1: Load personal touch settings (cached)
       const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
@@ -284,11 +283,11 @@ export class WaktiAIV2ServiceClass {
         timestamp: msg.timestamp
       }));
 
-      // STEP 3: Create timeout-protected API call
-      console.log('⚡ TIMEOUT-PROTECTED: Making ultra-fast AI call with 10-second timeout');
+      // STEP 3: Create timeout-protected API call with INCREASED timeout
+      console.log('⚡ FIXED TIMEOUT: Making AI call with 15-second timeout (was 10s)');
 
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000);
+        setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000); // INCREASED from 10s
       });
 
       const apiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
@@ -313,13 +312,16 @@ export class WaktiAIV2ServiceClass {
         }
       });
 
-      // Race between API call and timeout
+      // Race between API call and timeout with INCREASED timeout
       const { data, error } = await Promise.race([apiPromise, timeoutPromise]) as any;
 
-      if (error) throw error;
+      if (error) {
+        console.error('🚨 API Error:', error);
+        throw error;
+      }
 
       const apiTime = Date.now() - startTime;
-      console.log(`⚡ TIMEOUT-PROTECTED API: Completed in ${apiTime}ms`);
+      console.log(`⚡ SUCCESS: Completed in ${apiTime}ms`);
 
       // STEP 4: Minimal post-processing (most personalization done in edge function)
       let finalResponse = data.response;
@@ -338,7 +340,7 @@ export class WaktiAIV2ServiceClass {
       }
 
       const totalTime = Date.now() - startTime;
-      console.log(`🚀 TOTAL TIME: ${totalTime}ms (Timeout-protected, Personalized: ${!!personalTouch})`);
+      console.log(`🚀 TOTAL TIME: ${totalTime}ms (Timeout Fixed: 15s, Personalized: ${!!personalTouch})`);
 
       // Return enhanced response
       return {
@@ -351,14 +353,19 @@ export class WaktiAIV2ServiceClass {
       };
 
     } catch (error) {
-      console.error('🚨 Timeout-protected send message error:', error);
+      console.error('🚨 FIXED TIMEOUT Error:', error);
       
-      // Handle timeout specifically
+      // IMPROVED: Better error handling - never show "trouble connecting"
       if (error.message?.includes('timeout')) {
-        throw new Error('Request timed out - please try again');
+        throw new Error('AI response is taking longer than expected. Please try again.');
       }
       
-      throw error;
+      if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        throw new Error('Network connection issue. Please check your internet and try again.');
+      }
+      
+      // Generic fallback
+      throw new Error('AI service is temporarily unavailable. Please try again in a moment.');
     }
   }
 
