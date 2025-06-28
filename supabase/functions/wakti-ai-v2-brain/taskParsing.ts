@@ -7,64 +7,82 @@ import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 export async function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
 
-  // UPDATED: More specific task keywords that require explicit task creation intent
-  const explicitTaskKeywords = [
-    'create task', 'create a task', 'add task', 'add a task', 'make task', 'make a task',
-    'new task', 'create todo', 'add todo', 'make todo', 'new todo',
-    'help me create task', 'help me add task', 'help me make task',
-    'i want to create task', 'i want to add task', 'i want to make task',
-    'need to create task', 'need to add task', 'need to make task',
-    'can you create task', 'can you add task', 'can you make task',
-    'please create task', 'please add task', 'please make task',
-    // Arabic equivalents
-    'أنشئ مهمة', 'اصنع مهمة', 'أضف مهمة', 'مهمة جديدة',
-    'ساعدني في إنشاء مهمة', 'أريد إنشاء مهمة', 'أحتاج إنشاء مهمة'
+  // ENHANCED: More flexible task keywords with partial matching
+  const taskKeywordPatterns = [
+    // Direct task creation phrases
+    /\b(create|make|add|new)\s+(a\s+)?task/i,
+    /\btask\s+(for|to|about)/i,
+    /\b(help\s+me\s+)?(create|make|add)\s+(a\s+)?task/i,
+    /\b(i\s+)?(want|need|have)\s+to\s+(create|make|add)\s+(a\s+)?task/i,
+    /\b(can\s+you\s+)?(create|make|add)\s+(a\s+)?task/i,
+    /\b(please\s+)?(create|make|add)\s+(a\s+)?task/i,
+    // Arabic patterns
+    /\b(أنشئ|اصنع|أضف)\s+(مهمة|مهام)/i,
+    /\bمهمة\s+(ل|عن|في)/i,
+    /\b(ساعدني\s+في\s+)?(إنشاء|صنع|إضافة)\s+مهمة/i,
+    /\b(أريد|أحتاج)\s+(إنشاء|صنع|إضافة)\s+مهمة/i
   ];
 
-  // UPDATED: More specific reminder keywords
-  const explicitReminderKeywords = [
-    'create reminder', 'create a reminder', 'add reminder', 'add a reminder', 
-    'make reminder', 'make a reminder', 'new reminder',
-    'help me create reminder', 'help me add reminder', 'help me make reminder',
-    'i want to create reminder', 'i want to add reminder', 'i want to make reminder',
-    'need to create reminder', 'need to add reminder', 'need to make reminder',
-    'can you create reminder', 'can you add reminder', 'can you make reminder',
-    'please create reminder', 'please add reminder', 'please make reminder',
-    'remind me to', 'set reminder', 'schedule reminder',
-    // Arabic equivalents
-    'أنشئ تذكير', 'اصنع تذكير', 'أضف تذكير', 'تذكير جديد',
-    'ذكرني أن', 'ذكرني ب', 'اجعل تذكير'
+  // ENHANCED: More flexible reminder keywords with partial matching
+  const reminderKeywordPatterns = [
+    // Direct reminder creation phrases
+    /\b(create|make|add|set|new)\s+(a\s+)?reminder/i,
+    /\breminder\s+(for|to|about)/i,
+    /\bremind\s+me\s+(to|about|of)/i,
+    /\b(help\s+me\s+)?(create|make|add|set)\s+(a\s+)?reminder/i,
+    /\b(i\s+)?(want|need|have)\s+to\s+(create|make|add|set)\s+(a\s+)?reminder/i,
+    /\b(can\s+you\s+)?(create|make|add|set)\s+(a\s+)?reminder/i,
+    /\b(please\s+)?(create|make|add|set)\s+(a\s+)?reminder/i,
+    // Arabic patterns
+    /\b(أنشئ|اصنع|أضف)\s+(تذكير|تذكيرات)/i,
+    /\bتذكير\s+(ل|عن|في)/i,
+    /\b(ذكرني|ذكريني)\s+(أن|ب)/i,
+    /\b(ساعدني\s+في\s+)?(إنشاء|صنع|إضافة)\s+تذكير/i
   ];
 
-  // Check for explicit task creation phrases
-  const isExplicitTaskKeyword = explicitTaskKeywords.some(keyword => lowerMessage.includes(keyword));
-  const isExplicitReminderKeyword = explicitReminderKeywords.some(keyword => lowerMessage.includes(keyword));
+  // Check for task creation patterns
+  const isTaskMatch = taskKeywordPatterns.some(pattern => pattern.test(message));
+  const isReminderMatch = reminderKeywordPatterns.some(pattern => pattern.test(message));
 
   let isTask = false;
   let isReminder = false;
 
-  // UPDATED: Only detect as task/reminder if explicit keywords are found
-  if (isExplicitTaskKeyword && !isExplicitReminderKeyword) {
+  // ENHANCED: Better pattern matching logic
+  if (isTaskMatch && !isReminderMatch) {
     isTask = true;
-  } else if (isExplicitReminderKeyword && !isExplicitTaskKeyword) {
+  } else if (isReminderMatch && !isTaskMatch) {
     isReminder = true;
-  } else if (isExplicitTaskKeyword && isExplicitReminderKeyword) {
-    // If both are present, prefer task
+  } else if (isTaskMatch && isReminderMatch) {
+    // If both patterns match, prefer task creation
     isTask = true;
   }
 
-  // REMOVED: The fallback action verb detection that was too aggressive
-  // No longer checking for general action verbs like 'buy', 'get', 'call', etc.
-  // These were causing false positives when users were just having conversations
+  // FALLBACK: Check for action-oriented phrases that could be tasks
+  if (!isTask && !isReminder) {
+    const actionPatterns = [
+      /\b(i\s+need\s+to|i\s+have\s+to|i\s+should|i\s+must)\s+.+\s+(tomorrow|today|next\s+week|at\s+\d)/i,
+      /\b(buy|get|pick\s+up|purchase|shop\s+for)\s+.+\s+(tomorrow|today|at\s+\d)/i,
+      /\b(call|contact|email|text|message)\s+.+\s+(tomorrow|today|at\s+\d)/i,
+      /\b(go\s+to|visit|attend)\s+.+\s+(tomorrow|today|at\s+\d)/i,
+      // Arabic action patterns
+      /\b(يجب\s+أن|أحتاج\s+إلى|علي\s+أن)\s+.+\s+(غداً|اليوم|في\s+الساعة)/i,
+      /\b(اشتري|احضر|اذهب\s+إلى)\s+.+\s+(غداً|اليوم|في\s+الساعة)/i
+    ];
+
+    // Only consider these as tasks if they have time/date context
+    const hasTimeContext = actionPatterns.some(pattern => pattern.test(message));
+    if (hasTimeContext) {
+      isTask = true;
+    }
+  }
 
   if (!isTask && !isReminder) {
     return { isTask: false, isReminder: false };
   }
 
-  // --- NEW LOGIC: AI-powered extraction using DeepSeek preferred, fallback to OpenAI ---
+  // --- AI-powered extraction using DeepSeek preferred, fallback to OpenAI ---
   let extractionOk = false;
   let aiExtracted: any = {};
-  let providerTried: string = "";
 
   const todayISO = new Date().toISOString().split('T')[0];
   const systemPrompt = language === 'ar'
@@ -114,7 +132,6 @@ User message:
   // Try DeepSeek first if key is available
   if (DEEPSEEK_API_KEY) {
     try {
-      providerTried = "deepseek";
       const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -156,7 +173,6 @@ User message:
   // Fallback to OpenAI if DeepSeek not available or failed
   if (!extractionOk && OPENAI_API_KEY) {
     try {
-      providerTried = "openai";
       const apiResp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -229,9 +245,8 @@ User message:
     }
   }
 
-  // Fallback: If AI extraction failed, use previous regex logic but only for explicit requests
-  // --- BEGIN FALLBACK LEGACY REGEX LOGIC ---
-
+  // --- FALLBACK LEGACY REGEX LOGIC ---
+  
   // Extract subtasks after the word 'subtask' or 'subtasks'
   let subtasks: string[] = [];
   let textForSubtasks = '';
@@ -284,7 +299,23 @@ User message:
       .trim()
       .replace(/[,،]+$/, '');
   }
-  // 4. Fallback, if still empty, remove all keywords and subtasks, try picking a main phrase.
+  // 4. ENHANCED: Extract from natural language patterns
+  if (!title) {
+    // Try to extract from "create a task for X" patterns
+    const naturalTitlePatterns = [
+      /(?:create|make|add)\s+(?:a\s+)?task\s+(?:for|to|about)\s+([^,\n]*)/i,
+      /(?:أنشئ|اصنع|أضف)\s+مهمة\s+(?:ل|عن|في)\s+([^,\n]*)/i,
+    ];
+    
+    for (const pattern of naturalTitlePatterns) {
+      const match = message.match(pattern);
+      if (match && match[1] && match[1].trim()) {
+        title = match[1].trim();
+        break;
+      }
+    }
+  }
+  // 5. Fallback, if still empty, remove all keywords and subtasks, try picking a main phrase.
   if (!title) {
     let fallback = message
       .replace(subtaskRegex, '')
@@ -391,6 +422,4 @@ User message:
     taskData: isTask ? taskData : null,
     reminderData: isReminder ? reminderData : null
   };
-
-  // --- END FALLBACK LEGACY REGEX LOGIC ---
 }
