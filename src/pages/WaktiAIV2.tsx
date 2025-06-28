@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -293,7 +292,7 @@ const WaktiAIV2 = () => {
     setSessionMessages(prev => [...prev, cancelMessage]);
   };
 
-  // ENHANCED: Enhanced message sending with personal touch integration
+  // ULTRA-FAST: Lightning-fast message sending with post-processing personalization
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
@@ -314,15 +313,15 @@ const WaktiAIV2 = () => {
     abortControllerRef.current = new AbortController();
 
     try {
-      console.log('🎯 ENHANCED AI: Enhanced conversation processing initiated');
+      console.log('🚀 ULTRA-FAST AI: Lightning speed processing initiated');
       const startTime = Date.now();
 
-      // ENHANCED: Handle Voice quota check only if needed (non-blocking)
+      // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
       if (inputType === 'voice') {
         incrementTranslationCount().catch(e => console.warn('Quota check failed:', e));
       }
 
-      // ENHANCED: Create user message immediately with instant UI update
+      // ULTRA-FAST: Create user message immediately with instant UI update
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -335,12 +334,10 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // ENHANCED: Build personalized conversation context
-      const conversationSummary = sessionMessages.length > 5 
-        ? `Previous conversation with personalized context. User preferences active.`
-        : '';
+      // ULTRA-FAST: Minimal conversation context for speed
+      const conversationSummary = '';
 
-      // ENHANCED: Send message with personal touch integration
+      // ULTRA-FAST: Lightning-fast API call with post-processing personalization
       const response = await Promise.race([
         WaktiAIV2ServiceClass.sendMessage(
           message,
@@ -348,25 +345,25 @@ const WaktiAIV2 = () => {
           language,
           currentConversationId,
           inputType,
-          updatedSessionMessages.slice(-7), // Enhanced context window
+          updatedSessionMessages.slice(-4), // Minimal context for speed
           false,
           activeTrigger,
           conversationSummary,
           attachedFiles || []
         ),
-        // Backup timeout promise
+        // Ultra-fast timeout
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 8000) // Reduced timeout for speed
+          setTimeout(() => reject(new Error('Request timeout')), 6000) // Faster timeout
         )
       ]) as any;
 
-      // ENHANCED: Create assistant message with natural conversation flow
+      // ULTRA-FAST: Create assistant message with personalized response
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: response.response,
+        content: response.response, // This is already personalized via post-processing
         timestamp: new Date(),
-        intent: response.intent || 'conversation_enhanced',
+        intent: response.intent || 'ultra_fast_chat',
         confidence: response.confidence || 'high',
         actionTaken: response.actionTaken || false,
         imageUrl: response.imageUrl,
@@ -378,7 +375,7 @@ const WaktiAIV2 = () => {
       setSessionMessages(finalSessionMessages);
       
       const responseTime = Date.now() - startTime;
-      console.log(`🎯 ENHANCED AI: Response time: ${responseTime}ms (Personal conversation mode)`);
+      console.log(`🚀 ULTRA-FAST AI: Total time: ${responseTime}ms (API: ${response.apiTime}ms + Processing: ${response.postProcessTime}ms)`);
 
       // Handle special responses
       if (response.needsConfirmation && response.pendingTaskData) {
@@ -396,7 +393,7 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🎯 ENHANCED AI: Error:', error);
+      console.error('🚀 ULTRA-FAST AI: Error:', error);
       
       // Handle specific error types
       if (error.message?.includes('timeout')) {

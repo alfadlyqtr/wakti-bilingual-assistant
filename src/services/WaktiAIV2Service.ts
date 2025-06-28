@@ -1,6 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { AIResponseCache } from './AIResponseCache';
+import { PersonalizationProcessor } from './PersonalizationProcessor';
 
 export interface AIMessage {
   id: string;
@@ -195,6 +196,7 @@ interface PersonalTouchData {
   tone: string;
   style: string;
   instruction: string;
+  aiNickname?: string; // NEW: AI nickname
 }
 
 // ENHANCED: Better personal touch cache
@@ -251,7 +253,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ENHANCED: Fast personalized message sending with integrated personal touch
+  // ENHANCED: Ultra-fast message sending with post-processing personalization
   static async sendMessage(
     message: string,
     userId?: string,
@@ -265,109 +267,39 @@ export class WaktiAIV2ServiceClass {
     attachedFiles: any[] = []
   ): Promise<any> {
     try {
+      const startTime = Date.now();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
 
-      // ENHANCED: Load personal touch settings for personalization
-      const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
-      console.log('🎯 Personal Touch Data:', personalTouch);
+      console.log('🚀 ULTRA-FAST AI: Starting speed-optimized processing');
 
-      // ENHANCED: Build enhanced recent messages for better context
-      const recentMessages = sessionMessages.slice(-6).map(msg => ({
+      // STEP 1: Load personal touch settings (cached)
+      const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
+      console.log('🎯 Personal Touch:', personalTouch);
+
+      // STEP 2: Build minimal context for speed
+      const recentMessages = sessionMessages.slice(-4).map(msg => ({
         role: msg.role,
         content: msg.content,
-        timestamp: msg.timestamp,
-        inputType: msg.inputType,
-        attachedFiles: msg.attachedFiles
+        timestamp: msg.timestamp
       }));
 
-      // ENHANCED: Build personalized system prompt
-      let customSystemPrompt = '';
-      if (personalTouch) {
-        const { nickname, tone, style, instruction } = personalTouch;
-        
-        customSystemPrompt = language === 'ar' 
-          ? `أنت Wakti AI، مساعد ذكي ومفيد وودود.`
-          : `You are Wakti AI, a smart, helpful, and friendly assistant.`;
+      // STEP 3: Fast API call with minimal system prompt
+      const fastApiStartTime = Date.now();
+      
+      // Build speed-optimized system prompt
+      let speedSystemPrompt = language === 'ar' 
+        ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود.'
+        : 'You are Wakti AI, a smart, helpful, and friendly assistant.';
 
-        // Add personalization
-        if (nickname) {
-          customSystemPrompt += language === 'ar' 
-            ? ` اسم المستخدم "${nickname}". استخدم اسمهم في المحادثة بشكل طبيعي.`
-            : ` The user's name is "${nickname}". Use their name naturally in conversation.`;
-        }
-
-        // Apply tone with detailed personality instructions
-        if (tone && tone !== 'neutral') {
-          switch (tone) {
-            case 'funny':
-              customSystemPrompt += language === 'ar'
-                ? ' كن مرحاً ولطيفاً! استخدم النكات والرموز التعبيرية. اجعل المحادثة ممتعة ومسلية.'
-                : ' Be funny and playful! Use jokes, puns, and emojis. Make conversations entertaining and light-hearted.';
-              break;
-            case 'casual':
-              customSystemPrompt += language === 'ar'
-                ? ' كن ودوداً وعادياً! استخدم الرموز التعبيرية واللغة المألوفة. تحدث كصديق مقرب.'
-                : ' Be casual and friendly! Use emojis and conversational language. Talk like you\'re a close friend.';
-              break;
-            case 'encouraging':
-              customSystemPrompt += language === 'ar'
-                ? ' كن محفزاً ومشجعاً! استخدم عبارات إيجابية والرموز التعبيرية المحفزة. ادعم المستخدم وشجعه.'
-                : ' Be encouraging and motivating! Use positive language and supportive phrases. Uplift and inspire the user.';
-              break;
-            case 'serious':
-              customSystemPrompt += language === 'ar'
-                ? ' كن جدياً ومهنياً في ردودك. استخدم لغة رسمية ومناسبة.'
-                : ' Be serious and professional in your responses. Use formal language and maintain professionalism.';
-              break;
-          }
-        }
-
-        // Apply reply style
-        if (style) {
-          switch (style) {
-            case 'short answers':
-              customSystemPrompt += language === 'ar'
-                ? ' اجعل إجاباتك مختصرة ومباشرة. لا تزد عن 2-3 جمل.'
-                : ' Keep your answers brief and to the point. Stick to 2-3 sentences unless more detail is needed.';
-              break;
-            case 'bullet points':
-              customSystemPrompt += language === 'ar'
-                ? ' استخدم النقاط والقوائم لتنظيم المعلومات بوضوح.'
-                : ' Use bullet points and lists to organize information clearly.';
-              break;
-            case 'detailed':
-              customSystemPrompt += language === 'ar'
-                ? ' قدم إجابات مفصلة وشاملة مع أمثلة وتوضيحات.'
-                : ' Provide detailed, comprehensive answers with examples and explanations.';
-              break;
-            case 'step-by-step':
-              customSystemPrompt += language === 'ar'
-                ? ' قسم إجاباتك إلى خطوات واضحة ومرقمة.'
-                : ' Break down your responses into clear, numbered steps.';
-              break;
-          }
-        }
-
-        // Add custom instruction
-        if (instruction && instruction.trim()) {
-          customSystemPrompt += language === 'ar'
-            ? ` تعليمات إضافية: ${instruction}`
-            : ` Additional instruction: ${instruction}`;
-        }
-
-        console.log('🎯 Personalized System Prompt:', customSystemPrompt);
+      // Only add basic personalization for API speed
+      if (personalTouch?.style === 'short answers') {
+        speedSystemPrompt += language === 'ar' 
+          ? ' اجعل إجاباتك مختصرة.'
+          : ' Keep answers brief.';
       }
 
-      // ENHANCED: Determine optimal token limits based on personalization
-      let maxTokens = 500; // Default fast response
-      if (personalTouch?.style === 'detailed') {
-        maxTokens = 700;
-      } else if (personalTouch?.style === 'short answers') {
-        maxTokens = 250;
-      }
-
-      console.log(`⚡ PERSONALIZED SERVICE: Sending with personalization - Nickname: ${personalTouch?.nickname}, Tone: ${personalTouch?.tone}, Style: ${personalTouch?.style}`);
+      console.log('⚡ FAST API: Making ultra-fast AI call');
 
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
@@ -378,25 +310,59 @@ export class WaktiAIV2ServiceClass {
           inputType,
           activeTrigger,
           attachedFiles,
-          conversationSummary,
-          recentMessages,
-          customSystemPrompt, // Pass personalized system prompt
-          maxTokens,
-          userStyle: personalTouch?.style || 'balanced',
-          userTone: personalTouch?.tone || 'neutral',
-          speedOptimized: true, // Always optimized for speed
-          aggressiveOptimization: false,
-          hasTaskIntent: false,
-          personalityEnabled: true,
+          conversationSummary: '', // Minimal for speed
+          recentMessages: recentMessages.slice(-2), // Minimal context
+          customSystemPrompt: speedSystemPrompt,
+          maxTokens: personalTouch?.style === 'short answers' ? 200 : 400, // Speed-optimized
+          speedOptimized: true, // Enable speed mode
+          aggressiveOptimization: true, // Maximum speed
+          personalityEnabled: false, // Disable for API speed
           enableTaskCreation: true,
-          enablePersonality: true
+          enablePersonality: false // Disable for API speed
         }
       });
 
       if (error) throw error;
-      return data;
+
+      const apiTime = Date.now() - fastApiStartTime;
+      console.log(`⚡ FAST API: Completed in ${apiTime}ms`);
+
+      // STEP 4: Post-processing personalization (lightning fast)
+      const postProcessStartTime = Date.now();
+      
+      let finalResponse = data.response;
+      
+      if (personalTouch) {
+        console.log('🎨 POST-PROCESSING: Applying personalization');
+        finalResponse = PersonalizationProcessor.enhanceResponse(
+          data.response,
+          {
+            personalTouch,
+            language,
+            responseTime: apiTime
+          }
+        );
+      }
+
+      const postProcessTime = Date.now() - postProcessStartTime;
+      const totalTime = Date.now() - startTime;
+      
+      console.log(`🎨 POST-PROCESSING: Completed in ${postProcessTime}ms`);
+      console.log(`🚀 TOTAL TIME: ${totalTime}ms (API: ${apiTime}ms + Processing: ${postProcessTime}ms)`);
+
+      // Return enhanced response
+      return {
+        ...data,
+        response: finalResponse,
+        processingTime: totalTime,
+        apiTime,
+        postProcessTime,
+        personalizedResponse: !!personalTouch,
+        speedOptimized: true
+      };
+
     } catch (error) {
-      console.error('Enhanced send message error:', error);
+      console.error('Ultra-fast send message error:', error);
       throw error;
     }
   }

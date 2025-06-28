@@ -1,6 +1,6 @@
 
 /**
- * Enhanced chat analysis with full personality integration for Wakti Edge Function
+ * Enhanced chat analysis with ultra-fast processing and post-processing personalization
  */
 import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 
@@ -66,8 +66,8 @@ export function analyzeSmartModeIntent(message: string, activeTrigger: string, l
   };
 }
 
-// ENHANCED: Build personalized conversation messages with natural follow-up integration
-const buildPersonalizedMessages = (
+// ULTRA-FAST: Build speed-optimized conversation messages
+const buildSpeedOptimizedMessages = (
   userMessage: string, 
   context: string | null, 
   recentMessages: any[], 
@@ -76,25 +76,23 @@ const buildPersonalizedMessages = (
 ) => {
   const messages = [{ role: 'system', content: systemPrompt }];
 
-  // ENHANCED: Add conversation context more intelligently
-  if (context && interactionType.includes('enhanced')) {
+  // ULTRA-FAST: Minimal context for speed
+  if (context && context.length > 0 && !interactionType.includes('hyper_fast')) {
     messages.push({
       role: 'system',
-      content: `Previous conversation context: ${context}`
-    });
-  } else if (context) {
-    messages.push({
-      role: 'system',
-      content: `Information: ${context}`
+      content: `Context: ${context.substring(0, 300)}`
     });
   }
 
-  // ENHANCED: Include conversation history with better context awareness
+  // ULTRA-FAST: Minimal conversation history for maximum speed
   if (recentMessages && recentMessages.length > 0) {
-    const conversationHistory = recentMessages.slice(-5).map(msg => ({
+    const maxMessages = interactionType.includes('hyper_fast') ? 1 : 
+                       interactionType.includes('ultra_fast') ? 2 : 3;
+    
+    const conversationHistory = recentMessages.slice(-maxMessages).map(msg => ({
       role: msg.role === 'user' ? 'user' : 'assistant',
       content: typeof msg.content === 'string' 
-        ? msg.content
+        ? msg.content.substring(0, interactionType.includes('hyper_fast') ? 100 : 200)
         : '[Message with attachment]'
     }));
     
@@ -107,7 +105,7 @@ const buildPersonalizedMessages = (
   return messages;
 };
 
-// ENHANCED: Main processing function with integrated personal conversation flow
+// ULTRA-FAST: Main processing function with speed optimization
 export async function processWithBuddyChatAI(
   userMessage: string,
   context: string | null = null,
@@ -115,51 +113,54 @@ export async function processWithBuddyChatAI(
   recentMessages: any[] = [],
   conversationSummary: string = '',
   activeTrigger: string = 'chat',
-  interactionType: string = 'personality_enhanced_conversation',
+  interactionType: string = 'ultra_fast_chat',
   attachedFiles: any[] = [],
   customSystemPrompt: string = '',
-  maxTokens: number = 500
+  maxTokens: number = 400
 ): Promise<string> {
   
-  console.log(`⚡ PERSONAL CHAT: Processing with personalization - ${interactionType} (${maxTokens} tokens)`);
+  console.log(`🚀 ULTRA-FAST CHAT: Processing with maximum speed - ${interactionType} (${maxTokens} tokens)`);
   
-  // ENHANCED: Use custom system prompt for personalization
+  // ULTRA-FAST: Use minimal system prompt for speed
   let systemPrompt = customSystemPrompt;
   if (!systemPrompt) {
     systemPrompt = language === 'ar' 
-      ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود. كن متفاعلاً وشخصياً في المحادثة.'
-      : 'You are Wakti AI, a smart, helpful, and friendly assistant. Be interactive and personal in conversation.';
+      ? 'أنت Wakti AI، مساعد ذكي ومفيد وودود.'
+      : 'You are Wakti AI, a smart, helpful, and friendly assistant.';
   }
 
-  // ENHANCED: Add natural conversation flow instructions
-  systemPrompt += language === 'ar'
-    ? '\n\nاجعل المحادثة طبيعية ومتدفقة. إذا كان لديك سؤال متابعة، أدرجه في نهاية ردك بشكل طبيعي.'
-    : '\n\nMake conversation natural and flowing. If you have a follow-up question, include it naturally at the end of your response.';
-  
-  console.log(`⚡ PERSONALIZED SYSTEM PROMPT: ${systemPrompt.substring(0, 100)}...`);
-  
-  // ENHANCED: Build context with conversation awareness
-  let enhancedContext = context;
-  if (conversationSummary && interactionType.includes('enhanced')) {
-    enhancedContext = conversationSummary + (context ? `\n\nCurrent context: ${context}` : '');
-    console.log(`⚡ ENHANCED CONTEXT: Combined summary and context (${enhancedContext.length} chars)`);
+  // ULTRA-FAST: Skip complex instructions for speed modes
+  if (!interactionType.includes('hyper_fast') && !interactionType.includes('ultra_fast')) {
+    systemPrompt += language === 'ar'
+      ? '\n\nاجعل المحادثة طبيعية ومفيدة.'
+      : '\n\nMake conversation natural and helpful.';
   }
   
-  if (enhancedContext) {
-    console.log(`⚡ CONTEXT INCLUDED: ${enhancedContext.length} characters`);
+  console.log(`🚀 ULTRA-FAST SYSTEM PROMPT: ${systemPrompt.substring(0, 80)}...`);
+  
+  // ULTRA-FAST: Build minimal context
+  let speedContext = context;
+  if (interactionType.includes('hyper_fast')) {
+    speedContext = null; // No context for maximum speed
+  } else if (interactionType.includes('ultra_fast') && context) {
+    speedContext = context.substring(0, 200); // Minimal context
   }
   
-  // Enhanced message history inclusion
-  if (recentMessages && recentMessages.length > 0) {
-    console.log(`⚡ CONTEXT MESSAGES: Including ${recentMessages.length} messages`);
-    console.log(`⚡ SUMMARY CONTEXT: ${conversationSummary.length} characters`);
+  if (speedContext) {
+    console.log(`🚀 SPEED CONTEXT: ${speedContext.length} characters`);
+  }
+  
+  // ULTRA-FAST: Minimal message history
+  const speedMessages = interactionType.includes('hyper_fast') ? [] : recentMessages.slice(-2);
+  if (speedMessages.length > 0) {
+    console.log(`🚀 SPEED MESSAGES: Including ${speedMessages.length} messages`);
   }
 
-  // Build conversation messages
-  const messages = buildPersonalizedMessages(
+  // Build speed-optimized conversation messages
+  const messages = buildSpeedOptimizedMessages(
     userMessage,
-    enhancedContext,
-    recentMessages,
+    speedContext,
+    speedMessages,
     systemPrompt,
     interactionType
   );
@@ -167,17 +168,15 @@ export async function processWithBuddyChatAI(
   try {
     let response;
     
-    // ENHANCED: Choose AI provider based on interaction type - prioritize OpenAI for personality
+    // ULTRA-FAST: Prioritize OpenAI for speed, with speed-optimized settings
     if (OPENAI_API_KEY) {
-      console.log(`⚡ PERSONAL: Using OpenAI for personalized conversation with ${messages.length} messages`);
+      console.log(`🚀 ULTRA-FAST: Using OpenAI with speed optimization - ${messages.length} messages`);
       
-      // Enhanced temperature for more personality
-      let temperature = 0.8; // Higher for more personality
-      if (interactionType.includes('hyper_fast')) {
-        temperature = 0.6;
-      }
+      // ULTRA-FAST: Speed-optimized temperature
+      let temperature = interactionType.includes('hyper_fast') ? 0.3 : 
+                       interactionType.includes('ultra_fast') ? 0.5 : 0.7;
       
-      console.log(`⚡ TEMPERATURE: ${temperature} for personalized conversation`);
+      console.log(`🚀 SPEED TEMPERATURE: ${temperature} for ultra-fast processing`);
       
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -186,17 +185,17 @@ export async function processWithBuddyChatAI(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4o-mini', // Fastest model
           messages: messages,
           max_tokens: maxTokens,
           temperature: temperature,
-          top_p: 0.9,
-          frequency_penalty: 0.1,
-          presence_penalty: 0.2 // Higher for more conversational variety
+          top_p: interactionType.includes('hyper_fast') ? 0.8 : 0.9,
+          frequency_penalty: 0,
+          presence_penalty: 0
         }),
       });
     } else {
-      console.log(`⚡ PERSONAL: Using DeepSeek for personalized conversation with ${messages.length} messages`);
+      console.log(`🚀 ULTRA-FAST: Using DeepSeek with speed optimization - ${messages.length} messages`);
       
       response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
@@ -208,7 +207,7 @@ export async function processWithBuddyChatAI(
           model: 'deepseek-chat',
           messages: messages,
           max_tokens: maxTokens,
-          temperature: 0.8,
+          temperature: interactionType.includes('hyper_fast') ? 0.3 : 0.7,
           top_p: 0.9
         }),
       });
@@ -221,17 +220,17 @@ export async function processWithBuddyChatAI(
     const data = await response.json();
     const aiResponse = data.choices[0].message.content;
     
-    console.log(`⚡ PERSONAL AI RESPONSE LENGTH: ${aiResponse.length} characters`);
+    console.log(`🚀 ULTRA-FAST AI RESPONSE LENGTH: ${aiResponse.length} characters`);
     
     return aiResponse;
     
   } catch (error) {
-    console.error('⚡ PERSONAL CHAT ERROR:', error);
+    console.error('🚀 ULTRA-FAST CHAT ERROR:', error);
     
-    // Fallback response with personalization
+    // Ultra-fast fallback response
     const fallbackResponse = language === 'ar' 
-      ? 'عذراً، حدث خطأ مؤقت. يمكنك المحاولة مرة أخرى أو طرح سؤال آخر.'
-      : 'Sorry, there was a temporary error. You can try again or ask another question.';
+      ? 'عذراً، حدث خطأ مؤقت. حاول مرة أخرى.'
+      : 'Sorry, there was a temporary error. Please try again.';
     
     return fallbackResponse;
   }

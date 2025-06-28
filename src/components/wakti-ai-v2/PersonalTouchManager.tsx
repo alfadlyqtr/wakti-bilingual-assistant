@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToastHelper } from "@/hooks/use-toast-helper";
-import { Brain, Save } from 'lucide-react';
+import { Brain, Save, Bot } from 'lucide-react';
 
 const PERSONAL_TOUCH_KEY = "wakti_personal_touch";
 
@@ -17,6 +17,7 @@ interface PersonalTouchData {
   tone: string;
   style: string;
   instruction: string;
+  aiNickname?: string; // NEW: AI nickname feature
 }
 
 function saveWaktiPersonalTouch(data: PersonalTouchData) {
@@ -40,14 +41,18 @@ export function PersonalTouchManager() {
     nickname: '',
     tone: 'neutral',
     style: 'detailed',
-    instruction: ''
+    instruction: '',
+    aiNickname: '' // NEW: AI nickname
   });
 
   // Load saved data on mount
   useEffect(() => {
     const saved = loadWaktiPersonalTouch();
     if (saved) {
-      setFormData(saved);
+      setFormData({
+        ...saved,
+        aiNickname: saved.aiNickname || '' // Handle existing data without aiNickname
+      });
     }
   }, []);
 
@@ -93,6 +98,21 @@ export function PersonalTouchManager() {
             value={formData.nickname}
             onChange={(e) => setFormData(prev => ({ ...prev, nickname: e.target.value }))}
             placeholder={language === 'ar' ? 'عبود' : 'Abood'}
+            className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm"
+          />
+        </div>
+
+        {/* NEW: AI Nickname Field */}
+        <div className="space-y-2">
+          <Label htmlFor="aiNickname" className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1">
+            <Bot className="h-3 w-3" />
+            {language === 'ar' ? 'أعط وقتي اسماً مستعاراً' : 'Give Wakti AI a nickname'}
+          </Label>
+          <Input
+            id="aiNickname"
+            value={formData.aiNickname}
+            onChange={(e) => setFormData(prev => ({ ...prev, aiNickname: e.target.value }))}
+            placeholder={language === 'ar' ? 'مساعدي الذكي' : 'My Smart Assistant'}
             className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm"
           />
         </div>
