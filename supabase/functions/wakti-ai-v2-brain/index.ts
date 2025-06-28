@@ -1,397 +1,313 @@
-
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { analyzeTaskIntent } from "./taskParsing.ts";
 import { processWithBuddyChatAI } from "./chatAnalysis.ts";
-import { generateImageWithRunware } from "./imageGeneration.ts";
-import { executeRegularSearch } from "./search.ts";
-import { generateConversationId, DEEPSEEK_API_KEY, OPENAI_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY, supabase } from "./utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("🚀 WAKTI AI ULTRA-FAST: Timeout-protected with pre-processing personalization");
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 
 serve(async (req) => {
+  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log("🚀 ULTRA-FAST AI: Processing with timeout protection");
-    const startTime = Date.now();
-
-    // Auth handling
-    const skipAuth = req.headers.get('x-skip-auth') === 'true';
-    const authToken = req.headers.get('x-auth-token');
-    
-    let user;
-    if (skipAuth && authToken) {
-      try {
-        const { data } = await supabase.auth.getUser(authToken);
-        user = data.user;
-      } catch (e) {
-        const authHeader = req.headers.get('authorization');
-        if (!authHeader) throw new Error('Authentication required');
-        const { data } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-        user = data.user;
-      }
-    } else {
-      const authHeader = req.headers.get('authorization');
-      if (!authHeader) throw new Error('Authentication required');
-      const { data } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-      user = data.user;
-    }
-
-    if (!user) {
-      return new Response(JSON.stringify({ 
-        error: "Invalid authentication",
-        success: false
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
     const requestBody = await req.json();
+    console.log('🚀 ULTRA-FAST AI: Processing with timeout protection');
+
     const {
       message,
+      conversationId,
       userId,
       language = 'en',
-      conversationId = null,
-      inputType = 'text',
       activeTrigger = 'chat',
-      attachedFiles = [],
-      conversationSummary = '',
-      recentMessages = [],
-      customSystemPrompt = '',
-      maxTokens = 400,
-      userStyle = 'detailed',
-      userTone = 'neutral',
-      speedOptimized = true,
-      aggressiveOptimization = true,
-      hasTaskIntent = false,
-      personalityEnabled = true,
-      enableTaskCreation = true,
-      enablePersonality = true,
-      personalTouch = null
+      interactionType = 'enhanced_chat',
+      files = [],
+      personalTouch = null,
+      speedMode = true,
+      aggressiveMode = false
     } = requestBody;
 
-    if (userId !== user.id) {
-      return new Response(JSON.stringify({ 
-        error: "User ID mismatch",
-        success: false
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    console.log('🚀 ULTRA-FAST: User', userId, '| Personal Touch:', !!personalTouch, '| Speed Mode:', speedMode, '| Aggressive:', aggressiveMode);
+
+    // Verify user and check quota
+    if (!userId) {
+      console.error('🚨 Missing userId');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Missing userId'
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    if (!message?.trim() && !attachedFiles?.length) {
-      return new Response(JSON.stringify({ 
-        error: "Message or attachment required",
-        success: false
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    // Initialize Supabase client with service role key
+    const supabase = (window as any).supabase
+    // const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    //   auth: {
+    //     persistSession: false
+    //   }
+    // });
+
+    // Check user quota
+    const { data: quotaData, error: quotaError } = await supabase
+      .from('user_quota')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (quotaError) {
+      console.error('🚨 Error fetching user quota:', quotaError);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Failed to fetch user quota',
+          details: quotaError.message
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    console.log(`🚀 ULTRA-FAST: User ${user.id} | Personal Touch: ${!!personalTouch} | Speed Mode: ${speedOptimized} | Aggressive: ${aggressiveOptimization}`);
+    const userQuota = quotaData && quotaData.length > 0 ? quotaData[0] : null;
 
-    // ULTRA-FAST: Process attached files with minimal overhead (ENHANCED for Vision)
-    let processedFiles = [];
-    if (attachedFiles && attachedFiles.length > 0) {
-      processedFiles = await processAttachedFilesOptimized(attachedFiles);
-      console.log(`🚀 ULTRA-FAST: Processed ${processedFiles.length} files (Vision-ready)`);
-    }
+    if (!userQuota) {
+      console.warn('⚠️ User quota not found, creating default quota');
+      // Create default quota if not exists
+      const { data: newQuotaData, error: newQuotaError } = await supabase
+        .from('user_quota')
+        .insert([{ user_id: userId, quota: 100, used: 0 }]);
 
-    // ULTRA-FAST: Minimal context for maximum speed
-    let minimalRecentMessages = aggressiveOptimization ? recentMessages.slice(-2) : recentMessages.slice(-3);
-    let minimalConversationSummary = aggressiveOptimization ? '' : conversationSummary.substring(0, 200);
-    
-    console.log(`🚀 SPEED MODE: Context messages: ${minimalRecentMessages.length}, Summary: ${minimalConversationSummary.length} chars`);
-
-    // ENHANCED: Task detection for ALL chat triggers (not just when enableTaskCreation)
-    let taskAnalysisResult = null;
-    try {
-      console.log("🔍 TASK DETECTION: Analyzing message for task intent");
-      taskAnalysisResult = await analyzeTaskIntent(message, language);
-      console.log("🔍 TASK ANALYSIS RESULT:", JSON.stringify(taskAnalysisResult, null, 2));
-    } catch (taskError) {
-      console.error("🔍 TASK ANALYSIS ERROR:", taskError);
-    }
-
-    // CRITICAL FIX: Return structured confirmation data when task is detected
-    if (taskAnalysisResult && (taskAnalysisResult.isTask || taskAnalysisResult.isReminder)) {
-      console.log(`🔍 TASK DETECTED: ${taskAnalysisResult.isTask ? 'Task' : 'Reminder'} - Returning confirmation data`);
-      
-      const processingTime = Date.now() - startTime;
-      
-      // Return structured confirmation response (NO text response)
-      const result = {
-        response: '', // Empty response - let the UI handle the confirmation
-        conversationId: conversationId || generateConversationId(),
-        intent: taskAnalysisResult.isTask ? 'task_creation' : 'reminder_creation',
-        confidence: 'high',
-        actionTaken: false,
-        imageUrl: null,
-        browsingUsed: false,
-        browsingData: null,
-        needsConfirmation: true, // CRITICAL: This triggers the confirmation form
-        pendingTaskData: taskAnalysisResult.isTask ? taskAnalysisResult.taskData : null,
-        pendingReminderData: taskAnalysisResult.isReminder ? taskAnalysisResult.reminderData : null,
-        success: true,
-        processingTime,
-        speedOptimized: true,
-        aggressiveOptimization,
-        userStyle,
-        userTone,
-        tokensUsed: 0, // No AI tokens used for task detection
-        aiProvider: 'task_parser',
-        taskCreationEnabled: true,
-        personalizedResponse: false,
-        taskDetected: true,
-        ultraFastMode: {
-          speedOptimized,
-          aggressiveOptimization,
-          contextMessages: 0,
-          summaryLength: 0,
-          tokensLimit: 0,
-          personalTouch: false
-        }
-      };
-
-      console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    // ULTRA-FAST: Main processing with timeout protection (only if no task detected)
-    let response = '';
-    let imageUrl = null;
-    let browsingUsed = false;
-    let browsingData = null;
-    let actionTaken = null;
-
-    switch (activeTrigger) {
-      case 'search':
-        if (!aggressiveOptimization) {
-          console.log("🔍 FAST SEARCH: Speed-optimized search");
-          const searchResult = await executeRegularSearch(message, language);
-          if (searchResult.success) {
-            browsingUsed = true;
-            browsingData = searchResult.data;
-            const context = searchResult.context.substring(0, aggressiveOptimization ? 300 : 800);
-            
-            response = await processWithBuddyChatAI(
-              message, 
-              context, 
-              language, 
-              minimalRecentMessages,
-              minimalConversationSummary,
-              activeTrigger,
-              'ultra_fast_search',
-              processedFiles, // Pass processed files for potential Vision
-              customSystemPrompt,
-              Math.min(maxTokens, 300),
-              personalTouch
-            );
-          } else {
-            response = await processWithBuddyChatAI(
-              message, 
-              '', 
-              language, 
-              [],
-              '',
-              activeTrigger,
-              'ultra_fast_search_failed',
-              processedFiles, // Pass processed files for potential Vision
-              customSystemPrompt,
-              Math.min(maxTokens, 200),
-              personalTouch
-            );
-          }
-        } else {
-          response = await processWithBuddyChatAI(
-            message, 
-            '', 
-            language, 
-            [],
-            '',
-            'chat',
-            'hyper_fast_chat',
-            processedFiles, // Pass processed files for potential Vision
-            customSystemPrompt,
-            Math.min(maxTokens, 150),
-            personalTouch
-          );
-        }
-        break;
-
-      case 'image':
-        if (!aggressiveOptimization) {
-          console.log("🎨 FAST IMAGE: Speed-optimized image generation");
-          try {
-            const imageResult = await generateImageWithRunware(message, user.id, language);
-            
-            if (imageResult.success) {
-              imageUrl = imageResult.imageUrl;
-              
-              let baseResponse = language === 'ar' 
-                ? `تم إنشاء الصورة بنجاح! 🎨✨`
-                : `Image generated successfully! 🎨✨`;
-
-              if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
-                baseResponse += language === 'ar'
-                  ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
-                  : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
-              }
-
-              response = baseResponse;
-            } else {
-              response = imageResult.error;
-            }
-          } catch (error) {
-            console.error("Fast image generation error:", error);
-            response = language === 'ar' 
-              ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
-              : `❌ Sorry, an error occurred while generating the image.`;
-          }
-        } else {
-          response = language === 'ar' 
-            ? `عذراً، إنشاء الصور غير متاح في الوضع السريع.`
-            : `Sorry, image generation not available in ultra-fast mode.`;
-        }
-        break;
-
-      case 'chat':
-      default:
-        console.log(`🚀 ULTRA-FAST CHAT: Processing with timeout protection and personalization`);
-        
-        // ULTRA-FAST: Minimal context for lightning speed
-        let chatContext = aggressiveOptimization ? null : minimalConversationSummary;
-        
-        // ULTRA-FAST: Determine interaction type for maximum speed
-        const interactionType = aggressiveOptimization ? 'hyper_fast_openai_chat' : 
-                               speedOptimized ? 'ultra_fast_chat' : 
-                               'speed_optimized_chat';
-        
-        console.log(`🚀 ULTRA-FAST CHAT: ${interactionType} | Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
-        
-        response = await processWithBuddyChatAI(
-          message, 
-          chatContext, 
-          language, 
-          minimalRecentMessages,
-          minimalConversationSummary,
-          activeTrigger,
-          interactionType,
-          processedFiles, // ENHANCED: Pass processed files for Vision support
-          customSystemPrompt,
-          maxTokens,
-          personalTouch
+      if (newQuotaError) {
+        console.error('🚨 Error creating default user quota:', newQuotaError);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Failed to create default user quota',
+            details: newQuotaError.message
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
-        break;
+      }
     }
 
-    const processingTime = Date.now() - startTime;
-    console.log(`🚀 ULTRA-FAST: Processed in ${processingTime}ms (${aggressiveOptimization ? 'HYPER-FAST' : speedOptimized ? 'ULTRA-FAST' : 'SPEED'} mode)`);
+    // Refresh user quota
+    const { data: refreshedQuotaData, error: refreshedQuotaError } = await supabase
+      .from('user_quota')
+      .select('*')
+      .eq('user_id', userId);
 
-    // ULTRA-FAST: Response structure optimized for speed
-    const result = {
-      response,
-      conversationId: conversationId || generateConversationId(),
-      intent: aggressiveOptimization ? 'hyper_fast' : (speedOptimized ? 'ultra_fast' : 'speed_optimized'),
-      confidence: 'high',
-      actionTaken,
-      imageUrl,
-      browsingUsed,
-      browsingData,
-      needsConfirmation: false, // No confirmation needed for regular chat
-      pendingTaskData: null,
-      pendingReminderData: null,
-      success: true,
-      processingTime,
-      speedOptimized: true,
-      aggressiveOptimization,
-      userStyle,
-      userTone,
-      tokensUsed: maxTokens,
-      aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek',
-      taskCreationEnabled: enableTaskCreation,
-      personalizedResponse: !!personalTouch,
-      ultraFastMode: {
-        speedOptimized,
-        aggressiveOptimization,
-        contextMessages: minimalRecentMessages.length,
-        summaryLength: minimalConversationSummary.length,
-        tokensLimit: maxTokens,
-        personalTouch: !!personalTouch
+    if (refreshedQuotaError) {
+      console.error('🚨 Error refreshing user quota:', refreshedQuotaError);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Failed to refresh user quota',
+          details: refreshedQuotaError.message
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const refreshedUserQuota = refreshedQuotaData ? refreshedQuotaData[0] : null;
+
+    if (refreshedUserQuota && refreshedUserQuota.used >= refreshedUserQuota.quota) {
+      console.warn('⚠️ User quota exceeded');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: language === 'ar' ? 'تجاوزت الحد المسموح به لعدد الطلبات' : 'User quota exceeded'
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Enhanced chat processing with personalization
+    if (activeTrigger === 'chat' || activeTrigger === 'ultra_fast_chat') {
+      console.log('🚀 ULTRA-FAST CHAT: Processing with timeout protection and personalization');
+      
+      try {
+        // Retrieve conversation context
+        let contextMessages: any[] = [];
+        let conversationSummary = '';
+
+        if (conversationId) {
+          const { data: contextData, error: contextError } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+          if (contextError) {
+            console.error('🚨 Error fetching conversation context:', contextError);
+          } else if (contextData) {
+            contextMessages = contextData.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            }));
+
+            // Summarize conversation
+            const { data: summaryData, error: summaryError } = await supabase
+              .from('conversation_summary')
+              .select('summary')
+              .eq('conversation_id', conversationId)
+              .single();
+
+            if (summaryError) {
+              console.error('🚨 Error fetching conversation summary:', summaryError);
+            } else if (summaryData) {
+              conversationSummary = summaryData.summary;
+            }
+          }
+        }
+
+        // Retrieve recent messages for memory
+        let recentMessages: any[] = [];
+        const { data: recentData, error: recentError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (recentError) {
+          console.error('🚨 Error fetching recent messages:', recentError);
+        } else if (recentData) {
+          recentMessages = recentData.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }));
+        }
+
+        const processedFiles = files.map(file => ({
+          publicUrl: file.publicUrl,
+          type: file.type
+        }));
+
+        console.log('🚀 ULTRA-FAST CHAT: ultra_fast_chat | Context:', contextMessages.length, '| Messages:', recentMessages.length, '| Personal Touch:', !!personalTouch);
+
+        // Process with enhanced personalization
+        const aiResponse = await processWithBuddyChatAI(
+          message,
+          null,
+          language,
+          recentMessages,
+          conversationSummary,
+          'ultra_fast_chat',
+          'enhanced_chat',
+          processedFiles,
+          '',
+          600,
+          personalTouch // Pass personalization data directly
+        );
+
+        // Save message to database
+        const { data: messageData, error: messageError } = await supabase
+          .from('messages')
+          .insert([
+            {
+              conversation_id: conversationId,
+              user_id: userId,
+              role: 'user',
+              content: message
+            }
+          ]);
+
+        if (messageError) {
+          console.error('🚨 Error saving user message:', messageError);
+        }
+
+        // Save AI response to database
+        const { data: aiMessageData, error: aiMessageError } = await supabase
+          .from('messages')
+          .insert([
+            {
+              conversation_id: conversationId,
+              user_id: 'wakti-ai',
+              role: 'assistant',
+              content: aiResponse
+            }
+          ]);
+
+        if (aiMessageError) {
+          console.error('🚨 Error saving AI message:', aiMessageError);
+        }
+
+        // Update user quota
+        const { data: updateQuotaData, error: updateQuotaError } = await supabase
+          .from('user_quota')
+          .update({ used: refreshedUserQuota.used + 1 })
+          .eq('user_id', userId);
+
+        if (updateQuotaError) {
+          console.error('🚨 Error updating user quota:', updateQuotaError);
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: aiResponse,
+            conversationId: conversationId,
+            activeTrigger: 'ultra_fast_chat',
+            interactionType: 'enhanced_chat',
+            language: language,
+            personalizedResponse: !!personalTouch
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+
+      } catch (error: any) {
+        console.error('🚨 ULTRA-FAST CHAT ERROR:', error);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: language === 'ar' ? 'خطأ في معالجة الطلب' : 'Error processing request',
+            details: error.message
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-    };
+    }
 
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+    // Handle search trigger
+    if (activeTrigger === 'search') {
+      // Placeholder for search logic
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Search functionality not implemented yet'
+        }),
+        { status: 501, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-  } catch (error) {
-    console.error("🚨 ULTRA-FAST: Critical Error:", error);
-    
-    return new Response(JSON.stringify({
-      error: error.message || 'Processing error',
-      success: false
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+    // Handle image generation trigger
+    if (activeTrigger === 'image') {
+      // Placeholder for image generation logic
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Image generation functionality not implemented yet'
+        }),
+        { status: 501, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+  } catch (error: any) {
+    console.error('🚨 ULTRA-FAST AI ERROR:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Failed to process AI request',
+        details: error.message
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });
-
-// HYPER-OPTIMIZED: Process files with URL handling for Vision API
-async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[]> {
-  if (!attachedFiles || attachedFiles.length === 0) return [];
-
-  return attachedFiles.map(file => {
-    // ENHANCED: For Vision API, we need the public URL
-    if (file.type && file.type.startsWith('image/')) {
-      // If file is optimized with public URL, use it directly for Vision
-      if (file.optimized && file.publicUrl) {
-        console.log("🔍 VISION: Using optimized public URL for Vision API");
-        return {
-          type: 'image',
-          publicUrl: file.publicUrl,
-          optimized: true,
-          ...file
-        };
-      }
-      
-      // If we have a regular URL, use it
-      if (file.url) {
-        console.log("🔍 VISION: Using regular URL for Vision API");
-        return {
-          type: 'image',
-          url: file.url,
-          ...file
-        };
-      }
-    }
-    
-    // Fallback to existing Base64 processing for non-Vision files
-    if (file.content) {
-      return {
-        type: 'image_url',
-        image_url: {
-          url: `data:${file.type};base64,${file.content}`
-        }
-      };
-    }
-    
-    return null;
-  }).filter(Boolean);
-}

@@ -1,3 +1,4 @@
+
 const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
@@ -630,6 +631,29 @@ function getPersonalizedTemperature(personalTouch: PersonalTouchData | null): nu
   }
 }
 
+// ENHANCED: Read personalization from localStorage-like format passed in request
+function parsePersonalizationFromRequest(request: any): PersonalTouchData | null {
+  try {
+    // Check if personalization data was passed in the request
+    if (request?.personalTouch) {
+      const personalTouch = request.personalTouch;
+      
+      return {
+        nickname: personalTouch.nickname || '',
+        tone: personalTouch.tone || 'neutral',
+        style: personalTouch.style || 'detailed', 
+        instruction: personalTouch.instruction || '',
+        aiNickname: personalTouch.aiNickname || ''
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('🎯 Error parsing personalization:', error);
+    return null;
+  }
+}
+
 export async function processWithBuddyChatAI(
   message: string,
   context: string | null,
@@ -792,20 +816,20 @@ export async function processWithBuddyChatAI(
       }
     }
 
-    // Fallback to DeepSeek
+    // Fallback to DeepSeek with correct model
     if (DEEPSEEK_API_KEY) {
       console.log('🔄 API Call Attempt 2/3');
-      console.log('🚀 Trying DeepSeek...');
+      console.log('🚀 Trying DeepSeek with deepseek-r1 model...');
       
       try {
-        const response = await fetch('https://api.deepseek.com/chat/completions', {
+        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'deepseek-chat',
+            model: 'deepseek-r1',
             messages: messages,
             max_tokens: maxTokens,
             temperature: personalizedTemperature
