@@ -304,7 +304,7 @@ const WaktiAIV2 = () => {
     setSessionMessages(prev => [...prev, cancelMessage]);
   };
 
-  // ENHANCED: Lightning-fast message sending with FULL personalization
+  // ENHANCED: Lightning-fast message sending with PROPER TASK CONFIRMATION FLOW
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
@@ -326,7 +326,7 @@ const WaktiAIV2 = () => {
     abortControllerRef.current = new AbortController();
 
     try {
-      console.log('🚀 ENHANCED AI: Lightning speed processing with FULL personalization');
+      console.log('🚀 ENHANCED AI: Lightning speed processing with TASK DETECTION');
       const startTime = Date.now();
 
       // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
@@ -347,7 +347,7 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      // ENHANCED: Timeout-protected API call with FULL personalization
+      // ENHANCED: Timeout-protected API call with TASK DETECTION
       const response = await Promise.race([
         WaktiAIV2ServiceClass.sendMessage(
           message,
@@ -375,7 +375,38 @@ const WaktiAIV2 = () => {
         })
       ]) as any;
 
-      // ENHANCED: Create assistant message with FULL personalization applied
+      const responseTime = Date.now() - startTime;
+      console.log(`🚀 ENHANCED AI: Total time: ${responseTime}ms`);
+
+      // CRITICAL: Check for task/reminder confirmation FIRST
+      if (response.needsConfirmation) {
+        console.log('🎯 TASK/REMINDER CONFIRMATION DETECTED:', {
+          taskData: !!response.pendingTaskData,
+          reminderData: !!response.pendingReminderData
+        });
+
+        if (response.pendingTaskData) {
+          console.log('📝 SHOWING TASK CONFIRMATION FORM');
+          setPendingTaskData(response.pendingTaskData);
+          setPendingReminderData(null);
+          setShowTaskConfirmation(true);
+          
+          // Don't add AI response message yet - wait for confirmation
+          console.log('✅ Task confirmation UI state set');
+          return;
+        } else if (response.pendingReminderData) {
+          console.log('⏰ SHOWING REMINDER CONFIRMATION FORM');
+          setPendingReminderData(response.pendingReminderData);
+          setPendingTaskData(null);
+          setShowTaskConfirmation(true);
+          
+          // Don't add AI response message yet - wait for confirmation
+          console.log('✅ Reminder confirmation UI state set');
+          return;
+        }
+      }
+
+      // REGULAR CHAT: Create assistant message with personalization applied
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -391,20 +422,8 @@ const WaktiAIV2 = () => {
 
       const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
       setSessionMessages(finalSessionMessages);
-      
-      const responseTime = Date.now() - startTime;
-      console.log(`🚀 ENHANCED AI: Total time: ${responseTime}ms (FULLY PERSONALIZED)`);
 
-      // FIXED: Handle EXPLICIT task creation only
-      if (response.needsConfirmation && response.pendingTaskData) {
-        console.log('📝 EXPLICIT TASK CREATION: Showing confirmation form');
-        setPendingTaskData(response.pendingTaskData);
-        setShowTaskConfirmation(true);
-      } else if (response.needsConfirmation && response.pendingReminderData) {
-        console.log('⏰ EXPLICIT REMINDER CREATION: Showing confirmation form');
-        setPendingReminderData(response.pendingReminderData);
-        setShowTaskConfirmation(true);
-      }
+      console.log(`✅ REGULAR CHAT COMPLETED: ${responseTime}ms (Personalized: ${response.personalizedResponse})`);
 
       // FIRE-AND-FORGET: Background quota updates
       if (inputType === 'voice') {
@@ -419,16 +438,12 @@ const WaktiAIV2 = () => {
       if (error.message?.includes('timeout') || error.message?.includes('longer than expected')) {
         setRequestTimeout(true);
         setError('AI is taking longer than usual - please try again');
-        showError(language === 'ar' ? 'الذكاء الاصطناعي يستغرق وقتاً أطول - حاول مرة أخرى' : 'AI is taking longer than usual - try again');
-      } else if (error.message?.includes('network') || error.message?.includes('connection')) {
-        setError('Network connection issue - check your internet');
-        showError(language === 'ar' ? 'مشكلة في الاتصال - تحقق من الإنترنت' : 'Network issue - check connection');
-      } else if (error.message?.includes('unavailable') || error.message?.includes('busy')) {
-        setError('AI service is temporarily busy - please try again');
-        showError(language === 'ar' ? 'الخدمة مشغولة مؤقتاً - حاول مرة أخرى' : 'AI service is busy - try again');
+      } else if (error.message?.includes('Authentication required')) {
+        setError('Please log in to use AI features');
+      } else if (error.message?.includes('Network')) {
+        setError('Connection issue - please check your internet');
       } else {
-        setError('Something went wrong - please try again');
-        showError(error.message || (language === 'ar' ? 'حدث خطأ - حاول مرة أخرى' : 'Something went wrong - try again'));
+        setError(error.message || 'AI service temporarily unavailable');
       }
     } finally {
       setIsLoading(false);
@@ -620,67 +635,66 @@ const WaktiAIV2 = () => {
   }, []);
 
   return (
-    <div className="flex flex-col h-full min-h-screen bg-background overflow-hidden">
-      <div className="sticky top-0 z-30">
-        <NotificationBars
-          quotaStatus={aiQuota}
-          searchConfirmationRequired={false}
-          onSearchConfirmation={() => {}}
-          onQuotaRefresh={() => fetchAIQuota(true)}
-          requestTimeout={requestTimeout}
-          onTimeoutRetry={() => {
-            setRequestTimeout(false);
-            setError(null);
-          }}
-        />
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[140px]">
-        <ChatMessages
-          sessionMessages={allDisplayMessages}
-          isLoading={isLoading}
-          activeTrigger={activeTrigger}
-          scrollAreaRef={scrollAreaRef}
-          userProfile={userProfile}
-          showTaskConfirmation={showTaskConfirmation}
-          pendingTaskData={pendingTaskData}
-          pendingReminderData={pendingReminderData}
-          taskConfirmationLoading={taskConfirmationLoading}
-          onTaskConfirmation={handleTaskConfirmation}
-          onReminderConfirmation={handleReminderConfirmation}
-          onCancelTaskConfirmation={handleCancelTaskConfirmation}
-        />
-      </div>
-      <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-t border-border">
-        <ChatInput
-          message={message}
-          setMessage={setMessage}
-          isLoading={isLoading || requestInProgress}
-          sessionMessages={allDisplayMessages}
-          onSendMessage={handleSendMessage}
-          onClearChat={handleClearChat}
-          onOpenPlusDrawer={handleOpenPlusDrawer}
-          activeTrigger={activeTrigger}
-        />
-      </div>
-      <ChatDrawers
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      <NotificationBars />
+      
+      <ChatHeader 
         showConversations={showConversations}
         setShowConversations={setShowConversations}
         showQuickActions={showQuickActions}
         setShowQuickActions={setShowQuickActions}
-        conversations={conversations}
         currentConversationId={currentConversationId}
-        onSelectConversation={handleSelectConversation}
-        onDeleteConversation={handleDeleteConversation}
-        fetchConversations={fetchConversations}
-        onSendMessage={handleSendMessage}
-        activeTrigger={activeTrigger}
-        onTriggerChange={handleTriggerChange}
-        onTextGenerated={handleTextGenerated}
-        onNewConversation={handleNewConversation}
-        onClearChat={handleClearChat}
-        sessionMessages={allDisplayMessages}
-        isLoading={isLoading}
+        setCurrentConversationId={setCurrentConversationId}
+        setSessionMessages={setSessionMessages}
+        conversations={conversations}
+        setConversations={setConversations}
+        aiQuota={aiQuota}
+        fetchAIQuota={fetchAIQuota}
       />
+
+      <div className="flex-1 flex relative overflow-hidden">
+        <div className="flex-1 flex flex-col">
+          <ChatMessages 
+            sessionMessages={sessionMessages}
+            isLoading={isLoading}
+            activeTrigger={activeTrigger}
+            scrollAreaRef={scrollAreaRef}
+            userProfile={userProfile}
+            showTaskConfirmation={showTaskConfirmation}
+            pendingTaskData={pendingTaskData}
+            pendingReminderData={pendingReminderData}
+            taskConfirmationLoading={taskConfirmationLoading}
+            onTaskConfirmation={handleTaskConfirmation}
+            onReminderConfirmation={handleReminderConfirmation}
+            onCancelTaskConfirmation={handleCancelTaskConfirmation}
+          />
+
+          <ChatInput 
+            message={message}
+            setMessage={setMessage}
+            onSendMessage={handleSendMessage}
+            isLoading={isLoading}
+            error={error}
+            setError={setError}
+            translationQuota={translationQuota}
+            MAX_DAILY_TRANSLATIONS={MAX_DAILY_TRANSLATIONS}
+            activeTrigger={activeTrigger}
+            setActiveTrigger={setActiveTrigger}
+            requestTimeout={requestTimeout}
+          />
+        </div>
+
+        <ChatDrawers 
+          showConversations={showConversations}
+          setShowConversations={setShowConversations}
+          showQuickActions={showQuickActions}
+          setShowQuickActions={setShowQuickActions}
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          setCurrentConversationId={setCurrentConversationId}
+          setSessionMessages={setSessionMessages}
+        />
+      </div>
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 /**
  * Task and reminder extraction for Wakti Edge Function
  */
@@ -7,7 +6,7 @@ import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 export async function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
 
-  // UPDATED: More specific task keywords that require explicit task creation intent
+  // ENHANCED: More flexible task keywords that capture natural language
   const explicitTaskKeywords = [
     'create task', 'create a task', 'add task', 'add a task', 'make task', 'make a task',
     'new task', 'create todo', 'add todo', 'make todo', 'new todo',
@@ -16,12 +15,17 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
     'need to create task', 'need to add task', 'need to make task',
     'can you create task', 'can you add task', 'can you make task',
     'please create task', 'please add task', 'please make task',
+    // ADDED: More natural language patterns
+    'create a task for', 'add a task for', 'make a task for',
+    'i need a task', 'create task:', 'add task:', 'make task:',
+    'task for tomorrow', 'task for today', 'task to',
     // Arabic equivalents
     'أنشئ مهمة', 'اصنع مهمة', 'أضف مهمة', 'مهمة جديدة',
-    'ساعدني في إنشاء مهمة', 'أريد إنشاء مهمة', 'أحتاج إنشاء مهمة'
+    'ساعدني في إنشاء مهمة', 'أريد إنشاء مهمة', 'أحتاج إنشاء مهمة',
+    'مهمة لـ', 'مهمة غداً', 'مهمة اليوم'
   ];
 
-  // UPDATED: More specific reminder keywords
+  // ENHANCED: More flexible reminder keywords
   const explicitReminderKeywords = [
     'create reminder', 'create a reminder', 'add reminder', 'add a reminder', 
     'make reminder', 'make a reminder', 'new reminder',
@@ -31,37 +35,62 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
     'can you create reminder', 'can you add reminder', 'can you make reminder',
     'please create reminder', 'please add reminder', 'please make reminder',
     'remind me to', 'set reminder', 'schedule reminder',
+    // ADDED: More natural language patterns
+    'create a reminder for', 'add a reminder for', 'reminder for',
+    'reminder to', 'remind me at', 'set a reminder',
     // Arabic equivalents
     'أنشئ تذكير', 'اصنع تذكير', 'أضف تذكير', 'تذكير جديد',
-    'ذكرني أن', 'ذكرني ب', 'اجعل تذكير'
+    'ذكرني أن', 'ذكرني ب', 'اجعل تذكير', 'تذكير لـ'
   ];
 
-  // Check for explicit task creation phrases
+  // ENHANCED: Pattern matching for common task creation structures
+  const taskPatterns = [
+    /create\s+(?:a\s+)?task\s+(?:for|to)\s+/i,
+    /add\s+(?:a\s+)?task\s+(?:for|to)\s+/i,
+    /make\s+(?:a\s+)?task\s+(?:for|to)\s+/i,
+    /task\s+(?:for|to)\s+.+(?:tomorrow|today|at\s+\d)/i,
+    /i\s+need\s+(?:a\s+)?task\s+/i,
+    /create\s+task:\s*/i,
+    /add\s+task:\s*/i
+  ];
+
+  const reminderPatterns = [
+    /remind\s+me\s+(?:to|at)\s+/i,
+    /set\s+(?:a\s+)?reminder\s+/i,
+    /create\s+(?:a\s+)?reminder\s+(?:for|to)\s+/i,
+    /reminder\s+(?:for|to)\s+/i
+  ];
+
+  // Check for explicit keywords first
   const isExplicitTaskKeyword = explicitTaskKeywords.some(keyword => lowerMessage.includes(keyword));
   const isExplicitReminderKeyword = explicitReminderKeywords.some(keyword => lowerMessage.includes(keyword));
+
+  // Check for pattern matches
+  const isTaskPattern = taskPatterns.some(pattern => pattern.test(lowerMessage));
+  const isReminderPattern = reminderPatterns.some(pattern => pattern.test(lowerMessage));
 
   let isTask = false;
   let isReminder = false;
 
-  // UPDATED: Only detect as task/reminder if explicit keywords are found
-  if (isExplicitTaskKeyword && !isExplicitReminderKeyword) {
+  // ENHANCED: More flexible detection logic
+  if ((isExplicitTaskKeyword || isTaskPattern) && !isExplicitReminderKeyword && !isReminderPattern) {
     isTask = true;
-  } else if (isExplicitReminderKeyword && !isExplicitTaskKeyword) {
+    console.log('🎯 TASK DETECTED: Explicit keyword or pattern match');
+  } else if ((isExplicitReminderKeyword || isReminderPattern) && !isExplicitTaskKeyword && !isTaskPattern) {
     isReminder = true;
-  } else if (isExplicitTaskKeyword && isExplicitReminderKeyword) {
+    console.log('⏰ REMINDER DETECTED: Explicit keyword or pattern match');
+  } else if ((isExplicitTaskKeyword || isTaskPattern) && (isExplicitReminderKeyword || isReminderPattern)) {
     // If both are present, prefer task
     isTask = true;
+    console.log('🎯 TASK DETECTED: Both present, preferring task');
   }
 
-  // REMOVED: The fallback action verb detection that was too aggressive
-  // No longer checking for general action verbs like 'buy', 'get', 'call', etc.
-  // These were causing false positives when users were just having conversations
-
   if (!isTask && !isReminder) {
+    console.log('❌ NO TASK/REMINDER DETECTED: Message does not match patterns');
     return { isTask: false, isReminder: false };
   }
 
-  // --- NEW LOGIC: AI-powered extraction using DeepSeek preferred, fallback to OpenAI ---
+  // --- ENHANCED AI-powered extraction using DeepSeek preferred, fallback to OpenAI ---
   let extractionOk = false;
   let aiExtracted: any = {};
   let providerTried: string = "";
@@ -69,7 +98,8 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
   const todayISO = new Date().toISOString().split('T')[0];
   const systemPrompt = language === 'ar'
     ? "ساعدني في استخراج الحقول المنظمة من نص عبارة عن طلب مهمة أو تذكير."
-    : "Help me extract structured fields from a user's to-do or reminder request.";
+    : "Help me extract structured fields from a user's task or reminder request.";
+  
   const userPrompt = language === 'ar'
     ? `
 اليوم: ${todayISO}
@@ -91,14 +121,14 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
     : `
 Today is: ${todayISO}
 Analyze the following user message and extract:
-- title (short task intent/action),
+- title (short task intent/action, clean and descriptive),
 - description (only if present; otherwise empty),
-- due_date (YYYY-MM-DD),
+- due_date (YYYY-MM-DD format),
 - due_time (24hr format HH:MM, if present),
 - subtasks (as an array, extracted from shopping lists, comma/and/bullet separated, etc.),
 - priority ("normal" or "high")
 
-Return ONLY this JSON, with no comments:
+Return ONLY this JSON, with no comments or markdown:
 {
   "title": "...",
   "description": "...",
@@ -107,6 +137,7 @@ Return ONLY this JSON, with no comments:
   "subtasks": [...],
   "priority": "normal"
 }
+
 User message:
 "${message}"
 `;
@@ -115,6 +146,7 @@ User message:
   if (DEEPSEEK_API_KEY) {
     try {
       providerTried = "deepseek";
+      console.log('🤖 Using DeepSeek for task extraction');
       const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -137,19 +169,23 @@ User message:
         try {
           aiExtracted = JSON.parse(reply);
           extractionOk = true;
+          console.log('✅ DeepSeek extraction successful');
         } catch (e) {
           // Try cleaning up code blocks
           const jsonStr = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
           try {
             aiExtracted = JSON.parse(jsonStr);
             extractionOk = true;
+            console.log('✅ DeepSeek extraction successful (after cleanup)');
           } catch (e2) {
             extractionOk = false;
+            console.log('❌ DeepSeek extraction failed');
           }
         }
       }
     } catch (e) {
       extractionOk = false;
+      console.log('❌ DeepSeek API call failed:', e);
     }
   }
 
@@ -157,6 +193,7 @@ User message:
   if (!extractionOk && OPENAI_API_KEY) {
     try {
       providerTried = "openai";
+      console.log('🤖 Using OpenAI for task extraction');
       const apiResp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -180,19 +217,23 @@ User message:
         try {
           aiExtracted = JSON.parse(reply);
           extractionOk = true;
+          console.log('✅ OpenAI extraction successful');
         } catch (e) {
           // Try to cleanup codeblocks or extra output:
           const jsonStr = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
           try {
             aiExtracted = JSON.parse(jsonStr);
             extractionOk = true;
+            console.log('✅ OpenAI extraction successful (after cleanup)');
           } catch (e2) {
             extractionOk = false;
+            console.log('❌ OpenAI extraction failed');
           }
         }
       }
     } catch (err) {
       extractionOk = false;
+      console.log('❌ OpenAI API call failed:', err);
     }
   }
 
@@ -210,6 +251,8 @@ User message:
       subtasks: Array.isArray(aiExtracted.subtasks) ? aiExtracted.subtasks : [],
       priority: fill("priority", "normal")
     };
+
+    console.log('🎯 TASK EXTRACTION RESULT:', resultData);
 
     if (isTask) {
       return {
@@ -229,8 +272,7 @@ User message:
     }
   }
 
-  // Fallback: If AI extraction failed, use previous regex logic but only for explicit requests
-  // --- BEGIN FALLBACK LEGACY REGEX LOGIC ---
+  console.log('⚠️ AI extraction failed, using fallback regex logic');
 
   // Extract subtasks after the word 'subtask' or 'subtasks'
   let subtasks: string[] = [];
@@ -385,12 +427,12 @@ User message:
     priority
   };
 
+  console.log('🎯 FALLBACK EXTRACTION RESULT:', isTask ? taskData : reminderData);
+
   return {
     isTask,
     isReminder,
     taskData: isTask ? taskData : null,
     reminderData: isReminder ? reminderData : null
   };
-
-  // --- END FALLBACK LEGACY REGEX LOGIC ---
 }
