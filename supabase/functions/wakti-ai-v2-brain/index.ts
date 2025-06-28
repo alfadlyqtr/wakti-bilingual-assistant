@@ -103,11 +103,11 @@ serve(async (req) => {
 
     console.log(`🚀 ULTRA-FAST: User ${user.id} | Personal Touch: ${!!personalTouch} | Speed Mode: ${speedOptimized} | Aggressive: ${aggressiveOptimization}`);
 
-    // ULTRA-FAST: Process attached files with minimal overhead
+    // ULTRA-FAST: Process attached files with minimal overhead (ENHANCED for Vision)
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
       processedFiles = await processAttachedFilesOptimized(attachedFiles);
-      console.log(`🚀 ULTRA-FAST: Processed ${processedFiles.length} files`);
+      console.log(`🚀 ULTRA-FAST: Processed ${processedFiles.length} files (Vision-ready)`);
     }
 
     // ULTRA-FAST: Minimal context for maximum speed
@@ -197,7 +197,7 @@ serve(async (req) => {
               minimalConversationSummary,
               activeTrigger,
               'ultra_fast_search',
-              attachedFiles,
+              processedFiles, // Pass processed files for potential Vision
               customSystemPrompt,
               Math.min(maxTokens, 300),
               personalTouch
@@ -211,7 +211,7 @@ serve(async (req) => {
               '',
               activeTrigger,
               'ultra_fast_search_failed',
-              attachedFiles,
+              processedFiles, // Pass processed files for potential Vision
               customSystemPrompt,
               Math.min(maxTokens, 200),
               personalTouch
@@ -226,7 +226,7 @@ serve(async (req) => {
             '',
             'chat',
             'hyper_fast_chat',
-            attachedFiles,
+            processedFiles, // Pass processed files for potential Vision
             customSystemPrompt,
             Math.min(maxTokens, 150),
             personalTouch
@@ -292,7 +292,7 @@ serve(async (req) => {
           minimalConversationSummary,
           activeTrigger,
           interactionType,
-          processedFiles,
+          processedFiles, // ENHANCED: Pass processed files for Vision support
           customSystemPrompt,
           maxTokens,
           personalTouch
@@ -353,22 +353,36 @@ serve(async (req) => {
   }
 });
 
-// HYPER-OPTIMIZED: Process files with URL handling instead of Base64
+// HYPER-OPTIMIZED: Process files with URL handling for Vision API
 async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[]> {
   if (!attachedFiles || attachedFiles.length === 0) return [];
 
   return attachedFiles.map(file => {
-    // If file is optimized (has URL), use it directly for OpenAI Vision
-    if (file.optimized && file.url) {
-      return {
-        type: 'image_url',
-        image_url: {
-          url: file.url
-        }
-      };
+    // ENHANCED: For Vision API, we need the public URL
+    if (file.type && file.type.startsWith('image/')) {
+      // If file is optimized with public URL, use it directly for Vision
+      if (file.optimized && file.publicUrl) {
+        console.log("🔍 VISION: Using optimized public URL for Vision API");
+        return {
+          type: 'image',
+          publicUrl: file.publicUrl,
+          optimized: true,
+          ...file
+        };
+      }
+      
+      // If we have a regular URL, use it
+      if (file.url) {
+        console.log("🔍 VISION: Using regular URL for Vision API");
+        return {
+          type: 'image',
+          url: file.url,
+          ...file
+        };
+      }
     }
     
-    // Fallback to existing Base64 processing for non-optimized files
+    // Fallback to existing Base64 processing for non-Vision files
     if (file.content) {
       return {
         type: 'image_url',
