@@ -1,6 +1,6 @@
-
 /**
  * Enhanced chat analysis with ultra-fast processing and post-processing personalization
+ * UPDATED: Smart memory management with 10+ message trigger
  */
 import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 
@@ -159,7 +159,7 @@ const buildPersonalizedSystemPrompt = (
   return systemPrompt;
 };
 
-// ENHANCED: Build speed-optimized messages with BETTER CONTEXT (6-8 messages)
+// ENHANCED: Build speed-optimized messages with SMART MEMORY INTEGRATION
 const buildSpeedOptimizedMessages = (
   userMessage: string, 
   context: string | null, 
@@ -169,27 +169,40 @@ const buildSpeedOptimizedMessages = (
 ) => {
   const messages = [{ role: 'system', content: systemPrompt }];
 
-  // ENHANCED: Better context for conversation flow
+  // ENHANCED: Smart context integration with conversation summaries
   if (context && context.length > 0) {
-    messages.push({
-      role: 'system',
-      content: `Previous conversation context: ${context.substring(0, 500)}`
-    });
+    // Check if context contains enhanced conversation memory
+    const isEnhancedMemory = context.includes('Enhanced Conversation Memory:') || 
+                            context.includes('Conversation Context');
+    
+    if (isEnhancedMemory) {
+      messages.push({
+        role: 'system',
+        content: `Smart Memory Context: ${context.substring(0, 800)}` // INCREASED limit
+      });
+      console.log('🧠 SMART MEMORY: Using enhanced conversation context');
+    } else {
+      messages.push({
+        role: 'system',
+        content: `Previous context: ${context.substring(0, 600)}`
+      });
+    }
   }
 
-  // ENHANCED: More conversation history for better continuity (6-8 messages)
+  // ENHANCED: More conversation history for better continuity (8-12 messages)
   if (recentMessages && recentMessages.length > 0) {
-    const maxMessages = interactionType.includes('hyper_fast') ? 4 : 
-                       interactionType.includes('ultra_fast') ? 6 : 8;
+    const maxMessages = interactionType.includes('hyper_fast') ? 6 : 
+                       interactionType.includes('ultra_fast') ? 8 : 12; // INCREASED
     
     const conversationHistory = recentMessages.slice(-maxMessages).map(msg => ({
       role: msg.role === 'user' ? 'user' : 'assistant',
       content: typeof msg.content === 'string' 
-        ? msg.content.substring(0, 300) // Increased from 200
+        ? msg.content.substring(0, 400) // INCREASED from 300
         : '[Message with attachment]'
     }));
     
     messages.push(...conversationHistory);
+    console.log(`🧠 CONTEXT: Using ${conversationHistory.length} recent messages for continuity`);
   }
 
   // Add current user message
@@ -325,7 +338,7 @@ const makeResilientAPICall = async (
   throw new Error('AI services are temporarily busy. Please try again.');
 };
 
-// ENHANCED: Main processing function with FULL personalization
+// ENHANCED: Main processing function with SMART MEMORY INTEGRATION
 export async function processWithBuddyChatAI(
   userMessage: string,
   context: string | null = null,
@@ -340,7 +353,7 @@ export async function processWithBuddyChatAI(
   personalTouch: any | null = null
 ): Promise<string> {
   
-  console.log(`🚀 ENHANCED CHAT: Processing with FULL personalization - ${interactionType} (${maxTokens} tokens)`);
+  console.log(`🚀 ENHANCED CHAT: Processing with SMART MEMORY (10+ trigger) - ${interactionType} (${maxTokens} tokens)`);
   
   try {
     // ENHANCED: Build FULLY personalized system prompt BEFORE API call
@@ -351,7 +364,7 @@ export async function processWithBuddyChatAI(
 
     console.log(`🎯 FULL PERSONALIZED SYSTEM PROMPT: ${systemPrompt.substring(0, 150)}...`);
     
-    // ENHANCED: Better context handling
+    // ENHANCED: Smart context handling with memory integration
     let enhancedContext = context;
     if (conversationSummary && conversationSummary.length > 0) {
       enhancedContext = enhancedContext 
@@ -359,11 +372,11 @@ export async function processWithBuddyChatAI(
         : conversationSummary;
     }
     
-    // Build enhanced conversation messages with MORE CONTEXT
+    // Build enhanced conversation messages with SMART MEMORY
     const messages = buildSpeedOptimizedMessages(
       userMessage,
       enhancedContext,
-      recentMessages.slice(-8), // INCREASED from -2 to -8
+      recentMessages.slice(-12), // INCREASED from -8 to -12
       systemPrompt,
       interactionType
     );
@@ -385,12 +398,13 @@ export async function processWithBuddyChatAI(
     }
 
     console.log(`🎯 PERSONALIZED TEMPERATURE: ${temperature}`);
+    console.log(`🧠 MESSAGE COUNT: System(1) + Context(${enhancedContext ? 1 : 0}) + History(${recentMessages.slice(-12).length}) + Current(1) = ${messages.length}`);
 
     // Make resilient API call with proper timeout handling
     const result = await makeResilientAPICall(messages, maxTokens, temperature);
     const aiResponse = result.data.choices[0].message.content;
     
-    console.log(`✅ SUCCESS via ${result.provider.toUpperCase()}: ${aiResponse.length} characters`);
+    console.log(`✅ SUCCESS via ${result.provider.toUpperCase()}: ${aiResponse.length} characters (SMART MEMORY ENABLED)`);
     
     return aiResponse;
     

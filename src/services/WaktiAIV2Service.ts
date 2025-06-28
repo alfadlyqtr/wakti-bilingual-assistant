@@ -28,11 +28,13 @@ export interface AIConversation {
   message_count: number;
 }
 
-// ENHANCED: Advanced conversation summary management
+// ENHANCED: Smart conversation summary manager with 10+ message trigger
 class ConversationSummaryManager {
-  private static readonly SUMMARY_THRESHOLD = 20; // Summarize every 20 messages
-  private static readonly MAX_SUMMARY_LENGTH = 500;
+  private static readonly SUMMARY_THRESHOLD = 10; // UPDATED: Trigger at 10+ messages
+  private static readonly MAX_SUMMARY_LENGTH = 600; // INCREASED for better context
+  private static readonly REFRESH_THRESHOLD = 10; // Refresh when 10+ new messages
 
+  // ENHANCED: Smart summary creation with database integration
   static async createOrUpdateSummary(
     userId: string,
     conversationId: string | null,
@@ -41,7 +43,26 @@ class ConversationSummaryManager {
     if (!conversationId || messages.length < this.SUMMARY_THRESHOLD) return null;
 
     try {
-      // Get existing summary
+      // Check if summary refresh is needed using new database function
+      const { data: refreshNeeded } = await supabase.rpc(
+        'refresh_conversation_summary_if_needed',
+        {
+          p_user_id: userId,
+          p_conversation_id: conversationId,
+          p_current_message_count: messages.length
+        }
+      );
+
+      // Only create/update summary if refresh is needed
+      if (!refreshNeeded) {
+        // Return existing summary if no refresh needed
+        const existingSummary = await this.getSummary(userId, conversationId);
+        return existingSummary;
+      }
+
+      console.log('🧠 SMART SUMMARY: Creating fresh summary for conversation with', messages.length, 'messages');
+
+      // Get existing summary for context enhancement
       const { data: existingSummary } = await supabase
         .from('ai_conversation_summaries')
         .select('*')
@@ -49,9 +70,9 @@ class ConversationSummaryManager {
         .eq('conversation_id', conversationId)
         .single();
 
-      // Create smart summary from recent messages
-      const recentMessages = messages.slice(-this.SUMMARY_THRESHOLD);
-      const summaryText = this.generateSmartSummary(recentMessages);
+      // ENHANCED: Create intelligent summary from recent context
+      const recentMessages = messages.slice(-this.SUMMARY_THRESHOLD * 2); // Use more context for better summaries
+      const summaryText = this.generateEnhancedSummary(recentMessages, existingSummary?.summary_text);
 
       if (existingSummary) {
         // Update existing summary
@@ -60,10 +81,13 @@ class ConversationSummaryManager {
           .update({
             summary_text: summaryText,
             message_count: messages.length,
+            messages_since_summary: 0, // Reset counter
             last_message_date: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
           .eq('id', existingSummary.id);
+
+        console.log('✅ SMART SUMMARY: Updated existing summary');
       } else {
         // Create new summary
         await supabase
@@ -73,13 +97,16 @@ class ConversationSummaryManager {
             conversation_id: conversationId,
             summary_text: summaryText,
             message_count: messages.length,
+            messages_since_summary: 0,
             last_message_date: new Date().toISOString()
           });
+
+        console.log('✅ SMART SUMMARY: Created new summary');
       }
 
       return summaryText;
     } catch (error) {
-      console.error('Error managing conversation summary:', error);
+      console.error('🚨 SMART SUMMARY: Error managing conversation summary:', error);
       return null;
     }
   }
@@ -99,54 +126,117 @@ class ConversationSummaryManager {
     }
   }
 
-  private static generateSmartSummary(messages: AIMessage[]): string {
+  // ENHANCED: Intelligent summary generation with conversation flow analysis
+  private static generateEnhancedSummary(messages: AIMessage[], existingSummary?: string): string {
     const topics = new Set<string>();
     const userPreferences = [];
-    const keyPoints = [];
+    const keyActions = [];
+    const conversationFlow = [];
+    const userPersonality = [];
 
-    messages.forEach(msg => {
+    messages.forEach((msg, index) => {
+      // Extract topics and intents
       if (msg.intent && msg.intent !== 'general_chat') topics.add(msg.intent);
-      if (msg.actionTaken) keyPoints.push(msg.content.substring(0, 80));
+      if (msg.actionTaken) keyActions.push(msg.content.substring(0, 100));
       
-      // Extract user preferences
+      // Analyze user preferences and personality
       const content = msg.content.toLowerCase();
-      if (content.includes('like') || content.includes('prefer') || content.includes('want')) {
-        userPreferences.push(msg.content.substring(0, 100));
+      if (content.includes('like') || content.includes('prefer') || content.includes('love')) {
+        userPreferences.push(msg.content.substring(0, 120));
+      }
+      
+      // Track conversation flow patterns
+      if (msg.role === 'user' && index < messages.length - 1) {
+        const nextMsg = messages[index + 1];
+        if (nextMsg && nextMsg.role === 'assistant') {
+          conversationFlow.push({
+            userQuery: msg.content.substring(0, 80),
+            aiResponse: nextMsg.content.substring(0, 80)
+          });
+        }
+      }
+
+      // Extract personality indicators
+      if (msg.role === 'user') {
+        if (content.includes('thank') || content.includes('appreciate')) {
+          userPersonality.push('polite');
+        }
+        if (content.includes('quick') || content.includes('fast') || content.includes('asap')) {
+          userPersonality.push('prefers-speed');
+        }
+        if (content.includes('detail') || content.includes('explain') || content.includes('how')) {
+          userPersonality.push('detail-oriented');
+        }
       }
     });
 
-    let summary = 'Conversation summary:\n';
+    // Build enhanced summary
+    let summary = 'Enhanced Conversation Memory:\n';
     
-    if (topics.size > 0) {
-      summary += `Topics: ${Array.from(topics).slice(0, 5).join(', ')}\n`;
+    // Include previous summary context if available
+    if (existingSummary && existingSummary.length > 0) {
+      summary += `Previous Context: ${existingSummary.substring(0, 200)}...\n\n`;
     }
     
-    if (keyPoints.length > 0) {
-      summary += `Key actions: ${keyPoints.slice(0, 3).join('; ')}\n`;
+    // Add current conversation insights
+    if (topics.size > 0) {
+      summary += `Topics: ${Array.from(topics).slice(0, 6).join(', ')}\n`;
+    }
+    
+    if (keyActions.length > 0) {
+      summary += `Key Actions: ${keyActions.slice(0, 3).join('; ')}\n`;
     }
     
     if (userPreferences.length > 0) {
-      summary += `User preferences: ${userPreferences.slice(0, 2).join('; ')}\n`;
+      summary += `User Preferences: ${userPreferences.slice(0, 2).join('; ')}\n`;
+    }
+    
+    if (userPersonality.length > 0) {
+      summary += `Communication Style: ${[...new Set(userPersonality)].slice(0, 3).join(', ')}\n`;
+    }
+    
+    // Add conversation flow insights
+    if (conversationFlow.length > 0) {
+      summary += `Recent Flow: ${conversationFlow.slice(-2).map(f => 
+        `User: "${f.userQuery}" → AI: "${f.aiResponse}"`
+      ).join(' | ')}\n`;
     }
 
     return summary.substring(0, ConversationSummaryManager.MAX_SUMMARY_LENGTH);
   }
+
+  // ENHANCED: Manual cleanup trigger for immediate cleanup
+  static async triggerCleanup(): Promise<{ success: boolean; message: string }> {
+    try {
+      await supabase.rpc('cleanup_old_conversation_summaries');
+      return { 
+        success: true, 
+        message: 'Successfully cleaned up old conversation summaries' 
+      };
+    } catch (error) {
+      console.error('🚨 CLEANUP ERROR:', error);
+      return { 
+        success: false, 
+        message: 'Failed to cleanup old summaries' 
+      };
+    }
+  }
 }
 
-// ENHANCED: Better message compression with personality awareness
+// ENHANCED: Better message compression with SMART CONTEXT LOADING
 class MessageCompressor {
   static compressHistory(messages: AIMessage[], userStyle: string = 'detailed'): { summary: string; recentMessages: AIMessage[] } {
-    // Enhanced context limits based on user style
+    // ENHANCED: Dynamic context limits based on conversation patterns
     const contextLimits = {
-      'short answers': 4,
-      'bullet points': 6,
-      'detailed': 8,        // Keep more for detailed users
-      'step-by-step': 8,
-      'casual': 6,
-      'funny': 6
+      'short answers': 6,    // INCREASED from 4
+      'bullet points': 8,    // INCREASED from 6
+      'detailed': 10,        // INCREASED from 8
+      'step-by-step': 10,    // INCREASED from 8
+      'casual': 8,           // INCREASED from 6
+      'funny': 8             // INCREASED from 6
     };
     
-    const limit = contextLimits[userStyle] || 6; // INCREASED default from 3 to 6
+    const limit = contextLimits[userStyle] || 8; // INCREASED default from 6 to 8
     
     if (messages.length <= limit) {
       return { summary: '', recentMessages: messages };
@@ -154,47 +244,60 @@ class MessageCompressor {
 
     const recentMessages = messages.slice(-limit);
     
-    // Enhanced summary creation for better memory
+    // ENHANCED: Create intelligent summary for compressed messages
     const oldMessages = messages.slice(0, -limit);
-    const summary = this.createEnhancedSummary(oldMessages, userStyle);
+    const summary = this.createIntelligentSummary(oldMessages, userStyle);
     
     return { summary, recentMessages };
   }
 
-  private static createEnhancedSummary(messages: AIMessage[], userStyle: string): string {
+  // ENHANCED: Intelligent summary creation for better context preservation
+  private static createIntelligentSummary(messages: AIMessage[], userStyle: string): string {
     if (messages.length === 0) return '';
     
     const topics = new Set<string>();
     const actions = [];
-    const userPreferences = [];
+    const userPatterns = [];
+    const keyMoments = [];
     
-    messages.forEach(msg => {
+    messages.forEach((msg, index) => {
       if (msg.intent && msg.intent !== 'general_chat') topics.add(msg.intent);
-      if (msg.actionTaken) actions.push(msg.content.substring(0, 50));
+      if (msg.actionTaken) actions.push(msg.content.substring(0, 60));
       
-      // Extract user preferences from conversation
+      // Extract user communication patterns
       const content = msg.content.toLowerCase();
-      if (content.includes('like') || content.includes('prefer')) {
-        userPreferences.push(msg.content.substring(0, 60));
+      if (msg.role === 'user') {
+        if (content.includes('like') || content.includes('prefer')) {
+          userPatterns.push(msg.content.substring(0, 80));
+        }
+        
+        // Identify key moments in conversation
+        if (content.includes('important') || content.includes('remember') || content.includes('note')) {
+          keyMoments.push(msg.content.substring(0, 100));
+        }
       }
     });
     
-    let summary = `Previous conversation context:\n`;
+    let summary = `Conversation Context (${messages.length} messages):\n`;
     
     if (topics.size > 0) {
-      summary += `Topics discussed: ${Array.from(topics).slice(0, 5).join(', ')}\n`;
+      summary += `Topics: ${Array.from(topics).slice(0, 5).join(', ')}\n`;
     }
     
     if (actions.length > 0) {
-      summary += `Actions taken: ${actions.slice(0, 3).join('; ')}\n`;
+      summary += `Actions: ${actions.slice(0, 3).join('; ')}\n`;
     }
     
-    if (userPreferences.length > 0) {
-      summary += `User preferences: ${userPreferences.slice(0, 2).join('; ')}\n`;
+    if (userPatterns.length > 0) {
+      summary += `User Style: ${userPatterns.slice(0, 2).join('; ')}\n`;
     }
     
-    // Add style context for personality
-    summary += `User communication style: ${userStyle}\n`;
+    if (keyMoments.length > 0) {
+      summary += `Key Points: ${keyMoments.slice(0, 2).join('; ')}\n`;
+    }
+    
+    // Add user communication preference context
+    summary += `Communication Style: ${userStyle}\n`;
     
     return summary;
   }
@@ -357,7 +460,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ENHANCED: Main message sending with FULL personalization and better memory
+  // ENHANCED: Main message sending with SMART MEMORY MANAGEMENT
   static async sendMessage(
     message: string,
     userId?: string,
@@ -375,36 +478,45 @@ export class WaktiAIV2ServiceClass {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
 
-      console.log('🚀 ENHANCED AI: Starting with FULL personalization and better memory');
+      console.log('🚀 ENHANCED AI: Starting with SMART MEMORY (10+ trigger, 2-week retention)');
 
       // STEP 1: Load personal touch settings (cached)
       const personalTouch = PersonalTouchCache.loadWaktiPersonalTouch();
       console.log('🎯 Personal Touch:', personalTouch);
 
-      // STEP 2: Get or create conversation summary for better context
+      // STEP 2: SMART SUMMARY MANAGEMENT - Check and create/update if needed
       let enhancedSummary = conversationSummary;
-      if (conversationId && sessionMessages.length >= 10) {
-        const summary = await ConversationSummaryManager.createOrUpdateSummary(
+      if (conversationId && sessionMessages.length >= 5) { // Start checking at 5 messages
+        const smartSummary = await ConversationSummaryManager.createOrUpdateSummary(
           user.id,
           conversationId,
           sessionMessages
         );
-        if (summary) enhancedSummary = summary;
+        if (smartSummary) {
+          enhancedSummary = smartSummary;
+          console.log('🧠 SMART MEMORY: Using enhanced summary');
+        }
       } else if (conversationId) {
+        // Load existing summary for context
         const existingSummary = await ConversationSummaryManager.getSummary(user.id, conversationId);
-        if (existingSummary) enhancedSummary = existingSummary;
+        if (existingSummary) {
+          enhancedSummary = existingSummary;
+          console.log('🧠 SMART MEMORY: Using existing summary');
+        }
       }
 
-      // STEP 3: Build ENHANCED context with better message compression
+      // STEP 3: ENHANCED CONTEXT with smart message compression
       const userStyle = personalTouch?.style || 'detailed';
       const { summary: contextSummary, recentMessages } = MessageCompressor.compressHistory(
         sessionMessages,
         userStyle
       );
 
+      // Combine smart summaries for optimal context
       const finalContext = [enhancedSummary, contextSummary].filter(Boolean).join('\n\n');
 
-      console.log('⚡ ENHANCED CONTEXT: Making AI call with full personalization');
+      console.log('⚡ ENHANCED CONTEXT: Making AI call with smart memory management');
+      console.log(`📊 CONTEXT STATS: Summary: ${enhancedSummary ? 'Yes' : 'No'}, Recent Messages: ${recentMessages.length}, Total Context: ${finalContext.length} chars`);
 
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000);
@@ -420,11 +532,11 @@ export class WaktiAIV2ServiceClass {
           activeTrigger,
           attachedFiles,
           conversationSummary: finalContext,
-          recentMessages: recentMessages.slice(-8), // INCREASED context
+          recentMessages: recentMessages.slice(-10), // ENHANCED: More context
           customSystemPrompt: '',
-          maxTokens: personalTouch?.style === 'short answers' ? 200 : 500, // INCREASED
+          maxTokens: personalTouch?.style === 'short answers' ? 200 : 600, // INCREASED
           speedOptimized: true,
-          aggressiveOptimization: false, // DISABLED for better responses
+          aggressiveOptimization: false,
           personalityEnabled: true,
           enableTaskCreation: true,
           enablePersonality: true,
@@ -458,7 +570,7 @@ export class WaktiAIV2ServiceClass {
       }
 
       const totalTime = Date.now() - startTime;
-      console.log(`🚀 TOTAL TIME: ${totalTime}ms (Fully Personalized: ${!!personalTouch})`);
+      console.log(`🚀 TOTAL TIME: ${totalTime}ms (Smart Memory: ${!!enhancedSummary}, Personalized: ${!!personalTouch})`);
 
       return {
         ...data,
@@ -466,7 +578,8 @@ export class WaktiAIV2ServiceClass {
         processingTime: totalTime,
         apiTime,
         personalizedResponse: !!personalTouch,
-        enhancedMemory: true
+        enhancedMemory: true,
+        smartSummaryUsed: !!enhancedSummary
       };
 
     } catch (error) {
@@ -649,6 +762,15 @@ export class WaktiAIV2ServiceClass {
   
   deleteConversation(conversationId: string) {
     return WaktiAIV2ServiceClass.deleteConversation(conversationId);
+  }
+  
+  // NEW: Smart cleanup trigger for manual testing
+  static async triggerSmartCleanup() {
+    return ConversationSummaryManager.triggerCleanup();
+  }
+  
+  triggerSmartCleanup() {
+    return WaktiAIV2ServiceClass.triggerSmartCleanup();
   }
 }
 

@@ -240,6 +240,7 @@ export type Database = {
           id: string
           last_message_date: string
           message_count: number
+          messages_since_summary: number | null
           summary_text: string
           updated_at: string
           user_id: string
@@ -250,6 +251,7 @@ export type Database = {
           id?: string
           last_message_date?: string
           message_count?: number
+          messages_since_summary?: number | null
           summary_text: string
           updated_at?: string
           user_id: string
@@ -260,6 +262,7 @@ export type Database = {
           id?: string
           last_message_date?: string
           message_count?: number
+          messages_since_summary?: number | null
           summary_text?: string
           updated_at?: string
           user_id?: string
@@ -1897,6 +1900,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      cleanup_old_conversation_summaries: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_old_conversations: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -2074,6 +2081,14 @@ export type Database = {
           p_scheduled_for?: string
         }
         Returns: string
+      }
+      refresh_conversation_summary_if_needed: {
+        Args: {
+          p_user_id: string
+          p_conversation_id: string
+          p_current_message_count: number
+        }
+        Returns: boolean
       }
       send_admin_message: {
         Args: {
