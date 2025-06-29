@@ -20,6 +20,54 @@ export function useUserProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const createProfileIfMissing = async (userId: string) => {
+    try {
+      console.log('Creating missing profile for user:', userId);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          username: `user${userId.substring(0, 8)}`,
+          display_name: user?.email || 'User',
+          email: user?.email,
+          settings: {
+            widgets: {
+              tasksWidget: true,
+              calendarWidget: true,
+              remindersWidget: true,
+              quoteWidget: true
+            },
+            notifications: {
+              pushNotifications: true,
+              emailNotifications: false
+            },
+            privacy: {
+              profileVisibility: true,
+              activityStatus: true
+            },
+            quotes: {
+              category: 'mixed',
+              frequency: 'daily'
+            }
+          }
+        })
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error('Error creating profile:', error);
+        throw error;
+      }
+
+      console.log('Successfully created profile:', data);
+      return data;
+    } catch (error) {
+      console.error('Failed to create profile:', error);
+      throw error;
+    }
+  };
+
   const fetchProfile = async () => {
     if (!user?.id) {
       setLoading(false);
@@ -28,6 +76,10 @@ export function useUserProfile() {
 
     try {
       setLoading(true);
+      setError(null);
+      
+      console.log('Fetching profile for user:', user.id);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -35,11 +87,18 @@ export function useUserProfile() {
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error);
-        setError(error.message);
+        if (error.code === 'PGRST116') {
+          // Profile doesn't exist, create it
+          console.log('Profile not found, creating new profile...');
+          const newProfile = await createProfileIfMissing(user.id);
+          setProfile(newProfile);
+        } else {
+          console.error('Error fetching profile:', error);
+          setError(error.message);
+        }
       } else {
+        console.log('Profile fetched successfully:', data);
         setProfile(data);
-        setError(null);
       }
     } catch (err) {
       console.error('Profile fetch error:', err);
@@ -85,6 +144,7 @@ export function useUserProfile() {
     profile,
     loading,
     error,
-    refetch: fetchProfile
+    refetch: fetchProfile,
+    createProfileIfMissing
   };
 }

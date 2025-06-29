@@ -1894,6 +1894,10 @@ export type Database = {
           expires_at: string
         }[]
       }
+      backfill_missing_profiles: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       can_users_message: {
         Args: { sender_id: string; recipient_id: string }
         Returns: boolean

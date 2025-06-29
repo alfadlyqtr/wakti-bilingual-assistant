@@ -11,11 +11,32 @@ import { useTheme } from '@/providers/ThemeProvider';
 
 export function ProfileImageUpload() {
   const { user } = useAuth();
-  const { profile, refetch } = useUserProfile();
+  const { profile, refetch, createProfileIfMissing } = useUserProfile();
   const { language } = useTheme();
   const [isUploading, setIsUploading] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const ensureProfileExists = async () => {
+    if (!user?.id) {
+      throw new Error('User not authenticated');
+    }
+
+    // Check if profile exists
+    const { data: existingProfile, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    if (error && error.code === 'PGRST116') {
+      // Profile doesn't exist, create it
+      console.log('Profile missing during upload, creating...');
+      await createProfileIfMissing(user.id);
+    } else if (error) {
+      throw error;
+    }
+  };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -37,6 +58,9 @@ export function ProfileImageUpload() {
     setAvatarError(false);
 
     try {
+      // Ensure profile exists before uploading
+      await ensureProfileExists();
+
       // Create unique filename with user ID folder structure for better organization
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/avatar-${Date.now()}.${fileExt}`;
@@ -102,6 +126,9 @@ export function ProfileImageUpload() {
     setIsUploading(true);
 
     try {
+      // Ensure profile exists
+      await ensureProfileExists();
+
       // Update profile to remove avatar URL
       const { error: updateError } = await supabase
         .from('profiles')
