@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { Brain, Save, Bot } from 'lucide-react';
+import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 
 const PERSONAL_TOUCH_KEY = "wakti_personal_touch";
 
@@ -58,6 +58,10 @@ export function PersonalTouchManager() {
 
   const handleSave = () => {
     saveWaktiPersonalTouch(formData);
+    
+    // NEW: Clear the cache immediately so settings take effect without refresh
+    WaktiAIV2Service.clearPersonalTouchCache();
+    
     showSuccess(language === 'ar' ? 'تم حفظ الإعدادات!' : 'Settings saved!');
   };
 

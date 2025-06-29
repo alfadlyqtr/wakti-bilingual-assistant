@@ -815,6 +815,16 @@ export class WaktiAIV2ServiceClass {
   triggerSmartCleanup() {
     return WaktiAIV2ServiceClass.triggerSmartCleanup();
   }
+  
+  // NEW: Method to clear personal touch cache for immediate settings application
+  static clearPersonalTouchCache() {
+    PersonalTouchCache.clearCache();
+    console.log('🎯 Personal Touch Cache cleared - settings will apply immediately');
+  }
+  
+  clearPersonalTouchCache() {
+    return WaktiAIV2ServiceClass.clearPersonalTouchCache();
+  }
 }
 
 export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
