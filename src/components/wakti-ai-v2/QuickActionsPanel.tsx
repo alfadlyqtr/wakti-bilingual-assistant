@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -124,13 +125,13 @@ export function QuickActionsPanel({
           <CardContent className="space-y-2">
             {triggerModes.map(mode => {
             const isActive = activeTrigger === mode.id;
-            return <Button key={mode.id} onClick={() => handleTriggerSelect(mode.id)} variant="ghost" className={`w-full justify-start h-auto p-3 transition-all duration-300 ${isActive ? `${mode.activeColor} border-2 ${mode.borderColor} text-white shadow-lg` : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border-2 border-transparent text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`}`}>
-                  <div className={`p-2 rounded-lg ${isActive ? 'bg-white/20' : mode.activeColor} text-white mr-3`}>
+            return <Button key={mode.id} onClick={() => handleTriggerSelect(mode.id)} variant="ghost" className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 ${isActive ? `${mode.activeColor} border-2 ${mode.borderColor} text-white shadow-lg` : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border-2 border-transparent text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`}`}>
+                  <div className={`p-2 rounded-lg ${isActive ? 'bg-white/20' : mode.activeColor} text-white mr-3 flex-shrink-0`}>
                     {mode.icon}
                   </div>
-                  <div className="text-left">
-                    <div className="font-medium text-sm">{mode.label}</div>
-                    <div className="text-xs opacity-70">{mode.description}</div>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="font-medium text-sm whitespace-normal break-words leading-tight">{mode.label}</div>
+                    <div className="text-xs opacity-70 whitespace-normal break-words leading-tight">{mode.description}</div>
                   </div>
                 </Button>;
           })}
