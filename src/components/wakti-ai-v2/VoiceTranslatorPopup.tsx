@@ -307,11 +307,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [language]);
 
-  // Background audio pre-generation
+  // Background audio pre-generation using Supabase functions invoke
   const preGenerateAudio = useCallback(async (text: string) => {
     const cacheKey = `${text}_${selectedLanguage}`;
     
-    // Don't pre-generate if already cached or currently generating
     if (audioCache[cacheKey] || isGeneratingAudio) {
       return;
     }
@@ -320,38 +319,30 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsGeneratingAudio(true);
       console.log('🔊 Pre-generating audio for:', text.substring(0, 30) + '...');
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator-tts', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('voice-translator-tts', {
+        body: {
           text: text,
           voice: 'alloy'
-        })
+        }
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        const audioContent = result.audioContent;
-        
-        if (audioContent) {
-          const newCache = { 
-            ...audioCache, 
-            [cacheKey]: {
-              data: audioContent,
-              timestamp: Date.now(),
-              size: result.size || 0
-            }
-          };
-          setAudioCache(newCache);
-          saveAudioCache(newCache);
-          console.log('🔊 Audio pre-generated and cached successfully');
-        }
+      if (error) {
+        console.log('🔊 Background audio pre-generation failed (non-critical):', error);
+        return;
+      }
+
+      if (data?.audioContent) {
+        const newCache = { 
+          ...audioCache, 
+          [cacheKey]: {
+            data: data.audioContent,
+            timestamp: Date.now(),
+            size: data.size || 0
+          }
+        };
+        setAudioCache(newCache);
+        saveAudioCache(newCache);
+        console.log('🔊 Audio pre-generated and cached successfully');
       }
     } catch (error) {
       console.log('🔊 Background audio pre-generation failed (non-critical):', error);
@@ -450,56 +441,74 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
+  // FIXED: Updated to use supabase.functions.invoke instead of direct fetch
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
-
       console.log('🎤 Processing translation with target language:', selectedLanguage);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('No active session found');
-      }
+      // Convert audio blob to base64 for the invoke method
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-      const formData = new FormData();
-      formData.append('audioBlob', audioBlob, 'audio.webm');
-      formData.append('targetLanguage', selectedLanguage);
+      console.log('🎤 Voice Translator: Using supabase.functions.invoke for authentication');
 
-      console.log('🎤 Voice Translator: Processing translation to:', selectedLanguage);
-
-      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: formData
+      // FIXED: Use supabase.functions.invoke instead of direct fetch for proper authentication
+      const { data, error } = await supabase.functions.invoke('voice-translator', {
+        body: {
+          audioData: base64Audio,
+          targetLanguage: selectedLanguage,
+          mimeType: 'audio/webm'
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🎤 Voice Translator error:', errorText);
-        throw new Error(`Translation failed: ${errorText}`);
+      if (error) {
+        console.error('🎤 Voice Translator error:', error);
+        
+        // Handle authentication errors specifically
+        if (error.message?.includes('session') || error.message?.includes('auth')) {
+          // Try to refresh session and retry once
+          console.log('🎤 Attempting session refresh...');
+          await supabase.auth.refreshSession();
+          
+          const { data: retryData, error: retryError } = await supabase.functions.invoke('voice-translator', {
+            body: {
+              audioData: base64Audio,
+              targetLanguage: selectedLanguage,
+              mimeType: 'audio/webm'
+            }
+          });
+
+          if (retryError) {
+            throw new Error(`Authentication failed: ${retryError.message}`);
+          }
+          
+          // Use retry data if successful
+          if (retryData) {
+            data = retryData;
+          }
+        } else {
+          throw new Error(`Translation failed: ${error.message}`);
+        }
       }
 
-      const result = await response.json();
-      console.log('🎤 Voice Translator result:', result);
-
-      if (!result.translatedText) {
+      if (!data?.translatedText) {
         throw new Error('No translation received from service');
       }
 
-      if (result.targetLanguageCode && result.targetLanguageCode !== selectedLanguage) {
+      console.log('🎤 Voice Translator result:', data);
+
+      if (data.targetLanguageCode && data.targetLanguageCode !== selectedLanguage) {
         console.error('🎤 CRITICAL ERROR: Language mismatch!', {
           requested: selectedLanguage,
-          received: result.targetLanguageCode
+          received: data.targetLanguageCode
         });
         
         toast({
           title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
           description: language === 'ar' 
-            ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${result.targetLanguage}` 
-            : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${result.targetLanguage}`,
+            ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${data.targetLanguage}` 
+            : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${data.targetLanguage}`,
           variant: 'destructive'
         });
       }
@@ -520,14 +529,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
 
-      setTranslatedText(result.translatedText);
+      setTranslatedText(data.translatedText);
       
       const newTranslation: TranslationItem = {
         id: Date.now().toString(),
-        originalText: result.originalText,
-        translatedText: result.translatedText,
-        sourceLanguage: result.sourceLanguage,
-        targetLanguage: result.targetLanguage,
+        originalText: data.originalText,
+        translatedText: data.translatedText,
+        sourceLanguage: data.sourceLanguage,
+        targetLanguage: data.targetLanguage,
         timestamp: new Date()
       };
       addToHistory(newTranslation);
@@ -545,16 +554,25 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       // Background pre-generate audio immediately after translation
       if (playbackEnabled) {
-        preGenerateAudio(result.translatedText);
+        preGenerateAudio(data.translatedText);
       }
 
     } catch (error) {
       console.error('🎤 Voice Translator: Error processing translation:', error);
+      
+      let errorMessage = language === 'ar' 
+        ? 'فشل في ترجمة الصوت - يرجى المحاولة مرة أخرى' 
+        : 'Failed to translate voice - please try again';
+
+      if (error.message?.includes('Authentication failed')) {
+        errorMessage = language === 'ar' 
+          ? 'انتهت صلاحية الجلسة - يرجى تسجيل الدخول مرة أخرى' 
+          : 'Session expired - please log in again';
+      }
+
       toast({
         title: language === 'ar' ? 'خطأ في الترجمة' : 'Translation Error',
-        description: language === 'ar' 
-          ? 'فشل في ترجمة الصوت - يرجى المحاولة مرة أخرى' 
-          : 'Failed to translate voice - please try again',
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {
@@ -563,6 +581,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, preGenerateAudio]);
 
+  // FIXED: Updated to use supabase.functions.invoke for TTS as well
   const playTranslatedText = useCallback(async (text: string) => {
     console.log('🔊 Play button clicked, text:', text);
     
@@ -585,63 +604,47 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
       
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        console.error('No session available for TTS');
-        setIsPlaying(false);
-        return;
-      }
-      
       console.log(`🔊 Generating TTS for language: ${selectedLanguage}, voice: alloy`);
       
-      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator-tts', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // FIXED: Use supabase.functions.invoke for TTS as well
+      const { data, error } = await supabase.functions.invoke('voice-translator-tts', {
+        body: {
           text: text,
           voice: 'alloy'
-        })
+        }
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        const audioContent = result.audioContent;
+      if (error) {
+        console.error('🔊 TTS error:', error);
+        throw new Error(`TTS failed: ${error.message}`);
+      }
+
+      if (data?.audioContent) {
+        console.log(`🔊 TTS generated successfully, size: ${data.size || 'unknown'} bytes`);
         
-        if (audioContent) {
-          console.log(`🔊 TTS generated successfully, size: ${result.size || 'unknown'} bytes`);
-          
-          const newCache = { 
-            ...audioCache, 
-            [cacheKey]: {
-              data: audioContent,
-              timestamp: Date.now(),
-              size: result.size || 0
-            }
-          };
-          setAudioCache(newCache);
-          saveAudioCache(newCache);
-          
-          await audioManager.playAudio(audioContent);
-          console.log('🔊 TTS playback successful');
-        } else {
-          throw new Error('No audio content received');
-        }
+        const newCache = { 
+          ...audioCache, 
+          [cacheKey]: {
+            data: data.audioContent,
+            timestamp: Date.now(),
+            size: data.size || 0
+          }
+        };
+        setAudioCache(newCache);
+        saveAudioCache(newCache);
+        
+        await audioManager.playAudio(data.audioContent);
+        console.log('🔊 TTS playback successful');
       } else {
-        const errorText = await response.text();
-        console.error('🔊 TTS error:', response.status, errorText);
-        throw new Error(`TTS failed: ${errorText}`);
+        throw new Error('No audio content received');
       }
     } catch (error) {
       console.error('🔊 Error playing TTS:', error);
       
       let errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Audio generation timed out. Please try again.';
-      if (error.message.includes('Rate limit')) {
+      if (error.message?.includes('Rate limit')) {
         errorMessage = language === 'ar' ? 'تم تجاوز الحد المسموح، حاول مرة أخرى' : 'Rate limit exceeded, please try again';
-      } else if (error.message.includes('timeout')) {
+      } else if (error.message?.includes('timeout')) {
         errorMessage = language === 'ar' ? 'انتهت مهلة الاتصال، حاول مرة أخرى' : 'Request timeout, please try again';
       }
       
