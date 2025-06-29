@@ -45,14 +45,14 @@ export default function AdminQuotas() {
 
   const loadUsers = async () => {
     try {
-      // Get users with their voice quota data
-      const { data: usersWithVoiceQuota, error: voiceError } = await supabase
+      // Get all users with LEFT JOIN to voice quota data
+      const { data: usersData, error: usersError } = await supabase
         .from('profiles')
         .select(`
           id,
           email,
-          full_name,
-          user_voice_usage!inner(
+          display_name,
+          user_voice_usage(
             characters_used,
             characters_limit,
             extra_characters
@@ -60,7 +60,7 @@ export default function AdminQuotas() {
         `)
         .order('email');
 
-      if (voiceError) throw voiceError;
+      if (usersError) throw usersError;
 
       // Get current month translation quotas
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
@@ -78,10 +78,11 @@ export default function AdminQuotas() {
         ]) || []
       );
 
-      const formattedUsers: User[] = usersWithVoiceQuota?.map(user => ({
+      const formattedUsers: User[] = usersData?.map(user => ({
         id: user.id,
-        email: user.email,
-        full_name: user.full_name || "No name",
+        email: user.email || "No email",
+        full_name: user.display_name || "No name",
+        // Handle missing voice usage records with defaults
         voice_characters_used: user.user_voice_usage?.[0]?.characters_used || 0,
         voice_characters_limit: user.user_voice_usage?.[0]?.characters_limit || 5000,
         voice_extra_characters: user.user_voice_usage?.[0]?.extra_characters || 0,
