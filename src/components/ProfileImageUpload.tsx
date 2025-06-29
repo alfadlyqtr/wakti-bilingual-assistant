@@ -35,9 +35,11 @@ export function ProfileImageUpload() {
     setAvatarError(false);
 
     try {
-      // Create unique filename
+      // Create unique filename with user ID folder structure for better organization
       const fileExt = file.name.split('.').pop();
-      const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`;
+      const fileName = `${user.id}/avatar-${Date.now()}.${fileExt}`;
+
+      console.log('Uploading avatar file:', fileName);
 
       // Upload to Supabase storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -52,10 +54,14 @@ export function ProfileImageUpload() {
         throw uploadError;
       }
 
+      console.log('Upload successful:', uploadData);
+
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(fileName);
+
+      console.log('Public URL generated:', publicUrl);
 
       // Update profile with new avatar URL
       const { error: updateError } = await supabase
@@ -122,6 +128,7 @@ export function ProfileImageUpload() {
   };
 
   const handleAvatarError = () => {
+    console.log('Avatar image failed to load');
     setAvatarError(true);
   };
 
@@ -137,6 +144,7 @@ export function ProfileImageUpload() {
       .slice(0, 2);
   };
 
+  // Get avatar URL from user metadata or profile
   const avatarUrl = user?.user_metadata?.avatar_url;
 
   return (
