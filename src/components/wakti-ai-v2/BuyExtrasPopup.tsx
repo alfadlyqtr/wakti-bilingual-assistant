@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
+import { useAuth } from '@/contexts/AuthContext';
 import { Coins, Zap, CheckCircle, Mic, Languages } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -19,6 +20,7 @@ export function BuyExtrasPopup({
   onOpenChange
 }: BuyExtrasPopupProps) {
   const { language } = useTheme();
+  const { user } = useAuth();
   const { userVoiceQuota, refreshVoiceQuota } = useExtendedQuotaManagement(language);
   const { 
     userQuota: translationQuota, 
@@ -27,14 +29,30 @@ export function BuyExtrasPopup({
   } = useQuotaManagement(language);
 
   const handlePurchaseVoiceCredits = () => {
-    const voiceCreditsUrl = 'https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=E3F4LJP2UR57A';
+    if (!user?.id) {
+      toast.error(language === 'ar' ? 'يرجى تسجيل الدخول أولاً' : 'Please login first');
+      return;
+    }
+
+    // PayPal button with proper user ID in custom field
+    const customId = `${user.id}:voice_credits`;
+    const voiceCreditsUrl = `https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=E3F4LJP2UR57A&custom=${encodeURIComponent(customId)}`;
+    
     window.open(voiceCreditsUrl, '_blank');
     toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة. ستتم إضافة الرصيد تلقائياً بعد الدفع' : 'Payment page opened. Credits will be added automatically after payment');
     setTimeout(() => onOpenChange(false), 1500);
   };
 
   const handlePurchaseTranslationCredits = () => {
-    const translationCreditsUrl = 'https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=96SVWU6YWXBFL';
+    if (!user?.id) {
+      toast.error(language === 'ar' ? 'يرجى تسجيل الدخول أولاً' : 'Please login first');
+      return;
+    }
+
+    // PayPal button with proper user ID in custom field
+    const customId = `${user.id}:translation_credits`;
+    const translationCreditsUrl = `https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=96SVWU6YWXBFL&custom=${encodeURIComponent(customId)}`;
+    
     window.open(translationCreditsUrl, '_blank');
     toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة. ستتم إضافة الرصيد تلقائياً بعد الدفع' : 'Payment page opened. Credits will be added automatically after payment');
     setTimeout(() => onOpenChange(false), 1500);
@@ -52,7 +70,7 @@ export function BuyExtrasPopup({
   };
 
   const getTranslationQuotaStatus = () => {
-    const used = translationQuota.monthly_count; // Changed from daily_count to monthly_count
+    const used = translationQuota.monthly_count;
     const extra = translationQuota.extra_translations;
     return {
       remaining: Math.max(0, MAX_MONTHLY_TRANSLATIONS - used),
@@ -99,7 +117,7 @@ export function BuyExtrasPopup({
                 )}
               </div>
               
-              {/* Translation Credits (for Voice Translator) - Changed to monthly */}
+              {/* Translation Credits (for Voice Translator) */}
               <div className="text-sm">
                 <span className="font-medium">
                   {language === 'ar' ? 'رصيد الترجمة:' : 'Translation Credits:'} 

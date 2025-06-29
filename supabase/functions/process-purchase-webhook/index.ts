@@ -37,7 +37,11 @@ serve(async (req) => {
 
     const transactionId = resource.id;
     const amount = resource.amount ? parseFloat(resource.amount.total) : 0;
-    const customId = resource.custom || resource.custom_id;
+    
+    // Get custom field from multiple possible locations
+    const customId = resource.custom || resource.custom_id || resource.invoice_number;
+    
+    console.log("Processing payment:", { transactionId, amount, customId });
     
     // Extract user ID and purchase type from custom field
     // Expected format: "userId:purchaseType" (e.g., "123e4567-e89b-12d3-a456-426614174000:voice_credits")
@@ -59,6 +63,7 @@ serve(async (req) => {
 
     // Process different purchase types
     if (purchaseType === 'voice_credits') {
+      console.log("Processing voice credits purchase for user:", userId);
       const { data, error } = await supabase.rpc('process_voice_credits_purchase', {
         p_user_id: userId,
         p_transaction_id: transactionId,
@@ -66,7 +71,9 @@ serve(async (req) => {
       });
       success = !error;
       if (error) console.error("Voice credits purchase error:", error);
+      else console.log("Voice credits purchase successful:", data);
     } else if (purchaseType === 'translation_credits') {
+      console.log("Processing translation credits purchase for user:", userId);
       const { data, error } = await supabase.rpc('process_translation_credits_purchase', {
         p_user_id: userId,
         p_transaction_id: transactionId,
@@ -74,6 +81,7 @@ serve(async (req) => {
       });
       success = !error;
       if (error) console.error("Translation credits purchase error:", error);
+      else console.log("Translation credits purchase successful:", data);
     } else {
       console.error("Unknown purchase type:", purchaseType);
       return new Response("Unknown purchase type", { status: 400, headers: corsHeaders });

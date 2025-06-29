@@ -1744,39 +1744,6 @@ export type Database = {
         }
         Relationships: []
       }
-      user_translation_quotas: {
-        Row: {
-          created_at: string
-          daily_count: number
-          daily_date: string
-          extra_translations: number
-          id: string
-          purchase_date: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          daily_count?: number
-          daily_date?: string
-          extra_translations?: number
-          id?: string
-          purchase_date?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          daily_count?: number
-          daily_date?: string
-          extra_translations?: number
-          id?: string
-          purchase_date?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       user_voice_clones: {
         Row: {
           created_at: string
@@ -2099,6 +2066,14 @@ export type Database = {
       mark_messages_as_read: {
         Args: { other_user_id: string }
         Returns: undefined
+      }
+      process_translation_credits_purchase: {
+        Args: { p_user_id: string; p_transaction_id: string; p_amount: number }
+        Returns: boolean
+      }
+      process_voice_credits_purchase: {
+        Args: { p_user_id: string; p_transaction_id: string; p_amount: number }
+        Returns: boolean
       }
       purchase_extra_advanced_searches: {
         Args: { p_user_id: string; p_count: number }
