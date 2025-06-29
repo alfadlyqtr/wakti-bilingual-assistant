@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Camera, Upload, X, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export function ProfileImageUpload() {
-  const { user, updateProfile } = useAuth();
+  const { user } = useAuth();
+  const { profile, refetch } = useUserProfile();
   const { language } = useTheme();
   const [isUploading, setIsUploading] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -77,8 +79,8 @@ export function ProfileImageUpload() {
         throw updateError;
       }
 
-      // Update auth context
-      await updateProfile({ avatar_url: publicUrl });
+      // Refresh profile data to get the latest avatar
+      await refetch();
 
       toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية بنجاح' : 'Profile picture updated successfully');
       
@@ -114,8 +116,8 @@ export function ProfileImageUpload() {
         throw updateError;
       }
 
-      // Update auth context
-      await updateProfile({ avatar_url: null });
+      // Refresh profile data
+      await refetch();
 
       toast.success(language === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile picture removed');
       
@@ -133,9 +135,13 @@ export function ProfileImageUpload() {
   };
 
   const getInitials = () => {
-    if (!user?.user_metadata?.display_name && !user?.email) return 'U';
+    // Try to get initials from profile first, then fallback to user metadata
+    const displayName = profile?.display_name || user?.user_metadata?.display_name;
+    const email = profile?.email || user?.email;
     
-    const name = user.user_metadata?.display_name || user.email;
+    if (!displayName && !email) return 'U';
+    
+    const name = displayName || email;
     return name
       .split(' ')
       .map((n: string) => n[0])
@@ -144,8 +150,8 @@ export function ProfileImageUpload() {
       .slice(0, 2);
   };
 
-  // Get avatar URL from user metadata or profile
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  // Get avatar URL from profile data (not user metadata)
+  const avatarUrl = profile?.avatar_url;
 
   return (
     <div className="flex flex-col items-center space-y-4">
