@@ -38,6 +38,14 @@ export function ProfileImageUpload() {
     }
   };
 
+  // Add cache-busting to avatar URL
+  const getCacheBustedAvatarUrl = (url: string | null | undefined) => {
+    if (!url) return undefined;
+    const timestamp = Date.now();
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}t=${timestamp}`;
+  };
+
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user) return;
@@ -103,8 +111,16 @@ export function ProfileImageUpload() {
         throw updateError;
       }
 
-      // Refresh profile data to get the latest avatar
+      // Force refresh profile data to get the latest avatar
       await refetch();
+
+      // Add a small delay to ensure the real-time subscription has processed
+      setTimeout(() => {
+        // Force a page refresh of avatar components by dispatching a custom event
+        window.dispatchEvent(new CustomEvent('avatar-updated', { 
+          detail: { avatarUrl: publicUrl, userId: user.id } 
+        }));
+      }, 500);
 
       toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية بنجاح' : 'Profile picture updated successfully');
       
@@ -146,6 +162,13 @@ export function ProfileImageUpload() {
       // Refresh profile data
       await refetch();
 
+      // Force refresh of avatar components
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('avatar-updated', { 
+          detail: { avatarUrl: null, userId: user.id } 
+        }));
+      }, 500);
+
       toast.success(language === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile picture removed');
       
     } catch (error) {
@@ -177,13 +200,16 @@ export function ProfileImageUpload() {
       .slice(0, 2);
   };
 
-  // Get avatar URL from profile data (not user metadata)
-  const avatarUrl = profile?.avatar_url;
+  // Get avatar URL from profile data with cache-busting
+  const avatarUrl = profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined;
 
   return (
     <div className="flex flex-col items-center space-y-4">
       <div className="relative">
-        <Avatar className="h-24 w-24 ring-2 ring-border">
+        <Avatar 
+          className="h-24 w-24 ring-2 ring-border"
+          key={profile?.avatar_url || 'no-avatar'} // Force re-render when avatar changes
+        >
           <AvatarImage 
             src={!avatarError && avatarUrl ? avatarUrl : undefined} 
             alt={language === 'ar' ? 'الصورة الشخصية' : 'Profile picture'}

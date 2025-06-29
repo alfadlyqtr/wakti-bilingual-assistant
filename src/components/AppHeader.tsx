@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,13 +20,16 @@ import { t } from "@/utils/translations";
 import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
 import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
   const { user, signOut } = useAuth();
+  const { profile } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
   const { unreadTotal } = useUnreadMessages();
+  const [avatarKey, setAvatarKey] = useState(Date.now());
   
   // Check if we're on the Wakti AI V2 page
   const isWaktiAIPage = location.pathname === '/wakti-ai';
@@ -37,13 +40,29 @@ export function AppHeader() {
   };
   
   // Add cache-busting to avatar URL
-  const getCacheBustedAvatarUrl = (url: string) => {
-    if (!url) return url;
-    const timestamp = Date.now();
-    return `${url}?t=${timestamp}`;
+  const getCacheBustedAvatarUrl = (url: string | null | undefined) => {
+    if (!url) return undefined;
+    const timestamp = avatarKey;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}t=${timestamp}`;
   };
 
-  const avatarUrl = user?.user_metadata?.avatar_url ? getCacheBustedAvatarUrl(user.user_metadata.avatar_url) : '';
+  // Listen for avatar update events to force refresh
+  useEffect(() => {
+    const handleAvatarUpdate = (event: CustomEvent) => {
+      console.log('Avatar updated event received:', event.detail);
+      setAvatarKey(Date.now()); // Force re-render of avatar
+    };
+
+    window.addEventListener('avatar-updated', handleAvatarUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('avatar-updated', handleAvatarUpdate as EventListener);
+    };
+  }, []);
+
+  // Get avatar URL from profile data with cache-busting
+  const avatarUrl = profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined;
   
   // Define menu items with icons
   const menuItems = [
@@ -208,7 +227,10 @@ export function AppHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 rounded-full relative">
                 <span className="relative">
-                  <Avatar className="h-8 w-8">
+                  <Avatar 
+                    className="h-8 w-8"
+                    key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`} // Force re-render
+                  >
                     <AvatarImage src={avatarUrl} />
                     <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
                   </Avatar>

@@ -49,20 +49,29 @@ export function UserMenu() {
       .substring(0, 2);
   };
 
-  // Get avatar URL from profile data (not user metadata)
-  const avatarUrl = profile?.avatar_url;
+  // Add cache-busting to avatar URL to force refresh
+  const getCacheBustedAvatarUrl = (url: string | null | undefined) => {
+    if (!url) return undefined;
+    const timestamp = Date.now();
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}t=${timestamp}`;
+  };
+
+  // Get avatar URL from profile data with cache-busting
+  const avatarUrl = profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar className="h-8 w-8">
-            {avatarUrl ? (
-              <AvatarImage 
-                src={avatarUrl} 
-                alt={profile?.display_name || user?.user_metadata?.full_name || "User"}
-              />
-            ) : null}
+          <Avatar 
+            className="h-8 w-8"
+            key={profile?.avatar_url || 'no-avatar'} // Force re-render when avatar changes
+          >
+            <AvatarImage 
+              src={avatarUrl} 
+              alt={profile?.display_name || user?.user_metadata?.full_name || "User"}
+            />
             <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold text-xs">
               {getUserInitials()}
             </AvatarFallback>
