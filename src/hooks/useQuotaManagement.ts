@@ -12,302 +12,161 @@ export interface UserQuota {
 
 export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const { user } = useAuth();
-  const [userQuota, setUserQuota] = useState<UserQuota>({ daily_count: 0, extra_translations: 0 });
+  
+  // Fixed: Use consistent 10 daily translations limit
+  const MAX_DAILY_TRANSLATIONS = 10;
+  
+  const [userQuota, setUserQuota] = useState<UserQuota>({
+    daily_count: 0,
+    extra_translations: 0
+  });
+  
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
-  const [quotaError, setQuotaError] = useState<string | null>(null);
 
-  // Monthly limit for translations (changed from 25 to 10)
-  const MAX_DAILY_TRANSLATIONS = 10; // Now represents monthly limit
-  const SOFT_WARNING_THRESHOLD = 8; // Warn at 8 out of 10
-
-  // Enhanced error handling helper
-  const handleDatabaseError = (error: any, operation: string) => {
-    console.error(`❌ ${operation} failed:`, error);
-    
-    let userMessage = language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred';
-    
-    if (error?.message) {
-      if (error.message.includes('function') && error.message.includes('does not exist')) {
-        userMessage = language === 'ar' ? 'خطأ في النظام، يرجى المحاولة لاحقاً' : 'System error, please try again later';
-      } else if (error.message.includes('permission')) {
-        userMessage = language === 'ar' ? 'ليس لديك صلاحية للقيام بهذه العملية' : 'You do not have permission for this operation';
-      }
-    }
-    
-    toast({
-      title: language === 'ar' ? 'خطأ' : 'Error',
-      description: userMessage,
-      variant: 'destructive'
-    });
-    
-    return false;
-  };
-
-  // Simplified quota loading function
-  const loadUserQuota = useCallback(async (forceRefresh: boolean = false) => {
+  // Load user quota
+  const loadUserQuota = useCallback(async () => {
     if (!user) return;
     
     try {
       setIsLoadingQuota(true);
-      setQuotaError(null);
       
-      console.log('🔄 Loading user translation quota for user:', user.id, forceRefresh ? '(force refresh)' : '');
+      console.log('🔄 Loading user translation quota for user:', user.id);
       
-      // Get current date for quota lookup
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-      
-      // Try to get today's quota directly from the table
-      const { data, error } = await supabase
-        .from('user_translation_quotas')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('daily_date', today)
-        .single();
+      const { data, error } = await supabase.rpc('get_or_create_user_quota', {
+        p_user_id: user.id
+      });
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        console.error('❌ Error loading user translation quota:', error);
-        handleDatabaseError(error, 'Loading translation quota');
-        setQuotaError('Failed to load quota data');
+      if (error) {
+        console.error('❌ Error loading user quota:', error);
         return;
       }
 
-      if (data) {
-        console.log('✅ User translation quota loaded successfully:', data);
+      if (data && data.length > 0) {
+        const quota = data[0];
+        console.log('✅ User translation quota loaded successfully:', quota);
         setUserQuota({
-          daily_count: data.daily_count || 0,
-          extra_translations: data.extra_translations || 0,
-          purchase_date: data.purchase_date
-        });
-      } else {
-        // No record for today, create one
-        console.log('📝 Creating new quota record for today');
-        const { data: newData, error: insertError } = await supabase
-          .from('user_translation_quotas')
-          .insert({
-            user_id: user.id,
-            daily_date: today,
-            daily_count: 0,
-            extra_translations: 0
-          })
-          .select()
-          .single();
-        
-        if (insertError) {
-          console.error('❌ Error creating quota record:', insertError);
-          handleDatabaseError(insertError, 'Creating translation quota');
-          setQuotaError('Failed to create quota data');
-          return;
-        }
-        
-        console.log('✅ New quota record created:', newData);
-        setUserQuota({
-          daily_count: 0,
-          extra_translations: 0,
-          purchase_date: null
+          daily_count: quota.daily_count || 0,
+          extra_translations: quota.extra_translations || 0,
+          purchase_date: quota.purchase_date
         });
       }
     } catch (error) {
-      console.error('❌ Unexpected error loading user translation quota:', error);
-      setQuotaError('Failed to load quota data');
-      handleDatabaseError(error, 'Loading translation quota');
-      setUserQuota({ daily_count: 0, extra_translations: 0 });
+      console.error('❌ Unexpected error loading user quota:', error);
     } finally {
       setIsLoadingQuota(false);
     }
-  }, [user, language]);
+  }, [user]);
 
-  // Simplified increment function with immediate UI update
-  const incrementTranslationCount = useCallback(async (): Promise<boolean> => {
-    if (!user) {
-      console.warn('⚠️ No user found for quota increment');
-      return false;
-    }
+  // Increment translation count
+  const incrementTranslationCount = useCallback(async () => {
+    if (!user) return { success: false, remainingTranslations: 0 };
 
     try {
-      console.log('🔄 Incrementing translation count for user:', user.id);
-      console.log('📊 Current quota before increment:', userQuota);
+      console.log('📈 Incrementing translation usage for user:', user.id);
       
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Check current quota
-      const remainingFree = Math.max(0, MAX_DAILY_TRANSLATIONS - userQuota.daily_count);
-      
-      if (remainingFree > 0) {
-        // Use free quota
-        const { data, error } = await supabase
-          .from('user_translation_quotas')
-          .update({ 
-            daily_count: userQuota.daily_count + 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', user.id)
-          .eq('daily_date', today)
-          .select()
-          .single();
+      const { data, error } = await supabase.rpc('increment_translation_usage', {
+        p_user_id: user.id
+      });
+
+      if (error) {
+        console.error('❌ Error incrementing translation usage:', error);
+        return { success: false, remainingTranslations: 0 };
+      }
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        console.log('✅ Translation usage incremented:', result);
         
-        if (error) {
-          console.error('❌ Error incrementing daily count:', error);
-          throw error;
-        }
-        
-        // Update local state immediately
         setUserQuota(prev => ({
           ...prev,
-          daily_count: prev.daily_count + 1
+          daily_count: result.daily_count,
+          extra_translations: result.extra_translations
         }));
         
-        console.log('✅ Daily translation count incremented');
-        return true;
-        
-      } else if (userQuota.extra_translations > 0) {
-        // Use extra translations
-        const { data, error } = await supabase
-          .from('user_translation_quotas')
-          .update({ 
-            extra_translations: userQuota.extra_translations - 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', user.id)
-          .eq('daily_date', today)
-          .select()
-          .single();
-        
-        if (error) {
-          console.error('❌ Error using extra translation:', error);
-          throw error;
-        }
-        
-        // Update local state immediately
-        setUserQuota(prev => ({
-          ...prev,
-          extra_translations: prev.extra_translations - 1
-        }));
-        
-        console.log('✅ Extra translation used');
-        return true;
-        
-      } else {
-        // No translations available
-        console.warn('⚠️ Translation quota exceeded');
-        toast({
-          title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
-          description: language === 'ar' 
-            ? `لقد وصلت للحد الأقصى من الترجمات الشهرية (${MAX_DAILY_TRANSLATIONS} ترجمة)` 
-            : `You have reached your monthly translation limit (${MAX_DAILY_TRANSLATIONS} translations)`,
-          variant: 'destructive'
-        });
-        return false;
+        const remaining = Math.max(0, MAX_DAILY_TRANSLATIONS - result.daily_count) + result.extra_translations;
+        return { success: result.success, remainingTranslations: remaining };
       }
       
+      return { success: false, remainingTranslations: 0 };
     } catch (error) {
-      console.error('❌ Error incrementing translation count:', error);
-      
-      // Show error but allow translation to continue for now
-      toast({
-        title: language === 'ar' ? 'تحذير' : 'Warning',
-        description: language === 'ar' 
-          ? 'حدث خطأ في تتبع الاستخدام، ولكن يمكنك المتابعة' 
-          : 'Error tracking usage, but you can continue',
-        variant: 'default'
-      });
-      
-      console.log('🔄 Using fallback - allowing translation to continue despite quota error');
-      return true;
+      console.error('❌ Unexpected error incrementing translation usage:', error);
+      return { success: false, remainingTranslations: 0 };
     }
-  }, [user, userQuota, language, MAX_DAILY_TRANSLATIONS]);
+  }, [user, MAX_DAILY_TRANSLATIONS]);
 
-  // Enhanced purchase function for translations - now 100 for 10 QAR
+  // Purchase extra translations
   const purchaseExtraTranslations = useCallback(async (count: number = 100) => {
-    if (!user) {
-      console.error('❌ No authenticated user found');
-      return false;
-    }
+    if (!user) return false;
 
     try {
-      console.log('💰 Attempting to purchase extra translations:', { userId: user.id, count });
+      console.log('💰 Purchasing extra translations:', { userId: user.id, count });
       
-      const today = new Date().toISOString().split('T')[0];
-      
-      const { data, error } = await supabase
-        .from('user_translation_quotas')
-        .update({
-          extra_translations: userQuota.extra_translations + count,
-          purchase_date: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id)
-        .eq('daily_date', today)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('purchase_extra_translations', {
+        p_user_id: user.id,
+        p_count: count
+      });
 
       if (error) {
         console.error('❌ Database error during translation purchase:', error);
-        handleDatabaseError(error, 'Purchasing translations');
         return false;
       }
 
-      console.log('✅ Translations purchased successfully');
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          console.log('✅ Extra translations purchased successfully:', result.new_extra_count);
+          
+          setUserQuota(prev => ({
+            ...prev,
+            extra_translations: result.new_extra_count,
+            purchase_date: new Date().toISOString()
+          }));
+          
+          await loadUserQuota();
+          return true;
+        }
+      }
       
-      // Update local state immediately
-      setUserQuota(prev => ({
-        ...prev,
-        extra_translations: prev.extra_translations + count,
-        purchase_date: new Date().toISOString()
-      }));
-      
-      toast({
-        title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
-        description: language === 'ar' 
-          ? `تم إضافة ${count} ترجمة إضافية (صالحة لشهر واحد)` 
-          : `Added ${count} extra translations (valid for 1 month)`,
-      });
-      
-      return true;
+      return false;
     } catch (error) {
       console.error('❌ Unexpected error purchasing extra translations:', error);
-      handleDatabaseError(error, 'Purchasing translations');
       return false;
     }
-  }, [user, userQuota, language]);
+  }, [user, loadUserQuota]);
 
-  // Simplified refresh function
-  const refreshTranslationQuota = useCallback(async () => {
-    console.log('🔄 External refresh of translation quota requested');
-    await loadUserQuota(true);
-  }, [loadUserQuota]);
-
-  // Load quota when user changes
   useEffect(() => {
-    if (user && !isLoadingQuota) {
+    if (user) {
       loadUserQuota();
     }
-  }, [user?.id]);
+  }, [user?.id, loadUserQuota]);
 
-  // Memoize computed values to prevent unnecessary re-renders
+  // Computed values
   const computedValues = useMemo(() => {
     const remainingFreeTranslations = Math.max(0, MAX_DAILY_TRANSLATIONS - userQuota.daily_count);
-    const isAtSoftLimit = userQuota.daily_count >= SOFT_WARNING_THRESHOLD;
-    const isAtHardLimit = userQuota.daily_count >= MAX_DAILY_TRANSLATIONS && userQuota.extra_translations === 0;
-    const canTranslate = quotaError || remainingFreeTranslations > 0 || userQuota.extra_translations > 0;
+    const totalAvailableTranslations = remainingFreeTranslations + userQuota.extra_translations;
+    const canTranslate = totalAvailableTranslations > 0;
 
     return {
       remainingFreeTranslations,
-      isAtSoftLimit,
-      isAtHardLimit,
+      totalAvailableTranslations,
       canTranslate
     };
-  }, [userQuota, quotaError, MAX_DAILY_TRANSLATIONS, SOFT_WARNING_THRESHOLD]);
+  }, [userQuota, MAX_DAILY_TRANSLATIONS]);
+
+  // Refresh function
+  const refreshTranslationQuota = useCallback(async () => {
+    console.log('🔄 External refresh of translation quota requested');
+    await loadUserQuota();
+  }, [loadUserQuota]);
 
   return {
     userQuota,
     isLoadingQuota,
-    quotaError,
+    MAX_DAILY_TRANSLATIONS,
     loadUserQuota,
     incrementTranslationCount,
     purchaseExtraTranslations,
     refreshTranslationQuota,
-    MAX_DAILY_TRANSLATIONS,
-    SOFT_WARNING_THRESHOLD,
     ...computedValues
   };
 };
