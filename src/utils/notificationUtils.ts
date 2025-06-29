@@ -151,8 +151,6 @@ export function generateDeepLink(type: string, data: Record<string, any>): strin
       return `${baseUrl}/maw3d/events`;
     case 'calendar_reminders':
       return `${baseUrl}/calendar`;
-    case 'admin_gifts':
-      return `${baseUrl}/wakti-ai`;
     default:
       return `${baseUrl}/dashboard`;
   }
