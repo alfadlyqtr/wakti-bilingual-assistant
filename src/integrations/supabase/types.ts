@@ -1859,6 +1859,20 @@ export type Database = {
             }
         Returns: boolean
       }
+      admin_gift_translation_credits: {
+        Args: { p_user_id: string; p_translations: number; p_admin_id: string }
+        Returns: {
+          success: boolean
+          new_extra_translations: number
+        }[]
+      }
+      admin_gift_voice_credits: {
+        Args: { p_user_id: string; p_characters: number; p_admin_id: string }
+        Returns: {
+          success: boolean
+          new_extra_characters: number
+        }[]
+      }
       admin_update_storage_bucket: {
         Args: {
           p_bucket_id: string

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Gift, Search, Plus, Mic, Languages } from "lucide-react";
@@ -16,10 +17,11 @@ interface User {
   id: string;
   email: string;
   full_name: string;
-  voice_quota_used: number;
-  voice_quota_limit: number;
-  translation_quota_used: number;
-  translation_quota_limit: number;
+  voice_characters_used: number;
+  voice_characters_limit: number;
+  voice_extra_characters: number;
+  translation_count: number;
+  translation_extra: number;
 }
 
 export default function AdminQuotas() {
@@ -43,21 +45,51 @@ export default function AdminQuotas() {
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
+      // Get users with their voice quota data
+      const { data: usersWithVoiceQuota, error: voiceError } = await supabase
         .from('profiles')
         .select(`
           id,
           email,
           full_name,
-          voice_quota_used,
-          voice_quota_limit,
-          translation_quota_used,
-          translation_quota_limit
+          user_voice_usage!inner(
+            characters_used,
+            characters_limit,
+            extra_characters
+          )
         `)
         .order('email');
 
-      if (error) throw error;
-      setUsers(data || []);
+      if (voiceError) throw voiceError;
+
+      // Get current month translation quotas
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+      const { data: translationQuotas, error: translationError } = await supabase
+        .from('user_voice_translation_quotas')
+        .select('user_id, translation_count, extra_translations')
+        .eq('monthly_date', currentMonth);
+
+      if (translationError) throw translationError;
+
+      const translationMap = new Map(
+        translationQuotas?.map(quota => [
+          quota.user_id, 
+          { count: quota.translation_count, extra: quota.extra_translations }
+        ]) || []
+      );
+
+      const formattedUsers: User[] = usersWithVoiceQuota?.map(user => ({
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name || "No name",
+        voice_characters_used: user.user_voice_usage?.[0]?.characters_used || 0,
+        voice_characters_limit: user.user_voice_usage?.[0]?.characters_limit || 5000,
+        voice_extra_characters: user.user_voice_usage?.[0]?.extra_characters || 0,
+        translation_count: translationMap.get(user.id)?.count || 0,
+        translation_extra: translationMap.get(user.id)?.extra || 0,
+      })) || [];
+
+      setUsers(formattedUsers);
     } catch (err) {
       console.error('Error loading users:', err);
       toast.error('Failed to load users');
@@ -94,27 +126,54 @@ export default function AdminQuotas() {
     setIsGifting(true);
 
     try {
-      const updateField = quotaType === 'voice' ? 'voice_quota_limit' : 'translation_quota_limit';
-      const currentLimit = quotaType === 'voice' ? selectedUser.voice_quota_limit : selectedUser.translation_quota_limit;
-      const newLimit = (currentLimit || 0) + amount;
+      // Get current admin session to get admin ID
+      const adminSession = localStorage.getItem('admin_session');
+      if (!adminSession) {
+        toast.error('Admin session not found');
+        return;
+      }
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({ [updateField]: newLimit })
-        .eq('id', selectedUser.id);
+      const session = JSON.parse(adminSession);
+      const adminId = session.admin_id;
 
-      if (error) throw error;
+      if (quotaType === 'voice') {
+        const { data, error } = await supabase.rpc('admin_gift_voice_credits', {
+          p_user_id: selectedUser.id,
+          p_characters: amount,
+          p_admin_id: adminId
+        });
 
-      // Update local state
-      setUsers(prev => prev.map(user => 
-        user.id === selectedUser.id 
-          ? { ...user, [updateField]: newLimit }
-          : user
-      ));
+        if (error) throw error;
+
+        // Update local state
+        setUsers(prev => prev.map(user => 
+          user.id === selectedUser.id 
+            ? { ...user, voice_extra_characters: data[0]?.new_extra_characters || user.voice_extra_characters }
+            : user
+        ));
+
+        toast.success(`Gifted ${amount} voice characters to ${selectedUser.email}`);
+      } else {
+        const { data, error } = await supabase.rpc('admin_gift_translation_credits', {
+          p_user_id: selectedUser.id,
+          p_translations: amount,
+          p_admin_id: adminId
+        });
+
+        if (error) throw error;
+
+        // Update local state
+        setUsers(prev => prev.map(user => 
+          user.id === selectedUser.id 
+            ? { ...user, translation_extra: data[0]?.new_extra_translations || user.translation_extra }
+            : user
+        ));
+
+        toast.success(`Gifted ${amount} translation credits to ${selectedUser.email}`);
+      }
 
       setSelectedUser(null);
       setQuotaAmount("");
-      toast.success(`Gifted ${amount} ${quotaType} credits to ${selectedUser.email}`);
     } catch (err) {
       console.error('Error gifting quota:', err);
       toast.error('Failed to gift quota');
@@ -161,7 +220,7 @@ export default function AdminQuotas() {
                     <SelectItem value="voice">
                       <div className="flex items-center">
                         <Mic className="h-4 w-4 mr-2" />
-                        Voice Credits
+                        Voice Characters
                       </div>
                     </SelectItem>
                     <SelectItem value="translation">
@@ -178,7 +237,7 @@ export default function AdminQuotas() {
                 <Label className="text-sm font-medium">Amount</Label>
                 <Input
                   type="number"
-                  placeholder="Enter quota amount"
+                  placeholder={quotaType === 'voice' ? "Voice characters" : "Translation credits"}
                   value={quotaAmount}
                   onChange={(e) => setQuotaAmount(e.target.value)}
                   className="input-enhanced"
@@ -201,7 +260,7 @@ export default function AdminQuotas() {
               {isGifting ? 'Gifting...' : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Gift Quota
+                  Gift {quotaType === 'voice' ? 'Voice Characters' : 'Translation Credits'}
                 </>
               )}
             </Button>
@@ -254,9 +313,16 @@ export default function AdminQuotas() {
                         <Mic className="h-4 w-4 text-accent-blue" />
                         <span className="text-sm font-medium">Voice</span>
                       </div>
-                      <Badge variant="outline">
-                        {user.voice_quota_used || 0} / {user.voice_quota_limit || 0}
-                      </Badge>
+                      <div className="space-y-1">
+                        <Badge variant="outline">
+                          {user.voice_characters_used.toLocaleString()} / {user.voice_characters_limit.toLocaleString()}
+                        </Badge>
+                        {user.voice_extra_characters > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            +{user.voice_extra_characters.toLocaleString()} extra
+                          </Badge>
+                        )}
+                      </div>
                     </div>
 
                     {/* Translation Quota */}
@@ -265,9 +331,16 @@ export default function AdminQuotas() {
                         <Languages className="h-4 w-4 text-accent-green" />
                         <span className="text-sm font-medium">Translation</span>
                       </div>
-                      <Badge variant="outline">
-                        {user.translation_quota_used || 0} / {user.translation_quota_limit || 0}
-                      </Badge>
+                      <div className="space-y-1">
+                        <Badge variant="outline">
+                          {user.translation_count} / 10
+                        </Badge>
+                        {user.translation_extra > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            +{user.translation_extra} extra
+                          </Badge>
+                        )}
+                      </div>
                     </div>
 
                     {selectedUser?.id === user.id && (
