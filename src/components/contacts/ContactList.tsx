@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -6,11 +7,10 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { MessageSquare, Star, UserX, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getContacts, blockContact, deleteContact, toggleContactFavorite } from "@/services/contactsService";
+import { getContacts, getBatchUnreadCounts, blockContact, deleteContact, toggleContactFavorite } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 import { ChatPopup } from "./ChatPopup";
-import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ContactRelationshipIndicator } from "./ContactRelationshipIndicator";
 import { UnreadBadge } from "@/components/UnreadBadge";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 type UserProfile = {
   display_name?: string;
@@ -47,11 +46,9 @@ export function ContactList() {
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
-  const { unreadPerContact } = useUnreadMessages();
 
-  // Fetch contacts with improved configuration
+  // Optimized contacts fetch with better caching
   const { 
     data: contacts, 
     isLoading, 
@@ -61,9 +58,24 @@ export function ContactList() {
   } = useQuery({
     queryKey: ['contacts'],
     queryFn: getContacts,
-    staleTime: 30000,
-    refetchInterval: 60000,
-    refetchOnWindowFocus: true,
+    staleTime: 300000, // 5 minutes - much longer cache
+    refetchInterval: 300000, // 5 minutes instead of 1 minute
+    refetchOnWindowFocus: true, // Keep this for when user comes back
+  });
+
+  // Optimized batch unread counts fetch
+  const { 
+    data: unreadCounts = {},
+    isLoading: unreadLoading 
+  } = useQuery({
+    queryKey: ['unread-counts', contacts?.map(c => c.contact_id) || []],
+    queryFn: () => {
+      const contactIds = contacts?.map(c => c.contact_id) || [];
+      return contactIds.length > 0 ? getBatchUnreadCounts(contactIds) : {};
+    },
+    enabled: !!contacts && contacts.length > 0,
+    staleTime: 30000, // 30 seconds for unread counts
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Block contact mutation
@@ -126,7 +138,6 @@ export function ContactList() {
   // handle toggle favorite in db, with optimistic update
   const handleToggleFavorite = (contactId: string, isCurrentlyFavorite: boolean) => {
     favoriteMutation.mutate({ contactId, currentVal: isCurrentlyFavorite });
-    // No local toast because backend success triggers cache update, can add if desired
   };
 
   const handleBlock = (contactId: string) => {
@@ -158,6 +169,13 @@ export function ContactList() {
 
   const shouldShowAvatar = (contactId: string, avatarUrl?: string) => {
     return avatarUrl && !avatarErrors[contactId];
+  };
+
+  // Simplified chat close handler - no manual unread count refresh needed
+  const handleChatClose = () => {
+    setChatOpen(false);
+    // The React Query will automatically refresh unread counts based on its interval
+    // No need for manual setTimeout refresh
   };
 
   if (isLoading) {
@@ -196,7 +214,7 @@ export function ContactList() {
             const contactProfile = contact.profile || {};
             const displayName = contactProfile.username || "unknown";
             const emailOrName = contactProfile.display_name || contactProfile.email || "";
-            const unreadCount = unreadPerContact[contact.contact_id] || 0;
+            const unreadCount = unreadCounts[contact.contact_id] || 0;
             const avatarUrl = contactProfile.avatar_url;
             const isFavorite = contact.is_favorite === true;
             const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
@@ -288,35 +306,7 @@ export function ContactList() {
       {selectedContact && (
         <ChatPopup 
           isOpen={chatOpen}
-          onClose={() => {
-            setChatOpen(false);
-            setTimeout(() => {
-              const fetchUnreadCounts = async () => {
-                if (contacts) {
-                  const counts: Record<string, number> = {};
-                  for (const contact of contacts) {
-                    try {
-                      const { data } = await supabase.auth.getSession();
-                      if (data.session) {
-                        const { count } = await supabase
-                          .from("messages")
-                          .select("*", { count: "exact", head: true })
-                          .eq("sender_id", contact.contact_id)
-                          .eq("recipient_id", data.session.user.id)
-                          .eq("is_read", false);
-                        counts[contact.contact_id] = count || 0;
-                      }
-                    } catch (error) {
-                      console.error("Error fetching unread count:", error);
-                      counts[contact.contact_id] = 0;
-                    }
-                  }
-                  setUnreadCounts(counts);
-                }
-              };
-              fetchUnreadCounts();
-            }, 1000);
-          }}
+          onClose={handleChatClose}
           contactId={selectedContact.id}
           contactName={selectedContact.name}
           contactAvatar={selectedContact.avatar}

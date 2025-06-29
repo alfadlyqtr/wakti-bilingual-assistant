@@ -13,8 +13,17 @@ import { getCurrentUserProfile } from "@/services/contactsService";
 import { Badge } from "@/components/ui/badge";
 import { Contact, Bell, ShieldCheck } from "lucide-react";
 
-// Create a client
-const queryClient = new QueryClient();
+// Create a client with optimized settings
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 300000, // 5 minutes
+      refetchInterval: 300000, // 5 minutes
+      refetchOnWindowFocus: true,
+      retry: 1, // Reduce retries for faster failure detection
+    },
+  },
+});
 
 export default function Contacts() {
   const { language } = useTheme();
@@ -37,10 +46,11 @@ function ContactsContent({
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }) {
-  // Get pending requests count
+  // Get pending requests count with optimized caching
   const { data: requests } = useQuery({
     queryKey: ['contactRequests'],
     queryFn: () => import('@/services/contactsService').then(module => module.getContactRequests()),
+    staleTime: 60000, // 1 minute cache for requests
   });
 
   const pendingCount = requests?.length || 0;
