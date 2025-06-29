@@ -46,13 +46,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [replyTone, setReplyTone] = useState('');
   const [replyLength, setReplyLength] = useState('');
 
-  // RESTORED: All content types including poem and story
+  // UPDATED: Content types - added text_message and removed social_post
   const contentTypes = {
     email: language === 'ar' ? 'بريد إلكتروني' : 'Email',
     letter: language === 'ar' ? 'خطاب' : 'Letter',
+    text_message: language === 'ar' ? 'رسالة نصية' : 'Text Message',
     report: language === 'ar' ? 'تقرير' : 'Report',
     article: language === 'ar' ? 'مقال' : 'Article',
-    social_post: language === 'ar' ? 'منشور اجتماعي' : 'Social Media Post',
     official_letter: language === 'ar' ? 'كتاب رسمي' : 'Official Letter',
     poem: language === 'ar' ? 'قصيدة' : 'Poem',
     story: language === 'ar' ? 'قصة' : 'Story'
