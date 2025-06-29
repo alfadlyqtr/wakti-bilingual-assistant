@@ -346,17 +346,19 @@ class AuthCache {
   }
 }
 
-// ENHANCED: Local memory cache with better persistence
+// FIXED: Enhanced local memory cache with better persistence logic
 class LocalMemoryCache {
   private static readonly STORAGE_KEY = 'wakti_ai_memory';
-  private static readonly MAX_MESSAGES = 8; // INCREASED from 5 to 8
+  private static readonly MAX_MESSAGES = 20; // INCREASED to keep more conversation history
   
   static saveMessages(conversationId: string | null, messages: AIMessage[]) {
     try {
+      console.log('💾 PERSISTENCE: Saving', messages.length, 'messages to local storage');
       const memory = {
         conversationId,
-        messages: messages.slice(-this.MAX_MESSAGES),
-        timestamp: Date.now()
+        messages: messages.slice(-this.MAX_MESSAGES), // Keep last 20 messages
+        timestamp: Date.now(),
+        userExplicitlyStartedNew: false // Track if user explicitly wants new conversation
       };
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(memory));
     } catch (e) {
@@ -367,22 +369,28 @@ class LocalMemoryCache {
   static loadMessages(): { conversationId: string | null; messages: AIMessage[] } | null {
     try {
       const stored = localStorage.getItem(this.STORAGE_KEY);
-      if (!stored) return null;
+      if (!stored) {
+        console.log('💾 PERSISTENCE: No stored messages found');
+        return null;
+      }
       
       const memory = JSON.parse(stored);
       
-      // Check if memory is less than 2 hours old (increased from 1 hour)
-      if (Date.now() - memory.timestamp > 2 * 60 * 60 * 1000) {
+      // Check if memory is less than 24 hours old (INCREASED from 2 hours for better persistence)
+      if (Date.now() - memory.timestamp > 24 * 60 * 60 * 1000) {
+        console.log('💾 PERSISTENCE: Stored messages expired (>24h), clearing');
         localStorage.removeItem(this.STORAGE_KEY);
         return null;
       }
       
+      console.log('💾 PERSISTENCE: Loaded', memory.messages?.length || 0, 'messages from storage');
+      
       return {
         conversationId: memory.conversationId,
-        messages: memory.messages.map((msg: any) => ({
+        messages: memory.messages?.map((msg: any) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
-        }))
+        })) || []
       };
     } catch (e) {
       console.warn('Failed to load local memory:', e);
@@ -391,7 +399,22 @@ class LocalMemoryCache {
   }
   
   static clearMemory() {
+    console.log('💾 PERSISTENCE: Clearing local memory storage');
     localStorage.removeItem(this.STORAGE_KEY);
+  }
+  
+  // NEW: Mark that user explicitly wants to start new conversation
+  static markExplicitNewConversation() {
+    try {
+      const stored = localStorage.getItem(this.STORAGE_KEY);
+      if (stored) {
+        const memory = JSON.parse(stored);
+        memory.userExplicitlyStartedNew = true;
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(memory));
+      }
+    } catch (e) {
+      console.warn('Failed to mark explicit new conversation:', e);
+    }
   }
 }
 
@@ -640,7 +663,6 @@ export class WaktiAIV2ServiceClass {
     }
   }
 
-  // Enhanced file processing with document support
   private static async processOptimizedFiles(attachedFiles: any[]): Promise<any[]> {
     if (!attachedFiles?.length) return [];
     
@@ -701,7 +723,7 @@ export class WaktiAIV2ServiceClass {
     }
   }
   
-  // Instance methods for compatibility
+  // FIXED: Enhanced instance methods with improved persistence logic
   saveChatSession(messages: AIMessage[], conversationId: string | null) {
     LocalMemoryCache.saveMessages(conversationId, messages);
   }

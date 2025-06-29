@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, MessageSquare, Clock, Plus, RefreshCw, Trash, Eraser } from 'lucide-react';
+import { Trash2, MessageSquare, Clock, Plus, RefreshCw, Trash, Eraser, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -55,13 +56,13 @@ export function ConversationsList({
   const limitedConversations = conversations.slice(0, 5);
 
   const handleSelectConversation = (id: string) => {
-    console.log('🔍 CONVERSATIONS: Selecting conversation:', id);
+    console.log('🔍 CONVERSATIONS: User selecting conversation:', id);
     onSelectConversation(id);
     onClose?.();
   };
 
   const handleDeleteConversation = async (id: string) => {
-    console.log('🔍 CONVERSATIONS: Deleting conversation:', id);
+    console.log('🔍 CONVERSATIONS: User deleting conversation:', id);
     try {
       await onDeleteConversation(id);
       onRefresh();
@@ -75,11 +76,13 @@ export function ConversationsList({
   };
 
   const handleNewConversation = () => {
+    console.log('🆕 CONVERSATIONS: User explicitly starting new conversation');
     onNewConversation?.();
     onClose?.();
   };
 
   const handleClearChat = () => {
+    console.log('🧹 CONVERSATIONS: User clearing current chat');
     onClearChat();
     onClose?.();
   };
@@ -123,7 +126,7 @@ export function ConversationsList({
           <div className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-semibold">
-              {language === 'ar' ? 'المحادثات الأخيرة' : 'Recent Conversations'}
+              {language === 'ar' ? 'المحادثات المحفوظة' : 'Saved Conversations'}
             </h2>
           </div>
           <div className="flex items-center gap-2">
@@ -162,13 +165,14 @@ export function ConversationsList({
             <RefreshCw className="h-3 w-3" />
           </Button>
 
-          {/* Clear Current Chat Button */}
+          {/* Clear Current Chat Button - Only show if there are active messages */}
           {sessionMessages.length > 0 && (
             <Button
               variant="outline"
               size="sm"
               onClick={handleClearChat}
               className="h-8 px-3 text-xs text-orange-600 hover:text-orange-700"
+              title={language === 'ar' ? 'مسح الدردشة الحالية' : 'Clear current chat'}
             >
               <Eraser className="h-3 w-3" />
             </Button>
@@ -182,6 +186,7 @@ export function ConversationsList({
                   size="sm"
                   className="h-8 px-3 text-xs text-destructive hover:text-destructive"
                   disabled={isClearing}
+                  title={language === 'ar' ? 'حذف جميع المحادثات' : 'Delete all conversations'}
                 >
                   <Trash className="h-3 w-3" />
                 </Button>
@@ -193,8 +198,8 @@ export function ConversationsList({
                   </AlertDialogTitle>
                   <AlertDialogDescription>
                     {language === 'ar' 
-                      ? 'هل أنت متأكد من حذف جميع المحادثات؟ لا يمكن التراجع عن هذا الإجراء.'
-                      : 'Are you sure you want to delete all conversations? This action cannot be undone.'
+                      ? 'هل أنت متأكد من حذف جميع المحادثات المحفوظة؟ لا يمكن التراجع عن هذا الإجراء.'
+                      : 'Are you sure you want to delete all saved conversations? This action cannot be undone.'
                     }
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -214,20 +219,34 @@ export function ConversationsList({
           )}
         </div>
 
-        {/* Info Card */}
-        <div className="mt-3 text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">
-          <div className="flex items-center gap-1 mb-1">
-            <Clock className="h-3 w-3" />
-            <span className="font-medium">
-              {language === 'ar' ? 'معلومات' : 'Info'}
+        {/* ENHANCED: Persistence Info Card with User Control Information */}
+        <div className="mt-3 text-xs text-muted-foreground bg-muted/50 p-3 rounded-md border">
+          <div className="flex items-center gap-1 mb-2">
+            <CheckCircle className="h-3 w-3 text-green-600" />
+            <span className="font-medium text-green-700 dark:text-green-400">
+              {language === 'ar' ? 'استمرارية الدردشة' : 'Chat Persistence'}
             </span>
           </div>
-          <p className="leading-relaxed">
-            {language === 'ar' 
-              ? 'يتم حفظ آخر 5 محادثات لمدة 10 أيام، وتحتفظ المحادثة الحالية بآخر 20 رسالة'
-              : 'Last 5 conversations saved for 10 days. Current chat keeps last 20 messages.'
-            }
-          </p>
+          <div className="space-y-1 leading-relaxed">
+            <p>
+              {language === 'ar' 
+                ? '• المحادثة الحالية تُحفظ تلقائياً وتستمر عند إعادة فتح التطبيق'
+                : '• Current chat auto-saves and continues when you reopen the app'
+              }
+            </p>
+            <p>
+              {language === 'ar' 
+                ? '• استخدم "محادثة جديدة" فقط لبدء محادثة منفصلة تماماً'
+                : '• Use "New Chat" only to start a completely separate conversation'
+              }
+            </p>
+            <p>
+              {language === 'ar' 
+                ? '• يتم حفظ آخر 5 محادثات لمدة 24 ساعة'
+                : '• Last 5 conversations saved for 24 hours'
+              }
+            </p>
+          </div>
         </div>
       </div>
       
@@ -240,15 +259,23 @@ export function ConversationsList({
               className={cn(
                 "group relative p-3 rounded-lg border cursor-pointer transition-all duration-200",
                 "hover:bg-accent/50 hover:border-primary/30 hover:shadow-sm",
-                currentConversationId === conversation.id && "bg-primary/5 border-primary/50 shadow-sm"
+                currentConversationId === conversation.id && "bg-primary/5 border-primary/50 shadow-sm ring-1 ring-primary/20"
               )}
               onClick={() => handleSelectConversation(conversation.id)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0 pr-2">
-                  <p className="text-sm font-medium truncate mb-1">
-                    {conversation.title}
-                  </p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-medium truncate">
+                      {conversation.title}
+                    </p>
+                    {currentConversationId === conversation.id && (
+                      <div className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                        <CheckCircle className="h-2.5 w-2.5" />
+                        {language === 'ar' ? 'نشط' : 'Active'}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>
                       {new Date(conversation.last_message_at).toLocaleDateString(
@@ -285,10 +312,10 @@ export function ConversationsList({
             <div className="text-center py-8 text-muted-foreground">
               <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-medium mb-1">
-                {language === 'ar' ? 'لا توجد محادثات بعد' : 'No conversations yet'}
+                {language === 'ar' ? 'لا توجد محادثات محفوظة بعد' : 'No saved conversations yet'}
               </p>
               <p className="text-xs opacity-70">
-                {language === 'ar' ? 'ابدأ محادثة جديدة للبدء' : 'Start a new conversation to begin'}
+                {language === 'ar' ? 'ستُحفظ محادثاتك تلقائياً هنا' : 'Your conversations will be saved here automatically'}
               </p>
             </div>
           )}

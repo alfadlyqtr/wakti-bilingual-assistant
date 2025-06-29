@@ -66,9 +66,10 @@ const WaktiAIV2 = () => {
     MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
 
-  const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
-  const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
+  // FIXED: Unified message state - no more separate session/conversation messages
+  const [allMessages, setAllMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
+  const [isNewConversation, setIsNewConversation] = useState(true);
 
   // ENHANCED: Load personal touch settings with better caching
   useEffect(() => {
@@ -137,26 +138,32 @@ const WaktiAIV2 = () => {
     fetchUserProfile();
   }, []);
 
-  // ULTRA-FAST: Load session from local memory cache
+  // FIXED: Improved session loading with proper conversation persistence
   useEffect(() => {
     if (!hasLoadedSession) {
       const savedSession = WaktiAIV2Service.loadChatSession();
-      if (savedSession) {
-        setSessionMessages(savedSession.messages || []);
+      if (savedSession && savedSession.messages && savedSession.messages.length > 0) {
+        console.log('🔄 PERSISTENCE: Restoring previous session with', savedSession.messages.length, 'messages');
+        setAllMessages(savedSession.messages);
         if (savedSession.conversationId) {
           setCurrentConversationId(savedSession.conversationId);
         }
+        setIsNewConversation(false); // This is a continuing conversation
+      } else {
+        console.log('🔄 PERSISTENCE: No previous session found, starting fresh');
+        setIsNewConversation(true);
       }
       setHasLoadedSession(true);
     }
   }, [hasLoadedSession]);
 
-  // ULTRA-FAST: Auto-save to local memory cache
+  // FIXED: Auto-save with proper persistence
   useEffect(() => {
-    if (hasLoadedSession && sessionMessages.length > 0) {
-      WaktiAIV2Service.saveChatSession(sessionMessages, currentConversationId);
+    if (hasLoadedSession && allMessages.length > 0) {
+      console.log('💾 PERSISTENCE: Auto-saving session with', allMessages.length, 'messages');
+      WaktiAIV2Service.saveChatSession(allMessages, currentConversationId);
     }
-  }, [sessionMessages, currentConversationId, hasLoadedSession]);
+  }, [allMessages, currentConversationId, hasLoadedSession]);
 
   // ULTRA-FAST: Lazy-load conversations
   useEffect(() => {
@@ -229,7 +236,7 @@ const WaktiAIV2 = () => {
         actionTaken: true
       };
 
-      setSessionMessages(prev => [...prev, successMessage]);
+      setAllMessages(prev => [...prev, successMessage]);
       setPendingTaskData(null);
       setShowTaskConfirmation(false);
       showSuccess(language === 'ar' ? 'تم إنشاء المهمة!' : 'Task created!');
@@ -272,7 +279,7 @@ const WaktiAIV2 = () => {
         actionTaken: true
       };
 
-      setSessionMessages(prev => [...prev, successMessage]);
+      setAllMessages(prev => [...prev, successMessage]);
       setPendingReminderData(null);
       setShowTaskConfirmation(false);
       showSuccess(language === 'ar' ? 'تم إنشاء التذكير!' : 'Reminder created!');
@@ -301,7 +308,7 @@ const WaktiAIV2 = () => {
       confidence: 'high'
     };
 
-    setSessionMessages(prev => [...prev, cancelMessage]);
+    setAllMessages(prev => [...prev, cancelMessage]);
   };
 
   // ENHANCED: Lightning-fast message sending with FULL personalization
@@ -344,8 +351,8 @@ const WaktiAIV2 = () => {
         attachedFiles: attachedFiles || []
       };
 
-      const updatedSessionMessages = [...sessionMessages, userMessage];
-      setSessionMessages(updatedSessionMessages);
+      const updatedMessages = [...allMessages, userMessage];
+      setAllMessages(updatedMessages);
 
       // ENHANCED: Timeout-protected API call with FULL personalization
       const response = await Promise.race([
@@ -355,7 +362,7 @@ const WaktiAIV2 = () => {
           language,
           currentConversationId,
           inputType,
-          updatedSessionMessages.slice(-8), // ENHANCED context
+          updatedMessages.slice(-8), // ENHANCED context
           false,
           activeTrigger,
           '', // Let service handle conversation summary
@@ -389,8 +396,8 @@ const WaktiAIV2 = () => {
         browsingData: response.browsingData
       };
 
-      const finalSessionMessages = [...updatedSessionMessages, assistantMessage];
-      setSessionMessages(finalSessionMessages);
+      const finalMessages = [...updatedMessages, assistantMessage];
+      setAllMessages(finalMessages);
       
       const responseTime = Date.now() - startTime;
       console.log(`🚀 ENHANCED AI: Total time: ${responseTime}ms (FULLY PERSONALIZED)`);
@@ -471,7 +478,7 @@ const WaktiAIV2 = () => {
         browsingData: msg.browsing_data
       }));
       
-      setConversationMessages(convertedMessages);
+      setAllMessages(convertedMessages);
       console.log('📚 Loaded full conversation history:', convertedMessages.length, 'messages');
       
     } catch (error) {
@@ -479,54 +486,48 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // handleNewConversation
+  // FIXED: Only start new conversation when explicitly requested
   const handleNewConversation = async () => {
+    console.log('🆕 PERSISTENCE: User explicitly requested new conversation');
+    
     // Cancel any in-progress request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     
     setCurrentConversationId(null);
-    setSessionMessages([]);
-    setConversationMessages([]);
+    setAllMessages([]);
     WaktiAIV2Service.clearChatSession();
     setError(null);
     setPendingTaskData(null);
     setPendingReminderData(null);
     setShowTaskConfirmation(false);
     setRequestInProgress(false);
+    setIsNewConversation(true);
+    
+    showSuccess(language === 'ar' ? 'بدأت محادثة جديدة' : 'Started new conversation');
   };
 
-  // handleSelectConversation
+  // FIXED: Load existing conversation without clearing current session
   const handleSelectConversation = async (conversationId: string) => {
     try {
+      console.log('🔄 PERSISTENCE: Loading existing conversation:', conversationId);
+      
       // Cancel any in-progress request
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
       
       setIsLoading(true);
-      const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
+      await loadFullConversationHistory(conversationId);
       
-      const convertedMessages: AIMessage[] = messages.map(msg => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: new Date(msg.created_at),
-        intent: msg.intent,
-        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
-        actionTaken: !!msg.action_taken,
-        inputType: msg.input_type as 'text' | 'voice'
-      }));
-      
-      setConversationMessages(convertedMessages);
       setCurrentConversationId(conversationId);
-      setSessionMessages([]);
       setError(null);
       setPendingTaskData(null);
       setPendingReminderData(null);
       setShowTaskConfirmation(false);
       setRequestInProgress(false);
+      setIsNewConversation(false);
       
     } catch (error: any) {
       console.error('Error loading conversation:', error);
@@ -536,21 +537,26 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // handleClearChat
+  // FIXED: Clear current chat only (not start new conversation)
   const handleClearChat = () => {
+    console.log('🧹 PERSISTENCE: Clearing current chat session');
+    
     // Cancel any in-progress request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     
-    setSessionMessages([]);
-    setConversationMessages([]);
+    setAllMessages([]);
     WaktiAIV2Service.clearChatSession();
     setError(null);
     setPendingTaskData(null);
     setPendingReminderData(null);
     setShowTaskConfirmation(false);
     setRequestInProgress(false);
+    setIsNewConversation(true);
+    
+    // Don't clear conversation ID - let user continue if they want
+    showSuccess(language === 'ar' ? 'تم مسح الدردشة' : 'Chat cleared');
   };
 
   // handleDeleteConversation
@@ -560,8 +566,8 @@ const WaktiAIV2 = () => {
       setConversations(prev => prev.filter(c => c.id !== conversationId));
       if (currentConversationId === conversationId) {
         setCurrentConversationId(null);
-        setSessionMessages([]);
-        setConversationMessages([]);
+        setAllMessages([]);
+        setIsNewConversation(true);
       }
       showSuccess(language === 'ar' ? 'تم حذف المحادثة' : 'Conversation deleted');
     } catch (error: any) {
@@ -588,13 +594,10 @@ const WaktiAIV2 = () => {
       isTextGenerated: true
     };
 
-    setSessionMessages(prev => [...prev, assistantMessage]);
+    setAllMessages(prev => [...prev, assistantMessage]);
     setShowQuickActions(false);
     showSuccess(language === 'ar' ? 'تم إنشاء النص' : 'Text generated');
   };
-
-  // Enhanced display messages without streaming
-  const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
   const handleOpenPlusDrawer = () => {
     setShowQuickActions(true);
@@ -636,7 +639,7 @@ const WaktiAIV2 = () => {
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[140px]">
         <ChatMessages
-          sessionMessages={allDisplayMessages}
+          sessionMessages={allMessages}
           isLoading={isLoading}
           activeTrigger={activeTrigger}
           scrollAreaRef={scrollAreaRef}
@@ -655,7 +658,7 @@ const WaktiAIV2 = () => {
           message={message}
           setMessage={setMessage}
           isLoading={isLoading || requestInProgress}
-          sessionMessages={allDisplayMessages}
+          sessionMessages={allMessages}
           onSendMessage={handleSendMessage}
           onClearChat={handleClearChat}
           onOpenPlusDrawer={handleOpenPlusDrawer}
@@ -678,7 +681,7 @@ const WaktiAIV2 = () => {
         onTextGenerated={handleTextGenerated}
         onNewConversation={handleNewConversation}
         onClearChat={handleClearChat}
-        sessionMessages={allDisplayMessages}
+        sessionMessages={allMessages}
         isLoading={isLoading}
       />
     </div>
