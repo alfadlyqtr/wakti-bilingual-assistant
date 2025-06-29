@@ -1,9 +1,8 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface QueueNotificationParams {
   userId: string;
-  type: 'messages' | 'task_updates' | 'contact_requests' | 'event_rsvps' | 'calendar_reminders';
+  type: 'messages' | 'task_updates' | 'contact_requests' | 'event_rsvps' | 'calendar_reminders' | 'admin_gifts';
   title: string;
   body: string;
   data?: Record<string, any>;
@@ -151,6 +150,16 @@ export function generateDeepLink(type: string, data: Record<string, any>): strin
       return `${baseUrl}/maw3d/events`;
     case 'calendar_reminders':
       return `${baseUrl}/calendar`;
+    case 'admin_gifts':
+      // For voice credits, redirect to Wakti AI page
+      if (data.gift_type === 'voice_credits') {
+        return `${baseUrl}/wakti-ai`;
+      }
+      // For translation credits, also redirect to Wakti AI page
+      if (data.gift_type === 'translation_credits') {
+        return `${baseUrl}/wakti-ai`;
+      }
+      return `${baseUrl}/wakti-ai`;
     default:
       return `${baseUrl}/dashboard`;
   }
