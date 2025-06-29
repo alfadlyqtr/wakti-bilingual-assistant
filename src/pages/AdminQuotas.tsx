@@ -45,24 +45,34 @@ export default function AdminQuotas() {
 
   const loadUsers = async () => {
     try {
-      // Get all users with LEFT JOIN to voice quota data
+      setIsLoading(true);
+      
+      // Get all users first
       const { data: usersData, error: usersError } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          email,
-          display_name,
-          user_voice_usage(
-            characters_used,
-            characters_limit,
-            extra_characters
-          )
-        `)
+        .select('id, email, display_name')
         .order('email');
 
       if (usersError) {
         console.error('❌ Error loading users:', usersError);
         throw usersError;
+      }
+
+      if (!usersData || usersData.length === 0) {
+        console.log('No users found');
+        setUsers([]);
+        return;
+      }
+
+      console.log('✅ Users loaded:', usersData.length);
+
+      // Get voice usage data for all users
+      const { data: voiceUsageData, error: voiceError } = await supabase
+        .from('user_voice_usage')
+        .select('user_id, characters_used, characters_limit, extra_characters');
+
+      if (voiceError) {
+        console.error('❌ Error loading voice usage:', voiceError);
       }
 
       // Get current month translation quotas
@@ -74,8 +84,19 @@ export default function AdminQuotas() {
 
       if (translationError) {
         console.error('❌ Error loading translation quotas:', translationError);
-        throw translationError;
       }
+
+      // Create maps for easier lookup
+      const voiceUsageMap = new Map(
+        voiceUsageData?.map(usage => [
+          usage.user_id, 
+          { 
+            used: usage.characters_used, 
+            limit: usage.characters_limit, 
+            extra: usage.extra_characters 
+          }
+        ]) || []
+      );
 
       const translationMap = new Map(
         translationQuotas?.map(quota => [
@@ -84,26 +105,24 @@ export default function AdminQuotas() {
         ]) || []
       );
 
-      const formattedUsers: User[] = usersData?.map(user => {
-        // Safely access voice usage data with proper null checks
-        const voiceUsage = Array.isArray(user.user_voice_usage) && user.user_voice_usage.length > 0 
-          ? user.user_voice_usage[0] 
-          : null;
+      // Combine all data
+      const formattedUsers: User[] = usersData.map(user => {
+        const voiceUsage = voiceUsageMap.get(user.id);
+        const translationUsage = translationMap.get(user.id);
 
         return {
           id: user.id,
           email: user.email || "No email",
           full_name: user.display_name || "No name",
-          // Handle missing voice usage records with defaults
-          voice_characters_used: voiceUsage?.characters_used || 0,
-          voice_characters_limit: voiceUsage?.characters_limit || 5000,
-          voice_extra_characters: voiceUsage?.extra_characters || 0,
-          translation_count: translationMap.get(user.id)?.count || 0,
-          translation_extra: translationMap.get(user.id)?.extra || 0,
+          voice_characters_used: voiceUsage?.used || 0,
+          voice_characters_limit: voiceUsage?.limit || 5000,
+          voice_extra_characters: voiceUsage?.extra || 0,
+          translation_count: translationUsage?.count || 0,
+          translation_extra: translationUsage?.extra || 0,
         };
-      }) || [];
+      });
 
-      console.log('✅ Users loaded successfully:', formattedUsers.length);
+      console.log('✅ Combined user data successfully:', formattedUsers.length);
       setUsers(formattedUsers);
     } catch (err) {
       console.error('❌ Error loading users:', err);

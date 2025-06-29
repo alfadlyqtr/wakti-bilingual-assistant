@@ -16,7 +16,7 @@ export interface UserQuota {
 export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const { user } = useAuth();
   
-  // Changed: Use consistent 10 monthly translations limit
+  // Consistent 10 monthly translations limit
   const MAX_MONTHLY_TRANSLATIONS = 10;
   
   const [userQuota, setUserQuota] = useState<UserQuota>({
@@ -45,6 +45,44 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
       if (error) {
         console.error('❌ Error loading user quota:', error);
+        
+        // If RPC fails, try to handle gracefully by creating a default quota
+        if (error.message?.includes('permission') || error.message?.includes('policy')) {
+          console.log('🔧 RPC failed, attempting direct quota creation...');
+          
+          // Try to create quota record directly if RPC fails due to RLS
+          const currentMonth = new Date().toISOString().slice(0, 7);
+          const { data: insertData, error: insertError } = await supabase
+            .from('user_voice_translation_quotas')
+            .upsert({
+              user_id: user.id,
+              monthly_date: currentMonth,
+              translation_count: 0,
+              extra_translations: 0
+            }, {
+              onConflict: 'user_id,monthly_date'
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('❌ Direct quota creation failed:', insertError);
+            setQuotaError('Failed to initialize quota');
+            return;
+          }
+
+          console.log('✅ Direct quota creation successful:', insertData);
+          setUserQuota({
+            daily_count: 0,
+            extra_translations: insertData.extra_translations || 0,
+            purchase_date: insertData.purchase_date,
+            monthly_count: insertData.translation_count || 0,
+            monthly_period: currentMonth,
+            quota_cycle_start: insertData.purchase_date
+          });
+          return;
+        }
+        
         setQuotaError(error.message);
         return;
       }
@@ -82,6 +120,35 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
       if (error) {
         console.error('❌ Error incrementing translation usage:', error);
+        
+        // If RPC fails due to missing quota, try to create it first
+        if (error.message?.includes('NOT FOUND') || error.message?.includes('no rows')) {
+          console.log('🔧 Creating missing quota record...');
+          await loadUserQuota(); // This will create the record
+          
+          // Retry the increment
+          const { data: retryData, error: retryError } = await supabase.rpc('increment_voice_translation_usage', {
+            p_user_id: user.id
+          });
+          
+          if (retryError) {
+            console.error('❌ Retry failed:', retryError);
+            return { success: false, remainingTranslations: 0 };
+          }
+          
+          if (retryData && retryData.length > 0) {
+            const result = retryData[0];
+            setUserQuota(prev => ({
+              ...prev,
+              monthly_count: result.translation_count,
+              extra_translations: result.extra_translations
+            }));
+            
+            const remaining = Math.max(0, MAX_MONTHLY_TRANSLATIONS - result.translation_count) + result.extra_translations;
+            return { success: result.success, remainingTranslations: remaining };
+          }
+        }
+        
         return { success: false, remainingTranslations: 0 };
       }
 
@@ -105,7 +172,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       console.error('❌ Unexpected error incrementing translation usage:', error);
       return { success: false, remainingTranslations: 0 };
     }
-  }, [user, MAX_MONTHLY_TRANSLATIONS]);
+  }, [user, MAX_MONTHLY_TRANSLATIONS, loadUserQuota]);
 
   // Purchase extra translations - Updated to use voice translation functions
   const purchaseExtraTranslations = useCallback(async (count: number = 100) => {
