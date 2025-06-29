@@ -1,0 +1,80 @@
+
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface GiftNotification {
+  id: string;
+  giftType: 'voice_credits' | 'translation_credits';
+  amount: number;
+  sender: string;
+  timestamp: string;
+}
+
+export function useGiftNotifications() {
+  const { user } = useAuth();
+  const [currentGift, setCurrentGift] = useState<GiftNotification | null>(null);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    console.log('Setting up gift notification listener for user:', user.id);
+
+    // Listen for new notifications of type 'admin_gifts'
+    const channel = supabase
+      .channel(`gift-notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notification_history',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('New notification received:', payload);
+          
+          const notification = payload.new;
+          
+          // Check if this is an admin gift notification
+          if (notification.type === 'admin_gifts' && notification.data) {
+            console.log('Gift notification detected:', notification);
+            
+            const giftData = notification.data;
+            
+            // Show the gift popup
+            setCurrentGift({
+              id: notification.id,
+              giftType: giftData.gift_type || 'voice_credits',
+              amount: giftData.amount || 0,
+              sender: giftData.sender || 'Wakti Admin Team',
+              timestamp: notification.sent_at
+            });
+            
+            setIsPopupOpen(true);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Gift notification subscription status:', status);
+      });
+
+    // Cleanup
+    return () => {
+      console.log('Cleaning up gift notification listener');
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  const closeGiftPopup = () => {
+    setIsPopupOpen(false);
+    setCurrentGift(null);
+  };
+
+  return {
+    currentGift,
+    isPopupOpen,
+    closeGiftPopup
+  };
+}

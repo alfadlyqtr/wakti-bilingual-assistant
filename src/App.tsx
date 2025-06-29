@@ -1,10 +1,10 @@
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { SpeedInsights } from "@vercel/speed-insights/react";
+import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
 import Maw3d from "@/pages/Maw3d";
@@ -51,255 +51,257 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
-            <div className="min-h-screen bg-background text-foreground">
-              <Routes>
-                {/* Admin Routes - Completely Separate */}
-                <Route path="/mqtr" element={<AdminLogin />} />
-                <Route
-                  path="/admindash"
-                  element={
-                    <AdminProtectedRoute>
-                      <AdminDashboard />
-                    </AdminProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin-settings"
-                  element={
-                    <AdminProtectedRoute>
-                      <AdminSettings />
-                    </AdminProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/users"
-                  element={
-                    <AdminProtectedRoute>
-                      <AdminUsers />
-                    </AdminProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/messages"
-                  element={
-                    <AdminProtectedRoute>
-                      <AdminMessages />
-                    </AdminProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/subscriptions"
-                  element={
-                    <AdminProtectedRoute>
-                      <AdminSubscriptions />
-                    </AdminProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/quotas"
-                  element={
-                    <AdminProtectedRoute>
-                      <AdminQuotas />
-                    </AdminProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/analytics"
-                  element={
-                    <AdminProtectedRoute>
-                      <AdminAnalytics />
-                    </AdminProtectedRoute>
-                  }
-                />
+            <GiftNotificationProvider>
+              <div className="min-h-screen bg-background text-foreground">
+                <Routes>
+                  {/* Admin Routes - Completely Separate */}
+                  <Route path="/mqtr" element={<AdminLogin />} />
+                  <Route
+                    path="/admindash"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminDashboard />
+                      </AdminProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin-settings"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminSettings />
+                      </AdminProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/users"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminUsers />
+                      </AdminProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/messages"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminMessages />
+                      </AdminProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/subscriptions"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminSubscriptions />
+                      </AdminProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/quotas"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminQuotas />
+                      </AdminProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/analytics"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminAnalytics />
+                      </AdminProtectedRoute>
+                    }
+                  />
+                  
+                  {/* Public Routes */}
+                  <Route path="/home" element={<Home />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<Signup />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/reset-success" element={<ResetSuccess />} />
+                  <Route path="/confirmed" element={<Confirmed />} />
+                  <Route path="/privacy-terms" element={<PrivacyTerms />} />
+                  <Route path="/contact" element={<ContactUs />} />
+                  
+                  {/* Root Route - Redirect to Home for landing */}
+                  <Route path="/" element={<Navigate to="/home" replace />} />
+                  
+                  {/* Protected Routes */}
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Dashboard />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/calendar"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Calendar />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/maw3d"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Maw3d />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  
+                  {/* Maw3d Events Routes */}
+                  <Route
+                    path="/maw3d-events"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Maw3dEvents />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/maw3d/create"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Maw3dCreate />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/maw3d/edit/:id"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Maw3dEdit />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/maw3d/manage/:id"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Maw3dManage />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  
+                  {/* Public Maw3d View Route - handles both UUID and short_id */}
+                  <Route path="/maw3d/:id" element={<Maw3dView />} />
+                  
+                  <Route
+                    path="/tasjeel"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Tasjeel />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/wakti-ai"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <WaktiAi />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Settings />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/account"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Account />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/help"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Help />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/contacts"
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <Contacts />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    }
+                  />
+                  
+                  {/* T&R Routes */}
+                  <Route 
+                    path="/tr" 
+                    element={
+                      <ProtectedRoute>
+                        <PageContainer>
+                          <TasksReminders />
+                        </PageContainer>
+                        <MobileNav />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  {/* Public Shared Task Route */}
+                  <Route path="/shared-task/:shareLink" element={<SharedTask />} />
+                  
+                  {/* 404 Route - Redirect to Home */}
+                  <Route path="*" element={<Navigate to="/home" />} />
+                </Routes>
                 
-                {/* Public Routes */}
-                <Route path="/home" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/reset-success" element={<ResetSuccess />} />
-                <Route path="/confirmed" element={<Confirmed />} />
-                <Route path="/privacy-terms" element={<PrivacyTerms />} />
-                <Route path="/contact" element={<ContactUs />} />
-                
-                {/* Root Route - Redirect to Home for landing */}
-                <Route path="/" element={<Navigate to="/home" replace />} />
-                
-                {/* Protected Routes */}
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Dashboard />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/calendar"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Calendar />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/maw3d"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Maw3d />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                
-                {/* Maw3d Events Routes */}
-                <Route
-                  path="/maw3d-events"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Maw3dEvents />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/maw3d/create"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Maw3dCreate />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/maw3d/edit/:id"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Maw3dEdit />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/maw3d/manage/:id"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Maw3dManage />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                
-                {/* Public Maw3d View Route - handles both UUID and short_id */}
-                <Route path="/maw3d/:id" element={<Maw3dView />} />
-                
-                <Route
-                  path="/tasjeel"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Tasjeel />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/wakti-ai"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <WaktiAi />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Settings />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/account"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Account />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/help"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Help />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/contacts"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Contacts />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  }
-                />
-                
-                {/* T&R Routes */}
-                <Route 
-                  path="/tr" 
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <TasksReminders />
-                      </PageContainer>
-                      <MobileNav />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* Public Shared Task Route */}
-                <Route path="/shared-task/:shareLink" element={<SharedTask />} />
-                
-                {/* 404 Route - Redirect to Home */}
-                <Route path="*" element={<Navigate to="/home" />} />
-              </Routes>
-              
-              <Toaster />
-              <SpeedInsights />
-            </div>
+                <Toaster />
+                <SpeedInsights />
+              </div>
+            </GiftNotificationProvider>
           </QueryClientProvider>
         </AuthProvider>
       </ThemeProvider>
