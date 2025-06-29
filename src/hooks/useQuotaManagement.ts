@@ -8,17 +8,22 @@ export interface UserQuota {
   daily_count: number;
   extra_translations: number;
   purchase_date?: string;
+  monthly_count: number;
+  monthly_period: string;
+  quota_cycle_start?: string;
 }
 
 export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const { user } = useAuth();
   
-  // Fixed: Use consistent 10 daily translations limit
-  const MAX_DAILY_TRANSLATIONS = 10;
+  // Changed: Use consistent 10 monthly translations limit
+  const MAX_MONTHLY_TRANSLATIONS = 10;
   
   const [userQuota, setUserQuota] = useState<UserQuota>({
     daily_count: 0,
-    extra_translations: 0
+    extra_translations: 0,
+    monthly_count: 0,
+    monthly_period: new Date().toISOString().slice(0, 7) // YYYY-MM format
   });
   
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
@@ -32,7 +37,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       setIsLoadingQuota(true);
       setQuotaError(null);
       
-      console.log('🔄 Loading user translation quota for user:', user.id);
+      console.log('🔄 Loading user translation quota (MONTHLY) for user:', user.id);
       
       const { data, error } = await supabase.rpc('get_or_create_user_quota', {
         p_user_id: user.id
@@ -46,11 +51,14 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
       if (data && data.length > 0) {
         const quota = data[0];
-        console.log('✅ User translation quota loaded successfully:', quota);
+        console.log('✅ User translation quota (MONTHLY) loaded successfully:', quota);
         setUserQuota({
           daily_count: quota.daily_count || 0,
           extra_translations: quota.extra_translations || 0,
-          purchase_date: quota.purchase_date
+          purchase_date: quota.purchase_date,
+          monthly_count: quota.monthly_count || 0,
+          monthly_period: quota.monthly_period || new Date().toISOString().slice(0, 7),
+          quota_cycle_start: quota.quota_cycle_start
         });
       }
     } catch (error) {
@@ -61,12 +69,12 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user]);
 
-  // Increment translation count
+  // Increment translation count (now monthly)
   const incrementTranslationCount = useCallback(async () => {
     if (!user) return { success: false, remainingTranslations: 0 };
 
     try {
-      console.log('📈 Incrementing translation usage for user:', user.id);
+      console.log('📈 Incrementing translation usage (MONTHLY) for user:', user.id);
       
       const { data, error } = await supabase.rpc('increment_translation_usage', {
         p_user_id: user.id
@@ -79,15 +87,16 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
       if (data && data.length > 0) {
         const result = data[0];
-        console.log('✅ Translation usage incremented:', result);
+        console.log('✅ Translation usage incremented (MONTHLY):', result);
         
         setUserQuota(prev => ({
           ...prev,
-          daily_count: result.daily_count,
+          monthly_count: result.monthly_count,
+          daily_count: result.daily_count, // Keep for backward compatibility
           extra_translations: result.extra_translations
         }));
         
-        const remaining = Math.max(0, MAX_DAILY_TRANSLATIONS - result.daily_count) + result.extra_translations;
+        const remaining = Math.max(0, MAX_MONTHLY_TRANSLATIONS - result.monthly_count) + result.extra_translations;
         return { success: result.success, remainingTranslations: remaining };
       }
       
@@ -96,7 +105,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       console.error('❌ Unexpected error incrementing translation usage:', error);
       return { success: false, remainingTranslations: 0 };
     }
-  }, [user, MAX_DAILY_TRANSLATIONS]);
+  }, [user, MAX_MONTHLY_TRANSLATIONS]);
 
   // Purchase extra translations
   const purchaseExtraTranslations = useCallback(async (count: number = 100) => {
@@ -144,14 +153,14 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user?.id, loadUserQuota]);
 
-  // Computed values
+  // Computed values (now based on monthly quota)
   const computedValues = useMemo(() => {
-    const remainingFreeTranslations = Math.max(0, MAX_DAILY_TRANSLATIONS - userQuota.daily_count);
+    const remainingFreeTranslations = Math.max(0, MAX_MONTHLY_TRANSLATIONS - userQuota.monthly_count);
     const totalAvailableTranslations = remainingFreeTranslations + userQuota.extra_translations;
     const canTranslate = totalAvailableTranslations > 0;
     
-    // Calculate limit status
-    const usagePercentage = (userQuota.daily_count / MAX_DAILY_TRANSLATIONS) * 100;
+    // Calculate limit status based on monthly usage
+    const usagePercentage = (userQuota.monthly_count / MAX_MONTHLY_TRANSLATIONS) * 100;
     const isAtSoftLimit = usagePercentage >= 80 && totalAvailableTranslations > 0;
     const isAtHardLimit = totalAvailableTranslations === 0;
 
@@ -162,11 +171,11 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       isAtSoftLimit,
       isAtHardLimit
     };
-  }, [userQuota, MAX_DAILY_TRANSLATIONS]);
+  }, [userQuota, MAX_MONTHLY_TRANSLATIONS]);
 
   // Refresh function
   const refreshTranslationQuota = useCallback(async () => {
-    console.log('🔄 External refresh of translation quota requested');
+    console.log('🔄 External refresh of translation quota (MONTHLY) requested');
     await loadUserQuota();
   }, [loadUserQuota]);
 
@@ -174,7 +183,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     userQuota,
     isLoadingQuota,
     quotaError,
-    MAX_DAILY_TRANSLATIONS,
+    MAX_DAILY_TRANSLATIONS: MAX_MONTHLY_TRANSLATIONS, // Keep for backward compatibility
+    MAX_MONTHLY_TRANSLATIONS,
     loadUserQuota,
     incrementTranslationCount,
     purchaseExtraTranslations,

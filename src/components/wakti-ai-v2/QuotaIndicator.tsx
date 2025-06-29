@@ -10,10 +10,10 @@ import { BarChart3, Zap, Search, Mic } from 'lucide-react';
 export function QuotaIndicator() {
   const { language } = useTheme();
   
-  // Translation quota (Voice Translator)
+  // Translation quota (Voice Translator) - now monthly
   const { 
     userQuota: translationQuota, 
-    MAX_DAILY_TRANSLATIONS, 
+    MAX_MONTHLY_TRANSLATIONS, 
     remainingFreeTranslations 
   } = useQuotaManagement(language);
 
@@ -32,7 +32,7 @@ export function QuotaIndicator() {
   } = useSearchQuotaManagement(language);
 
   const getTranslationStatusColor = () => {
-    const usagePercentage = (translationQuota.daily_count / MAX_DAILY_TRANSLATIONS) * 100;
+    const usagePercentage = (translationQuota.monthly_count / MAX_MONTHLY_TRANSLATIONS) * 100;
     if (usagePercentage >= 100 && translationQuota.extra_translations === 0) return 'text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-900/20 dark:border-red-800';
     if (usagePercentage >= 80) return 'text-orange-600 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-900/20 dark:border-orange-800';
     if (usagePercentage >= 60) return 'text-yellow-600 bg-yellow-50 border-yellow-200 dark:text-yellow-400 dark:bg-yellow-900/20 dark:border-yellow-800';
@@ -78,7 +78,7 @@ export function QuotaIndicator() {
         )}
       </div>
 
-      {/* Translation Credits Quota */}
+      {/* Translation Credits Quota - Changed to monthly display */}
       <div className={cn(
         "flex items-center gap-1.5 px-2 py-1 rounded-full border",
         getTranslationStatusColor()

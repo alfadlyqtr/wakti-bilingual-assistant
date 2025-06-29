@@ -22,7 +22,7 @@ export function BuyExtrasPopup({
   const { userVoiceQuota, refreshVoiceQuota } = useExtendedQuotaManagement(language);
   const { 
     userQuota: translationQuota, 
-    MAX_DAILY_TRANSLATIONS,
+    MAX_MONTHLY_TRANSLATIONS,
     refreshTranslationQuota 
   } = useQuotaManagement(language);
 
@@ -52,12 +52,12 @@ export function BuyExtrasPopup({
   };
 
   const getTranslationQuotaStatus = () => {
-    const used = translationQuota.daily_count;
+    const used = translationQuota.monthly_count; // Changed from daily_count to monthly_count
     const extra = translationQuota.extra_translations;
     return {
-      remaining: Math.max(0, MAX_DAILY_TRANSLATIONS - used),
+      remaining: Math.max(0, MAX_MONTHLY_TRANSLATIONS - used),
       extraTranslations: extra,
-      total: Math.max(0, MAX_DAILY_TRANSLATIONS - used) + extra
+      total: Math.max(0, MAX_MONTHLY_TRANSLATIONS - used) + extra
     };
   };
 
@@ -99,13 +99,13 @@ export function BuyExtrasPopup({
                 )}
               </div>
               
-              {/* Translation Credits (for Voice Translator) */}
+              {/* Translation Credits (for Voice Translator) - Changed to monthly */}
               <div className="text-sm">
                 <span className="font-medium">
                   {language === 'ar' ? 'رصيد الترجمة:' : 'Translation Credits:'} 
                 </span>
                 <span className="ml-2">
-                  {translationStatus.remaining}/{MAX_DAILY_TRANSLATIONS} {language === 'ar' ? 'متبقي اليوم' : 'remaining today'}
+                  {translationStatus.remaining}/{MAX_MONTHLY_TRANSLATIONS} {language === 'ar' ? 'متبقي هذا الشهر' : 'remaining this month'}
                 </span>
                 {translationStatus.extraTranslations > 0 && (
                   <span className="text-green-600 ml-2">
