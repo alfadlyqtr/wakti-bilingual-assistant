@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Gift, Search, Plus, Mic, Languages } from "lucide-react";
@@ -225,183 +224,192 @@ export default function AdminQuotas() {
   }
 
   return (
-    <div className="bg-gradient-background text-foreground min-h-screen overflow-y-auto">
-      <AdminHeader
-        title="Quota Management"
-        subtitle="Gift voice credits and translation quotas"
-        icon={<Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
-      />
-
-      <div className="p-3 sm:p-6 pb-24 space-y-4 sm:space-y-6">
-        {/* Gift Quota Form */}
-        <Card className="enhanced-card">
-          <CardHeader className="pb-3 sm:pb-6">
-            <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
-              <Gift className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-purple" />
-              Gift Quota Credits
-            </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Add additional voice or translation credits to user accounts</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 sm:space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div>
-                  <Label className="text-xs sm:text-sm font-medium">Quota Type</Label>
-                  <Select value={quotaType} onValueChange={(value: 'voice' | 'translation') => setQuotaType(value)}>
-                    <SelectTrigger className="h-9 sm:h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="voice">
-                        <div className="flex items-center">
-                          <Mic className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                          <span className="text-xs sm:text-sm">Voice Characters</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="translation">
-                        <div className="flex items-center">
-                          <Languages className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                          <span className="text-xs sm:text-sm">Translation Credits</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label className="text-xs sm:text-sm font-medium">Amount</Label>
-                  <Input
-                    type="number"
-                    placeholder={quotaType === 'voice' ? "Voice characters" : "Translation credits"}
-                    value={quotaAmount}
-                    onChange={(e) => setQuotaAmount(e.target.value)}
-                    className="input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <Label className="text-xs sm:text-sm font-medium">Selected User</Label>
-                  <div className="text-xs sm:text-sm p-2 bg-gradient-secondary/10 rounded-md min-h-[36px] sm:min-h-[40px] flex items-center">
-                    {selectedUser ? selectedUser.email : "No user selected"}
-                  </div>
-                </div>
-              </div>
-              
-              <Button
-                onClick={giftQuota}
-                disabled={!selectedUser || !quotaAmount || isGifting}
-                className="btn-enhanced w-full sm:w-auto h-9 sm:h-10 text-xs sm:text-sm"
-              >
-                {isGifting ? 'Gifting...' : (
-                  <>
-                    <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                    Gift {quotaType === 'voice' ? 'Voice Characters' : 'Translation Credits'}
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Search */}
-        <div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search users by email or name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 sm:pl-10 input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Users List */}
-        <div className="grid gap-2 sm:gap-4">
-          {filteredUsers.map((user) => (
-            <Card 
-              key={user.id} 
-              className={`enhanced-card cursor-pointer transition-all ${
-                selectedUser?.id === user.id ? 'ring-2 ring-accent-purple' : ''
-              }`}
-              onClick={() => setSelectedUser(user)}
-            >
-              <CardContent className="p-3 sm:p-6">
-                <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-medium text-xs sm:text-sm">
-                        {(user.full_name || user.email).charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
-                        {user.full_name || "No name"}
-                      </h3>
-                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{user.email}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center sm:space-x-6">
-                    {/* Voice Quota */}
-                    <div className="flex items-center justify-between sm:justify-start sm:flex-col sm:text-center space-x-2 sm:space-x-0">
-                      <div className="flex items-center space-x-2 mb-0 sm:mb-1">
-                        <Mic className="h-3 w-3 sm:h-4 sm:w-4 text-accent-blue" />
-                        <span className="text-xs sm:text-sm font-medium">Voice</span>
-                      </div>
-                      <div className="space-y-1">
-                        <Badge variant="outline" className="text-xs">
-                          {user.voice_characters_used.toLocaleString()} / {user.voice_characters_limit.toLocaleString()}
-                        </Badge>
-                        {user.voice_extra_characters > 0 && (
-                          <Badge variant="secondary" className="text-xs ml-1 sm:ml-0">
-                            +{user.voice_extra_characters.toLocaleString()} extra
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Translation Quota */}
-                    <div className="flex items-center justify-between sm:justify-start sm:flex-col sm:text-center space-x-2 sm:space-x-0">
-                      <div className="flex items-center space-x-2 mb-0 sm:mb-1">
-                        <Languages className="h-3 w-3 sm:h-4 sm:w-4 text-accent-green" />
-                        <span className="text-xs sm:text-sm font-medium">Translation</span>
-                      </div>
-                      <div className="space-y-1">
-                        <Badge variant="outline" className="text-xs">
-                          {user.translation_count} / 10
-                        </Badge>
-                        {user.translation_extra > 0 && (
-                          <Badge variant="secondary" className="text-xs ml-1 sm:ml-0">
-                            +{user.translation_extra} extra
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {selectedUser?.id === user.id && (
-                      <Badge className="bg-accent-purple self-start sm:self-center text-xs">Selected</Badge>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {filteredUsers.length === 0 && (
-          <Card className="enhanced-card">
-            <CardContent className="p-6 sm:p-12 text-center">
-              <Gift className="h-6 w-6 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-sm sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
-              <p className="text-muted-foreground text-xs sm:text-base">Try adjusting your search criteria.</p>
-            </CardContent>
-          </Card>
-        )}
+    <div className="bg-gradient-background text-foreground min-h-screen flex flex-col">
+      {/* Fixed Header */}
+      <div className="flex-shrink-0">
+        <AdminHeader
+          title="Quota Management"
+          subtitle="Gift voice credits and translation quotas"
+          icon={<Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
+        />
       </div>
 
-      {/* Admin Mobile Navigation */}
-      <AdminMobileNav />
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto px-3 sm:px-6 pb-32 pt-4">
+        <div className="space-y-4 sm:space-y-6 max-w-full">
+          {/* Gift Quota Form */}
+          <Card className="enhanced-card">
+            <CardHeader className="pb-3 sm:pb-6">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
+                <Gift className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-purple" />
+                Gift Quota Credits
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Add additional voice or translation credits to user accounts</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <div>
+                    <Label className="text-xs sm:text-sm font-medium">Quota Type</Label>
+                    <Select value={quotaType} onValueChange={(value: 'voice' | 'translation') => setQuotaType(value)}>
+                      <SelectTrigger className="h-9 sm:h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="voice">
+                          <div className="flex items-center">
+                            <Mic className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                            <span className="text-xs sm:text-sm">Voice Characters</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="translation">
+                          <div className="flex items-center">
+                            <Languages className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                            <span className="text-xs sm:text-sm">Translation Credits</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label className="text-xs sm:text-sm font-medium">Amount</Label>
+                    <Input
+                      type="number"
+                      placeholder={quotaType === 'voice' ? "Voice characters" : "Translation credits"}
+                      value={quotaAmount}
+                      onChange={(e) => setQuotaAmount(e.target.value)}
+                      className="input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label className="text-xs sm:text-sm font-medium">Selected User</Label>
+                    <div className="text-xs sm:text-sm p-2 bg-gradient-secondary/10 rounded-md min-h-[36px] sm:min-h-[40px] flex items-center">
+                      {selectedUser ? selectedUser.email : "No user selected"}
+                    </div>
+                  </div>
+                </div>
+                
+                <Button
+                  onClick={giftQuota}
+                  disabled={!selectedUser || !quotaAmount || isGifting}
+                  className="btn-enhanced w-full sm:w-auto h-9 sm:h-10 text-xs sm:text-sm"
+                >
+                  {isGifting ? 'Gifting...' : (
+                    <>
+                      <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                      Gift {quotaType === 'voice' ? 'Voice Characters' : 'Translation Credits'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Search */}
+          <div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search users by email or name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 sm:pl-10 input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Users List */}
+          <div className="grid gap-2 sm:gap-4">
+            {filteredUsers.map((user) => (
+              <Card 
+                key={user.id} 
+                className={`enhanced-card cursor-pointer transition-all ${
+                  selectedUser?.id === user.id ? 'ring-2 ring-accent-purple' : ''
+                }`}
+                onClick={() => setSelectedUser(user)}
+              >
+                <CardContent className="p-3 sm:p-4">
+                  <div className="space-y-3">
+                    {/* User Info Row */}
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
+                        <span className="text-white font-medium text-xs sm:text-sm">
+                          {(user.full_name || user.email).charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
+                          {user.full_name || "No name"}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-muted-foreground truncate">{user.email}</p>
+                      </div>
+                      {selectedUser?.id === user.id && (
+                        <Badge className="bg-accent-purple text-xs flex-shrink-0">Selected</Badge>
+                      )}
+                    </div>
+
+                    {/* Quota Display Row - Mobile Optimized */}
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                      {/* Voice Quota */}
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Mic className="h-3 w-3 text-accent-blue flex-shrink-0" />
+                          <span className="text-xs font-medium">Voice</span>
+                        </div>
+                        <div className="space-y-1">
+                          <Badge variant="outline" className="text-xs w-full justify-center">
+                            {user.voice_characters_used.toLocaleString()} / {user.voice_characters_limit.toLocaleString()}
+                          </Badge>
+                          {user.voice_extra_characters > 0 && (
+                            <Badge variant="secondary" className="text-xs w-full justify-center">
+                              +{user.voice_extra_characters.toLocaleString()} extra
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Translation Quota */}
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Languages className="h-3 w-3 text-accent-green flex-shrink-0" />
+                          <span className="text-xs font-medium">Translation</span>
+                        </div>
+                        <div className="space-y-1">
+                          <Badge variant="outline" className="text-xs w-full justify-center">
+                            {user.translation_count} / 10
+                          </Badge>
+                          {user.translation_extra > 0 && (
+                            <Badge variant="secondary" className="text-xs w-full justify-center">
+                              +{user.translation_extra} extra
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {filteredUsers.length === 0 && (
+            <Card className="enhanced-card">
+              <CardContent className="p-6 sm:p-12 text-center">
+                <Gift className="h-6 w-6 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-sm sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
+                <p className="text-muted-foreground text-xs sm:text-base">Try adjusting your search criteria.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* Fixed Footer/Navigation */}
+      <div className="flex-shrink-0">
+        <AdminMobileNav />
+      </div>
     </div>
   );
 }
