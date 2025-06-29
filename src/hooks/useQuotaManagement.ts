@@ -22,6 +22,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   });
   
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
 
   // Load user quota
   const loadUserQuota = useCallback(async () => {
@@ -29,6 +30,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     
     try {
       setIsLoadingQuota(true);
+      setQuotaError(null);
       
       console.log('🔄 Loading user translation quota for user:', user.id);
       
@@ -38,6 +40,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
       if (error) {
         console.error('❌ Error loading user quota:', error);
+        setQuotaError(error.message);
         return;
       }
 
@@ -52,6 +55,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       }
     } catch (error) {
       console.error('❌ Unexpected error loading user quota:', error);
+      setQuotaError(error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsLoadingQuota(false);
     }
@@ -145,11 +149,18 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     const remainingFreeTranslations = Math.max(0, MAX_DAILY_TRANSLATIONS - userQuota.daily_count);
     const totalAvailableTranslations = remainingFreeTranslations + userQuota.extra_translations;
     const canTranslate = totalAvailableTranslations > 0;
+    
+    // Calculate limit status
+    const usagePercentage = (userQuota.daily_count / MAX_DAILY_TRANSLATIONS) * 100;
+    const isAtSoftLimit = usagePercentage >= 80 && totalAvailableTranslations > 0;
+    const isAtHardLimit = totalAvailableTranslations === 0;
 
     return {
       remainingFreeTranslations,
       totalAvailableTranslations,
-      canTranslate
+      canTranslate,
+      isAtSoftLimit,
+      isAtHardLimit
     };
   }, [userQuota, MAX_DAILY_TRANSLATIONS]);
 
@@ -162,6 +173,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   return {
     userQuota,
     isLoadingQuota,
+    quotaError,
     MAX_DAILY_TRANSLATIONS,
     loadUserQuota,
     incrementTranslationCount,
