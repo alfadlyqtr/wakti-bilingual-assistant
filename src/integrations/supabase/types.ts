@@ -1974,6 +1974,22 @@ export type Database = {
           purchase_date: string
         }[]
       }
+      get_user_payment_history: {
+        Args: { p_user_id: string }
+        Returns: {
+          id: string
+          paypal_subscription_id: string
+          paypal_plan_id: string
+          plan_name: string
+          billing_amount: number
+          billing_currency: string
+          billing_cycle: string
+          status: string
+          start_date: string
+          next_billing_date: string
+          created_at: string
+        }[]
+      }
       gtrgm_compress: {
         Args: { "": unknown }
         Returns: unknown

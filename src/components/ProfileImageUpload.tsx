@@ -1,230 +1,210 @@
 
-import React, { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/providers/ThemeProvider";
-import { supabase } from "@/integrations/supabase/client";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Camera } from "lucide-react";
-import { toast } from "sonner";
-import { t } from "@/utils/translations";
+import React, { useState, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Camera, Upload, X, Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useTheme } from '@/providers/ThemeProvider';
 
-export const ProfileImageUpload = () => {
-  const { user, refreshSession } = useAuth();
+export function ProfileImageUpload() {
+  const { user, updateUserProfile } = useAuth();
   const { language } = useTheme();
-  const [uploading, setUploading] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || "");
-  const [imageError, setImageError] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get user initials for avatar fallback
-  const getUserInitials = () => {
-    const fullName = user?.user_metadata?.full_name || user?.email || "";
-    return fullName
-      .split(" ")
-      .map(name => name[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
-  };
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
 
-  const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error(language === 'ar' ? 'يرجى اختيار ملف صورة صحيح' : 'Please select a valid image file');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'حجم الملف كبير جداً (الحد الأقصى 5 ميجابايت)' : 'File size too large (max 5MB)');
+      return;
+    }
+
+    setIsUploading(true);
+    setAvatarError(false);
+
     try {
-      setUploading(true);
-      
-      if (!event.target.files || !event.target.files.length) {
-        return;
-      }
-      
-      const file = event.target.files[0];
-      
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(language === 'ar' ? 'حجم الملف كبير جداً (الحد الأقصى 5 ميجابايت)' : 'File size too large (max 5MB)');
-        return;
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast.error(language === 'ar' ? 'يرجى اختيار ملف صورة' : 'Please select an image file');
-        return;
-      }
-      
+      // Create unique filename
       const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      // Store in user-specific folder for proper RLS
-      const filePath = `${user?.id}/${fileName}`;
-      
-      console.log('Uploading avatar file:', { fileName, fileSize: file.size, fileType: file.type, filePath });
-      
-      // Delete old avatar if exists
-      if (user?.user_metadata?.avatar_url) {
-        try {
-          const oldUrl = user.user_metadata.avatar_url;
-          const oldPath = oldUrl.split('/').pop();
-          if (oldPath && oldPath !== fileName && oldPath.includes('.')) {
-            const oldFilePath = `${user.id}/${oldPath}`;
-            await supabase.storage
-              .from('avatars')
-              .remove([oldFilePath]);
-            console.log('Old avatar deleted:', oldFilePath);
-          }
-        } catch (deleteError) {
-          console.warn('Could not delete old avatar:', deleteError);
-          // Don't block upload if deletion fails
-        }
-      }
-      
-      // Upload the new file to Supabase storage with user folder structure
-      const { error: uploadError } = await supabase.storage
+      const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`;
+
+      // Upload to Supabase storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file, {
+        .upload(fileName, file, {
           cacheControl: '3600',
-          upsert: true // Allow overwriting
+          upsert: true
         });
-        
+
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        toast.error('Failed to upload avatar. Please try again.');
         throw uploadError;
       }
-      
-      // Get the public URL with cache busting
-      const { data: storageData } = supabase.storage
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
         .from('avatars')
-        .getPublicUrl(filePath);
-      
-      const newAvatarUrl = `${storageData.publicUrl}?t=${Date.now()}`;
-      console.log('New avatar URL with cache busting:', newAvatarUrl);
-      
-      // Update user metadata with the correct structure expected by Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.updateUser({
-        data: { 
-          avatar_url: newAvatarUrl 
-        }
-      });
-      
-      if (authError) {
-        console.error('Auth update error:', authError);
-        toast.error('Failed to update profile. Please try again.');
-        throw authError;
-      }
+        .getPublicUrl(fileName);
 
-      console.log('Auth update successful:', authData);
-
-      // Update the profiles table so ContactList can see the avatar
-      const { error: profileError } = await supabase
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: newAvatarUrl })
-        .eq('id', user?.id);
-      
-      if (profileError) {
-        console.error('Error updating profile avatar:', profileError);
-        // Don't throw here, as auth update was successful
-        console.log('Profile update failed but auth update succeeded');
-      } else {
-        console.log('Successfully updated profile avatar in both auth and profiles table');
+        .update({ 
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Profile update error:', updateError);
+        throw updateError;
       }
+
+      // Update auth context
+      await updateUserProfile({ avatar_url: publicUrl });
+
+      toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية بنجاح' : 'Profile picture updated successfully');
       
-      // Update local state immediately for better UX
-      setAvatarUrl(newAvatarUrl);
-      setImageError(false);
-      
-      // Force refresh the auth session to get the latest user metadata
-      await refreshSession();
-      
-      toast.success(t("profileImageUpdated", language));
-    } catch (error: any) {
-      console.error('Avatar upload failed:', error);
-      
-      // Show user-friendly error messages
-      if (error.message?.includes('permission')) {
-        toast.error('Permission denied. Please try logging out and back in.');
-      } else if (error.message?.includes('storage')) {
-        toast.error('Upload failed. Please check your internet connection and try again.');
-      } else {
-        toast.error(`Upload failed: ${error.message || 'Unknown error'}`);
-      }
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      toast.error(language === 'ar' ? 'فشل في تحديث الصورة الشخصية' : 'Failed to update profile picture');
     } finally {
-      setUploading(false);
-      // Clear the input to allow re-upload of the same file
-      if (event.target) {
-        event.target.value = '';
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
     }
   };
 
-  // Sync existing avatar from auth to profiles table on component mount
-  React.useEffect(() => {
-    const syncAvatarToProfiles = async () => {
-      if (user?.user_metadata?.avatar_url) {
-        try {
-          const { error } = await supabase
-            .from('profiles')
-            .update({ avatar_url: user.user_metadata.avatar_url })
-            .eq('id', user.id);
-          
-          if (error) {
-            console.error('Error syncing avatar to profiles:', error);
-          } else {
-            console.log('Avatar synced to profiles table');
-          }
-        } catch (error) {
-          console.error('Failed to sync avatar:', error);
-        }
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+
+    setIsUploading(true);
+
+    try {
+      // Update profile to remove avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ 
+          avatar_url: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Profile update error:', updateError);
+        throw updateError;
       }
-    };
 
-    syncAvatarToProfiles();
-  }, [user]);
+      // Update auth context
+      await updateUserProfile({ avatar_url: null });
 
-  const handleImageError = () => {
-    console.log('Avatar image failed to load:', avatarUrl);
-    setImageError(true);
+      toast.success(language === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile picture removed');
+      
+    } catch (error) {
+      console.error('Avatar removal error:', error);
+      toast.error(language === 'ar' ? 'فشل في حذف الصورة الشخصية' : 'Failed to remove profile picture');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  // Use the latest avatar URL from user metadata or local state with cache busting
-  const currentAvatarUrl = user?.user_metadata?.avatar_url || avatarUrl;
-  const cacheBustedUrl = currentAvatarUrl ? `${currentAvatarUrl}${currentAvatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : '';
-  const shouldShowImage = cacheBustedUrl && !imageError;
+  const handleAvatarError = () => {
+    setAvatarError(true);
+  };
+
+  const getInitials = () => {
+    if (!user?.user_metadata?.display_name && !user?.email) return 'U';
+    
+    const name = user.user_metadata?.display_name || user.email;
+    return name
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const avatarUrl = user?.user_metadata?.avatar_url;
 
   return (
     <div className="flex flex-col items-center space-y-4">
-      <Avatar className="w-24 h-24">
-        {shouldShowImage ? (
+      <div className="relative">
+        <Avatar className="h-24 w-24 ring-2 ring-border">
           <AvatarImage 
-            src={cacheBustedUrl} 
-            alt={t("profileImage", language)}
-            onError={handleImageError}
-            key={cacheBustedUrl} // Force re-render when URL changes
+            src={!avatarError && avatarUrl ? avatarUrl : undefined} 
+            alt={language === 'ar' ? 'الصورة الشخصية' : 'Profile picture'}
+            onError={handleAvatarError}
           />
-        ) : null}
-        <AvatarFallback className="text-lg bg-blue-100 text-blue-700 font-semibold">
-          {getUserInitials()}
-        </AvatarFallback>
-      </Avatar>
-      
-      <div className="flex items-center space-x-2">
-        <Button 
-          variant="outline" 
-          size="sm"
-          disabled={uploading}
-          className="relative"
-          onClick={() => document.getElementById('avatar-upload')?.click()}
-        >
-          <Camera className="h-4 w-4 mr-2" />
-          {uploading 
-            ? t("uploading", language)
-            : t("changeImage", language)}
-          <input
-            id="avatar-upload"
-            type="file"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            accept="image/*"
-            onChange={uploadAvatar}
-            disabled={uploading}
-          />
-        </Button>
+          <AvatarFallback className="text-lg font-semibold">
+            {getInitials()}
+          </AvatarFallback>
+        </Avatar>
+        
+        {isUploading && (
+          <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+            <Loader2 className="h-6 w-6 text-white animate-spin" />
+          </div>
+        )}
       </div>
+
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="flex items-center gap-2"
+        >
+          {isUploading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Camera className="h-4 w-4" />
+          )}
+          {language === 'ar' ? 'تغيير الصورة' : 'Change Photo'}
+        </Button>
+
+        {avatarUrl && !avatarError && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRemoveAvatar}
+            disabled={isUploading}
+            className="flex items-center gap-2 text-destructive hover:text-destructive"
+          >
+            <X className="h-4 w-4" />
+            {language === 'ar' ? 'حذف' : 'Remove'}
+          </Button>
+        )}
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageUpload}
+        className="hidden"
+        disabled={isUploading}
+      />
+
+      <p className="text-xs text-muted-foreground text-center max-w-xs">
+        {language === 'ar' 
+          ? 'الصيغ المدعومة: JPG, PNG, GIF (حد أقصى 5 ميجابايت)'
+          : 'Supported formats: JPG, PNG, GIF (max 5MB)'
+        }
+      </p>
     </div>
   );
-};
+}
