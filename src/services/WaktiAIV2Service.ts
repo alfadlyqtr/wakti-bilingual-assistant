@@ -460,7 +460,7 @@ class RequestDebouncer {
 }
 
 export class WaktiAIV2ServiceClass {
-  // ENHANCED: Main message sending with SMART MEMORY MANAGEMENT + PERSONALIZATION ENFORCEMENT
+  // ENHANCED: Main message sending with IMPROVED TIMEOUT HANDLING + PERSONALIZATION ENFORCEMENT
   static async sendMessage(
     message: string,
     userId?: string,
@@ -518,33 +518,50 @@ export class WaktiAIV2ServiceClass {
       console.log('⚡ ENHANCED CONTEXT: Making AI call with smart memory management');
       console.log(`📊 CONTEXT STATS: Summary: ${enhancedSummary ? 'Yes' : 'No'}, Recent Messages: ${recentMessages.length}, Total Context: ${finalContext.length} chars`);
 
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000);
-      });
+      // FIXED: Increased timeout from 15s to 45s and added retry logic
+      const makeApiCall = async (attempt: number = 1): Promise<any> => {
+        const timeoutDuration = 45000; // Increased from 15000ms to 45000ms (45 seconds)
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('AI_TIMEOUT')), timeoutDuration);
+        });
 
-      const apiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          userId: user.id,
-          language,
-          conversationId,
-          inputType,
-          activeTrigger,
-          attachedFiles,
-          conversationSummary: finalContext,
-          recentMessages: recentMessages.slice(-10), // ENHANCED: More context
-          customSystemPrompt: '',
-          maxTokens: personalTouch?.style === 'short answers' ? 200 : 600, // INCREASED
-          speedOptimized: true,
-          aggressiveOptimization: false,
-          personalityEnabled: true,
-          enableTaskCreation: true,
-          enablePersonality: true,
-          personalTouch: personalTouch
+        const apiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
+          body: {
+            message,
+            userId: user.id,
+            language,
+            conversationId,
+            inputType,
+            activeTrigger,
+            attachedFiles,
+            conversationSummary: finalContext,
+            recentMessages: recentMessages.slice(-10), // ENHANCED: More context
+            customSystemPrompt: '',
+            maxTokens: personalTouch?.style === 'short answers' ? 200 : 600, // INCREASED
+            speedOptimized: true,
+            aggressiveOptimization: false,
+            personalityEnabled: true,
+            enableTaskCreation: true,
+            enablePersonality: true,
+            personalTouch: personalTouch
+          }
+        });
+
+        try {
+          return await Promise.race([apiPromise, timeoutPromise]);
+        } catch (error: any) {
+          // ENHANCED: Retry logic for timeout and network errors
+          if ((error.message === 'AI_TIMEOUT' || error.message?.includes('network') || error.message?.includes('fetch')) && attempt < 3) {
+            console.log(`🔄 RETRY: Attempt ${attempt + 1}/3 after error:`, error.message);
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000)); // Exponential backoff
+            return makeApiCall(attempt + 1);
+          }
+          throw error;
         }
-      });
+      };
 
-      const { data, error } = await Promise.race([apiPromise, timeoutPromise]) as any;
+      const { data, error } = await makeApiCall();
 
       if (error) {
         console.error('🚨 API Error:', error);
@@ -597,15 +614,29 @@ export class WaktiAIV2ServiceClass {
     } catch (error) {
       console.error('🚨 ENHANCED AI Error:', error);
       
-      if (error.message?.includes('timeout')) {
-        throw new Error('AI response is taking longer than expected. Please try again.');
+      // IMPROVED: Better error handling without showing timeout errors to users
+      if (error.message === 'AI_TIMEOUT') {
+        console.log('⏱️ AI processing took longer than expected, but continuing...');
+        // Return a graceful response instead of throwing
+        return {
+          response: language === 'ar' 
+            ? 'عذراً، استغرق الأمر وقتاً أطول من المتوقع. يرجى المحاولة مرة أخرى.'
+            : 'Sorry, this is taking longer than expected. Please try again.',
+          success: false,
+          processingTime: 45000,
+          error: 'timeout_handled'
+        };
       }
       
       if (error.message?.includes('network') || error.message?.includes('fetch')) {
-        throw new Error('Network connection issue. Please check your internet and try again.');
+        throw new Error(language === 'ar' 
+          ? 'مشكلة في الاتصال. يرجى التحقق من الإنترنت والمحاولة مرة أخرى.'
+          : 'Connection issue. Please check your internet and try again.');
       }
       
-      throw new Error('AI service is temporarily unavailable. Please try again in a moment.');
+      throw new Error(language === 'ar' 
+        ? 'الخدمة غير متاحة مؤقتاً. يرجى المحاولة مرة أخرى.'
+        : 'Service temporarily unavailable. Please try again in a moment.');
     }
   }
 
