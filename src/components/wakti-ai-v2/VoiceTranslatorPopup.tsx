@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -462,6 +461,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         }
       });
 
+      let finalData = data;
+
       if (error) {
         console.error('🎤 Voice Translator error:', error);
         
@@ -484,31 +485,29 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           }
           
           // Use retry data if successful
-          if (retryData) {
-            data = retryData;
-          }
+          finalData = retryData;
         } else {
           throw new Error(`Translation failed: ${error.message}`);
         }
       }
 
-      if (!data?.translatedText) {
+      if (!finalData?.translatedText) {
         throw new Error('No translation received from service');
       }
 
-      console.log('🎤 Voice Translator result:', data);
+      console.log('🎤 Voice Translator result:', finalData);
 
-      if (data.targetLanguageCode && data.targetLanguageCode !== selectedLanguage) {
+      if (finalData.targetLanguageCode && finalData.targetLanguageCode !== selectedLanguage) {
         console.error('🎤 CRITICAL ERROR: Language mismatch!', {
           requested: selectedLanguage,
-          received: data.targetLanguageCode
+          received: finalData.targetLanguageCode
         });
         
         toast({
           title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
           description: language === 'ar' 
-            ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${data.targetLanguage}` 
-            : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${data.targetLanguage}`,
+            ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${finalData.targetLanguage}` 
+            : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${finalData.targetLanguage}`,
           variant: 'destructive'
         });
       }
@@ -529,14 +528,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
 
-      setTranslatedText(data.translatedText);
+      setTranslatedText(finalData.translatedText);
       
       const newTranslation: TranslationItem = {
         id: Date.now().toString(),
-        originalText: data.originalText,
-        translatedText: data.translatedText,
-        sourceLanguage: data.sourceLanguage,
-        targetLanguage: data.targetLanguage,
+        originalText: finalData.originalText,
+        translatedText: finalData.translatedText,
+        sourceLanguage: finalData.sourceLanguage,
+        targetLanguage: finalData.targetLanguage,
         timestamp: new Date()
       };
       addToHistory(newTranslation);
@@ -554,7 +553,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       // Background pre-generate audio immediately after translation
       if (playbackEnabled) {
-        preGenerateAudio(data.translatedText);
+        preGenerateAudio(finalData.translatedText);
       }
 
     } catch (error) {
