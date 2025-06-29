@@ -14,44 +14,129 @@ interface SubscriptionOverlayProps {
   onClose: () => void;
 }
 
+// Declare PayPal SDK types
+declare global {
+  interface Window {
+    paypal?: {
+      Buttons: (options: any) => {
+        render: (selector: string) => Promise<void>;
+      };
+    };
+  }
+}
+
 export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    
+    // Load PayPal SDK
+    const loadPayPalSDK = () => {
+      if (window.paypal) {
+        setPaypalLoaded(true);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://www.paypal.com/sdk/js?client-id=sb&vault=true&intent=subscription';
+      script.onload = () => {
+        setPaypalLoaded(true);
+      };
+      script.onerror = () => {
+        console.error('Failed to load PayPal SDK');
+        toast.error(language === 'ar' ? 'فشل في تحميل PayPal' : 'Failed to load PayPal');
+      };
+      document.head.appendChild(script);
+    };
+
+    if (isOpen) {
+      loadPayPalSDK();
+    }
+  }, [isOpen, language]);
+
+  useEffect(() => {
+    if (!paypalLoaded || !window.paypal || !user?.id) return;
+
+    // Render monthly subscription button
+    if (document.getElementById('paypal-monthly-button')) {
+      window.paypal.Buttons({
+        style: {
+          shape: 'rect',
+          color: 'blue',
+          layout: 'vertical',
+          label: 'subscribe'
+        },
+        createSubscription: function(data: any, actions: any) {
+          return actions.subscription.create({
+            plan_id: 'P-5RM543441H466435NNBGLCWA', // Monthly plan
+            custom_id: user.id,
+            application_context: {
+              brand_name: 'WAKTI',
+              locale: language === 'ar' ? 'ar_SA' : 'en_US',
+              user_action: 'SUBSCRIBE_NOW'
+            }
+          });
+        },
+        onApprove: function(data: any, actions: any) {
+          console.log('Monthly subscription approved:', data);
+          toast.success(language === 'ar' ? 'تم تفعيل الاشتراك الشهري بنجاح!' : 'Monthly subscription activated successfully!');
+          setTimeout(() => onClose(), 2000);
+        },
+        onError: function(err: any) {
+          console.error('Monthly subscription error:', err);
+          toast.error(language === 'ar' ? 'خطأ في الاشتراك الشهري' : 'Monthly subscription error');
+        },
+        onCancel: function(data: any) {
+          console.log('Monthly subscription cancelled:', data);
+          toast.info(language === 'ar' ? 'تم إلغاء الاشتراك الشهري' : 'Monthly subscription cancelled');
+        }
+      }).render('#paypal-monthly-button');
+    }
+
+    // Render yearly subscription button
+    if (document.getElementById('paypal-yearly-button')) {
+      window.paypal.Buttons({
+        style: {
+          shape: 'rect',
+          color: 'gold',
+          layout: 'vertical',
+          label: 'subscribe'
+        },
+        createSubscription: function(data: any, actions: any) {
+          return actions.subscription.create({
+            plan_id: 'P-5V753699962632454NBGLE6Y', // Yearly plan
+            custom_id: user.id,
+            application_context: {
+              brand_name: 'WAKTI',
+              locale: language === 'ar' ? 'ar_SA' : 'en_US',
+              user_action: 'SUBSCRIBE_NOW'
+            }
+          });
+        },
+        onApprove: function(data: any, actions: any) {
+          console.log('Yearly subscription approved:', data);
+          toast.success(language === 'ar' ? 'تم تفعيل الاشتراك السنوي بنجاح!' : 'Yearly subscription activated successfully!');
+          setTimeout(() => onClose(), 2000);
+        },
+        onError: function(err: any) {
+          console.error('Yearly subscription error:', err);
+          toast.error(language === 'ar' ? 'خطأ في الاشتراك السنوي' : 'Yearly subscription error');
+        },
+        onCancel: function(data: any) {
+          console.log('Yearly subscription cancelled:', data);
+          toast.info(language === 'ar' ? 'تم إلغاء الاشتراك السنوي' : 'Yearly subscription cancelled');
+        }
+      }).render('#paypal-yearly-button');
+    }
+  }, [paypalLoaded, user?.id, language, onClose]);
 
   if (!mounted) return null;
 
   if (!isOpen) return null;
-
-  const handleMonthlySubscription = () => {
-    if (!user?.id) {
-      toast.error(language === 'ar' ? 'خطأ في المصادقة' : 'Authentication error');
-      return;
-    }
-
-    // PayPal Monthly Plan URL (60 QAR/month) with user ID
-    const monthlyPlanUrl = `https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA&custom_id=${user.id}`;
-    window.open(monthlyPlanUrl, '_blank');
-    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
-    setTimeout(() => onClose(), 1500);
-  };
-
-  const handleYearlySubscription = () => {
-    if (!user?.id) {
-      toast.error(language === 'ar' ? 'خطأ في المصادقة' : 'Authentication error');
-      return;
-    }
-
-    // PayPal Yearly Plan URL (600 QAR/year) with user ID
-    const yearlyPlanUrl = `https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y&custom_id=${user.id}`;
-    window.open(yearlyPlanUrl, '_blank');
-    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
-    setTimeout(() => onClose(), 1500);
-  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
@@ -98,9 +183,15 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Button onClick={handleMonthlySubscription} className="w-full" size="lg">
-                    {language === "ar" ? "اشترك شهرياً" : "Subscribe Monthly"}
-                  </Button>
+                  {paypalLoaded ? (
+                    <div id="paypal-monthly-button" className="min-h-[45px]"></div>
+                  ) : (
+                    <div className="min-h-[45px] flex items-center justify-center bg-gray-100 rounded">
+                      <span className="text-sm text-gray-600">
+                        {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                      </span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -121,9 +212,15 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Button onClick={handleYearlySubscription} className="w-full" size="lg">
-                    {language === "ar" ? "اشترك سنوياً" : "Subscribe Yearly"}
-                  </Button>
+                  {paypalLoaded ? (
+                    <div id="paypal-yearly-button" className="min-h-[45px]"></div>
+                  ) : (
+                    <div className="min-h-[45px] flex items-center justify-center bg-gray-100 rounded">
+                      <span className="text-sm text-gray-600">
+                        {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                      </span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

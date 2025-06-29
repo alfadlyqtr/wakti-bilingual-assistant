@@ -1,7 +1,8 @@
 
 /**
- * PayPal Webhook Handler for WAKTI - Enhanced Version
- * - Handles subscription events, updates Supabase `subscriptions` and `profiles`
+ * PayPal Webhook Handler for WAKTI - Enhanced Version with Subscription Button Support
+ * - Handles subscription events from PayPal SDK buttons
+ * - Updates Supabase `subscriptions` and `profiles`
  * - Improved logging and user mapping
  * - CORS & PayPal verification support
  */
@@ -41,10 +42,11 @@ serve(async (req) => {
       eventType,
       resourceId: resource.id,
       resourceStatus: resource.status,
+      customId: resource.custom_id,
       subscriberInfo: resource.subscriber
     });
 
-    // Only process subscription events
+    // Only process subscription events (now proper subscription events from SDK buttons)
     const allowedEventTypes = [
       "BILLING.SUBSCRIPTION.CREATED",
       "BILLING.SUBSCRIPTION.ACTIVATED", 
@@ -64,37 +66,33 @@ serve(async (req) => {
 
     console.log("✅ Processing subscription event:", eventType);
 
-    // Extract subscription fields
-    const paypalSubscriptionId = resource.id || resource.billing_agreement_id || resource.subscription_id;
+    // Extract subscription fields (improved for SDK button events)
+    const paypalSubscriptionId = resource.id;
     const planId = resource.plan_id;
     const status = resource.status || resource.state;
     const subscriber = resource.subscriber || {};
     const startTime = resource.start_time || resource.create_time;
-    const nextBillingTime = resource.next_billing_time || (resource.next_payment && resource.next_payment.time);
+    const nextBillingTime = resource.billing_info?.next_billing_time || resource.next_billing_time;
     
     let userId = null;
     let mappingMethod = "none";
 
-    console.log("🔍 Attempting user mapping...", {
+    console.log("🔍 Attempting user mapping with improved SDK support...", {
       subscriberEmail: subscriber.email_address,
-      customId: subscriber.custom_id,
-      resourceCustom: resource.custom,
-      resourceCustomId: resource.custom_id
+      resourceCustomId: resource.custom_id,
+      planId,
+      subscriptionId: paypalSubscriptionId
     });
 
-    // Enhanced user mapping logic
-    if (subscriber.custom_id) {
-      userId = subscriber.custom_id;
-      mappingMethod = "subscriber_custom_id";
-      console.log("✅ User mapped via subscriber.custom_id:", userId);
-    } else if (resource.custom_id) {
+    // Enhanced user mapping logic for SDK button events
+    if (resource.custom_id) {
       userId = resource.custom_id;
       mappingMethod = "resource_custom_id";
       console.log("✅ User mapped via resource.custom_id:", userId);
-    } else if (resource.custom) {
-      userId = resource.custom;
-      mappingMethod = "resource_custom";
-      console.log("✅ User mapped via resource.custom:", userId);
+    } else if (subscriber.custom_id) {
+      userId = subscriber.custom_id;
+      mappingMethod = "subscriber_custom_id";
+      console.log("✅ User mapped via subscriber.custom_id:", userId);
     } else if (subscriber.email_address) {
       // Find userId by email in profiles
       console.log("🔍 Attempting email mapping for:", subscriber.email_address);
@@ -131,15 +129,22 @@ serve(async (req) => {
         .eq("paypal_subscription_id", paypalSubscriptionId)
         .single();
 
-      // Bill/plan info
-      const planName = (resource.plan_overview && resource.plan_overview.name) || planId || "Wakti Subscription";
-      const billingAmount = resource.billing_info && resource.billing_info.last_payment && resource.billing_info.last_payment.amount && resource.billing_info.last_payment.amount.value
-          ? Number(resource.billing_info.last_payment.amount.value)
-          : (planName.toLowerCase().includes("year") ? 600 : 60);
-      const billingCurrency = resource.billing_info && resource.billing_info.last_payment && resource.billing_info.last_payment.amount && resource.billing_info.last_payment.amount.currency_code
-          ? resource.billing_info.last_payment.amount.currency_code
-          : "QAR";
-      const billingCycle = planName.toLowerCase().includes("year") ? "yearly" : "monthly";
+      // Determine plan details based on plan_id
+      let planName = "Wakti Subscription";
+      let billingAmount = 60;
+      let billingCycle = "monthly";
+
+      if (planId === "P-5V753699962632454NBGLE6Y") {
+        planName = "Wakti Yearly Plan";
+        billingAmount = 600;
+        billingCycle = "yearly";
+      } else if (planId === "P-5RM543441H466435NNBGLCWA") {
+        planName = "Wakti Monthly Plan";
+        billingAmount = 60;
+        billingCycle = "monthly";
+      }
+
+      const billingCurrency = "QAR";
 
       // Determine columns
       const updateObj: any = {
