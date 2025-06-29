@@ -60,7 +60,10 @@ export default function AdminQuotas() {
         `)
         .order('email');
 
-      if (usersError) throw usersError;
+      if (usersError) {
+        console.error('❌ Error loading users:', usersError);
+        throw usersError;
+      }
 
       // Get current month translation quotas
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
@@ -69,7 +72,10 @@ export default function AdminQuotas() {
         .select('user_id, translation_count, extra_translations')
         .eq('monthly_date', currentMonth);
 
-      if (translationError) throw translationError;
+      if (translationError) {
+        console.error('❌ Error loading translation quotas:', translationError);
+        throw translationError;
+      }
 
       const translationMap = new Map(
         translationQuotas?.map(quota => [
@@ -78,21 +84,29 @@ export default function AdminQuotas() {
         ]) || []
       );
 
-      const formattedUsers: User[] = usersData?.map(user => ({
-        id: user.id,
-        email: user.email || "No email",
-        full_name: user.display_name || "No name",
-        // Handle missing voice usage records with defaults
-        voice_characters_used: user.user_voice_usage?.[0]?.characters_used || 0,
-        voice_characters_limit: user.user_voice_usage?.[0]?.characters_limit || 5000,
-        voice_extra_characters: user.user_voice_usage?.[0]?.extra_characters || 0,
-        translation_count: translationMap.get(user.id)?.count || 0,
-        translation_extra: translationMap.get(user.id)?.extra || 0,
-      })) || [];
+      const formattedUsers: User[] = usersData?.map(user => {
+        // Safely access voice usage data with proper null checks
+        const voiceUsage = Array.isArray(user.user_voice_usage) && user.user_voice_usage.length > 0 
+          ? user.user_voice_usage[0] 
+          : null;
 
+        return {
+          id: user.id,
+          email: user.email || "No email",
+          full_name: user.display_name || "No name",
+          // Handle missing voice usage records with defaults
+          voice_characters_used: voiceUsage?.characters_used || 0,
+          voice_characters_limit: voiceUsage?.characters_limit || 5000,
+          voice_extra_characters: voiceUsage?.extra_characters || 0,
+          translation_count: translationMap.get(user.id)?.count || 0,
+          translation_extra: translationMap.get(user.id)?.extra || 0,
+        };
+      }) || [];
+
+      console.log('✅ Users loaded successfully:', formattedUsers.length);
       setUsers(formattedUsers);
     } catch (err) {
-      console.error('Error loading users:', err);
+      console.error('❌ Error loading users:', err);
       toast.error('Failed to load users');
     } finally {
       setIsLoading(false);
