@@ -23,10 +23,9 @@ export function useUnreadMessages() {
     }
     const userId = session.session.user.id;
 
-    // Optimized single query for all unread messages
     const { data, error } = await supabase
       .from("messages")
-      .select("sender_id", { count: "exact" })
+      .select("sender_id, is_read", { count: "exact" })
       .eq("recipient_id", userId)
       .eq("is_read", false);
 
@@ -51,7 +50,7 @@ export function useUnreadMessages() {
     let pollInterval: NodeJS.Timeout | null = null;
     fetchUnread('mount/effect');
 
-    // Realtime updates with optimized settings
+    // Realtime updates
     const channel = supabase.channel("messages-unread")
       .on(
         'postgres_changes',
@@ -62,8 +61,7 @@ export function useUnreadMessages() {
         },
         (payload) => {
           console.log("[useUnreadMessages] Realtime message event:", payload);
-          // Debounce rapid realtime updates
-          setTimeout(() => fetchUnread('realtime'), 100);
+          fetchUnread('realtime');
         }
       )
       .subscribe((status) => {
@@ -72,10 +70,15 @@ export function useUnreadMessages() {
         }
       });
 
-    // Reduced polling frequency for better performance
+    // Fallback polling if realtime fails (every 30s)
     pollInterval = setInterval(() => {
       fetchUnread('polling');
-    }, 60000); // 60 seconds instead of 30
+    }, 30000);
+
+    // Debug: enable manual refresh in window for devs
+    if (typeof window !== "undefined") {
+      (window as any).debugRefetchUnreadMessages = () => fetchUnread('debug/manual');
+    }
 
     // Handle session change edge-cases by listening to Supabase auth state
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, _session) => {
@@ -87,7 +90,9 @@ export function useUnreadMessages() {
       if (pollInterval) clearInterval(pollInterval);
       if (authListener) authListener.subscription.unsubscribe();
     };
+    // No deps: only attach on mount.
   }, []);
 
   return { unreadTotal, unreadPerContact, loading, refetch: () => fetchUnread('refetch') };
 }
+

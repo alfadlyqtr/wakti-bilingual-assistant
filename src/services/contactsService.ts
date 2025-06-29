@@ -38,7 +38,7 @@ export interface UserSearchResult {
   email?: string;
 }
 
-// Optimized single-query approach for getting contacts with relationship status
+// Get all approved contacts for the current user
 export async function getContacts() {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) {
@@ -47,8 +47,8 @@ export async function getContacts() {
 
   const userId = session.session.user.id;
   
-  // Single optimized query using JOINs and aggregation
-  const { data: contacts, error } = await supabase
+  // 1. Get all contacts you added
+  const { data: youAddedRows, error: error1 } = await supabase
     .from('contacts')
     .select(`
       id,
@@ -60,33 +60,39 @@ export async function getContacts() {
         username, 
         display_name, 
         avatar_url
-      ),
-      reciprocal_contacts:contacts!contacts_contact_id_fkey(
-        user_id,
-        status
       )
     `)
     .eq('user_id', userId)
     .eq('status', 'approved');
-
-  if (error) {
-    console.error("Error fetching contacts:", error);
-    throw error;
+  if (error1) {
+    console.error("Error fetching contacts:", error1);
+    throw error1;
   }
 
-  // Process relationship status efficiently
-  const results = contacts?.map(contact => {
+  // 2. Get all contacts who have added you (reciprocal)
+  const contactIds = youAddedRows.map(contact => contact.contact_id);
+  let theyAddedRows = [];
+  if (contactIds.length > 0) {
+    const { data: reciprocalRows, error: error2 } = await supabase
+      .from('contacts')
+      .select('user_id, contact_id')
+      .in('user_id', contactIds)
+      .eq('contact_id', userId)
+      .eq('status', 'approved');
+    if (!error2) {
+      theyAddedRows = reciprocalRows;
+    }
+  }
+
+  // 3. Map relationship status
+  const reciprocalUserSet = new Set(theyAddedRows.map(c => c.user_id));
+  const results = youAddedRows.map(contact => {
     let relationship: "mutual" | "you-added-them" | "they-added-you" = "you-added-them";
-    
-    // Check if there's a reciprocal approved contact relationship
-    const reciprocalContact = contact.reciprocal_contacts?.find(
-      (rc: any) => rc.user_id === contact.contact_id && rc.status === 'approved'
-    );
-    
-    if (reciprocalContact) {
+    if (reciprocalUserSet.has(contact.contact_id)) {
       relationship = "mutual";
     }
-
+    // In this context, 'they-added-you' (where you haven't added them) is not possible,
+    // since we're only getting contacts YOU added, but we'll return either mutual or you-added-them.
     return {
       id: contact.id,
       contact_id: contact.contact_id,
@@ -94,40 +100,9 @@ export async function getContacts() {
       profile: contact.profiles,
       relationshipStatus: relationship,
     };
-  }) || [];
-
-  return results;
-}
-
-// Optimized batch function to get unread message counts for all contacts
-export async function getBatchUnreadCounts(contactIds: string[]) {
-  const { data: session } = await supabase.auth.getSession();
-  if (!session.session || !contactIds.length) {
-    return {};
-  }
-
-  const userId = session.session.user.id;
-
-  // Single query to get all unread counts at once
-  const { data: unreadCounts, error } = await supabase
-    .from("messages")
-    .select("sender_id")
-    .eq("recipient_id", userId)
-    .eq("is_read", false)
-    .in("sender_id", contactIds);
-
-  if (error) {
-    console.error("Error fetching unread counts:", error);
-    return {};
-  }
-
-  // Group by sender_id to count unread messages per contact
-  const counts: Record<string, number> = {};
-  unreadCounts?.forEach(msg => {
-    counts[msg.sender_id] = (counts[msg.sender_id] || 0) + 1;
   });
 
-  return counts;
+  return results;
 }
 
 // Get all pending contact requests for the current user
@@ -139,37 +114,56 @@ export async function getContactRequests() {
 
   const userId = session.session.user.id;
 
-  // Optimized single query with JOIN
-  const { data: requests, error } = await supabase
+  // Step 1: Get user IDs of people who sent requests
+  const { data: rows, error: err1 } = await supabase
     .from('contacts')
-    .select(`
-      id, 
-      user_id, 
-      created_at,
-      profiles:user_id(
-        id, 
-        username, 
-        display_name, 
-        avatar_url
-      )
-    `)
+    .select('id, user_id, created_at')
     .eq('contact_id', userId)
     .eq('status', 'pending');
   
-  if (error) {
-    console.error("Error fetching contact requests:", error);
-    throw error;
+  if (err1) {
+    console.error("Error fetching contact requests:", err1);
+    throw err1;
   }
 
-  // Transform to expected format
-  return requests?.map(request => ({
-    id: request.id,
-    user_id: request.user_id,
-    contact_id: userId,
-    status: 'pending' as const,
-    created_at: request.created_at,
-    profiles: request.profiles
-  })) || [];
+  const requestIds = rows.map(r => r.id);
+  const userIds = rows.map(r => r.user_id);
+  
+  // Use separate objects for different mappings
+  const createdDates = rows.reduce((acc, row) => {
+    acc[row.user_id] = row.created_at;
+    return acc;
+  }, {});
+  
+  const userToRequestIdMap = rows.reduce((acc, row) => {
+    acc[row.user_id] = row.id;
+    return acc;
+  }, {});
+  
+  if (!userIds.length) return [];
+
+  // Step 2: Get profiles for those IDs
+  const { data: profiles, error: err2 } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', userIds);
+  
+  if (err2) {
+    console.error("Error fetching requestor profiles:", err2);
+    throw err2;
+  }
+
+  // Transform data to match expected format
+  return profiles.map(profile => {
+    return {
+      id: userToRequestIdMap[profile.id], // Get request ID from the dedicated map
+      user_id: profile.id,
+      contact_id: userId,
+      status: 'pending' as const,
+      created_at: createdDates[profile.id],
+      profiles: profile
+    };
+  });
 }
 
 // Get all blocked contacts for the current user
@@ -181,37 +175,49 @@ export async function getBlockedContacts() {
 
   const userId = session.session.user.id;
 
-  // Optimized single query with JOIN
-  const { data: blocked, error } = await supabase
+  // Step 1: Get IDs of blocked contacts
+  const { data: rows, error: err1 } = await supabase
     .from('contacts')
-    .select(`
-      id, 
-      contact_id, 
-      created_at,
-      profiles:contact_id(
-        id, 
-        username, 
-        display_name, 
-        avatar_url
-      )
-    `)
+    .select('id, contact_id, created_at')
     .eq('user_id', userId)
     .eq('status', 'blocked');
   
-  if (error) {
-    console.error("Error fetching blocked contacts:", error);
-    throw error;
+  if (err1) {
+    console.error("Error fetching blocked contacts:", err1);
+    throw err1;
   }
 
-  // Transform to expected format
-  return blocked?.map(contact => ({
-    id: contact.id,
+  const ids = rows.map(r => r.contact_id);
+  const contactInfo = rows.reduce((acc, row) => {
+    acc[row.contact_id] = {
+      id: row.id,
+      created_at: row.created_at
+    };
+    return acc;
+  }, {});
+  
+  if (!ids.length) return [];
+
+  // Step 2: Get profiles for those IDs
+  const { data: profiles, error: err2 } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', ids);
+  
+  if (err2) {
+    console.error("Error fetching blocked profiles:", err2);
+    throw err2;
+  }
+
+  // Transform data to match expected format
+  return profiles.map(profile => ({
+    id: contactInfo[profile.id].id,
     user_id: userId,
-    contact_id: contact.contact_id,
+    contact_id: profile.id,
     status: 'blocked' as const,
-    created_at: contact.created_at,
-    profiles: contact.profiles
-  })) || [];
+    created_at: contactInfo[profile.id].created_at,
+    profiles: profile
+  }));
 }
 
 // Search for users to add as contacts
