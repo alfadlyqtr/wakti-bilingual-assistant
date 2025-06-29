@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { toast } from "sonner";
 
@@ -15,6 +16,7 @@ interface SubscriptionOverlayProps {
 
 export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProps) {
   const { language } = useTheme();
+  const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -26,16 +28,26 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
   if (!isOpen) return null;
 
   const handleMonthlySubscription = () => {
-    // PayPal Monthly Plan URL (60 QAR/month)
-    const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
+    if (!user?.id) {
+      toast.error(language === 'ar' ? 'خطأ في المصادقة' : 'Authentication error');
+      return;
+    }
+
+    // PayPal Monthly Plan URL (60 QAR/month) with user ID
+    const monthlyPlanUrl = `https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA&custom_id=${user.id}`;
     window.open(monthlyPlanUrl, '_blank');
     toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
     setTimeout(() => onClose(), 1500);
   };
 
   const handleYearlySubscription = () => {
-    // PayPal Yearly Plan URL (600 QAR/year)
-    const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
+    if (!user?.id) {
+      toast.error(language === 'ar' ? 'خطأ في المصادقة' : 'Authentication error');
+      return;
+    }
+
+    // PayPal Yearly Plan URL (600 QAR/year) with user ID
+    const yearlyPlanUrl = `https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y&custom_id=${user.id}`;
     window.open(yearlyPlanUrl, '_blank');
     toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
     setTimeout(() => onClose(), 1500);
