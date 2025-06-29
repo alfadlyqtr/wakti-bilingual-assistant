@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export function ProfileImageUpload() {
-  const { user, updateUserProfile } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { language } = useTheme();
   const [isUploading, setIsUploading] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -72,7 +72,7 @@ export function ProfileImageUpload() {
       }
 
       // Update auth context
-      await updateUserProfile({ avatar_url: publicUrl });
+      await updateProfile({ avatar_url: publicUrl });
 
       toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية بنجاح' : 'Profile picture updated successfully');
       
@@ -109,7 +109,7 @@ export function ProfileImageUpload() {
       }
 
       // Update auth context
-      await updateUserProfile({ avatar_url: null });
+      await updateProfile({ avatar_url: null });
 
       toast.success(language === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile picture removed');
       
