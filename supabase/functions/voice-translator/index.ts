@@ -1,6 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -52,6 +53,67 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Extract user ID from Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('🎤 Voice Translator: No authorization header');
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Get user from token
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error('🎤 Voice Translator: User authentication failed:', userError);
+      return new Response(
+        JSON.stringify({ error: "Authentication failed" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log('🎤 Voice Translator: Checking quota for user:', user.id);
+
+    // Check voice translation quota using the database function
+    const { data: quotaResult, error: quotaError } = await supabase
+      .rpc('increment_voice_translation_usage', { p_user_id: user.id });
+
+    if (quotaError) {
+      console.error('🎤 Voice Translator: Quota check error:', quotaError);
+      return new Response(
+        JSON.stringify({ error: "Failed to check quota" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if quota is exceeded
+    if (!quotaResult || !quotaResult[0]?.success) {
+      const currentQuota = quotaResult?.[0] || { translation_count: 10, extra_translations: 0 };
+      console.log('🎤 Voice Translator: Quota exceeded for user:', user.id);
+      return new Response(
+        JSON.stringify({ 
+          error: "Monthly voice translation quota exceeded",
+          quotaExceeded: true,
+          currentQuota: {
+            used: currentQuota.translation_count,
+            limit: 10,
+            extra: currentQuota.extra_translations
+          }
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log('🎤 Voice Translator: Quota check passed, processing translation...');
 
     const formData = await req.formData();
     const audioFile = formData.get('audioBlob') as File;
@@ -167,6 +229,10 @@ The target language is: ${targetLanguageName} (code: ${targetLanguage})`;
       throw new Error("Translation returned empty result");
     }
 
+    // Get updated quota information after successful usage
+    const quotaInfo = quotaResult[0];
+    const remainingQuota = Math.max(0, 10 - quotaInfo.translation_count);
+
     return new Response(
       JSON.stringify({ 
         originalText,
@@ -174,7 +240,13 @@ The target language is: ${targetLanguageName} (code: ${targetLanguage})`;
         sourceLanguage: 'auto-detected',
         targetLanguage: targetLanguageName,
         targetLanguageCode: targetLanguage,
-        quotaUsed: true
+        quotaUsed: true,
+        currentQuota: {
+          used: quotaInfo.translation_count,
+          remaining: remainingQuota,
+          limit: 10,
+          extra: quotaInfo.extra_translations
+        }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

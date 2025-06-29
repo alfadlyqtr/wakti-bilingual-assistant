@@ -1804,6 +1804,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_voice_translation_quotas: {
+        Row: {
+          created_at: string
+          extra_translations: number
+          id: string
+          monthly_date: string
+          purchase_date: string | null
+          translation_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          extra_translations?: number
+          id?: string
+          monthly_date?: string
+          purchase_date?: string | null
+          translation_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          extra_translations?: number
+          id?: string
+          monthly_date?: string
+          purchase_date?: string | null
+          translation_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_voice_usage: {
         Row: {
           characters_limit: number
@@ -1974,6 +2007,14 @@ export type Database = {
           purchase_date: string
         }[]
       }
+      get_or_create_voice_translation_quota: {
+        Args: { p_user_id: string }
+        Returns: {
+          translation_count: number
+          extra_translations: number
+          purchase_date: string
+        }[]
+      }
       get_user_payment_history: {
         Args: { p_user_id: string }
         Returns: {
@@ -2034,6 +2075,14 @@ export type Database = {
           extra_translations: number
         }[]
       }
+      increment_voice_translation_usage: {
+        Args: { p_user_id: string }
+        Returns: {
+          success: boolean
+          translation_count: number
+          extra_translations: number
+        }[]
+      }
       log_ai_usage: {
         Args: {
           p_user_id: string
@@ -2077,6 +2126,13 @@ export type Database = {
         Returns: {
           success: boolean
           new_extra_characters: number
+        }[]
+      }
+      purchase_extra_voice_translations: {
+        Args: { p_user_id: string; p_count: number }
+        Returns: {
+          success: boolean
+          new_extra_count: number
         }[]
       }
       purchase_search_package: {
