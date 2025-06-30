@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOut, Settings, RefreshCw, Menu, Receipt } from "lucide-react";
@@ -10,6 +11,8 @@ import { useRealTimeAdminData } from "@/hooks/useRealTimeAdminData";
 import { RealTimeStatsCards } from "@/components/admin/RealTimeStatsCards";
 import { RealTimeActivityFeed } from "@/components/admin/RealTimeActivityFeed";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import { FawranStatsCards } from "@/components/admin/FawranStatsCards";
+import { PaymentMethodDistribution } from "@/components/admin/PaymentMethodDistribution";
 
 interface AdminSession {
   admin_id: string;
@@ -23,7 +26,6 @@ export default function AdminDashboard() {
   const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [pendingFawranPayments, setPendingFawranPayments] = useState(0);
   
   const {
     stats,
@@ -34,21 +36,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     validateAdminSession();
-    loadFawranStats();
   }, []);
-
-  const loadFawranStats = async () => {
-    try {
-      const { count } = await supabase
-        .from('pending_fawran_payments')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-      
-      setPendingFawranPayments(count || 0);
-    } catch (error) {
-      console.error('Error loading Fawran stats:', error);
-    }
-  };
 
   const validateAdminSession = async () => {
     try {
@@ -125,7 +113,7 @@ export default function AdminDashboard() {
 
   const handleRefresh = async () => {
     toast.info('Refreshing data...');
-    await Promise.all([refetch(), loadFawranStats()]);
+    await refetch();
     toast.success('Data refreshed successfully');
   };
 
@@ -207,9 +195,9 @@ export default function AdminDashboard() {
               <Button variant="outline" size="sm" onClick={() => handleSectionChange('fawran')} className="justify-start text-xs py-2 relative">
                 <Receipt className="h-3 w-3 mr-2" />
                 Fawran
-                {pendingFawranPayments > 0 && (
+                {stats.pendingFawranPayments > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                    {pendingFawranPayments}
+                    {stats.pendingFawranPayments}
                   </span>
                 )}
               </Button>
@@ -224,8 +212,24 @@ export default function AdminDashboard() {
 
       {/* Main Content with Proper Scrolling */}
       <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 pb-20 space-y-4 sm:space-y-6">
-        {/* Real-Time Activity Feed */}
-        <RealTimeActivityFeed activities={recentActivity} isLoading={dataLoading} />
+        {/* Fawran Security Dashboard - Featured Section */}
+        <FawranStatsCards 
+          stats={stats.fawranStats}
+          autoApprovalRate={stats.autoApprovalRate}
+          avgProcessingTime={stats.avgProcessingTime}
+          isLoading={dataLoading}
+        />
+
+        {/* Payment Method Distribution */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <PaymentMethodDistribution 
+            distribution={stats.paymentMethodDistribution}
+            isLoading={dataLoading}
+          />
+          
+          {/* Real-Time Activity Feed */}
+          <RealTimeActivityFeed activities={recentActivity} isLoading={dataLoading} />
+        </div>
 
         {/* Real-Time Dashboard Stats */}
         <div>
@@ -306,15 +310,15 @@ export default function AdminDashboard() {
                   Fawran Payments
                 </CardTitle>
                 <CardDescription className="text-xs lg:text-sm">
-                  {pendingFawranPayments} pending payment reviews
+                  {stats.pendingFawranPayments} pending payment reviews
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-0">
                 <Button className="w-full btn-enhanced text-xs lg:text-sm py-2 lg:py-3 relative" onClick={() => handleSectionChange('fawran')}>
                   Review Payments
-                  {pendingFawranPayments > 0 && (
+                  {stats.pendingFawranPayments > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                      {pendingFawranPayments}
+                      {stats.pendingFawranPayments}
                     </span>
                   )}
                 </Button>

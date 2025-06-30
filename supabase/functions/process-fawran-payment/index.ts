@@ -42,7 +42,8 @@ serve(async (req) => {
         review_notes: adminNotes ? JSON.stringify({
           admin_notes: adminNotes,
           reviewed_at: new Date().toISOString(),
-          action: action
+          action: action,
+          admin_processed: true
         }) : null
       })
       .eq('id', paymentId);
@@ -51,7 +52,7 @@ serve(async (req) => {
       throw new Error('Failed to update payment status');
     }
 
-    // If approved, activate subscription
+    // If approved, activate subscription using the new dual system
     if (action === 'approved') {
       const planType = payment.plan_type === 'yearly' ? 'Yearly Plan' : 'Monthly Plan';
       
@@ -59,7 +60,10 @@ serve(async (req) => {
         p_user_id: payment.user_id,
         p_plan_name: planType,
         p_billing_amount: payment.amount,
-        p_billing_currency: 'QAR'
+        p_billing_currency: 'QAR',
+        p_payment_method: 'fawran',
+        p_paypal_subscription_id: null,
+        p_fawran_payment_id: payment.id
       });
 
       if (!subscriptionError) {
@@ -80,12 +84,14 @@ serve(async (req) => {
           p_user_id: payment.user_id,
           p_notification_type: 'subscription_activated',
           p_title: '🎉 Payment Approved by Admin!',
-          p_body: `Your ${planType} subscription has been manually approved and activated. Welcome to Wakti Premium!`,
+          p_body: `Your ${planType} subscription has been manually approved and activated via Fawran. Welcome to Wakti Premium!`,
           p_data: { 
             plan_type: payment.plan_type, 
             amount: payment.amount,
             payment_method: 'fawran',
-            admin_approved: true
+            payment_id: payment.id,
+            admin_approved: true,
+            security_verified: true
           },
           p_deep_link: '/dashboard',
           p_scheduled_for: new Date().toISOString()
@@ -97,10 +103,12 @@ serve(async (req) => {
         p_user_id: payment.user_id,
         p_notification_type: 'payment_rejected',
         p_title: '❌ Payment Rejected',
-        p_body: 'Your payment submission has been rejected. Please contact support if you believe this is an error.',
+        p_body: 'Your Fawran payment submission has been rejected by admin review. Please contact support if you believe this is an error.',
         p_data: { 
           payment_amount: payment.amount,
           plan_type: payment.plan_type,
+          payment_method: 'fawran',
+          payment_id: payment.id,
           reason: adminNotes || 'Administrative decision'
         },
         p_deep_link: '/settings',
@@ -120,7 +128,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       action,
-      paymentId
+      paymentId,
+      payment_method: 'fawran'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

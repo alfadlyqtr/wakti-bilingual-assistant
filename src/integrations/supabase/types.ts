@@ -1132,6 +1132,7 @@ export type Database = {
           display_name: string | null
           email: string | null
           email_confirmed: boolean | null
+          fawran_payment_id: string | null
           first_name: string | null
           id: string
           is_logged_in: boolean | null
@@ -1140,6 +1141,7 @@ export type Database = {
           last_name: string | null
           next_billing_date: string | null
           notification_preferences: Json | null
+          payment_method: string | null
           paypal_subscription_id: string | null
           plan_name: string | null
           settings: Json | null
@@ -1158,6 +1160,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           email_confirmed?: boolean | null
+          fawran_payment_id?: string | null
           first_name?: string | null
           id: string
           is_logged_in?: boolean | null
@@ -1166,6 +1169,7 @@ export type Database = {
           last_name?: string | null
           next_billing_date?: string | null
           notification_preferences?: Json | null
+          payment_method?: string | null
           paypal_subscription_id?: string | null
           plan_name?: string | null
           settings?: Json | null
@@ -1184,6 +1188,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           email_confirmed?: boolean | null
+          fawran_payment_id?: string | null
           first_name?: string | null
           id?: string
           is_logged_in?: boolean | null
@@ -1192,6 +1197,7 @@ export type Database = {
           last_name?: string | null
           next_billing_date?: string | null
           notification_preferences?: Json | null
+          payment_method?: string | null
           paypal_subscription_id?: string | null
           plan_name?: string | null
           settings?: Json | null
@@ -1203,6 +1209,13 @@ export type Database = {
           username?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_fawran_payment_id_fkey"
+            columns: ["fawran_payment_id"]
+            isOneToOne: false
+            referencedRelation: "pending_fawran_payments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_suspended_by_fkey"
             columns: ["suspended_by"]
@@ -1291,8 +1304,10 @@ export type Database = {
           billing_currency: string
           billing_cycle: string
           created_at: string | null
+          fawran_payment_id: string | null
           id: string
           next_billing_date: string
+          payment_method: string | null
           paypal_plan_id: string
           paypal_subscription_id: string
           plan_name: string
@@ -1306,8 +1321,10 @@ export type Database = {
           billing_currency?: string
           billing_cycle?: string
           created_at?: string | null
+          fawran_payment_id?: string | null
           id?: string
           next_billing_date: string
+          payment_method?: string | null
           paypal_plan_id: string
           paypal_subscription_id: string
           plan_name: string
@@ -1321,8 +1338,10 @@ export type Database = {
           billing_currency?: string
           billing_cycle?: string
           created_at?: string | null
+          fawran_payment_id?: string | null
           id?: string
           next_billing_date?: string
+          payment_method?: string | null
           paypal_plan_id?: string
           paypal_subscription_id?: string
           plan_name?: string
@@ -1331,7 +1350,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_fawran_payment_id_fkey"
+            columns: ["fawran_payment_id"]
+            isOneToOne: false
+            referencedRelation: "pending_fawran_payments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subtasks: {
         Row: {
@@ -1994,6 +2021,15 @@ export type Database = {
               p_plan_name: string
               p_billing_amount?: number
               p_billing_currency?: string
+              p_payment_method?: string
+              p_paypal_subscription_id?: string
+              p_fawran_payment_id?: string
+            }
+          | {
+              p_user_id: string
+              p_plan_name: string
+              p_billing_amount?: number
+              p_billing_currency?: string
               p_paypal_plan_id?: string
             }
         Returns: boolean
@@ -2093,6 +2129,21 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_fawran_payment_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_payments: number
+          pending_payments: number
+          approved_payments: number
+          rejected_payments: number
+          auto_approved_payments: number
+          manual_reviewed_payments: number
+          avg_processing_time_ms: number
+          tampering_detected_count: number
+          duplicate_detected_count: number
+          time_validation_failed_count: number
+        }[]
+      }
       get_or_create_ai_quota: {
         Args: { p_user_id: string }
         Returns: {
@@ -2137,6 +2188,14 @@ export type Database = {
           translation_count: number
           extra_translations: number
           purchase_date: string
+        }[]
+      }
+      get_payment_method_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          payment_method: string
+          user_count: number
+          total_revenue: number
         }[]
       }
       get_user_payment_history: {

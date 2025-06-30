@@ -369,7 +369,7 @@ serve(async (req) => {
         analyzed_at: new Date().toISOString(),
         auto_approved: shouldAutoApprove,
         security_level: 'maximum',
-        worker_version: 'enhanced-v2.1-renewals'
+        worker_version: 'enhanced-v2.2-dual-system'
       }),
       reviewed_at: shouldAutoApprove ? new Date().toISOString() : null,
       time_validation_passed: validations.timeValid,
@@ -391,18 +391,21 @@ serve(async (req) => {
     const processingTime = Date.now() - startTime;
     console.log('⏱️ Total Processing Time:', processingTime, 'ms');
 
-    // Handle auto-approval with subscription activation
+    // Handle auto-approval with subscription activation using new dual system
     if (shouldAutoApprove) {
-      console.log('✅ Auto-Approval Granted - Activating Subscription');
+      console.log('✅ Auto-Approval Granted - Activating Subscription via Dual System');
       
       const planType = payment.plan_type === 'yearly' ? 'Yearly Plan' : 'Monthly Plan';
       
-      // Activate subscription
+      // Activate subscription using the new dual system
       const { error: subscriptionError } = await supabase.rpc('admin_activate_subscription', {
         p_user_id: payment.user_id,
         p_plan_name: planType,
         p_billing_amount: payment.amount,
-        p_billing_currency: 'QAR'
+        p_billing_currency: 'QAR',
+        p_payment_method: 'fawran',
+        p_paypal_subscription_id: null,
+        p_fawran_payment_id: payment.id
       });
 
       if (!subscriptionError) {
@@ -412,13 +415,15 @@ serve(async (req) => {
         await supabase.rpc('queue_notification', {
           p_user_id: payment.user_id,
           p_notification_type: 'subscription_activated',
-          p_title: '🎉 Payment Approved & Subscription Activated!',
-          p_body: `Your ${planType} subscription has been automatically approved by our enhanced security system (${validationMethodText}). Welcome to Wakti Premium!`,
+          p_title: '🎉 Payment Auto-Approved & Subscription Activated!',
+          p_body: `Your ${planType} subscription has been automatically approved by our enhanced GPT-4 Vision security system (${validationMethodText}). Welcome to Wakti Premium!`,
           p_data: { 
             plan_type: payment.plan_type, 
             amount: payment.amount,
             payment_method: 'fawran',
+            payment_id: payment.id,
             security_verified: true,
+            auto_approved: true,
             processing_time_ms: processingTime,
             validation_method: validationMethod
           },
@@ -442,6 +447,8 @@ serve(async (req) => {
         p_data: { 
           payment_amount: payment.amount,
           plan_type: payment.plan_type,
+          payment_method: 'fawran',
+          payment_id: payment.id,
           confidence: analysis.confidence,
           security_issues: analysis.tamperingDetected ? analysis.tamperingReasons : [],
           processing_time_ms: processingTime,
@@ -470,8 +477,9 @@ serve(async (req) => {
       auto_approved: shouldAutoApprove,
       processing_time_ms: processingTime,
       security_level: 'maximum',
-      worker_version: 'enhanced-v2.1-renewals',
-      validation_method: validationMethod
+      worker_version: 'enhanced-v2.2-dual-system',
+      validation_method: validationMethod,
+      payment_method: 'fawran'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -485,7 +493,7 @@ serve(async (req) => {
       error: error.message,
       processing_time_ms: processingTime,
       security_level: 'maximum',
-      worker_version: 'enhanced-v2.1-renewals'
+      worker_version: 'enhanced-v2.2-dual-system'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

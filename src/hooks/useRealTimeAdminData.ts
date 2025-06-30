@@ -1,180 +1,290 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AdminStats {
   totalUsers: number;
-  activeSubscriptions: number;
+  activeUsers: number;
+  subscribedUsers: number;
   pendingMessages: number;
-  onlineUsers: number;
   monthlyRevenue: number;
-  newUsersToday: number;
+  newUsersThisMonth: number;
+  pendingFawranPayments: number;
+  autoApprovalRate: number;
+  avgProcessingTime: number;
+  paymentMethodDistribution: {
+    paypal: number;
+    fawran: number;
+    manual: number;
+    legacy: number;
+  };
+  fawranStats: {
+    totalPayments: number;
+    pendingPayments: number;
+    approvedPayments: number;
+    rejectedPayments: number;
+    autoApprovedPayments: number;
+    manualReviewedPayments: number;
+    tamperingDetected: number;
+    duplicateDetected: number;
+    timeValidationFailed: number;
+  };
 }
 
-interface RecentActivity {
+interface AdminActivity {
   id: string;
-  type: 'user_registration' | 'subscription_activation' | 'contact_submission' | 'task_creation';
-  message: string;
+  type: 'user_signup' | 'subscription_activated' | 'fawran_payment' | 'message_received';
+  title: string;
+  description: string;
   timestamp: string;
-  status: 'success' | 'warning' | 'info';
+  user_email?: string;
+  amount?: number;
+  status?: string;
 }
 
 export const useRealTimeAdminData = () => {
   const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
-    activeSubscriptions: 0,
+    activeUsers: 0,
+    subscribedUsers: 0,
     pendingMessages: 0,
-    onlineUsers: 0,
     monthlyRevenue: 0,
-    newUsersToday: 0
+    newUsersThisMonth: 0,
+    pendingFawranPayments: 0,
+    autoApprovalRate: 0,
+    avgProcessingTime: 0,
+    paymentMethodDistribution: { paypal: 0, fawran: 0, manual: 0, legacy: 0 },
+    fawranStats: {
+      totalPayments: 0,
+      pendingPayments: 0,
+      approvedPayments: 0,
+      rejectedPayments: 0,
+      autoApprovedPayments: 0,
+      manualReviewedPayments: 0,
+      tamperingDetected: 0,
+      duplicateDetected: 0,
+      timeValidationFailed: 0
+    }
   });
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  
+  const [recentActivity, setRecentActivity] = useState<AdminActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadStats = async () => {
+  const fetchStats = async () => {
     try {
-      // Load total users (exclude suspended/deleted ones)
-      const { count: totalUsers } = await supabase
+      // Get basic user stats
+      const { data: userStats } = await supabase
         .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .neq('display_name', '[DELETED USER]')
-        .eq('is_suspended', false);
-
-      // Load active subscriptions from profiles table
-      const { data: activeSubscriptionData, count: activeSubscriptions } = await supabase
-        .from('profiles')
-        .select('plan_name, is_subscribed, subscription_status, billing_start_date', { count: 'exact' })
-        .eq('is_subscribed', true)
-        .eq('subscription_status', 'active')
+        .select('*')
         .neq('display_name', '[DELETED USER]');
 
-      // Load pending messages
-      const { count: pendingMessages } = await supabase
+      const totalUsers = userStats?.length || 0;
+      const activeUsers = userStats?.filter(u => u.is_logged_in).length || 0;
+      const subscribedUsers = userStats?.filter(u => u.is_subscribed && u.subscription_status === 'active').length || 0;
+
+      // Get monthly revenue
+      const { data: subscriptions } = await supabase
+        .from('subscriptions')
+        .select('billing_amount')
+        .eq('status', 'active');
+
+      const monthlyRevenue = subscriptions?.reduce((sum, sub) => sum + Number(sub.billing_amount), 0) || 0;
+
+      // Get new users this month
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: newUsers } = await supabase
+        .from('profiles')
+        .select('id')
+        .gte('created_at', startOfMonth.toISOString());
+
+      const newUsersThisMonth = newUsers?.length || 0;
+
+      // Get pending messages
+      const { data: messages } = await supabase
         .from('contact_submissions')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('status', 'unread');
 
-      // Load online users (users who are currently logged in)
-      const { count: onlineUsers } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_logged_in', true)
-        .neq('display_name', '[DELETED USER]');
+      const pendingMessages = messages?.length || 0;
 
-      // Calculate monthly revenue from active subscriptions (fixed calculation)
-      let monthlyRevenue = 0;
-      if (activeSubscriptionData && activeSubscriptionData.length > 0) {
-        monthlyRevenue = activeSubscriptionData.reduce((sum, profile) => {
-          // Skip admin-gifted subscriptions (they don't contribute to revenue)
-          if (profile.plan_name?.toLowerCase().includes('gift') || 
-              profile.plan_name?.toLowerCase().includes('admin')) {
-            return sum;
-          }
-          
-          // Calculate amount based on plan name - Fixed amounts
-          const isYearly = profile.plan_name?.toLowerCase().includes('yearly') || 
-                           profile.plan_name?.toLowerCase().includes('year');
-          const amount = isYearly ? 600 : 60; // 600 QAR yearly, 60 QAR monthly
-          return sum + amount;
-        }, 0);
-      }
+      // Get Fawran statistics
+      const { data: fawranStatsData } = await supabase.rpc('get_fawran_payment_stats');
+      const fawranStats = fawranStatsData?.[0] || {
+        total_payments: 0,
+        pending_payments: 0,
+        approved_payments: 0,
+        rejected_payments: 0,
+        auto_approved_payments: 0,
+        manual_reviewed_payments: 0,
+        avg_processing_time_ms: 0,
+        tampering_detected_count: 0,
+        duplicate_detected_count: 0,
+        time_validation_failed_count: 0
+      };
 
-      // Load new users today
-      const today = new Date().toISOString().split('T')[0];
-      const { count: newUsersToday } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', `${today}T00:00:00`)
-        .neq('display_name', '[DELETED USER]');
+      // Get payment method distribution
+      const { data: paymentMethodData } = await supabase.rpc('get_payment_method_stats');
+      const paymentMethodDistribution = {
+        paypal: 0,
+        fawran: 0,
+        manual: 0,
+        legacy: 0
+      };
+
+      paymentMethodData?.forEach((method: any) => {
+        if (method.payment_method) {
+          paymentMethodDistribution[method.payment_method as keyof typeof paymentMethodDistribution] = method.user_count;
+        }
+      });
+
+      // Calculate auto-approval rate
+      const autoApprovalRate = fawranStats.total_payments > 0 
+        ? Math.round((fawranStats.auto_approved_payments / fawranStats.total_payments) * 100)
+        : 0;
 
       setStats({
-        totalUsers: totalUsers || 0,
-        activeSubscriptions: activeSubscriptions || 0,
-        pendingMessages: pendingMessages || 0,
-        onlineUsers: onlineUsers || 0,
+        totalUsers,
+        activeUsers,
+        subscribedUsers,
+        pendingMessages,
         monthlyRevenue,
-        newUsersToday: newUsersToday || 0
+        newUsersThisMonth,
+        pendingFawranPayments: fawranStats.pending_payments,
+        autoApprovalRate,
+        avgProcessingTime: Math.round(fawranStats.avg_processing_time_ms / 1000) || 0,
+        paymentMethodDistribution,
+        fawranStats: {
+          totalPayments: fawranStats.total_payments,
+          pendingPayments: fawranStats.pending_payments,
+          approvedPayments: fawranStats.approved_payments,
+          rejectedPayments: fawranStats.rejected_payments,
+          autoApprovedPayments: fawranStats.auto_approved_payments,
+          manualReviewedPayments: fawranStats.manual_reviewed_payments,
+          tamperingDetected: fawranStats.tampering_detected_count,
+          duplicateDetected: fawranStats.duplicate_detected_count,
+          timeValidationFailed: fawranStats.time_validation_failed_count
+        }
       });
 
-      console.log('Admin stats loaded:', {
-        totalUsers: totalUsers || 0,
-        activeSubscriptions: activeSubscriptions || 0,
-        monthlyRevenue,
-        pendingMessages: pendingMessages || 0,
-        onlineUsers: onlineUsers || 0
-      });
     } catch (error) {
-      console.error('Error loading admin stats:', error);
-      toast.error('Failed to load admin statistics');
+      console.error('Error fetching admin stats:', error);
     }
   };
 
-  const loadRecentActivity = async () => {
+  const fetchRecentActivity = async () => {
     try {
-      const activities: RecentActivity[] = [];
+      const activities: AdminActivity[] = [];
 
-      // Get recent user registrations with email confirmation status (limit to 3)
-      const { data: newUsers } = await supabase
-        .from('profiles')
-        .select('email, created_at, email_confirmed')
-        .neq('display_name', '[DELETED USER]')
+      // Get recent Fawran payments
+      const { data: fawranPayments } = await supabase
+        .from('pending_fawran_payments')
+        .select('*')
         .order('created_at', { ascending: false })
-        .limit(3);
+        .limit(5);
 
-      newUsers?.forEach(user => {
-        const emailStatus = user.email_confirmed ? 'confirmed' : 'not confirmed yet';
+      fawranPayments?.forEach(payment => {
         activities.push({
-          id: `user-${user.created_at}`,
-          type: 'user_registration',
-          message: `New user registration: ${user.email} (email ${emailStatus})`,
-          timestamp: user.created_at,
-          status: user.email_confirmed ? 'success' : 'warning'
+          id: payment.id,
+          type: 'fawran_payment',
+          title: 'Fawran Payment Received',
+          description: `${payment.email} - ${payment.amount} QAR (${payment.plan_type})`,
+          timestamp: payment.created_at,
+          user_email: payment.email,
+          amount: payment.amount,
+          status: payment.status
         });
       });
 
-      // Sort by timestamp and limit to 3 activities total
+      // Get recent user signups
+      const { data: newUsers } = await supabase
+        .from('profiles')
+        .select('email, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      newUsers?.forEach(user => {
+        if (user.email) {
+          activities.push({
+            id: user.email + user.created_at,
+            type: 'user_signup',
+            title: 'New User Signup',
+            description: user.email,
+            timestamp: user.created_at,
+            user_email: user.email
+          });
+        }
+      });
+
+      // Get recent subscription activations
+      const { data: recentSubs } = await supabase
+        .from('subscriptions')
+        .select('*, profiles!inner(email)')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      recentSubs?.forEach(sub => {
+        activities.push({
+          id: sub.id,
+          type: 'subscription_activated',
+          title: 'Subscription Activated',
+          description: `${(sub.profiles as any)?.email} - ${sub.plan_name}`,
+          timestamp: sub.created_at,
+          user_email: (sub.profiles as any)?.email,
+          amount: sub.billing_amount
+        });
+      });
+
+      // Sort all activities by timestamp
       activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setRecentActivity(activities.slice(0, 3));
+      
+      setRecentActivity(activities.slice(0, 10));
+
     } catch (error) {
-      console.error('Error loading recent activity:', error);
+      console.error('Error fetching recent activity:', error);
     }
   };
 
+  const refetch = async () => {
+    setIsLoading(true);
+    await Promise.all([fetchStats(), fetchRecentActivity()]);
+    setIsLoading(false);
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      await Promise.all([loadStats(), loadRecentActivity()]);
-      setIsLoading(false);
-    };
-
-    loadData();
-
+    refetch();
+    
     // Set up real-time subscriptions
-    const statsInterval = setInterval(loadStats, 30000); // Refresh every 30 seconds
-    const activityInterval = setInterval(loadRecentActivity, 60000); // Refresh every minute
-
-    // Set up real-time listeners for immediate updates
-    const profilesSubscription = supabase
-      .channel('profiles-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        loadStats();
-        loadRecentActivity();
-      })
+    const fawranSubscription = supabase
+      .channel('admin-fawran-payments')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'pending_fawran_payments' },
+        () => refetch()
+      )
       .subscribe();
 
-    const contactsSubscription = supabase
-      .channel('contacts-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_submissions' }, () => {
-        loadStats();
-        loadRecentActivity();
-      })
+    const profilesSubscription = supabase
+      .channel('admin-profiles')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => refetch()
+      )
+      .subscribe();
+
+    const subscriptionsSubscription = supabase
+      .channel('admin-subscriptions')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'subscriptions' },
+        () => refetch()
+      )
       .subscribe();
 
     return () => {
-      clearInterval(statsInterval);
-      clearInterval(activityInterval);
-      supabase.removeChannel(profilesSubscription);
-      supabase.removeChannel(contactsSubscription);
+      fawranSubscription.unsubscribe();
+      profilesSubscription.unsubscribe();
+      subscriptionsSubscription.unsubscribe();
     };
   }, []);
 
@@ -182,8 +292,6 @@ export const useRealTimeAdminData = () => {
     stats,
     recentActivity,
     isLoading,
-    refetch: async () => {
-      await Promise.all([loadStats(), loadRecentActivity()]);
-    }
+    refetch
   };
 };
