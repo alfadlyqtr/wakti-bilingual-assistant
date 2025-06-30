@@ -1,228 +1,242 @@
 
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Check, X, CreditCard, Calendar } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/providers/ThemeProvider';
-import { t } from '@/utils/translations';
-import { Logo3D } from '@/components/Logo3D';
+import { useEffect, useState } from "react";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
+import { UserMenu } from "@/components/UserMenu";
+import { toast } from "sonner";
 
 interface SubscriptionOverlayProps {
-  onClose?: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export default function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
-  const { user, profile } = useAuth();
+// Declare PayPal SDK types
+declare global {
+  interface Window {
+    paypal?: {
+      Buttons: (options: any) => {
+        render: (selector: string) => Promise<void>;
+      };
+    };
+  }
+}
+
+export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProps) {
   const { language } = useTheme();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { user } = useAuth();
+  const [mounted, setMounted] = useState(false);
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
 
-  const handleFawranPayment = async (planType: 'monthly' | 'yearly') => {
-    setIsProcessing(true);
+  useEffect(() => {
+    setMounted(true);
     
-    try {
-      const amount = planType === 'yearly' ? 550 : 55;
-      const planName = planType === 'yearly' ? 'Wakti Pro - Yearly' : 'Wakti Pro - Monthly';
-      
-      // Create Fawran payment request
-      const response = await fetch('/api/fawran/create-payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount,
-          currency: 'QAR',
-          planType,
-          planName,
-          userId: user?.id,
-          userEmail: user?.email,
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (data.paymentUrl) {
-        // Redirect to Fawran payment page
-        window.location.href = data.paymentUrl;
-      } else {
-        throw new Error('Failed to create payment session');
+    // Load PayPal SDK
+    const loadPayPalSDK = () => {
+      if (window.paypal) {
+        setPaypalLoaded(true);
+        return;
       }
-    } catch (error) {
-      console.error('Payment error:', error);
-      // Handle error - show toast or error message
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
-  // If user is already subscribed, show different content
-  if (profile?.is_subscribed) {
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <Logo3D size="sm" />
-            <CardTitle className="text-green-600">
-              {t("subscriptionActive", language)}
+      const script = document.createElement('script');
+      script.src = 'https://www.paypal.com/sdk/js?client-id=sb&vault=true&intent=subscription';
+      script.onload = () => {
+        setPaypalLoaded(true);
+      };
+      script.onerror = () => {
+        console.error('Failed to load PayPal SDK');
+        toast.error(language === 'ar' ? 'فشل في تحميل PayPal' : 'Failed to load PayPal');
+      };
+      document.head.appendChild(script);
+    };
+
+    if (isOpen) {
+      loadPayPalSDK();
+    }
+  }, [isOpen, language]);
+
+  useEffect(() => {
+    if (!paypalLoaded || !window.paypal || !user?.id) return;
+
+    // Render monthly subscription button
+    if (document.getElementById('paypal-monthly-button')) {
+      window.paypal.Buttons({
+        style: {
+          shape: 'rect',
+          color: 'blue',
+          layout: 'vertical',
+          label: 'subscribe'
+        },
+        createSubscription: function(data: any, actions: any) {
+          return actions.subscription.create({
+            plan_id: 'P-5RM543441H466435NNBGLCWA', // Monthly plan
+            custom_id: user.id,
+            application_context: {
+              brand_name: 'WAKTI',
+              locale: language === 'ar' ? 'ar_SA' : 'en_US',
+              user_action: 'SUBSCRIBE_NOW'
+            }
+          });
+        },
+        onApprove: function(data: any, actions: any) {
+          console.log('Monthly subscription approved:', data);
+          toast.success(language === 'ar' ? 'تم تفعيل الاشتراك الشهري بنجاح!' : 'Monthly subscription activated successfully!');
+          setTimeout(() => onClose(), 2000);
+        },
+        onError: function(err: any) {
+          console.error('Monthly subscription error:', err);
+          toast.error(language === 'ar' ? 'خطأ في الاشتراك الشهري' : 'Monthly subscription error');
+        },
+        onCancel: function(data: any) {
+          console.log('Monthly subscription cancelled:', data);
+          toast.info(language === 'ar' ? 'تم إلغاء الاشتراك الشهري' : 'Monthly subscription cancelled');
+        }
+      }).render('#paypal-monthly-button');
+    }
+
+    // Render yearly subscription button
+    if (document.getElementById('paypal-yearly-button')) {
+      window.paypal.Buttons({
+        style: {
+          shape: 'rect',
+          color: 'gold',
+          layout: 'vertical',
+          label: 'subscribe'
+        },
+        createSubscription: function(data: any, actions: any) {
+          return actions.subscription.create({
+            plan_id: 'P-5V753699962632454NBGLE6Y', // Yearly plan
+            custom_id: user.id,
+            application_context: {
+              brand_name: 'WAKTI',
+              locale: language === 'ar' ? 'ar_SA' : 'en_US',
+              user_action: 'SUBSCRIBE_NOW'
+            }
+          });
+        },
+        onApprove: function(data: any, actions: any) {
+          console.log('Yearly subscription approved:', data);
+          toast.success(language === 'ar' ? 'تم تفعيل الاشتراك السنوي بنجاح!' : 'Yearly subscription activated successfully!');
+          setTimeout(() => onClose(), 2000);
+        },
+        onError: function(err: any) {
+          console.error('Yearly subscription error:', err);
+          toast.error(language === 'ar' ? 'خطأ في الاشتراك السنوي' : 'Yearly subscription error');
+        },
+        onCancel: function(data: any) {
+          console.log('Yearly subscription cancelled:', data);
+          toast.info(language === 'ar' ? 'تم إلغاء الاشتراك السنوي' : 'Yearly subscription cancelled');
+        }
+      }).render('#paypal-yearly-button');
+    }
+  }, [paypalLoaded, user?.id, language, onClose]);
+
+  if (!mounted) return null;
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+          {/* Header with Controls */}
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            <div className="pointer-events-auto">
+              <UserMenu />
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm hover:bg-accent border pointer-events-auto"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <CardHeader className="text-center pt-16 pb-6">
+            <CardTitle className="text-2xl font-bold">
+              {language === "ar" ? "اشترك للوصول إلى تطبيق واقتي AI" : "Subscribe to access Wakti AI app"}
             </CardTitle>
-            <CardDescription>
-              {t("thankYouForSubscribing", language)}
+            <CardDescription className="text-lg">
+              {language === "ar" 
+                ? "اختر خطة الاشتراك المناسبة لك"
+                : "Choose the subscription plan that works for you"
+              }
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <div className="flex items-center gap-2 text-green-700">
-                <Check className="w-4 h-4" />
-                <span className="font-medium">{profile.plan_name}</span>
-              </div>
-              <div className="flex items-center gap-2 text-green-600 text-sm mt-1">
-                <Calendar className="w-4 h-4" />
-                <span>
-                  {t("nextBillingDate", language)}: {
-                    profile.next_billing_date ? 
-                    new Date(profile.next_billing_date).toLocaleDateString() : 
-                    t("notAvailable", language)
-                  }
-                </span>
-              </div>
+
+          <CardContent className="space-y-6">
+            {/* Pricing Plans */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Monthly Plan */}
+              <Card className="border-2 hover:border-primary/50 transition-colors">
+                <CardHeader className="text-center">
+                  <CardTitle className="text-lg">
+                    {language === "ar" ? "الخطة الشهرية" : "Monthly Plan"}
+                  </CardTitle>
+                  <div className="text-3xl font-bold">
+                    60 <span className="text-sm font-normal text-muted-foreground">QAR/month</span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {paypalLoaded ? (
+                    <div id="paypal-monthly-button" className="min-h-[45px]"></div>
+                  ) : (
+                    <div className="min-h-[45px] flex items-center justify-center bg-gray-100 rounded">
+                      <span className="text-sm text-gray-600">
+                        {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Yearly Plan */}
+              <Card className="border-2 border-primary relative">
+                <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-primary">
+                  {language === "ar" ? "الأكثر شعبية" : "Most Popular"}
+                </Badge>
+                <CardHeader className="text-center">
+                  <CardTitle className="text-lg">
+                    {language === "ar" ? "الخطة السنوية" : "Yearly Plan"}
+                  </CardTitle>
+                  <div className="text-3xl font-bold">
+                    600 <span className="text-sm font-normal text-muted-foreground">QAR/year</span>
+                  </div>
+                  <div className="text-sm text-green-600 font-medium">
+                    {language === "ar" ? "وفر 120 ريال سنوياً" : "Save 120 QAR yearly"}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {paypalLoaded ? (
+                    <div id="paypal-yearly-button" className="min-h-[45px]"></div>
+                  ) : (
+                    <div className="min-h-[45px] flex items-center justify-center bg-gray-100 rounded">
+                      <span className="text-sm text-gray-600">
+                        {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-            <Button onClick={onClose} className="w-full">
-              {t("continue", language)}
-            </Button>
+
+            {/* Footer */}
+            <div className="text-center text-sm text-muted-foreground">
+              <p>
+                {language === "ar" 
+                  ? "إلغاء في أي وقت"
+                  : "Cancel anytime"
+                }
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader className="text-center">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <Logo3D size="sm" />
-              <CardTitle className="text-2xl mt-2">
-                {t("welcomeToWakti", language)}
-              </CardTitle>
-              <CardDescription>
-                {t("thankYouMessage", language)}
-              </CardDescription>
-            </div>
-            {onClose && (
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="text-center">
-            <p className="text-muted-foreground">
-              {t("subscriptionRequired", language)}
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Monthly Plan */}
-            <Card className="relative">
-              <CardHeader>
-                <CardTitle className="text-lg">{t("monthlyPlan", language)}</CardTitle>
-                <CardDescription>
-                  <span className="text-2xl font-bold text-primary">55 QAR</span>
-                  <span className="text-muted-foreground">/{t("month", language)}</span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2 text-sm">
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("unlimitedAI", language)}</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("voiceFeatures", language)}</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("eventManagement", language)}</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("taskSharing", language)}</span>
-                  </li>
-                </ul>
-                <Button 
-                  className="w-full" 
-                  onClick={() => handleFawranPayment('monthly')}
-                  disabled={isProcessing}
-                >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  {isProcessing ? t("processing", language) : t("subscribeMonthly", language)}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Yearly Plan */}
-            <Card className="relative border-primary">
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <Badge className="bg-primary text-primary-foreground">
-                  {t("bestValue", language)}
-                </Badge>
-              </div>
-              <CardHeader>
-                <CardTitle className="text-lg">{t("yearlyPlan", language)}</CardTitle>
-                <CardDescription>
-                  <span className="text-2xl font-bold text-primary">550 QAR</span>
-                  <span className="text-muted-foreground">/{t("year", language)}</span>
-                  <div className="text-green-600 text-sm font-medium">
-                    {t("save110QAR", language)}
-                  </div>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2 text-sm">
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("unlimitedAI", language)}</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("voiceFeatures", language)}</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("eventManagement", language)}</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("taskSharing", language)}</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>{t("prioritySupport", language)}</span>
-                  </li>
-                </ul>
-                <Button 
-                  className="w-full" 
-                  onClick={() => handleFawranPayment('yearly')}
-                  disabled={isProcessing}
-                >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  {isProcessing ? t("processing", language) : t("subscribeYearly", language)}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="text-center text-sm text-muted-foreground">
-            <p>{t("fawranRedirectNote", language)}</p>
-            <p className="mt-2">{t("securePaymentNote", language)}</p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

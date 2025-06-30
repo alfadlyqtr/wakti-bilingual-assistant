@@ -20,47 +20,10 @@ export const billing = {
   welcomeToWakti: "Welcome to Wakti",
   thankYouMessage: "Thank you for creating an account!",
   subscriptionRequired: "To access all Wakti AI tools and productivity features, please subscribe below:",
-  subscribeMonthly: "Subscribe Monthly – 55 QAR",
-  subscribeYearly: "Subscribe Yearly – 550 QAR",
-  
-  // Fawran Integration
-  fawranRedirectNote: "You will be redirected to Fawran to complete payment",
-  securePaymentNote: "All payments are processed securely through Fawran",
+  subscribeMonthly: "Subscribe Monthly – $16.50 USD ≈ 60 QAR",
+  subscribeYearly: "Subscribe Yearly – $165.00 USD ≈ 600 QAR",
+  paypalRedirectNote: "You will be redirected to PayPal to complete payment",
   
   // Status Messages
   paymentPageOpened: "Payment page opened in new window",
-  
-  // New Subscription UI
-  subscriptionActive: "Subscription Active",
-  thankYouForSubscribing: "Thank you for subscribing to Wakti Pro!",
-  monthlyPlan: "Monthly Plan",
-  yearlyPlan: "Yearly Plan",
-  bestValue: "Best Value",
-  month: "month",
-  year: "year",
-  save110QAR: "Save 110 QAR per year",
-  unlimitedAI: "Unlimited AI Features",
-  voiceFeatures: "Voice Recording & Transcription",
-  eventManagement: "Advanced Event Management",
-  taskSharing: "Task Sharing & Collaboration",
-  prioritySupport: "Priority Customer Support",
-  continue: "Continue",
-  processing: "Processing...",
-  
-  // Payment Status Pages
-  verifyingPayment: "Verifying Payment",
-  pleaseWait: "Please wait while we verify your payment...",
-  paymentSuccessful: "Payment Successful!",
-  subscriptionActivated: "Your subscription has been activated successfully.",
-  welcomeToWaktiPro: "Welcome to Wakti Pro! Enjoy unlimited access to all features.",
-  continueToDashboard: "Continue to Dashboard",
-  paymentFailed: "Payment Failed",
-  paymentVerificationFailed: "We couldn't verify your payment. Please contact support if this issue persists.",
-  returnToDashboard: "Return to Dashboard",
-  paymentCancelled: "Payment Cancelled",
-  paymentWasCancelled: "Your payment was cancelled and no charges were made.",
-  subscriptionNotActivated: "Your subscription was not activated. You can try again anytime.",
-  continueFree: "Continue Free",
-  tryAgain: "Try Again",
-  notAvailable: "Not Available",
 };

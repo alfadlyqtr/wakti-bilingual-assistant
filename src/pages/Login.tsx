@@ -1,111 +1,89 @@
 
-import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useAuth } from "@/contexts/AuthContext";
-import { Logo3D } from "@/components/Logo3D";
+import { useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
+import { Button } from "@/components/ui/button";
+import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
+import { Logo3D } from "@/components/Logo3D";
+import { LoginForm } from "@/components/LoginForm";
+import { ArrowLeft } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+
+// Define the type for location state
+interface LocationState {
+  from?: string;
+}
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
-  const { language } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const { language } = useTheme();
+  const { user, session, isLoading: authLoading } = useAuth();
+  const navigationInProgress = useRef(false);
+  
+  // Get the location state to know where to redirect after login
+  const locationState = location.state as LocationState;
+  const from = locationState?.from || "/dashboard";
 
-  const from = location.state?.from?.pathname || "/dashboard";
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLoading) return;
-
-    setIsLoading(true);
-    setError("");
-
-    try {
-      await login(email, password);
-      navigate(from, { replace: true });
-    } catch (error: any) {
-      console.error("Login error:", error);
-      setError(error.message || t("loginError", language));
-    } finally {
-      setIsLoading(false);
+  // Add effect to check auth state and redirect if already logged in
+  useEffect(() => {
+    console.log("Login: Auth state check", { 
+      user: !!user, 
+      session: !!session, 
+      authLoading,
+      currentPath: location.pathname,
+      redirectTo: from
+    });
+    
+    if (user && session && !authLoading && !navigationInProgress.current) {
+      console.log("Login: User already authenticated, redirecting to:", from);
+      navigationInProgress.current = true;
+      setTimeout(() => {
+        navigate(from);
+        navigationInProgress.current = false;
+      }, 100);
     }
-  };
+  }, [user, session, authLoading, navigate, location.pathname, from]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex justify-center mb-4">
-            <Logo3D size="lg" />
-          </div>
-          <CardTitle className="text-2xl text-center">
-            {t("signIn", language)}
-          </CardTitle>
-          <CardDescription className="text-center">
-            {t("signInDescription", language)}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("email", language)}</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder={t("emailPlaceholder", language)}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">{t("password", language)}</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder={t("passwordPlaceholder", language)}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-            </div>
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? t("signingIn", language) : t("signIn", language)}
-            </Button>
-          </form>
-          <div className="mt-4 text-center space-y-2">
-            <Link
-              to="/forgot-password"
-              className="text-sm text-muted-foreground hover:text-primary underline"
+    <div className="mobile-container">
+      <header className="mobile-header">
+        <div className="flex items-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-1 mr-2"
+            onClick={() => navigate("/home")}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-xs">{language === 'en' ? 'Back to Home' : 'العودة للرئيسية'}</span>
+          </Button>
+        </div>
+        <ThemeLanguageToggle />
+      </header>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex min-h-[80vh] flex-col justify-center py-6 px-6 sm:px-6 lg:px-8">
+          <div className="mb-8 text-center">
+            {/* App logo with navigation to home */}
+            <div 
+              className="inline-block cursor-pointer mb-4"
+              onClick={() => navigate("/home")}
             >
-              {t("forgotPassword", language)}
-            </Link>
-            <div className="text-sm text-muted-foreground">
-              {t("noAccount", language)}{" "}
-              <Link to="/signup" className="text-primary hover:underline">
-                {t("signUp", language)}
-              </Link>
+              <Logo3D size="lg" />
             </div>
+            <h1 className="text-2xl font-bold">
+              {language === 'en' ? 'Login' : 'تسجيل الدخول'}
+            </h1>
           </div>
-        </CardContent>
-      </Card>
+
+          <LoginForm 
+            redirectTo={from}
+            showForgotPassword={true}
+            showSignupLink={true}
+          />
+        </div>
+      </div>
     </div>
   );
 }

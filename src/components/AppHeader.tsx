@@ -24,7 +24,7 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const { profile } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,7 +35,7 @@ export function AppHeader() {
   const isWaktiAIPage = location.pathname === '/wakti-ai';
   
   const handleLogout = async () => {
-    await logout();
+    await signOut();
     navigate('/login');
   };
   
@@ -131,7 +131,7 @@ export function AppHeader() {
       '/tasjeel': {
         title: language === 'ar' ? 'تسجيل' : 'Tasjeel',
         icon: Mic,
-        colorClass: 'text-cyan-500'
+        colorClass: 'text-cyan-500' // Changed to cyan color
       },
       '/tr': {
         title: 'T & R',
@@ -229,7 +229,7 @@ export function AppHeader() {
                 <span className="relative">
                   <Avatar 
                     className="h-8 w-8"
-                    key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
+                    key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`} // Force re-render
                   >
                     <AvatarImage src={avatarUrl} />
                     <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
