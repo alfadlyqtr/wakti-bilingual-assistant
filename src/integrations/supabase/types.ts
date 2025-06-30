@@ -1057,6 +1057,51 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_fawran_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          email: string
+          id: string
+          plan_type: string
+          review_notes: string | null
+          reviewed_at: string | null
+          screenshot_url: string
+          status: string
+          submitted_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          email: string
+          id?: string
+          plan_type: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          screenshot_url: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          email?: string
+          id?: string
+          plan_type?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          screenshot_url?: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           auto_approve_contacts: boolean | null

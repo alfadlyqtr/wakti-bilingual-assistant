@@ -16,13 +16,18 @@ export const billingAr = {
   paymentHistory: "سجل الاشتراكات",
   noPaymentHistory: "لا يوجد سجل اشتراكات",
   
-  // Overlay Messages
-  welcomeToWakti: "مرحباً بك في وقتي",
-  subscriptionRequired: "للوصول إلى جميع ميزات وقتي، يرجى الاشتراك:",
-  subscribeMonthly: "اشتراك شهري – 60 ريال قطري",
-  subscribeYearly: "اشتراك سنوي – 600 ريال قطري",
-  comingSoon: "نظام دفع جديد قادم قريباً",
+  // Fawran Payment
+  fawranPayment: "دفع فوران",
+  paymentInstructions: "تعليمات الدفع",
+  paymentProofUpload: "رفع إثبات الدفع",
+  fawranAlias: "عنوان فوران: alfadlyqtr أو عبدالله حسون",
+  uploadScreenshot: "رفع لقطة شاشة الدفع",
+  emailAddress: "البريد الإلكتروني",
+  submitPaymentProof: "إرسال إثبات الدفع",
+  paymentProofSubmitted: "تم إرسال إثبات الدفع بنجاح",
+  paymentUnderReview: "الدفع قيد المراجعة",
   
   // Status Messages
-  paymentSystemUpdate: "يتم تحديث نظام الدفع",
+  paymentSystemUpdate: "نظام دفع فوران الجديد نشط",
+  comingSoon: "مدفوعات فوران الفورية متاحة",
 };

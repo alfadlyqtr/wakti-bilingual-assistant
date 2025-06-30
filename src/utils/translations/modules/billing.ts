@@ -16,13 +16,18 @@ export const billing = {
   paymentHistory: "Subscription History",
   noPaymentHistory: "No subscription history available",
   
-  // Overlay Messages
-  welcomeToWakti: "Welcome to Wakti",
-  subscriptionRequired: "To access all Wakti features, please subscribe:",
-  subscribeMonthly: "Subscribe Monthly – 60 QAR",
-  subscribeYearly: "Subscribe Yearly – 600 QAR",
-  comingSoon: "New payment system coming soon",
+  // Fawran Payment
+  fawranPayment: "Fawran Payment",
+  paymentInstructions: "Payment Instructions",
+  paymentProofUpload: "Upload Payment Proof",
+  fawranAlias: "Fawran Alias: alfadlyqtr or Abdullah Hassoun",
+  uploadScreenshot: "Upload payment screenshot",
+  emailAddress: "Email Address",
+  submitPaymentProof: "Submit Payment Proof",
+  paymentProofSubmitted: "Payment proof submitted successfully",
+  paymentUnderReview: "Payment under review",
   
   // Status Messages
-  paymentSystemUpdate: "Payment system being updated",
+  paymentSystemUpdate: "New Fawran payment system active",
+  comingSoon: "Fawran instant payments available",
 };
