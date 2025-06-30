@@ -98,7 +98,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       const hash = await generateImageHash(file);
       setImageHash(hash);
       
-      // Check for duplicate hash
+      // Check for duplicate hash in screenshot_hashes table
       const { data: existingHash } = await supabase
         .from('screenshot_hashes')
         .select('id')
@@ -115,6 +115,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       }
 
       setSelectedFile(file);
+      console.log('File validation passed, hash generated:', hash.substring(0, 16) + '...');
     } catch (error) {
       console.error('Hash generation failed:', error);
       toast.error(language === 'ar' ? 'خطأ في معالجة الصورة' : 'Image processing error');
@@ -143,36 +144,42 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
     }
 
     setIsUploading(true);
-    console.log('Starting enhanced upload process with security checks...');
+    console.log('Starting upload process with enhanced debugging...');
 
     try {
       // Get user creation time for validation
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error('User not authenticated');
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        console.error('User authentication error:', userError);
+        throw new Error('User not authenticated');
+      }
+
+      console.log('User authenticated, proceeding with upload...');
 
       // Upload file to storage
       const fileName = `${user.id}/${Date.now()}-${selectedFile.name}`;
-      console.log('Uploading file:', fileName);
+      console.log('Uploading file to storage:', fileName);
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('fawran-screenshots')
         .upload(fileName, selectedFile);
 
       if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw uploadError;
+        console.error('Storage upload error:', uploadError);
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      console.log('File uploaded successfully:', uploadData);
+      console.log('File uploaded successfully to storage:', uploadData);
 
       // Get the public URL
       const { data: { publicUrl } } = supabase.storage
         .from('fawran-screenshots')
         .getPublicUrl(fileName);
 
-      console.log('Public URL:', publicUrl);
+      console.log('Generated public URL:', publicUrl);
 
-      // Store screenshot hash
+      // Store screenshot hash first
+      console.log('Storing screenshot hash...');
       const { error: hashError } = await supabase
         .from('screenshot_hashes')
         .insert({
@@ -181,11 +188,10 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         });
 
       if (hashError) {
-        console.error('Hash storage error:', hashError);
-        // Continue anyway - this is for tracking only
+        console.error('Hash storage error (continuing anyway):', hashError);
       }
 
-      // Insert enhanced payment record with security fields
+      // Insert payment record with all required fields
       const paymentRecord = {
         user_id: user.id,
         email: userEmail,
@@ -198,10 +204,12 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         account_created_at: userData.user.created_at,
         time_validation_passed: false,
         tampering_detected: false,
-        duplicate_detected: false
+        duplicate_detected: false,
+        payment_reference_number: null,
+        transaction_reference_number: null
       };
 
-      console.log('Inserting enhanced payment record:', paymentRecord);
+      console.log('Inserting payment record:', paymentRecord);
 
       const { data: paymentData, error: paymentError } = await supabase
         .from('pending_fawran_payments')
@@ -210,29 +218,34 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         .single();
 
       if (paymentError) {
-        console.error('Payment insert error:', paymentError);
-        throw paymentError;
+        console.error('Payment record insert error:', paymentError);
+        throw new Error(`Database insert failed: ${paymentError.message}`);
       }
 
-      console.log('Payment record created:', paymentData);
+      console.log('Payment record created successfully:', paymentData);
 
       // Update screenshot hash with payment ID
-      await supabase
-        .from('screenshot_hashes')
-        .update({ payment_id: paymentData.id })
-        .eq('image_hash', imageHash);
+      if (paymentData.id) {
+        await supabase
+          .from('screenshot_hashes')
+          .update({ payment_id: paymentData.id })
+          .eq('image_hash', imageHash);
+      }
 
-      // Trigger enhanced GPT-4 Vision analysis
-      console.log('Triggering enhanced GPT-4 Vision Fawran Worker...');
-      const { error: analysisError } = await supabase.functions.invoke('analyze-payment-screenshot', {
-        body: { paymentId: paymentData.id }
-      });
+      // Trigger GPT-4 Vision analysis (optional, don't fail if this errors)
+      try {
+        console.log('Triggering GPT-4 Vision analysis...');
+        const { error: analysisError } = await supabase.functions.invoke('analyze-payment-screenshot', {
+          body: { paymentId: paymentData.id }
+        });
 
-      if (analysisError) {
-        console.error('Enhanced analysis trigger failed:', analysisError);
-        // Don't throw - let it continue, analysis can be done manually
-      } else {
-        console.log('Enhanced GPT-4 Vision analysis triggered successfully');
+        if (analysisError) {
+          console.warn('Analysis trigger failed (non-critical):', analysisError);
+        } else {
+          console.log('GPT-4 Vision analysis triggered successfully');
+        }
+      } catch (analysisErr) {
+        console.warn('Analysis invocation failed (non-critical):', analysisErr);
       }
 
       toast.success(language === 'ar' ? 'تم رفع الصورة بنجاح!' : 'Screenshot uploaded successfully!');
@@ -244,11 +257,9 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       });
 
     } catch (error) {
-      console.error('Enhanced upload failed:', error);
+      console.error('Complete upload process failed:', error);
       toast.error(language === 'ar' ? 'فشل في الرفع' : 'Upload failed', {
-        description: language === 'ar' 
-          ? 'حدث خطأ أثناء رفع الصورة. يرجى المحاولة مرة أخرى.'
-          : 'An error occurred while uploading. Please try again.'
+        description: error instanceof Error ? error.message : 'An unexpected error occurred'
       });
     } finally {
       setIsUploading(false);

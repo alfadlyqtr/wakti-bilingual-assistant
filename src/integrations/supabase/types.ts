@@ -1071,6 +1071,7 @@ export type Database = {
           reviewed_at: string | null
           screenshot_hash: string | null
           screenshot_url: string
+          sender_alias: string | null
           status: string
           submitted_at: string
           tampering_detected: boolean | null
@@ -1092,6 +1093,7 @@ export type Database = {
           reviewed_at?: string | null
           screenshot_hash?: string | null
           screenshot_url: string
+          sender_alias?: string | null
           status?: string
           submitted_at?: string
           tampering_detected?: boolean | null
@@ -1113,6 +1115,7 @@ export type Database = {
           reviewed_at?: string | null
           screenshot_hash?: string | null
           screenshot_url?: string
+          sender_alias?: string | null
           status?: string
           submitted_at?: string
           tampering_detected?: boolean | null
