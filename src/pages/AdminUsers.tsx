@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, Search, Filter, RefreshCw, Eye, UserX, Trash2, AlertTriangle } from "lucide-react";
@@ -14,9 +15,9 @@ import { UserActionModals } from "@/components/admin/UserActionModals";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 
-interface User {
+interface AdminUser {
   id: string;
-  email?: string;
+  email: string;
   full_name?: string;
   display_name?: string;
   username?: string;
@@ -28,16 +29,16 @@ interface User {
   suspended_at?: string;
   suspension_reason?: string;
   is_logged_in?: boolean;
-  email_confirmed?: boolean;
+  email_confirmed: boolean;
 }
 
 export default function AdminUsers() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState<'suspend' | 'delete' | null>(null);
@@ -76,7 +77,15 @@ export default function AdminUsers() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setUsers(data || []);
+      
+      // Ensure email_confirmed has a default value
+      const processedUsers = (data || []).map(user => ({
+        ...user,
+        email: user.email || '',
+        email_confirmed: user.email_confirmed ?? false
+      }));
+      
+      setUsers(processedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
       toast.error('Failed to load users');
@@ -85,7 +94,7 @@ export default function AdminUsers() {
     }
   };
 
-  const handleUserAction = (user: User, action: 'view' | 'suspend' | 'delete') => {
+  const handleUserAction = (user: AdminUser, action: 'view' | 'suspend' | 'delete') => {
     setSelectedUser(user);
     
     if (action === 'view') {
