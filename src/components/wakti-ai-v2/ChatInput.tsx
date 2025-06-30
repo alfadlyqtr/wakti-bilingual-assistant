@@ -343,18 +343,6 @@ export function ChatInput({
                 )}
               </div>
             </div>
-            {/* Status Indicators - Updated */}
-            {(isUploading || isLoading) && (
-              <div className="mt-2 flex justify-center">
-                <div className="inline-flex items-center gap-2 px-2 py-1.5 bg-blue-500/10 backdrop-blur-xl text-blue-500 rounded-2xl border border-blue-500/20 text-xs font-medium">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  {isUploading 
-                    ? (language === 'ar' ? 'رفع...' : 'Uploading...')
-                    : (language === 'ar' ? 'التفكير...' : 'Thinking...')
-                  }
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </DragDropUpload>
