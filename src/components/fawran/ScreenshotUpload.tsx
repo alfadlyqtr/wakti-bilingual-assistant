@@ -164,14 +164,14 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
   return (
     <div className="p-4 sm:p-8">
       {/* Header with controls */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onBack}>
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <Button variant="ghost" size="sm" onClick={onBack} className="p-1 sm:p-2">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline ml-1">
+          <Button variant="ghost" size="sm" onClick={handleLogout} className="p-1 sm:p-2">
+            <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline ml-1 text-xs sm:text-sm">
               {language === 'ar' ? 'خروج' : 'Logout'}
             </span>
           </Button>
@@ -179,7 +179,17 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         <ThemeLanguageToggle />
       </div>
 
-      <div className="mb-6">
+      {/* Account Creation Indicator */}
+      <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+        <p className="text-xs sm:text-sm text-green-700 dark:text-green-300 font-medium">
+          {language === 'ar' 
+            ? '✅ تم إنشاء حسابك وتأكيد البريد الإلكتروني - شكراً لك! يجب إكمال الاشتراك خلال 90 دقيقة من إنشاء الحساب 👇'
+            : '✅ Your account created and email confirmed - thank you! Must complete subscription within 90 minutes from account creation 👇'
+          }
+        </p>
+      </div>
+
+      <div className="mb-4 sm:mb-6">
         <h2 className="text-xl sm:text-2xl font-bold mb-2">
           {language === 'ar' ? 'رفع صورة التأكيد' : 'Upload Payment Screenshot'}
         </h2>
@@ -191,7 +201,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         </p>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Email Field */}
         <div>
           <Label htmlFor="email" className="text-sm sm:text-base">
@@ -209,7 +219,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         {/* Sender Alias Field */}
         <div>
           <Label htmlFor="senderAlias" className="text-sm sm:text-base">
-            {language === 'ar' ? 'اسمك المستعار في البنك' : 'Your Bank Alias Name'}
+            {language === 'ar' ? 'اسمك المستعار في فوران' : 'Your Fawran Alias Name'}
           </Label>
           <Input
             id="senderAlias"
@@ -217,8 +227,8 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
             value={senderAlias}
             onChange={(e) => setSenderAlias(e.target.value)}
             placeholder={language === 'ar' 
-              ? 'أدخل اسمك المستعار أو رقم الهاتف المسجل في البنك'
-              : 'Enter your bank alias or registered mobile number'
+              ? 'أدخل اسمك المستعار في فوران أو رقم الهاتف المسجل'
+              : 'Enter your Fawran alias or registered mobile number'
             }
             required
             className="mt-2"
@@ -243,7 +253,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
                 <Button
                   variant="outline"
                   onClick={() => document.getElementById('file-input')?.click()}
-                  className="w-full sm:w-auto"
+                  className="w-full sm:w-auto text-sm sm:text-base"
                 >
                   {language === 'ar' ? 'اختر صورة' : 'Choose Image'}
                 </Button>
@@ -285,10 +295,21 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
                 <li>• {language === 'ar' ? 'اسم المستلم (alfadlyqtr) ظاهر' : 'Recipient alias (alfadlyqtr) visible'}</li>
                 <li>• {language === 'ar' ? 'تاريخ ووقت التحويل واضح' : 'Transfer date and time visible'}</li>
                 <li>• {language === 'ar' ? 'رقم المرجع ظاهر' : 'Reference number visible'}</li>
+                <li>• {language === 'ar' ? 'تأكد من وضوح اسم المرسل ومطابقته للإدخال أعلاه' : 'Make sure your alias name is clear and matches your above input'}</li>
               </ul>
             </div>
           </div>
         </Card>
+
+        {/* Fraud Warning */}
+        <div className="text-center p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-xs sm:text-sm font-bold text-red-700 dark:text-red-300">
+            {language === 'ar' 
+              ? '⚠️ الاحتيال لن يُتساهل معه وستكون عرضة للشروط القانونية'
+              : '⚠️ Fraud will not be tolerated and you will be subject to legal terms'
+            }
+          </p>
+        </div>
 
         {/* Submit Button */}
         <Button 
