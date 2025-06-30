@@ -28,14 +28,14 @@ import NotificationSettings from "@/components/notifications/NotificationSetting
 import { t } from "@/utils/translations";
 import { Shield, Users, Eye, Quote, Palette, Bell, Layout } from "lucide-react";
 import { useToastHelper } from "@/hooks/use-toast-helper";
+import { QuotePreferencesManager } from "@/components/settings/QuotePreferencesManager";
+import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 
 export default function Settings() {
   const { theme, setTheme, language, setLanguage } = useTheme();
   const { user } = useAuth();
   const { showSuccess, showError } = useToastHelper();
   const [activeTab, setActiveTab] = useState("appearance");
-  const [displayName, setDisplayName] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
 
   // Widget visibility settings
   const [widgetSettings, setWidgetSettings] = useState({
@@ -56,7 +56,6 @@ export default function Settings() {
 
   useEffect(() => {
     if (user) {
-      setDisplayName(user.user_metadata?.display_name || "");
       loadSettings();
     }
   }, [user]);
@@ -96,32 +95,6 @@ export default function Settings() {
   const handleLanguageChange = (newLanguage: string) => {
     if (newLanguage === 'en' || newLanguage === 'ar') {
       setLanguage(newLanguage);
-    }
-  };
-
-  const handleUpdateProfile = async () => {
-    setIsUpdating(true);
-    try {
-      if (!user) {
-        throw new Error("User not authenticated");
-      }
-
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          display_name: displayName,
-        },
-      });
-
-      if (error) {
-        showError(t("errorUpdatingSettings", language));
-        return;
-      }
-
-      showSuccess(t("settingsUpdated", language));
-    } catch (error: any) {
-      showError(error.message || t("errorUpdatingSettings", language));
-    } finally {
-      setIsUpdating(false);
     }
   };
 
@@ -238,21 +211,6 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name">
-                    {language === "ar" ? "الاسم المعروض" : "Display Name"}
-                  </Label>
-                  <Input
-                    id="name"
-                    placeholder={language === "ar" ? "أدخل اسمك المعروض" : "Enter your display name"}
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                  />
-                  <Button onClick={handleUpdateProfile} disabled={isUpdating} className="mt-2">
-                    {isUpdating ? (language === "ar" ? "جاري التحديث..." : "Updating...") : (language === "ar" ? "تحديث الملف الشخصي" : "Update Profile")}
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
                   <Label htmlFor="theme">{t("theme", language)}</Label>
                   <Select value={theme} onValueChange={handleThemeChange}>
                     <SelectTrigger id="theme">
@@ -362,6 +320,7 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-6">
+            {/* Widget Visibility */}
             <Card>
               <CardHeader>
                 <CardTitle>{t("widgetVisibility", language)}</CardTitle>
@@ -373,25 +332,7 @@ export default function Settings() {
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {language === "ar" ? "أداة المهام" : "Tasks Widget"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar" ? "عرض المهام الأخيرة" : "Show recent tasks"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showTasksWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showTasksWidget', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "أداة التقويم" : "Calendar Widget"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar" ? "عرض الأحداث القادمة" : "Show upcoming events"}
+                      {language === "ar" ? "إظهار الأحداث والمواعيد القادمة" : "Show upcoming events and appointments"}
                     </p>
                   </div>
                   <Switch 
@@ -403,40 +344,31 @@ export default function Settings() {
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {language === "ar" ? "أداة الأحداث" : "Events Widget"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar" ? "عرض الأحداث المنشأة" : "Show created events"}
+                      {language === "ar" ? "إظهار المهام المعلقة" : "Show pending tasks"}
                     </p>
                   </div>
                   <Switch 
-                    checked={widgetSettings.showEventsWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showEventsWidget', checked)}
+                    checked={widgetSettings.showTasksWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showTasksWidget', checked)}
                   />
                 </div>
 
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {language === "ar" ? "أداة الاقتباس" : "Quote Widget"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar" ? "عرض الاقتباس اليومي" : "Show daily quote"}
+                      {language === "ar" ? "إظهار التذكيرات المعلقة" : "Show pending reminders"}
                     </p>
                   </div>
                   <Switch 
-                    checked={widgetSettings.showQuoteWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
+                    checked={widgetSettings.showTRWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showTRWidget', checked)}
                   />
                 </div>
 
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {language === "ar" ? "أداة مواعيد" : "Maw3d Widget"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar" ? "عرض أحداث مواعيد" : "Show Maw3d events"}
+                      {language === "ar" ? "إظهار أحداث مواعيد القادمة" : "Show upcoming Maw3d events"}
                     </p>
                   </div>
                   <Switch 
@@ -448,19 +380,22 @@ export default function Settings() {
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {language === "ar" ? "أداة المهام والتذكيرات" : "Tasks & Reminders Widget"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "ar" ? "عرض المهام والتذكيرات" : "Show tasks and reminders"}
+                      {language === "ar" ? "إظهار الاقتباسات التحفيزية اليومية" : "Show daily inspirational quotes"}
                     </p>
                   </div>
                   <Switch 
-                    checked={widgetSettings.showTRWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showTRWidget', checked)}
+                    checked={widgetSettings.showQuoteWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
                   />
                 </div>
               </CardContent>
             </Card>
+
+            {/* Daily Quote Settings */}
+            <QuotePreferencesManager />
+
+            {/* Custom Quotes */}
+            <CustomQuoteManager />
           </TabsContent>
         </Tabs>
       </div>
