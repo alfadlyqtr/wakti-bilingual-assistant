@@ -30,30 +30,39 @@ export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverla
     message?: string;
   } | null>(null);
 
+  console.log('FawranPaymentOverlay - Current step:', currentStep);
+  console.log('FawranPaymentOverlay - Selected plan:', selectedPlan);
+
   const handlePlanSelect = (plan: PlanType) => {
+    console.log('Plan selected:', plan);
     setSelectedPlan(plan);
     setCurrentStep('instructions');
   };
 
   const handleContinueToUpload = () => {
+    console.log('Continuing to upload step');
     setCurrentStep('upload');
   };
 
   const handleUploadComplete = (data: { screenshotUrl: string; senderAlias: string; paymentId: string }) => {
+    console.log('Upload complete, moving to processing:', data);
     setPaymentData(data);
     setCurrentStep('processing');
   };
 
   const handleProcessingComplete = (result: { success: boolean; needsReview?: boolean; message?: string }) => {
+    console.log('Processing complete:', result);
     setPaymentResult(result);
     setCurrentStep('result');
   };
 
   const handleBackToInstructions = () => {
+    console.log('Going back to instructions');
     setCurrentStep('instructions');
   };
 
   const handleStartOver = () => {
+    console.log('Starting over');
     setCurrentStep('plan');
     setPaymentData(null);
     setPaymentResult(null);

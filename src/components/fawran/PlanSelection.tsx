@@ -1,9 +1,10 @@
 
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Check, Star } from 'lucide-react';
+import { Check, Star, LogOut } from 'lucide-react';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
 import type { PlanType } from './FawranPaymentOverlay';
 
@@ -13,15 +14,37 @@ interface PlanSelectionProps {
 
 export function PlanSelection({ onPlanSelect }: PlanSelectionProps) {
   const { language } = useTheme();
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     <div className="p-8 relative">
-      {/* Language Toggle */}
+      {/* Logout Button - Top Left */}
+      <div className="absolute top-4 left-4">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={handleLogout}
+          className="flex items-center gap-2"
+        >
+          <LogOut className="h-4 w-4" />
+          {language === 'ar' ? 'خروج' : 'Logout'}
+        </Button>
+      </div>
+
+      {/* Language Toggle - Top Right */}
       <div className="absolute top-4 right-4">
         <ThemeLanguageToggle />
       </div>
 
-      <div className="text-center mb-8">
+      <div className="text-center mb-8 mt-8">
         <h2 className="text-3xl font-bold mb-4">
           {language === 'ar' ? 'اختر خطة الاشتراك' : 'Choose Your Subscription Plan'}
         </h2>
@@ -35,8 +58,7 @@ export function PlanSelection({ onPlanSelect }: PlanSelectionProps) {
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Monthly Plan */}
-        <Card className="p-6 hover:shadow-lg transition-all duration-300 cursor-pointer border-2 hover:border-primary/50"
-              onClick={() => onPlanSelect('monthly')}>
+        <Card className="p-6 hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/50">
           <div className="text-center">
             <h3 className="text-xl font-bold mb-2">
               {language === 'ar' ? 'الخطة الشهرية' : 'Monthly Plan'}
@@ -79,8 +101,7 @@ export function PlanSelection({ onPlanSelect }: PlanSelectionProps) {
         </Card>
 
         {/* Yearly Plan */}
-        <Card className="p-6 hover:shadow-lg transition-all duration-300 cursor-pointer border-2 hover:border-primary/50 relative"
-              onClick={() => onPlanSelect('yearly')}>
+        <Card className="p-6 hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/50 relative">
           <div className="absolute -top-3 -right-3">
             <div className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
               <Star className="h-3 w-3" />

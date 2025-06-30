@@ -4,7 +4,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Copy, Clock, CheckCircle } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import type { PlanType } from './FawranPaymentOverlay';
 
 interface PaymentInstructionsProps {
@@ -14,7 +14,6 @@ interface PaymentInstructionsProps {
 
 export function PaymentInstructions({ selectedPlan, onContinue }: PaymentInstructionsProps) {
   const { language } = useTheme();
-  const { toast } = useToast();
   
   const amount = selectedPlan === 'monthly' ? '60 QAR' : '600 QAR';
   const alias = 'alfadlyqtr';
@@ -22,10 +21,7 @@ export function PaymentInstructions({ selectedPlan, onContinue }: PaymentInstruc
   const handleCopyAlias = async () => {
     try {
       await navigator.clipboard.writeText(alias);
-      toast({
-        title: language === 'ar' ? 'تم النسخ!' : 'Copied!',
-        description: language === 'ar' ? 'تم نسخ الاسم المستعار' : 'Alias copied to clipboard',
-      });
+      toast.success(language === 'ar' ? 'تم النسخ!' : 'Copied!');
     } catch (error) {
       console.error('Failed to copy alias:', error);
     }
@@ -54,8 +50,8 @@ export function PaymentInstructions({ selectedPlan, onContinue }: PaymentInstruc
     },
     {
       number: 5,
-      title: language === 'ar' ? 'أكمل التحويل' : 'Complete the transfer',
-      description: language === 'ar' ? 'أكمل التحويل والتقط صورة للتأكيد' : 'Complete transfer and screenshot confirmation'
+      title: language === 'ar' ? 'أكمل التحويل' : 'Complete the transfer and screenshot your confirmation',
+      description: language === 'ar' ? 'أكمل التحويل والتقط صورة للتأكيد' : 'Complete transfer and take a screenshot of confirmation'
     }
   ];
 
@@ -110,7 +106,7 @@ export function PaymentInstructions({ selectedPlan, onContinue }: PaymentInstruc
                       className="flex items-center gap-1"
                     >
                       <Copy className="h-4 w-4" />
-                      {language === 'ar' ? 'نسخ' : 'Copy'}
+                      📋 {language === 'ar' ? 'نسخ' : 'Copy'}
                     </Button>
                   </div>
                 )}
