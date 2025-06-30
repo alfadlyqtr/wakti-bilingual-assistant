@@ -1,5 +1,4 @@
-
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -24,6 +23,21 @@ export default function Index() {
       navigate('/dashboard');
     }
   }, [user, navigate]);
+
+  const [pricingPlan, setPricingPlan] = useState("monthly");
+
+  // Dynamic price calculation
+  const getPrices = () => {
+    const prices = {
+      monthly: { QAR: 60 },
+      yearly: { QAR: 600 }
+    };
+    return prices[pricingPlan as keyof typeof prices];
+  };
+
+  const formatPrice = (amount: number) => {
+    return `${amount} QAR`;
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -211,6 +225,26 @@ export default function Index() {
             <p className="text-muted-foreground text-sm mb-6">
               {t("perfectForEveryone", language)}
             </p>
+            
+            {/* Plan Toggle */}
+            <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-1 border shadow-sm mb-4">
+              <Button
+                size="sm"
+                variant={pricingPlan === "monthly" ? "default" : "ghost"}
+                className="rounded-full text-sm px-6 py-2"
+                onClick={() => setPricingPlan("monthly")}
+              >
+                {t("monthly", language)}
+              </Button>
+              <Button
+                size="sm"
+                variant={pricingPlan === "yearly" ? "default" : "ghost"}
+                className="rounded-full text-sm px-6 py-2"
+                onClick={() => setPricingPlan("yearly")}
+              >
+                {t("yearly", language)}
+              </Button>
+            </div>
           </motion.div>
           
           <motion.div
@@ -220,11 +254,19 @@ export default function Index() {
             <div className="text-center mb-8">
               <div className="flex justify-center items-baseline gap-2 mb-4">
                 <span className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  55 QAR
+                  {formatPrice(getPrices().QAR)}
                 </span>
+                {pricingPlan === "yearly" && (
+                  <span className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full font-medium shadow-sm">
+                    {language === 'en' ? 'SAVE 17%' : 'وفر 17٪'}
+                  </span>
+                )}
               </div>
               <p className="text-sm text-muted-foreground">
-                {language === "en" ? "per month" : "شهرياً"}
+                {pricingPlan === "monthly" 
+                  ? (language === "en" ? "per month" : "شهرياً") 
+                  : (language === "en" ? "per year" : "سنوياً")
+                }
               </p>
             </div>
             
