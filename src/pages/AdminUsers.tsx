@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, Search, Filter, RefreshCw, Eye, UserX, Trash2, AlertTriangle } from "lucide-react";
@@ -29,6 +28,7 @@ interface User {
   suspended_at?: string;
   suspension_reason?: string;
   is_logged_in?: boolean;
+  email_confirmed?: boolean;
 }
 
 export default function AdminUsers() {

@@ -2,33 +2,41 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Mail, Send } from "lucide-react";
+import { Mail, Send, MessageSquare, User, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface User {
+interface ContactSubmission {
   id: string;
+  name: string;
   email: string;
-  full_name: string;
+  subject?: string;
+  message: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  admin_response?: string;
+  responded_at?: string;
+  responded_by?: string;
 }
 
 interface AdminMessageModalProps {
-  user: User | null;
+  message: ContactSubmission | null;
   isOpen: boolean;
   onClose: () => void;
+  onResponded: () => void;
 }
 
-export const AdminMessageModal = ({ user, isOpen, onClose }: AdminMessageModalProps) => {
-  const [subject, setSubject] = useState("");
-  const [content, setContent] = useState("");
+export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: AdminMessageModalProps) => {
+  const [response, setResponse] = useState("");
   const [isSending, setIsSending] = useState(false);
 
-  const handleSendMessage = async () => {
-    if (!user || !subject.trim() || !content.trim()) {
-      toast.error("Please fill in both subject and message");
+  const handleSendResponse = async () => {
+    if (!message || !response.trim()) {
+      toast.error("Please write a response");
       return;
     }
 
@@ -43,76 +51,133 @@ export const AdminMessageModal = ({ user, isOpen, onClose }: AdminMessageModalPr
 
       const session = JSON.parse(adminSession);
       
-      const { error } = await supabase.rpc('send_admin_message', {
-        p_admin_id: session.admin_id,
-        p_recipient_id: user.id,
-        p_subject: subject.trim(),
-        p_content: content.trim()
-      });
+      // Update the contact submission with admin response
+      const { error } = await supabase
+        .from('contact_submissions')
+        .update({
+          admin_response: response.trim(),
+          status: 'responded',
+          responded_at: new Date().toISOString(),
+          responded_by: session.admin_id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', message.id);
 
       if (error) {
-        console.error('Error sending admin message:', error);
-        toast.error("Failed to send message");
+        console.error('Error sending response:', error);
+        toast.error("Failed to send response");
         return;
       }
 
-      toast.success(`Message sent to ${user.full_name || user.email}`);
-      setSubject("");
-      setContent("");
-      onClose();
+      toast.success(`Response sent to ${message.name}`);
+      setResponse("");
+      onResponded();
     } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error("Failed to send message");
+      console.error('Error sending response:', error);
+      toast.error("Failed to send response");
     } finally {
       setIsSending(false);
     }
   };
 
   const handleClose = () => {
-    setSubject("");
-    setContent("");
+    setResponse("");
     onClose();
   };
 
-  if (!user) return null;
+  const markAsRead = async () => {
+    if (!message || message.status !== 'unread') return;
+
+    try {
+      await supabase
+        .from('contact_submissions')
+        .update({ 
+          status: 'read',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', message.id);
+      
+      onResponded();
+    } catch (error) {
+      console.error('Error marking as read:', error);
+    }
+  };
+
+  if (!message) return null;
+
+  // Mark as read when modal opens
+  if (message.status === 'unread') {
+    markAsRead();
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
-            <Mail className="h-5 w-5" />
-            <span>Send Message to User</span>
+            <MessageSquare className="h-5 w-5" />
+            <span>Support Message</span>
+            <Badge 
+              variant={
+                message.status === 'unread' ? 'destructive' :
+                message.status === 'responded' ? 'default' : 'secondary'
+              }
+              className="text-xs"
+            >
+              {message.status}
+            </Badge>
           </DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
-          <div>
-            <Label className="text-sm font-medium">Recipient</Label>
-            <div className="mt-1 p-2 bg-muted rounded">
-              <p className="font-medium">{user.full_name || "No name"}</p>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
+          {/* Message Details */}
+          <div className="bg-muted p-4 rounded-lg space-y-3">
+            <div className="flex items-center space-x-2">
+              <User className="h-4 w-4" />
+              <span className="font-medium">{message.name}</span>
+              <span className="text-muted-foreground">({message.email})</span>
+            </div>
+            
+            {message.subject && (
+              <div>
+                <Label className="text-sm font-medium">Subject</Label>
+                <p className="text-sm mt-1">{message.subject}</p>
+              </div>
+            )}
+            
+            <div>
+              <Label className="text-sm font-medium">Message</Label>
+              <p className="text-sm mt-1 whitespace-pre-wrap">{message.message}</p>
+            </div>
+            
+            <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>Received: {new Date(message.created_at).toLocaleString()}</span>
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="subject">Subject</Label>
-            <Input
-              id="subject"
-              placeholder="Message subject..."
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="mt-1"
-            />
-          </div>
+          {/* Previous Response (if any) */}
+          {message.admin_response && (
+            <div className="bg-accent/20 p-4 rounded-lg">
+              <Label className="text-sm font-medium">Previous Admin Response</Label>
+              <p className="text-sm mt-1 whitespace-pre-wrap">{message.admin_response}</p>
+              {message.responded_at && (
+                <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-2">
+                  <Clock className="h-3 w-3" />
+                  <span>Responded: {new Date(message.responded_at).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          )}
 
+          {/* Response Section */}
           <div>
-            <Label htmlFor="content">Message</Label>
+            <Label htmlFor="response">Admin Response</Label>
             <Textarea
-              id="content"
-              placeholder="Type your message here..."
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
+              id="response"
+              placeholder="Type your response to the user here..."
+              value={response}
+              onChange={(e) => setResponse(e.target.value)}
               rows={6}
               className="mt-1"
             />
@@ -120,15 +185,15 @@ export const AdminMessageModal = ({ user, isOpen, onClose }: AdminMessageModalPr
 
           <div className="flex justify-end space-x-2">
             <Button variant="outline" onClick={handleClose}>
-              Cancel
+              Close
             </Button>
             <Button 
-              onClick={handleSendMessage}
-              disabled={isSending || !subject.trim() || !content.trim()}
+              onClick={handleSendResponse}
+              disabled={isSending || !response.trim()}
               className="flex items-center space-x-2"
             >
               <Send className="h-4 w-4" />
-              <span>{isSending ? "Sending..." : "Send Message"}</span>
+              <span>{isSending ? "Sending..." : "Send Response"}</span>
             </Button>
           </div>
         </div>
