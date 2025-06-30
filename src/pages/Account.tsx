@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -630,7 +629,7 @@ export default function Account() {
               <CardHeader>
                 <CardTitle>{t("subscriptionInfo", language)}</CardTitle>
                 <CardDescription>
-                  {t("currentSubscription", language)}
+                  {language === 'ar' ? 'معلومات الاشتراك الحالي' : 'Current subscription information'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -649,7 +648,7 @@ export default function Account() {
               <CardHeader>
                 <CardTitle>{t("paymentHistory", language)}</CardTitle>
                 <CardDescription>
-                  {t("subscriptionHistory", language)}
+                  {language === 'ar' ? 'سجل المدفوعات والاشتراكات' : 'Payment and subscription history'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
