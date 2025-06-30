@@ -127,7 +127,7 @@ export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
             </div>
 
             {/* Upcoming Items */}
-            {upcomingItems.length > 0 ? (
+            {upcomingItems.length > 0 && (
               <div className="space-y-2 mb-4">
                 <h4 className="text-xs font-medium text-muted-foreground">
                   {language === 'ar' ? 'القادم' : 'Next Up'}
@@ -148,12 +148,6 @@ export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
                     </div>
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="text-center py-2 mb-4">
-                <p className="text-xs text-muted-foreground">
-                  {language === 'ar' ? 'لا توجد عناصر قادمة' : 'No upcoming items'}
-                </p>
               </div>
             )}
           </>

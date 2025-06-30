@@ -76,7 +76,7 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
             </div>
 
             {/* Upcoming Events */}
-            {upcomingEvents.length > 0 ? (
+            {upcomingEvents.length > 0 && (
               <div className="space-y-2 mb-4">
                 <h4 className="text-xs font-medium text-muted-foreground">
                   {language === 'ar' ? 'الأحداث القادمة' : 'Next Events'}
@@ -99,13 +99,6 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
                     </div>
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="text-center py-4 mb-4">
-                <Heart className="mx-auto h-8 w-8 text-purple-500/50 mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'لا توجد أحداث قادمة' : 'No upcoming events'}
-                </p>
               </div>
             )}
           </>
