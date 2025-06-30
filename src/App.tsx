@@ -25,7 +25,7 @@ import WaktiAi from "@/pages/WaktiAi";
 import WaktiAIV2 from "@/pages/WaktiAIV2";
 import Tasjeel from "@/pages/Tasjeel";
 import Maw3d from "@/pages/Maw3d";
-import MobileNav from "@/components/MobileNav";
+import { MobileNav } from "@/components/MobileNav";
 import NotFound from "@/pages/NotFound";
 import Confirmed from "@/pages/Confirmed";
 import SharedTask from "@/pages/SharedTask";

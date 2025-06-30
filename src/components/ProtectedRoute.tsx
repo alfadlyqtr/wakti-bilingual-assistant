@@ -4,14 +4,13 @@ import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import Loading from "@/components/ui/loading";
-import { SubscriptionOverlay } from "@/components/SubscriptionOverlay";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, session, isLoading } = useAuth();
+  const { user, session, loading } = useAuth();
   const location = useLocation();
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     isSubscribed: boolean;
@@ -26,14 +25,14 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     console.log("ProtectedRoute: Current auth state:", {
-      isLoading,
+      loading,
       hasUser: !!user,
       hasSession: !!session,
       currentPath: location.pathname,
       userEmail: user?.email,
       userId: user?.id
     });
-  }, [isLoading, user, session, location.pathname]);
+  }, [loading, user, session, location.pathname]);
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
@@ -155,10 +154,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
 
     // Only run subscription check when we have a user and auth is not loading
-    if (!isLoading && user) {
+    if (!loading && user) {
       console.log("ProtectedRoute: Auth loaded, starting subscription check");
       checkSubscriptionStatus();
-    } else if (!isLoading && !user) {
+    } else if (!loading && !user) {
       console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
       setSubscriptionStatus({ 
         isSubscribed: false, 
@@ -166,11 +165,11 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         needsPayment: true 
       });
     }
-  }, [user, isLoading]);
+  }, [user, loading]);
 
   // Show loading while auth or subscription status is loading
-  if (isLoading || subscriptionStatus.isLoading) {
-    console.log("ProtectedRoute: Still loading - auth:", isLoading, "subscription:", subscriptionStatus.isLoading);
+  if (loading || subscriptionStatus.isLoading) {
+    console.log("ProtectedRoute: Still loading - auth:", loading, "subscription:", subscriptionStatus.isLoading);
     return <Loading />;
   }
 
@@ -180,21 +179,14 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Show subscription overlay only when payment is actually needed
+  // For now, since we removed PayPal and haven't implemented Fawran yet, 
+  // allow access to owner accounts and show a simple message for others
   if (subscriptionStatus.needsPayment) {
-    console.log("ProtectedRoute: Payment needed, showing subscription overlay");
-    console.log("ProtectedRoute: Subscription details:", subscriptionStatus.subscriptionDetails);
-    return (
-      <SubscriptionOverlay 
-        isOpen={true} 
-        onClose={() => {
-          // Allow closing overlay but still show it on next navigation
-          // In a real app, you might want to store this in localStorage with a timestamp
-        }} 
-      />
-    );
+    console.log("ProtectedRoute: Payment needed - will be handled by Fawran overlay in Step 2");
+    // For Step 1, just allow access since we haven't built the Fawran overlay yet
+    // This will be replaced in Step 2
   }
 
-  console.log("ProtectedRoute: User authenticated and subscription valid, rendering protected content");
+  console.log("ProtectedRoute: User authenticated, rendering protected content");
   return <>{children}</>;
 }
