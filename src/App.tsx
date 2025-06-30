@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,6 +6,7 @@ import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
+import { AppLayout } from "@/components/AppLayout";
 
 // Import all your existing components
 import Index from "./pages/Index";
@@ -80,21 +80,22 @@ function App() {
                     {/* Maw3d public view */}
                     <Route path="/maw3d/:shortId" element={<Maw3dView />} />
                     
-                    {/* Protected user routes */}
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/account" element={<Account />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/tasks-reminders" element={<TasksReminders />} />
-                    <Route path="/wakti-ai" element={<WaktiAi />} />
-                    <Route path="/wakti-ai-v2" element={<WaktiAIV2 />} />
-                    <Route path="/calendar" element={<Calendar />} />
-                    <Route path="/contacts" element={<Contacts />} />
-                    <Route path="/maw3d" element={<Maw3d />} />
-                    <Route path="/maw3d/create" element={<Maw3dCreate />} />
-                    <Route path="/maw3d/manage" element={<Maw3dManage />} />
-                    <Route path="/maw3d/edit/:id" element={<Maw3dEdit />} />
-                    <Route path="/maw3d/events" element={<Maw3dEvents />} />
-                    <Route path="/tasjeel" element={<Tasjeel />} />
+                    {/* Protected user routes wrapped with AppLayout */}
+                    <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
+                    <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
+                    <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
+                    <Route path="/tasks-reminders" element={<AppLayout><TasksReminders /></AppLayout>} />
+                    <Route path="/tr" element={<AppLayout><TasksReminders /></AppLayout>} />
+                    <Route path="/wakti-ai" element={<AppLayout><WaktiAi /></AppLayout>} />
+                    <Route path="/wakti-ai-v2" element={<AppLayout><WaktiAIV2 /></AppLayout>} />
+                    <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
+                    <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
+                    <Route path="/maw3d" element={<AppLayout><Maw3d /></AppLayout>} />
+                    <Route path="/maw3d/create" element={<AppLayout><Maw3dCreate /></AppLayout>} />
+                    <Route path="/maw3d/manage" element={<AppLayout><Maw3dManage /></AppLayout>} />
+                    <Route path="/maw3d/edit/:id" element={<AppLayout><Maw3dEdit /></AppLayout>} />
+                    <Route path="/maw3d/events" element={<AppLayout><Maw3dEvents /></AppLayout>} />
+                    <Route path="/tasjeel" element={<AppLayout><Tasjeel /></AppLayout>} />
                     
                     {/* Admin routes */}
                     <Route path="/mqtr" element={<AdminLogin />} />
