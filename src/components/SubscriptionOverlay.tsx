@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,6 +41,22 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
     setDebugInfo(prev => [...prev.slice(-9), logMessage]); // Keep last 10 logs
   };
 
+  // Add CSP meta tag for PayPal
+  const addCSPSupport = () => {
+    const existingCSP = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    if (!existingCSP) {
+      const cspMeta = document.createElement('meta');
+      cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
+      cspMeta.setAttribute('content', 
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.paypal.com https://www.paypal.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.paypal.com; frame-src https://*.paypal.com;"
+      );
+      document.head.appendChild(cspMeta);
+      addDebugLog('✅ Added CSP meta tag for PayPal support');
+    } else {
+      addDebugLog('⚠️ CSP meta tag already exists');
+    }
+  };
+
   useEffect(() => {
     setMounted(true);
     
@@ -56,13 +71,16 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
         return;
       }
 
-      // Check if we can even reach PayPal's domain
+      // Add CSP support
+      addCSPSupport();
+
+      // Test PayPal domain accessibility
       const testPayPalAccess = async () => {
         try {
           addDebugLog('🌐 Testing PayPal domain accessibility...');
           const response = await fetch('https://www.paypal.com/robots.txt', { 
             method: 'HEAD',
-            mode: 'no-cors' // Avoid CORS issues for this test
+            mode: 'no-cors'
           });
           addDebugLog('✅ PayPal domain is accessible');
         } catch (error) {
@@ -72,25 +90,34 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
 
       testPayPalAccess();
 
+      // Remove any existing PayPal scripts first
+      const existingScript = document.querySelector('script[src*="paypal.com/sdk"]');
+      if (existingScript) {
+        addDebugLog('🗑️ Removing existing PayPal script');
+        existingScript.remove();
+      }
+
       const script = document.createElement('script');
       const sdkUrl = 'https://www.paypal.com/sdk/js?client-id=ATVW7zXzTxmmYdKWHV-kKupIv3rk2OcLn6fBQMR_ANGdPqIqJt3AhQ4iY-doB8xGkHkLnmYHMEYQNwZ&vault=true&intent=subscription';
       
       addDebugLog(`📡 Loading PayPal SDK from: ${sdkUrl}`);
       script.src = sdkUrl;
       script.async = true;
+      script.crossOrigin = 'anonymous';
       
-      // Add more detailed error tracking
+      // Enhanced error tracking with proper type checking
       script.onload = () => {
         addDebugLog('✅ PayPal SDK script loaded successfully');
         if (window.paypal) {
           addDebugLog('✅ PayPal object is available on window');
           if (window.paypal.Buttons) {
             addDebugLog('✅ PayPal.Buttons function is available');
+            setPaypalLoaded(true);
+            setPaypalError(null);
           } else {
             addDebugLog('❌ PayPal.Buttons function is NOT available');
+            setPaypalError('PayPal.Buttons function not available');
           }
-          setPaypalLoaded(true);
-          setPaypalError(null);
         } else {
           addDebugLog('❌ PayPal object NOT found on window after script load');
           setPaypalError('PayPal object not found after script load');
@@ -98,9 +125,21 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
       };
       
       script.onerror = (error) => {
-        addDebugLog(`❌ PayPal SDK script failed to load: ${error}`);
-        addDebugLog(`Error type: ${error.type || 'unknown'}`);
-        addDebugLog(`Error target: ${error.target || 'unknown'}`);
+        let errorMessage = 'Unknown error';
+        let errorType = 'unknown';
+        let errorTarget = 'unknown';
+
+        // Proper type checking for error parameter
+        if (error instanceof Event) {
+          errorType = error.type || 'unknown';
+          errorTarget = error.target ? 'script element' : 'unknown';
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+
+        addDebugLog(`❌ PayPal SDK script failed to load: ${errorMessage}`);
+        addDebugLog(`Error type: ${errorType}`);
+        addDebugLog(`Error target: ${errorTarget}`);
         
         const errorMsg = language === 'ar' ? 'فشل في تحميل PayPal. يرجى المحاولة مرة أخرى.' : 'Failed to load PayPal. Please try again.';
         setPaypalError(errorMsg);
@@ -116,32 +155,41 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
           }, retryDelay);
         } else {
           addDebugLog('❌ Maximum retry attempts reached');
+          // Try alternative loading strategy
+          tryAlternativeLoading();
         }
       };
-      
-      // Remove any existing PayPal scripts first
-      const existingScript = document.querySelector('script[src*="paypal.com/sdk"]');
-      if (existingScript) {
-        addDebugLog('🗑️ Removing existing PayPal script');
-        existingScript.remove();
-      }
-      
-      // Check CSP headers
-      const checkCSP = () => {
-        const metaTags = document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
-        if (metaTags.length > 0) {
-          metaTags.forEach((tag, index) => {
-            addDebugLog(`CSP Meta Tag ${index + 1}: ${tag.getAttribute('content')}`);
-          });
-        } else {
-          addDebugLog('No CSP meta tags found');
-        }
-      };
-      
-      checkCSP();
       
       document.head.appendChild(script);
       addDebugLog('📡 PayPal SDK script added to DOM');
+    };
+
+    // Alternative loading strategy using iframe approach
+    const tryAlternativeLoading = () => {
+      addDebugLog('🔄 Attempting alternative PayPal loading strategy...');
+      
+      // Create a hidden iframe to test PayPal connectivity
+      const testFrame = document.createElement('iframe');
+      testFrame.style.display = 'none';
+      testFrame.src = 'https://www.paypal.com/sdk/js?client-id=ATVW7zXzTxmmYdKWHV-kKupIv3rk2OcLn6fBQMR_ANGdPqIqJt3AhQ4iY-doB8xGkHkLnmYHMEYQNwZ';
+      
+      testFrame.onload = () => {
+        addDebugLog('✅ Alternative iframe loading successful');
+        document.body.removeChild(testFrame);
+        // Retry script loading after successful iframe test
+        setTimeout(() => {
+          setLoadingAttempts(0);
+          loadPayPalSDK();
+        }, 1000);
+      };
+      
+      testFrame.onerror = () => {
+        addDebugLog('❌ Alternative iframe loading also failed');
+        document.body.removeChild(testFrame);
+        setPaypalError(language === 'ar' ? 'فشل في الاتصال بـ PayPal' : 'Failed to connect to PayPal');
+      };
+      
+      document.body.appendChild(testFrame);
     };
 
     if (isOpen) {
