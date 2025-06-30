@@ -1404,4 +1404,7 @@ export type TranslationKey =
   | "tap_piece_destination"
   | "tap_square"
   | "white"
-  | "black";
+  | "black"
+  
+  // THE MISSING KEY THAT'S CAUSING THE BUILD ERROR:
+  | "tasksReminders";
