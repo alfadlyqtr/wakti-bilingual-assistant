@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
@@ -29,6 +28,8 @@ import { MobileNav } from "@/components/MobileNav";
 import NotFound from "@/pages/NotFound";
 import Confirmed from "@/pages/Confirmed";
 import SharedTask from "@/pages/SharedTask";
+import PaymentSuccess from "@/pages/PaymentSuccess";
+import PaymentCancelled from "@/pages/PaymentCancelled";
 
 // Maw3d pages
 import Maw3dEvents from "@/pages/Maw3dEvents";
@@ -74,6 +75,8 @@ function App() {
                 <Route path="/help" element={<Help />} />
                 <Route path="/contact-us" element={<ContactUs />} />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
+                <Route path="/payment-success" element={<PaymentSuccess />} />
+                <Route path="/payment-cancelled" element={<PaymentCancelled />} />
                 
                 {/* Shared routes */}
                 <Route path="/shared-task/:taskId" element={<SharedTask />} />

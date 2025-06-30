@@ -1,192 +1,52 @@
 
-import React, { useEffect, useState } from "react";
-import { useLocation, Navigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import Loading from "@/components/ui/loading";
+import { ReactNode, useEffect, useState } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import SubscriptionOverlay from '@/components/SubscriptionOverlay';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
+  children: ReactNode;
+  requireSubscription?: boolean;
 }
 
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, session, loading } = useAuth();
+export default function ProtectedRoute({ 
+  children, 
+  requireSubscription = true 
+}: ProtectedRouteProps) {
+  const { user, profile, loading } = useAuth();
   const location = useLocation();
-  const [subscriptionStatus, setSubscriptionStatus] = useState<{
-    isSubscribed: boolean;
-    isLoading: boolean;
-    error?: string;
-    needsPayment: boolean;
-    subscriptionDetails?: any;
-  }>({ isSubscribed: false, isLoading: true, needsPayment: false });
-
-  // Owner accounts that bypass all restrictions
-  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
+  const [showSubscriptionOverlay, setShowSubscriptionOverlay] = useState(false);
 
   useEffect(() => {
-    console.log("ProtectedRoute: Current auth state:", {
-      loading,
-      hasUser: !!user,
-      hasSession: !!session,
-      currentPath: location.pathname,
-      userEmail: user?.email,
-      userId: user?.id
-    });
-  }, [loading, user, session, location.pathname]);
-
-  useEffect(() => {
-    const checkSubscriptionStatus = async () => {
-      console.log("ProtectedRoute: Starting subscription check for user:", user?.email);
-      
-      if (!user) {
-        console.log("ProtectedRoute: No user, setting not subscribed");
-        setSubscriptionStatus({ 
-          isSubscribed: false, 
-          isLoading: false, 
-          needsPayment: true 
-        });
-        return;
-      }
-
-      // Check if user is an owner account
-      if (ownerAccounts.includes(user.email || '')) {
-        console.log('ProtectedRoute: Owner account detected, bypassing subscription checks');
-        setSubscriptionStatus({ 
-          isSubscribed: true, 
-          isLoading: false, 
-          needsPayment: false 
-        });
-        return;
-      }
-
-      try {
-        console.log("ProtectedRoute: Fetching subscription status from database...");
-        
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error('ProtectedRoute: Error fetching subscription status:', error);
-          setSubscriptionStatus({ 
-            isSubscribed: false, 
-            isLoading: false, 
-            needsPayment: true,
-            error: error.message 
-          });
-          return;
-        }
-
-        console.log('ProtectedRoute: Raw profile data:', profile);
-
-        if (!profile) {
-          console.log('ProtectedRoute: No profile found, user needs subscription');
-          setSubscriptionStatus({ 
-            isSubscribed: false, 
-            isLoading: false, 
-            needsPayment: true 
-          });
-          return;
-        }
-
-        // Check if subscription is active and valid
-        const now = new Date();
-        let isValidSubscription = false;
-        let needsPayment = true;
-
-        // Basic subscription check
-        const hasActiveSubscription = profile.is_subscribed === true && profile.subscription_status === 'active';
-        
-        if (hasActiveSubscription && profile.next_billing_date) {
-          const nextBillingDate = new Date(profile.next_billing_date);
-          const gracePeriodDays = 7; // 7 days grace period after due date
-          const gracePeriodEnd = new Date(nextBillingDate);
-          gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays);
-          
-          // Subscription is valid if we haven't passed the grace period
-          isValidSubscription = now <= gracePeriodEnd;
-          needsPayment = now > nextBillingDate; // Payment needed if past due date
-          
-          console.log('ProtectedRoute: Date-based subscription check:', {
-            now: now.toISOString(),
-            nextBillingDate: nextBillingDate.toISOString(),
-            gracePeriodEnd: gracePeriodEnd.toISOString(),
-            isValidSubscription,
-            needsPayment,
-            daysUntilDue: Math.ceil((nextBillingDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
-            daysOverdue: needsPayment ? Math.ceil((now.getTime() - nextBillingDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
-          });
-        } else if (hasActiveSubscription && !profile.next_billing_date) {
-          // Active subscription without billing date (like admin gifts) - consider valid
-          isValidSubscription = true;
-          needsPayment = false;
-          console.log('ProtectedRoute: Active subscription without billing date (admin gift/special case)');
-        }
-
-        console.log('ProtectedRoute: Final subscription evaluation:', {
-          profileExists: !!profile,
-          isSubscribed: profile.is_subscribed,
-          subscriptionStatus: profile.subscription_status,
-          nextBillingDate: profile.next_billing_date,
-          planName: profile.plan_name,
-          hasActiveSubscription,
-          isValidSubscription,
-          needsPayment
-        });
-
-        setSubscriptionStatus({ 
-          isSubscribed: isValidSubscription, 
-          isLoading: false,
-          needsPayment: needsPayment && !isValidSubscription,
-          subscriptionDetails: profile
-        });
-      } catch (error) {
-        console.error('ProtectedRoute: Exception during subscription check:', error);
-        setSubscriptionStatus({ 
-          isSubscribed: false, 
-          isLoading: false, 
-          needsPayment: true,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    };
-
-    // Only run subscription check when we have a user and auth is not loading
-    if (!loading && user) {
-      console.log("ProtectedRoute: Auth loaded, starting subscription check");
-      checkSubscriptionStatus();
-    } else if (!loading && !user) {
-      console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
-      setSubscriptionStatus({ 
-        isSubscribed: false, 
-        isLoading: false, 
-        needsPayment: true 
-      });
+    // Show subscription overlay if user is not subscribed and subscription is required
+    if (user && profile && requireSubscription && !profile.is_subscribed) {
+      setShowSubscriptionOverlay(true);
     }
-  }, [user, loading]);
+  }, [user, profile, requireSubscription]);
 
-  // Show loading while auth or subscription status is loading
-  if (loading || subscriptionStatus.isLoading) {
-    console.log("ProtectedRoute: Still loading - auth:", loading, "subscription:", subscriptionStatus.isLoading);
-    return <Loading />;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
-  // Proper authentication check - redirect to login if not authenticated
-  if (!user || !session) {
-    console.log("ProtectedRoute: No valid user/session, redirecting to login");
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // For now, since we removed PayPal and haven't implemented Fawran yet, 
-  // allow access to owner accounts and show a simple message for others
-  if (subscriptionStatus.needsPayment) {
-    console.log("ProtectedRoute: Payment needed - will be handled by Fawran overlay in Step 2");
-    // For Step 1, just allow access since we haven't built the Fawran overlay yet
-    // This will be replaced in Step 2
+  // Show subscription overlay if needed
+  if (showSubscriptionOverlay) {
+    return (
+      <>
+        {children}
+        <SubscriptionOverlay 
+          onClose={() => setShowSubscriptionOverlay(false)} 
+        />
+      </>
+    );
   }
 
-  console.log("ProtectedRoute: User authenticated, rendering protected content");
   return <>{children}</>;
 }
