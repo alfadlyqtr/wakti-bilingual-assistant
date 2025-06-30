@@ -1,5 +1,5 @@
+
 import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -24,16 +24,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Languages } from "@/integrations/i18n/settings";
 import { supabase } from "@/integrations/supabase/client";
-import { BillingTab } from "@/components/BillingTab";
+import { BillingTab } from "@/components/account/BillingTab";
 import { FawranPaymentStatus } from "@/components/FawranPaymentStatus";
 
 export default function Settings() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const { theme, setTheme, language, setLanguage } = useTheme();
-  const { user, updateUserProfile } = useAuth();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("account");
   const [displayName, setDisplayName] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
@@ -44,12 +42,16 @@ export default function Settings() {
     }
   }, [user]);
 
-  const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
-    setTheme(newTheme);
+  const handleThemeChange = (newTheme: string) => {
+    if (newTheme === 'light' || newTheme === 'dark') {
+      setTheme(newTheme);
+    }
   };
 
   const handleLanguageChange = (newLanguage: string) => {
-    setLanguage(newLanguage);
+    if (newLanguage === 'en' || newLanguage === 'ar') {
+      setLanguage(newLanguage);
+    }
   };
 
   const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,27 +73,14 @@ export default function Settings() {
 
       if (error) {
         console.error("Error updating profile:", error);
-        toast({
-          title: "Error",
-          description: "Failed to update profile",
-          variant: "destructive",
-        });
+        toast.error("Failed to update profile");
         return;
       }
 
-      await updateUserProfile();
-
-      toast({
-        title: "Success",
-        description: "Profile updated successfully",
-      });
+      toast.success("Profile updated successfully");
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update profile",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to update profile");
     } finally {
       setIsUpdating(false);
     }
@@ -102,41 +91,39 @@ export default function Settings() {
       <div className="space-y-6 pb-20">
         <div className="flex items-center justify-between space-y-2 md:space-y-0">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              {t.settings.title}
-            </h2>
-            <p className="text-muted-foreground">{t.settings.description}</p>
+            <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
+            <p className="text-muted-foreground">Manage your account settings</p>
           </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="account">{t.settings.account}</TabsTrigger>
-            <TabsTrigger value="billing">{t.settings.billing}</TabsTrigger>
-            <TabsTrigger value="preferences">{t.settings.preferences}</TabsTrigger>
-            <TabsTrigger value="notifications">{t.settings.notifications}</TabsTrigger>
+            <TabsTrigger value="account">Account</TabsTrigger>
+            <TabsTrigger value="billing">Billing</TabsTrigger>
+            <TabsTrigger value="preferences">Preferences</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
           <TabsContent value="account" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>{t.settings.accountSettings}</CardTitle>
+                <CardTitle>Account Settings</CardTitle>
                 <CardDescription>
-                  {t.settings.manageAccountSettings}
+                  Manage your account settings
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">{t.settings.displayName}</Label>
+                  <Label htmlFor="name">Display Name</Label>
                   <Input
                     id="name"
-                    placeholder={t.settings.displayNamePlaceholder}
+                    placeholder="Enter your display name"
                     value={displayName}
                     onChange={handleDisplayNameChange}
                   />
                 </div>
                 <Button onClick={handleUpdateProfile} disabled={isUpdating}>
-                  {isUpdating ? t.common.updating : t.settings.updateProfile}
+                  {isUpdating ? "Updating..." : "Update Profile"}
                 </Button>
               </CardContent>
             </Card>
@@ -145,37 +132,33 @@ export default function Settings() {
           <TabsContent value="preferences" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>{t.settings.preferences}</CardTitle>
+                <CardTitle>Preferences</CardTitle>
                 <CardDescription>
-                  {t.settings.managePreferences}
+                  Manage your preferences
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="theme">{t.settings.theme}</Label>
+                  <Label htmlFor="theme">Theme</Label>
                   <Select value={theme} onValueChange={handleThemeChange}>
                     <SelectTrigger id="theme">
-                      <SelectValue placeholder={t.settings.selectTheme} />
+                      <SelectValue placeholder="Select theme" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="light">{t.settings.light}</SelectItem>
-                      <SelectItem value="dark">{t.settings.dark}</SelectItem>
-                      <SelectItem value="system">{t.settings.system}</SelectItem>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="dark">Dark</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="language">{t.settings.language}</Label>
+                  <Label htmlFor="language">Language</Label>
                   <Select value={language} onValueChange={handleLanguageChange}>
                     <SelectTrigger id="language">
-                      <SelectValue placeholder={t.settings.selectLanguage} />
+                      <SelectValue placeholder="Select language" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.entries(Languages).map(([key, value]) => (
-                        <SelectItem key={key} value={key}>
-                          {value}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="ar">العربية</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -186,26 +169,26 @@ export default function Settings() {
           <TabsContent value="notifications" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>{t.settings.notifications}</CardTitle>
+                <CardTitle>Notifications</CardTitle>
                 <CardDescription>
-                  {t.settings.manageNotifications}
+                  Manage your notifications
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium">{t.settings.email}</p>
+                    <p className="text-sm font-medium">Email Notifications</p>
                     <p className="text-sm text-muted-foreground">
-                      {t.settings.emailDescription}
+                      Receive notifications via email
                     </p>
                   </div>
                   <Switch id="email-notifications" defaultChecked />
                 </div>
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium">{t.settings.push}</p>
+                    <p className="text-sm font-medium">Push Notifications</p>
                     <p className="text-sm text-muted-foreground">
-                      {t.settings.pushDescription}
+                      Receive push notifications
                     </p>
                   </div>
                   <Switch id="push-notifications" defaultChecked />

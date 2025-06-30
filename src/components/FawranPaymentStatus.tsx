@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Clock, XCircle, AlertCircle, RefreshCw } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { format } from "date-fns";
 
 interface FawranPayment {
@@ -44,11 +44,7 @@ export function FawranPaymentStatus() {
       setPayments(data || []);
     } catch (error) {
       console.error('Error loading payments:', error);
-      toast({ 
-        title: "Error", 
-        description: "Failed to load payment status", 
-        variant: "destructive" 
-      });
+      toast.error("Failed to load payment status");
     } finally {
       setIsLoading(false);
     }
