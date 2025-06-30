@@ -17,7 +17,7 @@ Extract and validate these fields:
 2. Payment amount: must match expected value exactly.
 3. Beneficiary alias: must be "alfadlyqtr".
 4. Beneficiary name: must be "ABDULLAH HASSOUN" or Arabic equivalent.
-5. Transfer timestamp: must be within 90 minutes of the user's account creation.
+5. Transfer timestamp: extract the exact timestamp from screenshot.
 6. Sender alias: extract user's mobile number or alias.
 7. Payment reference number: extract and verify uniqueness.
 8. Transaction reference number: extract and verify uniqueness.
@@ -48,7 +48,7 @@ Respond ONLY with strict JSON containing:
   "extractedText": string
 }`;
 
-// Enhanced validation logic with ironclad security checks
+// Enhanced validation logic with time validation for renewals
 const runSecurityValidations = async (supabase: any, payment: any, analysis: any) => {
   const validations = {
     amountValid: false,
@@ -75,15 +75,88 @@ const runSecurityValidations = async (supabase: any, payment: any, analysis: any
   validations.highConfidence = analysis.confidence > 85;
   validations.tamperingValid = !analysis.tamperingDetected;
 
-  // Enhanced time validation using account creation time
-  if (payment.account_created_at && analysis.timestamp) {
-    const accountCreatedAt = new Date(payment.account_created_at);
-    const ninetyMinutesLater = new Date(accountCreatedAt.getTime() + 90 * 60 * 1000);
-    const now = new Date();
+  // Enhanced Time Validation with Renewal Support
+  const now = new Date();
+  const userCreatedAt = new Date(payment.account_created_at);
+  const ninetyMinutesAgo = 90 * 60 * 1000; // 90 minutes in milliseconds
+  
+  console.log('🕐 Time Validation Analysis:', {
+    now: now.toISOString(),
+    userCreatedAt: userCreatedAt.toISOString(),
+    accountAge: now.getTime() - userCreatedAt.getTime(),
+    ninetyMinutesThreshold: ninetyMinutesAgo
+  });
+
+  // Step 1: Check if account is new (within 90 minutes of creation)
+  const isNewAccount = (now.getTime() - userCreatedAt.getTime()) <= ninetyMinutesAgo;
+  
+  let timeValidationPassed = false;
+  let validationMethod = '';
+
+  if (isNewAccount) {
+    // New account - use original validation logic
+    if (analysis.timestamp) {
+      const ninetyMinutesAfterCreation = new Date(userCreatedAt.getTime() + ninetyMinutesAgo);
+      timeValidationPassed = analysis.isWithinTimeLimit && now <= ninetyMinutesAfterCreation;
+      validationMethod = 'new_account';
+      
+      console.log('✅ New Account Time Validation:', {
+        method: validationMethod,
+        screenshotWithinLimit: analysis.isWithinTimeLimit,
+        currentTimeValid: now <= ninetyMinutesAfterCreation,
+        result: timeValidationPassed
+      });
+    }
+  } else {
+    // Renewal check - look for last approved payment
+    console.log('🔄 Checking Renewal Eligibility...');
     
-    // Screenshot must be from after account creation but within 90 minutes
-    validations.timeValid = analysis.isWithinTimeLimit && now <= ninetyMinutesLater;
+    const { data: lastApprovedPayment } = await supabase
+      .from('pending_fawran_payments')
+      .select('reviewed_at')
+      .eq('user_id', payment.user_id)
+      .eq('status', 'approved')
+      .order('reviewed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lastApprovedPayment && analysis.timestamp) {
+      const lastApprovedAt = new Date(lastApprovedPayment.reviewed_at);
+      const screenshotTime = new Date(analysis.timestamp);
+      
+      // Check if screenshot is within 90 minutes of last approved payment
+      const timeSinceLastPayment = screenshotTime.getTime() - lastApprovedAt.getTime();
+      const isValidRenewal = timeSinceLastPayment >= 0 && timeSinceLastPayment <= ninetyMinutesAgo;
+      
+      timeValidationPassed = isValidRenewal;
+      validationMethod = 'renewal';
+      
+      console.log('🔄 Renewal Time Validation:', {
+        method: validationMethod,
+        lastApprovedAt: lastApprovedAt.toISOString(),
+        screenshotTime: screenshotTime.toISOString(),
+        timeSinceLastPayment: timeSinceLastPayment,
+        maxAllowed: ninetyMinutesAgo,
+        result: timeValidationPassed
+      });
+    } else {
+      // No previous approved payments found
+      timeValidationPassed = false;
+      validationMethod = 'no_previous_payments';
+      
+      console.log('❌ No Previous Approved Payments Found for Renewal');
+    }
   }
+
+  validations.timeValid = timeValidationPassed;
+
+  console.log('🛡️ Final Time Validation Result:', {
+    isNewAccount,
+    validationMethod,
+    timeValidationPassed,
+    accountCreatedAt: userCreatedAt.toISOString(),
+    currentTime: now.toISOString()
+  });
 
   // Check reference number uniqueness
   if (analysis.paymentReferenceNumber || analysis.transactionReferenceNumber) {
@@ -106,7 +179,7 @@ const runSecurityValidations = async (supabase: any, payment: any, analysis: any
     validations.hashUnique = !existingHash || existingHash.length === 0;
   }
 
-  return validations;
+  return { ...validations, validationMethod };
 };
 
 serve(async (req) => {
@@ -252,10 +325,11 @@ serve(async (req) => {
       aliasMatches: analysis.aliasMatches
     });
 
-    // Run comprehensive security validations
-    const validations = await runSecurityValidations(supabase, payment, analysis);
+    // Run comprehensive security validations with enhanced time validation
+    const validationResult = await runSecurityValidations(supabase, payment, analysis);
+    const { validationMethod, ...validations } = validationResult;
     
-    console.log('🛡️ Security Validations:', validations);
+    console.log('🛡️ Security Validations:', { ...validations, validationMethod });
 
     // Determine final decision with ironclad logic
     const allSecurityChecksPassed = Object.values(validations).every(Boolean);
@@ -268,7 +342,8 @@ serve(async (req) => {
       allSecurityChecksPassed,
       shouldAutoApprove,
       confidence: analysis.confidence,
-      tampering: analysis.tamperingDetected
+      tampering: analysis.tamperingDetected,
+      validationMethod
     });
 
     // Store reference numbers if unique and valid
@@ -289,11 +364,12 @@ serve(async (req) => {
       review_notes: JSON.stringify({
         ai_analysis: analysis,
         security_validations: validations,
+        validation_method: validationMethod,
         processing_time_ms: Date.now() - startTime,
         analyzed_at: new Date().toISOString(),
         auto_approved: shouldAutoApprove,
         security_level: 'maximum',
-        worker_version: 'enhanced-v2.0'
+        worker_version: 'enhanced-v2.1-renewals'
       }),
       reviewed_at: shouldAutoApprove ? new Date().toISOString() : null,
       time_validation_passed: validations.timeValid,
@@ -330,17 +406,21 @@ serve(async (req) => {
       });
 
       if (!subscriptionError) {
+        const validationMethodText = validationMethod === 'new_account' ? 'New Account' : 
+                                   validationMethod === 'renewal' ? 'Subscription Renewal' : 'Standard';
+                                   
         await supabase.rpc('queue_notification', {
           p_user_id: payment.user_id,
           p_notification_type: 'subscription_activated',
           p_title: '🎉 Payment Approved & Subscription Activated!',
-          p_body: `Your ${planType} subscription has been automatically approved by our enhanced security system. Welcome to Wakti Premium!`,
+          p_body: `Your ${planType} subscription has been automatically approved by our enhanced security system (${validationMethodText}). Welcome to Wakti Premium!`,
           p_data: { 
             plan_type: payment.plan_type, 
             amount: payment.amount,
             payment_method: 'fawran',
             security_verified: true,
-            processing_time_ms: processingTime
+            processing_time_ms: processingTime,
+            validation_method: validationMethod
           },
           p_deep_link: '/dashboard',
           p_scheduled_for: new Date().toISOString()
@@ -350,17 +430,22 @@ serve(async (req) => {
       // Queue manual review notification
       console.log('🔍 Sending to Manual Review');
       
+      const reasonText = validationMethod === 'no_previous_payments' ? 
+        'Account older than 90 minutes with no previous payments - manual verification required.' :
+        'Security verification required by our enhanced fraud protection system.';
+      
       await supabase.rpc('queue_notification', {
         p_user_id: payment.user_id,
         p_notification_type: 'payment_under_review',
         p_title: '🔍 Payment Under Enhanced Security Review',
-        p_body: 'Your payment requires manual verification by our security team. This ensures maximum protection against fraud.',
+        p_body: reasonText,
         p_data: { 
           payment_amount: payment.amount,
           plan_type: payment.plan_type,
           confidence: analysis.confidence,
           security_issues: analysis.tamperingDetected ? analysis.tamperingReasons : [],
-          processing_time_ms: processingTime
+          processing_time_ms: processingTime,
+          validation_method: validationMethod
         },
         p_deep_link: '/settings',
         p_scheduled_for: new Date().toISOString()
@@ -385,7 +470,8 @@ serve(async (req) => {
       auto_approved: shouldAutoApprove,
       processing_time_ms: processingTime,
       security_level: 'maximum',
-      worker_version: 'enhanced-v2.0'
+      worker_version: 'enhanced-v2.1-renewals',
+      validation_method: validationMethod
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -399,7 +485,7 @@ serve(async (req) => {
       error: error.message,
       processing_time_ms: processingTime,
       security_level: 'maximum',
-      worker_version: 'enhanced-v2.0'
+      worker_version: 'enhanced-v2.1-renewals'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
