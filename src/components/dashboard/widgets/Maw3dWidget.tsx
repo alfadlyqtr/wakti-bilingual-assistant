@@ -54,7 +54,7 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
         <div className="flex items-center gap-2 mb-4">
           <Heart className="h-5 w-5 text-purple-500" />
           <h3 className="font-semibold text-lg bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-            Maw3d Events
+            {t("maw3dEvents", language)}
           </h3>
         </div>
 

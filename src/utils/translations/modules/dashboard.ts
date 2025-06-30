@@ -9,5 +9,7 @@ export const dashboard = {
   maw3dEvents: "Maw3d Events",
   dragMode: "Drag Mode",
   dragModeActivated: "Drag mode activated",
-  dragModeDeactivated: "Drag mode deactivated"
+  dragModeDeactivated: "Drag mode deactivated",
+  noEventsYet: "No events yet",
+  createEvent: "Create Event"
 };

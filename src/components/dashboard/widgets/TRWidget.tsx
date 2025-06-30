@@ -37,7 +37,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
 
         {/* Error Content */}
         <div className="relative z-10 p-6 pt-12 text-center">
-          <h3 className="font-semibold text-lg text-foreground mb-4">Tasks & Reminders</h3>
+          <h3 className="font-semibold text-lg text-foreground mb-4">{t("tasksReminders", language)}</h3>
           <p className="text-sm text-red-500 mb-4">Error loading data</p>
           <Button 
             variant="outline" 
@@ -73,7 +73,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
             <Bell className="h-4 w-4 text-red-500" />
           </div>
           <h3 className="font-semibold text-lg text-foreground">
-            Tasks & Reminders
+            {t("tasksReminders", language)}
           </h3>
         </div>
 
@@ -91,7 +91,10 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
                 <div className="flex items-center gap-2 mb-2">
                   <CheckSquare className="h-4 w-4 text-green-500" />
                   <span className="text-sm font-medium text-green-500 dark:text-green-400">
-                    Tasks ({pendingTasks.length})
+                    {language === 'ar' 
+                      ? `المهام (${pendingTasks.length})`
+                      : `Tasks (${pendingTasks.length})`
+                    }
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -119,7 +122,10 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
                 <div className="flex items-center gap-2 mb-2">
                   <Bell className="h-4 w-4 text-red-500" />
                   <span className="text-sm font-medium text-red-500 dark:text-red-400">
-                    Today's Reminders ({todayReminders.length})
+                    {language === 'ar' 
+                      ? `تذكيرات اليوم (${todayReminders.length})`
+                      : `Today's Reminders (${todayReminders.length})`
+                    }
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -146,7 +152,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
               className="w-full bg-white/10 backdrop-blur-sm border-white/20 hover:bg-primary/20 hover:border-primary/40 transition-all duration-300 text-foreground font-medium" 
               onClick={() => navigate('/tr')}
             >
-              View All T&R
+              {language === 'ar' ? 'عرض جميع المهام والتذكيرات' : 'View All T&R'}
             </Button>
           </div>
         ) : (
@@ -155,7 +161,9 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
               <CheckSquare className="h-6 w-6 text-green-500" />
               <Bell className="h-6 w-6 text-red-500" />
             </div>
-            <p className="text-sm text-foreground/70 mb-3 font-medium">No pending tasks or reminders</p>
+            <p className="text-sm text-foreground/70 mb-3 font-medium">
+              {language === 'ar' ? 'لا توجد مهام أو تذكيرات معلقة' : 'No pending tasks or reminders'}
+            </p>
             <Button 
               variant="outline" 
               size="sm" 
@@ -163,7 +171,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
               onClick={() => navigate('/tr')}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Create Task
+              {language === 'ar' ? 'إنشاء مهمة' : 'Create Task'}
             </Button>
           </div>
         )}

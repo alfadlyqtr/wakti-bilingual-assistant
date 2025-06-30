@@ -9,5 +9,7 @@ export const dashboardAr = {
   maw3dEvents: "أحداث Maw3d",
   dragMode: "وضع السحب",
   dragModeActivated: "تم تفعيل وضع السحب",
-  dragModeDeactivated: "تم إلغاء تفعيل وضع السحب"
+  dragModeDeactivated: "تم إلغاء تفعيل وضع السحب",
+  noEventsYet: "لا توجد أحداث بعد",
+  createEvent: "إنشاء حدث"
 };
