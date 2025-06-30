@@ -20,8 +20,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     subscriptionDetails?: any;
   }>({ isSubscribed: false, isLoading: true, needsPayment: false });
 
-  // REMOVED: Owner accounts bypass - now ALL users must have valid subscriptions
-  // const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
+  // Owner accounts that bypass all restrictions
+  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
 
   useEffect(() => {
     console.log("ProtectedRoute: Current auth state:", {
@@ -48,8 +48,16 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         return;
       }
 
-      // REMOVED: Owner account bypass logic
-      // All users now go through the same subscription validation
+      // Check if user is an owner account
+      if (ownerAccounts.includes(user.email || '')) {
+        console.log('ProtectedRoute: Owner account detected, bypassing subscription checks');
+        setSubscriptionStatus({ 
+          isSubscribed: true, 
+          isLoading: false, 
+          needsPayment: false 
+        });
+        return;
+      }
 
       try {
         console.log("ProtectedRoute: Fetching subscription status from database...");
