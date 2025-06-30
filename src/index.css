@@ -108,26 +108,28 @@
   }
 }
 
-/* Mobile-specific styles with enhanced artistic touches */
+/* Mobile-specific styles with enhanced artistic touches - FIXED SCROLLING */
 @layer base {
   * {
     @apply border-border;
   }
   
   html, body {
-    @apply h-full overflow-hidden antialiased;
+    @apply antialiased;
     background: var(--gradient-background);
+    /* REMOVED: overflow-hidden that was blocking scrolling */
   }
   
   body {
-    @apply text-foreground flex flex-col min-h-full;
+    @apply text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     background: var(--gradient-background);
   }
 
   #root {
-    @apply flex flex-col h-full w-full max-w-md mx-auto min-h-screen;
+    @apply max-w-md mx-auto min-h-screen;
     background: var(--gradient-background);
+    /* REMOVED: h-full and flex that were constraining height */
   }
 
   /* App container with enhanced background */
@@ -136,10 +138,11 @@
     background: var(--gradient-background);
   }
 
-  /* Mobile container with vibrant gradient */
+  /* Mobile container with vibrant gradient - FIXED SCROLLING */
   .mobile-container {
-    @apply max-w-md w-full mx-auto h-full flex flex-col overflow-hidden;
+    @apply max-w-md w-full mx-auto min-h-screen flex flex-col;
     background: var(--gradient-background);
+    /* REMOVED: overflow-hidden and h-full that were blocking scrolling */
   }
 
   /* Enhanced mobile buttons with vibrant gradients */
