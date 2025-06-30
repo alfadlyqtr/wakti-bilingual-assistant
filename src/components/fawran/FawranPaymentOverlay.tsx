@@ -61,6 +61,11 @@ export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverla
     setCurrentStep('instructions');
   };
 
+  const handleBackToPlan = () => {
+    console.log('Going back to plan selection');
+    setCurrentStep('plan');
+  };
+
   const handleStartOver = () => {
     console.log('Starting over');
     setCurrentStep('plan');
@@ -69,8 +74,8 @@ export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverla
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg w-full max-w-2xl max-h-[95vh] overflow-y-auto">
         {currentStep === 'plan' && (
           <PlanSelection onPlanSelect={handlePlanSelect} />
         )}
@@ -79,6 +84,7 @@ export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverla
           <PaymentInstructions 
             selectedPlan={selectedPlan}
             onContinue={handleContinueToUpload}
+            onBack={handleBackToPlan}
           />
         )}
         

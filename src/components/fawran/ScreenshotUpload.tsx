@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, ArrowLeft, AlertCircle } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Upload, ArrowLeft, AlertCircle, LogOut } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
 import type { PlanType } from './FawranPaymentOverlay';
 
 interface ScreenshotUploadProps {
@@ -20,39 +21,44 @@ interface ScreenshotUploadProps {
 
 export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, onBack }: ScreenshotUploadProps) {
   const { language } = useTheme();
-  const { user } = useAuth();
-  const { toast } = useToast();
+  const { user, signOut } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [senderAlias, setSenderAlias] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
   const amount = selectedPlan === 'monthly' ? 60 : 600;
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    console.log('File selected:', file.name, file.type, file.size);
+
     // Validate file type
     const validTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      toast({
-        title: language === 'ar' ? 'نوع ملف غير صحيح' : 'Invalid file type',
+      toast.error(language === 'ar' ? 'نوع ملف غير صحيح' : 'Invalid file type', {
         description: language === 'ar' 
           ? 'يرجى اختيار صورة بصيغة PNG, JPG, JPEG, أو WebP'
-          : 'Please select a PNG, JPG, JPEG, or WebP image',
-        variant: 'destructive',
+          : 'Please select a PNG, JPG, JPEG, or WebP image'
       });
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: language === 'ar' ? 'حجم الملف كبير جداً' : 'File too large',
+      toast.error(language === 'ar' ? 'حجم الملف كبير جداً' : 'File too large', {
         description: language === 'ar' 
           ? 'يجب أن يكون حجم الملف أقل من 5 ميجابايت'
-          : 'File size must be less than 5MB',
-        variant: 'destructive',
+          : 'File size must be less than 5MB'
       });
       return;
     }
@@ -62,52 +68,68 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
 
   const handleSubmit = async () => {
     if (!selectedFile || !senderAlias.trim() || !user) {
-      toast({
-        title: language === 'ar' ? 'حقول مطلوبة' : 'Required fields',
+      toast.error(language === 'ar' ? 'حقول مطلوبة' : 'Required fields', {
         description: language === 'ar' 
           ? 'يرجى اختيار صورة وإدخال الاسم المستعار'
-          : 'Please select a screenshot and enter your alias',
-        variant: 'destructive',
+          : 'Please select a screenshot and enter your alias'
       });
       return;
     }
 
     setIsUploading(true);
+    console.log('Starting upload process...');
 
     try {
       // Upload file to storage
       const fileName = `${user.id}/${Date.now()}-${selectedFile.name}`;
+      console.log('Uploading file:', fileName);
+      
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('fawran-screenshots')
         .upload(fileName, selectedFile);
 
       if (uploadError) {
+        console.error('Upload error:', uploadError);
         throw uploadError;
       }
+
+      console.log('File uploaded successfully:', uploadData);
 
       // Get the public URL
       const { data: { publicUrl } } = supabase.storage
         .from('fawran-screenshots')
         .getPublicUrl(fileName);
 
+      console.log('Public URL:', publicUrl);
+
       // Insert payment record
+      const paymentRecord = {
+        user_id: user.id,
+        email: userEmail,
+        plan_type: selectedPlan,
+        amount: amount,
+        screenshot_url: publicUrl,
+        sender_alias: senderAlias.trim(),
+        status: 'pending'
+      };
+
+      console.log('Inserting payment record:', paymentRecord);
+
       const { data: paymentData, error: paymentError } = await supabase
         .from('pending_fawran_payments')
-        .insert({
-          user_id: user.id,
-          email: userEmail,
-          plan_type: selectedPlan,
-          amount: amount,
-          screenshot_url: publicUrl,
-        })
+        .insert(paymentRecord)
         .select()
         .single();
 
       if (paymentError) {
+        console.error('Payment insert error:', paymentError);
         throw paymentError;
       }
 
+      console.log('Payment record created:', paymentData);
+
       // Trigger analysis
+      console.log('Triggering GPT-4 Vision analysis...');
       const { error: analysisError } = await supabase.functions.invoke('analyze-payment-screenshot', {
         body: { paymentId: paymentData.id }
       });
@@ -115,7 +137,11 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       if (analysisError) {
         console.error('Analysis trigger failed:', analysisError);
         // Don't throw - let it continue, analysis can be done manually
+      } else {
+        console.log('Analysis triggered successfully');
       }
+
+      toast.success(language === 'ar' ? 'تم رفع الصورة بنجاح!' : 'Screenshot uploaded successfully!');
 
       onUploadComplete({
         screenshotUrl: publicUrl,
@@ -125,12 +151,10 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
 
     } catch (error) {
       console.error('Upload failed:', error);
-      toast({
-        title: language === 'ar' ? 'فشل في الرفع' : 'Upload failed',
+      toast.error(language === 'ar' ? 'فشل في الرفع' : 'Upload failed', {
         description: language === 'ar' 
           ? 'حدث خطأ أثناء رفع الصورة. يرجى المحاولة مرة أخرى.'
-          : 'An error occurred while uploading. Please try again.',
-        variant: 'destructive',
+          : 'An error occurred while uploading. Please try again.'
       });
     } finally {
       setIsUploading(false);
@@ -138,28 +162,39 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
   };
 
   return (
-    <div className="p-8">
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h2 className="text-2xl font-bold">
-            {language === 'ar' ? 'رفع صورة التأكيد' : 'Upload Payment Screenshot'}
-          </h2>
-          <p className="text-muted-foreground">
-            {language === 'ar' 
-              ? `ارفع صورة تأكيد تحويل ${amount} QAR`
-              : `Upload your ${amount} QAR transfer confirmation`
-            }
-          </p>
+    <div className="p-4 sm:p-8">
+      {/* Header with controls */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">
+              {language === 'ar' ? 'خروج' : 'Logout'}
+            </span>
+          </Button>
         </div>
+        <ThemeLanguageToggle />
+      </div>
+
+      <div className="mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold mb-2">
+          {language === 'ar' ? 'رفع صورة التأكيد' : 'Upload Payment Screenshot'}
+        </h2>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          {language === 'ar' 
+            ? `ارفع صورة تأكيد تحويل ${amount} QAR`
+            : `Upload your ${amount} QAR transfer confirmation`
+          }
+        </p>
       </div>
 
       <div className="space-y-6">
         {/* Email Field */}
         <div>
-          <Label htmlFor="email">
+          <Label htmlFor="email" className="text-sm sm:text-base">
             {language === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}
           </Label>
           <Input
@@ -167,13 +202,13 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
             type="email"
             value={userEmail}
             disabled
-            className="bg-muted"
+            className="bg-muted mt-2"
           />
         </div>
 
         {/* Sender Alias Field */}
         <div>
-          <Label htmlFor="senderAlias">
+          <Label htmlFor="senderAlias" className="text-sm sm:text-base">
             {language === 'ar' ? 'اسمك المستعار في البنك' : 'Your Bank Alias Name'}
           </Label>
           <Input
@@ -186,8 +221,9 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
               : 'Enter your bank alias or registered mobile number'
             }
             required
+            className="mt-2"
           />
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             {language === 'ar' 
               ? 'هذا الاسم يجب أن يطابق الاسم الظاهر في صورة التحويل'
               : 'This name must match the sender name shown in your transfer screenshot'
@@ -197,16 +233,17 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
 
         {/* Screenshot Upload */}
         <div>
-          <Label htmlFor="screenshot">
+          <Label htmlFor="screenshot" className="text-sm sm:text-base">
             {language === 'ar' ? 'صورة تأكيد التحويل' : 'Transfer Confirmation Screenshot'}
           </Label>
-          <Card className="p-6 border-dashed border-2 hover:border-primary/50 transition-colors">
+          <Card className="p-4 sm:p-6 border-dashed border-2 hover:border-primary/50 transition-colors mt-2">
             <div className="text-center">
-              <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <Upload className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
               <div className="mb-4">
                 <Button
                   variant="outline"
                   onClick={() => document.getElementById('file-input')?.click()}
+                  className="w-full sm:w-auto"
                 >
                   {language === 'ar' ? 'اختر صورة' : 'Choose Image'}
                 </Button>
@@ -218,7 +255,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
                   className="hidden"
                 />
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {language === 'ar' 
                   ? 'PNG, JPG, JPEG, WebP (حد أقصى 5 ميجابايت)'
                   : 'PNG, JPG, JPEG, WebP (max 5MB)'
@@ -226,7 +263,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
               </p>
               {selectedFile && (
                 <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                  <p className="text-sm font-medium text-green-700 dark:text-green-300 break-all">
                     ✅ {selectedFile.name}
                   </p>
                 </div>
@@ -236,10 +273,10 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         </div>
 
         {/* Important Notice */}
-        <Card className="p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+        <Card className="p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-            <div className="text-sm text-blue-700 dark:text-blue-300">
+            <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="text-xs sm:text-sm text-blue-700 dark:text-blue-300">
               <div className="font-medium mb-1">
                 {language === 'ar' ? 'تأكد من وضوح الصورة' : 'Ensure Screenshot Clarity'}
               </div>

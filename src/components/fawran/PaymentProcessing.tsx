@@ -68,8 +68,12 @@ export function PaymentProcessing({ paymentId, onProcessingComplete }: PaymentPr
 
   // Check payment status
   useEffect(() => {
+    let isSubscribed = true;
+    
     const checkPaymentStatus = async () => {
       try {
+        console.log('Checking payment status for ID:', paymentId);
+        
         const { data, error } = await supabase
           .from('pending_fawran_payments')
           .select('status, review_notes')
@@ -81,7 +85,12 @@ export function PaymentProcessing({ paymentId, onProcessingComplete }: PaymentPr
           return;
         }
 
+        console.log('Payment status data:', data);
+
+        if (!isSubscribed) return; // Component unmounted
+
         if (data.status === 'approved') {
+          console.log('Payment approved!');
           onProcessingComplete({ 
             success: true, 
             message: language === 'ar' 
@@ -89,6 +98,7 @@ export function PaymentProcessing({ paymentId, onProcessingComplete }: PaymentPr
               : 'Payment verified successfully! Welcome to WAKTI.'
           });
         } else if (data.status === 'rejected' || data.status === 'flagged') {
+          console.log('Payment needs review:', data.status);
           onProcessingComplete({ 
             success: false, 
             needsReview: true,
@@ -108,16 +118,20 @@ export function PaymentProcessing({ paymentId, onProcessingComplete }: PaymentPr
 
     // Auto-timeout after 2 minutes if no response
     const timeout = setTimeout(() => {
-      onProcessingComplete({ 
-        success: false, 
-        needsReview: true,
-        message: language === 'ar' 
-          ? 'نحتاج لمراجعة دفعتك يدوياً. سنتواصل معك قريباً.'
-          : 'We need to review your payment manually. We\'ll contact you soon.'
-      });
+      if (isSubscribed) {
+        console.log('Payment verification timeout');
+        onProcessingComplete({ 
+          success: false, 
+          needsReview: true,
+          message: language === 'ar' 
+            ? 'نحتاج لمراجعة دفعتك يدوياً. سنتواصل معك قريباً.'
+            : 'We need to review your payment manually. We\'ll contact you soon.'
+        });
+      }
     }, 120000);
 
     return () => {
+      isSubscribed = false;
       clearInterval(interval);
       clearTimeout(timeout);
     };
@@ -127,19 +141,19 @@ export function PaymentProcessing({ paymentId, onProcessingComplete }: PaymentPr
   const IconComponent = currentFeatureData.icon;
 
   return (
-    <div className="p-8 text-center">
+    <div className="p-4 sm:p-8 text-center">
       <div className="mb-8">
         <div className="relative inline-block">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 bg-primary rounded-full animate-pulse"></div>
+            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-primary rounded-full animate-pulse"></div>
           </div>
         </div>
         
-        <h2 className="text-2xl font-bold mb-2">
+        <h2 className="text-xl sm:text-2xl font-bold mb-2">
           {language === 'ar' ? 'جاري التحقق من الدفع...' : 'Verifying payment...'}
         </h2>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground text-sm sm:text-base">
           {language === 'ar' 
             ? 'يرجى الانتظار، هذا عادة ما يستغرق أقل من دقيقة!'
             : 'Hang tight! This usually takes under a minute.'}
@@ -147,17 +161,17 @@ export function PaymentProcessing({ paymentId, onProcessingComplete }: PaymentPr
       </div>
 
       {/* Feature Carousel */}
-      <Card className="p-6 max-w-md mx-auto">
+      <Card className="p-4 sm:p-6 max-w-md mx-auto">
         <div className="text-center">
-          <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-4 ${currentFeatureData.color}`}>
-            <IconComponent className="h-6 w-6" />
+          <div className={`inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-4 ${currentFeatureData.color}`}>
+            <IconComponent className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
           
-          <h3 className="font-bold text-lg mb-2">
+          <h3 className="font-bold text-base sm:text-lg mb-2">
             {currentFeatureData.title}
           </h3>
           
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {currentFeatureData.description}
           </p>
         </div>
