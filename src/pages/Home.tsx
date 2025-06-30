@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,22 +26,18 @@ export default function Home() {
   }, [user, navigate]);
 
   const [pricingPlan, setPricingPlan] = useState("monthly");
-  const [currency, setCurrency] = useState("USD");
 
   // Dynamic price calculation
   const getPrices = () => {
     const prices = {
-      monthly: { USD: 16.50, QAR: 60 },
-      yearly: { USD: 165.00, QAR: 600 }
+      monthly: { QAR: 55 },
+      yearly: { QAR: 550 }
     };
     return prices[pricingPlan as keyof typeof prices];
   };
 
-  const formatPrice = (amount: number, curr: string) => {
-    if (curr === "QAR") {
-      return `${amount} QAR`;
-    }
-    return `$${amount}`;
+  const formatPrice = (amount: number) => {
+    return `${amount} QAR`;
   };
 
   const containerVariants = {
@@ -249,26 +246,6 @@ export default function Home() {
                 {t("yearly", language)}
               </Button>
             </div>
-
-            {/* Currency Toggle */}
-            <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-1 border shadow-sm">
-              <Button
-                size="sm"
-                variant={currency === "USD" ? "default" : "ghost"}
-                className="rounded-full text-sm px-4 py-2"
-                onClick={() => setCurrency("USD")}
-              >
-                USD
-              </Button>
-              <Button
-                size="sm"
-                variant={currency === "QAR" ? "default" : "ghost"}
-                className="rounded-full text-sm px-4 py-2"
-                onClick={() => setCurrency("QAR")}
-              >
-                QAR
-              </Button>
-            </div>
           </motion.div>
           
           <motion.div
@@ -278,7 +255,7 @@ export default function Home() {
             <div className="text-center mb-8">
               <div className="flex justify-center items-baseline gap-2 mb-4">
                 <span className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  {formatPrice(getPrices()[currency as keyof typeof getPrices], currency)}
+                  {formatPrice(getPrices().QAR)}
                 </span>
                 {pricingPlan === "yearly" && (
                   <span className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full font-medium shadow-sm">
