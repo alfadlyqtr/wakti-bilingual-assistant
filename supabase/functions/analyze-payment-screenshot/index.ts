@@ -65,26 +65,50 @@ serve(async (req) => {
     const arrayBuffer = await fileData.arrayBuffer();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-    // Analyze with GPT-4 Vision
-    const analysisPrompt = `Analyze this Fawran payment screenshot and extract the following information:
+    // Enhanced GPT-4 Vision analysis prompt for Fawran validation
+    const analysisPrompt = `You are a Fawran payment verification expert. Analyze this Qatar bank transfer screenshot and extract the following information with high accuracy:
 
-1. Payment amount (should be ${payment.amount} QAR)
-2. Recipient (should be "alfadlyqtr" or "Abdullah Hassoun" or similar)
-3. Payment method confirmation (should show Fawran)
-4. Transaction status (should be completed/successful)
-5. Any suspicious elements or red flags
+REQUIRED VALIDATIONS:
+1. Transfer Type: Must contain "Fawran" or "فوران" (instant transfer)
+2. Payment Amount: Must be exactly ${payment.amount} QAR (${payment.amount} ريال قطري)
+3. Beneficiary Alias: Must be exactly "alfadlyqtr"
+4. Beneficiary Name: Must be "ABDULLAH HASSOUN" or "عبدالله حسون" (any case variation)
+5. Timestamp: Must be within the last 90 minutes (1.5 hours)
+6. Sender Information: Extract sender alias/name or mobile number
+7. Reference Numbers: Extract all reference and transaction numbers
+8. Transfer Status: Must show "Completed" or "تم" or "منجز" or similar success status
 
-Respond in JSON format with:
+CRITICAL CHECKS:
+- The transfer must be FROM a Qatar bank TO alfadlyqtr
+- The amount must match exactly (not approximate)
+- The transfer must be recent (within 90 minutes)
+- The recipient must be ABDULLAH HASSOUN only
+- Must be a Fawran (instant) transfer, not regular transfer
+
+Respond in JSON format:
 {
   "isValid": boolean,
-  "extractedAmount": number or null,
-  "extractedRecipient": string or null,
-  "isFawranPayment": boolean,
-  "transactionStatus": string,
+  "transferType": "string (Fawran/فوران found)",
+  "extractedAmount": number,
+  "amountMatches": boolean,
+  "beneficiaryAlias": "string",
+  "aliasMatches": boolean,
+  "beneficiaryName": "string", 
+  "nameMatches": boolean,
+  "senderInfo": "string (alias or mobile)",
+  "timestamp": "string",
+  "isWithinTimeLimit": boolean,
+  "referenceNumber": "string",
+  "transactionId": "string",
+  "transferStatus": "string",
+  "isCompleted": boolean,
   "confidence": number (0-100),
-  "issues": string[],
-  "recommendation": "approve" | "reject" | "manual_review"
-}`;
+  "issues": ["array of any problems found"],
+  "recommendation": "approve|reject|manual_review",
+  "extractedText": "string (all visible text for manual review)"
+}
+
+Be extremely strict with validation. If ANY required field is missing, unclear, or doesn't match exactly, recommend manual review or rejection.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -108,7 +132,7 @@ Respond in JSON format with:
             ]
           }
         ],
-        max_tokens: 1000,
+        max_tokens: 1500,
       }),
     });
 
@@ -121,42 +145,56 @@ Respond in JSON format with:
     } catch {
       analysis = {
         isValid: false,
+        transferType: null,
         extractedAmount: null,
-        extractedRecipient: null,
-        isFawranPayment: false,
-        transactionStatus: 'unknown',
+        amountMatches: false,
+        beneficiaryAlias: null,
+        aliasMatches: false,
+        beneficiaryName: null,
+        nameMatches: false,
+        senderInfo: null,
+        timestamp: null,
+        isWithinTimeLimit: false,
+        referenceNumber: null,
+        transactionId: null,
+        transferStatus: null,
+        isCompleted: false,
         confidence: 0,
         issues: ['Failed to parse AI analysis'],
-        recommendation: 'manual_review'
+        recommendation: 'manual_review',
+        extractedText: analysisText
       };
     }
 
-    // Validate analysis results
-    const amountMatches = analysis.extractedAmount && 
-      Math.abs(analysis.extractedAmount - payment.amount) <= 5;
-    
-    const recipientValid = analysis.extractedRecipient && 
-      (analysis.extractedRecipient.toLowerCase().includes('alfadlyqtr') ||
-       analysis.extractedRecipient.toLowerCase().includes('abdullah') ||
-       analysis.extractedRecipient.toLowerCase().includes('hassoun'));
+    // Strict validation logic
+    const validations = {
+      amountValid: analysis.amountMatches && analysis.extractedAmount === payment.amount,
+      aliasValid: analysis.aliasMatches && analysis.beneficiaryAlias?.toLowerCase() === 'alfadlyqtr',
+      nameValid: analysis.nameMatches && analysis.beneficiaryName?.toLowerCase().includes('abdullah') && analysis.beneficiaryName?.toLowerCase().includes('hassoun'),
+      transferTypeValid: analysis.transferType?.toLowerCase().includes('fawran') || analysis.transferType?.includes('فوران'),
+      timeValid: analysis.isWithinTimeLimit,
+      statusValid: analysis.isCompleted,
+      highConfidence: analysis.confidence > 85
+    };
 
-    const shouldAutoApprove = analysis.recommendation === 'approve' && 
-                              amountMatches && 
-                              recipientValid && 
-                              analysis.isFawranPayment && 
-                              analysis.confidence > 80;
+    const allValidationsPassed = Object.values(validations).every(Boolean);
+    const shouldAutoApprove = allValidationsPassed && analysis.recommendation === 'approve';
 
-    // Update payment with analysis
+    // Update payment with detailed analysis
     const { error: updateError } = await supabase
       .from('pending_fawran_payments')
       .update({
         status: shouldAutoApprove ? 'approved' : 'pending',
         review_notes: JSON.stringify({
           ai_analysis: analysis,
-          amount_matches: amountMatches,
-          recipient_valid: recipientValid,
+          validations: validations,
           analyzed_at: new Date().toISOString(),
-          auto_approved: shouldAutoApprove
+          auto_approved: shouldAutoApprove,
+          payment_details: {
+            expected_amount: payment.amount,
+            expected_alias: 'alfadlyqtr',
+            expected_beneficiary: 'ABDULLAH HASSOUN'
+          }
         }),
         reviewed_at: shouldAutoApprove ? new Date().toISOString() : null
       })
@@ -196,7 +234,7 @@ Respond in JSON format with:
         });
       }
     } else {
-      // Queue pending review notification
+      // Queue manual review notification
       await supabase.rpc('queue_notification', {
         p_user_id: payment.user_id,
         p_notification_type: 'payment_under_review',
@@ -205,7 +243,8 @@ Respond in JSON format with:
         p_data: { 
           payment_amount: payment.amount,
           plan_type: payment.plan_type,
-          confidence: analysis.confidence
+          confidence: analysis.confidence,
+          issues: analysis.issues
         },
         p_deep_link: '/settings',
         p_scheduled_for: new Date().toISOString()
@@ -224,6 +263,7 @@ Respond in JSON format with:
     return new Response(JSON.stringify({
       success: true,
       analysis,
+      validations,
       auto_approved: shouldAutoApprove,
       notification_sent: true
     }), {

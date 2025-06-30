@@ -1,0 +1,102 @@
+
+import React, { useState } from 'react';
+import { useTheme } from '@/providers/ThemeProvider';
+import { PlanSelection } from './PlanSelection';
+import { PaymentInstructions } from './PaymentInstructions';
+import { ScreenshotUpload } from './ScreenshotUpload';
+import { PaymentProcessing } from './PaymentProcessing';
+import { PaymentResult } from './PaymentResult';
+
+export type PaymentStep = 'plan' | 'instructions' | 'upload' | 'processing' | 'result';
+export type PlanType = 'monthly' | 'yearly';
+
+interface FawranPaymentOverlayProps {
+  userEmail: string;
+  onClose: () => void;
+}
+
+export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverlayProps) {
+  const { language } = useTheme();
+  const [currentStep, setCurrentStep] = useState<PaymentStep>('plan');
+  const [selectedPlan, setSelectedPlan] = useState<PlanType>('monthly');
+  const [paymentData, setPaymentData] = useState<{
+    screenshotUrl: string;
+    senderAlias: string;
+    paymentId: string;
+  } | null>(null);
+  const [paymentResult, setPaymentResult] = useState<{
+    success: boolean;
+    needsReview?: boolean;
+    message?: string;
+  } | null>(null);
+
+  const handlePlanSelect = (plan: PlanType) => {
+    setSelectedPlan(plan);
+    setCurrentStep('instructions');
+  };
+
+  const handleContinueToUpload = () => {
+    setCurrentStep('upload');
+  };
+
+  const handleUploadComplete = (data: { screenshotUrl: string; senderAlias: string; paymentId: string }) => {
+    setPaymentData(data);
+    setCurrentStep('processing');
+  };
+
+  const handleProcessingComplete = (result: { success: boolean; needsReview?: boolean; message?: string }) => {
+    setPaymentResult(result);
+    setCurrentStep('result');
+  };
+
+  const handleBackToInstructions = () => {
+    setCurrentStep('instructions');
+  };
+
+  const handleStartOver = () => {
+    setCurrentStep('plan');
+    setPaymentData(null);
+    setPaymentResult(null);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {currentStep === 'plan' && (
+          <PlanSelection onPlanSelect={handlePlanSelect} />
+        )}
+        
+        {currentStep === 'instructions' && (
+          <PaymentInstructions 
+            selectedPlan={selectedPlan}
+            onContinue={handleContinueToUpload}
+          />
+        )}
+        
+        {currentStep === 'upload' && (
+          <ScreenshotUpload
+            userEmail={userEmail}
+            selectedPlan={selectedPlan}
+            onUploadComplete={handleUploadComplete}
+            onBack={handleBackToInstructions}
+          />
+        )}
+        
+        {currentStep === 'processing' && paymentData && (
+          <PaymentProcessing
+            paymentId={paymentData.paymentId}
+            onProcessingComplete={handleProcessingComplete}
+          />
+        )}
+        
+        {currentStep === 'result' && paymentResult && (
+          <PaymentResult
+            result={paymentResult}
+            onStartOver={handleStartOver}
+            onClose={onClose}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
