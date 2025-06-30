@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -346,10 +347,14 @@ export default function Account() {
         </h1>
         
         <Tabs defaultValue="profile" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-1 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-2 h-auto p-1">
             <TabsTrigger value="profile" className="flex flex-col items-center gap-1 p-3">
               <User className="h-4 w-4" />
               <span className="text-xs">{t("profile", language)}</span>
+            </TabsTrigger>
+            <TabsTrigger value="billing" className="flex flex-col items-center gap-1 p-3">
+              <CreditCard className="h-4 w-4" />
+              <span className="text-xs">{t("billing", language)}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -616,6 +621,43 @@ export default function Account() {
                 >
                   {t("deleteMyAccount", language)}
                 </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="billing" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("subscriptionInfo", language)}</CardTitle>
+                <CardDescription>
+                  {t("currentSubscription", language)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <CreditCard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium text-muted-foreground">
+                      {language === 'ar' ? 'لا يوجد اشتراك نشط' : 'No active subscription'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("paymentHistory", language)}</CardTitle>
+                <CardDescription>
+                  {t("subscriptionHistory", language)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-4">
+                  <p className="text-muted-foreground">
+                    {t("noPaymentHistory", language)}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
