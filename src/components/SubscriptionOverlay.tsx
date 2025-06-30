@@ -34,7 +34,7 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
   useEffect(() => {
     setMounted(true);
     
-    // Load PayPal SDK
+    // Load PayPal SDK with LIVE client ID
     const loadPayPalSDK = () => {
       if (window.paypal) {
         setPaypalLoaded(true);
@@ -42,7 +42,7 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
       }
 
       const script = document.createElement('script');
-      script.src = 'https://www.paypal.com/sdk/js?client-id=sb&vault=true&intent=subscription';
+      script.src = 'https://www.paypal.com/sdk/js?client-id=ATVW7zXzTxmmYdKWHV-kKupIv3rk2OcLn6fBQMR_ANGdPqIqJt3AhQ4iY-doB8xGkHkLnmYHMEYQNwZ&vault=true&intent=subscription';
       script.onload = () => {
         setPaypalLoaded(true);
       };

@@ -1,10 +1,10 @@
 
 /**
- * PayPal Webhook Handler for WAKTI - Enhanced Version with Subscription Button Support
- * - Handles subscription events from PayPal SDK buttons
- * - Updates Supabase `subscriptions` and `profiles`
- * - Improved logging and user mapping
- * - CORS & PayPal verification support
+ * PayPal Webhook Handler for WAKTI - Production Version
+ * - Handles ONLY PayPal subscription events (not database events)
+ * - Updates Supabase `subscriptions` and `profiles` tables
+ * - Enhanced logging and error handling
+ * - Live PayPal integration ready
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
@@ -35,10 +35,21 @@ serve(async (req) => {
     const body = await req.json();
     console.log("🎯 PayPal Webhook received:", JSON.stringify(body, null, 2));
 
+    // CRITICAL: Only process actual PayPal events, ignore database events
+    if (body.type || body.table || body.schema === "realtime") {
+      console.log("⚠️ Ignoring database event - this is a PayPal webhook");
+      return new Response("Database event ignored", { headers: corsHeaders });
+    }
+
     const eventType = body.event_type;
     const resource = body.resource || {};
 
-    console.log("📝 Event details:", {
+    if (!eventType) {
+      console.log("❌ No event_type found - not a valid PayPal webhook");
+      return new Response("Invalid PayPal event", { status: 400, headers: corsHeaders });
+    }
+
+    console.log("📝 PayPal Event details:", {
       eventType,
       resourceId: resource.id,
       resourceStatus: resource.status,
@@ -46,7 +57,7 @@ serve(async (req) => {
       subscriberInfo: resource.subscriber
     });
 
-    // Only process subscription events (now proper subscription events from SDK buttons)
+    // Only process PayPal subscription events
     const allowedEventTypes = [
       "BILLING.SUBSCRIPTION.CREATED",
       "BILLING.SUBSCRIPTION.ACTIVATED", 
@@ -60,13 +71,13 @@ serve(async (req) => {
     ];
 
     if (!allowedEventTypes.includes(eventType)) {
-      console.log("⏭️ Ignored event type:", eventType);
-      return new Response("Event ignored", { headers: corsHeaders });
+      console.log("⏭️ Ignored PayPal event type:", eventType);
+      return new Response("PayPal event ignored", { headers: corsHeaders });
     }
 
-    console.log("✅ Processing subscription event:", eventType);
+    console.log("✅ Processing PayPal subscription event:", eventType);
 
-    // Extract subscription fields (improved for SDK button events)
+    // Extract subscription fields from PayPal event
     const paypalSubscriptionId = resource.id;
     const planId = resource.plan_id;
     const status = resource.status || resource.state;
@@ -77,14 +88,14 @@ serve(async (req) => {
     let userId = null;
     let mappingMethod = "none";
 
-    console.log("🔍 Attempting user mapping with improved SDK support...", {
+    console.log("🔍 Attempting user mapping for PayPal event...", {
       subscriberEmail: subscriber.email_address,
       resourceCustomId: resource.custom_id,
       planId,
       subscriptionId: paypalSubscriptionId
     });
 
-    // Enhanced user mapping logic for SDK button events
+    // Enhanced user mapping logic for PayPal events
     if (resource.custom_id) {
       userId = resource.custom_id;
       mappingMethod = "resource_custom_id";
@@ -112,13 +123,13 @@ serve(async (req) => {
     }
 
     if (!userId) {
-      console.error("❌ NO USER MAPPING POSSIBLE");
-      console.error("Raw subscriber object:", JSON.stringify(subscriber));
-      console.error("Raw resource object:", JSON.stringify(resource));
-      return new Response("No user mapping possible", { status: 200, headers: corsHeaders });
+      console.error("❌ NO USER MAPPING POSSIBLE FOR PAYPAL EVENT");
+      console.error("PayPal subscriber object:", JSON.stringify(subscriber));
+      console.error("PayPal resource object:", JSON.stringify(resource));
+      return new Response("No user mapping possible for PayPal event", { status: 200, headers: corsHeaders });
     }
 
-    console.log("🎯 Processing subscription for user:", { userId, mappingMethod, eventType });
+    console.log("🎯 Processing PayPal subscription for user:", { userId, mappingMethod, eventType });
 
     // Update subscriptions table
     if (paypalSubscriptionId) {
@@ -146,7 +157,7 @@ serve(async (req) => {
 
       const billingCurrency = "QAR";
 
-      // Determine columns
+      // Determine columns for database update
       const updateObj: any = {
         plan_name: planName,
         paypal_plan_id: planId || null,
@@ -160,26 +171,26 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       };
 
-      console.log("💾 Subscription data to save:", updateObj);
+      console.log("💾 PayPal subscription data to save:", updateObj);
 
       if (existingSubscription) {
         // Update existing subscription
-        console.log("🔄 Updating existing subscription...");
+        console.log("🔄 Updating existing PayPal subscription...");
         const { error: updateError } = await supabase
           .from("subscriptions")
           .update(updateObj)
           .eq("paypal_subscription_id", paypalSubscriptionId);
         
         if (updateError) {
-          console.error("❌ Failed to update subscription:", updateError);
+          console.error("❌ Failed to update PayPal subscription:", updateError);
         } else {
-          console.log("✅ Subscription updated successfully");
+          console.log("✅ PayPal subscription updated successfully");
         }
         
         userId = existingSubscription.user_id;
       } else {
         // Insert new subscription
-        console.log("➕ Creating new subscription...");
+        console.log("➕ Creating new PayPal subscription...");
         const { error: insertError } = await supabase.from("subscriptions").insert([{
           ...updateObj,
           user_id: userId,
@@ -187,14 +198,14 @@ serve(async (req) => {
         }]);
         
         if (insertError) {
-          console.error("❌ Failed to create subscription:", insertError);
+          console.error("❌ Failed to create PayPal subscription:", insertError);
         } else {
-          console.log("✅ New subscription created successfully for user:", userId);
+          console.log("✅ New PayPal subscription created successfully for user:", userId);
         }
       }
 
       // Update profiles status
-      console.log("👤 Updating user profile...");
+      console.log("👤 Updating user profile for PayPal subscription...");
       let profilesUpdate: any = {
         is_subscribed: (status || "").toUpperCase() === "ACTIVE",
         subscription_status: status ? status.toLowerCase() : "active",
@@ -209,10 +220,10 @@ serve(async (req) => {
       if (["CANCELLED", "EXPIRED", "SUSPENDED"].includes((status || "").toUpperCase())) {
         profilesUpdate.is_subscribed = false;
         profilesUpdate.subscription_status = (status || "inactive").toLowerCase();
-        console.log("🚫 Setting subscription as inactive due to status:", status);
+        console.log("🚫 Setting PayPal subscription as inactive due to status:", status);
       }
 
-      console.log("💾 Profile data to update:", profilesUpdate);
+      console.log("💾 Profile data to update for PayPal subscription:", profilesUpdate);
 
       const { error: profileError } = await supabase
         .from("profiles")
@@ -220,17 +231,17 @@ serve(async (req) => {
         .eq("id", userId);
 
       if (profileError) {
-        console.error("❌ Failed to update profile:", profileError);
+        console.error("❌ Failed to update profile for PayPal subscription:", profileError);
       } else {
-        console.log("✅ Profile updated successfully for user:", userId);
+        console.log("✅ Profile updated successfully for PayPal subscription, user:", userId);
       }
     }
 
-    console.log("🎉 Webhook processing completed successfully");
-    return new Response("Webhook processed successfully", { status: 200, headers: corsHeaders });
+    console.log("🎉 PayPal webhook processing completed successfully");
+    return new Response("PayPal webhook processed successfully", { status: 200, headers: corsHeaders });
     
   } catch (err) {
-    console.error("💥 Webhook processing error:", err);
-    return new Response("Internal server error", { status: 500, headers: corsHeaders });
+    console.error("💥 PayPal webhook processing error:", err);
+    return new Response("PayPal webhook error", { status: 500, headers: corsHeaders });
   }
 });
