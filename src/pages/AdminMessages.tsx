@@ -1,5 +1,3 @@
-
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Search } from "lucide-react";
@@ -281,7 +279,7 @@ export default function AdminMessages() {
         isOpen={showMessageModal}
         onClose={() => {
           setShowMessageModal(false);
-          setSelectedUser(null);
+          setSelectedMessage(null);
         }}
         message={selectedMessage}
         onResponded={handleMessageResponded}
