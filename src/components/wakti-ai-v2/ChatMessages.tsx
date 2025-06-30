@@ -89,7 +89,7 @@ export function ChatMessages({
         <div className="flex justify-start">
           <div className="max-w-md">
             <EditableTaskConfirmationCard
-              taskData={pendingTaskData || pendingReminderData}
+              data={pendingTaskData || pendingReminderData}
               isLoading={taskConfirmationLoading}
               onConfirm={pendingTaskData ? onTaskConfirmation : onReminderConfirmation}
               onCancel={onCancelTaskConfirmation}
