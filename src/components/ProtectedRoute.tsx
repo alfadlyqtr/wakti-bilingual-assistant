@@ -4,6 +4,9 @@ import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import Loading from "@/components/ui/loading";
+import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -12,6 +15,7 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, session, isLoading } = useAuth();
   const location = useLocation();
+  const { language } = useTheme();
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     isSubscribed: boolean;
     isLoading: boolean;
@@ -187,23 +191,36 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       needsPayment: subscriptionStatus.needsPayment
     });
     
-    // Create a simple subscription required overlay
+    // Create a subscription required overlay with language toggle
     return (
       <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-slate-800 p-8 rounded-lg max-w-md mx-4 text-center">
-          <h2 className="text-2xl font-bold mb-4">Subscription Required</h2>
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-lg max-w-md mx-4 text-center relative">
+          {/* Language Toggle in top-right corner */}
+          <div className="absolute top-4 right-4">
+            <ThemeLanguageToggle />
+          </div>
+          
+          <h2 className="text-2xl font-bold mb-4">
+            {t("subscriptionRequired", language)}
+          </h2>
           <p className="text-muted-foreground mb-6">
-            You need an active subscription to access WAKTI.
+            {language === 'ar' 
+              ? 'تحتاج إلى اشتراك نشط للوصول إلى WAKTI.'
+              : 'You need an active subscription to access WAKTI.'
+            }
           </p>
           <p className="text-sm text-muted-foreground mb-4">
-            Account: {user.email}
+            {language === 'ar' ? 'الحساب:' : 'Account:'} {user.email}
           </p>
           <div className="space-y-3">
             <button
               onClick={() => window.location.href = '/'}
               className="w-full bg-primary text-white px-4 py-2 rounded hover:bg-primary/90"
             >
-              Go to Subscription Page
+              {language === 'ar' 
+                ? 'انتقل إلى صفحة الاشتراك'
+                : 'Go to Subscription Page'
+              }
             </button>
             <button
               onClick={() => {
@@ -212,7 +229,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
               }}
               className="w-full bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
             >
-              Sign Out
+              {language === 'ar' ? 'تسجيل الخروج' : 'Sign Out'}
             </button>
           </div>
         </div>
