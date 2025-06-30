@@ -124,7 +124,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ langu
             </div>
 
             {/* Upcoming Events Preview with color-coded indicators */}
-            {upcomingEntries.length > 0 ? (
+            {upcomingEntries.length > 0 && (
               <div className="space-y-2 mb-4">
                 <h4 className="text-xs font-medium text-muted-foreground">
                   {language === 'ar' ? 'الأحداث القادمة' : 'Upcoming'}
@@ -144,12 +144,6 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ langu
                     </div>
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="text-center py-2 mb-4">
-                <p className="text-xs text-muted-foreground">
-                  {language === 'ar' ? 'لا توجد أحداث قادمة' : 'No upcoming events'}
-                </p>
               </div>
             )}
           </>
