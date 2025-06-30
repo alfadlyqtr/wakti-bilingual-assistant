@@ -2,6 +2,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Hand } from "lucide-react";
+import { t } from "@/utils/translations";
 
 interface DragModeToggleProps {
   isDragging: boolean;
@@ -22,8 +23,8 @@ export const DragModeToggle: React.FC<DragModeToggleProps> = ({ isDragging, onTo
         >
           <Hand className="h-3 w-3" />
           {isDragging 
-            ? (language === 'ar' ? "إيقاف السحب" : "Exit Drag Mode") 
-            : (language === 'ar' ? "تنظيم الأدوات" : "Organize Widgets")
+            ? t("exitDragMode", language)
+            : t("organizeWidgets", language)
           }
         </Button>
         {displayName && (
@@ -32,7 +33,7 @@ export const DragModeToggle: React.FC<DragModeToggleProps> = ({ isDragging, onTo
             style={{ fontFamily: 'inherit', fontWeight: 600 }}
             dir={language === 'ar' ? 'rtl' : 'ltr'}
           >
-            {language === 'ar' ? `مرحبًا، ${displayName}` : `Welcome, ${displayName}`}
+            {t("welcome", language)}, {displayName}
           </span>
         )}
       </div>

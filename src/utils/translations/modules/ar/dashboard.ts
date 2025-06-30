@@ -11,5 +11,8 @@ export const dashboardAr = {
   dragModeActivated: "تم تفعيل وضع السحب",
   dragModeDeactivated: "تم إلغاء تفعيل وضع السحب",
   noEventsYet: "لا توجد أحداث بعد",
-  createEvent: "إنشاء حدث"
+  createEvent: "إنشاء حدث",
+  organizeWidgets: "تنظيم الأدوات",
+  exitDragMode: "إيقاف السحب",
+  welcome: "مرحبًا"
 };

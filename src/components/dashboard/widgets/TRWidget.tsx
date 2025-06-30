@@ -38,7 +38,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
         {/* Error Content */}
         <div className="relative z-10 p-6 pt-12 text-center">
           <h3 className="font-semibold text-lg text-foreground mb-4">{t("tasksReminders", language)}</h3>
-          <p className="text-sm text-red-500 mb-4">Error loading data</p>
+          <p className="text-sm text-red-500 mb-4">{t("error", language)}</p>
           <Button 
             variant="outline" 
             size="sm" 
@@ -46,7 +46,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
             className="bg-white/10 backdrop-blur-sm border-white/20"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Retry
+            {t("retry", language)}
           </Button>
         </div>
       </div>
@@ -54,14 +54,14 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
   }
 
   return (
-    <div className="relative group">
+    <div className="relative group" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       {/* Liquid Glass Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-background/80 via-background/40 to-background/60 backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl"></div>
       <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-transparent to-red-500/5 rounded-xl"></div>
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br from-green-500/10 via-transparent to-red-500/10 rounded-xl"></div>
       
       {/* Drag handle with glass effect */}
-      <div className="absolute top-2 left-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-primary/20 hover:border-primary/30 transition-all duration-300 cursor-grab active:cursor-grabbing group-hover:scale-110">
+      <div className={`absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-primary/20 hover:border-primary/30 transition-all duration-300 cursor-grab active:cursor-grabbing group-hover:scale-110 ${language === 'ar' ? 'right-2' : 'left-2'}`}>
         <Hand className="h-3 w-3 text-primary/70" />
       </div>
 
@@ -91,10 +91,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
                 <div className="flex items-center gap-2 mb-2">
                   <CheckSquare className="h-4 w-4 text-green-500" />
                   <span className="text-sm font-medium text-green-500 dark:text-green-400">
-                    {language === 'ar' 
-                      ? `المهام (${pendingTasks.length})`
-                      : `Tasks (${pendingTasks.length})`
-                    }
+                    {t("tasks", language)} ({pendingTasks.length})
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -123,8 +120,8 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
                   <Bell className="h-4 w-4 text-red-500" />
                   <span className="text-sm font-medium text-red-500 dark:text-red-400">
                     {language === 'ar' 
-                      ? `تذكيرات اليوم (${todayReminders.length})`
-                      : `Today's Reminders (${todayReminders.length})`
+                      ? `تذكيرات ${t("today", language)} (${todayReminders.length})`
+                      : `${t("today", language)} ${t("reminders", language)} (${todayReminders.length})`
                     }
                   </span>
                 </div>
@@ -171,7 +168,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
               onClick={() => navigate('/tr')}
             >
               <Plus className="h-4 w-4 mr-2" />
-              {language === 'ar' ? 'إنشاء مهمة' : 'Create Task'}
+              {t("createTask", language)}
             </Button>
           </div>
         )}

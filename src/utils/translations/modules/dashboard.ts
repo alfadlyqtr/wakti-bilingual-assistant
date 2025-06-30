@@ -11,5 +11,8 @@ export const dashboard = {
   dragModeActivated: "Drag mode activated",
   dragModeDeactivated: "Drag mode deactivated",
   noEventsYet: "No events yet",
-  createEvent: "Create Event"
+  createEvent: "Create Event",
+  organizeWidgets: "Organize Widgets",
+  exitDragMode: "Exit Drag Mode",
+  welcome: "Welcome"
 };
