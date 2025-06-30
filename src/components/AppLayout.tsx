@@ -13,7 +13,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     <ProtectedRoute>
       <div className="min-h-screen bg-background">
         <AppHeader />
-        <main className="pb-20">
+        <main className="pb-16">
           {children}
         </main>
         <MobileNav />

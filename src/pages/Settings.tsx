@@ -24,13 +24,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { PrivacySettings } from "@/components/settings/PrivacySettings";
 import NotificationSettings from "@/components/notifications/NotificationSettings";
 import { t } from "@/utils/translations";
+import { Shield, Users, Eye, Quote, Palette, Bell, Layout } from "lucide-react";
+import { useToastHelper } from "@/hooks/use-toast-helper";
 
 export default function Settings() {
   const { theme, setTheme, language, setLanguage } = useTheme();
   const { user } = useAuth();
+  const { showSuccess, showError } = useToastHelper();
   const [activeTab, setActiveTab] = useState("appearance");
   const [displayName, setDisplayName] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
@@ -45,18 +47,25 @@ export default function Settings() {
     showTRWidget: true,
   });
 
+  // Privacy settings
+  const [privacySettings, setPrivacySettings] = useState({
+    autoApproveContacts: false,
+    profileVisibility: true,
+    showActivityStatus: true
+  });
+
   useEffect(() => {
     if (user) {
       setDisplayName(user.user_metadata?.display_name || "");
-      loadWidgetSettings();
+      loadSettings();
     }
   }, [user]);
 
-  const loadWidgetSettings = async () => {
+  const loadSettings = async () => {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('settings')
+        .select('settings, auto_approve_contacts')
         .eq('id', user?.id)
         .single();
 
@@ -66,8 +75,15 @@ export default function Settings() {
           ...profile.settings.widgets
         }));
       }
+
+      // Load privacy settings
+      setPrivacySettings({
+        autoApproveContacts: profile?.auto_approve_contacts || false,
+        profileVisibility: profile?.settings?.privacy?.profileVisibility !== false,
+        showActivityStatus: profile?.settings?.privacy?.activityStatus !== false
+      });
     } catch (error) {
-      console.error('Error loading widget settings:', error);
+      console.error('Error loading settings:', error);
     }
   };
 
@@ -83,10 +99,6 @@ export default function Settings() {
     }
   };
 
-  const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDisplayName(e.target.value);
-  };
-
   const handleUpdateProfile = async () => {
     setIsUpdating(true);
     try {
@@ -94,22 +106,20 @@ export default function Settings() {
         throw new Error("User not authenticated");
       }
 
-      const { data, error } = await supabase.auth.updateUser({
+      const { error } = await supabase.auth.updateUser({
         data: {
           display_name: displayName,
         },
       });
 
       if (error) {
-        console.error("Error updating profile:", error);
-        toast.error(t("errorUpdatingSettings", language));
+        showError(t("errorUpdatingSettings", language));
         return;
       }
 
-      toast.success(t("settingsUpdated", language));
+      showSuccess(t("settingsUpdated", language));
     } catch (error: any) {
-      console.error("Error updating profile:", error);
-      toast.error(error.message || t("errorUpdatingSettings", language));
+      showError(error.message || t("errorUpdatingSettings", language));
     } finally {
       setIsUpdating(false);
     }
@@ -138,34 +148,82 @@ export default function Settings() {
         })
         .eq('id', user?.id);
 
-      toast.success(t("settingsUpdated", language));
+      showSuccess(t("settingsUpdated", language));
     } catch (error) {
       console.error('Error updating widget setting:', error);
-      toast.error(t("errorUpdatingSettings", language));
-      // Revert the change
+      showError(t("errorUpdatingSettings", language));
       setWidgetSettings(widgetSettings);
     }
   };
 
+  const updatePrivacySetting = async (key: keyof typeof privacySettings, value: boolean) => {
+    try {
+      const newSettings = { ...privacySettings, [key]: value };
+      setPrivacySettings(newSettings);
+
+      if (key === 'autoApproveContacts') {
+        await supabase
+          .from('profiles')
+          .update({ auto_approve_contacts: value })
+          .eq('id', user?.id);
+      } else {
+        const { data: currentProfile } = await supabase
+          .from('profiles')
+          .select('settings')
+          .eq('id', user?.id)
+          .single();
+
+        const currentSettings = currentProfile?.settings || {};
+        const privacySettings = currentSettings.privacy || {};
+
+        const updatedPrivacy = {
+          ...privacySettings,
+          [key === 'profileVisibility' ? 'profileVisibility' : 'activityStatus']: value
+        };
+
+        await supabase
+          .from('profiles')
+          .update({ 
+            settings: {
+              ...currentSettings,
+              privacy: updatedPrivacy
+            }
+          })
+          .eq('id', user?.id);
+      }
+
+      showSuccess(language === 'ar' ? 'تم تحديث إعدادات الخصوصية' : 'Privacy settings updated');
+    } catch (error) {
+      console.error('Error updating privacy setting:', error);
+      showError(language === 'ar' ? 'خطأ في تحديث الإعدادات' : 'Error updating settings');
+      setPrivacySettings(privacySettings);
+    }
+  };
+
   return (
-    <PageContainer>
-      <div className="space-y-6 pb-20">
-        <div className="flex items-center justify-between space-y-2 md:space-y-0">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              {t("settings", language)}
-            </h2>
-            <p className="text-muted-foreground">
-              {language === "ar" ? "إدارة إعدادات التطبيق" : "Manage your app settings"}
-            </p>
-          </div>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto p-4 max-w-4xl">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">
+            {t("settings", language)}
+          </h1>
+          <p className="text-muted-foreground">
+            {language === "ar" ? "إدارة إعدادات التطبيق" : "Manage your app settings"}
+          </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="appearance">{t("appearance", language)}</TabsTrigger>
-            <TabsTrigger value="notifications">{t("notifications", language)}</TabsTrigger>
-            <TabsTrigger value="dashboard">
+            <TabsTrigger value="appearance" className="flex items-center gap-2">
+              <Palette className="h-4 w-4" />
+              {t("appearance", language)}
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              {t("notifications", language)}
+            </TabsTrigger>
+            <TabsTrigger value="dashboard" className="flex items-center gap-2">
+              <Layout className="h-4 w-4" />
               {language === "ar" ? "لوحة التحكم" : "Dashboard"}
             </TabsTrigger>
           </TabsList>
@@ -178,7 +236,7 @@ export default function Settings() {
                   {language === "ar" ? "تخصيص مظهر التطبيق" : "Customize the app appearance"}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="name">
                     {language === "ar" ? "الاسم المعروض" : "Display Name"}
@@ -187,12 +245,12 @@ export default function Settings() {
                     id="name"
                     placeholder={language === "ar" ? "أدخل اسمك المعروض" : "Enter your display name"}
                     value={displayName}
-                    onChange={handleDisplayNameChange}
+                    onChange={(e) => setDisplayName(e.target.value)}
                   />
+                  <Button onClick={handleUpdateProfile} disabled={isUpdating} className="mt-2">
+                    {isUpdating ? (language === "ar" ? "جاري التحديث..." : "Updating...") : (language === "ar" ? "تحديث الملف الشخصي" : "Update Profile")}
+                  </Button>
                 </div>
-                <Button onClick={handleUpdateProfile} disabled={isUpdating}>
-                  {isUpdating ? (language === "ar" ? "جاري التحديث..." : "Updating...") : (language === "ar" ? "تحديث الملف الشخصي" : "Update Profile")}
-                </Button>
 
                 <div className="space-y-2">
                   <Label htmlFor="theme">{t("theme", language)}</Label>
@@ -206,6 +264,7 @@ export default function Settings() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="language">{t("language", language)}</Label>
                   <Select value={language} onValueChange={handleLanguageChange}>
@@ -217,6 +276,82 @@ export default function Settings() {
                       <SelectItem value="ar">{t("arabic", language)}</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Privacy Settings in Appearance Tab */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  {language === 'ar' ? 'إعدادات الخصوصية' : 'Privacy Settings'}
+                </CardTitle>
+                <CardDescription>
+                  {language === 'ar' 
+                    ? 'تحكم في خصوصيتك وكيفية تفاعل الآخرين معك'
+                    : 'Control your privacy and how others can interact with you'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-md border">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      <Label className="text-sm font-medium">
+                        {language === 'ar' ? 'الموافقة التلقائية على طلبات التواصل' : 'Auto-approve Contact Requests'}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' 
+                        ? 'قبول طلبات إضافة جهات الاتصال تلقائياً بدون مراجعة'
+                        : 'Automatically accept contact requests without manual review'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={privacySettings.autoApproveContacts}
+                    onCheckedChange={(checked) => updatePrivacySetting('autoApproveContacts', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-md border">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4" />
+                      <Label className="text-sm font-medium">
+                        {language === 'ar' ? 'إظهار الملف الشخصي للآخرين' : 'Profile Visibility to Others'}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' 
+                        ? 'السماح للمستخدمين الآخرين برؤية ملفك الشخصي'
+                        : 'Allow other users to view your profile information'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={privacySettings.profileVisibility}
+                    onCheckedChange={(checked) => updatePrivacySetting('profileVisibility', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-md border">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 rounded-full bg-green-500"></div>
+                      <Label className="text-sm font-medium">
+                        {language === 'ar' ? 'إظهار حالة النشاط' : 'Show Activity Status'}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' 
+                        ? 'السماح للآخرين برؤية ما إذا كنت متصلاً أم لا'
+                        : 'Let others see when you are online or active'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={privacySettings.showActivityStatus}
+                    onCheckedChange={(checked) => updatePrivacySetting('showActivityStatus', checked)}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -328,12 +463,7 @@ export default function Settings() {
             </Card>
           </TabsContent>
         </Tabs>
-
-        {/* Privacy Settings Section */}
-        <div className="mt-8">
-          <PrivacySettings />
-        </div>
       </div>
-    </PageContainer>
+    </div>
   );
 }

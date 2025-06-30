@@ -23,11 +23,11 @@ export function PageContainer({
 }: PageContainerProps) {
   
   return (
-    <div className="mobile-container">
+    <div className="min-h-screen bg-background">
       {showHeader && (
         <AppHeader />
       )}
-      <div className="flex-1 overflow-y-auto scrollbar-hide pb-24">
+      <div className="flex-1">
         {children}
       </div>
     </div>
