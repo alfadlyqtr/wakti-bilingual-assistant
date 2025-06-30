@@ -25,7 +25,9 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, userData: { username: string; full_name: string; date_of_birth: string }) => Promise<void>;
   logout: () => Promise<void>;
+  signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   updateEmail: (email: string) => Promise<void>;
   updateProfile: (data: any) => Promise<void>;
@@ -40,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useProgressierSync(user?.id);
+  useProgressierSync();
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -132,7 +134,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
   const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) throw error;
+  };
+
+  const forgotPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
@@ -173,7 +188,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     signup,
     logout,
+    signOut,
     resetPassword,
+    forgotPassword,
     updatePassword,
     updateEmail,
     updateProfile,
