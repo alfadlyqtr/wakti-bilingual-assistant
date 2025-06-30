@@ -7,6 +7,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Heart, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { t } from '@/utils/translations';
 
 // Ultra-fast skeleton component (reduced further)
 const EventsSkeleton = () => (
@@ -25,6 +26,7 @@ const EventsSkeleton = () => (
 
 const OptimizedMaw3dEvents = React.memo(() => {
   const navigate = useNavigate();
+  const { language } = useTheme();
   
   // Use optimized hook with caching and deduplication
   const { events, loading, error } = useOptimizedMaw3dEvents();
@@ -42,14 +44,14 @@ const OptimizedMaw3dEvents = React.memo(() => {
   // Handle error state
   if (error) {
     return (
-      <div className="min-h-screen p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
+      <div className="min-h-screen p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
         <div className="max-w-4xl mx-auto">
           <div className="text-center py-12">
             <Heart className="mx-auto h-12 w-12 text-red-500 mb-4" />
-            <h3 className="text-lg font-medium mb-2">Error Loading Events</h3>
+            <h3 className="text-lg font-medium mb-2">{t('errorLoadingEvent', language)}</h3>
             <p className="text-muted-foreground mb-4">{error}</p>
             <Button onClick={() => window.location.reload()} variant="outline">
-              Try Again
+              {t('retry', language)}
             </Button>
           </div>
         </div>
@@ -58,7 +60,7 @@ const OptimizedMaw3dEvents = React.memo(() => {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
+    <div className="min-h-screen p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex flex-col gap-4 mb-8">
@@ -68,12 +70,14 @@ const OptimizedMaw3dEvents = React.memo(() => {
             </div>
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Maw3d Events
+                {t('maw3dEvents', language)}
               </h1>
               <p className="text-muted-foreground">
                 {loading 
-                  ? 'Loading events...'
-                  : `Showing ${events.length} events`
+                  ? t('loading', language)
+                  : language === 'ar' 
+                    ? `عرض ${events.length} أحداث`
+                    : `Showing ${events.length} events`
                 }
               </p>
             </div>
@@ -86,7 +90,7 @@ const OptimizedMaw3dEvents = React.memo(() => {
               size="lg"
             >
               <Plus className="h-5 w-5 mr-2" />
-              Create Event
+              {t('createEvent', language)}
             </Button>
           </div>
         </div>
@@ -100,10 +104,13 @@ const OptimizedMaw3dEvents = React.memo(() => {
               <div className="max-w-md mx-auto p-8 rounded-2xl bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl">
                 <Heart className="mx-auto h-16 w-16 text-purple-400 mb-6" />
                 <h3 className="text-xl font-semibold mb-3 text-gray-800">
-                  No Events Yet
+                  {t('noEventsYet', language)}
                 </h3>
                 <p className="text-gray-600 mb-6 leading-relaxed">
-                  Create your first event to get started
+                  {language === 'ar' 
+                    ? 'أنشئ حدثك الأول للبدء'
+                    : 'Create your first event to get started'
+                  }
                 </p>
                 <Button 
                   onClick={handleCreateEvent}
@@ -111,7 +118,7 @@ const OptimizedMaw3dEvents = React.memo(() => {
                   className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <Plus className="h-5 w-5 mr-2" />
-                  Create Event
+                  {t('createEvent', language)}
                 </Button>
               </div>
             </div>
