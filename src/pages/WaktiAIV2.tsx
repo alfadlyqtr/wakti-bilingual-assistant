@@ -354,6 +354,10 @@ const WaktiAIV2 = () => {
       const updatedMessages = [...allMessages, userMessage];
       setAllMessages(updatedMessages);
 
+      // ENHANCED: Dynamic timeout based on request type - longer for Vision
+      const hasVisionFiles = attachedFiles && attachedFiles.length > 0;
+      const timeoutDuration = hasVisionFiles ? 30000 : 15000; // 30s for Vision, 15s for regular
+
       // ENHANCED: Timeout-protected API call with FULL personalization
       const response = await Promise.race([
         WaktiAIV2ServiceClass.sendMessage(
@@ -368,12 +372,15 @@ const WaktiAIV2 = () => {
           '', // Let service handle conversation summary
           attachedFiles || []
         ),
-        // Timeout protection
+        // Dynamic timeout protection
         new Promise((_, reject) => {
           const timeoutId = setTimeout(() => {
             setRequestTimeout(true);
-            reject(new Error('AI is taking longer than expected - please try again'));
-          }, 15000);
+            const timeoutMessage = hasVisionFiles 
+              ? 'Image analysis is taking longer than expected - please try again'
+              : 'AI is taking longer than expected - please try again';
+            reject(new Error(timeoutMessage));
+          }, timeoutDuration);
           
           // Cleanup timeout if request completes
           abortControllerRef.current?.signal.addEventListener('abort', () => {
@@ -422,11 +429,16 @@ const WaktiAIV2 = () => {
     } catch (error: any) {
       console.error('🚨 ENHANCED AI: Error:', error);
       
-      // IMPROVED: Better error messages
+      // IMPROVED: Better error messages with Vision-specific handling
       if (error.message?.includes('timeout') || error.message?.includes('longer than expected')) {
         setRequestTimeout(true);
-        setError('AI is taking longer than usual - please try again');
-        showError(language === 'ar' ? 'الذكاء الاصطناعي يستغرق وقتاً أطول - حاول مرة أخرى' : 'AI is taking longer than usual - try again');
+        const isVisionTimeout = error.message?.includes('Image analysis');
+        const errorMsg = isVisionTimeout
+          ? (language === 'ar' ? 'تحليل الصورة يستغرق وقتاً أطول - حاول مرة أخرى' : 'Image analysis taking longer - try again')
+          : (language === 'ar' ? 'الذكاء الاصطناعي يستغرق وقتاً أطول - حاول مرة أخرى' : 'AI is taking longer than usual - try again');
+        
+        setError(errorMsg);
+        showError(errorMsg);
       } else if (error.message?.includes('network') || error.message?.includes('connection')) {
         setError('Network connection issue - check your internet');
         showError(language === 'ar' ? 'مشكلة في الاتصال - تحقق من الإنترنت' : 'Network issue - check connection');

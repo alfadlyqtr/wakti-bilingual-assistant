@@ -1,7 +1,37 @@
 
 import React from 'react';
+import { useTheme } from '@/providers/ThemeProvider';
 
-export function TypingIndicator() {
+interface TypingIndicatorProps {
+  hasAttachedFiles?: boolean;
+  isVisionProcessing?: boolean;
+}
+
+export function TypingIndicator({ hasAttachedFiles = false, isVisionProcessing = false }: TypingIndicatorProps) {
+  const { language } = useTheme();
+
+  const getLoadingMessage = () => {
+    if (isVisionProcessing || hasAttachedFiles) {
+      return language === 'ar' 
+        ? 'وقتي يحلل الصورة...'
+        : 'WAKTI AI is analyzing image...';
+    }
+    
+    return language === 'ar' 
+      ? 'وقتي يفكر...'
+      : 'WAKTI AI is thinking...';
+  };
+
+  const getSubMessage = () => {
+    if (isVisionProcessing || hasAttachedFiles) {
+      return language === 'ar' 
+        ? 'قد يستغرق هذا وقتاً أطول قليلاً'
+        : 'This may take a bit longer';
+    }
+    
+    return null;
+  };
+
   return (
     <div className="flex justify-start mb-4">
       <div className="bg-muted rounded-2xl px-4 py-3 mr-12">
@@ -20,9 +50,16 @@ export function TypingIndicator() {
               style={{ animationDelay: '300ms' }} 
             />
           </div>
-          <span className="text-xs text-muted-foreground ml-2">
-            WAKTI AI is thinking...
-          </span>
+          <div className="ml-2">
+            <span className="text-xs text-muted-foreground">
+              {getLoadingMessage()}
+            </span>
+            {getSubMessage() && (
+              <div className="text-xs text-muted-foreground/70 mt-1">
+                {getSubMessage()}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
