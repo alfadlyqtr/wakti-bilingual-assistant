@@ -1,4 +1,5 @@
 
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, Search, Filter, RefreshCw, Eye, UserX, Trash2, AlertTriangle } from "lucide-react";
@@ -18,8 +19,8 @@ import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 interface AdminUser {
   id: string;
   email: string;
-  full_name?: string;
-  display_name?: string;
+  full_name: string;
+  display_name: string;
   username?: string;
   created_at: string;
   is_subscribed?: boolean;
@@ -78,10 +79,12 @@ export default function AdminUsers() {
 
       if (error) throw error;
       
-      // Ensure email_confirmed has a default value
+      // Ensure all required fields have default values
       const processedUsers = (data || []).map(user => ({
         ...user,
         email: user.email || '',
+        full_name: user.full_name || user.display_name || 'Unknown User',
+        display_name: user.display_name || user.full_name || 'Unknown User',
         email_confirmed: user.email_confirmed ?? false
       }));
       
