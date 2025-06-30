@@ -20,7 +20,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get payment submission
+    console.log('Processing Fawran payment action:', { paymentId, action });
+
+    // Get payment details
     const { data: payment, error: paymentError } = await supabase
       .from('pending_fawran_payments')
       .select('*')
@@ -28,7 +30,7 @@ serve(async (req) => {
       .single();
 
     if (paymentError || !payment) {
-      throw new Error('Payment submission not found');
+      throw new Error('Payment not found');
     }
 
     // Update payment status
@@ -36,8 +38,12 @@ serve(async (req) => {
       .from('pending_fawran_payments')
       .update({
         status: action,
-        review_notes: adminNotes || payment.review_notes,
-        reviewed_at: new Date().toISOString()
+        reviewed_at: new Date().toISOString(),
+        review_notes: adminNotes ? JSON.stringify({
+          admin_notes: adminNotes,
+          reviewed_at: new Date().toISOString(),
+          action: action
+        }) : null
       })
       .eq('id', paymentId);
 
@@ -45,11 +51,10 @@ serve(async (req) => {
       throw new Error('Failed to update payment status');
     }
 
-    // Handle approval or rejection
+    // If approved, activate subscription
     if (action === 'approved') {
       const planType = payment.plan_type === 'yearly' ? 'Yearly Plan' : 'Monthly Plan';
       
-      // Activate subscription
       const { error: subscriptionError } = await supabase.rpc('admin_activate_subscription', {
         p_user_id: payment.user_id,
         p_plan_name: planType,
@@ -57,43 +62,53 @@ serve(async (req) => {
         p_billing_currency: 'QAR'
       });
 
-      if (subscriptionError) {
-        throw new Error('Failed to activate subscription');
+      if (!subscriptionError) {
+        // Store reference numbers as used
+        if (payment.payment_reference_number || payment.transaction_reference_number) {
+          await supabase
+            .from('used_reference_numbers')
+            .insert({
+              reference_number: payment.payment_reference_number,
+              transaction_reference: payment.transaction_reference_number,
+              used_by: payment.user_id,
+              payment_id: payment.id
+            });
+        }
+
+        // Send approval notification
+        await supabase.rpc('queue_notification', {
+          p_user_id: payment.user_id,
+          p_notification_type: 'subscription_activated',
+          p_title: '🎉 Payment Approved by Admin!',
+          p_body: `Your ${planType} subscription has been manually approved and activated. Welcome to Wakti Premium!`,
+          p_data: { 
+            plan_type: payment.plan_type, 
+            amount: payment.amount,
+            payment_method: 'fawran',
+            admin_approved: true
+          },
+          p_deep_link: '/dashboard',
+          p_scheduled_for: new Date().toISOString()
+        });
       }
-
-      // Queue success notification
-      await supabase.rpc('queue_notification', {
-        p_user_id: payment.user_id,
-        p_notification_type: 'subscription_activated',
-        p_title: '🎉 Subscription Activated!',
-        p_body: `Your ${planType} subscription has been activated. Welcome to Wakti Premium!`,
-        p_data: { 
-          plan_type: payment.plan_type, 
-          amount: payment.amount,
-          payment_method: 'fawran'
-        },
-        p_deep_link: '/dashboard',
-        p_scheduled_for: new Date().toISOString()
-      });
-
     } else if (action === 'rejected') {
-      // Queue rejection notification
+      // Send rejection notification
       await supabase.rpc('queue_notification', {
         p_user_id: payment.user_id,
         p_notification_type: 'payment_rejected',
-        p_title: '❌ Payment Verification Failed',
-        p_body: 'Your payment could not be verified. Please contact support or try again with a clearer screenshot.',
+        p_title: '❌ Payment Rejected',
+        p_body: 'Your payment submission has been rejected. Please contact support if you believe this is an error.',
         p_data: { 
-          reason: adminNotes || 'Payment verification failed',
           payment_amount: payment.amount,
-          payment_method: 'fawran'
+          plan_type: payment.plan_type,
+          reason: adminNotes || 'Administrative decision'
         },
         p_deep_link: '/settings',
         p_scheduled_for: new Date().toISOString()
       });
     }
 
-    // Trigger immediate notification processing
+    // Trigger notification processing
     setTimeout(async () => {
       try {
         await supabase.functions.invoke('process-notification-queue', { body: {} });
@@ -104,14 +119,14 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: `Payment ${action} successfully`,
-      notification_queued: true
+      action,
+      paymentId
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('Error in process-fawran-payment:', error);
+    console.error('Error processing Fawran payment:', error);
     return new Response(JSON.stringify({ 
       success: false, 
       error: error.message 

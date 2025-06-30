@@ -1059,44 +1059,65 @@ export type Database = {
       }
       pending_fawran_payments: {
         Row: {
+          account_created_at: string | null
           amount: number
           created_at: string
+          duplicate_detected: boolean | null
           email: string
           id: string
+          payment_reference_number: string | null
           plan_type: string
           review_notes: string | null
           reviewed_at: string | null
+          screenshot_hash: string | null
           screenshot_url: string
           status: string
           submitted_at: string
+          tampering_detected: boolean | null
+          time_validation_passed: boolean | null
+          transaction_reference_number: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_created_at?: string | null
           amount: number
           created_at?: string
+          duplicate_detected?: boolean | null
           email: string
           id?: string
+          payment_reference_number?: string | null
           plan_type: string
           review_notes?: string | null
           reviewed_at?: string | null
+          screenshot_hash?: string | null
           screenshot_url: string
           status?: string
           submitted_at?: string
+          tampering_detected?: boolean | null
+          time_validation_passed?: boolean | null
+          transaction_reference_number?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_created_at?: string | null
           amount?: number
           created_at?: string
+          duplicate_detected?: boolean | null
           email?: string
           id?: string
+          payment_reference_number?: string | null
           plan_type?: string
           review_notes?: string | null
           reviewed_at?: string | null
+          screenshot_hash?: string | null
           screenshot_url?: string
           status?: string
           submitted_at?: string
+          tampering_detected?: boolean | null
+          time_validation_passed?: boolean | null
+          transaction_reference_number?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1187,6 +1208,41 @@ export type Database = {
             columns: ["suspended_by"]
             isOneToOne: false
             referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      screenshot_hashes: {
+        Row: {
+          created_at: string
+          id: string
+          image_hash: string
+          payment_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_hash: string
+          payment_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_hash?: string
+          payment_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "screenshot_hashes_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "pending_fawran_payments"
             referencedColumns: ["id"]
           },
         ]
@@ -1654,6 +1710,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      used_reference_numbers: {
+        Row: {
+          id: string
+          payment_id: string | null
+          reference_number: string
+          transaction_reference: string | null
+          updated_at: string | null
+          used_at: string
+          used_by: string
+        }
+        Insert: {
+          id?: string
+          payment_id?: string | null
+          reference_number: string
+          transaction_reference?: string | null
+          updated_at?: string | null
+          used_at?: string
+          used_by: string
+        }
+        Update: {
+          id?: string
+          payment_id?: string | null
+          reference_number?: string
+          transaction_reference?: string | null
+          updated_at?: string | null
+          used_at?: string
+          used_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "used_reference_numbers_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "pending_fawran_payments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_event_links: {
         Row: {

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -9,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CreditCard, Eye, CheckCircle, XCircle, Clock, Brain, ExternalLink } from "lucide-react";
+import { CreditCard, Eye, CheckCircle, XCircle, Clock, Brain, ExternalLink, Shield, Hash, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 
 interface FawranPayment {
@@ -23,6 +22,12 @@ interface FawranPayment {
   submitted_at: string;
   reviewed_at?: string;
   review_notes?: string;
+  screenshot_hash?: string;
+  payment_reference_number?: string;
+  transaction_reference_number?: string;
+  time_validation_passed?: boolean;
+  tampering_detected?: boolean;
+  duplicate_detected?: boolean;
   profiles?: {
     display_name: string;
     email: string;
@@ -100,6 +105,16 @@ export default function AdminFawranPayments() {
     }
   };
 
+  const getSecurityBadge = (payment: FawranPayment) => {
+    const hasSecurityIssues = payment.tampering_detected || payment.duplicate_detected || !payment.time_validation_passed;
+    
+    if (hasSecurityIssues) {
+      return <Badge className="bg-red-100 text-red-800"><AlertTriangle className="h-3 w-3 mr-1" />Security Alert</Badge>;
+    }
+    
+    return <Badge className="bg-green-100 text-green-800"><Shield className="h-3 w-3 mr-1" />Secure</Badge>;
+  };
+
   const getAIAnalysis = (reviewNotes: string) => {
     try {
       const parsed = JSON.parse(reviewNotes);
@@ -109,16 +124,25 @@ export default function AdminFawranPayments() {
     }
   };
 
+  const getSecurityValidations = (reviewNotes: string) => {
+    try {
+      const parsed = JSON.parse(reviewNotes);
+      return parsed.security_validations || null;
+    } catch {
+      return null;
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-background">
         <AdminHeader 
-          title="Fawran Payments" 
-          subtitle="Review and manage payment submissions"
-          icon={<CreditCard className="h-5 w-5 text-accent-blue" />}
+          title="Enhanced Fawran Payments" 
+          subtitle="Advanced security payment verification system"
+          icon={<Shield className="h-5 w-5 text-accent-blue" />}
         />
         <div className="p-6 flex items-center justify-center">
-          <div className="text-center">Loading payment submissions...</div>
+          <div className="text-center">Loading enhanced payment system...</div>
         </div>
       </div>
     );
@@ -127,17 +151,20 @@ export default function AdminFawranPayments() {
   return (
     <div className="min-h-screen bg-gradient-background pb-20">
       <AdminHeader 
-        title="Fawran Payments" 
-        subtitle={`${payments.length} payment submissions`}
-        icon={<CreditCard className="h-5 w-5 text-accent-blue" />}
+        title="Enhanced Fawran Payments" 
+        subtitle={`${payments.length} payments processed with maximum security`}
+        icon={<Shield className="h-5 w-5 text-accent-blue" />}
       />
 
       <div className="p-3 sm:p-6 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Enhanced Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <Card className="enhanced-card">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Pending
+              </CardTitle>
               <div className="text-2xl font-bold text-yellow-600">
                 {payments.filter(p => p.status === 'pending').length}
               </div>
@@ -145,7 +172,10 @@ export default function AdminFawranPayments() {
           </Card>
           <Card className="enhanced-card">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Approved</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Approved
+              </CardTitle>
               <div className="text-2xl font-bold text-green-600">
                 {payments.filter(p => p.status === 'approved').length}
               </div>
@@ -153,19 +183,36 @@ export default function AdminFawranPayments() {
           </Card>
           <Card className="enhanced-card">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Rejected</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <XCircle className="h-4 w-4" />
+                Rejected
+              </CardTitle>
               <div className="text-2xl font-bold text-red-600">
                 {payments.filter(p => p.status === 'rejected').length}
               </div>
             </CardHeader>
           </Card>
+          <Card className="enhanced-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Security Alerts
+              </CardTitle>
+              <div className="text-2xl font-bold text-orange-600">
+                {payments.filter(p => p.tampering_detected || p.duplicate_detected).length}
+              </div>
+            </CardHeader>
+          </Card>
         </div>
 
-        {/* Payments Table */}
+        {/* Enhanced Payments Table */}
         <Card className="enhanced-card">
           <CardHeader>
-            <CardTitle>Payment Submissions</CardTitle>
-            <CardDescription>Review Fawran payment screenshots and manage approvals</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Enhanced Security Payment Analysis
+            </CardTitle>
+            <CardDescription>GPT-4 Vision powered payment verification with maximum fraud protection</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -176,8 +223,10 @@ export default function AdminFawranPayments() {
                     <TableHead>Plan</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Submitted</TableHead>
+                    <TableHead>Security</TableHead>
                     <TableHead>AI Analysis</TableHead>
+                    <TableHead>Hash</TableHead>
+                    <TableHead>Submitted</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -199,33 +248,45 @@ export default function AdminFawranPayments() {
                         </TableCell>
                         <TableCell className="font-medium">{payment.amount} QAR</TableCell>
                         <TableCell>{getStatusBadge(payment.status)}</TableCell>
-                        <TableCell>
-                          {format(new Date(payment.submitted_at), 'MMM dd, yyyy HH:mm')}
-                        </TableCell>
+                        <TableCell>{getSecurityBadge(payment)}</TableCell>
                         <TableCell>
                           {aiAnalysis && (
                             <div className="flex items-center gap-2">
                               <Brain className="h-4 w-4 text-blue-500" />
                               <Badge 
-                                variant={aiAnalysis.confidence > 80 ? "default" : "secondary"}
+                                variant={aiAnalysis.confidence > 85 ? "default" : "secondary"}
                                 className="text-xs"
                               >
-                                {aiAnalysis.confidence}% confidence
+                                {aiAnalysis.confidence}%
                               </Badge>
+                              {aiAnalysis.tamperingDetected && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Tampering
+                                </Badge>
+                              )}
                             </div>
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedPayment(payment)}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              Review
-                            </Button>
-                          </div>
+                          {payment.screenshot_hash && (
+                            <div className="flex items-center gap-1">
+                              <Hash className="h-3 w-3" />
+                              <code className="text-xs">{payment.screenshot_hash.substring(0, 8)}...</code>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {format(new Date(payment.submitted_at), 'MMM dd, HH:mm')}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedPayment(payment)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Review
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -237,23 +298,26 @@ export default function AdminFawranPayments() {
         </Card>
       </div>
 
-      {/* Review Modal */}
+      {/* Enhanced Review Modal */}
       <Dialog open={!!selectedPayment} onOpenChange={() => setSelectedPayment(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Review Payment Submission</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Enhanced Security Payment Review
+            </DialogTitle>
             <DialogDescription>
-              Analyze the payment screenshot and approve or reject the submission
+              Comprehensive analysis powered by GPT-4 Vision with maximum fraud protection
             </DialogDescription>
           </DialogHeader>
 
           {selectedPayment && (
             <div className="space-y-6">
-              {/* Payment Details */}
+              {/* Payment & Security Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Payment Details</CardTitle>
+                    <CardTitle className="text-lg">Payment Information</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <div><strong>User:</strong> {selectedPayment.profiles?.display_name || 'Unknown'}</div>
@@ -265,47 +329,90 @@ export default function AdminFawranPayments() {
                   </CardContent>
                 </Card>
 
-                {/* AI Analysis */}
-                {selectedPayment.review_notes && (() => {
-                  const aiAnalysis = getAIAnalysis(selectedPayment.review_notes);
-                  return aiAnalysis && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Brain className="h-5 w-5 text-blue-500" />
-                          AI Analysis
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <div><strong>Validity:</strong> {aiAnalysis.isValid ? '✅ Valid' : '❌ Invalid'}</div>
-                        <div><strong>Fawran Payment:</strong> {aiAnalysis.isFawranPayment ? '✅ Yes' : '❌ No'}</div>
-                        <div><strong>Amount Match:</strong> {aiAnalysis.extractedAmount || 'N/A'}</div>
-                        <div><strong>Recipient:</strong> {aiAnalysis.extractedRecipient || 'N/A'}</div>
-                        <div><strong>Confidence:</strong> {aiAnalysis.confidence}%</div>
-                        <div><strong>Recommendation:</strong> 
-                          <Badge className={`ml-2 ${
-                            aiAnalysis.recommendation === 'approve' ? 'bg-green-100 text-green-800' : 
-                            aiAnalysis.recommendation === 'reject' ? 'bg-red-100 text-red-800' : 
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {aiAnalysis.recommendation}
-                          </Badge>
-                        </div>
-                        {aiAnalysis.issues && aiAnalysis.issues.length > 0 && (
-                          <div>
-                            <strong>Issues:</strong>
-                            <ul className="list-disc list-inside mt-1">
-                              {aiAnalysis.issues.map((issue: string, index: number) => (
-                                <li key={index} className="text-sm text-red-600">{issue}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })()}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      Security Analysis
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div><strong>Hash:</strong> <code className="text-xs">{selectedPayment.screenshot_hash?.substring(0, 16)}...</code></div>
+                    <div><strong>Time Valid:</strong> {selectedPayment.time_validation_passed ? '✅ Yes' : '❌ No'}</div>
+                    <div><strong>Tampering:</strong> {selectedPayment.tampering_detected ? '🚨 Detected' : '✅ None'}</div>
+                    <div><strong>Duplicate:</strong> {selectedPayment.duplicate_detected ? '🚨 Yes' : '✅ No'}</div>
+                    <div><strong>Payment Ref:</strong> {selectedPayment.payment_reference_number || 'N/A'}</div>
+                    <div><strong>Transaction Ref:</strong> {selectedPayment.transaction_reference_number || 'N/A'}</div>
+                  </CardContent>
+                </Card>
               </div>
+
+              {/* Enhanced AI Analysis */}
+              {selectedPayment.review_notes && (() => {
+                const aiAnalysis = getAIAnalysis(selectedPayment.review_notes);
+                const securityValidations = getSecurityValidations(selectedPayment.review_notes);
+                return (aiAnalysis || securityValidations) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {aiAnalysis && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Brain className="h-5 w-5 text-blue-500" />
+                            GPT-4 Vision Analysis
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          <div><strong>Confidence:</strong> {aiAnalysis.confidence}%</div>
+                          <div><strong>Recommendation:</strong> 
+                            <Badge className={`ml-2 ${
+                              aiAnalysis.recommendation === 'approve' ? 'bg-green-100 text-green-800' : 
+                              aiAnalysis.recommendation === 'reject' ? 'bg-red-100 text-red-800' : 
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {aiAnalysis.recommendation}
+                            </Badge>
+                          </div>
+                          <div><strong>Amount Match:</strong> {aiAnalysis.amountMatches ? '✅' : '❌'} ({aiAnalysis.extractedAmount})</div>
+                          <div><strong>Alias Match:</strong> {aiAnalysis.aliasMatches ? '✅' : '❌'} ({aiAnalysis.beneficiaryAlias})</div>
+                          <div><strong>Name Match:</strong> {aiAnalysis.nameMatches ? '✅' : '❌'} ({aiAnalysis.beneficiaryName})</div>
+                          <div><strong>Tampering:</strong> {aiAnalysis.tamperingDetected ? '🚨 Yes' : '✅ No'}</div>
+                          {aiAnalysis.tamperingReasons && aiAnalysis.tamperingReasons.length > 0 && (
+                            <div>
+                              <strong>Tampering Reasons:</strong>
+                              <ul className="list-disc list-inside mt-1">
+                                {aiAnalysis.tamperingReasons.map((reason: string, index: number) => (
+                                  <li key={index} className="text-sm text-red-600">{reason}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {securityValidations && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Shield className="h-5 w-5 text-orange-500" />
+                            Security Validations
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {Object.entries(securityValidations).map(([key, value]) => (
+                            <div key={key}>
+                              <strong>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</strong> 
+                              <span className={`ml-2 ${value ? 'text-green-600' : 'text-red-600'}`}>
+                                {value ? '✅ Pass' : '❌ Fail'}
+                              </span>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Screenshot */}
               <Card>
@@ -379,7 +486,7 @@ export default function AdminFawranPayments() {
       <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
         <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Payment Screenshot - Full Size</DialogTitle>
+            <DialogTitle>Payment Screenshot - Full Size Analysis</DialogTitle>
           </DialogHeader>
           {selectedPayment && (
             <div className="overflow-auto max-h-[80vh]">

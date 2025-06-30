@@ -19,12 +19,42 @@ interface ScreenshotUploadProps {
   onBack: () => void;
 }
 
+// Enhanced hash generation for image duplicate detection
+const generateImageHash = async (file: File): Promise<string> => {
+  const arrayBuffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+// Rate limiting check
+const checkRateLimit = async (): Promise<boolean> => {
+  const now = new Date();
+  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+  const { data: recentUploads } = await supabase
+    .from('pending_fawran_payments')
+    .select('submitted_at')
+    .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+    .gte('submitted_at', fiveMinutesAgo.toISOString());
+
+  const { data: hourlyUploads } = await supabase
+    .from('pending_fawran_payments')
+    .select('submitted_at')
+    .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+    .gte('submitted_at', oneHourAgo.toISOString());
+
+  return (recentUploads?.length || 0) === 0 && (hourlyUploads?.length || 0) < 3;
+};
+
 export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, onBack }: ScreenshotUploadProps) {
   const { language } = useTheme();
   const { user, signOut } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [senderAlias, setSenderAlias] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [imageHash, setImageHash] = useState<string>('');
 
   const amount = selectedPlan === 'monthly' ? 60 : 600;
 
@@ -36,7 +66,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -63,7 +93,32 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       return;
     }
 
-    setSelectedFile(file);
+    try {
+      // Generate image hash for duplicate detection
+      const hash = await generateImageHash(file);
+      setImageHash(hash);
+      
+      // Check for duplicate hash
+      const { data: existingHash } = await supabase
+        .from('screenshot_hashes')
+        .select('id')
+        .eq('image_hash', hash)
+        .maybeSingle();
+
+      if (existingHash) {
+        toast.error(language === 'ar' ? 'صورة مكررة' : 'Duplicate image detected', {
+          description: language === 'ar' 
+            ? 'هذه الصورة تم رفعها من قبل. يرجى استخدام صورة أخرى.'
+            : 'This image has been uploaded before. Please use a different screenshot.'
+        });
+        return;
+      }
+
+      setSelectedFile(file);
+    } catch (error) {
+      console.error('Hash generation failed:', error);
+      toast.error(language === 'ar' ? 'خطأ في معالجة الصورة' : 'Image processing error');
+    }
   };
 
   const handleSubmit = async () => {
@@ -76,10 +131,25 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       return;
     }
 
+    // Rate limiting check
+    const canUpload = await checkRateLimit();
+    if (!canUpload) {
+      toast.error(language === 'ar' ? 'تم تجاوز الحد المسموح' : 'Rate limit exceeded', {
+        description: language === 'ar' 
+          ? 'يمكنك رفع صورة واحدة كل 5 دقائق، بحد أقصى 3 صور في الساعة'
+          : 'You can upload one image every 5 minutes, maximum 3 per hour'
+      });
+      return;
+    }
+
     setIsUploading(true);
-    console.log('Starting upload process...');
+    console.log('Starting enhanced upload process with security checks...');
 
     try {
+      // Get user creation time for validation
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('User not authenticated');
+
       // Upload file to storage
       const fileName = `${user.id}/${Date.now()}-${selectedFile.name}`;
       console.log('Uploading file:', fileName);
@@ -102,7 +172,20 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
 
       console.log('Public URL:', publicUrl);
 
-      // Insert payment record
+      // Store screenshot hash
+      const { error: hashError } = await supabase
+        .from('screenshot_hashes')
+        .insert({
+          user_id: user.id,
+          image_hash: imageHash
+        });
+
+      if (hashError) {
+        console.error('Hash storage error:', hashError);
+        // Continue anyway - this is for tracking only
+      }
+
+      // Insert enhanced payment record with security fields
       const paymentRecord = {
         user_id: user.id,
         email: userEmail,
@@ -110,10 +193,15 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         amount: amount,
         screenshot_url: publicUrl,
         sender_alias: senderAlias.trim(),
-        status: 'pending'
+        status: 'pending',
+        screenshot_hash: imageHash,
+        account_created_at: userData.user.created_at,
+        time_validation_passed: false,
+        tampering_detected: false,
+        duplicate_detected: false
       };
 
-      console.log('Inserting payment record:', paymentRecord);
+      console.log('Inserting enhanced payment record:', paymentRecord);
 
       const { data: paymentData, error: paymentError } = await supabase
         .from('pending_fawran_payments')
@@ -128,17 +216,23 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
 
       console.log('Payment record created:', paymentData);
 
-      // Trigger analysis
-      console.log('Triggering GPT-4 Vision analysis...');
+      // Update screenshot hash with payment ID
+      await supabase
+        .from('screenshot_hashes')
+        .update({ payment_id: paymentData.id })
+        .eq('image_hash', imageHash);
+
+      // Trigger enhanced GPT-4 Vision analysis
+      console.log('Triggering enhanced GPT-4 Vision Fawran Worker...');
       const { error: analysisError } = await supabase.functions.invoke('analyze-payment-screenshot', {
         body: { paymentId: paymentData.id }
       });
 
       if (analysisError) {
-        console.error('Analysis trigger failed:', analysisError);
+        console.error('Enhanced analysis trigger failed:', analysisError);
         // Don't throw - let it continue, analysis can be done manually
       } else {
-        console.log('Analysis triggered successfully');
+        console.log('Enhanced GPT-4 Vision analysis triggered successfully');
       }
 
       toast.success(language === 'ar' ? 'تم رفع الصورة بنجاح!' : 'Screenshot uploaded successfully!');
@@ -150,7 +244,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       });
 
     } catch (error) {
-      console.error('Upload failed:', error);
+      console.error('Enhanced upload failed:', error);
       toast.error(language === 'ar' ? 'فشل في الرفع' : 'Upload failed', {
         description: language === 'ar' 
           ? 'حدث خطأ أثناء رفع الصورة. يرجى المحاولة مرة أخرى.'
@@ -276,26 +370,31 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
                   <p className="text-sm font-medium text-green-700 dark:text-green-300 break-all">
                     ✅ {selectedFile.name}
                   </p>
+                  {imageHash && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Hash: {imageHash.substring(0, 16)}...
+                    </p>
+                  )}
                 </div>
               )}
             </div>
           </Card>
         </div>
 
-        {/* Important Notice */}
+        {/* Enhanced Security Notice */}
         <Card className="p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <div className="text-xs sm:text-sm text-blue-700 dark:text-blue-300">
               <div className="font-medium mb-1">
-                {language === 'ar' ? 'تأكد من وضوح الصورة' : 'Ensure Screenshot Clarity'}
+                {language === 'ar' ? 'نظام الأمان المحسن' : 'Enhanced Security System'}
               </div>
               <ul className="space-y-1 text-xs">
-                <li>• {language === 'ar' ? 'المبلغ المحول واضح' : 'Transfer amount is clear'}</li>
-                <li>• {language === 'ar' ? 'اسم المستلم (alfadlyqtr) ظاهر' : 'Recipient alias (alfadlyqtr) visible'}</li>
-                <li>• {language === 'ar' ? 'تاريخ ووقت التحويل واضح' : 'Transfer date and time visible'}</li>
-                <li>• {language === 'ar' ? 'رقم المرجع ظاهر' : 'Reference number visible'}</li>
-                <li>• {language === 'ar' ? 'تأكد من وضوح اسم المرسل ومطابقته للإدخال أعلاه' : 'Make sure your alias name is clear and matches your above input'}</li>
+                <li>• {language === 'ar' ? 'فحص الصور المكررة تلقائياً' : 'Automatic duplicate image detection'}</li>
+                <li>• {language === 'ar' ? 'كشف التلاعب بالصور' : 'Image tampering detection'}</li>
+                <li>• {language === 'ar' ? 'تحقق من توقيت التحويل' : 'Transfer timing verification'}</li>
+                <li>• {language === 'ar' ? 'فحص أرقام المراجع' : 'Reference number validation'}</li>
+                <li>• {language === 'ar' ? 'معالجة خلال 90 ثانية' : '90-second processing guarantee'}</li>
               </ul>
             </div>
           </div>
@@ -321,7 +420,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
           {isUploading ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              {language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}
+              {language === 'ar' ? 'جاري المعالجة المحسنة...' : 'Enhanced Processing...'}
             </>
           ) : (
             language === 'ar' ? 'رفع وتأكيد الدفع' : 'Upload & Confirm Payment'
