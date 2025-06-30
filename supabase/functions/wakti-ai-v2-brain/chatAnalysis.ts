@@ -1,3 +1,4 @@
+
 const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
@@ -7,6 +8,49 @@ interface PersonalTouchData {
   style: string;
   instruction: string;
   aiNickname?: string;
+}
+
+// ENHANCED: Vision-specific prompt templates for different image types
+const VISION_PROMPT_TEMPLATES = {
+  receipt: 'Extract all visible text and summarize vendor, total, and date.',
+  screenshot: 'Analyze the UI. What app is this? What is happening?',
+  document: 'Summarize the content of this document, including headings and details.',
+  selfie: 'Describe the person, their expression, clothing, and background.',
+  scene: 'Describe this image in detail. Mention people, objects, text, and what\'s happening.'
+};
+
+// ENHANCED: Detect image type from user message context
+function detectImageType(userMessage: string): keyof typeof VISION_PROMPT_TEMPLATES {
+  const lowerMessage = userMessage.toLowerCase();
+  
+  if (lowerMessage.includes('receipt') || lowerMessage.includes('bill') || lowerMessage.includes('invoice')) {
+    return 'receipt';
+  }
+  if (lowerMessage.includes('screenshot') || lowerMessage.includes('screen') || lowerMessage.includes('app')) {
+    return 'screenshot';
+  }
+  if (lowerMessage.includes('document') || lowerMessage.includes('paper') || lowerMessage.includes('text')) {
+    return 'document';
+  }
+  if (lowerMessage.includes('selfie') || lowerMessage.includes('photo of me') || lowerMessage.includes('picture of me')) {
+    return 'selfie';
+  }
+  
+  // Default to 'scene' for general image analysis
+  return 'scene';
+}
+
+// ENHANCED: Build vision-enhanced user message with appropriate template
+function buildVisionMessage(userMessage: string, imageType: keyof typeof VISION_PROMPT_TEMPLATES): string {
+  const template = VISION_PROMPT_TEMPLATES[imageType];
+  
+  // If user provided a meaningful prompt, append template
+  if (userMessage && userMessage.trim().length > 5) {
+    return `${userMessage}\n\n${template}`;
+  }
+  
+  // If user typed nothing or just generic text, use only the template
+  return template;
 }
 
 // ENHANCED: PersonalizationProcessor logic moved directly into edge function
@@ -617,6 +661,13 @@ function buildPersonalizedSystemPrompt(personalTouch: PersonalTouchData | null, 
   return personalityPrompt;
 }
 
+// ENHANCED: Vision-specific system prompt
+function buildVisionSystemPrompt(language: string): string {
+  return language === 'ar'
+    ? "أنت مساعد ذكي مفيد يحلل الصور. استخرج كل النص المرئي، وحدد الأشخاص والأشياء والمشاهد، واستجب بوصف واضح ومنظم. استدل دائماً من التفاصيل البصرية وقدم رؤى عند الإمكان."
+    : "You are a helpful AI assistant that analyzes images. Extract all visible text, identify people, objects, and scenes, and respond with clear, structured descriptions. Always reason from visual details and provide insights where possible.";
+}
+
 // ENHANCED: Aggressive temperature based on personality
 function getPersonalizedTemperature(personalTouch: PersonalTouchData | null): number {
   if (!personalTouch) return 0.7;
@@ -651,18 +702,106 @@ export async function processWithBuddyChatAI(
       instruction: personalTouch?.instruction || ''
     });
 
-    // ENHANCED: Build aggressive personalized system prompt
+    // Build context for AI
+    let fullContext = '';
+    if (context) fullContext += `Context: ${context}\n\n`;
+    if (conversationSummary) fullContext += `Previous conversation: ${conversationSummary}\n\n`;
+
+    // ENHANCED: Vision support for attached files with intelligent prompt templates
+    if (processedFiles && processedFiles.length > 0) {
+      console.log('🔍 VISION MODE: Processing', processedFiles.length, 'attached files');
+      
+      const imageFiles = processedFiles.filter(file => 
+        file.type === 'image' || (file.publicUrl && file.type?.startsWith('image/'))
+      );
+      
+      if (imageFiles.length > 0) {
+        console.log('🔍 VISION PROCESSING: Starting OpenAI Vision analysis with enhanced prompts');
+        
+        // ENHANCED: Detect image type and build appropriate prompt
+        const imageType = detectImageType(message);
+        const enhancedMessage = buildVisionMessage(message, imageType);
+        
+        console.log('🔍 VISION: Detected image type:', imageType);
+        console.log('🔍 VISION: Enhanced message:', enhancedMessage.substring(0, 100) + '...');
+        
+        // Build vision-specific messages array with enhanced system prompt
+        const visionMessages = [
+          { role: 'system', content: buildVisionSystemPrompt(language) }
+        ];
+        
+        // Add full context if available
+        if (fullContext.trim()) {
+          visionMessages.push({ role: 'system', content: fullContext });
+        }
+        
+        // Add recent messages for continuity
+        recentMessages.forEach(msg => {
+          if (msg.role && msg.content) {
+            visionMessages.push({
+              role: msg.role,
+              content: msg.content
+            });
+          }
+        });
+        
+        // Build multimodal content with enhanced prompt
+        const visionContent = [
+          { type: 'text', text: enhancedMessage }
+        ];
+        
+        imageFiles.forEach(file => {
+          if (file.publicUrl) {
+            console.log('🔍 VISION: Added optimized image URL');
+            visionContent.push({
+              type: 'image_url',
+              image_url: { url: file.publicUrl }
+            });
+          }
+        });
+        
+        visionMessages.push({ role: 'user', content: visionContent });
+        
+        // Use OpenAI for Vision
+        console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4o');
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o',
+            messages: visionMessages,
+            max_tokens: maxTokens,
+            temperature: getPersonalizedTemperature(personalTouch)
+          }),
+        });
+
+        if (!response.ok) throw new Error(`Vision API error: ${response.status}`);
+        
+        const data = await response.json();
+        const rawResponse = data.choices[0].message.content;
+        
+        console.log('🔍 VISION SUCCESS: Generated', rawResponse.length, 'characters');
+        
+        // CRITICAL: Apply post-processing personalization
+        const enhancedResponse = PersonalizationProcessor.enhanceResponse(rawResponse, {
+          personalTouch,
+          language
+        });
+        
+        return enhancedResponse;
+      }
+    }
+
+    // ENHANCED: Build aggressive personalized system prompt for regular chat
     const personalizedSystemPrompt = buildPersonalizedSystemPrompt(personalTouch, language);
     console.log('🎯 FULL PERSONALIZED SYSTEM PROMPT:', personalizedSystemPrompt.substring(0, 200) + '...');
 
     // ENHANCED: Get personality-based temperature
     const personalizedTemperature = getPersonalizedTemperature(personalTouch);
     console.log('🎯 PERSONALIZED TEMPERATURE:', personalizedTemperature);
-
-    // Build context for AI
-    let fullContext = '';
-    if (context) fullContext += `Context: ${context}\n\n`;
-    if (conversationSummary) fullContext += `Previous conversation: ${conversationSummary}\n\n`;
 
     // Build message history
     const messages = [
@@ -684,66 +823,6 @@ export async function processWithBuddyChatAI(
         });
       }
     });
-
-    // ENHANCED: Vision support for attached files
-    if (processedFiles && processedFiles.length > 0) {
-      console.log('🔍 VISION MODE: Processing', processedFiles.length, 'attached files');
-      
-      const imageFiles = processedFiles.filter(file => 
-        file.type === 'image' || (file.publicUrl && file.type?.startsWith('image/'))
-      );
-      
-      if (imageFiles.length > 0) {
-        console.log('🔍 VISION PROCESSING: Starting OpenAI Vision analysis');
-        
-        const visionContent = [
-          { type: 'text', text: message }
-        ];
-        
-        imageFiles.forEach(file => {
-          if (file.publicUrl) {
-            console.log('🔍 VISION: Added optimized image URL');
-            visionContent.push({
-              type: 'image_url',
-              image_url: { url: file.publicUrl }
-            });
-          }
-        });
-        
-        messages.push({ role: 'user', content: visionContent });
-        
-        // Use OpenAI for Vision
-        console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4o');
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o',
-            messages: messages,
-            max_tokens: maxTokens,
-            temperature: personalizedTemperature
-          }),
-        });
-
-        if (!response.ok) throw new Error(`Vision API error: ${response.status}`);
-        
-        const data = await response.json();
-        const rawResponse = data.choices[0].message.content;
-        
-        console.log('🔍 VISION SUCCESS: Generated', rawResponse.length, 'characters');
-        
-        // CRITICAL: Apply post-processing personalization
-        const enhancedResponse = PersonalizationProcessor.enhanceResponse(rawResponse, {
-          personalTouch,
-          language
-        });
-        
-        return enhancedResponse;
-      }
-    }
 
     // Add current user message
     messages.push({ role: 'user', content: message });
