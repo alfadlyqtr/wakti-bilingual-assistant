@@ -20,8 +20,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     subscriptionDetails?: any;
   }>({ isSubscribed: false, isLoading: true, needsPayment: false });
 
-  // Owner accounts that bypass all restrictions
-  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
+  // REMOVED: Owner accounts bypass - now ALL users must have valid subscriptions
+  // const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
 
   useEffect(() => {
     console.log("ProtectedRoute: Current auth state:", {
@@ -48,16 +48,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         return;
       }
 
-      // Check if user is an owner account
-      if (ownerAccounts.includes(user.email || '')) {
-        console.log('ProtectedRoute: Owner account detected, bypassing subscription checks');
-        setSubscriptionStatus({ 
-          isSubscribed: true, 
-          isLoading: false, 
-          needsPayment: false 
-        });
-        return;
-      }
+      // REMOVED: Owner account bypass logic
+      // All users now go through the same subscription validation
 
       try {
         console.log("ProtectedRoute: Fetching subscription status from database...");
@@ -179,13 +171,47 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // For now, just allow access without subscription overlay since we removed it
-  // In a real app, you would implement proper subscription handling here
-  if (subscriptionStatus.needsPayment) {
-    console.log("ProtectedRoute: Payment needed but no subscription overlay available");
-    // Just allow access for now
+  // STRICT ENFORCEMENT: Block access if no valid subscription
+  if (!subscriptionStatus.isSubscribed || subscriptionStatus.needsPayment) {
+    console.log("ProtectedRoute: User blocked - no valid subscription:", {
+      email: user.email,
+      isSubscribed: subscriptionStatus.isSubscribed,
+      needsPayment: subscriptionStatus.needsPayment
+    });
+    
+    // Create a simple subscription required overlay
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-lg max-w-md mx-4 text-center">
+          <h2 className="text-2xl font-bold mb-4">Subscription Required</h2>
+          <p className="text-muted-foreground mb-6">
+            You need an active subscription to access WAKTI.
+          </p>
+          <p className="text-sm text-muted-foreground mb-4">
+            Account: {user.email}
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={() => window.location.href = '/'}
+              className="w-full bg-primary text-white px-4 py-2 rounded hover:bg-primary/90"
+            >
+              Go to Subscription Page
+            </button>
+            <button
+              onClick={() => {
+                supabase.auth.signOut();
+                window.location.href = '/';
+              }}
+              className="w-full bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  console.log("ProtectedRoute: User authenticated, rendering protected content");
+  console.log("ProtectedRoute: User has valid subscription, allowing access");
   return <>{children}</>;
 }
