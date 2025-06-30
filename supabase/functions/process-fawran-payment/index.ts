@@ -35,7 +35,7 @@ serve(async (req) => {
     const { error: updateError } = await supabase
       .from('pending_fawran_payments')
       .update({
-        status: action, // 'approved' or 'rejected'
+        status: action,
         review_notes: adminNotes || payment.review_notes,
         reviewed_at: new Date().toISOString()
       })
@@ -45,10 +45,11 @@ serve(async (req) => {
       throw new Error('Failed to update payment status');
     }
 
-    // If approved, activate subscription
+    // Handle approval or rejection
     if (action === 'approved') {
       const planType = payment.plan_type === 'yearly' ? 'Yearly Plan' : 'Monthly Plan';
       
+      // Activate subscription
       const { error: subscriptionError } = await supabase.rpc('admin_activate_subscription', {
         p_user_id: payment.user_id,
         p_plan_name: planType,
@@ -60,28 +61,51 @@ serve(async (req) => {
         throw new Error('Failed to activate subscription');
       }
 
-      // Send notification to user
+      // Queue success notification
       await supabase.rpc('queue_notification', {
         p_user_id: payment.user_id,
         p_notification_type: 'subscription_activated',
-        p_title: 'Subscription Activated',
+        p_title: '🎉 Subscription Activated!',
         p_body: `Your ${planType} subscription has been activated. Welcome to Wakti Premium!`,
-        p_data: { plan_type: payment.plan_type, amount: payment.amount }
+        p_data: { 
+          plan_type: payment.plan_type, 
+          amount: payment.amount,
+          payment_method: 'fawran'
+        },
+        p_deep_link: '/dashboard',
+        p_scheduled_for: new Date().toISOString()
       });
+
     } else if (action === 'rejected') {
-      // Send rejection notification
+      // Queue rejection notification
       await supabase.rpc('queue_notification', {
         p_user_id: payment.user_id,
         p_notification_type: 'payment_rejected',
-        p_title: 'Payment Verification Failed',
-        p_body: 'Your payment could not be verified. Please contact support or try again.',
-        p_data: { reason: adminNotes || 'Payment verification failed' }
+        p_title: '❌ Payment Verification Failed',
+        p_body: 'Your payment could not be verified. Please contact support or try again with a clearer screenshot.',
+        p_data: { 
+          reason: adminNotes || 'Payment verification failed',
+          payment_amount: payment.amount,
+          payment_method: 'fawran'
+        },
+        p_deep_link: '/settings',
+        p_scheduled_for: new Date().toISOString()
       });
     }
 
+    // Trigger immediate notification processing
+    setTimeout(async () => {
+      try {
+        await supabase.functions.invoke('process-notification-queue', { body: {} });
+      } catch (error) {
+        console.error('Failed to trigger notification processing:', error);
+      }
+    }, 1000);
+
     return new Response(JSON.stringify({
       success: true,
-      message: `Payment ${action} successfully`
+      message: `Payment ${action} successfully`,
+      notification_queued: true
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

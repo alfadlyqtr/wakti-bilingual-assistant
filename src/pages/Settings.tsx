@@ -1,282 +1,226 @@
-import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { useTheme } from '@/providers/ThemeProvider';
-import { useToastHelper } from '@/hooks/use-toast-helper';
-import { t } from '@/utils/translations';
-import NotificationSettings from '@/components/notifications/NotificationSettings';
-import { CustomQuoteManager } from '@/components/settings/CustomQuoteManager';
-import { QuotePreferencesManager } from '@/components/settings/QuotePreferencesManager';
-import { PrivacySettings } from '@/components/settings/PrivacySettings';
-import { NotificationSetupCard } from '@/components/settings/NotificationSetupCard';
-import { PageContainer } from '@/components/PageContainer';
-import { Sun, Moon, Bell, Layout, Palette } from 'lucide-react';
-import { getUserPreferences, saveUserPreferences, fetchRemoteWidgetPrefs, saveRemoteWidgetPrefs } from '@/utils/widgetPreferences';
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
+import { PageContainer } from "@/components/PageContainer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "@/components/ui/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Languages } from "@/integrations/i18n/settings";
+import { supabase } from "@/integrations/supabase/client";
+import { BillingTab } from "@/components/BillingTab";
+import { FawranPaymentStatus } from "@/components/FawranPaymentStatus";
 
 export default function Settings() {
-  const { showSuccess } = useToastHelper();
-  const { language, theme, setTheme, toggleLanguage } = useTheme();
-
-  // DB widget fields: calendarWidget, tasksWidget, maw3dWidget, remindersWidget, quoteWidget
-  // Dashboard expects: calendar, tr, maw3d, quote
-  // So: tr = tasksWidget || remindersWidget
-
-  const [widgetPrefs, setWidgetPrefs] = useState({
-    calendarWidget: true,
-    tasksWidget: true,
-    maw3dWidget: true,
-    remindersWidget: true,
-    quoteWidget: true
-  });
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { theme, setTheme, language, setLanguage } = useTheme();
+  const { user, updateUserProfile } = useAuth();
+  const [activeTab, setActiveTab] = useState("account");
+  const [displayName, setDisplayName] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    // Try to load DB prefs, fallback to localStorage
-    (async () => {
-      const remote = await fetchRemoteWidgetPrefs();
-      if (remote) {
-        setWidgetPrefs({
-          calendarWidget: remote.calendarWidget !== false,
-          tasksWidget: remote.tasksWidget !== false,
-          maw3dWidget: remote.maw3dWidget !== false,
-          remindersWidget: remote.remindersWidget !== false,
-          quoteWidget: remote.quoteWidget !== false,
-        });
-      } else {
-        // Fallback: treat local tr pref as both tasks/reminders
-        const local = getUserPreferences();
-        setWidgetPrefs({
-          calendarWidget: local.calendar !== false,
-          tasksWidget: local.tr !== false,
-          maw3dWidget: local.maw3d !== false,
-          remindersWidget: local.tr !== false,
-          quoteWidget: local.dailyQuote !== false,
-        });
+    if (user) {
+      setDisplayName(user.user_metadata?.display_name || "");
+    }
+  }, [user]);
+
+  const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
+    setTheme(newTheme);
+  };
+
+  const handleLanguageChange = (newLanguage: string) => {
+    setLanguage(newLanguage);
+  };
+
+  const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDisplayName(e.target.value);
+  };
+
+  const handleUpdateProfile = async () => {
+    setIsUpdating(true);
+    try {
+      if (!user) {
+        throw new Error("User not authenticated");
       }
-    })();
-  }, []);
 
-  // Helper: on widget toggle, set + save to both Supabase DB and localStorage for compatibility
-  const handleWidgetToggle = async (settingKey: string, enabled: boolean) => {
-    const newPrefs = { ...widgetPrefs, [settingKey]: enabled };
+      const { data, error } = await supabase.auth.updateUser({
+        data: {
+          display_name: displayName,
+        },
+      });
 
-    setWidgetPrefs(newPrefs);
+      if (error) {
+        console.error("Error updating profile:", error);
+        toast({
+          title: "Error",
+          description: "Failed to update profile",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    // Update DB (Supabase profile.settings.widgets)
-    await saveRemoteWidgetPrefs(newPrefs);
+      await updateUserProfile();
 
-    // Also update localStorage for compatibility with old fallback (e.g. force tr/dailyQuote, etc)
-    const localWidgetPrefs = {
-      // map DB to local for grid
-      calendar: newPrefs.calendarWidget !== false,
-      tr: (newPrefs.tasksWidget !== false) || (newPrefs.remindersWidget !== false),
-      maw3d: newPrefs.maw3dWidget !== false,
-      dailyQuote: newPrefs.quoteWidget !== false,
-    };
-    saveUserPreferences(localWidgetPrefs);
-
-    showSuccess(language === 'ar' ? 'تم تحديث تفضيلات الأدوات' : 'Widget preferences updated');
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      });
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   return (
-    <PageContainer showHeader={false}>
-      <div className="container mx-auto max-w-4xl p-4 space-y-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">{t('settings', language)}</h1>
-          <p className="text-muted-foreground mt-1">
-            {language === 'ar' ? 'إدارة إعدادات التطبيق وتفضيلاتك' : 'Manage your app settings and preferences'}
-          </p>
+    <PageContainer>
+      <div className="space-y-6 pb-20">
+        <div className="flex items-center justify-between space-y-2 md:space-y-0">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">
+              {t.settings.title}
+            </h2>
+            <p className="text-muted-foreground">{t.settings.description}</p>
+          </div>
         </div>
 
-        <Tabs defaultValue="appearance" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3 h-auto p-1">
-            <TabsTrigger value="appearance" className="flex flex-col items-center gap-1 p-3">
-              <Palette className="h-4 w-4" />
-              <span className="text-xs">{t('appearance', language)}</span>
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="flex flex-col items-center gap-1 p-3">
-              <Bell className="h-4 w-4" />
-              <span className="text-xs">{t('notifications', language)}</span>
-            </TabsTrigger>
-            <TabsTrigger value="dashboard" className="flex flex-col items-center gap-1 p-3">
-              <Layout className="h-4 w-4" />
-              <span className="text-xs">{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</span>
-            </TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
+            <TabsTrigger value="account">{t.settings.account}</TabsTrigger>
+            <TabsTrigger value="billing">{t.settings.billing}</TabsTrigger>
+            <TabsTrigger value="preferences">{t.settings.preferences}</TabsTrigger>
+            <TabsTrigger value="notifications">{t.settings.notifications}</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="appearance" className="space-y-4">
-            {/* Theme and Language */}
+          <TabsContent value="account" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="h-5 w-5" />
-                  {t('appearanceSettings', language)}
-                </CardTitle>
+                <CardTitle>{t.settings.accountSettings}</CardTitle>
                 <CardDescription>
-                  {language === 'ar' ? 'تخصيص مظهر التطبيق واللغة' : 'Customize app appearance and language'}
+                  {t.settings.manageAccountSettings}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Theme Selection */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-medium">{t('theme', language)}</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'اختر مظهر التطبيق' : 'Choose your app theme'}
-                    </p>
-                  </div>
-                  <Select value={theme} onValueChange={setTheme}>
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue />
+                <div className="space-y-2">
+                  <Label htmlFor="name">{t.settings.displayName}</Label>
+                  <Input
+                    id="name"
+                    placeholder={t.settings.displayNamePlaceholder}
+                    value={displayName}
+                    onChange={handleDisplayNameChange}
+                  />
+                </div>
+                <Button onClick={handleUpdateProfile} disabled={isUpdating}>
+                  {isUpdating ? t.common.updating : t.settings.updateProfile}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="preferences" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t.settings.preferences}</CardTitle>
+                <CardDescription>
+                  {t.settings.managePreferences}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="theme">{t.settings.theme}</Label>
+                  <Select value={theme} onValueChange={handleThemeChange}>
+                    <SelectTrigger id="theme">
+                      <SelectValue placeholder={t.settings.selectTheme} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="light">
-                        <div className="flex items-center gap-2">
-                          <Sun className="h-4 w-4" />
-                          {t('light', language)}
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="dark">
-                        <div className="flex items-center gap-2">
-                          <Moon className="h-4 w-4" />
-                          {t('dark', language)}
-                        </div>
-                      </SelectItem>
+                      <SelectItem value="light">{t.settings.light}</SelectItem>
+                      <SelectItem value="dark">{t.settings.dark}</SelectItem>
+                      <SelectItem value="system">{t.settings.system}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Language Selection */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-medium">{t('language', language)}</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'اختر لغة التطبيق' : 'Choose your app language'}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={toggleLanguage}
-                    className="min-w-[120px]"
-                  >
-                    {language === 'en' ? t('arabic', language) : t('english', language)}
-                  </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="language">{t.settings.language}</Label>
+                  <Select value={language} onValueChange={handleLanguageChange}>
+                    <SelectTrigger id="language">
+                      <SelectValue placeholder={t.settings.selectLanguage} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(Languages).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
-
-            {/* Privacy Settings */}
-            <PrivacySettings />
           </TabsContent>
 
-          <TabsContent value="notifications" className="space-y-4">
-            {/* Notification Setup */}
-            <NotificationSetupCard />
-
-            {/* Notification Settings */}
-            <NotificationSettings />
-          </TabsContent>
-
-          <TabsContent value="dashboard" className="space-y-4">
-            {/* Widget Visibility */}
+          <TabsContent value="notifications" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Layout className="h-5 w-5" />
-                  {language === 'ar' ? 'رؤية الأدوات' : 'Widget Visibility'}
-                </CardTitle>
+                <CardTitle>{t.settings.notifications}</CardTitle>
                 <CardDescription>
-                  {language === 'ar' 
-                    ? 'تحكم في الأدوات التي تظهر في لوحة التحكم'
-                    : 'Control which widgets appear on your dashboard'}
+                  {t.settings.manageNotifications}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-medium">
-                      {language === 'ar' ? 'أداة التقويم' : 'Calendar Widget'}
-                    </Label>
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">{t.settings.email}</p>
                     <p className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'عرض الأحداث والمواعيد القادمة' : 'Show upcoming events and appointments'}
+                      {t.settings.emailDescription}
                     </p>
                   </div>
-                  <Switch
-                    checked={widgetPrefs.calendarWidget}
-                    onCheckedChange={(checked) => handleWidgetToggle('calendarWidget', checked)}
-                  />
+                  <Switch id="email-notifications" defaultChecked />
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-medium">
-                      {language === 'ar' ? 'أداة المهام' : 'Tasks Widget'}
-                    </Label>
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">{t.settings.push}</p>
                     <p className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'عرض المهام المعلقة' : 'Show pending tasks'}
+                      {t.settings.pushDescription}
                     </p>
                   </div>
-                  <Switch
-                    checked={widgetPrefs.tasksWidget}
-                    onCheckedChange={(checked) => handleWidgetToggle('tasksWidget', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-medium">
-                      {language === 'ar' ? 'أداة التذكيرات' : 'Reminders Widget'}
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'عرض التذكيرات المعلقة' : 'Show pending reminders'}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={widgetPrefs.remindersWidget}
-                    onCheckedChange={(checked) => handleWidgetToggle('remindersWidget', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-medium">
-                      {language === 'ar' ? 'أداة أحداث مواعيد' : 'Maw3d Events Widget'}
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'عرض أحداث مواعيد القادمة' : 'Show upcoming Maw3d events'}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={widgetPrefs.maw3dWidget}
-                    onCheckedChange={(checked) => handleWidgetToggle('maw3dWidget', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-medium">
-                      {language === 'ar' ? 'أداة الاقتباس اليومي' : 'Daily Quote Widget'}
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'عرض اقتباس ملهم يومي' : 'Show daily inspirational quotes'}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={widgetPrefs.quoteWidget}
-                    onCheckedChange={(checked) => handleWidgetToggle('quoteWidget', checked)}
-                  />
+                  <Switch id="push-notifications" defaultChecked />
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
 
-            {/* Quote Preferences */}
-            <QuotePreferencesManager />
-
-            {/* Custom Quote Manager */}
-            <CustomQuoteManager />
+          <TabsContent value="billing" className="space-y-6">
+            <BillingTab />
+            
+            {/* Add Payment Status Section */}
+            <div className="mt-8">
+              <FawranPaymentStatus />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

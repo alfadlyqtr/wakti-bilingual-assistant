@@ -37,6 +37,21 @@ serve(async (req) => {
       throw new Error('Payment submission not found');
     }
 
+    // Send initial submission confirmation
+    await supabase.rpc('queue_notification', {
+      p_user_id: payment.user_id,
+      p_notification_type: 'payment_submitted',
+      p_title: '📋 Payment Submitted for Review',
+      p_body: 'Your Fawran payment screenshot has been submitted and is being reviewed. You will be notified once approved.',
+      p_data: { 
+        payment_amount: payment.amount,
+        plan_type: payment.plan_type,
+        payment_method: 'fawran'
+      },
+      p_deep_link: '/settings',
+      p_scheduled_for: new Date().toISOString()
+    });
+
     // Download screenshot from storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('fawran-screenshots')
@@ -104,7 +119,6 @@ Respond in JSON format with:
     try {
       analysis = JSON.parse(analysisText);
     } catch {
-      // Fallback if JSON parsing fails
       analysis = {
         isValid: false,
         extractedAmount: null,
@@ -119,29 +133,32 @@ Respond in JSON format with:
 
     // Validate analysis results
     const amountMatches = analysis.extractedAmount && 
-      Math.abs(analysis.extractedAmount - payment.amount) <= 5; // 5 QAR tolerance
+      Math.abs(analysis.extractedAmount - payment.amount) <= 5;
     
     const recipientValid = analysis.extractedRecipient && 
       (analysis.extractedRecipient.toLowerCase().includes('alfadlyqtr') ||
        analysis.extractedRecipient.toLowerCase().includes('abdullah') ||
        analysis.extractedRecipient.toLowerCase().includes('hassoun'));
 
+    const shouldAutoApprove = analysis.recommendation === 'approve' && 
+                              amountMatches && 
+                              recipientValid && 
+                              analysis.isFawranPayment && 
+                              analysis.confidence > 80;
+
     // Update payment with analysis
     const { error: updateError } = await supabase
       .from('pending_fawran_payments')
       .update({
-        status: analysis.recommendation === 'approve' && 
-                amountMatches && 
-                recipientValid && 
-                analysis.isFawranPayment && 
-                analysis.confidence > 80 ? 'approved' : 'pending',
+        status: shouldAutoApprove ? 'approved' : 'pending',
         review_notes: JSON.stringify({
           ai_analysis: analysis,
           amount_matches: amountMatches,
           recipient_valid: recipientValid,
-          analyzed_at: new Date().toISOString()
+          analyzed_at: new Date().toISOString(),
+          auto_approved: shouldAutoApprove
         }),
-        reviewed_at: new Date().toISOString()
+        reviewed_at: shouldAutoApprove ? new Date().toISOString() : null
       })
       .eq('id', paymentId);
 
@@ -149,13 +166,8 @@ Respond in JSON format with:
       throw new Error('Failed to update payment status');
     }
 
-    // If automatically approved, activate subscription
-    if (analysis.recommendation === 'approve' && 
-        amountMatches && 
-        recipientValid && 
-        analysis.isFawranPayment && 
-        analysis.confidence > 80) {
-      
+    // If auto-approved, activate subscription and notify user
+    if (shouldAutoApprove) {
       const planType = payment.plan_type === 'yearly' ? 'Yearly Plan' : 'Monthly Plan';
       
       // Activate subscription
@@ -166,19 +178,54 @@ Respond in JSON format with:
         p_billing_currency: 'QAR'
       });
 
-      if (subscriptionError) {
-        console.error('Failed to activate subscription:', subscriptionError);
+      if (!subscriptionError) {
+        // Queue success notification
+        await supabase.rpc('queue_notification', {
+          p_user_id: payment.user_id,
+          p_notification_type: 'subscription_activated',
+          p_title: '🎉 Payment Approved & Subscription Activated!',
+          p_body: `Your ${planType} subscription has been automatically approved and activated. Welcome to Wakti Premium!`,
+          p_data: { 
+            plan_type: payment.plan_type, 
+            amount: payment.amount,
+            payment_method: 'fawran',
+            auto_approved: true
+          },
+          p_deep_link: '/dashboard',
+          p_scheduled_for: new Date().toISOString()
+        });
       }
+    } else {
+      // Queue pending review notification
+      await supabase.rpc('queue_notification', {
+        p_user_id: payment.user_id,
+        p_notification_type: 'payment_under_review',
+        p_title: '👀 Payment Under Manual Review',
+        p_body: 'Your payment is being manually reviewed by our team. This usually takes 1-2 business days.',
+        p_data: { 
+          payment_amount: payment.amount,
+          plan_type: payment.plan_type,
+          confidence: analysis.confidence
+        },
+        p_deep_link: '/settings',
+        p_scheduled_for: new Date().toISOString()
+      });
     }
+
+    // Trigger notification processing
+    setTimeout(async () => {
+      try {
+        await supabase.functions.invoke('process-notification-queue', { body: {} });
+      } catch (error) {
+        console.error('Failed to trigger notification processing:', error);
+      }
+    }, 1000);
 
     return new Response(JSON.stringify({
       success: true,
       analysis,
-      auto_approved: analysis.recommendation === 'approve' && 
-                     amountMatches && 
-                     recipientValid && 
-                     analysis.isFawranPayment && 
-                     analysis.confidence > 80
+      auto_approved: shouldAutoApprove,
+      notification_sent: true
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

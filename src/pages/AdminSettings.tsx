@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Sun, Moon, Languages, Save, Palette, Bell, Database, Key } from "lucide-react";
+import { Shield, Sun, Moon, Languages, Save, Palette, Bell, Database, Key, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -10,6 +10,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import { NotificationTestPanel } from "@/components/admin/NotificationTestPanel";
 
 export default function AdminSettings() {
   const navigate = useNavigate();
@@ -56,23 +57,14 @@ export default function AdminSettings() {
   }, []);
 
   return (
-    <div className="bg-gradient-background text-foreground">
-      <AdminHeader
-        title="Admin Settings"
-        subtitle="Configure admin panel preferences"
-        icon={<Shield className="h-6 w-6 sm:h-8 sm:w-8 text-accent-blue" />}
-      >
-        <Button
-          onClick={handleSaveSettings}
-          className="btn-enhanced"
-        >
-          <Save className="h-4 w-4 mr-2" />
-          Save Settings
-        </Button>
-      </AdminHeader>
+    <div className="min-h-screen bg-gradient-background pb-20">
+      <AdminHeader 
+        title="Admin Settings" 
+        subtitle="System configuration and testing tools"
+        icon={<Settings className="h-5 w-5 text-accent-blue" />}
+      />
 
-      {/* Settings Content */}
-      <div className="p-3 sm:p-6 pb-32 space-y-4 sm:space-y-6">
+      <div className="p-3 sm:p-6 space-y-6">
         {/* Appearance Settings */}
         <Card className="enhanced-card">
           <CardHeader>
@@ -263,6 +255,9 @@ export default function AdminSettings() {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Add Notification Testing Panel */}
+        <NotificationTestPanel />
       </div>
 
       {/* Admin Mobile Navigation */}

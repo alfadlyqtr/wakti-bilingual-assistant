@@ -1,127 +1,90 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 serve(async (req) => {
-  const startTime = Date.now();
-  const requestId = crypto.randomUUID();
-  
-  console.log(`[${new Date().toISOString()}] [${requestId}] Starting fix for stuck notifications...`);
-
-  if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      db: { schema: 'public' },
-      auth: { persistSession: false }
-    });
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get all pending notifications
-    console.log(`[${requestId}] Fetching all pending notifications...`);
-    const { data: pendingNotifications, error: fetchError } = await supabase
+    console.log('Starting stuck notification cleanup...');
+
+    // Find notifications that are stuck (older than 5 minutes and still pending)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    
+    const { data: stuckNotifications, error: fetchError } = await supabase
       .from('notification_queue')
       .select('*')
-      .eq('status', 'pending');
+      .eq('status', 'pending')
+      .lt('scheduled_for', fiveMinutesAgo);
 
     if (fetchError) {
-      console.error(`[${requestId}] Error fetching notifications:`, fetchError);
-      throw fetchError;
+      throw new Error(`Failed to fetch stuck notifications: ${fetchError.message}`);
     }
 
-    console.log(`[${requestId}] Found ${pendingNotifications?.length || 0} pending notifications`);
+    console.log(`Found ${stuckNotifications?.length || 0} stuck notifications`);
 
-    if (!pendingNotifications || pendingNotifications.length === 0) {
-      const response = {
+    if (!stuckNotifications || stuckNotifications.length === 0) {
+      return new Response(JSON.stringify({
         success: true,
-        message: 'No pending notifications to fix',
-        fixed: 0,
-        timestamp: new Date().toISOString(),
-        requestId
-      };
-      
-      return new Response(JSON.stringify(response), {
-        headers: { 'Content-Type': 'application/json' }
+        message: 'No stuck notifications found',
+        fixed: 0
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Update all pending notifications to be scheduled for immediate processing
-    const now = new Date().toISOString();
-    console.log(`[${requestId}] Updating ${pendingNotifications.length} notifications to schedule for immediate processing...`);
-    
-    const { data: updatedNotifications, error: updateError } = await supabase
+    // Reset stuck notifications to be processed immediately
+    const { error: updateError } = await supabase
       .from('notification_queue')
       .update({ 
-        scheduled_for: now,
-        attempts: 0, // Reset attempts
-        updated_at: now
+        scheduled_for: new Date().toISOString(),
+        retry_count: 0,
+        error_message: null
       })
-      .eq('status', 'pending')
-      .select();
+      .in('id', stuckNotifications.map(n => n.id));
 
     if (updateError) {
-      console.error(`[${requestId}] Error updating notifications:`, updateError);
-      throw updateError;
+      throw new Error(`Failed to reset stuck notifications: ${updateError.message}`);
     }
 
-    console.log(`[${requestId}] Successfully updated ${updatedNotifications?.length || 0} notifications`);
+    console.log(`Reset ${stuckNotifications.length} stuck notifications`);
 
-    // Trigger immediate processing
-    console.log(`[${requestId}] Triggering immediate notification processing...`);
-    const processResponse = await fetch(`${supabaseUrl}/functions/v1/process-notification-queue`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({})
+    // Now trigger immediate processing
+    const processResponse = await supabase.functions.invoke('process-notification-queue', {
+      body: {}
     });
 
-    let processResult;
-    try {
-      processResult = await processResponse.json();
-    } catch (e) {
-      processResult = await processResponse.text();
-    }
+    console.log('Triggered notification processing:', processResponse);
 
-    console.log(`[${requestId}] Processing trigger result:`, processResult);
-
-    const totalTime = Date.now() - startTime;
-    const response = {
+    return new Response(JSON.stringify({
       success: true,
-      message: `Fixed ${updatedNotifications?.length || 0} stuck notifications`,
-      fixed: updatedNotifications?.length || 0,
-      processingTriggered: processResponse.ok,
-      processResult,
-      totalTimeMs: totalTime,
-      timestamp: new Date().toISOString(),
-      requestId
-    };
-
-    console.log(`[${requestId}] Fix completed successfully:`, response);
-
-    return new Response(JSON.stringify(response), {
-      headers: { 'Content-Type': 'application/json' }
+      message: `Fixed ${stuckNotifications.length} stuck notifications and triggered processing`,
+      fixed: stuckNotifications.length,
+      processResult: processResponse.data
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
-    const errorResult = {
-      error: 'Internal server error',
-      message: error.message,
-      totalTimeMs: Date.now() - startTime,
-      timestamp: new Date().toISOString(),
-      requestId
-    };
-    
-    console.error(`[${requestId}] Error in fix-stuck-notifications:`, errorResult);
-    
-    return new Response(JSON.stringify(errorResult), {
+    console.error('Error in fix-stuck-notifications:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
