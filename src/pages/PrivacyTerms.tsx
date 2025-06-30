@@ -28,7 +28,7 @@ export default function PrivacyTerms() {
   });
 
   const handleBackClick = () => {
-    navigate("/home");
+    navigate("/");
   };
 
   const formatText = (text: string) => {

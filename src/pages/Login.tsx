@@ -53,7 +53,7 @@ export default function Login() {
             variant="ghost"
             size="sm"
             className="flex items-center gap-1 mr-2"
-            onClick={() => navigate("/home")}
+            onClick={() => navigate("/")}
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs">{language === 'en' ? 'Back to Home' : 'العودة للرئيسية'}</span>
@@ -68,7 +68,7 @@ export default function Login() {
             {/* App logo with navigation to home */}
             <div 
               className="inline-block cursor-pointer mb-4"
-              onClick={() => navigate("/home")}
+              onClick={() => navigate("/")}
             >
               <Logo3D size="lg" />
             </div>

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useNavigate } from "react-router-dom";
@@ -31,7 +30,7 @@ export default function ContactUs() {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleBackClick = () => {
-    navigate("/home");
+    navigate("/");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -233,7 +233,7 @@ export default function Signup() {
               variant="ghost"
               size="sm"
               className="flex items-center gap-1 mr-2"
-              onClick={() => navigate("/home")}
+              onClick={() => navigate("/")}
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="text-xs">{t.backToHome}</span>
@@ -254,7 +254,7 @@ export default function Signup() {
                 {/* App logo with navigation to home */}
                 <div 
                   className="inline-block cursor-pointer mb-4"
-                  onClick={() => navigate("/home")}
+                  onClick={() => navigate("/")}
                 >
                   <Logo3D size="lg" />
                 </div>
