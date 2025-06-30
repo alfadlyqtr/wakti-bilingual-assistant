@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
@@ -317,24 +318,24 @@ export const UnifiedCalendar: React.FC = () => {
           </div>
         </div>
 
-        {/* Updated Legend with Tasks and Reminders */}
+        {/* Updated Legend with proper Arabic translations */}
         <div className="flex items-center justify-center">
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-              <span>Maw3d</span>
+              <span>{language === 'ar' ? 'مواعيد' : 'Maw3d'}</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-              <span>Manual</span>
+              <span>{language === 'ar' ? 'يدوي' : 'Manual'}</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span>Tasks</span>
+              <span>{language === 'ar' ? 'مهام' : 'Tasks'}</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-red-500"></div>
-              <span>Reminders</span>
+              <span>{language === 'ar' ? 'تذكيرات' : 'Reminders'}</span>
             </div>
           </div>
         </div>
