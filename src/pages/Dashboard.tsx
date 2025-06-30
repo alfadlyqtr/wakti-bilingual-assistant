@@ -5,7 +5,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { DragModeToggle } from "@/components/dashboard/DragModeToggle";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
-import { useDashboardData } from "@/hooks/useDashboardData";
 import { useWidgetManager } from "@/hooks/useWidgetManager";
 import { t } from "@/utils/translations";
 
@@ -28,29 +27,11 @@ export default function Dashboard() {
     }
   }
 
-  // Fetch dashboard data (this uses the legacy events system)
-  const {
-    isLoading,
-    events: legacyEvents
-  } = useDashboardData();
-
-  // Manage widgets - pass legacyEvents to avoid conflicts with Maw3d system
+  // Use simplified widget manager - no complex data fetching
   const {
     widgets,
     handleDragEnd
-  } = useWidgetManager(language, isLoading, [], legacyEvents, []);
-
-  // Debug logging for widget visibility
-  useEffect(() => {
-    console.log('Dashboard: Total widgets received from hook:', widgets.length);
-    console.log('Dashboard: Widgets details:', widgets.map(w => ({
-      id: w.id,
-      visible: w.visible
-    })));
-    const visibleWidgets = widgets.filter(widget => widget.visible);
-    console.log('Dashboard: Visible widgets count:', visibleWidgets.length);
-    console.log('Dashboard: Visible widget IDs:', visibleWidgets.map(w => w.id));
-  }, [widgets]);
+  } = useWidgetManager(language);
 
   // Toggle drag mode button handler
   const toggleDragMode = () => {
@@ -64,20 +45,19 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="min-h-full bg-gradient-to-b from-background to-background/95 p-4 pb-28">
-        <div className="max-w-md mx-auto space-y-4">
-          <DragModeToggle
-            isDragging={isDragging}
-            onToggle={toggleDragMode}
-            language={language}
-            displayName={displayName}
-          />
+    <div className="flex-1 min-h-0">
+      <div className="h-full overflow-y-auto">
+        <div className="p-4 pb-28 space-y-4">
+          <div className="max-w-md mx-auto space-y-4">
+            <DragModeToggle
+              isDragging={isDragging}
+              onToggle={toggleDragMode}
+              language={language}
+              displayName={displayName}
+            />
 
-          <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} />
-          
-          {/* Debug info - remove this after testing */}
-          {process.env.NODE_ENV === 'development'}
+            <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} />
+          </div>
         </div>
       </div>
     </div>

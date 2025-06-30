@@ -1,6 +1,5 @@
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { TranslationKey } from "@/utils/translationTypes";
 import { toast } from "sonner";
 import React from "react";
@@ -13,14 +12,9 @@ type WidgetType = {
 };
 
 export const useWidgetManager = (
-  language: "en" | "ar",
-  isLoading: boolean,
-  tasks: any[],
-  legacyEvents: any[],
-  reminders: any[]
+  language: "en" | "ar"
 ) => {
   const [widgets, setWidgets] = useState<WidgetType[]>([]);
-  const navigate = useNavigate();
 
   // Simple widget order management - localStorage only
   const getWidgetOrder = () => {
@@ -41,7 +35,7 @@ export const useWidgetManager = (
     }
   };
 
-  // Initialize widgets immediately - no async loading
+  // Initialize widgets immediately - simplified, no async loading
   useEffect(() => {
     const initializeWidgets = async () => {
       // Get current order
@@ -55,15 +49,13 @@ export const useWidgetManager = (
         "@/components/dashboard/QuoteWidget"
       );
 
-      // Define widgets - all visible by default, simple mirroring
+      // Define simplified widgets - all visible by default
       const defaultWidgets = {
         calendar: {
           id: "calendar",
           title: "calendar" as TranslationKey,
           visible: true,
           component: React.createElement(CalendarWidget, {
-            isLoading,
-            events: legacyEvents,
             language,
           }),
         },
@@ -92,12 +84,12 @@ export const useWidgetManager = (
         .map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets])
         .filter(Boolean);
 
-      console.log('Widgets initialized with order:', currentOrder);
+      console.log('Simplified widgets initialized with order:', currentOrder);
       setWidgets(orderedWidgets);
     };
 
     initializeWidgets();
-  }, [language, isLoading, legacyEvents]);
+  }, [language]);
 
   // Simple drag handler - just reorder and save
   const handleDragEnd = (result: any) => {

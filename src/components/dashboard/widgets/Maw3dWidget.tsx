@@ -1,13 +1,9 @@
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { format, parseISO } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
-import { Maw3dService } from "@/services/maw3dService";
-import { Maw3dEvent } from "@/types/maw3d";
-import { Hand, Heart, Calendar, Plus } from "lucide-react";
+import { Hand, Heart, Plus } from "lucide-react";
 
 interface Maw3dWidgetProps {
   language: 'en' | 'ar';
@@ -15,27 +11,6 @@ interface Maw3dWidgetProps {
 
 export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   const navigate = useNavigate();
-  const [events, setEvents] = useState<Maw3dEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        // Fast, simple fetch without complex operations
-        const userEvents = await Maw3dService.getUserEvents();
-        setEvents(userEvents);
-      } catch (error) {
-        console.error('Error fetching Maw3d events for widget:', error);
-        setEvents([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
-  }, []);
-
-  const hasEvents = events && events.length > 0;
 
   return (
     <div className="relative group" dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -58,51 +33,22 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
           </h3>
         </div>
 
-        {loading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="h-4 w-3/4" />
-          </div>
-        ) : hasEvents ? (
-          <div className="space-y-3">
-            {events.slice(0, 3).map((event) => (
-              <div 
-                key={event.id} 
-                className="flex items-center justify-between p-3 rounded-lg bg-purple-500/10 backdrop-blur-sm border border-purple-500/20 hover:border-purple-500/40 transition-all duration-300"
-              >
-                <span className="text-sm font-medium truncate flex-1">{event.title}</span>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground bg-purple-500/10 px-2 py-1 rounded-full">
-                  <Calendar className="h-3 w-3" />
-                  {event.event_date ? format(parseISO(event.event_date), "MMM d") : "TBD"}
-                </div>
-              </div>
-            ))}
-            
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full mt-3 bg-white/10 backdrop-blur-sm border-white/20 hover:bg-purple-500/20 hover:border-purple-500/40 transition-all duration-300" 
-              onClick={() => navigate('/maw3d-events')}
-            >
-              {t("events_view_all", language)}
-            </Button>
-          </div>
-        ) : (
-          <div className="text-center py-6">
-            <Heart className="mx-auto h-8 w-8 text-purple-500/50 mb-3" />
-            <p className="text-sm text-muted-foreground mb-3">{t("noEventsYet", language)}</p>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="bg-white/10 backdrop-blur-sm border-white/20 hover:bg-purple-500/20 hover:border-purple-500/40 transition-all duration-300" 
-              onClick={() => navigate('/maw3d-create')}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              {t("createEvent", language)}
-            </Button>
-          </div>
-        )}
+        {/* Simple Preview - No complex data fetching */}
+        <div className="text-center py-6">
+          <Heart className="mx-auto h-8 w-8 text-purple-500/50 mb-3" />
+          <p className="text-sm text-muted-foreground mb-4">
+            {language === 'ar' ? 'إنشاء وإدارة أحداث Maw3d' : 'Create & Manage Maw3d Events'}
+          </p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="bg-white/10 backdrop-blur-sm border-white/20 hover:bg-purple-500/20 hover:border-purple-500/40 transition-all duration-300" 
+            onClick={() => navigate('/maw3d-events')}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            {language === 'ar' ? 'فتح Maw3d' : 'Open Maw3d'}
+          </Button>
+        </div>
       </div>
     </div>
   );
