@@ -1,50 +1,69 @@
-import { useState, useEffect } from "react";
+
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, Search, Filter, MoreHorizontal, Mail, MailOpen, Reply, Menu } from "lucide-react";
+import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AdminMessageModal } from "@/components/admin/AdminMessageModal";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 
-interface ContactMessage {
+interface ContactSubmission {
   id: string;
   name: string;
   email: string;
   subject?: string;
   message: string;
-  status: 'unread' | 'read' | 'replied';
-  submission_type: 'contact' | 'feedback' | 'abuse';
+  status: string;
   created_at: string;
+  updated_at: string;
+  admin_response?: string;
+  responded_at?: string;
+  responded_by?: string;
 }
 
 export default function AdminMessages() {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [filteredMessages, setFilteredMessages] = useState<ContactMessage[]>([]);
+  const [messages, setMessages] = useState<ContactSubmission[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterType, setFilterType] = useState("all");
-  const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
-  const [replyText, setReplyText] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<ContactSubmission | null>(null);
+  const [showMessageModal, setShowMessageModal] = useState(false);
 
   useEffect(() => {
+    validateAdminSession();
     loadMessages();
   }, []);
 
-  useEffect(() => {
-    filterMessages();
-  }, [messages, searchTerm, filterStatus, filterType]);
+  const validateAdminSession = async () => {
+    const storedSession = localStorage.getItem('admin_session');
+    if (!storedSession) {
+      navigate('/mqtr');
+      return;
+    }
+
+    try {
+      const session = JSON.parse(storedSession);
+      if (new Date(session.expires_at) < new Date()) {
+        localStorage.removeItem('admin_session');
+        navigate('/mqtr');
+        return;
+      }
+    } catch (err) {
+      navigate('/mqtr');
+    }
+  };
 
   const loadMessages = async () => {
     try {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('contact_submissions')
         .select('*')
@@ -52,264 +71,218 @@ export default function AdminMessages() {
 
       if (error) throw error;
       setMessages(data || []);
-    } catch (err) {
-      console.error('Error loading messages:', err);
+    } catch (error) {
+      console.error('Error loading messages:', error);
       toast.error('Failed to load messages');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const filterMessages = () => {
-    let filtered = messages;
-
-    if (searchTerm) {
-      filtered = filtered.filter(msg =>
-        msg.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        msg.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        msg.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (msg.subject && msg.subject.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-    }
-
-    if (filterStatus !== "all") {
-      filtered = filtered.filter(msg => msg.status === filterStatus);
-    }
-
-    if (filterType !== "all") {
-      filtered = filtered.filter(msg => msg.submission_type === filterType);
-    }
-
-    setFilteredMessages(filtered);
+  const handleViewMessage = (message: ContactSubmission) => {
+    setSelectedMessage(message);
+    setShowMessageModal(true);
   };
 
-  const markAsRead = async (messageId: string) => {
-    try {
-      const { error } = await supabase
-        .from('contact_submissions')
-        .update({ status: 'read' })
-        .eq('id', messageId);
-
-      if (error) throw error;
-
-      setMessages(prev => prev.map(msg => 
-        msg.id === messageId ? { ...msg, status: 'read' as const } : msg
-      ));
-      toast.success('Message marked as read');
-    } catch (err) {
-      console.error('Error marking message as read:', err);
-      toast.error('Failed to update message status');
-    }
+  const handleMessageResponded = () => {
+    loadMessages();
+    setShowMessageModal(false);
+    setSelectedMessage(null);
   };
 
-  const handleReply = async (messageId: string) => {
-    if (!replyText.trim()) {
-      toast.error('Please enter a reply message');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('contact_submissions')
-        .update({ status: 'replied' })
-        .eq('id', messageId);
-
-      if (error) throw error;
-
-      setMessages(prev => prev.map(msg => 
-        msg.id === messageId ? { ...msg, status: 'replied' as const } : msg
-      ));
-      
-      setSelectedMessage(null);
-      setReplyText("");
-      toast.success('Reply sent successfully');
-    } catch (err) {
-      console.error('Error sending reply:', err);
-      toast.error('Failed to send reply');
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'contact':
-        return 'bg-blue-100 text-blue-800';
-      case 'feedback':
-        return 'bg-green-100 text-green-800';
-      case 'abuse':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'unread':
-        return 'bg-accent-orange text-white';
-      case 'replied':
-        return 'bg-accent-green text-white';
-      case 'read':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const filteredMessages = messages.filter(message => {
+    const matchesSearch = !searchTerm || 
+      message.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.message?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesFilter = filterStatus === "all" || 
+      (filterStatus === "unread" && message.status === 'unread') ||
+      (filterStatus === "read" && message.status === 'read') ||
+      (filterStatus === "responded" && message.status === 'responded');
+    
+    return matchesSearch && matchesFilter;
+  });
 
   if (isLoading) {
     return (
-      <div className="bg-gradient-background flex items-center justify-center" style={{ minHeight: '100vh' }}>
+      <div className="bg-gradient-background min-h-screen p-4 flex items-center justify-center">
         <div className="text-foreground">Loading messages...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-background text-foreground">
+    <div className="bg-gradient-background min-h-screen text-foreground pb-20">
+      {/* Header */}
       <AdminHeader
         title="Support Messages"
-        subtitle={`${filteredMessages.length} messages found`}
-        icon={<MessageSquare className="h-6 w-6 sm:h-8 sm:w-8 text-accent-orange" />}
+        subtitle={`${messages.filter(m => m.status === 'unread').length} unread messages`}
+        icon={<MessageSquare className="h-5 w-5 text-accent-orange" />}
       >
-        {/* Mobile Filter Toggle */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
-          className="sm:hidden"
-        >
-          <Menu className="h-4 w-4" />
+        <Button onClick={loadMessages} variant="outline" size="sm" className="text-xs">
+          <RefreshCw className="h-4 w-4 mr-1" />
+          <span className="hidden sm:inline">Refresh</span>
         </Button>
       </AdminHeader>
 
-      {/* Search and Filters */}
-      <div className={`p-3 sm:p-6 bg-gradient-background border-b border-border/30 ${mobileFiltersOpen ? 'block' : 'hidden'} sm:block`}>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search messages..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 input-enhanced"
-            />
-          </div>
+      {/* Main Content */}
+      <div className="p-3 sm:p-4 space-y-4 sm:space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Card className="enhanced-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
+                <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-blue" />
+                Total Messages
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg sm:text-2xl font-bold text-enhanced-heading">{messages.length}</div>
+            </CardContent>
+          </Card>
           
-          <div className="flex gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2">
-                  <Filter className="h-4 w-4" />
-                  <span className="hidden sm:inline">
-                    {filterStatus === "all" ? "All Status" : 
-                     filterStatus === "unread" ? "Unread" : 
-                     filterStatus === "read" ? "Read" : "Replied"}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setFilterStatus("all")}>All Status</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFilterStatus("unread")}>Unread</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFilterStatus("read")}>Read</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFilterStatus("replied")}>Replied</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2">
-                  <Filter className="h-4 w-4" />
-                  <span className="hidden sm:inline">
-                    {filterType === "all" ? "All Types" : 
-                     filterType === "contact" ? "Contact" : 
-                     filterType === "feedback" ? "Feedback" : "Abuse"}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setFilterType("all")}>All Types</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFilterType("contact")}>Contact</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFilterType("feedback")}>Feedback</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFilterType("abuse")}>Abuse</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-
-      {/* Messages List with Natural Scrolling */}
-      <div className="p-3 sm:p-6 pb-32 space-y-3 sm:space-y-4">
-        {filteredMessages.map((message) => (
-          <Card key={message.id} className="enhanced-card">
-            <CardContent className="p-3 sm:p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2 sm:space-x-3 mb-3">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-medium text-sm">
-                        {message.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">{message.name}</h3>
-                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{message.email}</p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 flex-shrink-0">
-                      <Badge className={getTypeColor(message.submission_type)} variant="outline">
-                        {message.submission_type}
-                      </Badge>
-                      <Badge className={getStatusColor(message.status)}>
-                        {message.status}
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  {message.subject && (
-                    <h4 className="font-medium text-sm mb-2 text-enhanced-heading">{message.subject}</h4>
-                  )}
-                  
-                  <p className="text-xs sm:text-sm mb-3 bg-gradient-secondary/10 p-3 rounded-lg line-clamp-3">
-                    {message.message}
-                  </p>
-                  
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(message.created_at).toLocaleString()}
-                  </p>
-                </div>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="flex-shrink-0 ml-2">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {message.status === 'unread' && (
-                      <DropdownMenuItem onClick={() => markAsRead(message.id)}>
-                        <MailOpen className="h-4 w-4 mr-2" />
-                        Mark as Read
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={() => setSelectedMessage(message)}>
-                      <Reply className="h-4 w-4 mr-2" />
-                      Reply
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+          <Card className="enhanced-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-orange" />
+                Unread
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg sm:text-2xl font-bold text-accent-orange">
+                {messages.filter(m => m.status === 'unread').length}
               </div>
             </CardContent>
           </Card>
-        ))}
-
-        {filteredMessages.length === 0 && (
+          
           <Card className="enhanced-card">
-            <CardContent className="p-8 sm:p-12 text-center">
-              <MessageSquare className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-enhanced-heading mb-2">No messages found</h3>
-              <p className="text-muted-foreground text-sm">Try adjusting your search or filter criteria.</p>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
+                <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-green" />
+                Read
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg sm:text-2xl font-bold text-accent-green">
+                {messages.filter(m => m.status === 'read').length}
+              </div>
             </CardContent>
           </Card>
-        )}
+          
+          <Card className="enhanced-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
+                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-purple" />
+                Responded
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg sm:text-2xl font-bold text-accent-purple">
+                {messages.filter(m => m.status === 'responded').length}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search and Filter Controls */}
+        <Card className="enhanced-card">
+          <CardHeader>
+            <CardTitle className="text-enhanced-heading text-sm sm:text-base">Message Management</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Contact forms, feedback, and support requests</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
+              <div className="flex-1">
+                <Label htmlFor="search" className="text-xs sm:text-sm">Search Messages</Label>
+                <Input
+                  id="search"
+                  placeholder="Search by name, email, subject, or content..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="mt-1 text-xs sm:text-sm"
+                />
+              </div>
+              <div className="w-full sm:w-48">
+                <Label className="text-xs sm:text-sm">Filter by Status</Label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="mt-1 text-xs sm:text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Messages</SelectItem>
+                    <SelectItem value="unread">Unread</SelectItem>
+                    <SelectItem value="read">Read</SelectItem>
+                    <SelectItem value="responded">Responded</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Messages List */}
+            <div className="space-y-2 sm:space-y-3">
+              {filteredMessages.map((message) => (
+                <div key={message.id} className="flex flex-col sm:flex-row sm:items-start justify-between p-3 sm:p-4 border border-border/50 rounded-lg hover:border-border transition-colors gap-3 sm:gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="font-medium text-enhanced-heading text-sm sm:text-base">
+                        {message.name}
+                      </div>
+                      <Badge 
+                        variant={
+                          message.status === 'unread' ? 'destructive' :
+                          message.status === 'responded' ? 'default' : 'secondary'
+                        }
+                        className="text-xs"
+                      >
+                        {message.status}
+                      </Badge>
+                    </div>
+                    <div className="text-xs sm:text-sm text-muted-foreground mb-1">
+                      {message.email}
+                    </div>
+                    {message.subject && (
+                      <div className="font-medium text-xs sm:text-sm mb-1">
+                        {message.subject}
+                      </div>
+                    )}
+                    <div className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                      {message.message}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-2">
+                      {new Date(message.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <Button 
+                      size="sm" 
+                      onClick={() => handleViewMessage(message)}
+                      className="btn-enhanced text-xs px-2 sm:px-3"
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      <span className="hidden sm:inline">View & Respond</span>
+                      <span className="sm:hidden">View</span>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Message Modal */}
+      <AdminMessageModal
+        isOpen={showMessageModal}
+        onClose={() => {
+          setShowMessageModal(false);
+          setSelectedMessage(null);
+        }}
+        message={selectedMessage}
+        onResponded={handleMessageResponded}
+      />
 
       {/* Admin Mobile Navigation */}
       <AdminMobileNav />

@@ -13,7 +13,7 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
   const navigate = useNavigate();
 
   const handleBackToAdmin = () => {
-    console.log('AD button clicked - navigating to /admindash');
+    console.log('Admin Header - navigating back to admin dashboard');
     navigate('/admindash');
   };
 
@@ -25,13 +25,13 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
             variant="ghost"
             size="sm"
             onClick={handleBackToAdmin}
-            className="rounded-full hover:bg-accent/10 font-bold text-sm sm:text-lg px-2 sm:px-3 bg-gradient-primary text-white hover:bg-gradient-secondary transition-all duration-300"
+            className="rounded-full hover:bg-accent/10 font-bold text-xs sm:text-lg px-2 sm:px-3 bg-gradient-primary text-white hover:bg-gradient-secondary transition-all duration-300"
           >
             AD
           </Button>
           {icon}
           <div>
-            <h1 className="text-base sm:text-lg lg:text-xl font-bold text-enhanced-heading">{title}</h1>
+            <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-enhanced-heading">{title}</h1>
             {subtitle && (
               <p className="text-xs sm:text-sm text-muted-foreground">{subtitle}</p>
             )}
