@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
 import { useAuth } from '@/contexts/AuthContext';
-import { Coins, Zap, CheckCircle, Mic, Languages } from 'lucide-react';
-import { toast } from 'sonner';
+import { Coins, CheckCircle, Mic, Languages } from 'lucide-react';
 
 interface BuyExtrasPopupProps {
   open: boolean;
@@ -21,42 +20,11 @@ export function BuyExtrasPopup({
 }: BuyExtrasPopupProps) {
   const { language } = useTheme();
   const { user } = useAuth();
-  const { userVoiceQuota, refreshVoiceQuota } = useExtendedQuotaManagement(language);
+  const { userVoiceQuota } = useExtendedQuotaManagement(language);
   const { 
     userQuota: translationQuota, 
-    MAX_MONTHLY_TRANSLATIONS,
-    refreshTranslationQuota 
+    MAX_MONTHLY_TRANSLATIONS
   } = useQuotaManagement(language);
-
-  const handlePurchaseVoiceCredits = () => {
-    if (!user?.id) {
-      toast.error(language === 'ar' ? 'يرجى تسجيل الدخول أولاً' : 'Please login first');
-      return;
-    }
-
-    // PayPal button with proper user ID in custom field
-    const customId = `${user.id}:voice_credits`;
-    const voiceCreditsUrl = `https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=E3F4LJP2UR57A&custom=${encodeURIComponent(customId)}`;
-    
-    window.open(voiceCreditsUrl, '_blank');
-    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة. ستتم إضافة الرصيد تلقائياً بعد الدفع' : 'Payment page opened. Credits will be added automatically after payment');
-    setTimeout(() => onOpenChange(false), 1500);
-  };
-
-  const handlePurchaseTranslationCredits = () => {
-    if (!user?.id) {
-      toast.error(language === 'ar' ? 'يرجى تسجيل الدخول أولاً' : 'Please login first');
-      return;
-    }
-
-    // PayPal button with proper user ID in custom field
-    const customId = `${user.id}:translation_credits`;
-    const translationCreditsUrl = `https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=96SVWU6YWXBFL&custom=${encodeURIComponent(customId)}`;
-    
-    window.open(translationCreditsUrl, '_blank');
-    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة. ستتم إضافة الرصيد تلقائياً بعد الدفع' : 'Payment page opened. Credits will be added automatically after payment');
-    setTimeout(() => onOpenChange(false), 1500);
-  };
 
   const getVoiceQuotaStatus = () => {
     const used = userVoiceQuota.characters_used;
@@ -158,9 +126,8 @@ export function BuyExtrasPopup({
                   <div className="text-lg font-bold text-green-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button onClick={handlePurchaseVoiceCredits} className="bg-green-600 hover:bg-green-700" size="sm">
-                    <Zap className="h-4 w-4 mr-2" />
-                    {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
+                  <Button disabled size="sm">
+                    {language === 'ar' ? 'قريباً' : 'Coming Soon'}
                   </Button>
                 </div>
               </CardContent>
@@ -188,9 +155,8 @@ export function BuyExtrasPopup({
                   <div className="text-lg font-bold text-blue-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button onClick={handlePurchaseTranslationCredits} className="bg-blue-600 hover:bg-blue-700" size="sm">
-                    <Zap className="h-4 w-4 mr-2" />
-                    {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
+                  <Button disabled size="sm">
+                    {language === 'ar' ? 'شراء الآن' : 'Coming Soon'}
                   </Button>
                 </div>
               </CardContent>
@@ -199,10 +165,7 @@ export function BuyExtrasPopup({
 
           <div className="text-xs text-muted-foreground text-center space-y-1">
             <div>
-              {language === 'ar' ? 'جميع الإضافات صالحة لمدة 30 يوماً من تاريخ الشراء' : 'All extras are valid for 30 days from purchase date'}
-            </div>
-            <div className="text-green-600">
-              {language === 'ar' ? 'سيتم إضافة الرصيد تلقائياً بعد إتمام الدفع' : 'Credits will be added automatically after payment completion'}
+              {language === 'ar' ? 'نظام دفع جديد قادم قريباً' : 'New payment system coming soon'}
             </div>
           </div>
         </div>

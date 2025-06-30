@@ -7,13 +7,10 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { CreditCard, Calendar, DollarSign, CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
-import { BillingHistoryCard } from "./BillingHistoryCard";
+import { CreditCard, Calendar, ExternalLink, CheckCircle, Clock, AlertCircle } from "lucide-react";
 
-interface PaymentRecord {
+interface SubscriptionRecord {
   id: string;
-  paypal_subscription_id: string;
-  paypal_plan_id: string;
   plan_name: string;
   billing_amount: number;
   billing_currency: string;
@@ -27,41 +24,43 @@ interface PaymentRecord {
 export function BillingTab() {
   const { language } = useTheme();
   const { user } = useAuth();
-  const [paymentHistory, setPaymentHistory] = useState<PaymentRecord[]>([]);
+  const [subscriptionHistory, setSubscriptionHistory] = useState<SubscriptionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadPaymentHistory();
+    loadSubscriptionHistory();
   }, [user]);
 
-  const loadPaymentHistory = async () => {
+  const loadSubscriptionHistory = async () => {
     if (!user) return;
 
     try {
       setIsLoading(true);
-      console.log('Loading payment history for user:', user.id);
+      console.log('Loading subscription history for user:', user.id);
 
-      const { data, error } = await supabase.rpc('get_user_payment_history', {
-        p_user_id: user.id
-      });
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading payment history:', error);
+        console.error('Error loading subscription history:', error);
         toast.error(language === "ar" 
-          ? "فشل في تحميل سجل المدفوعات" 
-          : "Failed to load payment history"
+          ? "فشل في تحميل سجل الاشتراكات" 
+          : "Failed to load subscription history"
         );
         return;
       }
 
-      console.log('Payment history loaded:', data);
-      setPaymentHistory(data || []);
+      console.log('Subscription history loaded:', data);
+      setSubscriptionHistory(data || []);
       
     } catch (error) {
-      console.error('Failed to load payment history:', error);
+      console.error('Failed to load subscription history:', error);
       toast.error(language === "ar" 
-        ? "فشل في تحميل سجل المدفوعات" 
-        : "Failed to load payment history"
+        ? "فشل في تحميل سجل الاشتراكات" 
+        : "Failed to load subscription history"
       );
     } finally {
       setIsLoading(false);
@@ -119,9 +118,9 @@ export function BillingTab() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {paymentHistory.length > 0 ? (
+          {subscriptionHistory.length > 0 ? (
             <div className="space-y-4">
-              {paymentHistory.slice(0, 1).map((record) => (
+              {subscriptionHistory.slice(0, 1).map((record) => (
                 <div key={record.id} className="p-4 border rounded-lg">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold">{record.plan_name}</h3>
@@ -161,14 +160,6 @@ export function BillingTab() {
                       <p className="font-medium">{formatDate(record.next_billing_date)}</p>
                     </div>
                   </div>
-
-                  {record.paypal_subscription_id && (
-                    <div className="mt-3 pt-3 border-t">
-                      <p className="text-xs text-muted-foreground">
-                        PayPal ID: {record.paypal_subscription_id}
-                      </p>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -183,8 +174,78 @@ export function BillingTab() {
         </CardContent>
       </Card>
 
-      {/* Payment History */}
-      <BillingHistoryCard paymentHistory={paymentHistory} isLoading={isLoading} />
+      {/* Subscription History */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            {language === "ar" ? "سجل الاشتراكات" : "Subscription History"}
+          </CardTitle>
+          <CardDescription>
+            {language === "ar" 
+              ? "سجل جميع اشتراكاتك السابقة"
+              : "Track all your subscription history"
+            }
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
+              ))}
+            </div>
+          ) : subscriptionHistory.length > 0 ? (
+            <div className="space-y-4">
+              {subscriptionHistory.map((record) => (
+                <div key={record.id} className="p-4 border rounded-lg hover:bg-accent/5 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <CreditCard className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">{record.plan_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatDate(record.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">
+                        {record.billing_amount} {record.billing_currency}
+                      </p>
+                      <Badge className={getStatusColor(record.status)} variant="outline">
+                        <span className="flex items-center gap-1">
+                          {getStatusIcon(record.status)}
+                          {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                        </span>
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>{language === "ar" ? "دورة الفوترة:" : "Billing Cycle:"} {record.billing_cycle}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">
+                {language === "ar" ? "لا يوجد سجل اشتراكات" : "No subscription history"}
+              </h3>
+              <p className="text-muted-foreground">
+                {language === "ar" 
+                  ? "ستظهر اشتراكاتك هنا"
+                  : "Your subscriptions will appear here"
+                }
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Billing Support */}
       <Card>
