@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ProfileImageUpload } from "@/components/ProfileImageUpload";
-import { BillingTab } from "@/components/account/BillingTab";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
@@ -23,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -347,14 +346,10 @@ export default function Account() {
         </h1>
         
         <Tabs defaultValue="profile" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-1 h-auto p-1">
             <TabsTrigger value="profile" className="flex flex-col items-center gap-1 p-3">
               <User className="h-4 w-4" />
               <span className="text-xs">{t("profile", language)}</span>
-            </TabsTrigger>
-            <TabsTrigger value="billing" className="flex flex-col items-center gap-1 p-3">
-              <CreditCard className="h-4 w-4" />
-              <span className="text-xs">{t("billing", language)}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -623,10 +618,6 @@ export default function Account() {
                 </Button>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="billing" className="space-y-6">
-            <BillingTab />
           </TabsContent>
         </Tabs>
       </div>

@@ -4,7 +4,6 @@ import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import Loading from "@/components/ui/loading";
-import { SubscriptionOverlay } from "@/components/SubscriptionOverlay";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -180,21 +179,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Show subscription overlay only when payment is actually needed
+  // For now, just allow access without subscription overlay since we removed it
+  // In a real app, you would implement proper subscription handling here
   if (subscriptionStatus.needsPayment) {
-    console.log("ProtectedRoute: Payment needed, showing subscription overlay");
-    console.log("ProtectedRoute: Subscription details:", subscriptionStatus.subscriptionDetails);
-    return (
-      <SubscriptionOverlay 
-        isOpen={true} 
-        onClose={() => {
-          // Allow closing overlay but still show it on next navigation
-          // In a real app, you might want to store this in localStorage with a timestamp
-        }} 
-      />
-    );
+    console.log("ProtectedRoute: Payment needed but no subscription overlay available");
+    // Just allow access for now
   }
 
-  console.log("ProtectedRoute: User authenticated and subscription valid, rendering protected content");
+  console.log("ProtectedRoute: User authenticated, rendering protected content");
   return <>{children}</>;
 }
