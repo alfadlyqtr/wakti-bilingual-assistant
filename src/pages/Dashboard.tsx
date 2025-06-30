@@ -45,20 +45,16 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex-1 min-h-0">
-      <div className="h-full overflow-y-auto">
-        <div className="p-4 pb-28 space-y-4">
-          <div className="max-w-md mx-auto space-y-4">
-            <DragModeToggle
-              isDragging={isDragging}
-              onToggle={toggleDragMode}
-              language={language}
-              displayName={displayName}
-            />
+    <div className="p-4 space-y-4">
+      <div className="max-w-md mx-auto space-y-4">
+        <DragModeToggle
+          isDragging={isDragging}
+          onToggle={toggleDragMode}
+          language={language}
+          displayName={displayName}
+        />
 
-            <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} />
-          </div>
-        </div>
+        <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} />
       </div>
     </div>
   );

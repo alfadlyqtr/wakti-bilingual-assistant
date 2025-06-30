@@ -11,11 +11,11 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-background">
         <AppHeader />
-        <div className="flex-1 min-h-0">
+        <main className="pb-20">
           {children}
-        </div>
+        </main>
         <MobileNav />
       </div>
     </ProtectedRoute>
