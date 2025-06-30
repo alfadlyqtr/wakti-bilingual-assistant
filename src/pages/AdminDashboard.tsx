@@ -125,6 +125,16 @@ export default function AdminDashboard() {
     );
   }
 
+  // Convert AdminStats to RealTimeStatsCards format
+  const convertedStats = {
+    totalUsers: stats.totalUsers,
+    activeSubscriptions: stats.subscribedUsers,
+    pendingMessages: stats.pendingMessages,
+    onlineUsers: stats.activeUsers,
+    monthlyRevenue: stats.monthlyRevenue,
+    newUsersToday: stats.newUsersThisMonth
+  };
+
   return (
     <div className="h-screen bg-gradient-background text-foreground flex flex-col">
       {/* Mobile Responsive Header */}
@@ -240,7 +250,7 @@ export default function AdminDashboard() {
               <span className="text-xs text-muted-foreground">Live</span>
             </div>
           </div>
-          <RealTimeStatsCards stats={stats} isLoading={dataLoading} />
+          <RealTimeStatsCards stats={convertedStats} isLoading={dataLoading} />
         </div>
 
         {/* Management Tools - Improved Layout */}

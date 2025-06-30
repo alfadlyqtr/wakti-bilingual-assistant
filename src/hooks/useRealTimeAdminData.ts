@@ -42,6 +42,15 @@ interface AdminActivity {
   status?: string;
 }
 
+// Convert AdminActivity to RecentActivity format for compatibility
+interface RecentActivity {
+  id: string;
+  type: 'user_registration' | 'subscription_activation' | 'contact_submission' | 'task_creation';
+  message: string;
+  timestamp: string;
+  status: 'success' | 'warning' | 'info';
+}
+
 export const useRealTimeAdminData = () => {
   const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
@@ -288,9 +297,21 @@ export const useRealTimeAdminData = () => {
     };
   }, []);
 
+  // Convert AdminActivity to RecentActivity format for RealTimeActivityFeed compatibility
+  const convertedRecentActivity: RecentActivity[] = recentActivity.map(activity => ({
+    id: activity.id,
+    type: activity.type === 'user_signup' ? 'user_registration' as const : 
+          activity.type === 'subscription_activated' ? 'subscription_activation' as const :
+          activity.type === 'fawran_payment' ? 'contact_submission' as const : 'task_creation' as const,
+    message: activity.title + (activity.description ? ` - ${activity.description}` : ''),
+    timestamp: activity.timestamp,
+    status: activity.type === 'fawran_payment' ? 'warning' as const : 
+            activity.type === 'subscription_activated' ? 'success' as const : 'info' as const
+  }));
+
   return {
     stats,
-    recentActivity,
+    recentActivity: convertedRecentActivity,
     isLoading,
     refetch
   };
