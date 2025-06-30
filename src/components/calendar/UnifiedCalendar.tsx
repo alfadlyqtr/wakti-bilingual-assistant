@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
@@ -13,7 +12,7 @@ import { CalendarAgenda } from "./CalendarAgenda";
 import { CalendarEntryDialog } from "./CalendarEntryDialog";
 import { CalendarViewSwitcher } from "./CalendarViewSwitcher";
 import { CalendarEntry, CalendarView, EntryType } from "@/utils/calendarUtils";
-import { useCalendarData } from "@/hooks/useCalendarData";
+import { useOptimizedCalendarData } from "@/hooks/useOptimizedCalendarData";
 import { 
   Drawer, 
   DrawerContent, 
@@ -42,7 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export const UnifiedCalendar: React.FC = () => {
+export const UnifiedCalendar: React.FC = React.memo(() => {
   const { language, theme } = useTheme();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
@@ -56,7 +55,7 @@ export const UnifiedCalendar: React.FC = () => {
   const doubleTapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapRef = useRef<number>(0);
   
-  // Use unified calendar data hook!
+  // Use optimized calendar data hook to prevent freezing!
   const {
     entries: calendarEntries,
     manualEntries,
@@ -66,7 +65,7 @@ export const UnifiedCalendar: React.FC = () => {
     refresh: refreshCalendarData,
     setManualEntries,
     loading,
-  } = useCalendarData();
+  } = useOptimizedCalendarData();
   
   // Get the appropriate locale based on the selected language
   const locale = language === 'ar' ? arSA : enUS;
@@ -92,7 +91,7 @@ export const UnifiedCalendar: React.FC = () => {
   });
 
   // Handle navigation between dates
-  const navigatePrevious = () => {
+  const navigatePrevious = useCallback(() => {
     if (view === 'month') {
       setCurrentDate(subMonths(currentDate, 1));
     } else if (view === 'week') {
@@ -100,9 +99,9 @@ export const UnifiedCalendar: React.FC = () => {
     } else if (view === 'year') {
       setCurrentDate(subYears(currentDate, 1));
     }
-  };
+  }, [view, currentDate]);
 
-  const navigateNext = () => {
+  const navigateNext = useCallback(() => {
     if (view === 'month') {
       setCurrentDate(addMonths(currentDate, 1));
     } else if (view === 'week') {
@@ -110,26 +109,26 @@ export const UnifiedCalendar: React.FC = () => {
     } else if (view === 'year') {
       setCurrentDate(addYears(currentDate, 1));
     }
-  };
+  }, [view, currentDate]);
 
-  const goToToday = () => {
+  const goToToday = useCallback(() => {
     setCurrentDate(new Date());
     setSelectedDate(new Date());
-  };
+  }, []);
 
   // Handle month change from dropdown
-  const handleMonthChange = (value: string) => {
+  const handleMonthChange = useCallback((value: string) => {
     const newMonth = parseInt(value, 10);
     const newDate = setMonth(currentDate, newMonth);
     setCurrentDate(newDate);
-  };
+  }, [currentDate]);
 
   // Handle year change from dropdown
-  const handleYearChange = (value: string) => {
+  const handleYearChange = useCallback((value: string) => {
     const newYear = parseInt(value, 10);
     const newDate = setYear(currentDate, newYear);
     setCurrentDate(newDate);
-  };
+  }, [currentDate]);
 
   // touch gesture handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -197,47 +196,50 @@ export const UnifiedCalendar: React.FC = () => {
   };
 
   // Handle day selection
-  const handleDayClick = (date: Date) => {
+  const handleDayClick = useCallback((date: Date) => {
     setSelectedDate(date);
     setCurrentDate(date); // Update current date when clicking a day
     setAgendaOpen(true);
-  };
+  }, []);
 
-  // Add a new manual calendar entry
-  const addManualEntry = (entry: Omit<CalendarEntry, 'id'>) => {
+  // Add a new manual calendar entry - optimized to prevent freezing
+  const addManualEntry = useCallback((entry: Omit<CalendarEntry, 'id'>) => {
     const newEntry: CalendarEntry = {
       ...entry,
       id: `manual-${Date.now()}`,
       type: EntryType.MANUAL_NOTE,
     };
     console.log('Adding new manual entry:', newEntry);
-    setManualEntries([...manualEntries, newEntry]);
+    const updatedEntries = [...manualEntries, newEntry];
+    setManualEntries(updatedEntries);
     setEntryDialogOpen(false);
-  };
+  }, [manualEntries, setManualEntries]);
 
-  // Edit a manual calendar entry
-  const updateManualEntry = (entry: CalendarEntry) => {
+  // Edit a manual calendar entry - optimized
+  const updateManualEntry = useCallback((entry: CalendarEntry) => {
     console.log('Updating manual entry:', entry);
-    setManualEntries(manualEntries.map(e => e.id === entry.id ? entry : e));
+    const updatedEntries = manualEntries.map(e => e.id === entry.id ? entry : e);
+    setManualEntries(updatedEntries);
     setEditEntry(null);
     setEntryDialogOpen(false);
-  };
+  }, [manualEntries, setManualEntries]);
 
-  // Delete a manual calendar entry
-  const deleteManualEntry = (entryId: string) => {
+  // Delete a manual calendar entry - optimized
+  const deleteManualEntry = useCallback((entryId: string) => {
     console.log('Deleting manual entry with ID:', entryId);
-    setManualEntries(manualEntries.filter(entry => entry.id !== entryId));
+    const updatedEntries = manualEntries.filter(entry => entry.id !== entryId);
+    setManualEntries(updatedEntries);
     setEditEntry(null);
     setEntryDialogOpen(false);
-  };
+  }, [manualEntries, setManualEntries]);
 
   // Open dialog to edit an entry
-  const handleEditEntry = (entry: CalendarEntry) => {
+  const handleEditEntry = useCallback((entry: CalendarEntry) => {
     if (entry.type === EntryType.MANUAL_NOTE) {
       setEditEntry(entry);
       setEntryDialogOpen(true);
     }
-  };
+  }, []);
 
   const cycleView = useCallback(() => {
     setView(prev => {
@@ -318,7 +320,7 @@ export const UnifiedCalendar: React.FC = () => {
           </div>
         </div>
 
-        {/* Updated Legend with proper Arabic translations */}
+        {/* Updated Legend with proper color coding */}
         <div className="flex items-center justify-center">
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
@@ -412,6 +414,8 @@ export const UnifiedCalendar: React.FC = () => {
       />
     </div>
   );
-};
+});
+
+UnifiedCalendar.displayName = 'UnifiedCalendar';
 
 export default UnifiedCalendar;

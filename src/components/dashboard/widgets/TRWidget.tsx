@@ -4,16 +4,16 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { Hand, CheckSquare, Bell, Plus, AlertTriangle, Clock } from "lucide-react";
-import { useTRData } from "@/hooks/useTRData";
+import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { format, isToday, isPast, parseISO } from "date-fns";
 
 interface TRWidgetProps {
   language: 'en' | 'ar';
 }
 
-export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
+export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
   const navigate = useNavigate();
-  const { tasks, reminders, loading } = useTRData();
+  const { tasks, reminders, loading } = useOptimizedTRData();
 
   // Calculate stats
   const pendingTasks = tasks.filter(task => !task.completed);
@@ -171,4 +171,6 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
       </div>
     </div>
   );
-};
+});
+
+TRWidget.displayName = 'TRWidget';

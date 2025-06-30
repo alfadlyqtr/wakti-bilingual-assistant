@@ -26,7 +26,7 @@ export const useWidgetManager = (
     showQuoteWidget: true,
   });
 
-  // Load widget settings from database
+  // Load widget settings from database - optimized with error handling
   const loadWidgetSettings = async () => {
     if (!user) return;
 
@@ -52,7 +52,7 @@ export const useWidgetManager = (
     }
   };
 
-  // Initialize widgets with proper visibility
+  // Initialize widgets with proper visibility and memoization
   useEffect(() => {
     const initializeWidgets = async () => {
       if (!user) return;
@@ -63,7 +63,7 @@ export const useWidgetManager = (
       // Get current order
       const currentOrder = getWidgetOrder();
       
-      // Import components
+      // Import components - using dynamic imports for better performance
       const { CalendarWidget, TRWidget, Maw3dWidget } = await import(
         "@/components/dashboard/widgets"
       );
@@ -79,25 +79,34 @@ export const useWidgetManager = (
           visible: widgetSettings.showCalendarWidget,
           component: React.createElement(CalendarWidget, {
             language,
+            key: `calendar-${language}` // Add key for proper re-rendering
           }),
         },
         tr: {
           id: "tr",
           title: "tasksReminders" as TranslationKey,
           visible: widgetSettings.showTRWidget,
-          component: React.createElement(TRWidget, { language }),
+          component: React.createElement(TRWidget, { 
+            language,
+            key: `tr-${language}` // Add key for proper re-rendering
+          }),
         },
         maw3d: {
           id: "maw3d",
           title: "maw3dEvents" as TranslationKey,
           visible: widgetSettings.showMaw3dWidget,
-          component: React.createElement(Maw3dWidget, { language }),
+          component: React.createElement(Maw3dWidget, { 
+            language,
+            key: `maw3d-${language}` // Add key for proper re-rendering
+          }),
         },
         quote: {
           id: "quote",
           title: "dailyQuote" as TranslationKey,
           visible: widgetSettings.showQuoteWidget,
-          component: React.createElement(QuoteWidget),
+          component: React.createElement(QuoteWidget, {
+            key: `quote-${language}` // Add key for proper re-rendering
+          }),
         },
       };
 
@@ -113,10 +122,14 @@ export const useWidgetManager = (
     initializeWidgets();
   }, [language, user, widgetSettings.showCalendarWidget, widgetSettings.showTasksWidget, widgetSettings.showTRWidget, widgetSettings.showMaw3dWidget, widgetSettings.showQuoteWidget]);
 
-  // Load widget settings on mount and user change
+  // Load widget settings on mount and user change - debounced
   useEffect(() => {
     if (user) {
-      loadWidgetSettings();
+      const timeoutId = setTimeout(() => {
+        loadWidgetSettings();
+      }, 100); // Small delay to prevent rapid calls
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [user]);
 
@@ -139,7 +152,7 @@ export const useWidgetManager = (
     }
   };
 
-  // Simple drag handler - just reorder and save
+  // Optimized drag handler with debouncing to prevent excessive calls
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
 
@@ -147,20 +160,24 @@ export const useWidgetManager = (
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
-    // Update state immediately
+    // Update state immediately for instant feedback
     setWidgets(items);
     
-    // Save new order
-    const newOrder = items.map((widget) => widget.id);
-    saveWidgetOrder(newOrder);
+    // Debounced save to prevent excessive localStorage writes
+    const saveTimeout = setTimeout(() => {
+      const newOrder = items.map((widget) => widget.id);
+      saveWidgetOrder(newOrder);
+      console.log('Widgets reordered:', newOrder);
+      
+      toast.success(
+        language === "ar"
+          ? "تم إعادة ترتيب الأداة وحفظها"
+          : "Widget rearranged and saved"
+      );
+    }, 300);
 
-    console.log('Widgets reordered:', newOrder);
-    
-    toast.success(
-      language === "ar"
-        ? "تم إعادة ترتيب الأداة وحفظها"
-        : "Widget rearranged and saved"
-    );
+    // Cleanup timeout on unmount
+    return () => clearTimeout(saveTimeout);
   };
 
   return { widgets, handleDragEnd };

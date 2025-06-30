@@ -5,15 +5,32 @@ import { format, addDays, isToday, isTomorrow } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { Hand, Calendar, Clock } from "lucide-react";
-import { useCalendarData } from "@/hooks/useCalendarData";
+import { useOptimizedCalendarData } from "@/hooks/useOptimizedCalendarData";
+import { EntryType } from "@/utils/calendarUtils";
 
 interface CalendarWidgetProps {
   language: 'en' | 'ar';
 }
 
-export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ language }) => {
+// Color mapping for different entry types
+const getEntryColor = (type: EntryType) => {
+  switch (type) {
+    case EntryType.MAW3D_EVENT:
+      return '#8B5CF6'; // Purple
+    case EntryType.MANUAL_NOTE:
+      return '#F59E0B'; // Yellowish
+    case EntryType.TASK:
+      return '#10B981'; // Green
+    case EntryType.REMINDER:
+      return '#EF4444'; // Red
+    default:
+      return '#6B7280'; // Gray fallback
+  }
+};
+
+export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ language }) => {
   const navigate = useNavigate();
-  const { entries, loading } = useCalendarData();
+  const { entries, loading } = useOptimizedCalendarData();
 
   // Get upcoming entries for next 3 days
   const upcomingEntries = entries
@@ -27,6 +44,18 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ language }) => {
 
   const todayEntries = entries.filter(entry => isToday(new Date(entry.date)));
   const tomorrowEntries = entries.filter(entry => isTomorrow(new Date(entry.date)));
+
+  // Count entries by type for today
+  const todayByType = todayEntries.reduce((acc, entry) => {
+    acc[entry.type] = (acc[entry.type] || 0) + 1;
+    return acc;
+  }, {} as Record<EntryType, number>);
+
+  // Count entries by type for tomorrow
+  const tomorrowByType = tomorrowEntries.reduce((acc, entry) => {
+    acc[entry.type] = (acc[entry.type] || 0) + 1;
+    return acc;
+  }, {} as Record<EntryType, number>);
 
   return (
     <div className="relative group" dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -56,14 +85,22 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ language }) => {
           </div>
         ) : (
           <>
-            {/* Today & Tomorrow Preview */}
+            {/* Today & Tomorrow Preview with Color-coded dots */}
             <div className="flex gap-3 mb-4">
               <div className="flex-1 p-3 rounded-xl bg-blue-500 text-white text-center relative">
                 <div className="font-bold text-lg">{format(new Date(), "d")}</div>
                 <div className="text-xs opacity-90">{t("today", language)}</div>
                 {todayEntries.length > 0 && (
-                  <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                    {todayEntries.length}
+                  <div className="absolute -top-1 -right-1 flex flex-wrap gap-1">
+                    {Object.entries(todayByType).map(([type, count]) => (
+                      <div
+                        key={type}
+                        className="text-white text-xs rounded-full h-4 w-4 flex items-center justify-center text-[10px] font-bold"
+                        style={{ backgroundColor: getEntryColor(type as EntryType) }}
+                      >
+                        {count}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -71,14 +108,22 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ language }) => {
                 <div className="font-bold text-lg">{format(addDays(new Date(), 1), "d")}</div>
                 <div className="text-xs opacity-90">{t("tomorrow", language)}</div>
                 {tomorrowEntries.length > 0 && (
-                  <div className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                    {tomorrowEntries.length}
+                  <div className="absolute -top-1 -right-1 flex flex-wrap gap-1">
+                    {Object.entries(tomorrowByType).map(([type, count]) => (
+                      <div
+                        key={type}
+                        className="text-white text-xs rounded-full h-4 w-4 flex items-center justify-center text-[10px] font-bold"
+                        style={{ backgroundColor: getEntryColor(type as EntryType) }}
+                      >
+                        {count}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Upcoming Events Preview */}
+            {/* Upcoming Events Preview with color-coded indicators */}
             {upcomingEntries.length > 0 ? (
               <div className="space-y-2 mb-4">
                 <h4 className="text-xs font-medium text-muted-foreground">
@@ -86,7 +131,10 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ language }) => {
                 </h4>
                 {upcomingEntries.slice(0, 2).map((entry) => (
                   <div key={entry.id} className="flex items-center gap-2 p-2 rounded-lg bg-white/10 backdrop-blur-sm">
-                    <Clock className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                    <div 
+                      className="h-3 w-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: getEntryColor(entry.type) }}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{entry.title}</p>
                       <p className="text-xs text-muted-foreground">
@@ -118,4 +166,6 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ language }) => {
       </div>
     </div>
   );
-};
+});
+
+CalendarWidget.displayName = 'CalendarWidget';
