@@ -24,11 +24,14 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
     task.due_date && isToday(parseISO(task.due_date))
   );
 
-  const pendingReminders = reminders.filter(reminder => !reminder.is_completed);
-  const overdueReminders = pendingReminders.filter(reminder => 
+  // For reminders, we show all active reminders (they don't have completion status)
+  const activeReminders = reminders.filter(reminder => 
+    !reminder.snoozed_until || (reminder.snoozed_until && isPast(parseISO(reminder.snoozed_until)))
+  );
+  const overdueReminders = activeReminders.filter(reminder => 
     reminder.due_date && isPast(parseISO(reminder.due_date)) && !isToday(parseISO(reminder.due_date))
   );
-  const todayReminders = pendingReminders.filter(reminder => 
+  const todayReminders = activeReminders.filter(reminder => 
     reminder.due_date && isToday(parseISO(reminder.due_date))
   );
 
@@ -38,7 +41,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
       ...task,
       type: 'task' as const
     })),
-    ...pendingReminders.filter(reminder => reminder.due_date).map(reminder => ({
+    ...activeReminders.filter(reminder => reminder.due_date).map(reminder => ({
       ...reminder,
       type: 'reminder' as const
     }))
@@ -105,7 +108,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
                 <div className="flex items-center gap-2">
                   <Bell className="h-4 w-4 text-red-500" />
                   <div>
-                    <div className="font-bold text-lg text-red-500">{pendingReminders.length}</div>
+                    <div className="font-bold text-lg text-red-500">{activeReminders.length}</div>
                     <div className="text-xs text-red-600">{language === 'ar' ? 'تذكيرات' : 'Reminders'}</div>
                   </div>
                 </div>
