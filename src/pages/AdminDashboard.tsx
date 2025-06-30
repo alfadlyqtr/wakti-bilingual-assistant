@@ -1,7 +1,6 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOut, Settings, RefreshCw, Menu } from "lucide-react";
+import { Shield, Users, MessageSquare, CreditCard, BarChart3, ChevronDown, LogOut, Settings, RefreshCw, Menu, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -24,6 +23,7 @@ export default function AdminDashboard() {
   const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pendingFawranPayments, setPendingFawranPayments] = useState(0);
   
   const {
     stats,
@@ -34,7 +34,21 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     validateAdminSession();
+    loadFawranStats();
   }, []);
+
+  const loadFawranStats = async () => {
+    try {
+      const { count } = await supabase
+        .from('pending_fawran_payments')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      
+      setPendingFawranPayments(count || 0);
+    } catch (error) {
+      console.error('Error loading Fawran stats:', error);
+    }
+  };
 
   const validateAdminSession = async () => {
     try {
@@ -95,6 +109,9 @@ export default function AdminDashboard() {
       case 'subscriptions':
         navigate('/admin/subscriptions');
         break;
+      case 'fawran':
+        navigate('/admin/fawran-payments');
+        break;
       case 'quotas':
         navigate('/admin/quotas');
         break;
@@ -108,7 +125,7 @@ export default function AdminDashboard() {
 
   const handleRefresh = async () => {
     toast.info('Refreshing data...');
-    await refetch();
+    await Promise.all([refetch(), loadFawranStats()]);
     toast.success('Data refreshed successfully');
   };
 
@@ -187,6 +204,15 @@ export default function AdminDashboard() {
                 <CreditCard className="h-3 w-3 mr-2" />
                 Subscriptions
               </Button>
+              <Button variant="outline" size="sm" onClick={() => handleSectionChange('fawran')} className="justify-start text-xs py-2 relative">
+                <Receipt className="h-3 w-3 mr-2" />
+                Fawran
+                {pendingFawranPayments > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                    {pendingFawranPayments}
+                  </span>
+                )}
+              </Button>
               <Button variant="outline" size="sm" onClick={() => handleSectionChange('analytics')} className="justify-start text-xs py-2">
                 <BarChart3 className="h-3 w-3 mr-2" />
                 Analytics
@@ -216,7 +242,7 @@ export default function AdminDashboard() {
         {/* Management Tools - Improved Layout */}
         <div>
           <h2 className="text-sm sm:text-base lg:text-lg font-bold text-enhanced-heading mb-3 sm:mb-4">Management Tools</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
             <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300 group">
               <CardHeader className="pb-2 sm:pb-3">
                 <CardTitle className="text-enhanced-heading flex items-center text-sm lg:text-base">
@@ -269,6 +295,28 @@ export default function AdminDashboard() {
               <CardContent className="pt-0">
                 <Button className="w-full btn-enhanced text-xs lg:text-sm py-2 lg:py-3" onClick={() => handleSectionChange('subscriptions')}>
                   Manage Subs
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="enhanced-card hover:shadow-vibrant transition-all duration-300 group">
+              <CardHeader className="pb-2 sm:pb-3">
+                <CardTitle className="text-enhanced-heading flex items-center text-sm lg:text-base">
+                  <Receipt className="h-4 w-4 lg:h-5 lg:w-5 mr-2 text-accent-purple group-hover:scale-110 transition-transform" />
+                  Fawran Payments
+                </CardTitle>
+                <CardDescription className="text-xs lg:text-sm">
+                  {pendingFawranPayments} pending payment reviews
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <Button className="w-full btn-enhanced text-xs lg:text-sm py-2 lg:py-3 relative" onClick={() => handleSectionChange('fawran')}>
+                  Review Payments
+                  {pendingFawranPayments > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                      {pendingFawranPayments}
+                    </span>
+                  )}
                 </Button>
               </CardContent>
             </Card>
