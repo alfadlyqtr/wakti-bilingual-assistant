@@ -1186,6 +1186,8 @@ export type TranslationKey =
   | "dragMode"
   | "dragModeActivated"
   | "dragModeDeactivated"
+  | "organizeWidgets"
+  | "exitDragMode"
   
   // NEW KEYS TO FIX THE CURRENT BUILD ERRORS:
   | "retry"
