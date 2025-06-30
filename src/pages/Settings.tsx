@@ -122,6 +122,9 @@ export default function Settings() {
         .eq('id', user?.id);
 
       showSuccess(t("settingsUpdated", language));
+      
+      // Force dashboard to reload by dispatching a custom event
+      window.dispatchEvent(new CustomEvent('widgetSettingsChanged', { detail: newSettings }));
     } catch (error) {
       console.error('Error updating widget setting:', error);
       showError(t("errorUpdatingSettings", language));
