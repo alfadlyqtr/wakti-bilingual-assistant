@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { ArrowLeft, Upload, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, CheckCircle, AlertCircle, Loader2, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ export function PaymentProofUpload({
   const [email, setEmail] = useState(user?.email || '');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
   const handleFileSelect = (file: File) => {
@@ -96,7 +97,7 @@ export function PaymentProofUpload({
       const screenshotUrl = await uploadScreenshot(screenshot);
 
       // Create payment submission record
-      const { error } = await supabase
+      const { data: paymentData, error } = await supabase
         .from('pending_fawran_payments')
         .insert({
           user_id: user.id,
@@ -104,15 +105,55 @@ export function PaymentProofUpload({
           plan_type: selectedPlan,
           amount: planDetails.price,
           screenshot_url: screenshotUrl
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
       toast.success(
         language === "ar" 
-          ? "تم إرسال إثبات الدفع بنجاح. سيتم مراجعته خلال 24 ساعة." 
-          : "Payment proof submitted successfully. It will be reviewed within 24 hours."
+          ? "تم إرسال إثبات الدفع بنجاح!" 
+          : "Payment proof submitted successfully!"
       );
+
+      // Start AI analysis
+      setIsAnalyzing(true);
+      
+      try {
+        const { data: analysisResult, error: analysisError } = await supabase.functions
+          .invoke('analyze-payment-screenshot', {
+            body: { paymentId: paymentData.id }
+          });
+
+        if (analysisError) {
+          console.error('AI analysis failed:', analysisError);
+          toast.info(
+            language === "ar" 
+              ? "سيتم مراجعة الدفع يدوياً خلال 24 ساعة" 
+              : "Payment will be reviewed manually within 24 hours"
+          );
+        } else if (analysisResult?.auto_approved) {
+          toast.success(
+            language === "ar" 
+              ? "تم تفعيل اشتراكك تلقائياً! مرحباً بك في واقتي المميز" 
+              : "Your subscription has been activated automatically! Welcome to Wakti Premium"
+          );
+        } else {
+          toast.info(
+            language === "ar" 
+              ? "سيتم مراجعة الدفع وتفعيل اشتراكك خلال 24 ساعة" 
+              : "Payment will be reviewed and your subscription activated within 24 hours"
+          );
+        }
+      } catch (analysisError) {
+        console.error('Analysis request failed:', analysisError);
+        toast.info(
+          language === "ar" 
+            ? "سيتم مراجعة الدفع يدوياً خلال 24 ساعة" 
+            : "Payment will be reviewed manually within 24 hours"
+        );
+      }
       
       onSuccess();
     } catch (error) {
@@ -124,6 +165,7 @@ export function PaymentProofUpload({
       );
     } finally {
       setIsSubmitting(false);
+      setIsAnalyzing(false);
     }
   };
 
@@ -152,6 +194,19 @@ export function PaymentProofUpload({
       </CardHeader>
 
       <CardContent className="space-y-6">
+        {/* AI Analysis Badge */}
+        <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-2 text-blue-900 dark:text-blue-100">
+            <Brain className="h-4 w-4" />
+            <span className="text-sm font-medium">
+              {language === "ar" 
+                ? "تحليل ذكي لإثبات الدفع - تفعيل فوري محتمل"
+                : "AI-Powered Payment Analysis - Potential Instant Activation"
+              }
+            </span>
+          </div>
+        </div>
+
         {/* Payment Instructions */}
         <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
           <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
@@ -269,12 +324,17 @@ export function PaymentProofUpload({
         <Button 
           className="w-full" 
           onClick={submitPaymentProof}
-          disabled={!screenshot || !email.trim() || isSubmitting}
+          disabled={!screenshot || !email.trim() || isSubmitting || isAnalyzing}
         >
           {isSubmitting ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               {language === "ar" ? "جاري الإرسال..." : "Submitting..."}
+            </>
+          ) : isAnalyzing ? (
+            <>
+              <Brain className="h-4 w-4 mr-2 animate-pulse" />
+              {language === "ar" ? "جاري التحليل الذكي..." : "AI Analyzing..."}
             </>
           ) : (
             <>
@@ -285,11 +345,17 @@ export function PaymentProofUpload({
         </Button>
 
         {/* Footer Note */}
-        <div className="text-xs text-muted-foreground text-center">
+        <div className="text-xs text-muted-foreground text-center space-y-1">
           <p>
             {language === "ar" 
-              ? "سيتم مراجعة إثبات الدفع خلال 24 ساعة وتفعيل اشتراكك تلقائياً"
-              : "Payment proof will be reviewed within 24 hours and your subscription activated automatically"
+              ? "سيتم تحليل إثبات الدفع باستخدام الذكاء الاصطناعي للتفعيل الفوري"
+              : "Payment proof will be analyzed using AI for instant activation"
+            }
+          </p>
+          <p>
+            {language === "ar" 
+              ? "أو مراجعة يدوية خلال 24 ساعة كحد أقصى"
+              : "or manual review within 24 hours maximum"
             }
           </p>
         </div>
