@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Search } from "lucide-react";
@@ -127,58 +128,58 @@ export default function AdminMessages() {
       </AdminHeader>
 
       {/* Main Content */}
-      <div className="p-3 sm:p-4 space-y-4 sm:space-y-6">
+      <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-blue" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <MessageSquare className="h-4 w-4 mr-2 text-accent-blue" />
                 Total Messages
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-enhanced-heading">{messages.length}</div>
+              <div className="text-2xl font-bold text-enhanced-heading">{messages.length}</div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-orange" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Clock className="h-4 w-4 mr-2 text-accent-orange" />
                 Unread
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-orange">
+              <div className="text-2xl font-bold text-accent-orange">
                 {messages.filter(m => m.status === 'unread').length}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-green" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Eye className="h-4 w-4 mr-2 text-accent-green" />
                 Read
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-green">
+              <div className="text-2xl font-bold text-accent-green">
                 {messages.filter(m => m.status === 'read').length}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-purple" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <CheckCircle className="h-4 w-4 mr-2 text-accent-purple" />
                 Responded
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-purple">
+              <div className="text-2xl font-bold text-accent-purple">
                 {messages.filter(m => m.status === 'responded').length}
               </div>
             </CardContent>
@@ -186,27 +187,27 @@ export default function AdminMessages() {
         </div>
 
         {/* Enhanced Search and Filter Controls */}
-        <Card className="bg-gradient-card border-border/50 shadow-soft">
+        <Card className="bg-gradient-card border-border/50">
           <CardHeader>
-            <CardTitle className="text-enhanced-heading text-sm sm:text-base">Message Management</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Contact forms, feedback, and support requests</CardDescription>
+            <CardTitle className="text-enhanced-heading">Message Management</CardTitle>
+            <CardDescription>Contact forms, feedback, and support requests</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div className="flex flex-col lg:flex-row gap-4 mb-6">
               <div className="flex-1">
-                <Label htmlFor="search" className="text-xs sm:text-sm">Search Messages</Label>
+                <Label htmlFor="search">Search Messages</Label>
                 <Input
                   id="search"
                   placeholder="Search by name, email, subject, or content..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="mt-1 text-xs sm:text-sm bg-background/50 border-border/50 focus:border-accent-blue/50"
+                  className="mt-1 bg-background/50 border-border/50 focus:border-accent-blue/50"
                 />
               </div>
-              <div className="w-full sm:w-48">
-                <Label className="text-xs sm:text-sm">Filter by Status</Label>
+              <div className="w-full lg:w-48">
+                <Label>Filter by Status</Label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="mt-1 text-xs sm:text-sm bg-background/50 border-border/50">
+                  <SelectTrigger className="mt-1 bg-background/50 border-border/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -220,14 +221,19 @@ export default function AdminMessages() {
             </div>
 
             {/* Enhanced Messages List */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               {filteredMessages.map((message) => (
-                <div key={message.id} className="bg-gradient-card border border-border/30 rounded-xl p-4 hover:border-border/50 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <div className="font-medium text-enhanced-heading text-sm sm:text-base">
-                          {message.name}
+                <div key={message.id} className="bg-gradient-card border border-border/30 rounded-xl p-6 hover:border-border/50 transition-all duration-300">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-enhanced-heading">
+                            {message.name}
+                          </div>
+                          <div className="text-sm text-muted-foreground break-all">
+                            {message.email}
+                          </div>
                         </div>
                         <Badge 
                           variant={
@@ -239,17 +245,17 @@ export default function AdminMessages() {
                           {message.status}
                         </Badge>
                       </div>
-                      <div className="text-xs sm:text-sm text-muted-foreground mb-1">
-                        {message.email}
-                      </div>
+                      
                       {message.subject && (
-                        <div className="font-medium text-xs sm:text-sm mb-1 text-accent-blue">
+                        <div className="font-medium text-accent-blue">
                           {message.subject}
                         </div>
                       )}
-                      <div className="text-xs sm:text-sm text-muted-foreground line-clamp-2 mb-2">
+                      
+                      <div className="text-muted-foreground line-clamp-2">
                         {message.message}
                       </div>
+                      
                       <div className="text-xs text-muted-foreground">
                         {new Date(message.created_at).toLocaleString()}
                       </div>
@@ -259,11 +265,10 @@ export default function AdminMessages() {
                       <Button 
                         size="sm" 
                         onClick={() => handleViewMessage(message)}
-                        className="btn-enhanced text-xs px-3 py-2 hover:shadow-glow"
+                        className="btn-enhanced hover:shadow-glow"
                       >
                         <Eye className="h-3 w-3 mr-1" />
-                        <span className="hidden sm:inline">View & Respond</span>
-                        <span className="sm:hidden">View</span>
+                        View & Respond
                       </Button>
                     </div>
                   </div>

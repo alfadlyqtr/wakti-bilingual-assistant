@@ -1,5 +1,4 @@
 
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX } from "lucide-react";
@@ -245,58 +244,58 @@ export default function AdminSubscriptions() {
       </AdminHeader>
 
       {/* Main Content */}
-      <div className="p-3 sm:p-4 space-y-4 sm:space-y-6">
+      <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-blue" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Users className="h-4 w-4 mr-2 text-accent-blue" />
                 Total Users
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-enhanced-heading">{users.length}</div>
+              <div className="text-2xl font-bold text-enhanced-heading">{users.length}</div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-green" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <CheckCircle className="h-4 w-4 mr-2 text-accent-green" />
                 Active Subs
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-green">
+              <div className="text-2xl font-bold text-accent-green">
                 {users.filter(u => u.is_subscribed && u.subscription_status === 'active').length}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <Smartphone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-purple" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Smartphone className="h-4 w-4 mr-2 text-accent-purple" />
                 Fawran Users
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-purple">
+              <div className="text-2xl font-bold text-accent-purple">
                 {users.filter(u => u.payment_method === 'fawran').length}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <UserCog className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-orange" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <UserCog className="h-4 w-4 mr-2 text-accent-orange" />
                 Legacy Protected
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-orange">
+              <div className="text-2xl font-bold text-accent-orange">
                 {users.filter(u => LEGACY_PAYPAL_USERS.includes(u.email)).length}
               </div>
             </CardContent>
@@ -304,27 +303,27 @@ export default function AdminSubscriptions() {
         </div>
 
         {/* Enhanced Search and Filter Controls */}
-        <Card className="bg-gradient-card border-border/50 shadow-soft">
+        <Card className="bg-gradient-card border-border/50">
           <CardHeader>
-            <CardTitle className="text-enhanced-heading text-sm sm:text-base">User Management</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Search users and manage their subscriptions</CardDescription>
+            <CardTitle className="text-enhanced-heading">User Management</CardTitle>
+            <CardDescription>Search users and manage their subscriptions</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div className="flex flex-col lg:flex-row gap-4 mb-6">
               <div className="flex-1">
-                <Label htmlFor="search" className="text-xs sm:text-sm">Search Users</Label>
+                <Label htmlFor="search">Search Users</Label>
                 <Input
                   id="search"
                   placeholder="Search by email or name..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="mt-1 text-xs sm:text-sm bg-background/50 border-border/50 focus:border-accent-blue/50"
+                  className="mt-1 bg-background/50 border-border/50 focus:border-accent-blue/50"
                 />
               </div>
-              <div className="w-full sm:w-48">
-                <Label className="text-xs sm:text-sm">Filter by Status</Label>
+              <div className="w-full lg:w-48">
+                <Label>Filter by Status</Label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="mt-1 text-xs sm:text-sm bg-background/50 border-border/50">
+                  <SelectTrigger className="mt-1 bg-background/50 border-border/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -337,25 +336,24 @@ export default function AdminSubscriptions() {
             </div>
 
             {/* Enhanced Users List */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               {filteredUsers.map((user) => (
-                <div key={user.id} className="bg-gradient-card border border-border/30 rounded-xl p-4 hover:border-border/50 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                    <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
-                      <div className="flex items-center space-x-2">
-                        {getPaymentMethodIcon(user.payment_method)}
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium text-enhanced-heading text-sm sm:text-base truncate">{user.email}</div>
-                          <div className="text-xs sm:text-sm text-muted-foreground truncate">
-                            {user.display_name} • {getPaymentMethodLabel(user.payment_method, user.email)}
-                          </div>
+                <div key={user.id} className="bg-gradient-card border border-border/30 rounded-xl p-6 hover:border-border/50 transition-all duration-300">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex items-center space-x-4">
+                      {getPaymentMethodIcon(user.payment_method)}
+                      <div className="space-y-1">
+                        <div className="font-semibold text-enhanced-heading break-all">{user.email}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {user.display_name} • {getPaymentMethodLabel(user.payment_method, user.email)}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-3">
+                    
+                    <div className="flex items-center gap-3">
                       {user.is_subscribed ? (
                         <>
-                          <Badge variant="secondary" className="bg-accent-green/20 text-accent-green text-xs border-accent-green/30">
+                          <Badge variant="secondary" className="bg-accent-green/20 text-accent-green border-accent-green/30">
                             <CheckCircle className="h-3 w-3 mr-1" />
                             {user.plan_name || 'Active'}
                           </Badge>
@@ -364,21 +362,21 @@ export default function AdminSubscriptions() {
                               size="sm" 
                               variant="destructive"
                               onClick={() => handleDeactivateSubscription(user)}
-                              className="text-xs px-2 sm:px-3 hover:bg-destructive/90"
+                              className="hover:bg-destructive/90"
                             >
                               <UserX className="h-3 w-3 mr-1" />
-                              <span className="hidden sm:inline">Deactivate</span>
+                              Deactivate
                             </Button>
                           )}
                           {LEGACY_PAYPAL_USERS.includes(user.email) && (
-                            <Badge variant="outline" className="text-xs text-accent-orange border-accent-orange">
+                            <Badge variant="outline" className="text-accent-orange border-accent-orange">
                               Protected
                             </Badge>
                           )}
                         </>
                       ) : (
                         <>
-                          <Badge variant="secondary" className="bg-muted/20 text-xs">
+                          <Badge variant="secondary" className="bg-muted/20">
                             <XCircle className="h-3 w-3 mr-1" />
                             Unsubscribed
                           </Badge>
@@ -388,7 +386,7 @@ export default function AdminSubscriptions() {
                               setSelectedUser(user);
                               setShowActivationModal(true);
                             }}
-                            className="btn-enhanced text-xs px-2 sm:px-3 hover:shadow-glow"
+                            className="btn-enhanced hover:shadow-glow"
                           >
                             Activate
                           </Button>
@@ -405,16 +403,16 @@ export default function AdminSubscriptions() {
 
       {/* Activation Modal */}
       <Dialog open={showActivationModal} onOpenChange={setShowActivationModal}>
-        <DialogContent className="max-w-sm sm:max-w-md mx-4">
+        <DialogContent className="max-w-md mx-4">
           <DialogHeader>
-            <DialogTitle className="text-sm sm:text-base">Activate Subscription</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
+            <DialogTitle>Activate Subscription</DialogTitle>
+            <DialogDescription>
               Activate subscription for {selectedUser?.email}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-xs sm:text-sm">Plan Type</Label>
+              <Label>Plan Type</Label>
               <Select 
                 value={activationData.planName} 
                 onValueChange={(value) => setActivationData(prev => ({
@@ -423,7 +421,7 @@ export default function AdminSubscriptions() {
                   billingAmount: value.includes('Yearly') ? 600 : 60
                 }))}
               >
-                <SelectTrigger className="text-xs sm:text-sm">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -434,12 +432,12 @@ export default function AdminSubscriptions() {
             </div>
             
             <div>
-              <Label className="text-xs sm:text-sm">Payment Method</Label>
+              <Label>Payment Method</Label>
               <Select 
                 value={activationData.paymentMethod} 
                 onValueChange={(value) => setActivationData(prev => ({...prev, paymentMethod: value}))}
               >
-                <SelectTrigger className="text-xs sm:text-sm">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -450,12 +448,11 @@ export default function AdminSubscriptions() {
             </div>
             
             <div>
-              <Label className="text-xs sm:text-sm">Billing Amount</Label>
+              <Label>Billing Amount</Label>
               <Input
                 type="number"
                 value={activationData.billingAmount}
                 onChange={(e) => setActivationData(prev => ({...prev, billingAmount: Number(e.target.value)}))}
-                className="text-xs sm:text-sm"
               />
             </div>
           </div>
@@ -466,15 +463,12 @@ export default function AdminSubscriptions() {
                 setShowActivationModal(false);
                 setSelectedUser(null);
               }}
-              size="sm" 
-              className="text-xs"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleActivateSubscription}
-              className="btn-enhanced text-xs hover:shadow-glow" 
-              size="sm"
+              className="btn-enhanced hover:shadow-glow"
             >
               Activate Subscription
             </Button>

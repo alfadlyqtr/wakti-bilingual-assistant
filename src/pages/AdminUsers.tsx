@@ -1,5 +1,4 @@
 
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, Search, Filter, RefreshCw, Eye, UserX, Trash2, AlertTriangle } from "lucide-react";
@@ -209,58 +208,58 @@ export default function AdminUsers() {
       </AdminHeader>
 
       {/* Main Content */}
-      <div className="p-3 sm:p-4 space-y-4 sm:space-y-6">
+      <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-blue" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Users className="h-4 w-4 mr-2 text-accent-blue" />
                 Total Users
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-enhanced-heading">{users.length}</div>
+              <div className="text-2xl font-bold text-enhanced-heading">{users.length}</div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <Shield className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-green" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Shield className="h-4 w-4 mr-2 text-accent-green" />
                 Active Users
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-green">
+              <div className="text-2xl font-bold text-accent-green">
                 {users.filter(u => !u.is_suspended).length}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <UserX className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-orange" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <UserX className="h-4 w-4 mr-2 text-accent-orange" />
                 Suspended
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-orange">
+              <div className="text-2xl font-bold text-accent-orange">
                 {users.filter(u => u.is_suspended).length}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300 hover:shadow-glow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs sm:text-sm">
-                <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-accent-purple" />
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <AlertTriangle className="h-4 w-4 mr-2 text-accent-purple" />
                 Subscribers
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-accent-purple">
+              <div className="text-2xl font-bold text-accent-purple">
                 {users.filter(u => u.is_subscribed).length}
               </div>
             </CardContent>
@@ -268,27 +267,27 @@ export default function AdminUsers() {
         </div>
 
         {/* Enhanced Search and Filter Controls */}
-        <Card className="bg-gradient-card border-border/50 shadow-soft">
+        <Card className="bg-gradient-card border-border/50">
           <CardHeader>
-            <CardTitle className="text-enhanced-heading text-sm sm:text-base">User Directory</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Search and manage user accounts</CardDescription>
+            <CardTitle className="text-enhanced-heading">User Directory</CardTitle>
+            <CardDescription>Search and manage user accounts</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div className="flex flex-col lg:flex-row gap-4 mb-6">
               <div className="flex-1">
-                <Label htmlFor="search" className="text-xs sm:text-sm">Search Users</Label>
+                <Label htmlFor="search" className="text-sm">Search Users</Label>
                 <Input
                   id="search"
                   placeholder="Search by email, name, or username..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="mt-1 text-xs sm:text-sm bg-background/50 border-border/50 focus:border-accent-blue/50"
+                  className="mt-1 bg-background/50 border-border/50 focus:border-accent-blue/50"
                 />
               </div>
-              <div className="w-full sm:w-48">
-                <Label className="text-xs sm:text-sm">Filter by Status</Label>
+              <div className="w-full lg:w-48">
+                <Label className="text-sm">Filter by Status</Label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="mt-1 text-xs sm:text-sm bg-background/50 border-border/50">
+                  <SelectTrigger className="mt-1 bg-background/50 border-border/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -302,76 +301,74 @@ export default function AdminUsers() {
             </div>
 
             {/* Enhanced Users List */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               {filteredUsers.map((user) => (
-                <div key={user.id} className="bg-gradient-card border border-border/30 rounded-xl p-4 hover:border-border/50 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                    <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-enhanced-heading text-sm sm:text-base truncate">
-                          {user.email || 'No email'}
+                <div key={user.id} className="bg-gradient-card border border-border/30 rounded-xl p-6 hover:border-border/50 transition-all duration-300">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="font-semibold text-enhanced-heading text-base break-all">
+                            {user.email || 'No email'}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {user.display_name || user.full_name || user.username || 'No name set'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Joined: {new Date(user.created_at).toLocaleDateString()}
+                          </div>
                         </div>
-                        <div className="text-xs sm:text-sm text-muted-foreground truncate">
-                          {user.display_name || user.full_name || user.username || 'No name set'}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Joined: {new Date(user.created_at).toLocaleDateString()}
+                        
+                        <div className="flex flex-wrap gap-2">
+                          {user.is_subscribed && (
+                            <Badge variant="secondary" className="bg-accent-green/20 text-accent-green border-accent-green/30">
+                              Subscriber
+                            </Badge>
+                          )}
+                          {user.is_suspended && (
+                            <Badge variant="destructive">
+                              Suspended
+                            </Badge>
+                          )}
+                          {user.is_logged_in && (
+                            <Badge variant="outline" className="border-accent-blue text-accent-blue">
+                              Online
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
                     
-                    <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-3">
-                      <div className="flex flex-wrap gap-1">
-                        {user.is_subscribed && (
-                          <Badge variant="secondary" className="bg-accent-green/20 text-accent-green text-xs border-accent-green/30">
-                            Subscriber
-                          </Badge>
-                        )}
-                        {user.is_suspended && (
-                          <Badge variant="destructive" className="text-xs">
-                            Suspended
-                          </Badge>
-                        )}
-                        {user.is_logged_in && (
-                          <Badge variant="outline" className="text-xs border-accent-blue text-accent-blue">
-                            Online
-                          </Badge>
-                        )}
-                      </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleUserAction(user, 'view')}
+                        className="hover:bg-accent-blue/10 hover:border-accent-blue/30"
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        View
+                      </Button>
                       
-                      <div className="flex space-x-2">
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => handleUserAction(user, 'view')}
-                          className="text-xs px-2 sm:px-3 hover:bg-accent-blue/10 hover:border-accent-blue/30"
-                        >
-                          <Eye className="h-3 w-3 mr-1" />
-                          <span className="hidden sm:inline">View</span>
-                        </Button>
-                        
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => handleUserAction(user, 'suspend')}
-                          className={`text-xs px-2 sm:px-3 ${user.is_suspended ? 'text-accent-green hover:bg-accent-green/10 hover:border-accent-green/30' : 'text-accent-orange hover:bg-accent-orange/10 hover:border-accent-orange/30'}`}
-                        >
-                          <UserX className="h-3 w-3 mr-1" />
-                          <span className="hidden sm:inline">
-                            {user.is_suspended ? 'Unsuspend' : 'Suspend'}
-                          </span>
-                        </Button>
-                        
-                        <Button 
-                          size="sm" 
-                          variant="destructive"
-                          onClick={() => handleUserAction(user, 'delete')}
-                          className="text-xs px-2 sm:px-3 hover:bg-destructive/90"
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          <span className="hidden sm:inline">Delete</span>
-                        </Button>
-                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleUserAction(user, 'suspend')}
+                        className={user.is_suspended ? 'text-accent-green hover:bg-accent-green/10 hover:border-accent-green/30' : 'text-accent-orange hover:bg-accent-orange/10 hover:border-accent-orange/30'}
+                      >
+                        <UserX className="h-3 w-3 mr-1" />
+                        {user.is_suspended ? 'Unsuspend' : 'Suspend'}
+                      </Button>
+                      
+                      <Button 
+                        size="sm" 
+                        variant="destructive"
+                        onClick={() => handleUserAction(user, 'delete')}
+                        className="hover:bg-destructive/90"
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -393,12 +390,12 @@ export default function AdminUsers() {
 
       {/* Deactivate Confirmation Dialog */}
       <Dialog open={showDeactivateConfirm} onOpenChange={setShowDeactivateConfirm}>
-        <DialogContent className="max-w-sm mx-4">
+        <DialogContent className="max-w-md mx-4">
           <DialogHeader>
-            <DialogTitle className="text-sm sm:text-base">
+            <DialogTitle>
               {selectedUser?.is_suspended ? 'Unsuspend User' : 'Suspend User'}
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
+            <DialogDescription>
               Are you sure you want to {selectedUser?.is_suspended ? 'unsuspend' : 'suspend'} {selectedUser?.email}?
               {!selectedUser?.is_suspended && " This will prevent them from accessing the app."}
             </DialogDescription>
@@ -410,15 +407,12 @@ export default function AdminUsers() {
                 setShowDeactivateConfirm(false);
                 setSelectedUser(null);
               }}
-              size="sm" 
-              className="text-xs"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleDeactivateUser}
-              className={`text-xs ${selectedUser?.is_suspended ? 'btn-enhanced' : 'bg-accent-orange hover:bg-accent-orange/90'}`}
-              size="sm"
+              className={selectedUser?.is_suspended ? 'btn-enhanced' : 'bg-accent-orange hover:bg-accent-orange/90'}
             >
               {selectedUser?.is_suspended ? 'Unsuspend' : 'Suspend'}
             </Button>
@@ -428,10 +422,10 @@ export default function AdminUsers() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="max-w-sm mx-4">
+        <DialogContent className="max-w-md mx-4">
           <DialogHeader>
-            <DialogTitle className="text-sm sm:text-base text-destructive">Delete User</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
+            <DialogTitle className="text-destructive">Delete User</DialogTitle>
+            <DialogDescription>
               Are you sure you want to delete {selectedUser?.email}? This action cannot be undone and will permanently remove all user data.
             </DialogDescription>
           </DialogHeader>
@@ -442,16 +436,12 @@ export default function AdminUsers() {
                 setShowDeleteConfirm(false);
                 setSelectedUser(null);
               }}
-              size="sm" 
-              className="text-xs"
             >
               Cancel
             </Button>
             <Button 
               variant="destructive"
               onClick={handleDeleteUser}
-              size="sm"
-              className="text-xs"
             >
               Delete User
             </Button>
