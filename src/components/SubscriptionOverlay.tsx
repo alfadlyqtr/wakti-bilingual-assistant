@@ -32,56 +32,116 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
   const [loadingAttempts, setLoadingAttempts] = useState(0);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+
+  // Add debug logging function
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    setDebugInfo(prev => [...prev.slice(-9), logMessage]); // Keep last 10 logs
+  };
 
   useEffect(() => {
     setMounted(true);
     
-    // Load PayPal SDK with exact recommended parameters
     const loadPayPalSDK = () => {
-      console.log('🔄 Starting PayPal SDK loading process...');
+      addDebugLog('🔄 Starting PayPal SDK loading process...');
+      addDebugLog(`Current domain: ${window.location.hostname}`);
+      addDebugLog(`Current origin: ${window.location.origin}`);
       
       if (window.paypal) {
-        console.log('✅ PayPal SDK already loaded');
+        addDebugLog('✅ PayPal SDK already loaded');
         setPaypalLoaded(true);
         return;
       }
 
+      // Check if we can even reach PayPal's domain
+      const testPayPalAccess = async () => {
+        try {
+          addDebugLog('🌐 Testing PayPal domain accessibility...');
+          const response = await fetch('https://www.paypal.com/robots.txt', { 
+            method: 'HEAD',
+            mode: 'no-cors' // Avoid CORS issues for this test
+          });
+          addDebugLog('✅ PayPal domain is accessible');
+        } catch (error) {
+          addDebugLog(`❌ PayPal domain accessibility test failed: ${error}`);
+        }
+      };
+
+      testPayPalAccess();
+
       const script = document.createElement('script');
-      // Use PayPal's exact recommended URL with vault=true and intent=subscription
-      script.src = 'https://www.paypal.com/sdk/js?client-id=ATVW7zXzTxmmYdKWHV-kKupIv3rk2OcLn6fBQMR_ANGdPqIqJt3AhQ4iY-doB8xGkHkLnmYHMEYQNwZ&vault=true&intent=subscription';
+      const sdkUrl = 'https://www.paypal.com/sdk/js?client-id=ATVW7zXzTxmmYdKWHV-kKupIv3rk2OcLn6fBQMR_ANGdPqIqJt3AhQ4iY-doB8xGkHkLnmYHMEYQNwZ&vault=true&intent=subscription';
+      
+      addDebugLog(`📡 Loading PayPal SDK from: ${sdkUrl}`);
+      script.src = sdkUrl;
       script.async = true;
       
+      // Add more detailed error tracking
       script.onload = () => {
-        console.log('✅ PayPal SDK loaded successfully');
-        setPaypalLoaded(true);
-        setPaypalError(null);
+        addDebugLog('✅ PayPal SDK script loaded successfully');
+        if (window.paypal) {
+          addDebugLog('✅ PayPal object is available on window');
+          if (window.paypal.Buttons) {
+            addDebugLog('✅ PayPal.Buttons function is available');
+          } else {
+            addDebugLog('❌ PayPal.Buttons function is NOT available');
+          }
+          setPaypalLoaded(true);
+          setPaypalError(null);
+        } else {
+          addDebugLog('❌ PayPal object NOT found on window after script load');
+          setPaypalError('PayPal object not found after script load');
+        }
       };
       
       script.onerror = (error) => {
-        console.error('❌ PayPal SDK failed to load:', error);
+        addDebugLog(`❌ PayPal SDK script failed to load: ${error}`);
+        addDebugLog(`Error type: ${error.type || 'unknown'}`);
+        addDebugLog(`Error target: ${error.target || 'unknown'}`);
+        
         const errorMsg = language === 'ar' ? 'فشل في تحميل PayPal. يرجى المحاولة مرة أخرى.' : 'Failed to load PayPal. Please try again.';
         setPaypalError(errorMsg);
         toast.error(errorMsg);
         
-        // Retry logic with exponential backoff
+        // Enhanced retry logic with exponential backoff
         if (loadingAttempts < 3) {
           const retryDelay = Math.pow(2, loadingAttempts) * 1000; // 1s, 2s, 4s
-          console.log(`🔄 Retrying PayPal SDK load in ${retryDelay}ms (attempt ${loadingAttempts + 1}/3)`);
+          addDebugLog(`🔄 Retrying PayPal SDK load in ${retryDelay}ms (attempt ${loadingAttempts + 1}/3)`);
           setTimeout(() => {
             setLoadingAttempts(prev => prev + 1);
             loadPayPalSDK();
           }, retryDelay);
+        } else {
+          addDebugLog('❌ Maximum retry attempts reached');
         }
       };
       
       // Remove any existing PayPal scripts first
       const existingScript = document.querySelector('script[src*="paypal.com/sdk"]');
       if (existingScript) {
+        addDebugLog('🗑️ Removing existing PayPal script');
         existingScript.remove();
       }
       
+      // Check CSP headers
+      const checkCSP = () => {
+        const metaTags = document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
+        if (metaTags.length > 0) {
+          metaTags.forEach((tag, index) => {
+            addDebugLog(`CSP Meta Tag ${index + 1}: ${tag.getAttribute('content')}`);
+          });
+        } else {
+          addDebugLog('No CSP meta tags found');
+        }
+      };
+      
+      checkCSP();
+      
       document.head.appendChild(script);
-      console.log('📡 PayPal SDK script added to DOM');
+      addDebugLog('📡 PayPal SDK script added to DOM');
     };
 
     if (isOpen) {
@@ -187,10 +247,11 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
   }, [paypalLoaded, user?.id, language, onClose]);
 
   const handleRetryPayPal = () => {
-    console.log('🔄 Manual retry of PayPal SDK loading...');
+    addDebugLog('🔄 Manual retry of PayPal SDK loading...');
     setPaypalError(null);
     setPaypalLoaded(false);
     setLoadingAttempts(0);
+    setDebugInfo([]); // Clear debug logs
     
     // Remove existing script and reload
     const existingScript = document.querySelector('script[src*="paypal.com/sdk"]');
@@ -211,6 +272,12 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
       setPaypalError(language === 'ar' ? 'فشل في تحميل PayPal مرة أخرى' : 'Failed to load PayPal again');
     };
     document.head.appendChild(script);
+  };
+
+  // Test function to check PayPal directly
+  const testPayPalDirect = () => {
+    addDebugLog('🧪 Testing direct PayPal SDK access...');
+    window.open('https://www.paypal.com/sdk/js?client-id=ATVW7zXzTxmmYdKWHV-kKupIv3rk2OcLn6fBQMR_ANGdPqIqJt3AhQ4iY-doB8xGkHkLnmYHMEYQNwZ&vault=true&intent=subscription', '_blank');
   };
 
   if (!mounted) return null;
@@ -249,13 +316,59 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* Error Display */}
+            {/* Enhanced Error Display with Debug Info */}
             {paypalError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                <p className="text-red-700 mb-3">{paypalError}</p>
-                <Button onClick={handleRetryPayPal} variant="outline" size="sm">
-                  {language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
-                </Button>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-red-700 mb-3 font-medium">{paypalError}</p>
+                
+                {/* Debug Information */}
+                <div className="bg-red-100 p-3 rounded text-xs space-y-1 mb-3">
+                  <h4 className="font-medium text-red-800">Debug Information:</h4>
+                  {debugInfo.map((log, index) => (
+                    <div key={index} className="text-red-700 font-mono">{log}</div>
+                  ))}
+                </div>
+                
+                <div className="flex gap-2 flex-wrap">
+                  <Button onClick={handleRetryPayPal} variant="outline" size="sm">
+                    {language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+                  </Button>
+                  <Button onClick={testPayPalDirect} variant="outline" size="sm">
+                    {language === 'ar' ? 'اختبار PayPal مباشرة' : 'Test PayPal Direct'}
+                  </Button>
+                </div>
+                
+                {/* Domain Information */}
+                <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm">
+                  <p className="text-yellow-800">
+                    <strong>Current Domain:</strong> {window.location.hostname}
+                  </p>
+                  <p className="text-yellow-800">
+                    <strong>Current Origin:</strong> {window.location.origin}
+                  </p>
+                  <p className="text-yellow-700 text-xs mt-1">
+                    Make sure this domain is authorized in your PayPal Developer Dashboard
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Loading State with Debug */}
+            {!paypalLoaded && !paypalError && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-blue-700 mb-3">
+                  {language === 'ar' ? 'جاري تحميل PayPal...' : 'Loading PayPal...'}
+                </p>
+                
+                {/* Real-time Debug Information */}
+                {debugInfo.length > 0 && (
+                  <div className="bg-blue-100 p-3 rounded text-xs space-y-1">
+                    <h4 className="font-medium text-blue-800">Loading Progress:</h4>
+                    {debugInfo.slice(-5).map((log, index) => (
+                      <div key={index} className="text-blue-700 font-mono">{log}</div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -314,14 +427,26 @@ export function SubscriptionOverlay({ isOpen, onClose }: SubscriptionOverlayProp
               </Card>
             </div>
 
-            {/* Debug Info (only in development) */}
+            {/* Enhanced Debug Info (development only) */}
             {process.env.NODE_ENV === 'development' && (
               <div className="text-xs text-gray-500 p-4 bg-gray-50 rounded">
-                <p>Debug Info:</p>
+                <p className="font-medium mb-2">Debug Info:</p>
                 <p>PayPal Loaded: {paypalLoaded ? '✅' : '❌'}</p>
                 <p>User ID: {user?.id ? '✅' : '❌'}</p>
                 <p>Attempts: {loadingAttempts}/3</p>
                 <p>Error: {paypalError || 'None'}</p>
+                <p>Domain: {window.location.hostname}</p>
+                <p>Protocol: {window.location.protocol}</p>
+                {debugInfo.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-medium">Recent Logs:</p>
+                    <div className="max-h-32 overflow-y-auto">
+                      {debugInfo.map((log, index) => (
+                        <div key={index} className="font-mono text-xs">{log}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
