@@ -4,10 +4,9 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Play, Download, Loader2, Volume2, Mic, Info, Languages, MicIcon, ArrowRight, Copy } from 'lucide-react';
+import { Play, Download, Loader2, Volume2, Mic, Info, Languages, MicIcon, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -99,7 +98,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showStyleDetails, setShowStyleDetails] = useState(false);
-  const [activeTab, setActiveTab] = useState('tts');
 
   // Translation states
   const [translationText, setTranslationText] = useState('');
@@ -321,7 +319,11 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       }
 
       setTranslatedText(result.translated_text);
-      toast.success(language === 'ar' ? 'تمت الترجمة بنجاح!' : 'Translation completed successfully!');
+      
+      // Automatically populate the main TTS text area
+      setText(result.translated_text);
+      
+      toast.success(language === 'ar' ? 'تمت الترجمة بنجاح وتم نسخها إلى منطقة النص!' : 'Translation completed and copied to text area!');
 
     } catch (error: any) {
       console.error('🌐 Translation error:', error);
@@ -331,11 +333,15 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
-  const useTranslatedTextInTTS = () => {
-    if (translatedText) {
-      setText(translatedText);
-      setActiveTab('tts');
-      toast.success(language === 'ar' ? 'تم نسخ النص المترجم إلى التبويب الصوتي' : 'Translated text copied to Text-to-Speech tab');
+  const copyToClipboard = async () => {
+    if (!translatedText) return;
+    
+    try {
+      await navigator.clipboard.writeText(translatedText);
+      toast.success(language === 'ar' ? 'تم نسخ النص المترجم!' : 'Translated text copied!');
+    } catch (error) {
+      console.error('Failed to copy text:', error);
+      toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
     }
   };
 
@@ -442,257 +448,237 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </Select>
       </div>
 
-      {/* Tabs for TTS and Translation */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="tts" className="flex items-center gap-2">
-            <Volume2 className="h-4 w-4" />
-            {language === 'ar' ? 'نص إلى كلام' : 'Text to Speech'}
-          </TabsTrigger>
-          <TabsTrigger value="translate" className="flex items-center gap-2">
-            <Languages className="h-4 w-4" />
-            {language === 'ar' ? 'مترجم' : 'Translator'}
-          </TabsTrigger>
-        </TabsList>
+      {/* Quick Translator Section - ABOVE main TTS */}
+      <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Languages className="h-5 w-5 text-blue-600" />
+          <h3 className="font-medium text-blue-900 dark:text-blue-100">
+            {language === 'ar' ? 'مترجم سريع' : 'Quick Translator'}
+          </h3>
+        </div>
 
-        {/* Text to Speech Tab */}
-        <TabsContent value="tts" className="space-y-4">
-          {/* Enhanced Voice Style Selector */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">
-                {language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}
-              </label>
+        {/* Target Language Selector */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            {language === 'ar' ? 'ترجم إلى' : 'Translate to'}
+          </label>
+          <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSLATION_LANGUAGES.map((lang) => (
+                <SelectItem key={lang.code} value={lang.code}>
+                  {lang.name[language]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Text Input with Speech Recognition */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">
+              {language === 'ar' ? 'النص للترجمة' : 'Text to Translate'}
+            </label>
+            {speechSupported && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => setShowStyleDetails(!showStyleDetails)}
-                className="h-auto p-1"
+                onClick={isListening ? stopListening : startListening}
+                disabled={isTranslating}
+                className="flex items-center gap-2"
               >
-                <Info className="h-3 w-3" />
+                <MicIcon className={`h-4 w-4 ${isListening ? 'text-red-500 animate-pulse' : ''}`} />
+                {isListening 
+                  ? (language === 'ar' ? 'إيقاف التسجيل' : 'Stop Recording')
+                  : (language === 'ar' ? 'تسجيل صوتي' : 'Voice Input')
+                }
               </Button>
+            )}
+          </div>
+          <Textarea
+            value={translationText}
+            onChange={(e) => setTranslationText(e.target.value)}
+            placeholder={language === 'ar' 
+              ? 'اكتب النص الذي تريد ترجمته... أو استخدم التسجيل الصوتي'
+              : 'Type the text you want to translate... or use voice input'
+            }
+            className="min-h-20 resize-none"
+            dir="auto"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{translationText.length} {language === 'ar' ? 'حرف' : 'characters'}</span>
+            {speechError && (
+              <span className="text-red-500">{speechError}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Translate Button */}
+        <Button
+          onClick={translateText}
+          disabled={!canTranslate || isTranslating}
+          className="w-full"
+        >
+          {isTranslating ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              {language === 'ar' ? 'جاري الترجمة...' : 'Translating...'}
+            </>
+          ) : (
+            <>
+              <Languages className="h-4 w-4 mr-2" />
+              {language === 'ar' ? 'ترجم' : 'Translate'}
+            </>
+          )}
+        </Button>
+
+        {/* Translation Results */}
+        {translatedText && (
+          <div className="p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg border">
+            <div className="text-xs font-medium text-muted-foreground mb-2">
+              {language === 'ar' ? 'النص المترجم:' : 'Translated Text:'}
             </div>
+            <div className="text-sm font-medium mb-3" dir="auto">{translatedText}</div>
             
-            <Select value={selectedStyle} onValueChange={setSelectedStyle}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(VOICE_STYLES).map(([key, style]) => (
-                  <SelectItem key={key} value={key}>
-                    <div className="flex items-center gap-2">
-                      <span>{style.icon}</span>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{style.name[language]}</span>
-                        <span className="text-xs text-muted-foreground">{style.description[language]}</span>
-                      </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>{VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description[language]}</p>
-              {showStyleDetails && (
-                <div className="bg-muted/50 p-2 rounded text-xs">
-                  <p className="font-medium mb-1">{language === 'ar' ? 'الإعدادات التقنية:' : 'Technical Settings:'}</p>
-                  <p>{VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].technicalDesc[language]}</p>
-                  <div className="mt-1 font-mono text-xs">
-                    {JSON.stringify(VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].settings, null, 2)}
+            {/* Copy Button */}
+            <Button
+              onClick={copyToClipboard}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              {language === 'ar' ? 'نسخ النص المترجم' : 'Copy Translated Text'}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Enhanced Voice Style Selector */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">
+            {language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}
+          </label>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowStyleDetails(!showStyleDetails)}
+            className="h-auto p-1"
+          >
+            <Info className="h-3 w-3" />
+          </Button>
+        </div>
+        
+        <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(VOICE_STYLES).map(([key, style]) => (
+              <SelectItem key={key} value={key}>
+                <div className="flex items-center gap-2">
+                  <span>{style.icon}</span>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{style.name[language]}</span>
+                    <span className="text-xs text-muted-foreground">{style.description[language]}</span>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Text Input with Arabic support */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              {language === 'ar' ? 'النص' : 'Text'}
-            </label>
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بصوتك... يدعم العربية والإنجليزية. جرب نصوص مختلفة لتجربة الأساليب المتنوعة!' : 'Type what you want to hear in your voice... Supports Arabic and English. Try different texts to experience the various styles!'}
-              className="min-h-32 resize-none"
-              maxLength={totalAvailableCharacters}
-              dir="auto"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{text.length} / {totalAvailableCharacters}</span>
-              {text.length > totalAvailableCharacters && (
-                <span className="text-red-500">
-                  {language === 'ar' ? 'تجاوز الحد المسموح' : 'Exceeds limit'}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Generate Button */}
-          <Button
-            onClick={generateSpeech}
-            disabled={!canGenerate || isGenerating}
-            className="w-full"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'}
-              </>
-            ) : (
-              <>
-                <Mic className="h-4 w-4 mr-2" />
-                {language === 'ar' ? `تحدث بأسلوب ${VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]}` : `Speak with ${VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]} Style`}
-              </>
-            )}
-          </Button>
-
-          {/* Enhanced Audio Player */}
-          {audioUrl && (
-            <div className="p-4 border rounded-lg space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium">
-                  {language === 'ar' ? 'الصوت المُنشأ' : 'Generated Audio'}
-                </h3>
-                <div className="text-xs text-muted-foreground">
-                  {language === 'ar' ? 'أسلوب:' : 'Style:'} {VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]}
-                </div>
-              </div>
-              
-              <EnhancedAudioControls
-                audioUrl={audioUrl}
-                labels={{
-                  play: language === 'ar' ? 'تشغيل' : 'Play',
-                  pause: language === 'ar' ? 'إيقاف مؤقت' : 'Pause',
-                  rewind: language === 'ar' ? 'إرجاع' : 'Rewind',
-                  stop: language === 'ar' ? 'إيقاف' : 'Stop',
-                  error: language === 'ar' ? 'خطأ في تشغيل الصوت' : 'Error playing audio'
-                }}
-              />
-              
-              <div className="flex gap-2 justify-center">
-                <Button onClick={downloadAudio} variant="outline" size="sm">
-                  <Download className="h-3 w-3 mr-1" />
-                  {language === 'ar' ? 'تحميل' : 'Download'}
-                </Button>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        
+        <div className="text-xs text-muted-foreground space-y-1">
+          <p>{VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description[language]}</p>
+          {showStyleDetails && (
+            <div className="bg-muted/50 p-2 rounded text-xs">
+              <p className="font-medium mb-1">{language === 'ar' ? 'الإعدادات التقنية:' : 'Technical Settings:'}</p>
+              <p>{VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].technicalDesc[language]}</p>
+              <div className="mt-1 font-mono text-xs">
+                {JSON.stringify(VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].settings, null, 2)}
               </div>
             </div>
           )}
-        </TabsContent>
+        </div>
+      </div>
 
-        {/* Translation Tab */}
-        <TabsContent value="translate" className="space-y-4">
-          {/* Target Language Selector */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              {language === 'ar' ? 'ترجم إلى' : 'Translate to'}
-            </label>
-            <Select value={targetLanguage} onValueChange={setTargetLanguage}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TRANSLATION_LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    {lang.name[language]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Text Input with Speech Recognition */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">
-                {language === 'ar' ? 'النص للترجمة' : 'Text to Translate'}
-              </label>
-              {speechSupported && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={isListening ? stopListening : startListening}
-                  disabled={isTranslating}
-                  className="flex items-center gap-2"
-                >
-                  <MicIcon className={`h-4 w-4 ${isListening ? 'text-red-500 animate-pulse' : ''}`} />
-                  {isListening 
-                    ? (language === 'ar' ? 'إيقاف التسجيل' : 'Stop Recording')
-                    : (language === 'ar' ? 'تسجيل صوتي' : 'Voice Input')
-                  }
-                </Button>
-              )}
-            </div>
-            <Textarea
-              value={translationText}
-              onChange={(e) => setTranslationText(e.target.value)}
-              placeholder={language === 'ar' 
-                ? 'اكتب النص الذي تريد ترجمته... أو استخدم التسجيل الصوتي'
-                : 'Type the text you want to translate... or use voice input'
-              }
-              className="min-h-24 resize-none"
-              dir="auto"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{translationText.length} {language === 'ar' ? 'حرف' : 'characters'}</span>
-              {speechError && (
-                <span className="text-red-500">{speechError}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Translate Button */}
-          <Button
-            onClick={translateText}
-            disabled={!canTranslate || isTranslating}
-            className="w-full"
-          >
-            {isTranslating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {language === 'ar' ? 'جاري الترجمة...' : 'Translating...'}
-              </>
-            ) : (
-              <>
-                <Languages className="h-4 w-4 mr-2" />
-                {language === 'ar' ? 'ترجم' : 'Translate'}
-              </>
-            )}
-          </Button>
-
-          {/* Translation Results */}
-          {translatedText && (
-            <div className="space-y-4">
-              {/* Original Text */}
-              <div className="p-3 bg-muted/50 rounded-lg">
-                <div className="text-xs font-medium text-muted-foreground mb-1">
-                  {language === 'ar' ? 'النص الأصلي:' : 'Original Text:'}
-                </div>
-                <div className="text-sm" dir="auto">{translationText}</div>
-              </div>
-
-              {/* Translated Text */}
-              <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <div className="text-xs font-medium text-muted-foreground mb-2">
-                  {language === 'ar' ? 'النص المترجم:' : 'Translated Text:'}
-                </div>
-                <div className="text-sm font-medium mb-3" dir="auto">{translatedText}</div>
-                
-                {/* Use in TTS Button */}
-                <Button
-                  onClick={useTranslatedTextInTTS}
-                  className="w-full"
-                  variant="outline"
-                >
-                  <ArrowRight className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'استخدم في تحويل النص إلى صوت' : 'Use in Text-to-Speech'}
-                </Button>
-              </div>
-            </div>
+      {/* Text Input with Arabic support */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          {language === 'ar' ? 'النص' : 'Text'}
+        </label>
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بصوتك... يدعم العربية والإنجليزية. جرب نصوص مختلفة لتجربة الأساليب المتنوعة!' : 'Type what you want to hear in your voice... Supports Arabic and English. Try different texts to experience the various styles!'}
+          className="min-h-32 resize-none"
+          maxLength={totalAvailableCharacters}
+          dir="auto"
+        />
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{text.length} / {totalAvailableCharacters}</span>
+          {text.length > totalAvailableCharacters && (
+            <span className="text-red-500">
+              {language === 'ar' ? 'تجاوز الحد المسموح' : 'Exceeds limit'}
+            </span>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
+
+      {/* Generate Button */}
+      <Button
+        onClick={generateSpeech}
+        disabled={!canGenerate || isGenerating}
+        className="w-full"
+      >
+        {isGenerating ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            {language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'}
+          </>
+        ) : (
+          <>
+            <Mic className="h-4 w-4 mr-2" />
+            {language === 'ar' ? `تحدث بأسلوب ${VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]}` : `Speak with ${VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]} Style`}
+          </>
+        )}
+      </Button>
+
+      {/* Enhanced Audio Player */}
+      {audioUrl && (
+        <div className="p-4 border rounded-lg space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium">
+              {language === 'ar' ? 'الصوت المُنشأ' : 'Generated Audio'}
+            </h3>
+            <div className="text-xs text-muted-foreground">
+              {language === 'ar' ? 'أسلوب:' : 'Style:'} {VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]}
+            </div>
+          </div>
+          
+          <EnhancedAudioControls
+            audioUrl={audioUrl}
+            labels={{
+              play: language === 'ar' ? 'تشغيل' : 'Play',
+              pause: language === 'ar' ? 'إيقاف مؤقت' : 'Pause',
+              rewind: language === 'ar' ? 'إرجاع' : 'Rewind',
+              stop: language === 'ar' ? 'إيقاف' : 'Stop',
+              error: language === 'ar' ? 'خطأ في تشغيل الصوت' : 'Error playing audio'
+            }}
+          />
+          
+          <div className="flex gap-2 justify-center">
+            <Button onClick={downloadAudio} variant="outline" size="sm">
+              <Download className="h-3 w-3 mr-1" />
+              {language === 'ar' ? 'تحميل' : 'Download'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="flex gap-3 pt-4">
