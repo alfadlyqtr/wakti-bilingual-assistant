@@ -40,10 +40,10 @@ export class PersonalizationEnforcer {
       originalLength: originalResponse.length
     });
 
-    // 1. Basic nickname usage (only if very appropriate)
+    // 1. ENHANCED: Basic nickname usage (increased probability for consistent usage)
     if (personalTouch.nickname && personalTouch.nickname.trim() && originalResponse.length > 50) {
-      // Only 30% chance to add nickname to prevent overuse
-      if (Math.random() < 0.3 && !originalResponse.toLowerCase().includes(personalTouch.nickname.toLowerCase())) {
+      // FIXED: Increased from 30% to 80% chance to add nickname for consistent usage
+      if (Math.random() < 0.8 && !originalResponse.toLowerCase().includes(personalTouch.nickname.toLowerCase())) {
         const greetings = language === 'ar' ? [
           `${personalTouch.nickname}، `,
           `أهلاً ${personalTouch.nickname}! `
@@ -88,3 +88,4 @@ export class PersonalizationEnforcer {
     };
   }
 }
+
