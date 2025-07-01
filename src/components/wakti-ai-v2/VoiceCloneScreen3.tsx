@@ -6,11 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Play, Download, Loader2, Volume2, Mic, Info, Languages, MicIcon, Copy, Trash2 } from 'lucide-react';
+import { Play, Download, Loader2, Volume2, Mic, Info, Languages, Copy, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
-import { useBrowserSpeechRecognition } from '@/hooks/useBrowserSpeechRecognition';
 import EnhancedAudioControls from '@/components/tasjeel/EnhancedAudioControls';
 import {
   AlertDialog,
@@ -80,23 +79,37 @@ const VOICE_STYLES = {
   }
 };
 
-// ElevenLabs supported languages for translation
+// Complete ElevenLabs Multilingual v2 supported languages (29 languages)
 const TRANSLATION_LANGUAGES = [
   { code: 'en', name: { en: 'English', ar: 'الإنجليزية' } },
   { code: 'ar', name: { en: 'Arabic', ar: 'العربية' } },
-  { code: 'es', name: { en: 'Spanish', ar: 'الإسبانية' } },
+  { code: 'bg', name: { en: 'Bulgarian', ar: 'البلغارية' } },
+  { code: 'zh', name: { en: 'Chinese', ar: 'الصينية' } },
+  { code: 'cs', name: { en: 'Czech', ar: 'التشيكية' } },
+  { code: 'da', name: { en: 'Danish', ar: 'الدنماركية' } },
+  { code: 'nl', name: { en: 'Dutch', ar: 'الهولندية' } },
+  { code: 'fi', name: { en: 'Finnish', ar: 'الفنلندية' } },
   { code: 'fr', name: { en: 'French', ar: 'الفرنسية' } },
   { code: 'de', name: { en: 'German', ar: 'الألمانية' } },
+  { code: 'el', name: { en: 'Greek', ar: 'اليونانية' } },
+  { code: 'he', name: { en: 'Hebrew', ar: 'العبرية' } },
+  { code: 'hi', name: { en: 'Hindi', ar: 'الهندية' } },
+  { code: 'hu', name: { en: 'Hungarian', ar: 'المجرية' } },
+  { code: 'id', name: { en: 'Indonesian', ar: 'الإندونيسية' } },
   { code: 'it', name: { en: 'Italian', ar: 'الإيطالية' } },
-  { code: 'pt', name: { en: 'Portuguese', ar: 'البرتغالية' } },
-  { code: 'ru', name: { en: 'Russian', ar: 'الروسية' } },
   { code: 'ja', name: { en: 'Japanese', ar: 'اليابانية' } },
   { code: 'ko', name: { en: 'Korean', ar: 'الكورية' } },
-  { code: 'zh', name: { en: 'Chinese', ar: 'الصينية' } },
-  { code: 'hi', name: { en: 'Hindi', ar: 'الهندية' } },
+  { code: 'no', name: { en: 'Norwegian', ar: 'النرويجية' } },
+  { code: 'pl', name: { en: 'Polish', ar: 'البولندية' } },
+  { code: 'pt', name: { en: 'Portuguese', ar: 'البرتغالية' } },
+  { code: 'ro', name: { en: 'Romanian', ar: 'الرومانية' } },
+  { code: 'ru', name: { en: 'Russian', ar: 'الروسية' } },
+  { code: 'es', name: { en: 'Spanish', ar: 'الإسبانية' } },
+  { code: 'sv', name: { en: 'Swedish', ar: 'السويدية' } },
+  { code: 'th', name: { en: 'Thai', ar: 'التايلاندية' } },
   { code: 'tr', name: { en: 'Turkish', ar: 'التركية' } },
-  { code: 'nl', name: { en: 'Dutch', ar: 'الهولندية' } },
-  { code: 'sv', name: { en: 'Swedish', ar: 'السويدية' } }
+  { code: 'uk', name: { en: 'Ukrainian', ar: 'الأوكرانية' } },
+  { code: 'vi', name: { en: 'Vietnamese', ar: 'الفيتنامية' } }
 ];
 
 export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
@@ -126,31 +139,9 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     canUseVoice 
   } = useExtendedQuotaManagement(language);
 
-  // Browser speech recognition for translation
-  const {
-    isListening,
-    transcript,
-    error: speechError,
-    isSupported: speechSupported,
-    startListening,
-    stopListening,
-    clearTranscript
-  } = useBrowserSpeechRecognition({
-    language: language === 'ar' ? 'ar-SA' : 'en-US',
-    continuous: false,
-    interimResults: false
-  });
-
   useEffect(() => {
     loadData();
   }, []);
-
-  useEffect(() => {
-    if (transcript) {
-      setTranslationText(transcript);
-      clearTranscript();
-    }
-  }, [transcript, clearTranscript]);
 
   const loadData = async () => {
     try {
@@ -585,7 +576,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60">
               {TRANSLATION_LANGUAGES.map((lang) => (
                 <SelectItem key={lang.code} value={lang.code}>
                   {lang.name[language]}
@@ -595,34 +586,17 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </Select>
         </div>
 
-        {/* Text Input with Speech Recognition */}
+        {/* Text Input - Removed Voice Input Button */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">
-              {language === 'ar' ? 'النص للترجمة' : 'Text to Translate'}
-            </label>
-            {speechSupported && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={isListening ? stopListening : startListening}
-                disabled={isTranslating}
-                className="flex items-center gap-2"
-              >
-                <MicIcon className={`h-4 w-4 ${isListening ? 'text-red-500 animate-pulse' : ''}`} />
-                {isListening 
-                  ? (language === 'ar' ? 'إيقاف التسجيل' : 'Stop Recording')
-                  : (language === 'ar' ? 'تسجيل صوتي' : 'Voice Input')
-                }
-              </Button>
-            )}
-          </div>
+          <label className="text-sm font-medium">
+            {language === 'ar' ? 'النص للترجمة' : 'Text to Translate'}
+          </label>
           <Textarea
             value={translationText}
             onChange={(e) => setTranslationText(e.target.value)}
             placeholder={language === 'ar' 
-              ? 'اكتب النص الذي تريد ترجمته... أو استخدم التسجيل الصوتي'
-              : 'Type the text you want to translate... or use voice input'
+              ? 'اكتب ما تريد ترجمته بأي لغة...'
+              : 'Type whatever you want to translate in any language...'
             }
             className="min-h-20 resize-none"
             dir="auto"
@@ -630,9 +604,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>{translationText.length} / 6000 {language === 'ar' ? 'حرف' : 'characters'}</span>
-            {speechError && (
-              <span className="text-red-500">{speechError}</span>
-            )}
           </div>
         </div>
 
@@ -726,7 +697,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </div>
       </div>
 
-      {/* Text Input with Arabic support - Updated for 6000 characters */}
+      {/* Text Input with Arabic support - Updated for 6000 characters and new placeholder */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
           {language === 'ar' ? 'النص' : 'Text'}
@@ -734,7 +705,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بصوتك... يدعم العربية والإنجليزية. جرب نصوص مختلفة لتجربة الأساليب المتنوعة!' : 'Type what you want to hear in your voice... Supports Arabic and English. Try different texts to experience the various styles!'}
+          placeholder={language === 'ar' 
+            ? 'اكتب ما تريد سماعه بأي لغة... سيتم إنتاجه بصوتك المستنسخ وبأساليب متنوعة!'
+            : 'Type whatever you want in any language to speak it in your voice and in many styles!'
+          }
           className="min-h-32 resize-none"
           maxLength={totalAvailableCharacters}
           dir="auto"
