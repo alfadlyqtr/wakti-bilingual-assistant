@@ -38,24 +38,17 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { language } = useTheme();
 
-  // ENHANCED: Improved auto-scroll to reliably show latest message
+  // FIXED: Simple and reliable auto-scroll to show latest message
   useEffect(() => {
     const scrollToBottom = () => {
       if (scrollAreaRef.current) {
+        // Try direct scroll first (for simple div)
+        scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        
+        // Also try Radix ScrollArea if it exists
         const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
         if (scrollContainer) {
-          // Use multiple methods to ensure reliable scrolling
           scrollContainer.scrollTop = scrollContainer.scrollHeight;
-          
-          // Backup scroll method with slight delay
-          setTimeout(() => {
-            scrollContainer.scrollTop = scrollContainer.scrollHeight;
-          }, 50);
-          
-          // Force scroll with requestAnimationFrame for better reliability
-          requestAnimationFrame(() => {
-            scrollContainer.scrollTop = scrollContainer.scrollHeight;
-          });
         }
       }
     };
@@ -63,11 +56,9 @@ export function ChatMessages({
     // Immediate scroll
     scrollToBottom();
 
-    // Additional scroll with delay to handle dynamic content
-    const timeoutId = setTimeout(scrollToBottom, 100);
-
-    return () => clearTimeout(timeoutId);
-  }, [sessionMessages, isLoading, showTaskConfirmation, scrollAreaRef]);
+    // Additional scroll after a short delay for dynamic content
+    setTimeout(scrollToBottom, 100);
+  }, [sessionMessages, isLoading, showTaskConfirmation]);
 
   // Check if the last user message has attached files for better loading indicator
   const lastUserMessage = sessionMessages.filter(msg => msg.role === 'user').pop();
@@ -125,4 +116,3 @@ export function ChatMessages({
     </div>
   );
 }
-
