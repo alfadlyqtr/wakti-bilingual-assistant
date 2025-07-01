@@ -1,7 +1,5 @@
-
 // Remove the old OpenAI import and use direct fetch calls instead
-import { generateTaskPrompt } from "./taskAnalysisPrompts.ts";
-import { analyzeTaskIntent } from "./taskAnalysis.ts";
+import { analyzeTaskIntent } from "./taskParsing.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
