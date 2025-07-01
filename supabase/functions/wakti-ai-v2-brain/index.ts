@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -189,47 +188,47 @@ serve(async (req) => {
             browsingData = searchResult.data;
             const context = searchResult.context.substring(0, aggressiveOptimization ? 300 : 800);
             
+            // FIXED: Use correct parameter order
             response = await processWithBuddyChatAI(
-              message, 
-              context, 
-              language, 
+              `${message}\n\nSearch Context: ${context}`,
+              userId,
+              conversationId,
+              language,
+              processedFiles,
               minimalRecentMessages,
               minimalConversationSummary,
-              activeTrigger,
-              'ultra_fast_search',
-              processedFiles, // Pass processed files for potential Vision
-              customSystemPrompt,
+              personalTouch,
               Math.min(maxTokens, 300),
-              personalTouch
+              activeTrigger
             );
           } else {
+            // FIXED: Use correct parameter order
             response = await processWithBuddyChatAI(
-              message, 
-              '', 
-              language, 
+              message,
+              userId,
+              conversationId,
+              language,
+              processedFiles,
               [],
               '',
-              activeTrigger,
-              'ultra_fast_search_failed',
-              processedFiles, // Pass processed files for potential Vision
-              customSystemPrompt,
+              personalTouch,
               Math.min(maxTokens, 200),
-              personalTouch
+              activeTrigger
             );
           }
         } else {
+          // FIXED: Use correct parameter order
           response = await processWithBuddyChatAI(
-            message, 
-            '', 
-            language, 
+            message,
+            userId,
+            conversationId,
+            language,
+            processedFiles,
             [],
             '',
-            'chat',
-            'hyper_fast_chat',
-            processedFiles, // Pass processed files for potential Vision
-            customSystemPrompt,
+            personalTouch,
             Math.min(maxTokens, 150),
-            personalTouch
+            'chat'
           );
         }
         break;
@@ -275,27 +274,22 @@ serve(async (req) => {
         console.log(`🚀 ULTRA-FAST CHAT: Processing with timeout protection and personalization`);
         
         // ULTRA-FAST: Minimal context for lightning speed
-        let chatContext = aggressiveOptimization ? null : minimalConversationSummary;
+        let chatContext = aggressiveOptimization ? '' : minimalConversationSummary;
         
-        // ULTRA-FAST: Determine interaction type for maximum speed
-        const interactionType = aggressiveOptimization ? 'hyper_fast_openai_chat' : 
-                               speedOptimized ? 'ultra_fast_chat' : 
-                               'speed_optimized_chat';
+        console.log(`🚀 ULTRA-FAST CHAT: Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
         
-        console.log(`🚀 ULTRA-FAST CHAT: ${interactionType} | Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
-        
+        // FIXED: Use correct parameter order and remove invalid parameters
         response = await processWithBuddyChatAI(
-          message, 
-          chatContext, 
-          language, 
+          message,
+          userId,
+          conversationId,
+          language,
+          processedFiles,
           minimalRecentMessages,
-          minimalConversationSummary,
-          activeTrigger,
-          interactionType,
-          processedFiles, // ENHANCED: Pass processed files for Vision support
-          customSystemPrompt,
+          chatContext,
+          personalTouch,
           maxTokens,
-          personalTouch
+          activeTrigger
         );
         break;
     }

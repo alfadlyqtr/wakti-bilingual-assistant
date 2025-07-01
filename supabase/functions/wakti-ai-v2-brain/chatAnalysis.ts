@@ -91,6 +91,12 @@ export async function processWithBuddyChatAI(
     
     const startTime = Date.now();
     
+    // CRITICAL FIX: Ensure maxTokens is always a number
+    const safeMaxTokens = typeof maxTokens === 'string' ? parseInt(maxTokens, 10) : maxTokens;
+    const validMaxTokens = isNaN(safeMaxTokens) ? 500 : safeMaxTokens;
+    
+    console.log(`🔧 TOKEN SAFETY: Original: ${maxTokens} (${typeof maxTokens}) -> Safe: ${validMaxTokens} (${typeof validMaxTokens})`);
+    
     // Task detection (non-blocking)
     let isTask = false;
     let taskData = null;
@@ -109,12 +115,31 @@ export async function processWithBuddyChatAI(
       console.warn('⚠️  Task analysis failed:', taskError);
     }
     
-    // Personalization setup
+    // CRITICAL FIX: Validate recentMessages is an array
+    let conversationContext = '';
+    if (recentMessages && Array.isArray(recentMessages) && recentMessages.length > 0) {
+      console.log('🧠 MEMORY: Building conversation context from', recentMessages.length, 'recent messages');
+      conversationContext = '\n\nRecent conversation context:\n';
+      recentMessages.slice(-5).forEach((msg: any, index: number) => {
+        const role = msg.role === 'user' ? 'User' : 'Assistant';
+        conversationContext += `${role}: ${msg.content}\n`;
+      });
+    } else {
+      console.log('🧠 MEMORY: No valid recentMessages array provided, skipping context');
+      console.log('🧠 MEMORY DEBUG: recentMessages type:', typeof recentMessages, 'isArray:', Array.isArray(recentMessages));
+    }
+    
+    if (conversationSummary) {
+      console.log('🧠 MEMORY: Adding conversation summary');
+      conversationContext += `\nConversation summary: ${conversationSummary}\n`;
+    }
+    
+    // FIXED: Personalization setup WITHOUT nickname in system prompt
     let personalizedTemperature = 0.7;
     let systemPrompt = language === 'ar' ? arabicSystemPrompt : englishSystemPrompt;
     
     if (personalTouch) {
-      console.log('🎨 PERSONALIZATION: Applying personal touch settings');
+      console.log('🎨 PERSONALIZATION: Applying personal touch settings (no nickname in system prompt)');
       
       if (personalTouch.tone) {
         console.log('   - Setting tone:', personalTouch.tone);
@@ -125,9 +150,18 @@ export async function processWithBuddyChatAI(
         }
       }
       
+      // FIXED: Filter out nickname-related instructions to prevent double nicknames
       if (personalTouch.instruction) {
-        console.log('   - Adding custom instruction:', personalTouch.instruction);
-        systemPrompt += `\n\nADDITIONAL INSTRUCTION: ${personalTouch.instruction}`;
+        const filteredInstruction = personalTouch.instruction
+          .replace(/use my nickname/gi, '')
+          .replace(/call me by my nickname/gi, '')
+          .replace(/address me by name/gi, '')
+          .trim();
+        
+        if (filteredInstruction.length > 0) {
+          console.log('   - Adding filtered custom instruction:', filteredInstruction);
+          systemPrompt += `\n\nADDITIONAL INSTRUCTION: ${filteredInstruction}`;
+        }
       }
       
       if (personalTouch.aiNickname) {
@@ -146,9 +180,10 @@ export async function processWithBuddyChatAI(
       // Process files with compression
       const processedFiles = [];
       for (const file of attachedFiles) {
-        if (file.publicUrl) {
+        if (file.publicUrl || file.url) {
           console.log('🔍 VISION: Compressing image before API call');
-          const compressedBase64 = await compressImageForVision(file.publicUrl);
+          const imageUrl = file.publicUrl || file.url;
+          const compressedBase64 = await compressImageForVision(imageUrl);
           
           // Use compressed base64 format
           processedFiles.push({
@@ -168,8 +203,8 @@ export async function processWithBuddyChatAI(
       console.log('🔍 VISION: Detected image type:', imageType);
       
       const visionPromptTemplate = getVisionPromptTemplate(imageType, language);
-      const enhancedMessage = `${message}\n\n${visionPromptTemplate}`;
-      console.log('🔍 VISION: Enhanced message:', enhancedMessage.substring(0, 100) + '...');
+      const enhancedMessage = `${message}\n\n${visionPromptTemplate}${conversationContext}`;
+      console.log('🔍 VISION: Enhanced message with context:', enhancedMessage.substring(0, 100) + '...');
 
       // Use current OpenAI vision model
       console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4o-2024-05-13');
@@ -192,7 +227,7 @@ export async function processWithBuddyChatAI(
               ]
             }
           ],
-          max_tokens: Math.max(maxTokens * 2, 800), // More tokens for vision analysis
+          max_tokens: Math.max(validMaxTokens * 2, 800), // CRITICAL FIX: Use validMaxTokens as number
           temperature: personalizedTemperature
         }),
       });
@@ -219,8 +254,10 @@ export async function processWithBuddyChatAI(
       };
     }
 
-    // Regular chat processing with OpenAI
-    console.log('💬 REGULAR CHAT: Calling OpenAI with gpt-4o-mini');
+    // ENHANCED: Regular chat processing with conversation context
+    console.log('💬 REGULAR CHAT: Calling OpenAI with gpt-4o-mini and conversation context');
+    
+    const enhancedMessage = message + conversationContext;
     
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -232,9 +269,9 @@ export async function processWithBuddyChatAI(
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
+          { role: 'user', content: enhancedMessage }
         ],
-        max_tokens: maxTokens,
+        max_tokens: validMaxTokens, // CRITICAL FIX: Use validMaxTokens as number
         temperature: personalizedTemperature
       }),
     });
