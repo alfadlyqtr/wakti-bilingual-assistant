@@ -459,7 +459,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     });
   }, [selectedLanguage, language, addToHistory]);
 
-  // SIMPLIFIED: TTS with basic error handling - use voice-translator-tts function
+  // UPDATED: TTS using unified-ai-brain instead of voice-translator-tts
   const playTranslatedText = useCallback(async (text: string) => {
     console.log('🔊 Play button clicked, text:', text);
     
@@ -484,10 +484,12 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       
       console.log(`🔊 Generating TTS for language: ${selectedLanguage}`);
       
-      const { data, error } = await supabase.functions.invoke('voice-translator-tts', {
+      // UPDATED: Use unified-ai-brain for TTS instead of voice-translator-tts
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
         body: JSON.stringify({
           text: text,
-          voice: 'alloy'
+          voice: 'alloy',
+          requestType: 'tts'
         })
       });
 

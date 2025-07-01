@@ -13,7 +13,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with voice translation support");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with voice translation and TTS support");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -27,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🔍 UNIFIED AI BRAIN: Processing request with voice translation support");
+    console.log("🔍 UNIFIED AI BRAIN: Processing request with voice translation and TTS support");
 
     // CRITICAL: Extract and verify authentication token
     const authHeader = req.headers.get('authorization');
@@ -58,14 +58,35 @@ serve(async (req) => {
     // Check content type to determine processing mode
     const contentType = req.headers.get('content-type') || '';
     const isVoiceTranslation = contentType.includes('multipart/form-data');
+    
+    // Check if this is a TTS request
+    let requestBody;
+    let isTTSRequest = false;
+    
+    if (!isVoiceTranslation) {
+      try {
+        requestBody = await req.json();
+        isTTSRequest = requestBody.text && (requestBody.voice || requestBody.requestType === 'tts');
+      } catch (e) {
+        // Not JSON, continue with other checks
+      }
+    }
 
     if (isVoiceTranslation) {
       console.log("🎤 VOICE TRANSLATION: Processing audio through unified-ai-brain");
       return await processVoiceTranslation(req, user.id);
     }
 
-    // Get request body for regular requests
-    const requestBody = await req.json();
+    if (isTTSRequest) {
+      console.log("🔊 TTS: Processing text-to-speech through unified-ai-brain");
+      return await processTTS(requestBody, user.id);
+    }
+
+    // Get request body for regular requests if not already parsed
+    if (!requestBody) {
+      requestBody = await req.json();
+    }
+    
     console.log("🔍 UNIFIED AI BRAIN: Request body received for user:", user.id);
 
     const {
@@ -215,6 +236,71 @@ serve(async (req) => {
     });
   }
 });
+
+// NEW: TTS Processing Function
+async function processTTS(requestBody: any, userId: string) {
+  try {
+    console.log("🔊 TTS: Processing text-to-speech for user:", userId);
+
+    const { text, voice = 'alloy' } = requestBody;
+
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      throw new Error('Text is required for TTS');
+    }
+
+    if (!OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    console.log("🔊 TTS: Generating speech for text:", text.substring(0, 100) + "...");
+
+    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'tts-1',
+        input: text,
+        voice: voice,
+        response_format: 'mp3'
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("🔊 TTS: OpenAI TTS failed:", errorText);
+      throw new Error(`TTS failed: ${response.status}`);
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+
+    console.log("🔊 TTS: Generated audio successfully, size:", audioBuffer.byteLength);
+
+    const result = {
+      audioContent: audioBase64,
+      size: audioBuffer.byteLength,
+      success: true
+    };
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+
+  } catch (error) {
+    console.error("🔊 TTS: Error:", error);
+    
+    return new Response(JSON.stringify({
+      error: error.message || 'TTS generation failed',
+      success: false
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+}
 
 // NEW: Voice Translation Processing Function
 async function processVoiceTranslation(req: Request, userId: string) {
