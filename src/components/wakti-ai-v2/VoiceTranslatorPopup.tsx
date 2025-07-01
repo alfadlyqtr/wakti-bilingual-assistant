@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -374,7 +373,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
-  // SIMPLIFIED: Process voice translation without complex quota checks
+  // UPDATED: Process voice translation using unified-ai-brain
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
@@ -386,14 +385,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('targetLanguage', selectedLanguage);
 
-      console.log('🎤 Voice Translator: Sending FormData with audio blob');
+      console.log('🎤 Voice Translator: Sending FormData to unified-ai-brain');
 
-      // SIMPLIFIED: Direct call with minimal auth
-      const { data, error } = await supabase.functions.invoke('voice-translator', {
+      // UPDATED: Use unified-ai-brain instead of voice-translator
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
         body: formData
       });
 
-      console.log('🎤 Voice Translator: Response:', { data, error });
+      console.log('🎤 Voice Translator: Response from unified-ai-brain:', { data, error });
 
       if (error) {
         console.error('🎤 Voice Translator error:', error);
@@ -460,7 +459,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     });
   }, [selectedLanguage, language, addToHistory]);
 
-  // SIMPLIFIED: TTS with basic error handling
+  // SIMPLIFIED: TTS with basic error handling - use voice-translator-tts function
   const playTranslatedText = useCallback(async (text: string) => {
     console.log('🔊 Play button clicked, text:', text);
     

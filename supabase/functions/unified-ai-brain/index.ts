@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -14,7 +13,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with no search quota restrictions");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with voice translation support");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -28,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🔍 UNIFIED AI BRAIN: Processing request with user isolation and no search restrictions");
+    console.log("🔍 UNIFIED AI BRAIN: Processing request with voice translation support");
 
     // CRITICAL: Extract and verify authentication token
     const authHeader = req.headers.get('authorization');
@@ -56,7 +55,16 @@ serve(async (req) => {
       });
     }
 
-    // Get request body
+    // Check content type to determine processing mode
+    const contentType = req.headers.get('content-type') || '';
+    const isVoiceTranslation = contentType.includes('multipart/form-data');
+
+    if (isVoiceTranslation) {
+      console.log("🎤 VOICE TRANSLATION: Processing audio through unified-ai-brain");
+      return await processVoiceTranslation(req, user.id);
+    }
+
+    // Get request body for regular requests
     const requestBody = await req.json();
     console.log("🔍 UNIFIED AI BRAIN: Request body received for user:", user.id);
 
@@ -207,6 +215,167 @@ serve(async (req) => {
     });
   }
 });
+
+// NEW: Voice Translation Processing Function
+async function processVoiceTranslation(req: Request, userId: string) {
+  try {
+    console.log("🎤 VOICE TRANSLATION: Processing audio for user:", userId);
+
+    const formData = await req.formData();
+    const audioBlob = formData.get('audioBlob') as File;
+    const targetLanguage = formData.get('targetLanguage') as string;
+
+    if (!audioBlob) {
+      throw new Error('No audio data provided');
+    }
+
+    if (!targetLanguage) {
+      throw new Error('Target language is required');
+    }
+
+    console.log("🎤 VOICE TRANSLATION: Audio blob size:", audioBlob.size, "Target language:", targetLanguage);
+
+    // Step 1: Transcribe audio using OpenAI Whisper
+    const transcriptionFormData = new FormData();
+    transcriptionFormData.append('file', audioBlob, 'audio.webm');
+    transcriptionFormData.append('model', 'whisper-1');
+
+    const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: transcriptionFormData,
+    });
+
+    if (!transcriptionResponse.ok) {
+      const errorText = await transcriptionResponse.text();
+      console.error("🎤 Whisper transcription failed:", errorText);
+      throw new Error(`Transcription failed: ${transcriptionResponse.status}`);
+    }
+
+    const transcriptionResult = await transcriptionResponse.json();
+    const originalText = transcriptionResult.text;
+
+    console.log("🎤 VOICE TRANSLATION: Transcribed text:", originalText);
+
+    // Step 2: Translate the transcribed text
+    const translationPrompt = `Translate the following text to ${getLanguageName(targetLanguage)}. Only return the translation, nothing else:\n\n"${originalText}"`;
+
+    const translationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'You are a professional translator. Translate the given text accurately while preserving the original meaning and tone.' 
+          },
+          { role: 'user', content: translationPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 1000
+      })
+    });
+
+    if (!translationResponse.ok) {
+      const errorText = await translationResponse.text();
+      console.error("🎤 Translation failed:", errorText);
+      throw new Error(`Translation failed: ${translationResponse.status}`);
+    }
+
+    const translationResult = await translationResponse.json();
+    const translatedText = translationResult.choices[0].message.content;
+
+    console.log("🎤 VOICE TRANSLATION: Translated text:", translatedText);
+
+    // Step 3: Detect source language
+    const sourceLanguage = await detectLanguage(originalText);
+
+    const result = {
+      originalText,
+      translatedText,
+      sourceLanguage,
+      targetLanguage,
+      success: true
+    };
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+
+  } catch (error) {
+    console.error("🎤 VOICE TRANSLATION: Error:", error);
+    
+    return new Response(JSON.stringify({
+      error: error.message || 'Voice translation failed',
+      success: false
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+}
+
+// Helper function to get language name
+function getLanguageName(code: string): string {
+  const languages: { [key: string]: string } = {
+    'en': 'English',
+    'ar': 'Arabic',
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'ru': 'Russian',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'zh': 'Chinese',
+    'hi': 'Hindi',
+    'tr': 'Turkish',
+    'nl': 'Dutch',
+    'sv': 'Swedish'
+  };
+  return languages[code] || code;
+}
+
+// Helper function to detect source language
+async function detectLanguage(text: string): string {
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'Detect the language of the given text. Respond with only the language code (en, ar, es, fr, de, it, pt, ru, ja, ko, zh, hi, tr, nl, sv).' 
+          },
+          { role: 'user', content: text }
+        ],
+        temperature: 0,
+        max_tokens: 10
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return result.choices[0].message.content.trim().toLowerCase();
+    }
+  } catch (error) {
+    console.error("Language detection failed:", error);
+  }
+  
+  return 'auto'; // fallback
+}
 
 // SIMPLIFIED: Regular search function with optional web browsing
 async function executeRegularSearch(query: string, language: string = 'en') {
