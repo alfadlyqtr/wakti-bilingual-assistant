@@ -13,6 +13,7 @@ interface ChatMessagesProps {
   activeTrigger: string;
   scrollAreaRef: React.RefObject<any>;
   userProfile: any;
+  personalTouch: any;
   showTaskConfirmation: boolean;
   pendingTaskData: any;
   pendingReminderData: any;
@@ -28,6 +29,7 @@ export function ChatMessages({
   activeTrigger,
   scrollAreaRef,
   userProfile,
+  personalTouch,
   showTaskConfirmation,
   pendingTaskData,
   pendingReminderData,
@@ -37,32 +39,62 @@ export function ChatMessages({
   onCancelTaskConfirmation,
 }: ChatMessagesProps) {
   const { language } = useTheme();
+  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // FIXED: Simple and reliable auto-scroll to show latest message
+  // ENHANCED: Robust auto-scroll to always show latest message
   useEffect(() => {
     const scrollToBottom = () => {
       if (scrollAreaRef.current) {
-        // Try direct scroll first (for simple div)
-        scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-        
-        // Also try Radix ScrollArea if it exists
-        const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (scrollContainer) {
-          scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        // Clear any existing timeout
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
         }
+
+        // Use requestAnimationFrame for smooth scrolling
+        requestAnimationFrame(() => {
+          if (scrollAreaRef.current) {
+            // Direct scroll for simple div container
+            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+            
+            // Also handle Radix ScrollArea if it exists
+            const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+            if (scrollContainer) {
+              scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            }
+          }
+        });
+
+        // Additional delayed scroll for dynamic content and images
+        scrollTimeoutRef.current = setTimeout(() => {
+          if (scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+            
+            const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+            if (scrollContainer) {
+              scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            }
+          }
+        }, 150);
       }
     };
 
     // Immediate scroll
     scrollToBottom();
 
-    // Additional scroll after a short delay for dynamic content
-    setTimeout(scrollToBottom, 100);
+    // Cleanup timeout on unmount
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
   }, [sessionMessages, isLoading, showTaskConfirmation]);
 
   // Check if the last user message has attached files for better loading indicator
   const lastUserMessage = sessionMessages.filter(msg => msg.role === 'user').pop();
   const hasAttachedFiles = lastUserMessage?.attachedFiles && lastUserMessage.attachedFiles.length > 0;
+
+  // FIXED: Get AI nickname from personalTouch, fallback to "WAKTI AI"
+  const aiNickname = personalTouch?.aiNickname || 'WAKTI AI';
 
   return (
     <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-16">
@@ -70,7 +102,7 @@ export function ChatMessages({
         <div className="text-center text-muted-foreground py-12">
           <div className="text-2xl mb-2">🤖</div>
           <p className="text-lg font-medium mb-2">
-            {language === 'ar' ? 'مرحباً! أنا وقتي AI' : 'Hello! I\'m WAKTI AI'}
+            {language === 'ar' ? `مرحباً! أنا ${aiNickname}` : `Hello! I'm ${aiNickname}`}
           </p>
           <p className="text-sm">
             {language === 'ar' 

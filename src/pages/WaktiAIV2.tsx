@@ -659,6 +659,7 @@ const WaktiAIV2 = () => {
           activeTrigger={activeTrigger}
           scrollAreaRef={scrollAreaRef}
           userProfile={userProfile}
+          personalTouch={personalTouch}
           showTaskConfirmation={showTaskConfirmation}
           pendingTaskData={pendingTaskData}
           pendingReminderData={pendingReminderData}
