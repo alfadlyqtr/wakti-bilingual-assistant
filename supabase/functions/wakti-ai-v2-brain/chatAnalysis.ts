@@ -1,4 +1,5 @@
 
+
 // Remove the old OpenAI import and use direct fetch calls instead
 import { analyzeTaskIntent } from "./taskParsing.ts";
 
@@ -110,15 +111,18 @@ export async function processWithBuddyChatAI(
       console.warn('⚠️  Task analysis failed:', taskError);
     }
     
-    // ENHANCED: Build conversation context for better memory
+    // CRITICAL FIX: Validate recentMessages is an array
     let conversationContext = '';
-    if (recentMessages && recentMessages.length > 0) {
+    if (recentMessages && Array.isArray(recentMessages) && recentMessages.length > 0) {
       console.log('🧠 MEMORY: Building conversation context from', recentMessages.length, 'recent messages');
       conversationContext = '\n\nRecent conversation context:\n';
       recentMessages.slice(-5).forEach((msg: any, index: number) => {
         const role = msg.role === 'user' ? 'User' : 'Assistant';
         conversationContext += `${role}: ${msg.content}\n`;
       });
+    } else {
+      console.log('🧠 MEMORY: No valid recentMessages array provided, skipping context');
+      console.log('🧠 MEMORY DEBUG: recentMessages type:', typeof recentMessages, 'isArray:', Array.isArray(recentMessages));
     }
     
     if (conversationSummary) {
@@ -295,3 +299,4 @@ export async function processWithBuddyChatAI(
     throw error;
   }
 }
+
