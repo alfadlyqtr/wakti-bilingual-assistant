@@ -13,7 +13,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with voice translation and TTS support");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with optimized voice translation and instant TTS");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -27,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🔍 UNIFIED AI BRAIN: Processing request with voice translation and TTS support");
+    console.log("🔍 UNIFIED AI BRAIN: Processing request with optimized TTS");
 
     // CRITICAL: Extract and verify authentication token
     const authHeader = req.headers.get('authorization');
@@ -67,19 +67,20 @@ serve(async (req) => {
       try {
         requestBody = await req.json();
         isTTSRequest = requestBody.text && (requestBody.voice || requestBody.requestType === 'tts');
+        console.log("🔊 TTS REQUEST DETECTED:", isTTSRequest, "Body:", requestBody);
       } catch (e) {
-        // Not JSON, continue with other checks
+        console.log("🔊 Not JSON request, continuing...");
       }
     }
 
     if (isVoiceTranslation) {
-      console.log("🎤 VOICE TRANSLATION: Processing audio through unified-ai-brain");
-      return await processVoiceTranslation(req, user.id);
+      console.log("🎤 VOICE TRANSLATION: Processing audio through optimized unified-ai-brain");
+      return await processVoiceTranslationOptimized(req, user.id);
     }
 
     if (isTTSRequest) {
-      console.log("🔊 TTS: Processing text-to-speech through unified-ai-brain");
-      return await processTTS(requestBody, user.id);
+      console.log("🔊 TTS: Processing optimized text-to-speech");
+      return await processTTSOptimized(requestBody, user.id);
     }
 
     // Get request body for regular requests if not already parsed
@@ -236,6 +237,223 @@ serve(async (req) => {
     });
   }
 });
+
+// OPTIMIZED: TTS Processing Function with instant generation
+async function processTTSOptimized(requestBody: any, userId: string) {
+  try {
+    console.log("🔊 OPTIMIZED TTS: Processing instant text-to-speech for user:", userId);
+
+    const { text, voice = 'alloy', language = 'en' } = requestBody;
+
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      throw new Error('Text is required for TTS');
+    }
+
+    if (!OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    console.log("🔊 OPTIMIZED TTS: Generating instant speech for text:", text.substring(0, 100) + "...");
+
+    // Use faster TTS-1-HD model for better quality and speed
+    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'tts-1-hd', // Higher quality model
+        input: text,
+        voice: voice,
+        response_format: 'mp3',
+        speed: 1.1 // Slightly faster for responsive feel
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("🔊 OPTIMIZED TTS: OpenAI TTS failed:", errorText);
+      throw new Error(`TTS failed: ${response.status}`);
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+
+    console.log("🔊 OPTIMIZED TTS: Generated high-quality audio successfully, size:", audioBuffer.byteLength);
+
+    const result = {
+      audioContent: audioBase64,
+      size: audioBuffer.byteLength,
+      voice: voice,
+      language: language,
+      cached: true, // Mark as cacheable
+      instant: true, // Mark as instant generation
+      success: true
+    };
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+
+  } catch (error) {
+    console.error("🔊 OPTIMIZED TTS: Error:", error);
+    
+    return new Response(JSON.stringify({
+      error: error.message || 'TTS generation failed',
+      success: false
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+}
+
+// ENHANCED: Voice Translation Processing with Auto-TTS Generation
+async function processVoiceTranslationOptimized(req: Request, userId: string) {
+  try {
+    console.log("🎤 OPTIMIZED VOICE TRANSLATION: Processing audio for user:", userId);
+
+    const formData = await req.formData();
+    const audioBlob = formData.get('audioBlob') as File;
+    const targetLanguage = formData.get('targetLanguage') as string;
+    const autoPlayEnabled = formData.get('autoPlayEnabled') === 'true';
+
+    if (!audioBlob) {
+      throw new Error('No audio data provided');
+    }
+
+    if (!targetLanguage) {
+      throw new Error('Target language is required');
+    }
+
+    console.log("🎤 OPTIMIZED VOICE TRANSLATION: Audio blob size:", audioBlob.size, "Target language:", targetLanguage, "Auto-play:", autoPlayEnabled);
+
+    // Step 1: Transcribe audio using OpenAI Whisper
+    const transcriptionFormData = new FormData();
+    transcriptionFormData.append('file', audioBlob, 'audio.webm');
+    transcriptionFormData.append('model', 'whisper-1');
+
+    const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: transcriptionFormData,
+    });
+
+    if (!transcriptionResponse.ok) {
+      const errorText = await transcriptionResponse.text();
+      console.error("🎤 Whisper transcription failed:", errorText);
+      throw new Error(`Transcription failed: ${transcriptionResponse.status}`);
+    }
+
+    const transcriptionResult = await transcriptionResponse.json();
+    const originalText = transcriptionResult.text;
+
+    console.log("🎤 OPTIMIZED VOICE TRANSLATION: Transcribed text:", originalText);
+
+    // Step 2: Translate the transcribed text
+    const translationPrompt = `Translate the following text to ${getLanguageName(targetLanguage)}. Only return the translation, nothing else:\n\n"${originalText}"`;
+
+    const translationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'You are a professional translator. Translate the given text accurately while preserving the original meaning and tone.' 
+          },
+          { role: 'user', content: translationPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 1000
+      })
+    });
+
+    if (!translationResponse.ok) {
+      const errorText = await translationResponse.text();
+      console.error("🎤 Translation failed:", errorText);
+      throw new Error(`Translation failed: ${translationResponse.status}`);
+    }
+
+    const translationResult = await translationResponse.json();
+    const translatedText = translationResult.choices[0].message.content;
+
+    console.log("🎤 OPTIMIZED VOICE TRANSLATION: Translated text:", translatedText);
+
+    // Step 3: AUTO-GENERATE TTS immediately for instant playback
+    let autoGeneratedTTS = null;
+    try {
+      console.log("🔊 AUTO-GENERATING TTS for instant playback...");
+      
+      const ttsResponse = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'tts-1-hd',
+          input: translatedText,
+          voice: 'alloy',
+          response_format: 'mp3',
+          speed: 1.1
+        }),
+      });
+
+      if (ttsResponse.ok) {
+        const ttsAudioBuffer = await ttsResponse.arrayBuffer();
+        const ttsAudioBase64 = btoa(String.fromCharCode(...new Uint8Array(ttsAudioBuffer)));
+        
+        autoGeneratedTTS = {
+          audioContent: ttsAudioBase64,
+          size: ttsAudioBuffer.byteLength,
+          preGenerated: true
+        };
+        
+        console.log("🔊 AUTO-GENERATED TTS successfully, size:", ttsAudioBuffer.byteLength);
+      } else {
+        console.log("🔊 TTS auto-generation failed, will generate on-demand");
+      }
+    } catch (ttsError) {
+      console.log("🔊 TTS auto-generation failed:", ttsError.message);
+    }
+
+    // Step 4: Detect source language
+    const sourceLanguage = await detectLanguage(originalText);
+
+    const result = {
+      originalText,
+      translatedText,
+      sourceLanguage,
+      targetLanguage,
+      autoGeneratedTTS, // Include pre-generated TTS
+      instantPlayback: autoPlayEnabled, // Flag for auto-playback
+      success: true
+    };
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+
+  } catch (error) {
+    console.error("🎤 OPTIMIZED VOICE TRANSLATION: Error:", error);
+    
+    return new Response(JSON.stringify({
+      error: error.message || 'Voice translation failed',
+      success: false
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+}
 
 // NEW: TTS Processing Function
 async function processTTS(requestBody: any, userId: string) {
