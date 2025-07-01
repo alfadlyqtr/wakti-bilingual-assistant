@@ -207,14 +207,14 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
               />
 
-              {/* Image display - STANDARDIZED for both user and AI messages */}
+              {/* Image display - Show images in user bubbles as well, immediate preview */}
               {Array.isArray(message.attachedFiles) && message.attachedFiles.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2 max-w-xs">
                   {message.attachedFiles.map((file: any, idx: number) =>
                     file.type && file.type.startsWith('image/') ? (
                       <img
                         key={idx}
-                        src={file.preview || file.url || file.publicUrl}
+                        src={file.preview || file.url}
                         alt={file.name || 'Uploaded image'}
                         className="rounded-lg border max-h-40 max-w-[140px] object-contain"
                         style={{ background: '#f6f6f8' }}
@@ -331,21 +331,21 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             </div>
           </Card>
 
-          {/* Action buttons for ALL messages - INCREASED MARGIN */}
-          <div className="flex items-center gap-1 mt-3">
-            {/* Copy button for all messages */}
-            <Button
-              onClick={handleCopy}
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Copy className="w-3 h-3 mr-1" />
-              {language === 'ar' ? 'نسخ' : 'Copy'}
-            </Button>
+          {/* Action buttons for AI messages - INCREASED MARGIN */}
+          {!isUser && (
+            <div className="flex items-center gap-1 mt-3">
+              {/* Copy button */}
+              <Button
+                onClick={handleCopy}
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Copy className="w-3 h-3 mr-1" />
+                {language === 'ar' ? 'نسخ' : 'Copy'}
+              </Button>
 
-            {/* Speak button - only for messages with content */}
-            {message.content && (
+              {/* Speak button */}
               <Button
                 onClick={handleSpeak}
                 variant="ghost"
@@ -360,8 +360,8 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 <Speaker className={`w-3 h-3 mr-1 ${isSpeaking ? 'animate-pulse' : ''}`} />
                 {language === 'ar' ? 'استمع' : 'Speak'}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Message timestamp */}
           <div className="text-xs text-muted-foreground mt-1 px-1">

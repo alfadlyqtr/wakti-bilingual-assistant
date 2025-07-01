@@ -302,7 +302,7 @@ export class PersonalizationEnforcer {
   }
 
   /**
-   * ENHANCED: Enforce nickname usage with CREATIVE VARIATIONS
+   * AGGRESSIVE: Enforce nickname usage
    */
   private static enforceNicknameUsage(
     response: string,
@@ -318,43 +318,20 @@ export class PersonalizationEnforcer {
       return response;
     }
 
-    // ENHANCED: Creative and diverse greeting phrases
     const greetingPhrases = language === 'ar' ? [
       `${nickname}، `,
       `أهلاً ${nickname}! `,
       `استمع ${nickname}، `,
-      `${nickname} العزيز، `,
-      `صديقي ${nickname}، `,
-      `يا ${nickname}، `,
-      `${nickname} الغالي، `,
-      `مستخدم وقتي ${nickname}، `,
-      `صديق وقتي ${nickname}، `,
-      `${nickname} حبيبي، `,
-      `أخوي ${nickname}، `,
-      `رفيقي ${nickname}، `,
-      `${nickname} يا عسل، `,
-      `حياك ${nickname}، `,
-      `${nickname} يا بطل، `
+      `${nickname} العزيز، `
     ] : [
       `${nickname}, `,
       `Hey ${nickname}! `,
       `Listen ${nickname}, `,
-      `Dear ${nickname}, `,
-      `My friend ${nickname}, `,
-      `Yo ${nickname}, `,
-      `${nickname} my buddy, `,
-      `WAKTI user ${nickname}, `,
-      `${nickname} buddy, `,
-      `My BFF ${nickname}, `,
-      `${nickname} mate, `,
-      `${nickname} pal, `,
-      `Champion ${nickname}, `,
-      `${nickname} rockstar, `,
-      `Superstar ${nickname}, `
+      `Dear ${nickname}, `
     ];
 
-    // ENHANCED: 70% chance to add nickname with more variety
-    if (Math.random() < 0.7) {
+    // AGGRESSIVE: 60% chance to add nickname
+    if (Math.random() < 0.6) {
       const randomGreeting = greetingPhrases[Math.floor(Math.random() * greetingPhrases.length)];
       return randomGreeting + response;
     }
@@ -363,7 +340,7 @@ export class PersonalizationEnforcer {
   }
 
   /**
-   * ENHANCED: Enforce AI nickname signature with more variety
+   * AGGRESSIVE: Enforce AI nickname signature
    */
   private static enforceAINickname(
     response: string,
@@ -379,37 +356,20 @@ export class PersonalizationEnforcer {
       return response;
     }
 
-    // ENHANCED: More creative signature variations
     const signatures = language === 'ar' ? [
       `\n\n- ${aiNickname} 🤖`,
       `\n\n~ ${aiNickname} ✨`,
       `\n\n— ${aiNickname} 💫`,
-      `\n\n🤖 ${aiNickname}`,
-      `\n\n💙 ${aiNickname}`,
-      `\n\n🚀 ${aiNickname}`,
-      `\n\n🌟 ${aiNickname}`,
-      `\n\n⚡ ${aiNickname}`,
-      `\n\n🎯 مساعدك ${aiNickname}`,
-      `\n\n✨ صديقك ${aiNickname}`,
-      `\n\n🤝 رفيقك ${aiNickname}`,
-      `\n\n💪 ${aiNickname} دائماً هنا`
+      `\n\n🤖 ${aiNickname}`
     ] : [
       `\n\n- ${aiNickname} 🤖`,
       `\n\n~ ${aiNickname} ✨`,
       `\n\n— ${aiNickname} 💫`,
-      `\n\n🤖 ${aiNickname}`,
-      `\n\n💙 ${aiNickname}`,
-      `\n\n🚀 ${aiNickname}`,
-      `\n\n🌟 ${aiNickname}`,
-      `\n\n⚡ ${aiNickname}`,
-      `\n\n🎯 Your assistant ${aiNickname}`,
-      `\n\n✨ Your buddy ${aiNickname}`,
-      `\n\n🤝 Your pal ${aiNickname}`,
-      `\n\n💪 ${aiNickname} at your service`
+      `\n\n🤖 ${aiNickname}`
     ];
 
-    // ENHANCED: 50% chance to add signature with more variety
-    if (Math.random() < 0.5) {
+    // AGGRESSIVE: 40% chance to add signature
+    if (Math.random() < 0.4) {
       const randomSignature = signatures[Math.floor(Math.random() * signatures.length)];
       return response + randomSignature;
     }
