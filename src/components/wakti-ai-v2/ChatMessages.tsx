@@ -37,23 +37,22 @@ export function ChatMessages({
   onCancelTaskConfirmation,
 }: ChatMessagesProps) {
   const { language } = useTheme();
-  const lastMessageRef = useRef<HTMLDivElement>(null);
+
+  // REVERTED: Simple auto-scroll using scrollAreaRef
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        requestAnimationFrame(() => {
+          scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        });
+      }
+    }
+  }, [sessionMessages, isLoading, showTaskConfirmation]);
 
   // Check if the last user message has attached files for better loading indicator
   const lastUserMessage = sessionMessages.filter(msg => msg.role === 'user').pop();
   const hasAttachedFiles = lastUserMessage?.attachedFiles && lastUserMessage.attachedFiles.length > 0;
-
-  // FIXED: Auto-scroll using scrollIntoView on the last message
-  useEffect(() => {
-    if (lastMessageRef.current) {
-      requestAnimationFrame(() => {
-        lastMessageRef.current?.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'end' 
-        });
-      });
-    }
-  }, [sessionMessages, isLoading, showTaskConfirmation]);
 
   return (
     <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-16">
@@ -73,10 +72,7 @@ export function ChatMessages({
       )}
 
       {sessionMessages.map((message, index) => (
-        <div
-          key={message.id}
-          ref={index === sessionMessages.length - 1 ? lastMessageRef : null}
-        >
+        <div key={message.id}>
           <ChatBubble
             message={message}
             userProfile={userProfile}
@@ -86,7 +82,7 @@ export function ChatMessages({
       ))}
 
       {isLoading && (
-        <div ref={!sessionMessages.length ? lastMessageRef : null}>
+        <div>
           <TypingIndicator 
             hasAttachedFiles={hasAttachedFiles}
             isVisionProcessing={hasAttachedFiles}
@@ -95,7 +91,7 @@ export function ChatMessages({
       )}
 
       {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
-        <div className="flex justify-start" ref={lastMessageRef}>
+        <div className="flex justify-start">
           <div className="max-w-md">
             <EditableTaskConfirmationCard
               data={pendingTaskData || pendingReminderData}

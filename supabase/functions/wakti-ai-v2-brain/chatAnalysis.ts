@@ -1,13 +1,30 @@
 
+
 // Remove the old OpenAI import and use direct fetch calls instead
 import { analyzeTaskIntent } from "./taskParsing.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-// System prompts
-const englishSystemPrompt = `You are a helpful AI assistant that analyzes images. Extract all visible text, identify people, objects, and scenes, and respond with clear, structured descriptions. Always reason from visual details and provide insights where possible.`;
+// RESTORED: Complete system prompts for general AI conversation
+const englishSystemPrompt = `You are WAKTI AI, a helpful and intelligent personal assistant. You can help with various tasks including:
+- General conversation and questions
+- Task management and organization
+- Event planning and scheduling
+- Providing information and explanations
+- Creative assistance and brainstorming
+- Problem-solving and analysis
 
-const arabicSystemPrompt = `أنت مساعد ذكي مفيد يحلل الصور. استخرج كل النص المرئي، وحدد الأشخاص والأشياء والمشاهد، واستجب بوصف واضح ومنظم. استدل دائماً من التفاصيل البصرية وقدم رؤى عند الإمكان.`;
+You should be friendly, helpful, and concise in your responses. Adapt your tone and style based on user preferences when provided.`;
+
+const arabicSystemPrompt = `أنت وقتي AI، مساعد شخصي ذكي ومفيد. يمكنك المساعدة في مهام مختلفة تشمل:
+- المحادثة العامة والأسئلة
+- إدارة المهام والتنظيم
+- تخطيط الأحداث والجدولة
+- تقديم المعلومات والتوضيحات
+- المساعدة الإبداعية والعصف الذهني
+- حل المشاكل والتحليل
+
+يجب أن تكون ودودًا ومفيدًا ومختصرًا في إجاباتك. تكيف مع نبرة وأسلوب المستخدم حسب التفضيلات المقدمة.`;
 
 // Vision prompts
 const englishVisionPromptTemplate = `Analyze the image and provide a detailed description. Identify any objects, people, or scenes present. Extract any text or information that can be read from the image.`;
@@ -50,7 +67,12 @@ async function compressImageForVision(imageUrl: string): Promise<string> {
 
 // Build vision system prompt based on language
 function buildVisionSystemPrompt(language: string): string {
-  return language === 'ar' ? arabicSystemPrompt : englishSystemPrompt;
+  const basePrompt = language === 'ar' ? arabicSystemPrompt : englishSystemPrompt;
+  const visionAddition = language === 'ar' 
+    ? '\n\nيمكنك أيضًا تحليل الصور ووصفها واستخراج النصوص منها.'
+    : '\n\nYou can also analyze images, describe them, and extract text from them.';
+  
+  return basePrompt + visionAddition;
 }
 
 // Get vision prompt template based on image type and language
@@ -144,12 +166,12 @@ export async function processWithBuddyChatAI(
       conversationContext += `\nConversation summary: ${conversationSummary}\n`;
     }
     
-    // FIXED: Personalization setup WITHOUT nickname in system prompt
+    // SIMPLIFIED: Basic personalization setup
     let personalizedTemperature = 0.7;
     let systemPrompt = language === 'ar' ? arabicSystemPrompt : englishSystemPrompt;
     
     if (personalTouch) {
-      console.log('🎨 PERSONALIZATION: Applying personal touch settings (no nickname in system prompt)');
+      console.log('🎨 PERSONALIZATION: Applying basic personal touch settings');
       
       if (personalTouch.tone) {
         console.log('   - Setting tone:', personalTouch.tone);
@@ -157,20 +179,6 @@ export async function processWithBuddyChatAI(
           personalizedTemperature = Math.max(0.3, personalizedTemperature - 0.2);
         } else if (personalTouch.tone === 'friendly') {
           personalizedTemperature = Math.min(0.9, personalizedTemperature + 0.2);
-        }
-      }
-      
-      // FIXED: Filter out nickname-related instructions to prevent double nicknames
-      if (personalTouch.instruction) {
-        const filteredInstruction = personalTouch.instruction
-          .replace(/use my nickname/gi, '')
-          .replace(/call me by my nickname/gi, '')
-          .replace(/address me by name/gi, '')
-          .trim();
-        
-        if (filteredInstruction.length > 0) {
-          console.log('   - Adding filtered custom instruction:', filteredInstruction);
-          systemPrompt += `\n\nADDITIONAL INSTRUCTION: ${filteredInstruction}`;
         }
       }
       
@@ -313,3 +321,4 @@ export async function processWithBuddyChatAI(
     throw error;
   }
 }
+
