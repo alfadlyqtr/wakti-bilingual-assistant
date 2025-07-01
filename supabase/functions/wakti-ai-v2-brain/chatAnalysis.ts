@@ -1,4 +1,5 @@
 
+
 // Remove the old OpenAI import and use direct fetch calls instead
 import { analyzeTaskIntent } from "./taskParsing.ts";
 
@@ -110,15 +111,18 @@ export async function processWithBuddyChatAI(
       console.warn('⚠️  Task analysis failed:', taskError);
     }
     
-    // ENHANCED: Build conversation context for better memory
+    // CRITICAL FIX: Validate recentMessages is an array
     let conversationContext = '';
-    if (recentMessages && recentMessages.length > 0) {
+    if (recentMessages && Array.isArray(recentMessages) && recentMessages.length > 0) {
       console.log('🧠 MEMORY: Building conversation context from', recentMessages.length, 'recent messages');
       conversationContext = '\n\nRecent conversation context:\n';
       recentMessages.slice(-5).forEach((msg: any, index: number) => {
         const role = msg.role === 'user' ? 'User' : 'Assistant';
         conversationContext += `${role}: ${msg.content}\n`;
       });
+    } else {
+      console.log('🧠 MEMORY: No valid recentMessages array provided, skipping context');
+      console.log('🧠 MEMORY DEBUG: recentMessages type:', typeof recentMessages, 'isArray:', Array.isArray(recentMessages));
     }
     
     if (conversationSummary) {
@@ -126,12 +130,12 @@ export async function processWithBuddyChatAI(
       conversationContext += `\nConversation summary: ${conversationSummary}\n`;
     }
     
-    // Personalization setup
+    // FIXED: Personalization setup WITHOUT nickname in system prompt
     let personalizedTemperature = 0.7;
     let systemPrompt = language === 'ar' ? arabicSystemPrompt : englishSystemPrompt;
     
     if (personalTouch) {
-      console.log('🎨 PERSONALIZATION: Applying personal touch settings');
+      console.log('🎨 PERSONALIZATION: Applying personal touch settings (no nickname in system prompt)');
       
       if (personalTouch.tone) {
         console.log('   - Setting tone:', personalTouch.tone);
@@ -142,9 +146,18 @@ export async function processWithBuddyChatAI(
         }
       }
       
+      // FIXED: Filter out nickname-related instructions to prevent double nicknames
       if (personalTouch.instruction) {
-        console.log('   - Adding custom instruction:', personalTouch.instruction);
-        systemPrompt += `\n\nADDITIONAL INSTRUCTION: ${personalTouch.instruction}`;
+        const filteredInstruction = personalTouch.instruction
+          .replace(/use my nickname/gi, '')
+          .replace(/call me by my nickname/gi, '')
+          .replace(/address me by name/gi, '')
+          .trim();
+        
+        if (filteredInstruction.length > 0) {
+          console.log('   - Adding filtered custom instruction:', filteredInstruction);
+          systemPrompt += `\n\nADDITIONAL INSTRUCTION: ${filteredInstruction}`;
+        }
       }
       
       if (personalTouch.aiNickname) {
@@ -286,3 +299,4 @@ export async function processWithBuddyChatAI(
     throw error;
   }
 }
+
