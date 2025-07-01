@@ -462,7 +462,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
-  // FIXED: Completely rewritten to use FormData with Blob directly
+  // FIXED: Complete rewrite to use FormData with Blob directly - no base64 conversion
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
@@ -502,7 +502,75 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             throw new Error(`Authentication failed: ${retryError.message}`);
           }
           
-          data = retryData;
+          // FIXED: Use retryData instead of reassigning const data
+          if (!retryData?.translatedText) {
+            throw new Error('No translation received from service');
+          }
+
+          console.log('🎤 Voice Translator retry result:', retryData);
+
+          if (retryData.targetLanguageCode && retryData.targetLanguageCode !== selectedLanguage) {
+            console.error('🎤 CRITICAL ERROR: Language mismatch!', {
+              requested: selectedLanguage,
+              received: retryData.targetLanguageCode
+            });
+            
+            toast({
+              title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
+              description: language === 'ar' 
+                ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${retryData.targetLanguage}` 
+                : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${retryData.targetLanguage}`,
+              variant: 'destructive'
+            });
+          }
+
+          console.log('📊 About to increment translation usage...');
+          const usageSuccess = await incrementTranslationCount();
+          console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
+          
+          if (!usageSuccess && !quotaError) {
+            console.warn('⚠️ Translation blocked due to quota limit');
+            const errorMsg = language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached';
+            setProcessingError(errorMsg);
+            toast({
+              title: errorMsg,
+              description: language === 'ar' 
+                ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
+                : 'You have reached your daily translation limit',
+              variant: 'destructive'
+            });
+            return;
+          }
+
+          setTranslatedText(retryData.translatedText);
+          
+          const newTranslation: TranslationItem = {
+            id: Date.now().toString(),
+            originalText: retryData.originalText,
+            translatedText: retryData.translatedText,
+            sourceLanguage: retryData.sourceLanguage,
+            targetLanguage: retryData.targetLanguage,
+            timestamp: new Date()
+          };
+          addToHistory(newTranslation);
+          
+          setIsOnCooldown(true);
+          setTimeout(() => setIsOnCooldown(false), COOLDOWN_TIME);
+
+          const targetLangName = SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name || selectedLanguage;
+          toast({
+            title: language === 'ar' ? '✅ تمت الترجمة' : '✅ Translation Complete',
+            description: language === 'ar' 
+              ? `تم إنجاز الترجمة إلى ${targetLangName} بنجاح` 
+              : `Translation to ${targetLangName} completed successfully`,
+          });
+
+          // Background pre-generate audio immediately after translation
+          if (playbackEnabled) {
+            preGenerateAudio(retryData.translatedText);
+          }
+
+          return;
         } else {
           throw new Error(`Translation failed: ${error.message}`);
         }
