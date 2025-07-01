@@ -142,18 +142,86 @@ const MAX_CACHE_SIZE = 50;
 const SUPABASE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
 
-// FIXED: Helper function to get authenticated headers for direct fetch calls
-const getAuthenticatedHeaders = async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('No valid session found');
+// IMPROVED: Robust session handling with retry logic and refresh
+const getAuthenticatedHeaders = async (maxRetries = 3): Promise<Record<string, string>> => {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔐 Getting authenticated headers (attempt ${attempt}/${maxRetries})`);
+      
+      // First, try to get the current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('🔐 Session error:', sessionError);
+        lastError = sessionError;
+        
+        // If this is not the last attempt, try to refresh the session
+        if (attempt < maxRetries) {
+          console.log('🔐 Attempting to refresh session...');
+          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (!refreshError && refreshedSession?.access_token) {
+            console.log('🔐 Session refreshed successfully');
+            return {
+              'Authorization': `Bearer ${refreshedSession.access_token}`,
+              'apikey': SUPABASE_ANON_KEY,
+              'x-client-info': 'wakti-voice-translator'
+            };
+          } else {
+            console.error('🔐 Session refresh failed:', refreshError);
+          }
+        }
+        continue;
+      }
+      
+      if (!session?.access_token) {
+        console.warn('🔐 No session found, attempting refresh...');
+        
+        // Try to refresh the session if we don't have one
+        if (attempt < maxRetries) {
+          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (!refreshError && refreshedSession?.access_token) {
+            console.log('🔐 Session obtained after refresh');
+            return {
+              'Authorization': `Bearer ${refreshedSession.access_token}`,
+              'apikey': SUPABASE_ANON_KEY,
+              'x-client-info': 'wakti-voice-translator'
+            };
+          } else {
+            console.error('🔐 Failed to get session after refresh:', refreshError);
+            lastError = refreshError || new Error('No session after refresh');
+          }
+        } else {
+          lastError = new Error('No valid session found after all retry attempts');
+        }
+        continue;
+      }
+      
+      // We have a valid session
+      console.log('🔐 Valid session found');
+      return {
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'x-client-info': 'wakti-voice-translator'
+      };
+      
+    } catch (error) {
+      console.error(`🔐 Authentication attempt ${attempt} failed:`, error);
+      lastError = error as Error;
+      
+      if (attempt < maxRetries) {
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
   }
   
-  return {
-    'Authorization': `Bearer ${session.access_token}`,
-    'apikey': SUPABASE_ANON_KEY,
-    'x-client-info': 'wakti-voice-translator'
-  };
+  // All attempts failed
+  console.error('🔐 All authentication attempts failed');
+  throw lastError || new Error('Authentication failed after all retry attempts');
 };
 
 export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
@@ -327,7 +395,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [language]);
 
-  // FIXED: Background audio pre-generation using direct fetch
+  // FIXED: Background audio pre-generation using direct fetch with improved error handling
   const preGenerateAudio = useCallback(async (text: string) => {
     const cacheKey = `${text}_${selectedLanguage}`;
     
@@ -339,7 +407,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsGeneratingAudio(true);
       console.log('🔊 Pre-generating audio for:', text.substring(0, 30) + '...');
 
-      // FIXED: Use direct fetch instead of supabase.functions.invoke
       const headers = await getAuthenticatedHeaders();
       const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator-tts`, {
         method: 'POST',
@@ -487,7 +554,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
-  // FIXED: Complete rewrite using direct fetch() instead of supabase.functions.invoke()
+  // IMPROVED: Enhanced error handling with better user feedback
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
@@ -495,19 +562,17 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.log('🎤 Processing translation with target language:', selectedLanguage);
       console.log('🎤 Audio blob size:', audioBlob.size, 'bytes');
 
-      // FIXED: Create FormData with the audio Blob directly
       const formData = new FormData();
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('targetLanguage', selectedLanguage);
 
       console.log('🎤 Voice Translator: Sending FormData with audio blob via direct fetch');
 
-      // FIXED: Use direct fetch() instead of supabase.functions.invoke()
       const headers = await getAuthenticatedHeaders();
       
       const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator`, {
         method: 'POST',
-        headers: headers, // Don't set Content-Type for FormData - browser will set it with boundary
+        headers: headers,
         body: formData
       });
 
@@ -516,39 +581,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       if (!response.ok) {
         const errorText = await response.text();
         console.error('🎤 Voice Translator error:', errorText);
-        
-        // Handle authentication errors specifically
-        if (response.status === 401) {
-          console.log('🎤 Attempting session refresh...');
-          await supabase.auth.refreshSession();
-          
-          // Retry with new headers
-          const retryHeaders = await getAuthenticatedHeaders();
-          const retryFormData = new FormData();
-          retryFormData.append('audioBlob', audioBlob, 'audio.webm');
-          retryFormData.append('targetLanguage', selectedLanguage);
-
-          const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator`, {
-            method: 'POST',
-            headers: retryHeaders,
-            body: retryFormData
-          });
-
-          if (!retryResponse.ok) {
-            throw new Error(`Authentication retry failed: ${retryResponse.status}`);
-          }
-          
-          const retryData = await retryResponse.json();
-          
-          if (!retryData?.translatedText) {
-            throw new Error('No translation received from service after retry');
-          }
-
-          console.log('🎤 Voice Translator retry result:', retryData);
-          return handleSuccessfulTranslation(retryData);
-        } else {
-          throw new Error(`Translation failed: ${response.status} - ${errorText}`);
-        }
+        throw new Error(`Translation service error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -563,18 +596,24 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('🎤 Voice Translator: Error processing translation:', error);
       
-      let errorMessage = language === 'ar' 
-        ? 'فشل في ترجمة الصوت - يرجى المحاولة مرة أخرى' 
-        : 'Failed to translate voice - please try again';
-
-      if (error.message?.includes('Authentication')) {
+      let errorMessage: string;
+      
+      if (error.message?.includes('Authentication') || error.message?.includes('session')) {
         errorMessage = language === 'ar' 
-          ? 'انتهت صلاحية الجلسة - يرجى تسجيل الدخول مرة أخرى' 
-          : 'Session expired - please log in again';
+          ? 'مشكلة في المصادقة - يرجى إعادة تحديث الصفحة' 
+          : 'Authentication issue - please refresh the page';
       } else if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
         errorMessage = language === 'ar'
           ? 'خطأ في الاتصال - تحقق من الاتصال بالإنترنت'
           : 'Connection error - check your internet connection';
+      } else if (error.message?.includes('Translation service error')) {
+        errorMessage = language === 'ar' 
+          ? 'خطأ مؤقت في خدمة الترجمة - يرجى المحاولة مرة أخرى' 
+          : 'Temporary translation service error - please try again';
+      } else {
+        errorMessage = language === 'ar' 
+          ? 'فشل في ترجمة الصوت - يرجى المحاولة مرة أخرى' 
+          : 'Failed to translate voice - please try again';
       }
 
       setProcessingError(errorMessage);
@@ -654,7 +693,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, preGenerateAudio]);
 
-  // FIXED: Updated to use direct fetch for TTS as well
+  // IMPROVED: Enhanced TTS with better error handling
   const playTranslatedText = useCallback(async (text: string) => {
     console.log('🔊 Play button clicked, text:', text);
     
@@ -679,7 +718,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       
       console.log(`🔊 Generating TTS for language: ${selectedLanguage}, voice: alloy`);
       
-      // FIXED: Use direct fetch for TTS as well
       const headers = await getAuthenticatedHeaders();
       const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator-tts`, {
         method: 'POST',
@@ -695,7 +733,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       if (!response.ok) {
         console.error('🔊 TTS error:', response.status);
-        throw new Error(`TTS failed: ${response.status}`);
+        throw new Error(`TTS service error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -721,11 +759,18 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('🔊 Error playing TTS:', error);
       
-      let errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Audio generation failed. Please try again.';
-      if (error.message?.includes('Rate limit')) {
+      let errorMessage: string;
+      
+      if (error.message?.includes('Authentication') || error.message?.includes('session')) {
+        errorMessage = language === 'ar' ? 'مشكلة في المصادقة - يرجى إعادة تحديث الصفحة' : 'Authentication issue - please refresh the page';
+      } else if (error.message?.includes('TTS service error')) {
+        errorMessage = language === 'ar' ? 'خطأ مؤقت في خدمة الصوت - يرجى المحاولة مرة أخرى' : 'Temporary audio service error - please try again';
+      } else if (error.message?.includes('Rate limit')) {
         errorMessage = language === 'ar' ? 'تم تجاوز الحد المسموح، حاول مرة أخرى' : 'Rate limit exceeded, please try again';
       } else if (error.message?.includes('timeout')) {
         errorMessage = language === 'ar' ? 'انتهت مهلة الاتصال، حاول مرة أخرى' : 'Request timeout, please try again';
+      } else {
+        errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Audio generation failed. Please try again.';
       }
       
       toast({
