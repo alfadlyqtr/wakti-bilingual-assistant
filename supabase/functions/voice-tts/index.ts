@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
@@ -11,10 +10,10 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const ELEVEN_LABS_API_KEY = Deno.env.get('ELEVEN_LABS_API_KEY');
+const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
 console.log("🎵 VOICE TTS: Function loaded");
-console.log("🎵 ElevenLabs API Key available:", !!ELEVEN_LABS_API_KEY);
+console.log("🎵 ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -37,8 +36,8 @@ serve(async (req) => {
 
   try {
     // Check if API key is available
-    if (!ELEVEN_LABS_API_KEY) {
-      console.error('🎵 ELEVEN_LABS_API_KEY not found in environment');
+    if (!ELEVENLABS_API_KEY) {
+      console.error('🎵 ELEVENLABS_API_KEY not found in environment');
       throw new Error('ElevenLabs API key not configured');
     }
 
@@ -113,7 +112,7 @@ serve(async (req) => {
       headers: {
         'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
-        'xi-api-key': ELEVEN_LABS_API_KEY,
+        'xi-api-key': ELEVENLABS_API_KEY,
       },
       body: JSON.stringify({
         text: text,
