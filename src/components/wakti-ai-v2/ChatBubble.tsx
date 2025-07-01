@@ -331,9 +331,9 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             </div>
           </Card>
 
-          {/* Action buttons for AI messages */}
+          {/* Action buttons for AI messages - INCREASED MARGIN */}
           {!isUser && (
-            <div className="flex items-center gap-1 mt-1">
+            <div className="flex items-center gap-1 mt-3">
               {/* Copy button */}
               <Button
                 onClick={handleCopy}

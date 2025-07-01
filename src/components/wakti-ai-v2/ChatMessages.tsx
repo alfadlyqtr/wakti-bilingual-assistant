@@ -53,7 +53,7 @@ export function ChatMessages({
   }, [sessionMessages, isLoading, showTaskConfirmation]);
 
   return (
-    <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full">
+    <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-16">
       {sessionMessages.length === 0 && !isLoading && (
         <div className="text-center text-muted-foreground py-12">
           <div className="text-2xl mb-2">🤖</div>
