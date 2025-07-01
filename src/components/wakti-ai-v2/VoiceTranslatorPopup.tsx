@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -139,6 +138,10 @@ const MAX_HISTORY_ITEMS = 5;
 const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000;
 const MAX_CACHE_SIZE = 50;
 
+// FIXED: Use hardcoded Supabase configuration values
+const SUPABASE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
+
 // FIXED: Helper function to get authenticated headers for direct fetch calls
 const getAuthenticatedHeaders = async () => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -148,7 +151,7 @@ const getAuthenticatedHeaders = async () => {
   
   return {
     'Authorization': `Bearer ${session.access_token}`,
-    'apikey': supabase.supabaseKey,
+    'apikey': SUPABASE_ANON_KEY,
     'x-client-info': 'wakti-voice-translator'
   };
 };
@@ -338,7 +341,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       // FIXED: Use direct fetch instead of supabase.functions.invoke
       const headers = await getAuthenticatedHeaders();
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/voice-translator-tts`, {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator-tts`, {
         method: 'POST',
         headers: {
           ...headers,
@@ -502,7 +505,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       // FIXED: Use direct fetch() instead of supabase.functions.invoke()
       const headers = await getAuthenticatedHeaders();
       
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/voice-translator`, {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator`, {
         method: 'POST',
         headers: headers, // Don't set Content-Type for FormData - browser will set it with boundary
         body: formData
@@ -525,7 +528,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           retryFormData.append('audioBlob', audioBlob, 'audio.webm');
           retryFormData.append('targetLanguage', selectedLanguage);
 
-          const retryResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/voice-translator`, {
+          const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator`, {
             method: 'POST',
             headers: retryHeaders,
             body: retryFormData
@@ -678,7 +681,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       
       // FIXED: Use direct fetch for TTS as well
       const headers = await getAuthenticatedHeaders();
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/voice-translator-tts`, {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator-tts`, {
         method: 'POST',
         headers: {
           ...headers,
