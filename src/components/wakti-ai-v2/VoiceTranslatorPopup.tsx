@@ -1,15 +1,15 @@
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuotaManagement } from '@/hooks/useQuotaManagement';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Mic, Square, Copy, Loader2, AlertTriangle, Clock, PlayCircle, Volume2, ChevronDown, VolumeX, Plus } from 'lucide-react';
+import { Mic, Square, Copy, Loader2, AlertTriangle, PlayCircle, Volume2, ChevronDown, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceTranslatorPopupProps {
@@ -50,14 +50,6 @@ class AudioManager {
         
         audio.preload = 'auto';
         audio.volume = 1.0;
-        
-        audio.onloadeddata = () => {
-          console.log('🔊 Audio loaded successfully');
-        };
-        
-        audio.oncanplaythrough = () => {
-          console.log('🔊 Audio ready to play');
-        };
         
         audio.onended = () => {
           console.log('🔊 Audio playback completed');
@@ -131,116 +123,16 @@ const SUPPORTED_LANGUAGES = [
 ];
 
 const MAX_RECORDING_TIME = 15;
-const COOLDOWN_TIME = 5000;
-const EXTRA_TRANSLATIONS_PRICE = 10;
-const EXTRA_TRANSLATIONS_COUNT = 150;
+const COOLDOWN_TIME = 3000;
 const MAX_HISTORY_ITEMS = 5;
 const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000;
 const MAX_CACHE_SIZE = 50;
-
-// FIXED: Use hardcoded Supabase configuration values
-const SUPABASE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
-
-// IMPROVED: Robust session handling with retry logic and refresh
-const getAuthenticatedHeaders = async (maxRetries = 3): Promise<Record<string, string>> => {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`🔐 Getting authenticated headers (attempt ${attempt}/${maxRetries})`);
-      
-      // First, try to get the current session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('🔐 Session error:', sessionError);
-        lastError = sessionError;
-        
-        // If this is not the last attempt, try to refresh the session
-        if (attempt < maxRetries) {
-          console.log('🔐 Attempting to refresh session...');
-          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-          
-          if (!refreshError && refreshedSession?.access_token) {
-            console.log('🔐 Session refreshed successfully');
-            return {
-              'Authorization': `Bearer ${refreshedSession.access_token}`,
-              'apikey': SUPABASE_ANON_KEY,
-              'x-client-info': 'wakti-voice-translator'
-            };
-          } else {
-            console.error('🔐 Session refresh failed:', refreshError);
-          }
-        }
-        continue;
-      }
-      
-      if (!session?.access_token) {
-        console.warn('🔐 No session found, attempting refresh...');
-        
-        // Try to refresh the session if we don't have one
-        if (attempt < maxRetries) {
-          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-          
-          if (!refreshError && refreshedSession?.access_token) {
-            console.log('🔐 Session obtained after refresh');
-            return {
-              'Authorization': `Bearer ${refreshedSession.access_token}`,
-              'apikey': SUPABASE_ANON_KEY,
-              'x-client-info': 'wakti-voice-translator'
-            };
-          } else {
-            console.error('🔐 Failed to get session after refresh:', refreshError);
-            lastError = refreshError || new Error('No session after refresh');
-          }
-        } else {
-          lastError = new Error('No valid session found after all retry attempts');
-        }
-        continue;
-      }
-      
-      // We have a valid session
-      console.log('🔐 Valid session found');
-      return {
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': SUPABASE_ANON_KEY,
-        'x-client-info': 'wakti-voice-translator'
-      };
-      
-    } catch (error) {
-      console.error(`🔐 Authentication attempt ${attempt} failed:`, error);
-      lastError = error as Error;
-      
-      if (attempt < maxRetries) {
-        // Wait a bit before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
-    }
-  }
-  
-  // All attempts failed
-  console.error('🔐 All authentication attempts failed');
-  throw lastError || new Error('Authentication failed after all retry attempts');
-};
 
 export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
   const { user } = useAuth();
   const { language } = useTheme();
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   
-  const {
-    userQuota,
-    isLoadingQuota,
-    quotaError,
-    incrementTranslationCount,
-    remainingFreeTranslations,
-    isAtSoftLimit,
-    isAtHardLimit,
-    canTranslate,
-    MAX_DAILY_TRANSLATIONS
-  } = useQuotaManagement(language);
-
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -266,14 +158,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     console.log('🎤 Language selection changed to:', selectedLanguage);
     setTranslatedText('');
     setProcessingError(null);
-    
-    const currentLangCache: CachedAudio = {};
-    Object.entries(audioCache).forEach(([key, value]) => {
-      if (key.includes(`_${selectedLanguage}`)) {
-        currentLangCache[key] = value;
-      }
-    });
-    setAudioCache(currentLangCache);
   }, [selectedLanguage]);
 
   // Load data on mount
@@ -395,74 +279,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [language]);
 
-  // FIXED: Background audio pre-generation using direct fetch with improved error handling
-  const preGenerateAudio = useCallback(async (text: string) => {
-    const cacheKey = `${text}_${selectedLanguage}`;
-    
-    if (audioCache[cacheKey] || isGeneratingAudio) {
-      return;
-    }
-
-    try {
-      setIsGeneratingAudio(true);
-      console.log('🔊 Pre-generating audio for:', text.substring(0, 30) + '...');
-
-      const headers = await getAuthenticatedHeaders();
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator-tts`, {
-        method: 'POST',
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: text,
-          voice: 'alloy'
-        })
-      });
-
-      if (!response.ok) {
-        console.log('🔊 Background audio pre-generation failed (non-critical):', response.status);
-        return;
-      }
-
-      const data = await response.json();
-      if (data?.audioContent) {
-        const newCache = { 
-          ...audioCache, 
-          [cacheKey]: {
-            data: data.audioContent,
-            timestamp: Date.now(),
-            size: data.size || 0
-          }
-        };
-        setAudioCache(newCache);
-        saveAudioCache(newCache);
-        console.log('🔊 Audio pre-generated and cached successfully');
-      }
-    } catch (error) {
-      console.log('🔊 Background audio pre-generation failed (non-critical):', error);
-    } finally {
-      setIsGeneratingAudio(false);
-    }
-  }, [selectedLanguage, audioCache, saveAudioCache, isGeneratingAudio]);
-
   const startRecording = useCallback(async () => {
     console.log('🎤 Starting recording process...');
     setProcessingError(null);
     
-    if (!quotaError && !canTranslate) {
-      const errorMsg = language === 'ar' ? 'تم الوصول للحد اليومي' : 'Daily Limit Reached';
-      setProcessingError(errorMsg);
-      toast({
-        title: errorMsg,
-        description: language === 'ar' 
-          ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
-          : "You've reached your daily translation limit",
-        variant: 'destructive'
-      });
-      return;
-    }
-
     if (isOnCooldown) {
       const errorMsg = language === 'ar' ? 'يرجى الانتظار' : 'Please Wait';
       setProcessingError(errorMsg);
@@ -538,7 +358,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         variant: 'destructive'
       });
     }
-  }, [quotaError, canTranslate, isOnCooldown, language, selectedLanguage]);
+  }, [isOnCooldown, language, selectedLanguage]);
 
   const stopRecording = useCallback(() => {
     console.log('🎤 Stopping recording...');
@@ -554,7 +374,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
-  // IMPROVED: Enhanced error handling with better user feedback
+  // SIMPLIFIED: Process voice translation without complex quota checks
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
@@ -566,26 +386,20 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('targetLanguage', selectedLanguage);
 
-      console.log('🎤 Voice Translator: Sending FormData with audio blob via direct fetch');
+      console.log('🎤 Voice Translator: Sending FormData with audio blob');
 
-      const headers = await getAuthenticatedHeaders();
-      
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator`, {
-        method: 'POST',
-        headers: headers,
+      // SIMPLIFIED: Direct call with minimal auth
+      const { data, error } = await supabase.functions.invoke('voice-translator', {
         body: formData
       });
 
-      console.log('🎤 Voice Translator: Response status:', response.status);
+      console.log('🎤 Voice Translator: Response:', { data, error });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🎤 Voice Translator error:', errorText);
-        throw new Error(`Translation service error: ${response.status}`);
+      if (error) {
+        console.error('🎤 Voice Translator error:', error);
+        throw new Error(error.message || 'Translation service error');
       }
 
-      const data = await response.json();
-      
       if (!data?.translatedText) {
         throw new Error('No translation received from service');
       }
@@ -598,18 +412,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       
       let errorMessage: string;
       
-      if (error.message?.includes('Authentication') || error.message?.includes('session')) {
-        errorMessage = language === 'ar' 
-          ? 'مشكلة في المصادقة - يرجى إعادة تحديث الصفحة' 
-          : 'Authentication issue - please refresh the page';
-      } else if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
         errorMessage = language === 'ar'
           ? 'خطأ في الاتصال - تحقق من الاتصال بالإنترنت'
           : 'Connection error - check your internet connection';
-      } else if (error.message?.includes('Translation service error')) {
-        errorMessage = language === 'ar' 
-          ? 'خطأ مؤقت في خدمة الترجمة - يرجى المحاولة مرة أخرى' 
-          : 'Temporary translation service error - please try again';
       } else {
         errorMessage = language === 'ar' 
           ? 'فشل في ترجمة الصوت - يرجى المحاولة مرة أخرى' 
@@ -628,42 +434,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [selectedLanguage, language]);
 
-  // FIXED: Extract success handling to avoid code duplication
+  // SIMPLIFIED: Success handling without complex quota logic
   const handleSuccessfulTranslation = useCallback(async (data: any) => {
-    // Validate language match
-    if (data.targetLanguageCode && data.targetLanguageCode !== selectedLanguage) {
-      console.error('🎤 CRITICAL ERROR: Language mismatch!', {
-        requested: selectedLanguage,
-        received: data.targetLanguageCode
-      });
-      
-      toast({
-        title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
-        description: language === 'ar' 
-          ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${data.targetLanguage}` 
-          : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${data.targetLanguage}`,
-        variant: 'destructive'
-      });
-    }
-
-    console.log('📊 About to increment translation usage...');
-    const usageSuccess = await incrementTranslationCount();
-    console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
-    
-    if (!usageSuccess && !quotaError) {
-      console.warn('⚠️ Translation blocked due to quota limit');
-      const errorMsg = language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached';
-      setProcessingError(errorMsg);
-      toast({
-        title: errorMsg,
-        description: language === 'ar' 
-          ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
-          : 'You have reached your daily translation limit',
-        variant: 'destructive'
-      });
-      return;
-    }
-
     setTranslatedText(data.translatedText);
     
     const newTranslation: TranslationItem = {
@@ -686,14 +458,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         ? `تم إنجاز الترجمة إلى ${targetLangName} بنجاح` 
         : `Translation to ${targetLangName} completed successfully`,
     });
+  }, [selectedLanguage, language, addToHistory]);
 
-    // Background pre-generate audio immediately after translation
-    if (playbackEnabled) {
-      preGenerateAudio(data.translatedText);
-    }
-  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, preGenerateAudio]);
-
-  // IMPROVED: Enhanced TTS with better error handling
+  // SIMPLIFIED: TTS with basic error handling
   const playTranslatedText = useCallback(async (text: string) => {
     console.log('🔊 Play button clicked, text:', text);
     
@@ -716,29 +483,22 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
       
-      console.log(`🔊 Generating TTS for language: ${selectedLanguage}, voice: alloy`);
+      console.log(`🔊 Generating TTS for language: ${selectedLanguage}`);
       
-      const headers = await getAuthenticatedHeaders();
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/voice-translator-tts`, {
-        method: 'POST',
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json'
-        },
+      const { data, error } = await supabase.functions.invoke('voice-translator-tts', {
         body: JSON.stringify({
           text: text,
           voice: 'alloy'
         })
       });
 
-      if (!response.ok) {
-        console.error('🔊 TTS error:', response.status);
-        throw new Error(`TTS service error: ${response.status}`);
+      if (error) {
+        console.error('🔊 TTS error:', error);
+        throw new Error(error.message || 'TTS service error');
       }
 
-      const data = await response.json();
       if (data?.audioContent) {
-        console.log(`🔊 TTS generated successfully, size: ${data.size || 'unknown'} bytes`);
+        console.log(`🔊 TTS generated successfully`);
         
         const newCache = { 
           ...audioCache, 
@@ -759,19 +519,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('🔊 Error playing TTS:', error);
       
-      let errorMessage: string;
-      
-      if (error.message?.includes('Authentication') || error.message?.includes('session')) {
-        errorMessage = language === 'ar' ? 'مشكلة في المصادقة - يرجى إعادة تحديث الصفحة' : 'Authentication issue - please refresh the page';
-      } else if (error.message?.includes('TTS service error')) {
-        errorMessage = language === 'ar' ? 'خطأ مؤقت في خدمة الصوت - يرجى المحاولة مرة أخرى' : 'Temporary audio service error - please try again';
-      } else if (error.message?.includes('Rate limit')) {
-        errorMessage = language === 'ar' ? 'تم تجاوز الحد المسموح، حاول مرة أخرى' : 'Rate limit exceeded, please try again';
-      } else if (error.message?.includes('timeout')) {
-        errorMessage = language === 'ar' ? 'انتهت مهلة الاتصال، حاول مرة أخرى' : 'Request timeout, please try again';
-      } else {
-        errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Audio generation failed. Please try again.';
-      }
+      const errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Audio generation failed. Please try again.';
       
       toast({
         title: language === 'ar' ? 'خطأ في التشغيل' : 'Playback Error',
@@ -827,27 +575,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     return `${remainingTime}s`;
   }, []);
 
-  const handlePurchaseExtra = useCallback(async () => {
-    toast({
-      title: language === 'ar' ? 'استخدم قائمة الإضافات' : 'Use Extras Menu',
-      description: language === 'ar' ? 'يمكنك شراء الإضافات من القائمة الرئيسية' : 'You can purchase extras from the main menu',
-    });
-  }, [language]);
-
-  const showDailyResetInfo = !quotaError && (isAtSoftLimit || isAtHardLimit);
   const needsAudioUnlock = !audioUnlockAttempted && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-  if (isLoadingQuota) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -857,23 +585,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             <span>
               {language === 'ar' ? '🎤 مترجم الصوت' : '🎤 Voice Translator'}
             </span>
-            <div className="flex items-center gap-2 text-sm">
-              {quotaError ? (
-                <div className="text-orange-600 text-xs">
-                  {language === 'ar' ? 'خطأ في البيانات' : 'Data error'}
-                </div>
-              ) : (
-                <div className={cn(
-                  "font-medium",
-                  isAtHardLimit ? "text-red-600" : isAtSoftLimit ? "text-orange-600" : "text-muted-foreground"
-                )}>
-                  {remainingFreeTranslations}/{MAX_DAILY_TRANSLATIONS}
-                  {userQuota.extra_translations > 0 && (
-                    <span className="text-green-600"> + {userQuota.extra_translations} extra</span>
-                  )}
-                </div>
-              )}
-            </div>
           </DialogTitle>
         </DialogHeader>
 
@@ -904,56 +615,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
               <p className="text-sm text-red-600 dark:text-red-400">
                 {processingError}
               </p>
-            </div>
-          )}
-
-          {/* Quota error warning */}
-          {quotaError && (
-            <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
-              <p className="text-sm text-orange-600 dark:text-orange-400">
-                {language === 'ar' 
-                  ? 'تعذر تحميل بيانات الحصة، ولكن يمكنك المتابعة' 
-                  : 'Could not load quota data, but you can continue'
-                }
-              </p>
-            </div>
-          )}
-
-          {/* Limit warnings */}
-          {!quotaError && isAtHardLimit && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {language === 'ar' 
-                  ? 'لقد وصلت للحد الأقصى من الترجمات الشهرية.' 
-                  : "You've reached your monthly translation limit."
-                }
-              </p>
-              <Button size="sm" onClick={handlePurchaseExtra} className="ml-auto">
-                <Plus className="h-3 w-3 mr-2" />
-                {EXTRA_TRANSLATIONS_PRICE} QAR
-              </Button>
-            </div>
-          )}
-
-          {!quotaError && isAtSoftLimit && !isAtHardLimit && (
-            <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
-              <p className="text-sm text-orange-600 dark:text-orange-400">
-                {language === 'ar' 
-                  ? 'اقتربت من الحد الأقصى للترجمات الشهرية.' 
-                  : 'You\'re nearing your monthly limit.'
-                }
-              </p>
-            </div>
-          )}
-
-          {/* Monthly reset info - only show if needed */}
-          {showDailyResetInfo && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              {language === 'ar' ? 'الحصة المجانية تتجدد شهرياً' : 'Free quota resets monthly'}
             </div>
           )}
 
@@ -1054,7 +715,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
             <Button
               onClick={isRecording ? stopRecording : startRecording}
-              disabled={isProcessing || (!quotaError && !canTranslate)}
+              disabled={isProcessing}
               size="lg"
               className={cn(
                 "h-16 w-16 rounded-full transition-all duration-200",
@@ -1080,7 +741,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </p>
           </div>
 
-          {/* Translation Results with instant loading state */}
+          {/* Translation Results */}
           {translatedText && (
             <div className="space-y-3">
               <div className="p-4 bg-muted rounded-lg text-center relative">

@@ -11,7 +11,6 @@ const corsHeaders = {
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-// Enhanced language mapping with validation
 const LANGUAGE_MAPPING = {
   'en': { name: 'English', code: 'en' },
   'ar': { name: 'Arabic', code: 'ar' },
@@ -54,66 +53,26 @@ serve(async (req) => {
       );
     }
 
-    // Extract user ID from Authorization header
+    // SIMPLIFIED: Get user ID from auth header (minimal auth, no complex validation)
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      console.error('🎤 Voice Translator: No authorization header');
-      return new Response(
-        JSON.stringify({ error: "Authentication required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    let userId = null;
+    
+    if (authHeader) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseKey, {
+          global: { headers: { Authorization: authHeader } }
+        });
+
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
+      } catch (error) {
+        console.log('🎤 Voice Translator: Auth failed, continuing without user ID:', error);
+      }
     }
 
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    // Get user from token
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      console.error('🎤 Voice Translator: User authentication failed:', userError);
-      return new Response(
-        JSON.stringify({ error: "Authentication failed" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log('🎤 Voice Translator: Checking quota for user:', user.id);
-
-    // Check voice translation quota using the database function
-    const { data: quotaResult, error: quotaError } = await supabase
-      .rpc('increment_voice_translation_usage', { p_user_id: user.id });
-
-    if (quotaError) {
-      console.error('🎤 Voice Translator: Quota check error:', quotaError);
-      return new Response(
-        JSON.stringify({ error: "Failed to check quota" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Check if quota is exceeded
-    if (!quotaResult || !quotaResult[0]?.success) {
-      const currentQuota = quotaResult?.[0] || { translation_count: 10, extra_translations: 0 };
-      console.log('🎤 Voice Translator: Quota exceeded for user:', user.id);
-      return new Response(
-        JSON.stringify({ 
-          error: "Monthly voice translation quota exceeded",
-          quotaExceeded: true,
-          currentQuota: {
-            used: currentQuota.translation_count,
-            limit: 10,
-            extra: currentQuota.extra_translations
-          }
-        }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log('🎤 Voice Translator: Quota check passed, processing translation...');
+    console.log('🎤 Voice Translator: User ID:', userId || 'anonymous');
 
     const formData = await req.formData();
     const audioFile = formData.get('audioBlob') as File;
@@ -172,11 +131,10 @@ serve(async (req) => {
       );
     }
 
-    // Step 2: Enhanced translation with strict language validation
+    // Step 2: Translate using GPT
     const targetLanguageName = getLanguageName(targetLanguage);
     console.log('🎤 Voice Translator: Translating to', targetLanguageName, `(${targetLanguage})`);
 
-    // Enhanced system prompt with strict language enforcement
     const systemPrompt = `You are a professional translator. Your ONLY task is to translate the given text accurately into ${targetLanguageName}.
 
 CRITICAL REQUIREMENTS:
@@ -206,7 +164,7 @@ The target language is: ${targetLanguageName} (code: ${targetLanguage})`;
             content: `Translate this text to ${targetLanguageName}: "${originalText}"`
           }
         ],
-        temperature: 0.1, // Lower temperature for more consistent translations
+        temperature: 0.1,
         max_tokens: 1000
       }),
     });
@@ -224,15 +182,32 @@ The target language is: ${targetLanguageName} (code: ${targetLanguage})`;
     console.log('🎤 Voice Translator: Original:', originalText);
     console.log('🎤 Voice Translator: Translated to', targetLanguageName + ':', translatedText);
 
-    // Validate translation is not empty
     if (!translatedText || translatedText.length === 0) {
       throw new Error("Translation returned empty result");
     }
 
-    // Get updated quota information after successful usage
-    const quotaInfo = quotaResult[0];
-    const remainingQuota = Math.max(0, 10 - quotaInfo.translation_count);
+    // SIMPLIFIED: Just track basic usage if we have a user ID
+    if (userId) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        // Simple usage tracking - just log the usage
+        await supabase.from('ai_usage_logs').insert({
+          user_id: userId,
+          model_used: 'voice-translator',
+          has_browsing: false,
+          month_year: new Date().toISOString().substring(0, 7)
+        });
+        
+        console.log('🎤 Voice Translator: Usage logged for user:', userId);
+      } catch (error) {
+        console.log('🎤 Voice Translator: Usage logging failed (non-critical):', error);
+      }
+    }
 
+    // Return successful translation
     return new Response(
       JSON.stringify({ 
         originalText,
@@ -240,13 +215,7 @@ The target language is: ${targetLanguageName} (code: ${targetLanguage})`;
         sourceLanguage: 'auto-detected',
         targetLanguage: targetLanguageName,
         targetLanguageCode: targetLanguage,
-        quotaUsed: true,
-        currentQuota: {
-          used: quotaInfo.translation_count,
-          remaining: remainingQuota,
-          limit: 10,
-          extra: quotaInfo.extra_translations
-        }
+        success: true
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
