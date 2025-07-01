@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,6 +34,30 @@ interface CachedAudio {
     size: number;
   };
 }
+
+// FIXED: Safe base64 conversion that prevents stack overflow
+const safeArrayBufferToBase64 = (arrayBuffer: ArrayBuffer): string => {
+  console.log('🔧 Converting audio to base64, size:', arrayBuffer.byteLength, 'bytes');
+  
+  try {
+    const bytes = new Uint8Array(arrayBuffer);
+    const chunkSize = 32768; // 32KB chunks to prevent stack overflow
+    let result = '';
+    
+    // Process in chunks to avoid call stack overflow
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.slice(i, i + chunkSize);
+      const chunkString = String.fromCharCode.apply(null, Array.from(chunk));
+      result += btoa(chunkString);
+    }
+    
+    console.log('✅ Base64 conversion successful, length:', result.length);
+    return result;
+  } catch (error) {
+    console.error('❌ Base64 conversion failed:', error);
+    throw new Error('Failed to convert audio data - audio file too large or corrupted');
+  }
+};
 
 // Simplified audio manager
 class AudioManager {
@@ -167,6 +192,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [audioCache, setAudioCache] = useState<CachedAudio>({});
   const [audioUnlockAttempted, setAudioUnlockAttempted] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [processingError, setProcessingError] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -178,6 +204,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   useEffect(() => {
     console.log('🎤 Language selection changed to:', selectedLanguage);
     setTranslatedText('');
+    setProcessingError(null);
     
     const currentLangCache: CachedAudio = {};
     Object.entries(audioCache).forEach(([key, value]) => {
@@ -280,6 +307,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
   const selectFromHistory = useCallback((item: TranslationItem) => {
     setTranslatedText(item.translatedText);
+    setProcessingError(null);
   }, []);
 
   const getFirstWords = useCallback((text: string, wordCount: number = 3) => {
@@ -351,9 +379,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   }, [selectedLanguage, audioCache, saveAudioCache, isGeneratingAudio]);
 
   const startRecording = useCallback(async () => {
+    console.log('🎤 Starting recording process...');
+    setProcessingError(null);
+    
     if (!quotaError && !canTranslate) {
+      const errorMsg = language === 'ar' ? 'تم الوصول للحد اليومي' : 'Daily Limit Reached';
+      setProcessingError(errorMsg);
       toast({
-        title: language === 'ar' ? 'تم الوصول للحد اليومي' : 'Daily Limit Reached',
+        title: errorMsg,
         description: language === 'ar' 
           ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
           : "You've reached your daily translation limit",
@@ -363,8 +396,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
 
     if (isOnCooldown) {
+      const errorMsg = language === 'ar' ? 'يرجى الانتظار' : 'Please Wait';
+      setProcessingError(errorMsg);
       toast({
-        title: language === 'ar' ? 'يرجى الانتظار' : 'Please Wait',
+        title: errorMsg,
         description: language === 'ar' ? 'يرجى الانتظار قليلاً قبل الترجمة التالية' : 'Please wait a moment before the next translation.',
         variant: 'default'
       });
@@ -372,7 +407,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
 
     try {
-      console.log('🎤 Starting recording with target language:', selectedLanguage);
+      console.log('🎤 Requesting microphone permission...');
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
@@ -384,6 +419,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         }
       });
       
+      console.log('🎤 Microphone access granted, setting up recorder...');
+      
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
       });
@@ -394,23 +431,28 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setTranslatedText('');
 
       mediaRecorder.ondataavailable = (event) => {
+        console.log('🎤 Audio data received, size:', event.data.size);
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = async () => {
+        console.log('🎤 Recording stopped, processing audio...');
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        console.log('🎤 Audio blob created, size:', audioBlob.size, 'bytes');
         await processVoiceTranslation(audioBlob);
         stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start(100);
       setIsRecording(true);
+      console.log('🎤 Recording started successfully');
 
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => {
           if (prev >= MAX_RECORDING_TIME - 1) {
+            console.log('🎤 Max recording time reached, stopping...');
             stopRecording();
             return MAX_RECORDING_TIME;
           }
@@ -419,16 +461,19 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       }, 1000);
 
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error('❌ Error starting recording:', error);
+      const errorMsg = language === 'ar' ? 'فشل في بدء التسجيل' : 'Failed to start recording';
+      setProcessingError(errorMsg);
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في بدء التسجيل' : 'Failed to start recording',
+        description: errorMsg,
         variant: 'destructive'
       });
     }
   }, [quotaError, canTranslate, isOnCooldown, language, selectedLanguage]);
 
   const stopRecording = useCallback(() => {
+    console.log('🎤 Stopping recording...');
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -437,22 +482,28 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
       }
+      console.log('🎤 Recording stopped successfully');
     }
   }, [isRecording]);
 
-  // FIXED: Updated to use supabase.functions.invoke instead of direct fetch
+  // FIXED: Improved processVoiceTranslation with proper error handling and safe base64 conversion
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
+      setProcessingError(null);
       console.log('🎤 Processing translation with target language:', selectedLanguage);
+      console.log('🎤 Audio blob size:', audioBlob.size, 'bytes');
 
-      // Convert audio blob to base64 for the invoke method
+      // FIXED: Use safe base64 conversion to prevent stack overflow
       const arrayBuffer = await audioBlob.arrayBuffer();
-      const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      console.log('🎤 ArrayBuffer created, size:', arrayBuffer.byteLength, 'bytes');
+      
+      const base64Audio = safeArrayBufferToBase64(arrayBuffer);
+      console.log('🎤 Base64 conversion completed successfully');
 
       console.log('🎤 Voice Translator: Using supabase.functions.invoke for authentication');
 
-      // FIXED: Use supabase.functions.invoke instead of direct fetch for proper authentication
+      // FIXED: Use supabase.functions.invoke for proper authentication
       const { data, error } = await supabase.functions.invoke('voice-translator', {
         body: {
           audioData: base64Audio,
@@ -468,7 +519,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         
         // Handle authentication errors specifically
         if (error.message?.includes('session') || error.message?.includes('auth')) {
-          // Try to refresh session and retry once
           console.log('🎤 Attempting session refresh...');
           await supabase.auth.refreshSession();
           
@@ -484,7 +534,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             throw new Error(`Authentication failed: ${retryError.message}`);
           }
           
-          // Use retry data if successful
           finalData = retryData;
         } else {
           throw new Error(`Translation failed: ${error.message}`);
@@ -518,8 +567,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       
       if (!usageSuccess && !quotaError) {
         console.warn('⚠️ Translation blocked due to quota limit');
+        const errorMsg = language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached';
+        setProcessingError(errorMsg);
         toast({
-          title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
+          title: errorMsg,
           description: language === 'ar' 
             ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
             : 'You have reached your daily translation limit',
@@ -567,8 +618,17 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         errorMessage = language === 'ar' 
           ? 'انتهت صلاحية الجلسة - يرجى تسجيل الدخول مرة أخرى' 
           : 'Session expired - please log in again';
+      } else if (error.message?.includes('audio file too large')) {
+        errorMessage = language === 'ar'
+          ? 'ملف الصوت كبير جداً - حاول تسجيل أقصر'
+          : 'Audio file too large - try a shorter recording';
+      } else if (error.message?.includes('stack')) {
+        errorMessage = language === 'ar'
+          ? 'خطأ في معالجة الصوت - حاول مرة أخرى'
+          : 'Audio processing error - please try again';
       }
 
+      setProcessingError(errorMessage);
       toast({
         title: language === 'ar' ? 'خطأ في الترجمة' : 'Translation Error',
         description: errorMessage,
@@ -771,6 +831,16 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </div>
           )}
 
+          {/* Processing error display */}
+          {processingError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {processingError}
+              </p>
+            </div>
+          )}
+
           {/* Quota error warning */}
           {quotaError && (
             <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
@@ -903,6 +973,15 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                 <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                 <span className="text-sm font-medium">
                   {language === 'ar' ? 'تسجيل' : 'Recording'} {formatRecordingTime(recordingTime)}
+                </span>
+              </div>
+            )}
+
+            {isProcessing && (
+              <div className="flex items-center justify-center gap-2 text-blue-600">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm font-medium">
+                  {language === 'ar' ? 'معالجة الترجمة...' : 'Processing translation...'}
                 </span>
               </div>
             )}
