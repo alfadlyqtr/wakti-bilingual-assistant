@@ -29,6 +29,20 @@ const arabicSystemPrompt = `أنت وقتي AI، مساعد شخصي ذكي وم
 const englishVisionPromptTemplate = `Analyze the image and provide a detailed description. Identify any objects, people, or scenes present. Extract any text or information that can be read from the image.`;
 const arabicVisionPromptTemplate = `حلل الصورة وقدم وصفًا تفصيليًا. حدد أي كائنات أو أشخاص أو مشاهد موجودة. استخرج أي نص أو معلومات يمكن قراءتها من الصورة.`;
 
+// FIXED: Proper base64 conversion utility without recursion
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 8192; // Process in 8KB chunks to avoid stack overflow
+  
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.slice(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  
+  return btoa(binary);
+}
+
 // FIXED: Proper image compression utility function without recursion
 async function compressImageForVision(imageUrl: string): Promise<string> {
   try {
@@ -41,19 +55,17 @@ async function compressImageForVision(imageUrl: string): Promise<string> {
     }
     
     const arrayBuffer = await response.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-    
-    // Convert to base64
-    const base64 = btoa(String.fromCharCode(...uint8Array));
     
     // Check size limits (OpenAI Vision API has ~20MB limit, but we'll be conservative)
     const maxSizeBytes = 10 * 1024 * 1024; // 10MB limit
     if (arrayBuffer.byteLength > maxSizeBytes) {
-      console.log('🔍 COMPRESSION: Image too large, applying simple truncation');
-      // Simple approach: truncate the base64 string (not ideal but prevents crashes)
-      const truncatedLength = Math.floor(maxSizeBytes * 0.75); // Account for base64 overhead
-      return base64.substring(0, truncatedLength);
+      console.log('🔍 COMPRESSION: Image too large, needs actual resizing');
+      // For now, reject images that are too large
+      throw new Error('Image too large for processing');
     }
+    
+    // FIXED: Use proper chunk-based base64 conversion
+    const base64 = arrayBufferToBase64(arrayBuffer);
     
     console.log('🔍 COMPRESSION: Image compression completed successfully');
     return base64;
