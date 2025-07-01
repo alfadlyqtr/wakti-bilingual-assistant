@@ -52,7 +52,7 @@ const WaktiAIV2 = () => {
   // ENHANCED: Personal touch state
   const [personalTouch, setPersonalTouch] = useState<any>(null);
   
-  const scrollAreaRef = useRef<any>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
 
@@ -649,7 +649,10 @@ const WaktiAIV2 = () => {
           }}
         />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[140px]">
+      <div 
+        ref={scrollAreaRef}
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[140px]"
+      >
         <ChatMessages
           sessionMessages={allMessages}
           isLoading={isLoading}

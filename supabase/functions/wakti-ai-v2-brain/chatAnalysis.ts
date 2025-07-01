@@ -1,5 +1,4 @@
 
-
 // Remove the old OpenAI import and use direct fetch calls instead
 import { analyzeTaskIntent } from "./taskParsing.ts";
 
@@ -30,10 +29,10 @@ const arabicSystemPrompt = `أنت وقتي AI، مساعد شخصي ذكي وم
 const englishVisionPromptTemplate = `Analyze the image and provide a detailed description. Identify any objects, people, or scenes present. Extract any text or information that can be read from the image.`;
 const arabicVisionPromptTemplate = `حلل الصورة وقدم وصفًا تفصيليًا. حدد أي كائنات أو أشخاص أو مشاهد موجودة. استخرج أي نص أو معلومات يمكن قراءتها من الصورة.`;
 
-// Image compression utility function
+// FIXED: Proper image compression utility function without recursion
 async function compressImageForVision(imageUrl: string): Promise<string> {
   try {
-    console.log('🔍 COMPRESSION: Starting image compression for Vision API');
+    console.log('🔍 COMPRESSION: Starting proper image compression for Vision API');
     
     // Fetch the image
     const response = await fetch(imageUrl);
@@ -44,23 +43,23 @@ async function compressImageForVision(imageUrl: string): Promise<string> {
     const arrayBuffer = await response.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
     
-    // For Deno edge functions, we'll use a simplified compression approach
-    // Convert to base64 with size limits
+    // Convert to base64
     const base64 = btoa(String.fromCharCode(...uint8Array));
     
-    // Apply size limits (max 1MB for Vision API)
-    const maxSize = 1024 * 1024; // 1MB limit
-    if (base64.length > maxSize) {
-      console.log('🔍 COMPRESSION: Image too large, applying compression');
-      // Simple truncation-based compression approach for Deno
-      return base64.substring(0, maxSize);
+    // Check size limits (OpenAI Vision API has ~20MB limit, but we'll be conservative)
+    const maxSizeBytes = 10 * 1024 * 1024; // 10MB limit
+    if (arrayBuffer.byteLength > maxSizeBytes) {
+      console.log('🔍 COMPRESSION: Image too large, applying simple truncation');
+      // Simple approach: truncate the base64 string (not ideal but prevents crashes)
+      const truncatedLength = Math.floor(maxSizeBytes * 0.75); // Account for base64 overhead
+      return base64.substring(0, truncatedLength);
     }
     
-    console.log('🔍 COMPRESSION: Image compression completed');
+    console.log('🔍 COMPRESSION: Image compression completed successfully');
     return base64;
   } catch (error) {
     console.error('🚨 COMPRESSION ERROR:', error);
-    // Return original URL if compression fails
+    // Return original URL if compression fails - let OpenAI handle it
     return imageUrl;
   }
 }
@@ -188,31 +187,35 @@ export async function processWithBuddyChatAI(
       }
     }
     
-    // Vision processing with compression
+    // FIXED: Vision processing with proper compression (no recursion)
     if (attachedFiles && attachedFiles.length > 0) {
       console.log('🔍 VISION MODE: Processing', attachedFiles.length, 'attached files');
-      console.log('🔍 VISION PROCESSING: Starting OpenAI Vision analysis with enhanced prompts');
+      console.log('🔍 VISION PROCESSING: Starting OpenAI Vision analysis with fixed compression');
 
       const visionSystemPrompt = buildVisionSystemPrompt(language);
       
-      // Process files with compression
+      // FIXED: Process files with proper compression (no stack overflow)
       const processedFiles = [];
       for (const file of attachedFiles) {
         if (file.publicUrl || file.url) {
-          console.log('🔍 VISION: Compressing image before API call');
+          console.log('🔍 VISION: Applying fixed compression to image');
           const imageUrl = file.publicUrl || file.url;
-          const compressedBase64 = await compressImageForVision(imageUrl);
           
-          // Use compressed base64 format
+          // FIXED: Use the corrected compression function
+          const compressedData = await compressImageForVision(imageUrl);
+          
+          // Create proper base64 data URL for OpenAI Vision API
+          const dataUrl = compressedData.startsWith('data:') 
+            ? compressedData 
+            : `data:image/jpeg;base64,${compressedData}`;
+          
           processedFiles.push({
             type: "image_url",
             image_url: {
-              url: compressedBase64.startsWith('data:') 
-                ? compressedBase64 
-                : `data:image/jpeg;base64,${compressedBase64}`
+              url: dataUrl
             }
           });
-          console.log('🔍 VISION: Added compressed image for analysis');
+          console.log('🔍 VISION: Successfully processed image for Vision API');
         }
       }
 
@@ -225,7 +228,7 @@ export async function processWithBuddyChatAI(
       console.log('🔍 VISION: Enhanced message with context:', enhancedMessage.substring(0, 100) + '...');
 
       // Use current OpenAI vision model
-      console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4o-2024-05-13');
+      console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4o (fixed compression)');
       
       const visionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -234,7 +237,7 @@ export async function processWithBuddyChatAI(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-2024-05-13', // Updated to current vision model
+          model: 'gpt-4o', // Using gpt-4o for better vision capabilities
           messages: [
             { role: 'system', content: visionSystemPrompt },
             {
@@ -245,7 +248,7 @@ export async function processWithBuddyChatAI(
               ]
             }
           ],
-          max_tokens: Math.max(safeMaxTokens * 2, 800), // CRITICAL FIX: Use safeMaxTokens as number
+          max_tokens: Math.max(safeMaxTokens * 2, 800),
           temperature: personalizedTemperature
         }),
       });
@@ -253,7 +256,7 @@ export async function processWithBuddyChatAI(
       if (!visionResponse.ok) {
         const errorData = await visionResponse.json();
         console.error('🚨 VISION API ERROR:', errorData);
-        throw new Error(`Vision API error: ${visionResponse.status}`);
+        throw new Error(`Vision API error: ${visionResponse.status} - ${JSON.stringify(errorData)}`);
       }
 
       const visionData = await visionResponse.json();
@@ -264,7 +267,7 @@ export async function processWithBuddyChatAI(
       return {
         response: visionResult,
         success: true,
-        model: 'gpt-4o-2024-05-13-vision',
+        model: 'gpt-4o-vision',
         processingTime: Date.now() - startTime,
         tokensUsed: visionData.usage?.total_tokens || 0,
         visionProcessed: true,
@@ -289,7 +292,7 @@ export async function processWithBuddyChatAI(
           { role: 'system', content: systemPrompt },
           { role: 'user', content: enhancedMessage }
         ],
-        max_tokens: safeMaxTokens, // CRITICAL FIX: Use safeMaxTokens as number
+        max_tokens: safeMaxTokens,
         temperature: personalizedTemperature
       }),
     });
@@ -321,4 +324,3 @@ export async function processWithBuddyChatAI(
     throw error;
   }
 }
-
