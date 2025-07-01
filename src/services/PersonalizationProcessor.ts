@@ -23,6 +23,12 @@ export class PersonalizationProcessor {
     originalResponse: string,
     options: ProcessingOptions
   ): string {
+    // CRITICAL FIX: Type validation to prevent crashes
+    if (!originalResponse || typeof originalResponse !== 'string') {
+      console.warn('🚨 PERSONALIZATION PROCESSOR: Invalid response type received');
+      return typeof originalResponse === 'string' ? originalResponse : 'Sorry, there was an error processing your request.';
+    }
+
     if (!options.personalTouch) {
       return originalResponse;
     }
@@ -77,6 +83,11 @@ export class PersonalizationProcessor {
     instruction: string,
     language: string
   ): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     // If instruction mentions "steps" or "break down", enforce step format
     if (instruction.toLowerCase().includes('step') || instruction.toLowerCase().includes('break')) {
       const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 10);
@@ -114,6 +125,11 @@ export class PersonalizationProcessor {
     personalTouch: PersonalTouchData,
     language: string
   ): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     let finalResponse = response;
 
     // AGGRESSIVE TONE CHECK

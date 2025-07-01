@@ -1,3 +1,4 @@
+
 // Remove the old OpenAI import and use direct fetch calls instead
 import { analyzeTaskIntent } from "./taskParsing.ts";
 
@@ -91,11 +92,20 @@ export async function processWithBuddyChatAI(
     
     const startTime = Date.now();
     
-    // CRITICAL FIX: Ensure maxTokens is always a number
-    const safeMaxTokens = typeof maxTokens === 'string' ? parseInt(maxTokens, 10) : maxTokens;
-    const validMaxTokens = isNaN(safeMaxTokens) ? 500 : safeMaxTokens;
+    // CRITICAL FIX: Ensure maxTokens is ALWAYS a number
+    let safeMaxTokens: number;
+    if (typeof maxTokens === 'string') {
+      safeMaxTokens = parseInt(maxTokens, 10);
+      if (isNaN(safeMaxTokens)) {
+        safeMaxTokens = 500; // Default fallback
+      }
+    } else if (typeof maxTokens === 'number') {
+      safeMaxTokens = maxTokens;
+    } else {
+      safeMaxTokens = 500; // Default fallback
+    }
     
-    console.log(`🔧 TOKEN SAFETY: Original: ${maxTokens} (${typeof maxTokens}) -> Safe: ${validMaxTokens} (${typeof validMaxTokens})`);
+    console.log(`🔧 TOKEN SAFETY: Original: ${maxTokens} (${typeof maxTokens}) -> Safe: ${safeMaxTokens} (${typeof safeMaxTokens})`);
     
     // Task detection (non-blocking)
     let isTask = false;
@@ -227,7 +237,7 @@ export async function processWithBuddyChatAI(
               ]
             }
           ],
-          max_tokens: Math.max(validMaxTokens * 2, 800), // CRITICAL FIX: Use validMaxTokens as number
+          max_tokens: Math.max(safeMaxTokens * 2, 800), // CRITICAL FIX: Use safeMaxTokens as number
           temperature: personalizedTemperature
         }),
       });
@@ -271,7 +281,7 @@ export async function processWithBuddyChatAI(
           { role: 'system', content: systemPrompt },
           { role: 'user', content: enhancedMessage }
         ],
-        max_tokens: validMaxTokens, // CRITICAL FIX: Use validMaxTokens as number
+        max_tokens: safeMaxTokens, // CRITICAL FIX: Use safeMaxTokens as number
         temperature: personalizedTemperature
       }),
     });

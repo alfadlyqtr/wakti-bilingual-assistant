@@ -20,6 +20,12 @@ export class PersonalizationEnforcer {
     originalResponse: string,
     options: EnforcementOptions
   ): string {
+    // CRITICAL FIX: Type validation to prevent crashes
+    if (!originalResponse || typeof originalResponse !== 'string') {
+      console.warn('🚨 PERSONALIZATION: Invalid response type, returning fallback');
+      return typeof originalResponse === 'string' ? originalResponse : 'Sorry, there was an error processing your request.';
+    }
+
     if (!options.personalTouch) {
       return originalResponse;
     }
@@ -78,6 +84,11 @@ export class PersonalizationEnforcer {
     style: string,
     language: string
   ): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     switch (style) {
       case 'short answers':
         return this.enforceShortAnswers(response, language);
@@ -97,6 +108,11 @@ export class PersonalizationEnforcer {
    * AGGRESSIVE: Enforce short answer preference
    */
   private static enforceShortAnswers(response: string, language: string): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     // If response is already short (< 100 chars), keep it
     if (response.length <= 100) {
       return response;
@@ -120,6 +136,11 @@ export class PersonalizationEnforcer {
    * AGGRESSIVE: Enforce bullet points format
    */
   private static enforceBulletPoints(response: string, language: string): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     // If already has bullet points, keep it
     if (response.includes('•') || response.includes('-') || response.includes('*')) {
       return response;
@@ -140,6 +161,11 @@ export class PersonalizationEnforcer {
    * AGGRESSIVE: Enforce step-by-step format
    */
   private static enforceStepByStep(response: string, language: string): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     // If already has step numbers, keep it
     if (/\d+\.\s/.test(response) || response.includes('Step') || response.includes('خطوة')) {
       return response;
@@ -166,6 +192,11 @@ export class PersonalizationEnforcer {
     tone: string,
     language: string
   ): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     switch (tone) {
       case 'funny':
         return this.enforceFunnyTone(response, language);
@@ -184,6 +215,11 @@ export class PersonalizationEnforcer {
    * AGGRESSIVE: Enforce funny tone
    */
   private static enforceFunnyTone(response: string, language: string): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     // Check if response already has funny elements
     const hasFunnyElements = /[😄😆🤪🎉😊🙃]|haha|ههه|funny|joke|lol/i.test(response);
     
@@ -212,6 +248,11 @@ export class PersonalizationEnforcer {
    * AGGRESSIVE: Enforce casual tone
    */
   private static enforceCasualTone(response: string, language: string): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     // Check if response is already casual
     const hasCasualElements = /[😊👍✨💫🙂]|awesome|cool|nice|يلا|طيب|حلو/i.test(response);
     
@@ -246,6 +287,11 @@ export class PersonalizationEnforcer {
    * AGGRESSIVE: Enforce encouraging tone
    */
   private static enforceEncouragingTone(response: string, language: string): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     const hasEncouragingElements = /[💪🌟✨🚀👏🎯]|you got|amazing|great|excellent|تستطيع|رائع|ممتاز/i.test(response);
     
     if (hasEncouragingElements) {
@@ -279,6 +325,11 @@ export class PersonalizationEnforcer {
    * AGGRESSIVE: Enforce serious tone
    */
   private static enforceSeriousTone(response: string, language: string): string {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string') {
+      return response;
+    }
+
     // AGGRESSIVE: Remove ALL casual elements and emojis
     let seriousResponse = response
       .replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '')
@@ -309,7 +360,8 @@ export class PersonalizationEnforcer {
     nickname: string,
     language: string
   ): string {
-    if (!nickname || nickname.trim().length === 0) {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string' || !nickname || nickname.trim().length === 0) {
       return response;
     }
 
@@ -370,7 +422,8 @@ export class PersonalizationEnforcer {
     aiNickname: string | undefined,
     language: string
   ): string {
-    if (!aiNickname || aiNickname.trim().length === 0) {
+    // CRITICAL FIX: Type validation
+    if (!response || typeof response !== 'string' || !aiNickname || aiNickname.trim().length === 0) {
       return response;
     }
 
