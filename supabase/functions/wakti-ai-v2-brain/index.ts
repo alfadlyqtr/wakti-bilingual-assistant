@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -188,8 +189,8 @@ serve(async (req) => {
             browsingData = searchResult.data;
             const context = searchResult.context.substring(0, aggressiveOptimization ? 300 : 800);
             
-            // FIXED: Use correct parameter order
-            response = await processWithBuddyChatAI(
+            // CRITICAL FIX: Extract response field from result object
+            const chatResult = await processWithBuddyChatAI(
               `${message}\n\nSearch Context: ${context}`,
               userId,
               conversationId,
@@ -201,9 +202,10 @@ serve(async (req) => {
               Math.min(maxTokens, 300),
               activeTrigger
             );
+            response = chatResult.response; // Extract the response field
           } else {
-            // FIXED: Use correct parameter order
-            response = await processWithBuddyChatAI(
+            // CRITICAL FIX: Extract response field from result object
+            const chatResult = await processWithBuddyChatAI(
               message,
               userId,
               conversationId,
@@ -215,10 +217,11 @@ serve(async (req) => {
               Math.min(maxTokens, 200),
               activeTrigger
             );
+            response = chatResult.response; // Extract the response field
           }
         } else {
-          // FIXED: Use correct parameter order
-          response = await processWithBuddyChatAI(
+          // CRITICAL FIX: Extract response field from result object
+          const chatResult = await processWithBuddyChatAI(
             message,
             userId,
             conversationId,
@@ -230,6 +233,7 @@ serve(async (req) => {
             Math.min(maxTokens, 150),
             'chat'
           );
+          response = chatResult.response; // Extract the response field
         }
         break;
 
@@ -278,8 +282,8 @@ serve(async (req) => {
         
         console.log(`🚀 ULTRA-FAST CHAT: Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
         
-        // FIXED: Use correct parameter order and remove invalid parameters
-        response = await processWithBuddyChatAI(
+        // CRITICAL FIX: Extract response field from result object
+        const chatResult = await processWithBuddyChatAI(
           message,
           userId,
           conversationId,
@@ -291,6 +295,7 @@ serve(async (req) => {
           maxTokens,
           activeTrigger
         );
+        response = chatResult.response; // Extract the response field
         break;
     }
 
