@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Play, Download, Loader2, Volume2, Mic, Info, Languages, MicIcon } from 'lucide-react';
+import { Play, Download, Loader2, Volume2, Mic, Info, Languages, MicIcon, ArrowRight, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -98,14 +99,13 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showStyleDetails, setShowStyleDetails] = useState(false);
+  const [activeTab, setActiveTab] = useState('tts');
 
   // Translation states
   const [translationText, setTranslationText] = useState('');
   const [targetLanguage, setTargetLanguage] = useState('ar');
   const [translatedText, setTranslatedText] = useState('');
-  const [translationAudioUrl, setTranslationAudioUrl] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(true);
 
   // Use the extended quota management hook to get voice quota data
   const { 
@@ -168,7 +168,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   };
 
   const canGenerate = text.trim().length > 0 && selectedVoiceId && text.length <= totalAvailableCharacters && canUseVoice;
-  const canTranslate = translationText.trim().length > 0 && selectedVoiceId && translationText.length <= totalAvailableCharacters && canUseVoice;
+  const canTranslate = translationText.trim().length > 0;
 
   const generateSpeech = async () => {
     if (!canGenerate) return;
@@ -277,19 +277,16 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
-  const translateAndSpeak = async () => {
+  const translateText = async () => {
     if (!canTranslate) return;
 
     setIsTranslating(true);
     setTranslatedText('');
-    setTranslationAudioUrl(null);
 
     try {
       console.log('🌐 === Translation Request ===');
       console.log('🌐 Text:', translationText);
       console.log('🌐 Target Language:', targetLanguage);
-      console.log('🌐 Voice ID:', selectedVoiceId);
-      console.log('🌐 Auto Speak:', autoSpeak);
 
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
@@ -304,9 +301,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         },
         body: JSON.stringify({
           original_text: translationText.trim(),
-          target_language: targetLanguage,
-          voice_id: selectedVoiceId,
-          auto_speak: autoSpeak
+          target_language: targetLanguage
         })
       });
 
@@ -326,24 +321,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       }
 
       setTranslatedText(result.translated_text);
-
-      // Create audio blob from base64
-      if (result.audio_content) {
-        const binaryString = atob(result.audio_content);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        setTranslationAudioUrl(audioUrl);
-
-        console.log('🌐 Audio generated, size:', result.audio_size);
-      }
-
-      // Reload voice quota after successful translation
-      await loadUserVoiceQuota();
-
       toast.success(language === 'ar' ? 'تمت الترجمة بنجاح!' : 'Translation completed successfully!');
 
     } catch (error: any) {
@@ -351,6 +328,14 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       toast.error(error.message || (language === 'ar' ? 'فشل في الترجمة' : 'Translation failed'));
     } finally {
       setIsTranslating(false);
+    }
+  };
+
+  const useTranslatedTextInTTS = () => {
+    if (translatedText) {
+      setText(translatedText);
+      setActiveTab('tts');
+      toast.success(language === 'ar' ? 'تم نسخ النص المترجم إلى التبويب الصوتي' : 'Translated text copied to Text-to-Speech tab');
     }
   };
 
@@ -458,7 +443,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       </div>
 
       {/* Tabs for TTS and Translation */}
-      <Tabs defaultValue="tts" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="tts" className="flex items-center gap-2">
             <Volume2 className="h-4 w-4" />
@@ -466,7 +451,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </TabsTrigger>
           <TabsTrigger value="translate" className="flex items-center gap-2">
             <Languages className="h-4 w-4" />
-            {language === 'ar' ? 'الترجمة الصوتية' : 'Voice Translator'}
+            {language === 'ar' ? 'مترجم' : 'Translator'}
           </TabsTrigger>
         </TabsList>
 
@@ -617,18 +602,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             </Select>
           </div>
 
-          {/* Auto Speak Toggle */}
-          <div className="flex items-center space-x-2">
-            <Switch 
-              id="auto-speak" 
-              checked={autoSpeak} 
-              onCheckedChange={setAutoSpeak}
-            />
-            <Label htmlFor="auto-speak" className="text-sm font-medium">
-              {language === 'ar' ? 'تشغيل تلقائي للترجمة' : 'Auto-play translation'}
-            </Label>
-          </div>
-
           {/* Text Input with Speech Recognition */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -659,11 +632,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
                 : 'Type the text you want to translate... or use voice input'
               }
               className="min-h-24 resize-none"
-              maxLength={totalAvailableCharacters}
               dir="auto"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{translationText.length} / {totalAvailableCharacters}</span>
+              <span>{translationText.length} {language === 'ar' ? 'حرف' : 'characters'}</span>
               {speechError && (
                 <span className="text-red-500">{speechError}</span>
               )}
@@ -672,7 +644,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
 
           {/* Translate Button */}
           <Button
-            onClick={translateAndSpeak}
+            onClick={translateText}
             disabled={!canTranslate || isTranslating}
             className="w-full"
           >
@@ -684,7 +656,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             ) : (
               <>
                 <Languages className="h-4 w-4 mr-2" />
-                {language === 'ar' ? 'ترجم واسمع' : 'Translate & Speak'}
+                {language === 'ar' ? 'ترجم' : 'Translate'}
               </>
             )}
           </Button>
@@ -707,21 +679,15 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
                 </div>
                 <div className="text-sm font-medium mb-3" dir="auto">{translatedText}</div>
                 
-                {/* Audio Player for Translation */}
-                {translationAudioUrl && (
-                  <div className="space-y-3">
-                    <EnhancedAudioControls
-                      audioUrl={translationAudioUrl}
-                      labels={{
-                        play: language === 'ar' ? 'تشغيل' : 'Play',
-                        pause: language === 'ar' ? 'إيقاف مؤقت' : 'Pause',
-                        rewind: language === 'ar' ? 'إرجاع' : 'Rewind',
-                        stop: language === 'ar' ? 'إيقاف' : 'Stop',
-                        error: language === 'ar' ? 'خطأ في تشغيل الصوت' : 'Error playing audio'
-                      }}
-                    />
-                  </div>
-                )}
+                {/* Use in TTS Button */}
+                <Button
+                  onClick={useTranslatedTextInTTS}
+                  className="w-full"
+                  variant="outline"
+                >
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  {language === 'ar' ? 'استخدم في تحويل النص إلى صوت' : 'Use in Text-to-Speech'}
+                </Button>
               </div>
             </div>
           )}
