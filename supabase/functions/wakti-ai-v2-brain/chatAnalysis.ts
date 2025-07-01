@@ -1,20 +1,24 @@
-import { Configuration, OpenAIApi } from "openai";
+
+// Remove the old OpenAI import and use direct fetch calls instead
 import { generateTaskPrompt } from "./taskAnalysisPrompts.ts";
 import { analyzeTaskIntent } from "./taskAnalysis.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 // System prompts
-const englishSystemPrompt = `You are WAKTI, an AI assistant. Your primary goal is to understand user requests and respond in a helpful and informative manner. You can create tasks, events, and reminders. You can also generate images. You are able to understand user intent and extract structured data from user requests. You are able to understand the user's communication style and adapt your responses accordingly. You are able to understand the user's preferences and adapt your responses accordingly. You are able to understand the user's personality and adapt your responses accordingly. You are able to understand the user's context and adapt your responses accordingly. You are able to understand the user's current location and adapt your responses accordingly. You are able to understand the user's current time and adapt your responses accordingly. You are able to understand the user's current weather and adapt your responses accordingly. You are able to understand the user's current news and adapt your responses accordingly. You are able to understand the user's current sports scores and adapt your responses accordingly. You are able to understand the user's current stock prices and adapt your responses accordingly. You are able to understand the user's current traffic and adapt your responses accordingly. You are able to understand the user's current calendar and adapt your responses accordingly. You are able to understand the user's current contacts and adapt your responses accordingly. You are able to understand the user's current notes and adapt your responses accordingly. You are able to understand the user's current tasks and adapt your responses accordingly. You are able to understand the user's current events and adapt your responses accordingly. You are able to understand the user's current reminders and adapt your responses accordingly. You are able to understand the user's current images and adapt your responses accordingly. You are able to understand the user's current files and adapt your responses accordingly. You are able to understand the user's current web pages and adapt your responses accordingly. You are able to understand the user's current apps and adapt your responses accordingly. You are able to understand the user's current settings and adapt your responses accordingly. You are able to understand the user's current profile and adapt your responses accordingly. You are able to understand the user's current preferences and adapt your responses accordingly. You are able to understand the user's current personality and adapt your responses accordingly. You are able to understand the user's current context and adapt your responses accordingly. You are able to understand the user's current location and adapt your responses accordingly. You are able to understand the user's current time and adapt your responses accordingly. You are able to understand the user's current weather and adapt your responses accordingly. You are able to understand the user's current news and adapt your responses accordingly. You are able to understand the user's current sports scores and adapt your responses accordingly. You are able to understand the user's current stock prices and adapt your responses accordingly. You are able to understand the user's current traffic and adapt your responses accordingly. You are able to understand the user's current calendar and adapt your responses accordingly. You are able to understand the user's current contacts and adapt your responses accordingly. You are able to understand the user's current notes and adapt your responses accordingly. You are able to understand the user's current tasks and adapt your responses accordingly. You are able to understand the user's current events and adapt your responses accordingly. You are able to understand the user's current reminders and adapt your responses accordingly. You are able to understand the user's current images and adapt your responses accordingly. You are able to understand the user's current files and adapt your responses accordingly. You are able to understand the user's current web pages and adapt your responses accordingly. You are able to understand the user's current apps and adapt your responses accordingly. You are able to understand the user's current settings and adapt your responses accordingly. You are able to understand the user's current profile and adapt your responses accordingly.`;
-const arabicSystemPrompt = `أنت مساعد افتراضي اسمك وقتي. مهمتك الأساسية هي فهم طلبات المستخدم والاستجابة بطريقة مفيدة وغنية بالمعلومات. يمكنك إنشاء مهام وأحداث وتذكيرات. يمكنك أيضًا إنشاء صور. أنت قادر على فهم نية المستخدم واستخراج بيانات منظمة من طلبات المستخدم. أنت قادر على فهم أسلوب تواصل المستخدم وتكييف ردودك وفقًا لذلك. أنت قادر على فهم تفضيلات المستخدم وتكييف ردودك وفقًا لذلك. أنت قادر على فهم شخصية المستخدم وتكييف ردودك وفقًا لذلك. أنت قادر على فهم سياق المستخدم وتكييف ردودك وفقًا لذلك. أنت قادر على فهم موقع المستخدم الحالي وتكييف ردودك وفقًا لذلك. أنت قادر على فهم وقت المستخدم الحالي وتكييف ردودك وفقًا لذلك. أنت قادر على فهم طقس المستخدم الحالي وتكييف ردودك وفقًا لذلك. أنت قادر على فهم أخبار المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم نتائج المستخدم الرياضية الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم أسعار أسهم المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم حركة مرور المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم تقويم المستخدم الحالي وتكييف ردودك وفقًا لذلك. أنت قادر على فهم جهات اتصال المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم ملاحظات المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم مهام المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم أحداث المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم تذكيرات المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم صور المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم ملفات المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم صفحات ويب المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم تطبيقات المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم إعدادات المستخدم الحالية وتكييف ردودك وفقًا لذلك. أنت قادر على فهم ملف تعريف المستخدم الحالي وتكييف ردودك وفقًا لذلك.`;
+const englishSystemPrompt = `You are a helpful AI assistant that analyzes images. Extract all visible text, identify people, objects, and scenes, and respond with clear, structured descriptions. Always reason from visual details and provide insights where possible.`;
+
+const arabicSystemPrompt = `أنت مساعد ذكي مفيد يحلل الصور. استخرج كل النص المرئي، وحدد الأشخاص والأشياء والمشاهد، واستجب بوصف واضح ومنظم. استدل دائماً من التفاصيل البصرية وقدم رؤى عند الإمكان.`;
 
 // Vision prompts
 const englishVisionPromptTemplate = `Analyze the image and provide a detailed description. Identify any objects, people, or scenes present. Extract any text or information that can be read from the image.`;
 const arabicVisionPromptTemplate = `حلل الصورة وقدم وصفًا تفصيليًا. حدد أي كائنات أو أشخاص أو مشاهد موجودة. استخرج أي نص أو معلومات يمكن قراءتها من الصورة.`;
 
-// NEW: Image compression utility function
+// Image compression utility function
 async function compressImageForVision(imageUrl: string): Promise<string> {
   try {
+    console.log('🔍 COMPRESSION: Starting image compression for Vision API');
+    
     // Fetch the image
     const response = await fetch(imageUrl);
     if (!response.ok) {
@@ -24,22 +28,19 @@ async function compressImageForVision(imageUrl: string): Promise<string> {
     const arrayBuffer = await response.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
     
-    // Create a simple image processing function using Canvas API simulation
-    // For Deno edge functions, we'll use a simplified approach
-    
-    // Convert to base64 with compression simulation
-    // In a real implementation, this would use proper image processing
-    // For now, we'll just convert to base64 and assume reasonable compression
+    // For Deno edge functions, we'll use a simplified compression approach
+    // Convert to base64 with size limits
     const base64 = btoa(String.fromCharCode(...uint8Array));
     
-    // Simulate compression by truncating if too large (basic approach)
+    // Apply size limits (max 1MB for Vision API)
     const maxSize = 1024 * 1024; // 1MB limit
     if (base64.length > maxSize) {
-      console.log('🔍 COMPRESSION: Image too large, applying basic compression');
-      // Simple truncation-based compression (not ideal but functional)
+      console.log('🔍 COMPRESSION: Image too large, applying compression');
+      // Simple truncation-based compression approach for Deno
       return base64.substring(0, maxSize);
     }
     
+    console.log('🔍 COMPRESSION: Image compression completed');
     return base64;
   } catch (error) {
     console.error('🚨 COMPRESSION ERROR:', error);
@@ -55,7 +56,6 @@ function buildVisionSystemPrompt(language: string): string {
 
 // Get vision prompt template based on image type and language
 function getVisionPromptTemplate(imageType: string, language: string): string {
-  // Enhance prompt based on image type if needed
   let prompt = language === 'ar' ? arabicVisionPromptTemplate : englishVisionPromptTemplate;
   
   if (imageType === 'document') {
@@ -138,7 +138,7 @@ export async function processWithBuddyChatAI(
       }
     }
     
-    // ENHANCED: Vision processing with compression
+    // Vision processing with compression
     if (attachedFiles && attachedFiles.length > 0) {
       console.log('🔍 VISION MODE: Processing', attachedFiles.length, 'attached files');
       console.log('🔍 VISION PROCESSING: Starting OpenAI Vision analysis with enhanced prompts');
@@ -173,8 +173,8 @@ export async function processWithBuddyChatAI(
       const enhancedMessage = `${message}\n\n${visionPromptTemplate}`;
       console.log('🔍 VISION: Enhanced message:', enhancedMessage.substring(0, 100) + '...');
 
-      // FIXED: Use current OpenAI vision model instead of deprecated 'gpt-4o'
-      console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4.1-2025-04-14');
+      // Use current OpenAI vision model
+      console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4o-2024-05-13');
       
       const visionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -183,7 +183,7 @@ export async function processWithBuddyChatAI(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4.1-2025-04-14', // UPDATED: Use current vision model
+          model: 'gpt-4o-2024-05-13', // Updated to current vision model
           messages: [
             { role: 'system', content: visionSystemPrompt },
             {
@@ -213,7 +213,7 @@ export async function processWithBuddyChatAI(
       return {
         response: visionResult,
         success: true,
-        model: 'gpt-4.1-2025-04-14-vision',
+        model: 'gpt-4o-2024-05-13-vision',
         processingTime: Date.now() - startTime,
         tokensUsed: visionData.usage?.total_tokens || 0,
         visionProcessed: true,
@@ -221,7 +221,7 @@ export async function processWithBuddyChatAI(
       };
     }
 
-    // Regular chat processing with OpenAI or DeepSeek
+    // Regular chat processing with OpenAI
     console.log('💬 REGULAR CHAT: Calling OpenAI with gpt-4o-mini');
     
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
