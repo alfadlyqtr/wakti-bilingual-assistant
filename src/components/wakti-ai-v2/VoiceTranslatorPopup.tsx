@@ -139,6 +139,20 @@ const MAX_HISTORY_ITEMS = 5;
 const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000;
 const MAX_CACHE_SIZE = 50;
 
+// FIXED: Helper function to get authenticated headers for direct fetch calls
+const getAuthenticatedHeaders = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('No valid session found');
+  }
+  
+  return {
+    'Authorization': `Bearer ${session.access_token}`,
+    'apikey': supabase.supabaseKey,
+    'x-client-info': 'wakti-voice-translator'
+  };
+};
+
 export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
   const { user } = useAuth();
   const { language } = useTheme();
@@ -310,7 +324,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [language]);
 
-  // Background audio pre-generation using Supabase functions invoke
+  // FIXED: Background audio pre-generation using direct fetch
   const preGenerateAudio = useCallback(async (text: string) => {
     const cacheKey = `${text}_${selectedLanguage}`;
     
@@ -322,18 +336,26 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsGeneratingAudio(true);
       console.log('🔊 Pre-generating audio for:', text.substring(0, 30) + '...');
 
-      const { data, error } = await supabase.functions.invoke('voice-translator-tts', {
-        body: {
+      // FIXED: Use direct fetch instead of supabase.functions.invoke
+      const headers = await getAuthenticatedHeaders();
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/voice-translator-tts`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           text: text,
           voice: 'alloy'
-        }
+        })
       });
 
-      if (error) {
-        console.log('🔊 Background audio pre-generation failed (non-critical):', error);
+      if (!response.ok) {
+        console.log('🔊 Background audio pre-generation failed (non-critical):', response.status);
         return;
       }
 
+      const data = await response.json();
       if (data?.audioContent) {
         const newCache = { 
           ...audioCache, 
@@ -462,7 +484,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
-  // FIXED: Complete rewrite to use FormData with Blob directly - no base64 conversion
+  // FIXED: Complete rewrite using direct fetch() instead of supabase.functions.invoke()
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
@@ -470,178 +492,70 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.log('🎤 Processing translation with target language:', selectedLanguage);
       console.log('🎤 Audio blob size:', audioBlob.size, 'bytes');
 
-      // FIXED: Create FormData with the audio Blob directly (no base64 conversion needed)
+      // FIXED: Create FormData with the audio Blob directly
       const formData = new FormData();
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('targetLanguage', selectedLanguage);
 
-      console.log('🎤 Voice Translator: Sending FormData with audio blob to voice-translator function');
+      console.log('🎤 Voice Translator: Sending FormData with audio blob via direct fetch');
 
-      // FIXED: Use supabase.functions.invoke with FormData body
-      const { data, error } = await supabase.functions.invoke('voice-translator', {
+      // FIXED: Use direct fetch() instead of supabase.functions.invoke()
+      const headers = await getAuthenticatedHeaders();
+      
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/voice-translator`, {
+        method: 'POST',
+        headers: headers, // Don't set Content-Type for FormData - browser will set it with boundary
         body: formData
       });
 
-      if (error) {
-        console.error('🎤 Voice Translator error:', error);
+      console.log('🎤 Voice Translator: Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🎤 Voice Translator error:', errorText);
         
         // Handle authentication errors specifically
-        if (error.message?.includes('session') || error.message?.includes('auth')) {
+        if (response.status === 401) {
           console.log('🎤 Attempting session refresh...');
           await supabase.auth.refreshSession();
           
-          const formDataRetry = new FormData();
-          formDataRetry.append('audioBlob', audioBlob, 'audio.webm');
-          formDataRetry.append('targetLanguage', selectedLanguage);
+          // Retry with new headers
+          const retryHeaders = await getAuthenticatedHeaders();
+          const retryFormData = new FormData();
+          retryFormData.append('audioBlob', audioBlob, 'audio.webm');
+          retryFormData.append('targetLanguage', selectedLanguage);
 
-          const { data: retryData, error: retryError } = await supabase.functions.invoke('voice-translator', {
-            body: formDataRetry
+          const retryResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/voice-translator`, {
+            method: 'POST',
+            headers: retryHeaders,
+            body: retryFormData
           });
 
-          if (retryError) {
-            throw new Error(`Authentication failed: ${retryError.message}`);
+          if (!retryResponse.ok) {
+            throw new Error(`Authentication retry failed: ${retryResponse.status}`);
           }
           
-          // FIXED: Use retryData instead of reassigning const data
+          const retryData = await retryResponse.json();
+          
           if (!retryData?.translatedText) {
-            throw new Error('No translation received from service');
+            throw new Error('No translation received from service after retry');
           }
 
           console.log('🎤 Voice Translator retry result:', retryData);
-
-          if (retryData.targetLanguageCode && retryData.targetLanguageCode !== selectedLanguage) {
-            console.error('🎤 CRITICAL ERROR: Language mismatch!', {
-              requested: selectedLanguage,
-              received: retryData.targetLanguageCode
-            });
-            
-            toast({
-              title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
-              description: language === 'ar' 
-                ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${retryData.targetLanguage}` 
-                : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${retryData.targetLanguage}`,
-              variant: 'destructive'
-            });
-          }
-
-          console.log('📊 About to increment translation usage...');
-          const usageSuccess = await incrementTranslationCount();
-          console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
-          
-          if (!usageSuccess && !quotaError) {
-            console.warn('⚠️ Translation blocked due to quota limit');
-            const errorMsg = language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached';
-            setProcessingError(errorMsg);
-            toast({
-              title: errorMsg,
-              description: language === 'ar' 
-                ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
-                : 'You have reached your daily translation limit',
-              variant: 'destructive'
-            });
-            return;
-          }
-
-          setTranslatedText(retryData.translatedText);
-          
-          const newTranslation: TranslationItem = {
-            id: Date.now().toString(),
-            originalText: retryData.originalText,
-            translatedText: retryData.translatedText,
-            sourceLanguage: retryData.sourceLanguage,
-            targetLanguage: retryData.targetLanguage,
-            timestamp: new Date()
-          };
-          addToHistory(newTranslation);
-          
-          setIsOnCooldown(true);
-          setTimeout(() => setIsOnCooldown(false), COOLDOWN_TIME);
-
-          const targetLangName = SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name || selectedLanguage;
-          toast({
-            title: language === 'ar' ? '✅ تمت الترجمة' : '✅ Translation Complete',
-            description: language === 'ar' 
-              ? `تم إنجاز الترجمة إلى ${targetLangName} بنجاح` 
-              : `Translation to ${targetLangName} completed successfully`,
-          });
-
-          // Background pre-generate audio immediately after translation
-          if (playbackEnabled) {
-            preGenerateAudio(retryData.translatedText);
-          }
-
-          return;
+          return handleSuccessfulTranslation(retryData);
         } else {
-          throw new Error(`Translation failed: ${error.message}`);
+          throw new Error(`Translation failed: ${response.status} - ${errorText}`);
         }
       }
 
+      const data = await response.json();
+      
       if (!data?.translatedText) {
         throw new Error('No translation received from service');
       }
 
       console.log('🎤 Voice Translator result:', data);
-
-      if (data.targetLanguageCode && data.targetLanguageCode !== selectedLanguage) {
-        console.error('🎤 CRITICAL ERROR: Language mismatch!', {
-          requested: selectedLanguage,
-          received: data.targetLanguageCode
-        });
-        
-        toast({
-          title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
-          description: language === 'ar' 
-            ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${data.targetLanguage}` 
-            : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${data.targetLanguage}`,
-          variant: 'destructive'
-        });
-      }
-
-      console.log('📊 About to increment translation usage...');
-      const usageSuccess = await incrementTranslationCount();
-      console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
-      
-      if (!usageSuccess && !quotaError) {
-        console.warn('⚠️ Translation blocked due to quota limit');
-        const errorMsg = language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached';
-        setProcessingError(errorMsg);
-        toast({
-          title: errorMsg,
-          description: language === 'ar' 
-            ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
-            : 'You have reached your daily translation limit',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      setTranslatedText(data.translatedText);
-      
-      const newTranslation: TranslationItem = {
-        id: Date.now().toString(),
-        originalText: data.originalText,
-        translatedText: data.translatedText,
-        sourceLanguage: data.sourceLanguage,
-        targetLanguage: data.targetLanguage,
-        timestamp: new Date()
-      };
-      addToHistory(newTranslation);
-      
-      setIsOnCooldown(true);
-      setTimeout(() => setIsOnCooldown(false), COOLDOWN_TIME);
-
-      const targetLangName = SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name || selectedLanguage;
-      toast({
-        title: language === 'ar' ? '✅ تمت الترجمة' : '✅ Translation Complete',
-        description: language === 'ar' 
-          ? `تم إنجاز الترجمة إلى ${targetLangName} بنجاح` 
-          : `Translation to ${targetLangName} completed successfully`,
-      });
-
-      // Background pre-generate audio immediately after translation
-      if (playbackEnabled) {
-        preGenerateAudio(data.translatedText);
-      }
+      return handleSuccessfulTranslation(data);
 
     } catch (error) {
       console.error('🎤 Voice Translator: Error processing translation:', error);
@@ -650,11 +564,11 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         ? 'فشل في ترجمة الصوت - يرجى المحاولة مرة أخرى' 
         : 'Failed to translate voice - please try again';
 
-      if (error.message?.includes('Authentication failed')) {
+      if (error.message?.includes('Authentication')) {
         errorMessage = language === 'ar' 
           ? 'انتهت صلاحية الجلسة - يرجى تسجيل الدخول مرة أخرى' 
           : 'Session expired - please log in again';
-      } else if (error.message?.includes('Failed to fetch')) {
+      } else if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
         errorMessage = language === 'ar'
           ? 'خطأ في الاتصال - تحقق من الاتصال بالإنترنت'
           : 'Connection error - check your internet connection';
@@ -670,9 +584,74 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsProcessing(false);
       setRecordingTime(0);
     }
+  }, [selectedLanguage, language]);
+
+  // FIXED: Extract success handling to avoid code duplication
+  const handleSuccessfulTranslation = useCallback(async (data: any) => {
+    // Validate language match
+    if (data.targetLanguageCode && data.targetLanguageCode !== selectedLanguage) {
+      console.error('🎤 CRITICAL ERROR: Language mismatch!', {
+        requested: selectedLanguage,
+        received: data.targetLanguageCode
+      });
+      
+      toast({
+        title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
+        description: language === 'ar' 
+          ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${data.targetLanguage}` 
+          : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${data.targetLanguage}`,
+        variant: 'destructive'
+      });
+    }
+
+    console.log('📊 About to increment translation usage...');
+    const usageSuccess = await incrementTranslationCount();
+    console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
+    
+    if (!usageSuccess && !quotaError) {
+      console.warn('⚠️ Translation blocked due to quota limit');
+      const errorMsg = language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached';
+      setProcessingError(errorMsg);
+      toast({
+        title: errorMsg,
+        description: language === 'ar' 
+          ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
+          : 'You have reached your daily translation limit',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setTranslatedText(data.translatedText);
+    
+    const newTranslation: TranslationItem = {
+      id: Date.now().toString(),
+      originalText: data.originalText,
+      translatedText: data.translatedText,
+      sourceLanguage: data.sourceLanguage,
+      targetLanguage: data.targetLanguage,
+      timestamp: new Date()
+    };
+    addToHistory(newTranslation);
+    
+    setIsOnCooldown(true);
+    setTimeout(() => setIsOnCooldown(false), COOLDOWN_TIME);
+
+    const targetLangName = SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name || selectedLanguage;
+    toast({
+      title: language === 'ar' ? '✅ تمت الترجمة' : '✅ Translation Complete',
+      description: language === 'ar' 
+        ? `تم إنجاز الترجمة إلى ${targetLangName} بنجاح` 
+        : `Translation to ${targetLangName} completed successfully`,
+    });
+
+    // Background pre-generate audio immediately after translation
+    if (playbackEnabled) {
+      preGenerateAudio(data.translatedText);
+    }
   }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, preGenerateAudio]);
 
-  // Updated to use supabase.functions.invoke for TTS as well
+  // FIXED: Updated to use direct fetch for TTS as well
   const playTranslatedText = useCallback(async (text: string) => {
     console.log('🔊 Play button clicked, text:', text);
     
@@ -697,19 +676,26 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       
       console.log(`🔊 Generating TTS for language: ${selectedLanguage}, voice: alloy`);
       
-      // Use supabase.functions.invoke for TTS as well
-      const { data, error } = await supabase.functions.invoke('voice-translator-tts', {
-        body: {
+      // FIXED: Use direct fetch for TTS as well
+      const headers = await getAuthenticatedHeaders();
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/voice-translator-tts`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           text: text,
           voice: 'alloy'
-        }
+        })
       });
 
-      if (error) {
-        console.error('🔊 TTS error:', error);
-        throw new Error(`TTS failed: ${error.message}`);
+      if (!response.ok) {
+        console.error('🔊 TTS error:', response.status);
+        throw new Error(`TTS failed: ${response.status}`);
       }
 
+      const data = await response.json();
       if (data?.audioContent) {
         console.log(`🔊 TTS generated successfully, size: ${data.size || 'unknown'} bytes`);
         
@@ -732,7 +718,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('🔊 Error playing TTS:', error);
       
-      let errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Audio generation timed out. Please try again.';
+      let errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Audio generation failed. Please try again.';
       if (error.message?.includes('Rate limit')) {
         errorMessage = language === 'ar' ? 'تم تجاوز الحد المسموح، حاول مرة أخرى' : 'Rate limit exceeded, please try again';
       } else if (error.message?.includes('timeout')) {
