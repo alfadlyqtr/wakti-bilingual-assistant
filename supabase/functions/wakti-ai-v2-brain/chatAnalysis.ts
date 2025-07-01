@@ -1,3 +1,4 @@
+
 // Remove the old OpenAI import and use direct fetch calls instead
 import { analyzeTaskIntent } from "./taskParsing.ts";
 
@@ -109,6 +110,22 @@ export async function processWithBuddyChatAI(
       console.warn('⚠️  Task analysis failed:', taskError);
     }
     
+    // ENHANCED: Build conversation context for better memory
+    let conversationContext = '';
+    if (recentMessages && recentMessages.length > 0) {
+      console.log('🧠 MEMORY: Building conversation context from', recentMessages.length, 'recent messages');
+      conversationContext = '\n\nRecent conversation context:\n';
+      recentMessages.slice(-5).forEach((msg: any, index: number) => {
+        const role = msg.role === 'user' ? 'User' : 'Assistant';
+        conversationContext += `${role}: ${msg.content}\n`;
+      });
+    }
+    
+    if (conversationSummary) {
+      console.log('🧠 MEMORY: Adding conversation summary');
+      conversationContext += `\nConversation summary: ${conversationSummary}\n`;
+    }
+    
     // Personalization setup
     let personalizedTemperature = 0.7;
     let systemPrompt = language === 'ar' ? arabicSystemPrompt : englishSystemPrompt;
@@ -146,9 +163,10 @@ export async function processWithBuddyChatAI(
       // Process files with compression
       const processedFiles = [];
       for (const file of attachedFiles) {
-        if (file.publicUrl) {
+        if (file.publicUrl || file.url) {
           console.log('🔍 VISION: Compressing image before API call');
-          const compressedBase64 = await compressImageForVision(file.publicUrl);
+          const imageUrl = file.publicUrl || file.url;
+          const compressedBase64 = await compressImageForVision(imageUrl);
           
           // Use compressed base64 format
           processedFiles.push({
@@ -168,8 +186,8 @@ export async function processWithBuddyChatAI(
       console.log('🔍 VISION: Detected image type:', imageType);
       
       const visionPromptTemplate = getVisionPromptTemplate(imageType, language);
-      const enhancedMessage = `${message}\n\n${visionPromptTemplate}`;
-      console.log('🔍 VISION: Enhanced message:', enhancedMessage.substring(0, 100) + '...');
+      const enhancedMessage = `${message}\n\n${visionPromptTemplate}${conversationContext}`;
+      console.log('🔍 VISION: Enhanced message with context:', enhancedMessage.substring(0, 100) + '...');
 
       // Use current OpenAI vision model
       console.log('🔍 VISION API: Calling OpenAI Vision with gpt-4o-2024-05-13');
@@ -219,8 +237,10 @@ export async function processWithBuddyChatAI(
       };
     }
 
-    // Regular chat processing with OpenAI
-    console.log('💬 REGULAR CHAT: Calling OpenAI with gpt-4o-mini');
+    // ENHANCED: Regular chat processing with conversation context
+    console.log('💬 REGULAR CHAT: Calling OpenAI with gpt-4o-mini and conversation context');
+    
+    const enhancedMessage = message + conversationContext;
     
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -232,7 +252,7 @@ export async function processWithBuddyChatAI(
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
+          { role: 'user', content: enhancedMessage }
         ],
         max_tokens: maxTokens,
         temperature: personalizedTemperature
