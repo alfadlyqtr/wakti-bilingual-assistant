@@ -1,4 +1,5 @@
 
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 
@@ -8,199 +9,177 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-const ELEVENLABS_API_KEY = "sk_7b19e76d94655f74d81063f3dd7b39cf9460ea743d40a532";
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const ELEVEN_LABS_API_KEY = Deno.env.get('ELEVEN_LABS_API_KEY');
 
-// Enhanced voice style configurations with extreme differences for maximum audibility
+console.log("🎵 VOICE TTS: Function loaded");
+console.log("🎵 ElevenLabs API Key available:", !!ELEVEN_LABS_API_KEY);
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Updated voice style configurations with corrected mappings for eleven_multilingual_v2
 const VOICE_STYLES = {
-  neutral: {
-    stability: 0.5,
-    similarity_boost: 0.75,
-    style: 0.0,
-    use_speaker_boost: true,
-    model: 'eleven_multilingual_v2'
-  },
-  report: {
-    stability: 1.0,
-    similarity_boost: 1.0,
-    style: 0.0,
-    use_speaker_boost: true,
-    model: 'eleven_multilingual_v2'
-  },
-  storytelling: {
-    stability: 0.1,
-    similarity_boost: 0.2,
-    style: 1.0,
-    use_speaker_boost: false,
-    model: 'eleven_multilingual_v2'
-  },
-  poetry: {
-    stability: 0.0,
-    similarity_boost: 0.1,
-    style: 1.0,
-    use_speaker_boost: false,
-    model: 'eleven_multilingual_v2'
-  },
-  teacher: {
-    stability: 0.9,
-    similarity_boost: 0.9,
-    style: 0.1,
-    use_speaker_boost: true,
-    model: 'eleven_multilingual_v2'
-  },
-  sports: {
-    stability: 0.2,
-    similarity_boost: 0.3,
-    style: 0.9,
-    use_speaker_boost: false,
-    model: 'eleven_multilingual_v2'
-  }
+  neutral: { stability: 0.7, similarity_boost: 0.85, style: 0.0, use_speaker_boost: true },
+  report: { stability: 0.8, similarity_boost: 0.9, style: 0.3, use_speaker_boost: true },
+  storytelling: { stability: 0.5, similarity_boost: 0.7, style: 0.6, use_speaker_boost: true },
+  poetry: { stability: 0.4, similarity_boost: 0.6, style: 0.7, use_speaker_boost: true },
+  teacher: { stability: 0.8, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true },
+  sports: { stability: 0.3, similarity_boost: 0.5, style: 0.8, use_speaker_boost: true }
 };
 
 serve(async (req) => {
+  console.log(`🎵 Request: ${req.method} ${req.url}`);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: { Authorization: req.headers.get('Authorization')! },
-      },
-    });
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      throw new Error('Unauthorized');
+    // Check if API key is available
+    if (!ELEVEN_LABS_API_KEY) {
+      console.error('🎵 ELEVEN_LABS_API_KEY not found in environment');
+      throw new Error('ElevenLabs API key not configured');
     }
 
-    const { text, voice_id, style = 'neutral' } = await req.json();
+    // Get user authentication
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '') || '';
+    
+    const { data: { user } } = await supabase.auth.getUser(token);
+
+    if (!user) {
+      throw new Error('Unauthorized - user not authenticated');
+    }
+
+    console.log(`🎵 Authenticated user: ${user.id}`);
+
+    // Get request data
+    const requestBody = await req.json();
+    const { text, voice_id, style = 'neutral' } = requestBody;
+    
+    console.log(`🎵 TTS request:`, {
+      textLength: text?.length || 0,
+      voiceId: voice_id,
+      style: style,
+      textPreview: text?.substring(0, 100)
+    });
 
     if (!text || !voice_id) {
-      throw new Error('Text and voice_id are required');
+      throw new Error('Missing required fields: text and voice_id are required');
     }
 
-    // Validate style exists
-    if (!VOICE_STYLES[style as keyof typeof VOICE_STYLES]) {
-      console.error('🎵 Invalid style requested:', style);
-      throw new Error(`Invalid style: ${style}. Available styles: ${Object.keys(VOICE_STYLES).join(', ')}`);
-    }
+    // Get the appropriate voice settings for the selected style
+    const voiceSettings = VOICE_STYLES[style as keyof typeof VOICE_STYLES] || VOICE_STYLES.neutral;
+    console.log(`🎵 Using voice settings for style "${style}":`, voiceSettings);
 
-    console.log('🎵 === TTS Generation Start ===');
-    console.log('🎵 User ID:', user.id);
-    console.log('🎵 Voice ID:', voice_id);
-    console.log('🎵 Text length:', text.length);
-    console.log('🎵 Style requested:', style);
-
-    // Check character usage
-    const { data: usage, error: usageError } = await supabase
-      .from('user_voice_usage')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    if (usageError) {
-      console.error('🎵 Usage check error:', usageError);
-      throw new Error('Failed to check character usage');
-    }
-
-    const remainingChars = usage.characters_limit + usage.extra_characters - usage.characters_used;
-    if (text.length > remainingChars) {
-      throw new Error(`Not enough characters remaining. You have ${remainingChars} characters left.`);
-    }
-
-    // Get voice settings for the selected style with extreme differences
-    const styleSettings = VOICE_STYLES[style as keyof typeof VOICE_STYLES];
-    console.log('🎵 === Style Configuration ===');
-    console.log('🎵 Style name:', style);
-    console.log('🎵 Stability:', styleSettings.stability);
-    console.log('🎵 Similarity boost:', styleSettings.similarity_boost);
-    console.log('🎵 Style intensity:', styleSettings.style);
-    console.log('🎵 Speaker boost:', styleSettings.use_speaker_boost);
-    console.log('🎵 Model:', styleSettings.model);
-
-    // Prepare request body for ElevenLabs
-    const requestBody = {
-      text: text,
-      model_id: styleSettings.model,
-      voice_settings: {
-        stability: styleSettings.stability,
-        similarity_boost: styleSettings.similarity_boost,
-        style: styleSettings.style,
-        use_speaker_boost: styleSettings.use_speaker_boost
-      },
-    };
-
-    console.log('🎵 === ElevenLabs Request ===');
-    console.log('🎵 Request body:', JSON.stringify(requestBody, null, 2));
-    console.log('🎵 API endpoint:', `https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`);
-
-    // Call ElevenLabs TTS API with enhanced style-specific settings
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': ELEVENLABS_API_KEY,
-      },
-      body: JSON.stringify(requestBody),
+    // Check user's voice quota before proceeding
+    console.log(`🎵 Checking voice quota for user: ${user.id}`);
+    const { data: quotaData, error: quotaError } = await supabase.rpc('get_or_create_user_voice_quota', {
+      p_user_id: user.id
     });
 
-    console.log('🎵 === ElevenLabs Response ===');
-    console.log('🎵 Response status:', response.status);
-    console.log('🎵 Response headers:', Object.fromEntries(response.headers.entries()));
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('🎵 ElevenLabs API error:', response.status, errorText);
-      throw new Error(`Failed to generate speech: ${response.status} - ${errorText}`);
+    if (quotaError) {
+      console.error('🎵 Error checking voice quota:', quotaError);
+      throw new Error('Failed to check voice quota');
     }
 
-    console.log('🎵 ElevenLabs API successful, processing audio...');
+    if (!quotaData || quotaData.length === 0) {
+      throw new Error('No quota data found');
+    }
 
-    // Update character usage
+    const quota = quotaData[0];
+    const remainingChars = Math.max(0, quota.characters_limit - quota.characters_used);
+    const totalAvailable = remainingChars + quota.extra_characters;
+    
+    console.log(`🎵 Voice quota check:`, {
+      used: quota.characters_used,
+      limit: quota.characters_limit,
+      extra: quota.extra_characters,
+      remaining: remainingChars,
+      totalAvailable: totalAvailable,
+      textLength: text.length
+    });
+
+    if (text.length > totalAvailable) {
+      throw new Error(`Text length (${text.length}) exceeds available quota (${totalAvailable})`);
+    }
+
+    console.log(`🎵 Calling ElevenLabs TTS API with eleven_multilingual_v2 model...`);
+
+    // Call ElevenLabs TTS API with the corrected model and settings
+    const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': ELEVEN_LABS_API_KEY,
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: 'eleven_multilingual_v2', // Updated: Use the latest model
+        voice_settings: voiceSettings
+      }),
+    });
+
+    console.log(`🎵 ElevenLabs API response status: ${elevenLabsResponse.status}`);
+
+    if (!elevenLabsResponse.ok) {
+      const errorText = await elevenLabsResponse.text();
+      console.error('🎵 ElevenLabs API error:', {
+        status: elevenLabsResponse.status,
+        statusText: elevenLabsResponse.statusText,
+        error: errorText
+      });
+      throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status} - ${errorText}`);
+    }
+
+    // Get the audio data
+    const audioBuffer = await elevenLabsResponse.arrayBuffer();
+    console.log(`🎵 Audio generated successfully:`, {
+      audioSize: audioBuffer.byteLength,
+      voiceStyle: style,
+      model: 'eleven_multilingual_v2'
+    });
+
+    if (audioBuffer.byteLength === 0) {
+      throw new Error('Received empty audio data from ElevenLabs API');
+    }
+
+    // Update user's voice usage
+    console.log(`🎵 Updating voice usage for user: ${user.id}`);
     const { error: updateError } = await supabase
       .from('user_voice_usage')
-      .update({
-        characters_used: usage.characters_used + text.length,
-      })
-      .eq('user_id', user.id);
+      .upsert({
+        user_id: user.id,
+        characters_used: (quota.characters_used || 0) + text.length,
+        updated_at: new Date().toISOString()
+      });
 
     if (updateError) {
-      console.error('🎵 Failed to update character usage:', updateError);
+      console.error('🎵 Error updating voice usage:', updateError);
+      // Continue anyway - don't fail the TTS generation
     } else {
-      console.log('🎵 Character usage updated successfully');
+      console.log(`🎵 Voice usage updated: +${text.length} characters`);
     }
 
-    // Return audio as ArrayBuffer
-    const audioBuffer = await response.arrayBuffer();
-    console.log('🎵 === Generation Complete ===');
-    console.log('🎵 Audio buffer size:', audioBuffer.byteLength);
-    console.log('🎵 Style applied:', style);
-    console.log('🎵 Settings used:', JSON.stringify(styleSettings, null, 2));
-    
     return new Response(audioBuffer, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'audio/mpeg',
-        'Content-Length': audioBuffer.byteLength.toString(),
-      },
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "audio/mpeg",
+        "Content-Length": audioBuffer.byteLength.toString()
+      }
     });
 
   } catch (error) {
-    console.error('🎵 === Error in voice-tts function ===');
-    console.error('🎵 Error details:', error);
-    console.error('🎵 Error message:', error.message);
-    console.error('🎵 Error stack:', error.stack);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message || 'Unknown error occurred' 
-      }),
-      { 
-        status: 400, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      }
-    );
+    console.error('🎵 TTS error:', error);
+    
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message || 'TTS generation failed'
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
   }
 });

@@ -16,7 +16,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   
   const [userVoiceQuota, setUserVoiceQuota] = useState<UserVoiceQuota>({
     characters_used: 0,
-    characters_limit: 5000, // Fixed: Use consistent 5000 characters
+    characters_limit: 6000, // Updated: Use consistent 6000 characters
     extra_characters: 0
   });
   
@@ -45,7 +45,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         console.log('✅ User voice quota loaded successfully:', quota);
         setUserVoiceQuota({
           characters_used: quota.characters_used || 0,
-          characters_limit: quota.characters_limit || 5000, // Fixed: Use consistent 5000
+          characters_limit: quota.characters_limit || 6000, // Updated: Use consistent 6000
           extra_characters: quota.extra_characters || 0,
           purchase_date: quota.purchase_date
         });
@@ -58,7 +58,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   }, [user]);
 
   // Voice purchase function - now properly handles the purchase flow
-  const purchaseExtraVoiceCredits = useCallback(async (characters: number = 5000) => {
+  const purchaseExtraVoiceCredits = useCallback(async (characters: number = 6000) => {
     if (!user) return false;
 
     try {

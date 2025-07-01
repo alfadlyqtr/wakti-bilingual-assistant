@@ -6,12 +6,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Play, Download, Loader2, Volume2, Mic, Info, Languages, MicIcon, Copy } from 'lucide-react';
+import { Play, Download, Loader2, Volume2, Mic, Info, Languages, MicIcon, Copy, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useBrowserSpeechRecognition } from '@/hooks/useBrowserSpeechRecognition';
 import EnhancedAudioControls from '@/components/tasjeel/EnhancedAudioControls';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface VoiceClone {
   id: string;
@@ -23,49 +34,49 @@ interface VoiceCloneScreen3Props {
   onBack: () => void;
 }
 
-// Enhanced voice style configurations with extreme differences and detailed descriptions
+// Enhanced voice style configurations with corrected style values for eleven_multilingual_v2
 const VOICE_STYLES = {
   neutral: {
     name: { en: 'Neutral', ar: 'عادي' },
     description: { en: 'Balanced, natural conversational tone', ar: 'نبرة محادثة طبيعية ومتوازنة' },
     technicalDesc: { en: 'Moderate stability & similarity', ar: 'ثبات واعتدال متوسط' },
     icon: '💬',
-    settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0 }
+    settings: { stability: 0.7, similarity_boost: 0.85, style: 0.0, use_speaker_boost: true }
   },
   report: {
     name: { en: 'News Report', ar: 'تقرير إخباري' },
     description: { en: 'Professional, clear news reporting style', ar: 'أسلوب التقارير الإخبارية المهنية والواضحة' },
-    technicalDesc: { en: 'Maximum stability & clarity', ar: 'أقصى ثبات ووضوح' },
+    technicalDesc: { en: 'Authoritative & clear delivery', ar: 'إلقاء موثوق وواضح' },
     icon: '📰',
-    settings: { stability: 1.0, similarity_boost: 1.0, style: 0.0 }
+    settings: { stability: 0.8, similarity_boost: 0.9, style: 0.3, use_speaker_boost: true }
   },
   storytelling: {
     name: { en: 'Storytelling', ar: 'سرد القصص' },
     description: { en: 'Dramatic, engaging narrative voice with emotion', ar: 'صوت سردي درامي وجذاب مع العاطفة' },
-    technicalDesc: { en: 'Low stability, high expressiveness', ar: 'ثبات منخفض وتعبيرية عالية' },
+    technicalDesc: { en: 'Expressive & engaging delivery', ar: 'إلقاء معبر وجذاب' },
     icon: '📚',
-    settings: { stability: 0.1, similarity_boost: 0.2, style: 1.0 }
+    settings: { stability: 0.5, similarity_boost: 0.7, style: 0.6, use_speaker_boost: true }
   },
   poetry: {
     name: { en: 'Poetry', ar: 'شعر' },
     description: { en: 'Highly expressive, artistic poetic delivery', ar: 'إلقاء شعري فني معبر للغاية' },
-    technicalDesc: { en: 'Minimum stability, maximum expression', ar: 'أدنى ثبات وأقصى تعبير' },
+    technicalDesc: { en: 'Very expressive & artistic', ar: 'معبر وفني للغاية' },
     icon: '🎭',
-    settings: { stability: 0.0, similarity_boost: 0.1, style: 1.0 }
+    settings: { stability: 0.4, similarity_boost: 0.6, style: 0.7, use_speaker_boost: true }
   },
   teacher: {
     name: { en: 'Teacher', ar: 'معلم' },
     description: { en: 'Clear, authoritative educational presentation', ar: 'عرض تعليمي واضح وموثوق' },
-    technicalDesc: { en: 'High stability, clear articulation', ar: 'ثبات عالي ونطق واضح' },
+    technicalDesc: { en: 'Firm & instructive delivery', ar: 'إلقاء حازم وتعليمي' },
     icon: '👨‍🏫',
-    settings: { stability: 0.9, similarity_boost: 0.9, style: 0.1 }
+    settings: { stability: 0.8, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true }
   },
   sports: {
     name: { en: 'Sports Announcer', ar: 'معلق رياضي' },
     description: { en: 'Dynamic, energetic sports commentary', ar: 'تعليق رياضي ديناميكي ونشيط' },
-    technicalDesc: { en: 'Low stability, high energy variation', ar: 'ثبات منخفض وتنوع طاقة عالي' },
+    technicalDesc: { en: 'Intense & energetic delivery', ar: 'إلقاء مكثف ونشيط' },
     icon: '🏆',
-    settings: { stability: 0.2, similarity_boost: 0.3, style: 0.9 }
+    settings: { stability: 0.3, similarity_boost: 0.5, style: 0.8, use_speaker_boost: true }
   }
 };
 
@@ -98,6 +109,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showStyleDetails, setShowStyleDetails] = useState(false);
+  const [isDeletingVoice, setIsDeletingVoice] = useState<string | null>(null);
 
   // Translation states
   const [translationText, setTranslationText] = useState('');
@@ -105,7 +117,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [translatedText, setTranslatedText] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
 
-  // Use the extended quota management hook to get voice quota data
+  // Use the extended quota management hook to get voice quota data (updated for 6000 chars)
   const { 
     userVoiceQuota, 
     isLoadingVoiceQuota, 
@@ -165,6 +177,69 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
+  const deleteVoiceClone = async (voiceId: string, voiceName: string) => {
+    setIsDeletingVoice(voiceId);
+    
+    try {
+      console.log('🗑️ === Voice Deletion Request ===');
+      console.log('🗑️ Voice ID:', voiceId);
+      console.log('🗑️ Voice Name:', voiceName);
+
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        throw new Error('User not authenticated');
+      }
+
+      // Call edge function to delete voice from ElevenLabs and database
+      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({
+          voice_id: voiceId,
+          action: 'delete'
+        })
+      });
+
+      console.log('🗑️ Delete response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🗑️ Delete response error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('🗑️ Delete result:', result);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete voice');
+      }
+
+      // Update local state
+      setVoices(prev => prev.filter(voice => voice.voice_id !== voiceId));
+      
+      // If deleted voice was selected, clear selection
+      if (selectedVoiceId === voiceId) {
+        setSelectedVoiceId('');
+        setAudioUrl(null);
+      }
+
+      toast.success(language === 'ar' 
+        ? `تم حذف الصوت "${voiceName}" بنجاح` 
+        : `Voice "${voiceName}" deleted successfully`
+      );
+
+    } catch (error: any) {
+      console.error('🗑️ Error deleting voice:', error);
+      toast.error(error.message || (language === 'ar' ? 'فشل في حذف الصوت' : 'Failed to delete voice'));
+    } finally {
+      setIsDeletingVoice(null);
+    }
+  };
+
   const canGenerate = text.trim().length > 0 && selectedVoiceId && text.length <= totalAvailableCharacters && canUseVoice;
   const canTranslate = translationText.trim().length > 0;
 
@@ -177,12 +252,13 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     try {
       const selectedStyleConfig = VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES];
       
-      console.log('🎵 === Frontend TTS Request ===');
+      console.log('🎵 === Frontend TTS Request (Updated) ===');
       console.log('🎵 Text length:', text.trim().length);
       console.log('🎵 Voice ID:', selectedVoiceId);
       console.log('🎵 Style:', selectedStyle);
       console.log('🎵 Style config:', selectedStyleConfig);
       console.log('🎵 Settings to be applied:', selectedStyleConfig.settings);
+      console.log('🎵 Model: eleven_multilingual_v2');
 
       // Show user what style is being applied
       toast.info(`${language === 'ar' ? 'تطبيق أسلوب' : 'Applying style'}: ${selectedStyleConfig.name[language]} (${selectedStyleConfig.technicalDesc[language]})`);
@@ -192,7 +268,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         throw new Error('User not authenticated');
       }
 
-      // Make direct fetch call to the edge function with style parameter
+      // Make direct fetch call to the edge function with corrected style parameter
       const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-tts`, {
         method: 'POST',
         headers: {
@@ -396,7 +472,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </p>
       </div>
 
-      {/* Character Usage - Now showing total available including extras */}
+      {/* Character Usage - Updated for 6000 characters */}
       <div className="p-3 bg-muted rounded-lg">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium">
@@ -429,7 +505,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </div>
       </div>
 
-      {/* Voice Selector */}
+      {/* Voice Selector with Delete Functionality */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
           {language === 'ar' ? 'اختر الصوت' : 'Select Voice'}
@@ -441,7 +517,50 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           <SelectContent>
             {voices.map((voice) => (
               <SelectItem key={voice.id} value={voice.voice_id}>
-                {voice.voice_name}
+                <div className="flex items-center justify-between w-full">
+                  <span>{voice.voice_name}</span>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 ml-2"
+                        disabled={isDeletingVoice === voice.voice_id}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {isDeletingVoice === voice.voice_id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {language === 'ar' ? 'حذف الصوت المستنسخ' : 'Delete Voice Clone'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {language === 'ar' 
+                            ? `هل أنت متأكد من حذف الصوت "${voice.voice_name}"؟ هذا الإجراء لا يمكن التراجع عنه.`
+                            : `Are you sure you want to delete the voice "${voice.voice_name}"? This action cannot be undone.`
+                          }
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>
+                          {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteVoiceClone(voice.voice_id, voice.voice_name)}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          {language === 'ar' ? 'حذف' : 'Delete'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </SelectItem>
             ))}
           </SelectContent>
@@ -507,9 +626,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             }
             className="min-h-20 resize-none"
             dir="auto"
+            maxLength={6000}
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{translationText.length} {language === 'ar' ? 'حرف' : 'characters'}</span>
+            <span>{translationText.length} / 6000 {language === 'ar' ? 'حرف' : 'characters'}</span>
             {speechError && (
               <span className="text-red-500">{speechError}</span>
             )}
@@ -606,7 +726,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </div>
       </div>
 
-      {/* Text Input with Arabic support */}
+      {/* Text Input with Arabic support - Updated for 6000 characters */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
           {language === 'ar' ? 'النص' : 'Text'}
