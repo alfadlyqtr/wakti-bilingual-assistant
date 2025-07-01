@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
@@ -37,21 +37,18 @@ export function ChatMessages({
   onCancelTaskConfirmation,
 }: ChatMessagesProps) {
   const { language } = useTheme();
-  const lastMessageRef = useRef<HTMLDivElement>(null);
 
   // Check if the last user message has attached files for better loading indicator
   const lastUserMessage = sessionMessages.filter(msg => msg.role === 'user').pop();
   const hasAttachedFiles = lastUserMessage?.attachedFiles && lastUserMessage.attachedFiles.length > 0;
 
-  // FIXED: Auto-scroll using scrollIntoView on the last message
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (lastMessageRef.current) {
-      requestAnimationFrame(() => {
-        lastMessageRef.current?.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'end' 
-        });
-      });
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
     }
   }, [sessionMessages, isLoading, showTaskConfirmation]);
 
@@ -72,30 +69,24 @@ export function ChatMessages({
         </div>
       )}
 
-      {sessionMessages.map((message, index) => (
-        <div
+      {sessionMessages.map((message) => (
+        <ChatBubble
           key={message.id}
-          ref={index === sessionMessages.length - 1 ? lastMessageRef : null}
-        >
-          <ChatBubble
-            message={message}
-            userProfile={userProfile}
-            activeTrigger={activeTrigger}
-          />
-        </div>
+          message={message}
+          userProfile={userProfile}
+          activeTrigger={activeTrigger}
+        />
       ))}
 
       {isLoading && (
-        <div ref={!sessionMessages.length ? lastMessageRef : null}>
-          <TypingIndicator 
-            hasAttachedFiles={hasAttachedFiles}
-            isVisionProcessing={hasAttachedFiles}
-          />
-        </div>
+        <TypingIndicator 
+          hasAttachedFiles={hasAttachedFiles}
+          isVisionProcessing={hasAttachedFiles}
+        />
       )}
 
       {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
-        <div className="flex justify-start" ref={lastMessageRef}>
+        <div className="flex justify-start">
           <div className="max-w-md">
             <EditableTaskConfirmationCard
               data={pendingTaskData || pendingReminderData}
