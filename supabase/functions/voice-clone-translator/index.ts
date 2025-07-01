@@ -15,53 +15,37 @@ const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY')!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log("🌐 VOICE CLONE TRANSLATOR: Function loaded - Translation only");
+console.log("🌐 VOICE CLONE TRANSLATOR: Function loaded");
 
 serve(async (req) => {
-  console.log(`🌐 Request received: ${req.method} ${req.url}`);
+  console.log(`🌐 Request: ${req.method} ${req.url}`);
   
   if (req.method === "OPTIONS") {
-    console.log("🌐 Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log("🌐 Authenticating user...");
-    const { data: { user } } = await supabase.auth.getUser(
-      req.headers.get('Authorization')?.replace('Bearer ', '') || ''
-    );
+    // Get user
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '') || '';
+    
+    const { data: { user } } = await supabase.auth.getUser(token);
 
     if (!user) {
-      console.log("🌐 Authentication failed - no user");
       throw new Error('Unauthorized');
     }
 
-    console.log(`🌐 User authenticated: ${user.id}`);
-
-    const requestBody = await req.json();
-    const { original_text, target_language } = requestBody;
-
-    console.log("🌐 Request data:", { 
-      text_length: original_text?.length, 
-      target_language,
-      has_deepseek_key: !!DEEPSEEK_API_KEY 
-    });
+    // Get request data
+    const { original_text, target_language } = await req.json();
+    
+    console.log(`🌐 Translating "${original_text.substring(0, 50)}..." to ${target_language}`);
 
     if (!original_text || !target_language) {
-      console.log("🌐 Missing required parameters");
-      throw new Error('Missing required parameters: original_text and target_language');
+      throw new Error('Missing text or language');
     }
 
-    console.log('🌐 TRANSLATOR: Processing translation request', {
-      text_length: original_text.length,
-      target_language,
-      user_id: user.id
-    });
-
-    // Translate with DeepSeek
-    console.log('🌐 TRANSLATOR: Calling DeepSeek API for translation');
-    
-    const translateResponse = await fetch('https://api.deepseek.com/chat/completions', {
+    // Call DeepSeek API
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
@@ -72,7 +56,7 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are a professional translator. Translate the following text to ${target_language}. Return only the translation, nothing else. Maintain the tone and meaning of the original text. If the text is already in the target language, return it as is.`
+            content: `Translate the following text to ${target_language}. Return ONLY the translation, nothing else.`
           },
           {
             role: 'user',
@@ -80,52 +64,41 @@ serve(async (req) => {
           }
         ],
         max_tokens: 2000,
-        temperature: 0.3
+        temperature: 0.1
       }),
     });
 
-    console.log(`🌐 DeepSeek API response status: ${translateResponse.status}`);
-
-    if (!translateResponse.ok) {
-      const errorText = await translateResponse.text();
-      console.error('🌐 DeepSeek API error:', translateResponse.status, errorText);
-      throw new Error(`Translation failed: ${translateResponse.status} - ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('🌐 DeepSeek error:', response.status, errorText);
+      throw new Error(`Translation API error: ${response.status}`);
     }
 
-    const translateResult = await translateResponse.json();
-    const translatedText = translateResult.choices[0]?.message?.content?.trim();
+    const result = await response.json();
+    const translatedText = result.choices[0]?.message?.content?.trim();
 
     if (!translatedText) {
-      console.log('🌐 No translation received from DeepSeek');
-      throw new Error('No translation received from DeepSeek');
+      throw new Error('No translation received');
     }
 
-    console.log('🌐 TRANSLATOR: Translation successful', {
-      original_length: original_text.length,
-      translated_length: translatedText.length
-    });
+    console.log(`🌐 Translation successful: "${translatedText.substring(0, 50)}..."`);
 
-    const response = {
+    return new Response(JSON.stringify({
       success: true,
       original_text,
       translated_text: translatedText,
       target_language
-    };
-
-    console.log('🌐 Sending successful response');
-    return new Response(JSON.stringify(response), {
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error('🌐 TRANSLATOR ERROR:', error);
+    console.error('🌐 Translation error:', error);
     
-    const errorResponse = {
+    return new Response(JSON.stringify({
       success: false,
       error: error.message || 'Translation failed'
-    };
-    
-    return new Response(JSON.stringify(errorResponse), {
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
