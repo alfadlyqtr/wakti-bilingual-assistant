@@ -15,7 +15,7 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log("🎤 SIMPLE VOICE TRANSLATOR: Function loaded - Record > Whisper > GPT > TTS");
+console.log("SIMPLE VOICE TRANSLATOR: Function loaded - Record > Whisper > GPT > TTS");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -23,13 +23,13 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🎤 SIMPLE FLOW: Processing voice translation request");
+    console.log("SIMPLE FLOW: Processing voice translation request");
     
     const contentType = req.headers.get('content-type') || '';
     
     // Handle voice translation with audio blob (FormData)
     if (contentType.includes('multipart/form-data')) {
-      console.log("🎤 VOICE TRANSLATION: Processing audio blob");
+      console.log("VOICE TRANSLATION: Processing audio blob");
       return await processVoiceTranslation(req);
     }
     
@@ -37,7 +37,7 @@ serve(async (req) => {
     const requestBody = await req.json();
     
     if (requestBody.requestType === 'tts' || requestBody.text) {
-      console.log("🔊 TTS REQUEST: Processing text-to-speech");
+      console.log("TTS REQUEST: Processing text-to-speech");
       return await processTTS(requestBody);
     }
 
@@ -50,7 +50,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 SIMPLE FLOW ERROR:", error);
+    console.error("SIMPLE FLOW ERROR:", error);
     return new Response(JSON.stringify({
       error: error.message || 'Processing error',
       success: false
@@ -64,7 +64,7 @@ serve(async (req) => {
 // SIMPLE: Voice translation with automatic TTS
 async function processVoiceTranslation(req: Request) {
   try {
-    console.log("🎤 STEP 1: Starting voice translation");
+    console.log("STEP 1: Starting voice translation");
     
     const formData = await req.formData();
     const audioBlob = formData.get('audioBlob') as File;
@@ -75,7 +75,7 @@ async function processVoiceTranslation(req: Request) {
       throw new Error('No audio blob provided');
     }
 
-    console.log("🎤 STEP 2: Audio received - Size:", audioBlob.size, "bytes, Target:", targetLanguage, "Auto-play:", autoPlayEnabled);
+    console.log("STEP 2: Audio received - Size:", audioBlob.size, "bytes, Target:", targetLanguage, "Auto-play:", autoPlayEnabled);
 
     // Step 1: Transcribe with Whisper
     const audioBuffer = await audioBlob.arrayBuffer();
@@ -86,7 +86,7 @@ async function processVoiceTranslation(req: Request) {
     }
 
     const originalText = transcriptionResult.text;
-    console.log("🎤 STEP 3: Transcribed:", originalText);
+    console.log("STEP 3: Transcribed:", originalText);
 
     // Step 2: Translate with GPT
     let translatedText = originalText;
@@ -96,14 +96,14 @@ async function processVoiceTranslation(req: Request) {
       const translationResult = await translateText(originalText, sourceLanguage, targetLanguage);
       if (translationResult.success) {
         translatedText = translationResult.translatedText;
-        console.log("🎤 STEP 4: Translated:", translatedText);
+        console.log("STEP 4: Translated:", translatedText);
       }
     }
 
     // Step 3: Generate TTS with OpenAI
     let ttsAudio = null;
     if (translatedText) {
-      console.log("🔊 STEP 5: Generating TTS audio");
+      console.log("STEP 5: Generating TTS audio");
       try {
         const ttsResult = await generateTTS(translatedText, targetLanguage);
         if (ttsResult.success) {
@@ -111,33 +111,33 @@ async function processVoiceTranslation(req: Request) {
             audioContent: ttsResult.audioContent,
             size: ttsResult.size || 0
           };
-          console.log("🔊 STEP 6: TTS generated successfully - Size:", ttsResult.size, "bytes");
+          console.log("STEP 6: TTS generated successfully - Size:", ttsResult.size, "bytes");
         } else {
-          console.error("🔊 TTS FAILED:", ttsResult.error);
+          console.error("TTS FAILED:", ttsResult.error);
         }
       } catch (ttsError) {
-        console.error("🔊 TTS ERROR:", ttsError);
+        console.error("TTS ERROR:", ttsError);
       }
     }
 
     const response = {
       success: true,
-      originalText,
-      translatedText,
-      sourceLanguage,
-      targetLanguage,
-      ttsAudio, // Pre-generated TTS
-      autoPlayEnabled,
+      originalText: originalText,
+      translatedText: translatedText,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      ttsAudio: ttsAudio,
+      autoPlayEnabled: autoPlayEnabled,
       processingTime: Date.now()
     };
 
-    console.log("🎤 COMPLETE: Voice translation finished successfully");
+    console.log("COMPLETE: Voice translation finished successfully");
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("🎤 VOICE TRANSLATION ERROR:", error);
+    console.error("VOICE TRANSLATION ERROR:", error);
     return new Response(JSON.stringify({
       success: false,
       error: error.message || 'Voice translation failed'
@@ -151,7 +151,7 @@ async function processVoiceTranslation(req: Request) {
 // SIMPLE: TTS generation
 async function processTTS(requestBody: any) {
   try {
-    console.log("🔊 TTS: Processing text-to-speech request");
+    console.log("TTS: Processing text-to-speech request");
     
     const text = requestBody.text;
     const voice = requestBody.voice || 'alloy';
@@ -161,7 +161,7 @@ async function processTTS(requestBody: any) {
       throw new Error('No text provided for TTS');
     }
 
-    console.log(`🔊 TTS: Generating speech for: "${text.substring(0, 50)}..."`);
+    console.log("TTS: Generating speech for text:", text.substring(0, 50) + "...");
     
     const ttsResult = await generateTTS(text, language, voice);
     
@@ -169,20 +169,20 @@ async function processTTS(requestBody: any) {
       throw new Error(ttsResult.error || 'TTS generation failed');
     }
 
-    console.log("🔊 TTS: Generated successfully, size:", ttsResult.size || 0, "bytes");
+    console.log("TTS: Generated successfully, size:", ttsResult.size || 0, "bytes");
 
     return new Response(JSON.stringify({
       success: true,
       audioContent: ttsResult.audioContent,
       size: ttsResult.size || 0,
-      voice,
-      language
+      voice: voice,
+      language: language
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("🔊 TTS ERROR:", error);
+    console.error("TTS ERROR:", error);
     return new Response(JSON.stringify({
       success: false,
       error: error.message || 'TTS processing failed'
@@ -200,7 +200,7 @@ async function generateTTS(text: string, language: string = 'en', voice: string 
       throw new Error('OpenAI API key not configured');
     }
 
-    console.log("🔊 TTS: Calling OpenAI API");
+    console.log("TTS: Calling OpenAI API");
     
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
@@ -218,23 +218,23 @@ async function generateTTS(text: string, language: string = 'en', voice: string 
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("🔊 TTS: OpenAI API error:", response.status, errorText);
+      console.error("TTS: OpenAI API error:", response.status, errorText);
       throw new Error(`OpenAI TTS API error: ${response.status}`);
     }
 
     const audioBuffer = await response.arrayBuffer();
     const audioContent = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
     
-    console.log("🔊 TTS: Audio generated - Size:", audioBuffer.byteLength, "bytes, Base64 length:", audioContent.length);
+    console.log("TTS: Audio generated - Size:", audioBuffer.byteLength, "bytes, Base64 length:", audioContent.length);
 
     return {
       success: true,
-      audioContent,
+      audioContent: audioContent,
       size: audioBuffer.byteLength
     };
 
   } catch (error) {
-    console.error("🔊 TTS: Generation error:", error);
+    console.error("TTS: Generation error:", error);
     return {
       success: false,
       error: error.message
@@ -249,7 +249,7 @@ async function transcribeWithWhisper(audioBuffer: ArrayBuffer): Promise<any> {
       throw new Error('OpenAI API key not configured');
     }
 
-    console.log("🎤 WHISPER: Transcribing audio");
+    console.log("WHISPER: Transcribing audio");
 
     const formData = new FormData();
     const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
@@ -270,7 +270,7 @@ async function transcribeWithWhisper(audioBuffer: ArrayBuffer): Promise<any> {
     }
 
     const result = await response.json();
-    console.log("🎤 WHISPER: Transcription result:", result.text);
+    console.log("WHISPER: Transcription result:", result.text);
     
     return {
       success: true,
@@ -279,7 +279,7 @@ async function transcribeWithWhisper(audioBuffer: ArrayBuffer): Promise<any> {
     };
 
   } catch (error) {
-    console.error("🎤 WHISPER ERROR:", error);
+    console.error("WHISPER ERROR:", error);
     return {
       success: false,
       error: error.message
@@ -294,7 +294,7 @@ async function translateText(text: string, sourceLanguage: string, targetLanguag
       throw new Error('OpenAI API key not configured');
     }
 
-    console.log("🌍 GPT: Translating from", sourceLanguage, "to", targetLanguage);
+    console.log("GPT: Translating from", sourceLanguage, "to", targetLanguage);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -330,15 +330,15 @@ async function translateText(text: string, sourceLanguage: string, targetLanguag
       throw new Error('No translation received');
     }
 
-    console.log("🌍 GPT: Translation result:", translatedText);
+    console.log("GPT: Translation result:", translatedText);
 
     return {
       success: true,
-      translatedText
+      translatedText: translatedText
     };
 
   } catch (error) {
-    console.error("🌍 TRANSLATION ERROR:", error);
+    console.error("TRANSLATION ERROR:", error);
     return {
       success: false,
       error: error.message
