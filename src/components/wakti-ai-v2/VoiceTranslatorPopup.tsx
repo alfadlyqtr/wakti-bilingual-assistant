@@ -35,30 +35,6 @@ interface CachedAudio {
   };
 }
 
-// FIXED: Safe base64 conversion that prevents stack overflow
-const safeArrayBufferToBase64 = (arrayBuffer: ArrayBuffer): string => {
-  console.log('🔧 Converting audio to base64, size:', arrayBuffer.byteLength, 'bytes');
-  
-  try {
-    const bytes = new Uint8Array(arrayBuffer);
-    const chunkSize = 32768; // 32KB chunks to prevent stack overflow
-    let result = '';
-    
-    // Process in chunks to avoid call stack overflow
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.slice(i, i + chunkSize);
-      const chunkString = String.fromCharCode.apply(null, Array.from(chunk));
-      result += btoa(chunkString);
-    }
-    
-    console.log('✅ Base64 conversion successful, length:', result.length);
-    return result;
-  } catch (error) {
-    console.error('❌ Base64 conversion failed:', error);
-    throw new Error('Failed to convert audio data - audio file too large or corrupted');
-  }
-};
-
 // Simplified audio manager
 class AudioManager {
   private currentAudio: HTMLAudioElement | null = null;
@@ -486,7 +462,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
-  // FIXED: Improved processVoiceTranslation with proper error handling and safe base64 conversion
+  // FIXED: Completely rewritten to use FormData with Blob directly
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
@@ -494,25 +470,17 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.log('🎤 Processing translation with target language:', selectedLanguage);
       console.log('🎤 Audio blob size:', audioBlob.size, 'bytes');
 
-      // FIXED: Use safe base64 conversion to prevent stack overflow
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      console.log('🎤 ArrayBuffer created, size:', arrayBuffer.byteLength, 'bytes');
-      
-      const base64Audio = safeArrayBufferToBase64(arrayBuffer);
-      console.log('🎤 Base64 conversion completed successfully');
+      // FIXED: Create FormData with the audio Blob directly (no base64 conversion needed)
+      const formData = new FormData();
+      formData.append('audioBlob', audioBlob, 'audio.webm');
+      formData.append('targetLanguage', selectedLanguage);
 
-      console.log('🎤 Voice Translator: Using supabase.functions.invoke for authentication');
+      console.log('🎤 Voice Translator: Sending FormData with audio blob to voice-translator function');
 
-      // FIXED: Use supabase.functions.invoke for proper authentication
+      // FIXED: Use supabase.functions.invoke with FormData body
       const { data, error } = await supabase.functions.invoke('voice-translator', {
-        body: {
-          audioData: base64Audio,
-          targetLanguage: selectedLanguage,
-          mimeType: 'audio/webm'
-        }
+        body: formData
       });
-
-      let finalData = data;
 
       if (error) {
         console.error('🎤 Voice Translator error:', error);
@@ -522,41 +490,41 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           console.log('🎤 Attempting session refresh...');
           await supabase.auth.refreshSession();
           
+          const formDataRetry = new FormData();
+          formDataRetry.append('audioBlob', audioBlob, 'audio.webm');
+          formDataRetry.append('targetLanguage', selectedLanguage);
+
           const { data: retryData, error: retryError } = await supabase.functions.invoke('voice-translator', {
-            body: {
-              audioData: base64Audio,
-              targetLanguage: selectedLanguage,
-              mimeType: 'audio/webm'
-            }
+            body: formDataRetry
           });
 
           if (retryError) {
             throw new Error(`Authentication failed: ${retryError.message}`);
           }
           
-          finalData = retryData;
+          data = retryData;
         } else {
           throw new Error(`Translation failed: ${error.message}`);
         }
       }
 
-      if (!finalData?.translatedText) {
+      if (!data?.translatedText) {
         throw new Error('No translation received from service');
       }
 
-      console.log('🎤 Voice Translator result:', finalData);
+      console.log('🎤 Voice Translator result:', data);
 
-      if (finalData.targetLanguageCode && finalData.targetLanguageCode !== selectedLanguage) {
+      if (data.targetLanguageCode && data.targetLanguageCode !== selectedLanguage) {
         console.error('🎤 CRITICAL ERROR: Language mismatch!', {
           requested: selectedLanguage,
-          received: finalData.targetLanguageCode
+          received: data.targetLanguageCode
         });
         
         toast({
           title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
           description: language === 'ar' 
-            ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${finalData.targetLanguage}` 
-            : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${finalData.targetLanguage}`,
+            ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${data.targetLanguage}` 
+            : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${data.targetLanguage}`,
           variant: 'destructive'
         });
       }
@@ -579,14 +547,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
 
-      setTranslatedText(finalData.translatedText);
+      setTranslatedText(data.translatedText);
       
       const newTranslation: TranslationItem = {
         id: Date.now().toString(),
-        originalText: finalData.originalText,
-        translatedText: finalData.translatedText,
-        sourceLanguage: finalData.sourceLanguage,
-        targetLanguage: finalData.targetLanguage,
+        originalText: data.originalText,
+        translatedText: data.translatedText,
+        sourceLanguage: data.sourceLanguage,
+        targetLanguage: data.targetLanguage,
         timestamp: new Date()
       };
       addToHistory(newTranslation);
@@ -604,7 +572,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       // Background pre-generate audio immediately after translation
       if (playbackEnabled) {
-        preGenerateAudio(finalData.translatedText);
+        preGenerateAudio(data.translatedText);
       }
 
     } catch (error) {
@@ -618,14 +586,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         errorMessage = language === 'ar' 
           ? 'انتهت صلاحية الجلسة - يرجى تسجيل الدخول مرة أخرى' 
           : 'Session expired - please log in again';
-      } else if (error.message?.includes('audio file too large')) {
+      } else if (error.message?.includes('Failed to fetch')) {
         errorMessage = language === 'ar'
-          ? 'ملف الصوت كبير جداً - حاول تسجيل أقصر'
-          : 'Audio file too large - try a shorter recording';
-      } else if (error.message?.includes('stack')) {
-        errorMessage = language === 'ar'
-          ? 'خطأ في معالجة الصوت - حاول مرة أخرى'
-          : 'Audio processing error - please try again';
+          ? 'خطأ في الاتصال - تحقق من الاتصال بالإنترنت'
+          : 'Connection error - check your internet connection';
       }
 
       setProcessingError(errorMessage);
@@ -640,7 +604,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, preGenerateAudio]);
 
-  // FIXED: Updated to use supabase.functions.invoke for TTS as well
+  // Updated to use supabase.functions.invoke for TTS as well
   const playTranslatedText = useCallback(async (text: string) => {
     console.log('🔊 Play button clicked, text:', text);
     
@@ -665,7 +629,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       
       console.log(`🔊 Generating TTS for language: ${selectedLanguage}, voice: alloy`);
       
-      // FIXED: Use supabase.functions.invoke for TTS as well
+      // Use supabase.functions.invoke for TTS as well
       const { data, error } = await supabase.functions.invoke('voice-translator-tts', {
         body: {
           text: text,
