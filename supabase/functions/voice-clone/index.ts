@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
@@ -114,7 +115,7 @@ serve(async (req) => {
       });
     }
 
-    // Handle other requests (existing voice cloning logic)
+    // Handle POST request (voice creation)
     const requestBody = await req.json();
     const { audio_url, voice_name, voice_description } = requestBody;
     
@@ -128,21 +129,33 @@ serve(async (req) => {
       throw new Error('Missing required fields: audio_url and voice_name are required');
     }
 
-    // Rest of the existing voice cloning logic...
-    // (keeping existing code for voice creation)
+    console.log(`🎙️ Downloading audio from URL: ${audio_url.substring(0, 50)}...`);
 
-    console.log(`🎙️ Calling ElevenLabs Voice Cloning API...`);
+    // Download the audio file first
+    const audioResponse = await fetch(audio_url);
+    if (!audioResponse.ok) {
+      throw new Error(`Failed to download audio: ${audioResponse.status}`);
+    }
 
+    const audioBuffer = await audioResponse.arrayBuffer();
+    console.log(`🎙️ Audio downloaded, size: ${audioBuffer.byteLength} bytes`);
+
+    // Create FormData for the new ElevenLabs API
+    const formData = new FormData();
+    const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+    formData.append('files', audioBlob, 'voice_sample.mp3');
+    formData.append('name', voice_name);
+    formData.append('description', voice_description || 'Voice cloned via WAKTI');
+
+    console.log(`🎙️ Calling new ElevenLabs Voice Cloning API...`);
+
+    // Use the new ElevenLabs voice cloning endpoint
     const elevenLabsResponse = await fetch('https://api.elevenlabs.io/v1/voices/add', {
       method: 'POST',
       headers: {
         'xi-api-key': ELEVEN_LABS_API_KEY,
       },
-      body: JSON.stringify({
-        name: voice_name,
-        description: voice_description || 'Voice cloned via WAKTI',
-        files: [audio_url]
-      }),
+      body: formData,
     });
 
     console.log(`🎙️ ElevenLabs API response status: ${elevenLabsResponse.status}`);
@@ -168,7 +181,7 @@ serve(async (req) => {
       throw new Error('No voice_id received from ElevenLabs API');
     }
 
-    // Save to database
+    // Save to database with the new structure
     const { data: dbResult, error: dbError } = await supabase
       .from('user_voice_clones')
       .insert({
