@@ -22,34 +22,48 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 serve(async (req) => {
-  console.log(`🎙️ Request: ${req.method} ${req.url}`);
+  const requestId = Math.random().toString(36).substring(7);
+  console.log(`🎙️ [${requestId}] === NEW REQUEST START ===`);
+  console.log(`🎙️ [${requestId}] Method: ${req.method}`);
+  console.log(`🎙️ [${requestId}] URL: ${req.url}`);
+  console.log(`🎙️ [${requestId}] Headers:`, Object.fromEntries(req.headers.entries()));
   
   if (req.method === "OPTIONS") {
+    console.log(`🎙️ [${requestId}] Handling OPTIONS request`);
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log(`🎙️ [${requestId}] Starting request processing...`);
+    
     // Verify ElevenLabs API key
+    console.log(`🎙️ [${requestId}] Checking ElevenLabs API key...`);
     if (!ELEVENLABS_API_KEY) {
-      console.error('🎙️ ELEVENLABS_API_KEY not configured');
+      console.error(`🎙️ [${requestId}] ELEVENLABS_API_KEY not configured`);
       throw new Error('ElevenLabs API key not configured');
     }
+    console.log(`🎙️ [${requestId}] ElevenLabs API key: ${ELEVENLABS_API_KEY ? 'FOUND' : 'MISSING'}`);
 
     // Get user authentication
+    console.log(`🎙️ [${requestId}] Checking authentication...`);
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error(`🎙️ [${requestId}] No authorization header found`);
       throw new Error('Missing authorization header');
     }
+    console.log(`🎙️ [${requestId}] Auth header found: ${authHeader.substring(0, 20)}...`);
 
     const token = authHeader.replace('Bearer ', '');
+    console.log(`🎙️ [${requestId}] Extracted token: ${token.substring(0, 20)}...`);
+    
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      console.error('🎙️ Authentication failed:', authError);
+      console.error(`🎙️ [${requestId}] Authentication failed:`, authError);
       throw new Error('Authentication failed');
     }
 
-    console.log(`🎙️ Authenticated user: ${user.id} (${user.email})`);
+    console.log(`🎙️ [${requestId}] ✅ Authenticated user: ${user.id} (${user.email})`);
 
     // Get user's profile to access email
     const { data: profile } = await supabaseService
@@ -129,15 +143,20 @@ serve(async (req) => {
     }
 
     // Handle POST request (voice creation using official ElevenLabs client)
+    console.log(`🎙️ [${requestId}] Checking request method...`);
     if (req.method !== 'POST') {
+      console.error(`🎙️ [${requestId}] Invalid method: ${req.method}`);
       throw new Error('Method not allowed');
     }
 
+    console.log(`🎙️ [${requestId}] Parsing form data...`);
     const formData = await req.formData();
+    console.log(`🎙️ [${requestId}] Form data keys:`, Array.from(formData.keys()));
+    
     const audioFile = formData.get('audio') as File;
     const voiceName = formData.get('voiceName') as string;
     
-    console.log(`🎙️ Voice cloning request:`, {
+    console.log(`🎙️ [${requestId}] Voice cloning request details:`, {
       hasAudioFile: !!audioFile,
       audioFileName: audioFile?.name,
       audioFileSize: audioFile?.size,
@@ -146,26 +165,34 @@ serve(async (req) => {
       userEmail: userEmail
     });
 
+    console.log(`🎙️ [${requestId}] Validating required fields...`);
     if (!audioFile || !voiceName) {
+      console.error(`🎙️ [${requestId}] Missing required fields - audioFile: ${!!audioFile}, voiceName: ${!!voiceName}`);
       throw new Error('Missing required fields: audio file and voiceName are required');
     }
 
     // Validate file size (max 10MB)
+    console.log(`🎙️ [${requestId}] Validating file size: ${audioFile.size} bytes`);
     if (audioFile.size > 10 * 1024 * 1024) {
+      console.error(`🎙️ [${requestId}] File too large: ${audioFile.size} bytes`);
       throw new Error('Audio file too large. Maximum size is 10MB');
     }
 
     // Validate file type
+    console.log(`🎙️ [${requestId}] Validating file type: ${audioFile.type}`);
     if (!audioFile.type.startsWith('audio/')) {
+      console.error(`🎙️ [${requestId}] Invalid file type: ${audioFile.type}`);
       throw new Error('Invalid file type. Only audio files are allowed');
     }
 
     // FIXED: Convert File to Blob for ElevenLabs client (proper file handling)
+    console.log(`🎙️ [${requestId}] Converting file to blob...`);
     const audioBlob = new Blob([await audioFile.arrayBuffer()], { 
       type: audioFile.type || 'audio/webm' 
     });
+    console.log(`🎙️ [${requestId}] Blob created - size: ${audioBlob.size}, type: ${audioBlob.type}`);
 
-    console.log(`🎙️ Calling ElevenLabs Voice Clone API using official client...`);
+    console.log(`🎙️ [${requestId}] Calling ElevenLabs Voice Clone API using official client...`);
 
     // Initialize ElevenLabs client
     const elevenlabs = new ElevenLabsClient({
@@ -230,14 +257,18 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('🎙️ Voice clone error:', error);
+    console.error(`🎙️ [${requestId}] ❌ ERROR in voice clone:`, error);
+    console.error(`🎙️ [${requestId}] Error stack:`, error.stack);
     
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'Voice cloning failed'
+      error: error.message || 'Voice cloning failed',
+      requestId: requestId
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
+  } finally {
+    console.log(`🎙️ [${requestId}] === REQUEST END ===`);
   }
 });

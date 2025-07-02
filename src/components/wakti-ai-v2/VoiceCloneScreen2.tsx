@@ -175,21 +175,6 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     }
   };
 
-  // NEW: Save audio recording as MP3
-  const saveRecording = () => {
-    if (audioBlob) {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const a = document.createElement('a');
-      a.href = audioUrl;
-      a.download = `voice-recording-${Date.now()}.webm`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(audioUrl);
-      
-      toast.success(language === 'ar' ? 'تم حفظ التسجيل' : 'Recording saved');
-    }
-  };
 
   const deleteRecording = () => {
     setAudioBlob(null);
@@ -201,24 +186,30 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   };
 
   const createVoiceClone = async () => {
+    console.log('🎤 FRONTEND: Starting voice clone creation...');
+    
     if (!voiceName.trim()) {
+      console.log('🎤 FRONTEND: Voice name validation failed');
       toast.error(language === 'ar' ? 'يرجى إدخال اسم للصوت' : 'Please enter a voice name');
       return;
     }
 
     if (!audioBlob) {
+      console.log('🎤 FRONTEND: Audio blob validation failed');
       toast.error(language === 'ar' ? 'يرجى تسجيل ملف صوتي' : 'Please record an audio file');
       return;
     }
 
     // Validate minimum duration (at least 60 seconds for better quality)
     if (recordingTime < 60) {
+      console.log('🎤 FRONTEND: Duration too short:', recordingTime);
       toast.error(language === 'ar' ? 'التسجيل يجب أن يكون دقيقة واحدة على الأقل للحصول على جودة أفضل' : 'Recording must be at least 1 minute for better quality');
       return;
     }
 
     // Validate maximum duration (3 minutes as per ElevenLabs requirements)
     if (recordingTime > 180) {
+      console.log('🎤 FRONTEND: Duration too long:', recordingTime);
       toast.error(language === 'ar' ? 'التسجيل يجب أن يكون أقل من 3 دقائق' : 'Recording must be less than 3 minutes');
       return;
     }
@@ -226,6 +217,14 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     setIsCloning(true);
 
     try {
+      // Get current user for debugging
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('🎤 FRONTEND: Current user:', user ? `${user.id} (${user.email})` : 'NOT AUTHENTICATED');
+      
+      if (!user) {
+        throw new Error('User not authenticated - please login again');
+      }
+
       // FIXED: Create proper File object with correct naming
       const audioFile = new File([audioBlob], `voice-clone-${Date.now()}.webm`, {
         type: audioBlob.type || 'audio/webm'
@@ -235,30 +234,41 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       formData.append('audio', audioFile);
       formData.append('voiceName', voiceName.trim());
 
-      console.log('Creating voice clone with ElevenLabs:', {
+      console.log('🎤 FRONTEND: Prepared request data:', {
         audioSize: audioFile.size,
         voiceName: voiceName.trim(),
         duration: recordingTime,
-        audioType: audioFile.type
+        audioType: audioFile.type,
+        formDataKeys: Array.from(formData.keys())
       });
+
+      console.log('🎤 FRONTEND: Calling voice-clone function...');
+      const startTime = Date.now();
 
       const { data, error } = await supabase.functions.invoke('voice-clone', {
         body: formData,
       });
 
+      const endTime = Date.now();
+      console.log(`🎤 FRONTEND: Function call completed in ${endTime - startTime}ms`);
+      console.log('🎤 FRONTEND: Response data:', data);
+      console.log('🎤 FRONTEND: Response error:', error);
+
       if (error) {
-        console.error('Voice clone error:', error);
+        console.error('🎤 FRONTEND: Voice clone error:', error);
         throw error;
       }
 
       if (!data?.success) {
+        console.error('🎤 FRONTEND: Function returned failure:', data);
         throw new Error(data?.error || 'Voice cloning failed');
       }
 
-      console.log('Voice clone success:', data);
+      console.log('🎤 FRONTEND: Voice clone success:', data);
       toast.success(language === 'ar' ? 'تم إنشاء نسخة الصوت بنجاح! يمكنك الآن استخدامها في التطبيق.' : 'Voice clone created successfully! You can now use it in the app.');
 
       // Reload voices and reset form
+      console.log('🎤 FRONTEND: Reloading voices and resetting form...');
       await loadExistingVoices();
       setVoiceName('');
       deleteRecording();
@@ -423,16 +433,6 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                       ? (language === 'ar' ? 'إيقاف مؤقت' : 'Pause') 
                       : (language === 'ar' ? 'تشغيل' : 'Play')
                     }
-                  </Button>
-                  {/* NEW: Save Button */}
-                  <Button 
-                    onClick={saveRecording} 
-                    variant="outline" 
-                    size="sm"
-                    disabled={isCloning}
-                  >
-                    <Download className="h-3 w-3 mr-1" />
-                    {language === 'ar' ? 'حفظ' : 'Save'}
                   </Button>
                   <Button 
                     onClick={deleteRecording} 
