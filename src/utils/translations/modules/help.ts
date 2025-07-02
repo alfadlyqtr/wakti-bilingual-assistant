@@ -25,7 +25,7 @@ export const help = {
   imageMode: "Image Analysis",
   imageModeDesc: "Upload images for AI analysis, text extraction, or description.",
   voiceFeatures: "Voice Features",
-  voiceFeaturesDesc: "Use voice input, create voice clones, and get audio responses.",
+  voiceFeaturesDesc: "Use voice input and get audio responses.",
   
   // Tasjeel section
   tasjeelTitle: "Tasjeel Audio Recorder",
