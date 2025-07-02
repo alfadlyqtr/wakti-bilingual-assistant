@@ -6,6 +6,17 @@ import { Label } from '@/components/ui/label';
 import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface VoiceClone {
   id: string;
@@ -28,6 +39,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const [isCloning, setIsCloning] = useState(false);
   const [existingVoices, setExistingVoices] = useState<VoiceClone[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDeletingVoice, setIsDeletingVoice] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -50,6 +62,63 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       console.error('Error loading voices:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteVoiceClone = async (voiceId: string, voiceName: string) => {
+    setIsDeletingVoice(voiceId);
+    
+    try {
+      console.log('🗑️ === Voice Deletion Request ===');
+      console.log('🗑️ Voice ID:', voiceId);
+      console.log('🗑️ Voice Name:', voiceName);
+
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        throw new Error('User not authenticated');
+      }
+
+      // Call edge function to delete voice from ElevenLabs and database
+      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({
+          voice_id: voiceId,
+          action: 'delete'
+        })
+      });
+
+      console.log('🗑️ Delete response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🗑️ Delete response error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('🗑️ Delete result:', result);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete voice');
+      }
+
+      // Update local state
+      setExistingVoices(prev => prev.filter(voice => voice.voice_id !== voiceId));
+
+      toast.success(language === 'ar' 
+        ? `تم حذف الصوت "${voiceName}" بنجاح` 
+        : `Voice "${voiceName}" deleted successfully`
+      );
+
+    } catch (error: any) {
+      console.error('🗑️ Error deleting voice:', error);
+      toast.error(error.message || (language === 'ar' ? 'فشل في حذف الصوت' : 'Failed to delete voice'));
+    } finally {
+      setIsDeletingVoice(null);
     }
   };
 
@@ -207,19 +276,62 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         </p>
       </div>
 
-      {/* Existing Voices */}
+      {/* Existing Voices with Delete Functionality */}
       {existingVoices.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-medium text-sm">
             {language === 'ar' ? 'أصواتك المحفوظة' : 'Your Saved Voices'}
           </h3>
           {existingVoices.map((voice) => (
-            <div key={voice.id} className="flex items-center gap-2 p-2 bg-muted rounded-md">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-sm">{voice.voice_name}</span>
-              <span className="text-xs text-muted-foreground">
-                {language === 'ar' ? '🟢 مستنسخ' : '🟢 Cloned'}
-              </span>
+            <div key={voice.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm font-medium">{voice.voice_name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {language === 'ar' ? '🟢 مستنسخ' : '🟢 Cloned'}
+                </span>
+              </div>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                    disabled={isDeletingVoice === voice.voice_id}
+                  >
+                    {isDeletingVoice === voice.voice_id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {language === 'ar' ? 'حذف الصوت المستنسخ' : 'Delete Voice Clone'}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {language === 'ar' 
+                        ? `هل أنت متأكد من حذف الصوت "${voice.voice_name}"؟ هذا الإجراء لا يمكن التراجع عنه.`
+                        : `Are you sure you want to delete the voice "${voice.voice_name}"? This action cannot be undone.`
+                      }
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteVoiceClone(voice.voice_id, voice.voice_name)}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      {language === 'ar' ? 'حذف' : 'Delete'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           ))}
         </div>
@@ -230,8 +342,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
           <p className="text-sm text-amber-800 dark:text-amber-200">
             {language === 'ar' 
-              ? 'لقد وصلت إلى الحد الأقصى من 3 أصوات. احذف صوتاً لإنشاء صوت جديد أو اشتر المزيد من الخانات.' 
-              : "You've reached your 3-voice limit. Delete a voice to create a new one or buy more slots."
+              ? 'لقد وصلت إلى الحد الأقصى من 3 أصوات. احذف صوتاً لإنشاء صوت جديد.' 
+              : "You've reached your 3-voice limit. Delete a voice to create a new one."
             }
           </p>
         </div>
