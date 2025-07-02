@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Mic, Square, Play, Pause, Trash2, Upload } from 'lucide-react';
 
 interface VoiceClone {
@@ -33,7 +34,6 @@ export function VoiceCloneScreen2({
   onRecordingComplete 
 }: VoiceCloneScreen2Props) {
   const { language } = useTheme();
-  const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -107,11 +107,9 @@ export function VoiceCloneScreen2({
 
       mediaRecorder.onerror = (event) => {
         console.error('📱 MediaRecorder error:', event);
-        toast({
-          title: language === 'ar' ? 'خطأ في التسجيل' : 'Recording Error',
-          description: language === 'ar' ? 'حدث خطأ أثناء التسجيل' : 'An error occurred during recording',
-          variant: 'destructive',
-        });
+        toast.error(
+          language === 'ar' ? 'حدث خطأ أثناء التسجيل' : 'An error occurred during recording'
+        );
       };
 
       mediaRecorder.start(1000); // Collect data every second
@@ -135,13 +133,11 @@ export function VoiceCloneScreen2({
 
     } catch (error) {
       console.error('📱 Error starting recording:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في الوصول للميكروفون' : 'Microphone Access Error',
-        description: language === 'ar' 
+      toast.error(
+        language === 'ar' 
           ? 'لا يمكن الوصول للميكروفون. تأكد من السماح بالوصول.' 
-          : 'Cannot access microphone. Please allow microphone access.',
-        variant: 'destructive',
-      });
+          : 'Cannot access microphone. Please allow microphone access.'
+      );
     }
   };
 
@@ -182,24 +178,20 @@ export function VoiceCloneScreen2({
 
   const createVoiceClone = async () => {
     if (!audioBlob || !voiceName.trim()) {
-      toast({
-        title: language === 'ar' ? 'بيانات ناقصة' : 'Missing Information',
-        description: language === 'ar' 
+      toast.error(
+        language === 'ar' 
           ? 'يرجى إدخال اسم الصوت والتأكد من وجود تسجيل صوتي' 
-          : 'Please enter a voice name and ensure you have a recording',
-        variant: 'destructive',
-      });
+          : 'Please enter a voice name and ensure you have a recording'
+      );
       return;
     }
 
     if (recordingTime < 30) {
-      toast({
-        title: language === 'ar' ? 'تسجيل قصير' : 'Recording Too Short',
-        description: language === 'ar' 
+      toast.error(
+        language === 'ar' 
           ? 'يجب أن يكون التسجيل 30 ثانية على الأقل' 
-          : 'Recording must be at least 30 seconds long',
-        variant: 'destructive',
-      });
+          : 'Recording must be at least 30 seconds long'
+      );
       return;
     }
 
@@ -247,12 +239,11 @@ export function VoiceCloneScreen2({
 
       console.log('🎙️ Voice clone created successfully:', data.voice);
 
-      toast({
-        title: language === 'ar' ? 'تم إنشاء نسخة الصوت' : 'Voice Clone Created',
-        description: language === 'ar' 
+      toast.success(
+        language === 'ar' 
           ? 'تم إنشاء نسخة الصوت بنجاح' 
-          : 'Voice clone created successfully',
-      });
+          : 'Voice clone created successfully'
+      );
 
       // Reset form
       setVoiceName('');
@@ -277,11 +268,7 @@ export function VoiceCloneScreen2({
         errorMessage += `: ${error.message}`;
       }
       
-      toast({
-        title: language === 'ar' ? 'خطأ في إنشاء نسخة الصوت' : 'Voice Clone Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      toast.error(errorMessage);
     } finally {
       setIsCreating(false);
     }
