@@ -1,12 +1,10 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Search, Image, PenTool, Mic, Zap, Gamepad2 } from 'lucide-react';
+import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-react';
 import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
-import { BuyExtrasPopup } from './BuyExtrasPopup';
 import { GameModeModal } from './GameModeModal';
 
 interface QuickActionsProps {
@@ -28,8 +26,8 @@ export function QuickActionsPanel({
   } = useTheme();
   const [showTextGen, setShowTextGen] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
-  const [showBuyExtras, setShowBuyExtras] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
+  
   const triggerModes = [{
     id: 'chat',
     label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
@@ -55,6 +53,7 @@ export function QuickActionsPanel({
     borderColor: 'border-orange-500',
     description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
   }];
+  
   const quickActions = [{
     icon: <PenTool className="h-5 w-5" />,
     label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
@@ -73,13 +72,8 @@ export function QuickActionsPanel({
     description: language === 'ar' ? 'العب ألعاب ذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
     action: () => setShowGameMode(true),
     color: 'bg-red-500'
-  }, {
-    icon: <Zap className="h-5 w-5" />,
-    label: language === 'ar' ? 'شراء إضافات' : 'Buy Extras',
-    description: language === 'ar' ? 'المزيد من الميزات المتقدمة' : 'More advanced features',
-    action: () => setShowBuyExtras(true),
-    color: 'bg-yellow-500'
   }];
+  
   const handleTriggerSelect = (triggerId: string) => {
     onTriggerChange(triggerId);
     console.log('✨ Quick Actions: Trigger changed to:', triggerId);
@@ -97,6 +91,7 @@ export function QuickActionsPanel({
     // DO NOT close the drawer here! Popups will remain open now.
     console.log('🔧 Quick Actions: Tool opened and drawer stays open');
   };
+  
   return <div className="h-full overflow-y-auto">
       <div className="p-4 space-y-6">
         <div className="text-center">
@@ -164,9 +159,6 @@ export function QuickActionsPanel({
 
         {/* Game Mode Modal */}
         <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />
-
-        {/* Buy Extras Popup */}
-        <BuyExtrasPopup open={showBuyExtras} onOpenChange={setShowBuyExtras} />
       </div>
     </div>;
 }
