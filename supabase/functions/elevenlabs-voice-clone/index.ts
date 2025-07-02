@@ -13,8 +13,12 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
-console.log("🎙️ ELEVENLABS VOICE CLONE: Function loaded");
-console.log("🎙️ ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
+console.log("🎙️ ELEVENLABS VOICE CLONE: Function starting up");
+console.log("🎙️ Environment check:");
+console.log("🎙️ - SUPABASE_URL:", !!SUPABASE_URL);
+console.log("🎙️ - SUPABASE_ANON_KEY:", !!SUPABASE_ANON_KEY);
+console.log("🎙️ - ELEVENLABS_API_KEY:", !!ELEVENLABS_API_KEY);
+console.log("🎙️ - ELEVENLABS_API_KEY length:", ELEVENLABS_API_KEY?.length || 0);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -70,19 +74,26 @@ const retryApiCall = async (apiCall: () => Promise<Response>, maxRetries = 3): P
 };
 
 serve(async (req) => {
+  console.log(`🎙️ === NEW REQUEST START ===`);
   console.log(`🎙️ Request: ${req.method} ${req.url}`);
+  console.log(`🎙️ Headers:`, Object.fromEntries(req.headers.entries()));
   
   if (req.method === "OPTIONS") {
+    console.log("🎙️ Handling OPTIONS request");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log("🎙️ Step 1: Checking API key availability");
     // Check if API key is available
     if (!ELEVENLABS_API_KEY) {
-      console.error('🎙️ ELEVENLABS_API_KEY not found in environment');
-      throw new Error('ElevenLabs API key not configured');
+      console.error('🎙️ CRITICAL ERROR: ELEVENLABS_API_KEY not found in environment');
+      console.error('🎙️ Available env vars:', Object.keys(Deno.env.toObject()));
+      throw new Error('ElevenLabs API key not configured - this is the root cause');
     }
+    console.log("🎙️ Step 1: ✅ API key is available");
 
+    console.log("🎙️ Step 2: Getting user authentication");
     // Get user authentication
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '') || '';
@@ -90,49 +101,62 @@ serve(async (req) => {
     console.log(`🎙️ Auth header present: ${!!authHeader}`);
     console.log(`🎙️ Token length: ${token.length}`);
     
-    const { data: { user } } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    console.log("🎙️ Supabase auth result:", { user: !!user, error: authError });
+
+    if (authError) {
+      console.error('🎙️ Authentication error:', authError);
+      throw new Error(`Authentication failed: ${authError.message}`);
+    }
 
     if (!user) {
-      console.error('🎙️ User authentication failed');
+      console.error('🎙️ No user found in auth result');
       throw new Error('Unauthorized - user not authenticated');
     }
 
-    console.log(`🎙️ Authenticated user: ${user.id}`);
+    console.log(`🎙️ Step 2: ✅ Authenticated user: ${user.id}`);
 
     if (req.method === 'POST') {
-      console.log('🎙️ Processing voice clone creation request');
+      console.log('🎙️ Step 3: Processing voice clone creation request');
       
       // Create voice clone using instant voice cloning
       const formData = await req.formData();
+      console.log("🎙️ Step 3a: FormData received");
+      
       const voiceName = formData.get('voice_name') as string;
       const voiceDescription = formData.get('voice_description') as string;
       const audioFile = formData.get('audio_file') as File;
 
-      console.log(`🎙️ Form data received:`, {
+      console.log(`🎙️ Step 3b: Form data parsed:`, {
         voiceName: voiceName || 'Not provided',
         voiceDescription: voiceDescription || 'Not provided',
         audioFilePresent: !!audioFile,
         audioFileType: audioFile?.type || 'Unknown',
-        audioFileSize: audioFile?.size || 0
+        audioFileSize: audioFile?.size || 0,
+        audioFileName: audioFile?.name || 'Unknown'
       });
 
       if (!voiceName || !audioFile) {
-        console.error('🎙️ Missing required fields');
+        console.error('🎙️ Missing required fields:', { voiceName: !!voiceName, audioFile: !!audioFile });
         throw new Error('Voice name and audio file are required');
       }
+
+      console.log("🎙️ Step 3c: ✅ Required fields validated");
 
       // Convert audio file if it's WebM
       let processedAudioFile = audioFile;
       if (audioFile.type.includes('webm')) {
-        console.log('🎙️ Converting WebM audio to WAV');
+        console.log('🎙️ Step 4: Converting WebM audio to WAV');
         const wavBlob = await convertWebMToWAV(audioFile);
         processedAudioFile = new File([wavBlob], audioFile.name.replace('.webm', '.wav'), {
           type: 'audio/wav'
         });
-        console.log(`🎙️ Audio converted - new type: ${processedAudioFile.type}, size: ${processedAudioFile.size}`);
+        console.log(`🎙️ Step 4: ✅ Audio converted - new type: ${processedAudioFile.type}, size: ${processedAudioFile.size}`);
+      } else {
+        console.log(`🎙️ Step 4: Audio file is already in correct format: ${audioFile.type}`);
       }
 
-      console.log(`🎙️ Creating voice clone: ${voiceName}`);
+      console.log(`🎙️ Step 5: Creating voice clone with name: ${voiceName}`);
 
       // Prepare form data for ElevenLabs instant voice cloning
       const elevenlabsFormData = new FormData();
@@ -142,7 +166,9 @@ serve(async (req) => {
       }
       elevenlabsFormData.append('files', processedAudioFile);
 
-      console.log('🎙️ Sending request to ElevenLabs API...');
+      console.log('🎙️ Step 6: Sending request to ElevenLabs API...');
+      console.log('🎙️ ElevenLabs API URL: https://api.elevenlabs.io/v1/voices/ivc/create');
+      console.log('🎙️ ElevenLabs API Key length:', ELEVENLABS_API_KEY.length);
 
       // Use instant voice cloning endpoint with retry logic
       const response = await retryApiCall(() => 
@@ -155,21 +181,25 @@ serve(async (req) => {
         })
       );
 
-      console.log(`🎙️ ElevenLabs API response status: ${response.status}`);
+      console.log(`🎙️ Step 6: ElevenLabs API response status: ${response.status}`);
+      console.log(`🎙️ Step 6: ElevenLabs API response headers:`, Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('🎙️ ElevenLabs API error:', {
+        console.error('🎙️ ElevenLabs API error details:', {
           status: response.status,
           statusText: response.statusText,
-          body: errorText
+          body: errorText,
+          url: response.url
         });
         throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('🎙️ Voice created successfully:', result.voice_id);
+      console.log('🎙️ Step 6: ✅ ElevenLabs API success, voice_id:', result.voice_id);
+      console.log('🎙️ Step 6: Full ElevenLabs response:', result);
 
+      console.log('🎙️ Step 7: Storing voice data in database...');
       // Store voice data in database
       const { data, error } = await supabase
         .from('user_voice_clones')
@@ -183,12 +213,15 @@ serve(async (req) => {
         .select()
         .single();
 
+      console.log('🎙️ Step 7: Database insert result:', { data: !!data, error });
+
       if (error) {
-        console.error('🎙️ Database error:', error);
+        console.error('🎙️ Database error details:', error);
         throw new Error(`Failed to save voice data: ${error.message}`);
       }
 
-      console.log('🎙️ Voice clone creation completed successfully');
+      console.log('🎙️ Step 7: ✅ Voice data saved to database');
+      console.log('🎙️ === VOICE CLONE CREATION COMPLETED SUCCESSFULLY ===');
 
       return new Response(JSON.stringify({
         success: true,
@@ -198,7 +231,7 @@ serve(async (req) => {
       });
 
     } else if (req.method === 'GET') {
-      console.log('🎙️ Fetching user voices');
+      console.log('🎙️ Step 3: Fetching user voices');
       
       // Get user's voices
       const { data: voices, error } = await supabase
@@ -212,7 +245,7 @@ serve(async (req) => {
         throw new Error(`Failed to fetch voices: ${error.message}`);
       }
 
-      console.log(`🎙️ Found ${voices?.length || 0} voices for user`);
+      console.log(`🎙️ Step 3: ✅ Found ${voices?.length || 0} voices for user`);
 
       return new Response(JSON.stringify({
         success: true,
@@ -222,7 +255,7 @@ serve(async (req) => {
       });
 
     } else if (req.method === 'DELETE') {
-      console.log('🎙️ Processing voice deletion request');
+      console.log('🎙️ Step 3: Processing voice deletion request');
       
       // Delete voice
       const { voice_id } = await req.json();
@@ -231,7 +264,7 @@ serve(async (req) => {
         throw new Error('Voice ID is required');
       }
 
-      console.log(`🎙️ Deleting voice: ${voice_id}`);
+      console.log(`🎙️ Step 4: Deleting voice: ${voice_id}`);
 
       // Delete from ElevenLabs with retry logic
       try {
@@ -249,7 +282,7 @@ serve(async (req) => {
           console.error('🎙️ ElevenLabs delete error:', errorText);
           // Continue with database deletion even if ElevenLabs fails
         } else {
-          console.log('🎙️ Voice deleted from ElevenLabs successfully');
+          console.log('🎙️ Step 4: ✅ Voice deleted from ElevenLabs successfully');
         }
       } catch (error) {
         console.error('🎙️ ElevenLabs delete failed:', error);
@@ -268,7 +301,7 @@ serve(async (req) => {
         throw new Error(`Failed to delete voice: ${error.message}`);
       }
 
-      console.log('🎙️ Voice deletion completed successfully');
+      console.log('🎙️ Step 5: ✅ Voice deletion completed successfully');
 
       return new Response(JSON.stringify({
         success: true,
@@ -281,11 +314,19 @@ serve(async (req) => {
     throw new Error('Method not allowed');
 
   } catch (error) {
-    console.error('🎙️ Error:', error);
+    console.error('🎙️ === CRITICAL ERROR ===');
+    console.error('🎙️ Error type:', typeof error);
+    console.error('🎙️ Error name:', error?.name);
+    console.error('🎙️ Error message:', error?.message);
+    console.error('🎙️ Error stack:', error?.stack);
+    console.error('🎙️ Full error object:', error);
+    console.error('🎙️ === END CRITICAL ERROR ===');
     
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'Voice cloning operation failed'
+      error: error.message || 'Voice cloning operation failed',
+      errorType: error.name || 'UnknownError',
+      timestamp: new Date().toISOString()
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
