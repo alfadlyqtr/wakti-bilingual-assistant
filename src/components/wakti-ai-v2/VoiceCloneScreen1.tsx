@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -121,19 +120,20 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
         </p>
       </div>
 
-      <div className="flex gap-3 pt-4">
+      <div className="flex gap-3 pt-4 items-center">
         <Button 
           onClick={onNext}
-          className="flex-1"
+          className="flex-1 h-12 text-base font-medium"
+          size="lg"
         >
-          {language === 'ar' ? 'ابدأ' : 'Get Started'}
+          {language === 'ar' ? 'ابدأ / استنسخ الصوت' : 'Get Started / Clone Voice'}
         </Button>
         
         {hasExistingVoices && (
           <Button 
             onClick={onSkip}
             variant="outline"
-            className="flex-1"
+            className="flex-1 h-12 text-sm"
           >
             {language === 'ar' ? 'تخطي' : 'Skip'}
           </Button>
