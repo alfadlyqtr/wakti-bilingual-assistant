@@ -26,6 +26,7 @@ interface VoiceClone {
   id: string;
   voice_name: string;
   voice_id: string;
+  is_default?: boolean;
 }
 
 interface VoiceCloneScreen3Props {
@@ -77,6 +78,22 @@ const VOICE_STYLES = {
     settings: { stability: 0.3, similarity_boost: 0.5, style: 0.8, use_speaker_boost: true }
   }
 };
+
+// Default ElevenLabs voices
+const DEFAULT_VOICES: VoiceClone[] = [
+  {
+    id: 'default-aria',
+    voice_name: 'Wakti Female',
+    voice_id: '9BWtsMINqrJLrRacOk9x', // Aria
+    is_default: true
+  },
+  {
+    id: 'default-brian',
+    voice_name: 'Wakti Male',
+    voice_id: 'nPczCjzI2devNBz1zQrb', // Brian
+    is_default: true
+  }
+];
 
 // Complete ElevenLabs Multilingual v2 supported languages (29 languages)
 const TRANSLATION_LANGUAGES = [
@@ -144,17 +161,23 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
 
   const loadData = async () => {
     try {
-      // Load voices
+      // Load user's cloned voices
       const { data: voicesData, error: voicesError } = await supabase
         .from('user_voice_clones')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (voicesError) throw voicesError;
-      setVoices(voicesData || []);
       
+      // Combine user voices with default voices
+      const allVoices = [...DEFAULT_VOICES, ...(voicesData || [])];
+      setVoices(allVoices);
+      
+      // Set default selection to first default voice if no user voices, otherwise first user voice
       if (voicesData && voicesData.length > 0) {
         setSelectedVoiceId(voicesData[0].voice_id);
+      } else {
+        setSelectedVoiceId(DEFAULT_VOICES[0].voice_id);
       }
 
       // Load voice quota using the hook
@@ -420,25 +443,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     );
   }
 
-  if (voices.length === 0) {
-    return (
-      <div className="text-center py-8 space-y-4">
-        <Volume2 className="h-12 w-12 mx-auto text-muted-foreground" />
-        <h3 className="text-lg font-semibold">
-          {language === 'ar' ? 'لا توجد أصوات' : 'No Voices Available'}
-        </h3>
-        <p className="text-muted-foreground">
-          {language === 'ar' 
-            ? 'يجب إنشاء صوت أولاً لاستخدام هذه الميزة' 
-            : 'You need to create a voice first to use this feature'
-          }
-        </p>
-        <Button onClick={onBack}>
-          {language === 'ar' ? 'رجوع' : 'Go Back'}
-        </Button>
-      </div>
-    );
-  }
+  // Note: We no longer need "No Voices Available" fallback since default voices are always present
 
   return (
     <div className="space-y-6">
@@ -494,11 +499,35 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             <SelectValue placeholder={language === 'ar' ? 'اختر صوت' : 'Choose a voice'} />
           </SelectTrigger>
           <SelectContent>
-            {voices.map((voice) => (
+            {/* Default Voices Group */}
+            {voices.filter(voice => voice.is_default).map((voice) => (
               <SelectItem key={voice.id} value={voice.voice_id}>
-                {voice.voice_name}
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-600">🤖</span>
+                  <span>{voice.voice_name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({language === 'ar' ? 'افتراضي' : 'Default'})
+                  </span>
+                </div>
               </SelectItem>
             ))}
+            
+            {/* User Cloned Voices Group */}
+            {voices.filter(voice => !voice.is_default).length > 0 && (
+              <>
+                {voices.filter(voice => !voice.is_default).map((voice) => (
+                  <SelectItem key={voice.id} value={voice.voice_id}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600">🎤</span>
+                      <span>{voice.voice_name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({language === 'ar' ? 'مستنسخ' : 'Cloned'})
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </>
+            )}
           </SelectContent>
         </Select>
       </div>
