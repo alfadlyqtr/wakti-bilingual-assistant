@@ -32,6 +32,7 @@ interface VoiceCloneScreen2Props {
 
 export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const { language } = useTheme();
+  
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -78,20 +79,33 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       console.log('🗑️ Voice ID:', voiceId);
       console.log('🗑️ Voice Name:', voiceName);
 
-      // Use supabase.functions.invoke instead of direct fetch
-      const { data, error } = await supabase.functions.invoke('voice-clone', {
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No authentication session found');
+      }
+
+      // Use direct fetch for DELETE request
+      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone', {
         method: 'DELETE',
-        body: {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU'
+        },
+        body: JSON.stringify({
           voice_id: voiceId,
           action: 'delete'
-        }
+        })
       });
 
-      console.log('🗑️ Delete response:', { data, error });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to delete voice');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
+
+      const data = await response.json();
+      console.log('🗑️ Delete response:', data);
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to delete voice');
@@ -262,21 +276,34 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       console.log('🎙️ Audio Blob Size:', audioBlob.size);
       console.log('🎙️ Recording Duration:', recordingTime);
 
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No authentication session found');
+      }
+
       const formData = new FormData();
       formData.append('audio', audioBlob, 'voice-sample.wav');
       formData.append('voiceName', voiceName.trim());
       formData.append('voiceDescription', voiceDescription.trim());
 
-      // Use supabase.functions.invoke with FormData
-      const { data, error } = await supabase.functions.invoke('voice-clone', {
+      // Use direct fetch for FormData upload
+      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU'
+        },
         body: formData,
       });
 
-      console.log('🎙️ Clone response:', { data, error });
-
-      if (error) {
-        throw new Error(error.message || 'Voice cloning failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
+
+      const data = await response.json();
+      console.log('🎙️ Clone response:', data);
 
       if (!data.success) {
         throw new Error(data.error || 'Voice cloning failed');

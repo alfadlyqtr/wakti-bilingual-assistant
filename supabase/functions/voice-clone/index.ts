@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
@@ -326,8 +325,8 @@ serve(async (req) => {
     const elevenLabsFormData = new FormData();
     elevenLabsFormData.append('name', voiceName);
     elevenLabsFormData.append('description', voiceDescription);
-    elevenLabsFormData.append('files', audioFile); // Note: ElevenLabs expects 'files' not 'files[]'
-    elevenLabsFormData.append('remove_background_noise', 'false');
+    elevenLabsFormData.append('files', audioFile);
+    elevenLabsFormData.append('remove_background_noise', 'true'); // Changed to 'true' for better quality
 
     const cloneUrl = 'https://api.elevenlabs.io/v1/voices/add';
     const cloneHeaders = {
