@@ -78,60 +78,33 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       console.log('🗑️ Voice ID:', voiceId);
       console.log('🗑️ Voice Name:', voiceName);
 
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        throw new Error('User not authenticated');
-      }
-
-      // Call edge function to delete voice
-      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone`, {
+      // Use supabase.functions.invoke instead of direct fetch
+      const { data, error } = await supabase.functions.invoke('voice-clone', {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.session.access_token}`,
-        },
-        body: JSON.stringify({
+        body: {
           voice_id: voiceId,
           action: 'delete'
-        })
+        }
       });
 
-      console.log('🗑️ Delete response status:', response.status);
+      console.log('🗑️ Delete response:', { data, error });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🗑️ Delete response error:', errorText);
-        
-        // Try to parse JSON error for better error message
-        let errorMessage = `HTTP ${response.status}`;
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.error || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-        
-        throw new Error(errorMessage);
+      if (error) {
+        throw new Error(error.message || 'Failed to delete voice');
       }
 
-      const result = await response.json();
-      console.log('🗑️ Delete result:', result);
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to delete voice');
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to delete voice');
       }
 
       // Show success message
-      const successMessage = result.message || `Voice "${voiceName}" deleted successfully`;
+      const successMessage = data.message || `Voice "${voiceName}" deleted successfully`;
       toast.success(language === 'ar' 
         ? `تم حذف الصوت "${voiceName}" بنجاح` 
         : successMessage
       );
 
-      // Log deletion details for debugging
-      if (result.details) {
-        console.log('🗑️ Deletion details:', result.details);
-      }
+      console.log('🗑️ Voice deleted successfully:', data);
 
       // Wait a moment then refresh to ensure consistency
       setTimeout(() => {
@@ -144,7 +117,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       // Restore voice to list on error
       loadExistingVoices();
       
-      // Provide more specific error messages without mentioning service names
+      // Provide more specific error messages
       let errorMessage = error.message;
       if (errorMessage.includes('Voice not found') || errorMessage.includes('access denied')) {
         errorMessage = language === 'ar' 
@@ -274,21 +247,44 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       return;
     }
 
+    // Check voice limit before proceeding
+    if (existingVoices.length >= 3) {
+      toast.error(language === 'ar' ? 'لقد وصلت إلى الحد الأقصى من 3 أصوات' : 'You have reached the maximum of 3 voices');
+      return;
+    }
+
     setIsCloning(true);
 
     try {
+      console.log('🎙️ === Voice Cloning Request ===');
+      console.log('🎙️ Voice Name:', voiceName.trim());
+      console.log('🎙️ Voice Description Length:', voiceDescription.trim().length);
+      console.log('🎙️ Audio Blob Size:', audioBlob.size);
+      console.log('🎙️ Recording Duration:', recordingTime);
+
       const formData = new FormData();
       formData.append('audio', audioBlob, 'voice-sample.wav');
       formData.append('voiceName', voiceName.trim());
       formData.append('voiceDescription', voiceDescription.trim());
 
+      // Use supabase.functions.invoke with FormData
       const { data, error } = await supabase.functions.invoke('voice-clone', {
         body: formData,
       });
 
-      if (error) throw error;
+      console.log('🎙️ Clone response:', { data, error });
+
+      if (error) {
+        throw new Error(error.message || 'Voice cloning failed');
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Voice cloning failed');
+      }
 
       toast.success(language === 'ar' ? 'تم إنشاء نسخة الصوت بنجاح' : 'Voice clone created successfully');
+
+      console.log('🎙️ Voice cloned successfully:', data);
 
       // Reload voices and reset form
       await loadExistingVoices();
@@ -297,10 +293,20 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       deleteRecording();
 
     } catch (error: any) {
-      console.error('Error creating voice clone:', error);
+      console.error('🎙️ Error creating voice clone:', error);
       let errorMessage = error.message || (language === 'ar' ? 'فشل في إنشاء نسخة الصوت' : 'Failed to create voice clone');
-      // Remove service name references
-      errorMessage = errorMessage.replace(/ElevenLabs/gi, 'voice service');
+      
+      // Handle specific error cases
+      if (errorMessage.includes('Voice limit reached')) {
+        errorMessage = language === 'ar' 
+          ? 'وصلت إلى الحد الأقصى من 3 أصوات. احذف صوتاً موجوداً أولاً' 
+          : 'Voice limit reached. Delete an existing voice first';
+      } else if (errorMessage.includes('Voice service API key not configured')) {
+        errorMessage = language === 'ar' 
+          ? 'مفتاح خدمة الصوت غير مكون' 
+          : 'Voice service not configured';
+      }
+      
       toast.error(errorMessage);
     } finally {
       setIsCloning(false);

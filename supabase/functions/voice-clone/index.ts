@@ -58,28 +58,12 @@ serve(async (req) => {
 
       console.log(`🗑️ Starting deletion process for voice: ${voice_id}`);
 
-      // First, check if voice exists in database and user owns it
-      const { data: voiceData, error: voiceError } = await supabase
-        .from('user_voice_clones')
-        .select('*')
-        .eq('voice_id', voice_id)
-        .eq('user_id', user.id)
-        .maybeSingle(); // Use maybeSingle instead of single to avoid error if not found
+      // Step 1: Delete from ElevenLabs first
+      let elevenLabsSuccess = false;
+      let elevenLabsError = null;
 
-      console.log(`🗑️ Database lookup result:`, { 
-        found: !!voiceData, 
-        error: voiceError, 
-        voiceData: voiceData ? { id: voiceData.id, voice_name: voiceData.voice_name } : null 
-      });
-
-      // Handle different scenarios
-      let voiceExistsInDatabase = !!voiceData && !voiceError;
-      let voiceExistsInElevenLabs = false;
-      let elevenLabsDeleteSuccess = false;
-
-      // Try to delete from voice service first
       try {
-        console.log(`🗑️ Attempting to delete from voice service: ${voice_id}`);
+        console.log(`🗑️ Deleting voice from ElevenLabs: ${voice_id}`);
         
         const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
           method: 'DELETE',
@@ -88,40 +72,33 @@ serve(async (req) => {
           },
         });
 
-        console.log(`🗑️ Voice service delete response status: ${deleteResponse.status}`);
+        console.log(`🗑️ ElevenLabs delete response status: ${deleteResponse.status}`);
 
         if (deleteResponse.ok) {
-          console.log('🗑️ Successfully deleted voice from voice service');
-          voiceExistsInElevenLabs = true;
-          elevenLabsDeleteSuccess = true;
-        } else if (deleteResponse.status === 404) {
-          console.log('🗑️ Voice not found in voice service (already deleted or never existed)');
-          voiceExistsInElevenLabs = false;
-          elevenLabsDeleteSuccess = true; // Consider it success if it's already gone
+          const result = await deleteResponse.json();
+          console.log('🗑️ ElevenLabs delete result:', result);
+          
+          if (result.status === 'ok') {
+            elevenLabsSuccess = true;
+            console.log('🗑️ Successfully deleted voice from ElevenLabs');
+          } else {
+            throw new Error(`ElevenLabs delete failed: ${JSON.stringify(result)}`);
+          }
         } else {
           const errorText = await deleteResponse.text();
-          console.error('🗑️ Voice service delete error:', errorText);
-          voiceExistsInElevenLabs = true; // Assume it exists but failed to delete
-          elevenLabsDeleteSuccess = false;
+          throw new Error(`ElevenLabs API error ${deleteResponse.status}: ${errorText}`);
         }
-      } catch (elevenLabsError) {
-        console.error('🗑️ Error calling voice service delete API:', elevenLabsError);
-        voiceExistsInElevenLabs = true; // Assume it exists but we couldn't reach the API
-        elevenLabsDeleteSuccess = false;
+      } catch (error) {
+        console.error('🗑️ ElevenLabs deletion failed:', error);
+        elevenLabsError = error.message;
       }
 
-      console.log(`🗑️ Status check:`, {
-        voiceExistsInDatabase,
-        voiceExistsInElevenLabs,
-        elevenLabsDeleteSuccess
-      });
+      // Step 2: Delete from database
+      let dbSuccess = false;
+      let dbError = null;
 
-      // Handle database deletion based on scenarios
-      let dbDeleteSuccess = false;
-      let dbDeleteError = null;
-
-      if (voiceExistsInDatabase) {
-        console.log(`🗑️ Deleting from database: ${voiceData.voice_name}`);
+      try {
+        console.log(`🗑️ Deleting voice from database: ${voice_id}`);
         
         const { error: dbDeleteErr } = await supabase
           .from('user_voice_clones')
@@ -130,70 +107,55 @@ serve(async (req) => {
           .eq('user_id', user.id);
 
         if (dbDeleteErr) {
-          console.error('🗑️ Database delete error:', dbDeleteErr);
-          dbDeleteError = dbDeleteErr;
+          throw new Error(`Database delete error: ${dbDeleteErr.message}`);
         } else {
+          dbSuccess = true;
           console.log('🗑️ Successfully deleted voice from database');
-          dbDeleteSuccess = true;
         }
+      } catch (error) {
+        console.error('🗑️ Database deletion failed:', error);
+        dbError = error.message;
+      }
+
+      // Determine overall success
+      if (elevenLabsSuccess && dbSuccess) {
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Voice deleted successfully from both ElevenLabs and database'
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } else if (elevenLabsSuccess && !dbSuccess) {
+        console.error('🗑️ Partial success: ElevenLabs deleted but database failed');
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Voice deleted from ElevenLabs but database cleanup failed: ${dbError}`
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } else if (!elevenLabsSuccess && dbSuccess) {
+        console.error('🗑️ Partial success: Database deleted but ElevenLabs failed');
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Voice deleted from database but ElevenLabs deletion failed: ${elevenLabsError}`
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       } else {
-        console.log('🗑️ Voice not found in database (already deleted or never existed)');
-        dbDeleteSuccess = true; // Consider it success if it's already gone
+        console.error('🗑️ Complete failure: Both deletions failed');
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Both deletions failed. ElevenLabs: ${elevenLabsError}, Database: ${dbError}`
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       }
-
-      // Determine overall success based on scenarios
-      let overallSuccess = false;
-      let resultMessage = '';
-
-      if (!voiceExistsInDatabase && !voiceExistsInElevenLabs) {
-        // Voice doesn't exist anywhere - consider success
-        overallSuccess = true;
-        resultMessage = 'Voice was already deleted or never existed';
-      } else if (voiceExistsInDatabase && !voiceExistsInElevenLabs) {
-        // Only in database - success if DB deletion worked
-        overallSuccess = dbDeleteSuccess;
-        resultMessage = dbDeleteSuccess ? 'Voice deleted from database successfully' : 'Failed to delete voice from database';
-      } else if (!voiceExistsInDatabase && voiceExistsInElevenLabs) {
-        // Only in voice service - success if voice service deletion worked
-        overallSuccess = elevenLabsDeleteSuccess;
-        resultMessage = elevenLabsDeleteSuccess ? 'Voice deleted from voice service successfully' : 'Failed to delete voice from voice service';
-      } else {
-        // Exists in both - success if both deletions worked
-        overallSuccess = dbDeleteSuccess && elevenLabsDeleteSuccess;
-        if (overallSuccess) {
-          resultMessage = 'Voice deleted successfully';
-        } else if (!dbDeleteSuccess && !elevenLabsDeleteSuccess) {
-          resultMessage = 'Failed to delete voice completely';
-        } else if (!dbDeleteSuccess) {
-          resultMessage = 'Voice deleted from service but failed to delete from database';
-        } else {
-          resultMessage = 'Deleted from database but failed to delete from voice service';
-        }
-      }
-
-      console.log(`🗑️ Final result:`, { overallSuccess, resultMessage });
-
-      if (!overallSuccess && dbDeleteError) {
-        throw new Error(`Database deletion failed: ${dbDeleteError.message}`);
-      } else if (!overallSuccess) {
-        throw new Error(resultMessage);
-      }
-
-      return new Response(JSON.stringify({
-        success: true,
-        message: resultMessage,
-        details: {
-          voiceExistsInDatabase,
-          voiceExistsInElevenLabs,
-          dbDeleteSuccess,
-          elevenLabsDeleteSuccess
-        }
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
     }
 
-    // Handle voice cloning (FormData from frontend)
+    // Handle voice cloning (POST request)
     const formData = await req.formData();
     const audioFile = formData.get('audio') as File;
     const voiceName = formData.get('voiceName') as string;
@@ -202,27 +164,52 @@ serve(async (req) => {
     console.log(`🎙️ Voice cloning request:`, {
       hasAudioFile: !!audioFile,
       audioSize: audioFile?.size,
+      audioType: audioFile?.type,
       voiceName: voiceName,
       voiceDescription: voiceDescription
     });
 
-    if (!audioFile || !voiceName || !voiceDescription) {
-      throw new Error('Missing required fields: audio file, voice name, and voice description are required');
+    if (!audioFile || !voiceName) {
+      throw new Error('Missing required fields: audio file and voice name are required');
     }
 
     if (voiceDescription.length < 20 || voiceDescription.length > 1000) {
       throw new Error('Voice description must be between 20 and 1000 characters');
     }
 
+    // Check user's voice limit
+    const { data: existingVoices, error: countError } = await supabase
+      .from('user_voice_clones')
+      .select('id')
+      .eq('user_id', user.id);
+
+    if (countError) {
+      console.error('🎙️ Error checking voice count:', countError);
+      throw new Error('Failed to check existing voice count');
+    }
+
+    if (existingVoices && existingVoices.length >= 3) {
+      throw new Error('Voice limit reached. You can have maximum 3 voice clones. Please delete an existing voice first.');
+    }
+
     console.log(`🎙️ Starting voice cloning process...`);
 
-    // Create FormData for ElevenLabs voice creation API
+    // Create FormData for ElevenLabs voice creation API with correct field names
     const elevenLabsFormData = new FormData();
     elevenLabsFormData.append('name', voiceName);
     elevenLabsFormData.append('description', voiceDescription);
-    elevenLabsFormData.append('files', audioFile);
+    elevenLabsFormData.append('files', audioFile); // Note: ElevenLabs expects 'files' not 'files[]'
+    elevenLabsFormData.append('remove_background_noise', 'false');
 
     console.log(`🎙️ Calling ElevenLabs voice creation API...`);
+    console.log(`🎙️ FormData entries:`, {
+      name: voiceName,
+      description: voiceDescription,
+      fileName: audioFile.name,
+      fileSize: audioFile.size,
+      fileType: audioFile.type,
+      remove_background_noise: 'false'
+    });
     
     const elevenLabsResponse = await fetch('https://api.elevenlabs.io/v1/voices/add', {
       method: 'POST',
@@ -241,18 +228,19 @@ serve(async (req) => {
         statusText: elevenLabsResponse.statusText,
         error: errorText
       });
-      throw new Error(`Voice cloning failed: ${elevenLabsResponse.status} - ${errorText}`);
+      throw new Error(`Voice cloning failed (${elevenLabsResponse.status}): ${errorText}`);
     }
 
     const result = await elevenLabsResponse.json();
     console.log('🎙️ Voice cloning result:', {
       voiceId: result.voice_id,
-      voiceName: result.name
+      voiceName: result.name,
+      fullResult: result
     });
 
     if (!result.voice_id) {
       console.error('🎙️ No voice_id in response:', result);
-      throw new Error('No voice ID received from voice cloning service');
+      throw new Error('No voice ID received from ElevenLabs voice cloning service');
     }
 
     // Save to database
@@ -276,18 +264,21 @@ serve(async (req) => {
 
     if (dbError) {
       console.error('🎙️ Database insert error:', dbError);
-      // Try to delete the voice from ElevenLabs since DB save failed
+      
+      // Cleanup: Try to delete the voice from ElevenLabs since DB save failed
       try {
+        console.log('🎙️ Cleaning up voice from ElevenLabs after DB error...');
         await fetch(`https://api.elevenlabs.io/v1/voices/${result.voice_id}`, {
           method: 'DELETE',
           headers: {
             'xi-api-key': ELEVEN_LABS_API_KEY,
           },
         });
-        console.log('🎙️ Cleaned up voice from ElevenLabs after DB error');
+        console.log('🎙️ Cleanup successful');
       } catch (cleanupError) {
         console.error('🎙️ Failed to cleanup voice after DB error:', cleanupError);
       }
+      
       throw new Error('Failed to save voice clone to database');
     }
 
@@ -297,7 +288,8 @@ serve(async (req) => {
       success: true,
       voice_id: result.voice_id,
       voice_name: voiceName,
-      message: 'Voice cloned successfully'
+      message: 'Voice cloned successfully',
+      data: dbResult
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
