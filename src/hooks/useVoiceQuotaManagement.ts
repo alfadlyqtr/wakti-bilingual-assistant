@@ -3,57 +3,46 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface VoiceQuota {
-  characters_limit: number;
   characters_used: number;
+  characters_limit: number;
   extra_characters: number;
+  purchase_date?: string;
 }
 
 export function useVoiceQuotaManagement() {
   const [quota, setQuota] = useState<VoiceQuota | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadQuota = async () => {
+  const fetchQuota = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get user's voice quota from profiles or create default
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const { data, error } = await supabase.rpc('get_or_create_user_voice_quota', {
+        p_user_id: user.id
+      });
 
-      if (profile) {
-        // Default voice quota values
-        const defaultQuota: VoiceQuota = {
-          characters_limit: 10000, // 10k characters default limit
-          characters_used: 0,
-          extra_characters: 0
-        };
+      if (error) {
+        console.error('Error fetching voice quota:', error);
+        return;
+      }
 
-        setQuota(defaultQuota);
+      if (data && data.length > 0) {
+        setQuota(data[0]);
       }
     } catch (error) {
-      console.error('Error loading voice quota:', error);
-      // Set default quota even on error
-      setQuota({
-        characters_limit: 10000,
-        characters_used: 0,
-        extra_characters: 0
-      });
+      console.error('Error in fetchQuota:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const updateQuota = async () => {
-    // Reload quota after usage
-    await loadQuota();
+    await fetchQuota();
   };
 
   useEffect(() => {
-    loadQuota();
+    fetchQuota();
   }, []);
 
   return {
