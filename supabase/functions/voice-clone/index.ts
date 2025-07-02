@@ -11,10 +11,10 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const ELEVEN_LABS_API_KEY = Deno.env.get('ELEVEN_LABS_API_KEY');
+const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
 console.log("🎙️ VOICE CLONE: Function loaded");
-console.log("🎙️ ElevenLabs API Key available:", !!ELEVEN_LABS_API_KEY);
+console.log("🎙️ ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -27,8 +27,8 @@ serve(async (req) => {
 
   try {
     // Check if API key is available
-    if (!ELEVEN_LABS_API_KEY) {
-      console.error('🎙️ ELEVEN_LABS_API_KEY not found in environment');
+    if (!ELEVENLABS_API_KEY) {
+      console.error('🎙️ ELEVENLABS_API_KEY not found in environment');
       throw new Error('ElevenLabs API key not configured');
     }
 
@@ -42,7 +42,22 @@ serve(async (req) => {
       throw new Error('Unauthorized - user not authenticated');
     }
 
-    console.log(`🎙️ Authenticated user: ${user.id}`);
+    console.log(`🎙️ Authenticated user: ${user.id} (${user.email})`);
+
+    // Get user's profile to access email
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', user.id)
+      .single();
+
+    const userEmail = profile?.email || user.email;
+    
+    if (!userEmail) {
+      throw new Error('User email not found');
+    }
+
+    console.log(`🎙️ Using email for voice identification: ${userEmail}`);
 
     // Handle DELETE request (voice deletion)
     if (req.method === 'DELETE') {
@@ -55,12 +70,12 @@ serve(async (req) => {
 
       console.log(`🗑️ Deleting voice: ${voice_id}`);
 
-      // First, verify the user owns this voice
+      // First, verify the user owns this voice (using email)
       const { data: voiceData, error: voiceError } = await supabase
         .from('user_voice_clones')
         .select('*')
         .eq('voice_id', voice_id)
-        .eq('user_id', user.id)
+        .eq('user_email', userEmail)
         .single();
 
       if (voiceError || !voiceData) {
@@ -75,7 +90,7 @@ serve(async (req) => {
         const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
           method: 'DELETE',
           headers: {
-            'xi-api-key': ELEVEN_LABS_API_KEY,
+            'xi-api-key': ELEVENLABS_API_KEY,
           },
         });
 
@@ -98,7 +113,7 @@ serve(async (req) => {
         .from('user_voice_clones')
         .delete()
         .eq('voice_id', voice_id)
-        .eq('user_id', user.id);
+        .eq('user_email', userEmail);
 
       if (dbDeleteError) {
         console.error('🗑️ Database delete error:', dbDeleteError);
@@ -125,7 +140,8 @@ serve(async (req) => {
       audioFileName: audioFile?.name,
       audioFileSize: audioFile?.size,
       audioFileType: audioFile?.type,
-      voiceName: voiceName
+      voiceName: voiceName,
+      userEmail: userEmail
     });
 
     if (!audioFile || !voiceName) {
@@ -138,15 +154,15 @@ serve(async (req) => {
     const elevenLabsFormData = new FormData();
     elevenLabsFormData.append('files', audioFile, audioFile.name);
     elevenLabsFormData.append('name', voiceName);
-    elevenLabsFormData.append('description', `Voice cloned via WAKTI - ${voiceName}`);
+    elevenLabsFormData.append('description', `Voice cloned via WAKTI - ${voiceName} (${userEmail})`);
 
-    console.log(`🎙️ Calling new ElevenLabs Voice Cloning API...`);
+    console.log(`🎙️ Calling ElevenLabs Voice Cloning API...`);
 
-    // Use the new ElevenLabs voice cloning endpoint
+    // Use the correct ElevenLabs voice cloning endpoint
     const elevenLabsResponse = await fetch('https://api.elevenlabs.io/v1/voices/add', {
       method: 'POST',
       headers: {
-        'xi-api-key': ELEVEN_LABS_API_KEY,
+        'xi-api-key': ELEVENLABS_API_KEY,
       },
       body: elevenLabsFormData,
     });
@@ -174,14 +190,15 @@ serve(async (req) => {
       throw new Error('No voice_id received from ElevenLabs API');
     }
 
-    // Save to database with the new structure
+    // Save to database with email-based identification
     const { data: dbResult, error: dbError } = await supabase
       .from('user_voice_clones')
       .insert({
         user_id: user.id,
+        user_email: userEmail,
         voice_id: result.voice_id,
         voice_name: voiceName,
-        voice_description: `Voice cloned via WAKTI - ${voiceName}`,
+        voice_description: `Voice cloned via WAKTI - ${voiceName} (${userEmail})`,
         elevenlabs_data: result
       })
       .select()
@@ -198,6 +215,7 @@ serve(async (req) => {
       success: true,
       voice_id: result.voice_id,
       voice_name: voiceName,
+      user_email: userEmail,
       message: 'Voice cloned successfully'
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }

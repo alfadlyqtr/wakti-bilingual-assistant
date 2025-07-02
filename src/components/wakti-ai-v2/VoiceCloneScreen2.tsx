@@ -11,6 +11,7 @@ interface VoiceClone {
   id: string;
   voice_name: string;
   voice_id: string;
+  user_email?: string;
 }
 
 interface VoiceCloneScreen2Props {
@@ -39,15 +40,46 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
   const loadExistingVoices = async () => {
     try {
+      // Get current user's email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('User not authenticated');
+        return;
+      }
+
+      // Get user's profile to access email
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', user.id)
+        .single();
+
+      const userEmail = profile?.email || user.email;
+      
+      if (!userEmail) {
+        console.error('User email not found');
+        return;
+      }
+
+      console.log('Loading voices for email:', userEmail);
+
+      // Load voices using both user_id and user_email for compatibility
       const { data, error } = await supabase
         .from('user_voice_clones')
         .select('*')
+        .or(`user_id.eq.${user.id},user_email.eq.${userEmail}`)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading voices:', error);
+        throw error;
+      }
+
+      console.log('Loaded voices:', data);
       setExistingVoices(data || []);
     } catch (error) {
       console.error('Error loading voices:', error);
+      toast.error(language === 'ar' ? 'فشل في تحميل الأصوات' : 'Failed to load voices');
     } finally {
       setLoading(false);
     }
@@ -158,12 +190,21 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       formData.append('audio', audioBlob);
       formData.append('voiceName', voiceName.trim());
 
+      console.log('Creating voice clone with formData:', {
+        audioSize: audioBlob.size,
+        voiceName: voiceName.trim()
+      });
+
       const { data, error } = await supabase.functions.invoke('voice-clone', {
         body: formData,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Voice clone error:', error);
+        throw error;
+      }
 
+      console.log('Voice clone success:', data);
       toast.success(language === 'ar' ? 'تم إنشاء نسخة الصوت بنجاح' : 'Voice clone created successfully');
 
       // Reload voices and reset form
@@ -220,6 +261,11 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
               <span className="text-xs text-muted-foreground">
                 {language === 'ar' ? '🟢 مستنسخ' : '🟢 Cloned'}
               </span>
+              {voice.user_email && (
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {voice.user_email}
+                </span>
+              )}
             </div>
           ))}
         </div>
