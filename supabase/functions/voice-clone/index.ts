@@ -117,7 +117,7 @@ serve(async (req) => {
       console.log(`🗑️ Starting deletion process for voice: ${voice_id}`);
 
       // Step 1: Get voice record to find audio file URL
-      const { data: voiceRecord, error: fetchError } = await supabase
+      const { data: voiceRecord, error: fetchError } = await supabaseAdmin
         .from('user_voice_clones')
         .select('*')
         .eq('voice_id', voice_id)
@@ -187,8 +187,8 @@ serve(async (req) => {
         }
       }
 
-      // Step 4: Delete from database
-      const { error: dbError } = await supabase
+      // Step 4: Delete from database using supabaseAdmin
+      const { error: dbError } = await supabaseAdmin
         .from('user_voice_clones')
         .delete()
         .eq('voice_id', voice_id)
@@ -219,7 +219,7 @@ serve(async (req) => {
       });
     }
 
-    // Handle voice cloning (POST request) - NEW SIMPLE FLOW
+    // Handle voice cloning (POST request) - SIMPLE FLOW
     console.log(`🎙️ Processing voice cloning request - SIMPLE FLOW`);
     
     const formData = await req.formData();
@@ -260,8 +260,8 @@ serve(async (req) => {
       });
     }
 
-    // Check user's voice limit
-    const { data: existingVoices, error: countError } = await supabase
+    // Check user's voice limit using supabaseAdmin
+    const { data: existingVoices, error: countError } = await supabaseAdmin
       .from('user_voice_clones')
       .select('id')
       .eq('user_id', user.id);
@@ -410,10 +410,10 @@ serve(async (req) => {
 
     console.log(`🎙️ Step 3: Voice cloned successfully with ID: ${cloneData.voice_id} ✓`);
 
-    // STEP 4: SAVE TO DATABASE
+    // STEP 4: SAVE TO DATABASE using supabaseAdmin
     console.log(`🎙️ Step 4: Saving voice clone to database...`);
     
-    const { data: dbResult, error: dbError } = await supabase
+    const { data: dbResult, error: dbError } = await supabaseAdmin
       .from('user_voice_clones')
       .insert({
         user_id: user.id,
@@ -467,7 +467,7 @@ serve(async (req) => {
       voice_id: cloneData.voice_id,
       voice_name: voiceName,
       audio_file_url: audioFileUrl,
-      message: 'Voice cloned successfully using simple flow: Record → Save → Send',
+      message: 'Voice cloned successfully',
       data: dbResult,
       processingTime
     }), {

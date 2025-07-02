@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2, Upload, Send } from 'lucide-react';
+import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -273,7 +273,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     setCloningStep(language === 'ar' ? 'جاري التحضير...' : 'Preparing...');
 
     try {
-      console.log('🎙️ === Voice Cloning Request - SIMPLE FLOW ===');
+      console.log('🎙️ === Voice Cloning Request ===');
       console.log('🎙️ Voice Name:', voiceName.trim());
       console.log('🎙️ Voice Description Length:', voiceDescription.trim().length);
       console.log('🎙️ Audio Blob Size:', audioBlob.size);
@@ -383,7 +383,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
           {language === 'ar' ? 'سجل صوتك' : 'Record Your Voice'}
         </h2>
         <p className="text-sm text-muted-foreground">
-          {language === 'ar' ? 'التدفق البسيط: تسجيل → حفظ → إرسال' : 'Simple Flow: Record → Save → Send'}
+          {language === 'ar' ? 'سجل → احفظ → أرسل' : 'Record → Save → Send'}
         </p>
       </div>
 
@@ -467,14 +467,14 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
       {canRecord && (
         <>
-          {/* Simple Flow Progress */}
+          {/* Progress Indicator */}
           {isCloning && (
             <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
               <div className="flex items-center gap-3">
                 <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                 <div>
                   <p className="font-medium text-blue-800 dark:text-blue-200">
-                    {language === 'ar' ? 'التدفق البسيط قيد التنفيذ' : 'Simple Flow in Progress'}
+                    {language === 'ar' ? 'قيد التنفيذ' : 'Processing'}
                   </p>
                   <p className="text-sm text-blue-600 dark:text-blue-300">{cloningStep}</p>
                 </div>
@@ -591,16 +591,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
               </div>
             </div>
 
-            {/* Simple Flow Action Button */}
+            {/* Action Button */}
             <div className="p-4 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50/50">
               <div className="text-center space-y-3">
                 <h3 className="font-medium flex items-center justify-center gap-2">
                   <span className="flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded-full text-sm font-bold">3</span>
-                  {language === 'ar' ? 'تنفيذ التدفق البسيط' : 'Execute Simple Flow'}
+                  {language === 'ar' ? 'إنشاء نسخة الصوت' : 'Create Voice Clone'}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'سيتم: حفظ الملف الصوتي → إرساله إلى ElevenLabs → حفظ النتيجة' : 'Will: Save audio file → Send to ElevenLabs → Save result'}
-                </p>
                 <Button
                   onClick={createVoiceClone}
                   disabled={!hasValidAudio || !voiceName.trim() || !voiceDescription.trim() || voiceDescription.trim().length < 20 || voiceDescription.trim().length > 1000 || isCloning}
@@ -615,7 +612,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                   ) : (
                     <>
                       <Send className="h-4 w-4 mr-2" />
-                      {language === 'ar' ? 'بدء التدفق البسيط' : 'Start Simple Flow'}
+                      {language === 'ar' ? 'إنشاء نسخة الصوت' : 'Create Voice Clone'}
                     </>
                   )}
                 </Button>
