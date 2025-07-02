@@ -193,35 +193,37 @@ serve(async (req) => {
       });
     }
 
-    // Handle other requests (existing voice cloning logic)
-    const requestBody = await req.json();
-    const { audio_url, voice_name, voice_description } = requestBody;
+    // Handle voice cloning (FormData from frontend)
+    const formData = await req.formData();
+    const audioFile = formData.get('audio') as File;
+    const voiceName = formData.get('voiceName') as string;
+    const voiceDescription = formData.get('voiceDescription') as string || 'Voice cloned via WAKTI';
     
     console.log(`🎙️ Voice cloning request:`, {
-      hasAudioUrl: !!audio_url,
-      voiceName: voice_name,
-      voiceDescription: voice_description
+      hasAudioFile: !!audioFile,
+      audioSize: audioFile?.size,
+      voiceName: voiceName,
+      voiceDescription: voiceDescription
     });
 
-    if (!audio_url || !voice_name) {
-      throw new Error('Missing required fields: audio_url and voice_name are required');
+    if (!audioFile || !voiceName) {
+      throw new Error('Missing required fields: audio file and voice name are required');
     }
 
-    // Rest of the existing voice cloning logic...
-    // (keeping existing code for voice creation)
-
     console.log(`🎙️ Calling ElevenLabs Voice Cloning API...`);
+
+    // Create FormData for ElevenLabs API
+    const elevenLabsFormData = new FormData();
+    elevenLabsFormData.append('name', voiceName);
+    elevenLabsFormData.append('description', voiceDescription);
+    elevenLabsFormData.append('files', audioFile);
 
     const elevenLabsResponse = await fetch('https://api.elevenlabs.io/v1/voices/add', {
       method: 'POST',
       headers: {
         'xi-api-key': ELEVEN_LABS_API_KEY,
       },
-      body: JSON.stringify({
-        name: voice_name,
-        description: voice_description || 'Voice cloned via WAKTI',
-        files: [audio_url]
-      }),
+      body: elevenLabsFormData,
     });
 
     console.log(`🎙️ ElevenLabs API response status: ${elevenLabsResponse.status}`);
@@ -253,8 +255,8 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         voice_id: result.voice_id,
-        voice_name: voice_name,
-        voice_description: voice_description,
+        voice_name: voiceName,
+        voice_description: voiceDescription,
         elevenlabs_data: result
       })
       .select()
@@ -270,7 +272,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       voice_id: result.voice_id,
-      voice_name: voice_name,
+      voice_name: voiceName,
       message: 'Voice cloned successfully'
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
