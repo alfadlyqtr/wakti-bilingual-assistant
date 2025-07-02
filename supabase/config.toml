@@ -154,6 +154,12 @@ verify_jwt = true
 [functions.paypal-webhook]
 verify_jwt = false
 
+[functions.elevenlabs-voice-clone]
+verify_jwt = true
+
+[functions.elevenlabs-tts]
+verify_jwt = true
+
 [analytics]
 enabled = false
 port = 54327
