@@ -29,7 +29,7 @@ serve(async (req) => {
     // Check if API key is available
     if (!ELEVEN_LABS_API_KEY) {
       console.error('🎙️ ELEVEN_LABS_API_KEY not found in environment');
-      throw new Error('ElevenLabs API key not configured');
+      throw new Error('Voice service API key not configured');
     }
 
     // Get user authentication
@@ -77,9 +77,9 @@ serve(async (req) => {
       let voiceExistsInElevenLabs = false;
       let elevenLabsDeleteSuccess = false;
 
-      // Try to delete from ElevenLabs first
+      // Try to delete from voice service first
       try {
-        console.log(`🗑️ Attempting to delete from ElevenLabs: ${voice_id}`);
+        console.log(`🗑️ Attempting to delete from voice service: ${voice_id}`);
         
         const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
           method: 'DELETE',
@@ -88,24 +88,24 @@ serve(async (req) => {
           },
         });
 
-        console.log(`🗑️ ElevenLabs delete response status: ${deleteResponse.status}`);
+        console.log(`🗑️ Voice service delete response status: ${deleteResponse.status}`);
 
         if (deleteResponse.ok) {
-          console.log('🗑️ Successfully deleted voice from ElevenLabs');
+          console.log('🗑️ Successfully deleted voice from voice service');
           voiceExistsInElevenLabs = true;
           elevenLabsDeleteSuccess = true;
         } else if (deleteResponse.status === 404) {
-          console.log('🗑️ Voice not found in ElevenLabs (already deleted or never existed)');
+          console.log('🗑️ Voice not found in voice service (already deleted or never existed)');
           voiceExistsInElevenLabs = false;
           elevenLabsDeleteSuccess = true; // Consider it success if it's already gone
         } else {
           const errorText = await deleteResponse.text();
-          console.error('🗑️ ElevenLabs delete error:', errorText);
+          console.error('🗑️ Voice service delete error:', errorText);
           voiceExistsInElevenLabs = true; // Assume it exists but failed to delete
           elevenLabsDeleteSuccess = false;
         }
       } catch (elevenLabsError) {
-        console.error('🗑️ Error calling ElevenLabs delete API:', elevenLabsError);
+        console.error('🗑️ Error calling voice service delete API:', elevenLabsError);
         voiceExistsInElevenLabs = true; // Assume it exists but we couldn't reach the API
         elevenLabsDeleteSuccess = false;
       }
@@ -154,20 +154,20 @@ serve(async (req) => {
         overallSuccess = dbDeleteSuccess;
         resultMessage = dbDeleteSuccess ? 'Voice deleted from database successfully' : 'Failed to delete voice from database';
       } else if (!voiceExistsInDatabase && voiceExistsInElevenLabs) {
-        // Only in ElevenLabs - success if ElevenLabs deletion worked
+        // Only in voice service - success if voice service deletion worked
         overallSuccess = elevenLabsDeleteSuccess;
-        resultMessage = elevenLabsDeleteSuccess ? 'Voice deleted from ElevenLabs successfully' : 'Failed to delete voice from ElevenLabs';
+        resultMessage = elevenLabsDeleteSuccess ? 'Voice deleted from voice service successfully' : 'Failed to delete voice from voice service';
       } else {
         // Exists in both - success if both deletions worked
         overallSuccess = dbDeleteSuccess && elevenLabsDeleteSuccess;
         if (overallSuccess) {
-          resultMessage = 'Voice deleted successfully from both ElevenLabs and database';
+          resultMessage = 'Voice deleted successfully';
         } else if (!dbDeleteSuccess && !elevenLabsDeleteSuccess) {
-          resultMessage = 'Failed to delete voice from both ElevenLabs and database';
+          resultMessage = 'Failed to delete voice completely';
         } else if (!dbDeleteSuccess) {
-          resultMessage = 'Deleted from ElevenLabs but failed to delete from database';
+          resultMessage = 'Voice deleted from service but failed to delete from database';
         } else {
-          resultMessage = 'Deleted from database but failed to delete from ElevenLabs';
+          resultMessage = 'Deleted from database but failed to delete from voice service';
         }
       }
 
@@ -228,9 +228,9 @@ serve(async (req) => {
     }
 
     console.log(`🎙️ User email: ${profile.email}`);
-    console.log(`🎙️ Calling ElevenLabs Voice Cloning API...`);
+    console.log(`🎙️ Calling Voice Cloning API...`);
 
-    // Create FormData for ElevenLabs API
+    // Create FormData for voice service API
     const elevenLabsFormData = new FormData();
     elevenLabsFormData.append('name', voiceName);
     elevenLabsFormData.append('description', voiceDescription);
@@ -244,16 +244,16 @@ serve(async (req) => {
       body: elevenLabsFormData,
     });
 
-    console.log(`🎙️ ElevenLabs API response status: ${elevenLabsResponse.status}`);
+    console.log(`🎙️ Voice service API response status: ${elevenLabsResponse.status}`);
 
     if (!elevenLabsResponse.ok) {
       const errorText = await elevenLabsResponse.text();
-      console.error('🎙️ ElevenLabs API error:', {
+      console.error('🎙️ Voice service API error:', {
         status: elevenLabsResponse.status,
         statusText: elevenLabsResponse.statusText,
         error: errorText
       });
-      throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status} - ${errorText}`);
+      throw new Error(`Voice service API error: ${elevenLabsResponse.status} - ${errorText}`);
     }
 
     const result = await elevenLabsResponse.json();
@@ -264,7 +264,7 @@ serve(async (req) => {
 
     if (!result.voice_id) {
       console.error('🎙️ No voice_id in response:', result);
-      throw new Error('No voice_id received from ElevenLabs API');
+      throw new Error('No voice_id received from voice service API');
     }
 
     // Save to database with user email and enhanced metadata

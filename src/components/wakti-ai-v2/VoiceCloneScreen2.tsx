@@ -70,6 +70,9 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const deleteVoiceClone = async (voiceId: string, voiceName: string) => {
     setIsDeletingVoice(voiceId);
     
+    // Optimistic UI update - remove immediately
+    setExistingVoices(prev => prev.filter(voice => voice.voice_id !== voiceId));
+    
     try {
       console.log('🗑️ === Voice Deletion Request ===');
       console.log('🗑️ Voice ID:', voiceId);
@@ -80,7 +83,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         throw new Error('User not authenticated');
       }
 
-      // Call edge function to delete voice from ElevenLabs and database
+      // Call edge function to delete voice
       const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone`, {
         method: 'DELETE',
         headers: {
@@ -118,10 +121,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         throw new Error(result.error || 'Failed to delete voice');
       }
 
-      // Update local state - remove the deleted voice
-      setExistingVoices(prev => prev.filter(voice => voice.voice_id !== voiceId));
-
-      // Show success message with details if available
+      // Show success message
       const successMessage = result.message || `Voice "${voiceName}" deleted successfully`;
       toast.success(language === 'ar' 
         ? `تم حذف الصوت "${voiceName}" بنجاح` 
@@ -133,12 +133,20 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         console.log('🗑️ Deletion details:', result.details);
       }
 
+      // Wait a moment then refresh to ensure consistency
+      setTimeout(() => {
+        loadExistingVoices();
+      }, 1000);
+
     } catch (error: any) {
       console.error('🗑️ Error deleting voice:', error);
       
-      // Provide more specific error messages
+      // Restore voice to list on error
+      loadExistingVoices();
+      
+      // Provide more specific error messages without mentioning service names
       let errorMessage = error.message;
-      if (errorMessage.includes('Voice not found or access denied')) {
+      if (errorMessage.includes('Voice not found') || errorMessage.includes('access denied')) {
         errorMessage = language === 'ar' 
           ? 'الصوت غير موجود أو تم حذفه مسبقاً' 
           : 'Voice not found or already deleted';
@@ -146,19 +154,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         errorMessage = language === 'ar' 
           ? 'فشل في حذف الصوت من قاعدة البيانات' 
           : 'Failed to remove voice from database';
-      } else if (errorMessage.includes('Failed to delete voice from ElevenLabs')) {
+      } else if (errorMessage.includes('Failed to delete voice')) {
         errorMessage = language === 'ar' 
-          ? 'فشل في حذف الصوت من ElevenLabs' 
-          : 'Failed to delete voice from ElevenLabs service';
+          ? 'فشل في حذف الصوت' 
+          : 'Failed to delete voice';
       }
       
       toast.error(errorMessage);
-      
-      // If the error suggests the voice might not exist, refresh the list
-      if (errorMessage.includes('not found') || errorMessage.includes('already deleted')) {
-        console.log('🗑️ Refreshing voice list due to "not found" error');
-        loadExistingVoices();
-      }
     } finally {
       setIsDeletingVoice(null);
     }
@@ -296,7 +298,10 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
     } catch (error: any) {
       console.error('Error creating voice clone:', error);
-      toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء نسخة الصوت' : 'Failed to create voice clone'));
+      let errorMessage = error.message || (language === 'ar' ? 'فشل في إنشاء نسخة الصوت' : 'Failed to create voice clone');
+      // Remove service name references
+      errorMessage = errorMessage.replace(/ElevenLabs/gi, 'voice service');
+      toast.error(errorMessage);
     } finally {
       setIsCloning(false);
     }
