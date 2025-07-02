@@ -160,9 +160,10 @@ serve(async (req) => {
       throw new Error('Invalid file type. Only audio files are allowed');
     }
 
-    // Convert File to ArrayBuffer for ElevenLabs client
-    const audioBuffer = await audioFile.arrayBuffer();
-    const audioUint8Array = new Uint8Array(audioBuffer);
+    // FIXED: Convert File to Blob for ElevenLabs client (proper file handling)
+    const audioBlob = new Blob([await audioFile.arrayBuffer()], { 
+      type: audioFile.type || 'audio/webm' 
+    });
 
     console.log(`🎙️ Calling ElevenLabs Voice Clone API using official client...`);
 
@@ -171,21 +172,23 @@ serve(async (req) => {
       apiKey: ELEVENLABS_API_KEY,
     });
 
-    // Use ElevenLabs official Voice Clone API (IVC - Instant Voice Cloning)
+    // FIXED: Use proper Blob format for ElevenLabs IVC API
     const result = await elevenlabs.voices.ivc.create({
       name: voiceName,
       description: `Voice cloned via WAKTI - ${voiceName} (${userEmail})`,
-      files: [audioUint8Array],
+      files: [audioBlob],
     });
 
     console.log('🎙️ Voice cloning result:', {
-      voiceId: result.voice_id,
-      voiceName: result.name
+      voiceId: result.voiceId, // FIXED: Use correct property name
+      voiceName: result.name,
+      fullResponse: result
     });
 
-    if (!result.voice_id) {
-      console.error('🎙️ No voice_id in response:', result);
-      throw new Error('No voice_id received from ElevenLabs API');
+    // FIXED: Check for correct property name from ElevenLabs response
+    if (!result.voiceId) {
+      console.error('🎙️ No voiceId in response:', result);
+      throw new Error('No voiceId received from ElevenLabs API');
     }
 
     // Save to database using service role to bypass RLS
@@ -194,7 +197,7 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         user_email: userEmail,
-        voice_id: result.voice_id,
+        voice_id: result.voiceId, // FIXED: Use correct property name
         voice_name: voiceName,
         voice_description: `Voice cloned via WAKTI - ${voiceName} (${userEmail})`,
         elevenlabs_data: result
@@ -206,7 +209,7 @@ serve(async (req) => {
       console.error('🎙️ Database insert error:', dbError);
       // Try to cleanup ElevenLabs voice if database insert fails
       try {
-        await elevenlabs.voices.delete(result.voice_id);
+        await elevenlabs.voices.delete(result.voiceId);
         console.log('🎙️ Cleaned up ElevenLabs voice after database error');
       } catch (cleanupError) {
         console.error('🎙️ Failed to cleanup ElevenLabs voice:', cleanupError);
@@ -218,7 +221,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      voice_id: result.voice_id,
+      voice_id: result.voiceId, // FIXED: Use correct property name
       voice_name: voiceName,
       user_email: userEmail,
       message: 'Voice cloned successfully'

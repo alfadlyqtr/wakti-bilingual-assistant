@@ -1,9 +1,10 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2, AlertCircle, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -95,7 +96,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         } 
       });
       
-      // Use MP3-compatible format for better ElevenLabs compatibility
+      // Use WebM format for recording
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
         ? 'audio/webm;codecs=opus' 
         : MediaRecorder.isTypeSupported('audio/mp4') 
@@ -174,6 +175,22 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     }
   };
 
+  // NEW: Save audio recording as MP3
+  const saveRecording = () => {
+    if (audioBlob) {
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const a = document.createElement('a');
+      a.href = audioUrl;
+      a.download = `voice-recording-${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(audioUrl);
+      
+      toast.success(language === 'ar' ? 'تم حفظ التسجيل' : 'Recording saved');
+    }
+  };
+
   const deleteRecording = () => {
     setAudioBlob(null);
     setRecordingTime(0);
@@ -209,7 +226,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     setIsCloning(true);
 
     try {
-      // Create audio file with proper naming for ElevenLabs
+      // FIXED: Create proper File object with correct naming
       const audioFile = new File([audioBlob], `voice-clone-${Date.now()}.webm`, {
         type: audioBlob.type || 'audio/webm'
       });
@@ -218,7 +235,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       formData.append('audio', audioFile);
       formData.append('voiceName', voiceName.trim());
 
-      console.log('Creating voice clone with ElevenLabs official client:', {
+      console.log('Creating voice clone with ElevenLabs:', {
         audioSize: audioFile.size,
         voiceName: voiceName.trim(),
         duration: recordingTime,
@@ -274,7 +291,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   };
 
   const canRecord = existingVoices.length < 3;
-  const hasValidAudio = audioBlob && recordingTime >= 60 && recordingTime <= 180; // Updated to 60 seconds minimum
+  const hasValidAudio = audioBlob && recordingTime >= 60 && recordingTime <= 180;
 
   if (loading) {
     return (
@@ -298,7 +315,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         </p>
       </div>
 
-      {/* Audio Quality Guidelines - Updated */}
+      {/* Audio Quality Guidelines */}
       <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
@@ -406,6 +423,16 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                       ? (language === 'ar' ? 'إيقاف مؤقت' : 'Pause') 
                       : (language === 'ar' ? 'تشغيل' : 'Play')
                     }
+                  </Button>
+                  {/* NEW: Save Button */}
+                  <Button 
+                    onClick={saveRecording} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={isCloning}
+                  >
+                    <Download className="h-3 w-3 mr-1" />
+                    {language === 'ar' ? 'حفظ' : 'Save'}
                   </Button>
                   <Button 
                     onClick={deleteRecording} 
