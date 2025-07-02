@@ -90,7 +90,7 @@ serve(async (req) => {
       console.log(`🗑️ Confirmed voice ownership: ${voiceData.voice_name}`);
 
       try {
-        // Delete from ElevenLabs first
+        // Delete from ElevenLabs using official API
         const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
           method: 'DELETE',
           headers: {
@@ -132,7 +132,7 @@ serve(async (req) => {
       });
     }
 
-    // Handle POST request (voice creation)
+    // Handle POST request (voice creation using official ElevenLabs method)
     if (req.method !== 'POST') {
       throw new Error('Method not allowed');
     }
@@ -164,15 +164,18 @@ serve(async (req) => {
       throw new Error('Invalid file type. Only audio files are allowed');
     }
 
-    // Create FormData for ElevenLabs API following their official documentation
+    // Convert File to proper format for ElevenLabs API
+    const audioBuffer = await audioFile.arrayBuffer();
+    const audioBlob = new Blob([audioBuffer], { type: audioFile.type });
+
+    console.log(`🎙️ Calling ElevenLabs Voice Clone API using official method...`);
+
+    // Use ElevenLabs official Voice Clone API (IVC - Instant Voice Cloning)
     const elevenLabsFormData = new FormData();
-    elevenLabsFormData.append('files', audioFile, audioFile.name);
+    elevenLabsFormData.append('files', audioBlob, audioFile.name);
     elevenLabsFormData.append('name', voiceName);
     elevenLabsFormData.append('description', `Voice cloned via WAKTI - ${voiceName} (${userEmail})`);
 
-    console.log(`🎙️ Calling ElevenLabs Voice Add API...`);
-
-    // Use ElevenLabs Voice Add API endpoint
     const elevenLabsResponse = await fetch('https://api.elevenlabs.io/v1/voices/add', {
       method: 'POST',
       headers: {

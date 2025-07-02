@@ -4,7 +4,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2 } from 'lucide-react';
+import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -96,9 +96,12 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         } 
       });
       
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
+      // Use a more compatible format for better ElevenLabs compatibility
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : 'audio/webm';
+      
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       
       const chunks: BlobPart[] = [];
@@ -110,7 +113,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       };
       
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+        const blob = new Blob(chunks, { type: mimeType });
         setAudioBlob(blob);
         stream.getTracks().forEach(track => track.stop());
       };
@@ -205,19 +208,20 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     setIsCloning(true);
 
     try {
-      // Convert WebM to a more compatible format if needed
+      // Convert audio blob to the most compatible format
       const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
-        type: 'audio/webm;codecs=opus'
+        type: audioBlob.type || 'audio/webm'
       });
 
       const formData = new FormData();
       formData.append('audio', audioFile);
       formData.append('voiceName', voiceName.trim());
 
-      console.log('Creating voice clone:', {
+      console.log('Creating voice clone with ElevenLabs official API:', {
         audioSize: audioFile.size,
         voiceName: voiceName.trim(),
-        duration: recordingTime
+        duration: recordingTime,
+        audioType: audioFile.type
       });
 
       const { data, error } = await supabase.functions.invoke('voice-clone', {
@@ -244,7 +248,17 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     } catch (error: any) {
       console.error('Error creating voice clone:', error);
       const errorMessage = error?.message || error?.error || 'Failed to create voice clone';
-      toast.error(language === 'ar' ? 'فشل في إنشاء نسخة الصوت: ' + errorMessage : 'Failed to create voice clone: ' + errorMessage);
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('Audio file too large')) {
+        toast.error(language === 'ar' ? 'الملف الصوتي كبير جداً (الحد الأقصى 10 ميجابايت)' : 'Audio file too large (max 10MB)');
+      } else if (errorMessage.includes('Invalid file type')) {
+        toast.error(language === 'ar' ? 'نوع الملف غير صالح' : 'Invalid file type');
+      } else if (errorMessage.includes('ElevenLabs API')) {
+        toast.error(language === 'ar' ? 'خطأ في خدمة نسخ الصوت' : 'Voice cloning service error');
+      } else {
+        toast.error(language === 'ar' ? 'فشل في إنشاء نسخة الصوت: ' + errorMessage : 'Failed to create voice clone: ' + errorMessage);
+      }
     } finally {
       setIsCloning(false);
     }
@@ -279,6 +293,24 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         <p className="text-sm text-muted-foreground">
           {language === 'ar' ? 'يمكنك إنشاء حتى 3 أصوات' : 'You can create up to 3 voices'}
         </p>
+      </div>
+
+      {/* Audio Quality Guidelines */}
+      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-blue-800 dark:text-blue-200">
+            <p className="font-medium mb-1">
+              {language === 'ar' ? 'نصائح لجودة أفضل:' : 'For best quality:'}
+            </p>
+            <ul className="text-xs space-y-1 list-disc list-inside">
+              <li>{language === 'ar' ? 'سجل في مكان هادئ' : 'Record in a quiet environment'}</li>
+              <li>{language === 'ar' ? 'تحدث بوضوح وثبات' : 'Speak clearly and consistently'}</li>
+              <li>{language === 'ar' ? 'تجنب الأصوات الخلفية' : 'Avoid background noise'}</li>
+              <li>{language === 'ar' ? 'اقرأ نصاً متنوعاً' : 'Read varied content'}</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       {/* Existing Voices */}
