@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -8,9 +9,10 @@ interface VoiceCloneScreen1Props {
   onStartRecording: () => void;
   onSkip: () => void;
   hasExistingVoices: boolean;
+  hasRecordings?: boolean;
 }
 
-export function VoiceCloneScreen1({ onStartRecording, onSkip, hasExistingVoices }: VoiceCloneScreen1Props) {
+export function VoiceCloneScreen1({ onStartRecording, onSkip, hasExistingVoices, hasRecordings = false }: VoiceCloneScreen1Props) {
   const { language } = useTheme();
 
   const instructions = [
@@ -35,6 +37,13 @@ export function VoiceCloneScreen1({ onStartRecording, onSkip, hasExistingVoices 
       description: language === 'ar' ? 'حافظ على نبرة ومستوى صوت ثابت طوال التسجيل' : 'Maintain consistent tone and volume throughout',
     },
   ];
+
+  const getButtonText = () => {
+    if (hasRecordings) {
+      return language === 'ar' ? 'عرض التسجيلات' : 'Show Recordings';
+    }
+    return language === 'ar' ? 'ابدأ الآن' : 'Start Now';
+  };
 
   return (
     <div className="h-full overflow-y-auto">
@@ -84,7 +93,7 @@ export function VoiceCloneScreen1({ onStartRecording, onSkip, hasExistingVoices 
                 onClick={onStartRecording}
                 className="flex-1 bg-accent-blue hover:bg-accent-blue/80 text-white"
               >
-                {language === 'ar' ? 'ابدأ الآن' : 'Start Now'}
+                {getButtonText()}
               </Button>
               
               {hasExistingVoices && (

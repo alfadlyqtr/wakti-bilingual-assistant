@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -5,9 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Mic, MicOff, Play, Pause, Trash2, Upload, ArrowLeft, ArrowRight, StopCircle } from 'lucide-react';
+import { Mic, MicOff, Play, Pause, Trash2, Upload, ArrowLeft, ArrowRight, StopCircle, Rewind } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface VoiceClone {
   id: string;
@@ -22,11 +23,11 @@ interface VoiceCloneScreen2Props {
   onBack: () => void;
   voices: VoiceClone[];
   onVoicesUpdate: () => void;
+  onRecordingComplete?: (hasRecordings: boolean) => void;
 }
 
-export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: VoiceCloneScreen2Props) {
+export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate, onRecordingComplete }: VoiceCloneScreen2Props) {
   const { language } = useTheme();
-  const { toast } = useToast();
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -38,10 +39,13 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
   const [isUploading, setIsUploading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [voiceToDelete, setVoiceToDelete] = useState<VoiceClone | null>(null);
+  const [audioAnalyzer, setAudioAnalyzer] = useState<AnalyserNode | null>(null);
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Auto-stop recording at 60 seconds
   useEffect(() => {
@@ -49,6 +53,64 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
       stopRecording();
     }
   }, [recordingTime]);
+
+  // Cleanup audio context on unmount
+  useEffect(() => {
+    return () => {
+      if (audioContext) {
+        audioContext.close();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [audioContext]);
+
+  const analyzeAudioQuality = (audioBuffer: AudioBuffer): { isGoodQuality: boolean; reason?: string } => {
+    const channelData = audioBuffer.getChannelData(0);
+    const samples = channelData.length;
+    
+    // Check for silence (all values near zero)
+    const threshold = 0.01;
+    let nonSilentSamples = 0;
+    let totalAmplitude = 0;
+    
+    for (let i = 0; i < samples; i++) {
+      const amplitude = Math.abs(channelData[i]);
+      totalAmplitude += amplitude;
+      if (amplitude > threshold) {
+        nonSilentSamples++;
+      }
+    }
+    
+    const averageAmplitude = totalAmplitude / samples;
+    const nonSilentRatio = nonSilentSamples / samples;
+    
+    // Check for mostly silence
+    if (nonSilentRatio < 0.1) {
+      return { isGoodQuality: false, reason: 'Recording appears to be mostly silent' };
+    }
+    
+    // Check for very low volume
+    if (averageAmplitude < 0.005) {
+      return { isGoodQuality: false, reason: 'Recording volume is too low' };
+    }
+    
+    // Check for clipping (values at maximum)
+    let clippedSamples = 0;
+    for (let i = 0; i < samples; i++) {
+      if (Math.abs(channelData[i]) > 0.95) {
+        clippedSamples++;
+      }
+    }
+    
+    const clippingRatio = clippedSamples / samples;
+    if (clippingRatio > 0.05) {
+      return { isGoodQuality: false, reason: 'Recording has too much distortion/clipping' };
+    }
+    
+    return { isGoodQuality: true };
+  };
 
   const startRecording = async () => {
     try {
@@ -59,6 +121,18 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
           sampleRate: 44100
         } 
       });
+      
+      streamRef.current = stream;
+      
+      // Set up audio analysis
+      const context = new AudioContext();
+      const source = context.createMediaStreamSource(stream);
+      const analyzer = context.createAnalyser();
+      analyzer.fftSize = 2048;
+      source.connect(analyzer);
+      
+      setAudioContext(context);
+      setAudioAnalyzer(analyzer);
       
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
@@ -72,11 +146,32 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
         }
       };
       
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
+        
+        // Analyze audio quality
+        try {
+          const arrayBuffer = await blob.arrayBuffer();
+          const audioBuffer = await context.decodeAudioData(arrayBuffer);
+          const qualityCheck = analyzeAudioQuality(audioBuffer);
+          
+          if (!qualityCheck.isGoodQuality) {
+            toast.error(language === 'ar' ? 'جودة الصوت منخفضة' : 'Poor Audio Quality', {
+              description: language === 'ar' ? 'يرجى إعادة التسجيل في مكان هادئ' : qualityCheck.reason || 'Please record again in a quiet place'
+            });
+          }
+        } catch (error) {
+          console.warn('Audio analysis failed:', error);
+        }
+        
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
         stream.getTracks().forEach(track => track.stop());
+        
+        // Notify parent component about recording completion
+        if (onRecordingComplete) {
+          onRecordingComplete(true);
+        }
       };
       
       mediaRecorderRef.current = mediaRecorder;
@@ -91,10 +186,8 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
       
     } catch (error) {
       console.error('Failed to start recording:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في التسجيل' : 'Recording Error',
-        description: language === 'ar' ? 'فشل في بدء التسجيل. تأكد من السماح بالوصول للميكروفون.' : 'Failed to start recording. Please allow microphone access.',
-        variant: 'destructive',
+      toast.error(language === 'ar' ? 'خطأ في التسجيل' : 'Recording Error', {
+        description: language === 'ar' ? 'فشل في بدء التسجيل. تأكد من السماح بالوصول للميكروفون.' : 'Failed to start recording. Please allow microphone access.'
       });
     }
   };
@@ -109,12 +202,15 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
         intervalRef.current = null;
       }
       
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      
       // Check minimum duration
       if (recordingTime < 30) {
-        toast({
-          title: language === 'ar' ? 'تسجيل قصير' : 'Recording Too Short',
-          description: language === 'ar' ? 'يجب أن يكون التسجيل 30 ثانية على الأقل للحصول على جودة جيدة.' : 'Recording should be at least 30 seconds for good quality.',
-          variant: 'destructive',
+        toast.error(language === 'ar' ? 'تسجيل قصير' : 'Recording Too Short', {
+          description: language === 'ar' ? 'يجب أن يكون التسجيل 30 ثانية على الأقل للحصول على جودة جيدة.' : 'Recording should be at least 30 seconds for good quality.'
         });
       }
     }
@@ -137,6 +233,12 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
     }
   };
 
+  const rewindAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -145,19 +247,15 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
 
   const uploadVoiceClone = async () => {
     if (!audioBlob || !voiceName.trim()) {
-      toast({
-        title: language === 'ar' ? 'بيانات مفقودة' : 'Missing Data',
-        description: language === 'ar' ? 'يرجى إدخال اسم الصوت وتسجيل الصوت.' : 'Please enter voice name and record audio.',
-        variant: 'destructive',
+      toast.error(language === 'ar' ? 'بيانات مفقودة' : 'Missing Data', {
+        description: language === 'ar' ? 'يرجى إدخال اسم الصوت وتسجيل الصوت.' : 'Please enter voice name and record audio.'
       });
       return;
     }
 
     if (recordingTime < 30) {
-      toast({
-        title: language === 'ar' ? 'تسجيل قصير' : 'Recording Too Short',
-        description: language === 'ar' ? 'يجب أن يكون التسجيل 30 ثانية على الأقل.' : 'Recording must be at least 30 seconds.',
-        variant: 'destructive',
+      toast.error(language === 'ar' ? 'تسجيل قصير' : 'Recording Too Short', {
+        description: language === 'ar' ? 'يجب أن يكون التسجيل 30 ثانية على الأقل.' : 'Recording must be at least 30 seconds.'
       });
       return;
     }
@@ -165,8 +263,12 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
     setIsUploading(true);
 
     try {
+      // Get user info for better voice naming
+      const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email || '';
+      
       const formData = new FormData();
-      formData.append('voice_name', voiceName.trim());
+      formData.append('voice_name', `${voiceName.trim()} (${userEmail})`);
       formData.append('voice_description', voiceDescription.trim());
       formData.append('audio_file', audioBlob, 'recording.webm');
 
@@ -177,9 +279,8 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
       if (error) throw error;
 
       if (data.success) {
-        toast({
-          title: language === 'ar' ? 'تم إنشاء النسخة بنجاح' : 'Voice Clone Created',
-          description: language === 'ar' ? 'تم إنشاء نسخة من صوتك بنجاح!' : 'Your voice clone has been created successfully!',
+        toast.success(language === 'ar' ? 'تم إنشاء النسخة بنجاح' : 'Voice Clone Created', {
+          description: language === 'ar' ? 'تم إنشاء نسخة من صوتك بنجاح!' : 'Your voice clone has been created successfully!'
         });
 
         // Reset form
@@ -191,15 +292,18 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
         
         // Refresh voices list
         onVoicesUpdate();
+        
+        // Notify parent component
+        if (onRecordingComplete) {
+          onRecordingComplete(true);
+        }
       } else {
         throw new Error(data.error || 'Failed to create voice clone');
       }
     } catch (error: any) {
       console.error('Voice clone error:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في إنشاء النسخة' : 'Voice Clone Error',
-        description: error.message || (language === 'ar' ? 'فشل في إنشاء نسخة الصوت.' : 'Failed to create voice clone.'),
-        variant: 'destructive',
+      toast.error(language === 'ar' ? 'خطأ في إنشاء النسخة' : 'Voice Clone Error', {
+        description: error.message || (language === 'ar' ? 'فشل في إنشاء نسخة الصوت.' : 'Failed to create voice clone.')
       });
     } finally {
       setIsUploading(false);
@@ -209,6 +313,7 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
   const deleteVoice = async (voice: VoiceClone) => {
     try {
       const { data, error } = await supabase.functions.invoke('elevenlabs-voice-clone', {
+        method: 'DELETE',
         body: { voice_id: voice.voice_id },
         headers: { 'Content-Type': 'application/json' },
       });
@@ -216,9 +321,8 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
       if (error) throw error;
 
       if (data.success) {
-        toast({
-          title: language === 'ar' ? 'تم حذف الصوت' : 'Voice Deleted',
-          description: language === 'ar' ? 'تم حذف نسخة الصوت بنجاح.' : 'Voice clone has been deleted successfully.',
+        toast.success(language === 'ar' ? 'تم حذف الصوت' : 'Voice Deleted', {
+          description: language === 'ar' ? 'تم حذف نسخة الصوت بنجاح.' : 'Voice clone has been deleted successfully.'
         });
         onVoicesUpdate();
       } else {
@@ -226,10 +330,8 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
       }
     } catch (error: any) {
       console.error('Delete voice error:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في الحذف' : 'Delete Error',
-        description: error.message || (language === 'ar' ? 'فشل في حذف نسخة الصوت.' : 'Failed to delete voice clone.'),
-        variant: 'destructive',
+      toast.error(language === 'ar' ? 'خطأ في الحذف' : 'Delete Error', {
+        description: error.message || (language === 'ar' ? 'فشل في حذف نسخة الصوت.' : 'Failed to delete voice clone.')
       });
     }
   };
@@ -272,14 +374,24 @@ export function VoiceCloneScreen2({ onNext, onBack, voices, onVoicesUpdate }: Vo
               </Button>
               
               {audioUrl && (
-                <Button
-                  onClick={togglePlayback}
-                  variant="outline"
-                  className="border-white/30 dark:border-white/20 text-slate-700 dark:text-slate-300"
-                >
-                  {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                  <span className="ml-2">{language === 'ar' ? 'تشغيل المعاينة' : 'Preview'}</span>
-                </Button>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={rewindAudio}
+                    variant="outline"
+                    size="sm"
+                    className="border-white/30 dark:border-white/20 text-slate-700 dark:text-slate-300"
+                  >
+                    <Rewind className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={togglePlayback}
+                    variant="outline"
+                    className="border-white/30 dark:border-white/20 text-slate-700 dark:text-slate-300"
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    <span className="ml-2">{language === 'ar' ? 'تشغيل المعاينة' : 'Preview'}</span>
+                  </Button>
+                </div>
               )}
             </div>
 

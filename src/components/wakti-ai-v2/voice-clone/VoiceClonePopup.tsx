@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -24,6 +25,7 @@ export function VoiceClonePopup({ isOpen, onClose }: VoiceClonePopupProps) {
   const [currentScreen, setCurrentScreen] = useState(1);
   const [voices, setVoices] = useState<VoiceClone[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasRecordings, setHasRecordings] = useState(false);
 
   const fetchVoices = async () => {
     setIsLoading(true);
@@ -36,6 +38,7 @@ export function VoiceClonePopup({ isOpen, onClose }: VoiceClonePopupProps) {
 
       if (data.success) {
         setVoices(data.voices || []);
+        setHasRecordings(data.voices && data.voices.length > 0);
       }
     } catch (error) {
       console.error('Failed to fetch voices:', error);
@@ -67,6 +70,10 @@ export function VoiceClonePopup({ isOpen, onClose }: VoiceClonePopupProps) {
     setCurrentScreen(1);
   };
 
+  const handleRecordingComplete = (hasNewRecordings: boolean) => {
+    setHasRecordings(hasNewRecordings);
+  };
+
   const renderCurrentScreen = () => {
     switch (currentScreen) {
       case 1:
@@ -75,6 +82,7 @@ export function VoiceClonePopup({ isOpen, onClose }: VoiceClonePopupProps) {
             onStartRecording={handleStartRecording}
             onSkip={handleSkip}
             hasExistingVoices={voices.length > 0}
+            hasRecordings={hasRecordings}
           />
         );
       case 2:
@@ -84,6 +92,7 @@ export function VoiceClonePopup({ isOpen, onClose }: VoiceClonePopupProps) {
             onBack={handleBack}
             voices={voices}
             onVoicesUpdate={fetchVoices}
+            onRecordingComplete={handleRecordingComplete}
           />
         );
       case 3:

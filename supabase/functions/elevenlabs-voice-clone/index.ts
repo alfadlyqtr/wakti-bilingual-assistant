@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
@@ -16,6 +17,35 @@ console.log("🎙️ ELEVENLABS VOICE CLONE: Function loaded");
 console.log("🎙️ ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Helper function to retry API calls
+const retryApiCall = async (apiCall: () => Promise<Response>, maxRetries = 3): Promise<Response> => {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await apiCall();
+      
+      // If it's a 5xx error, retry
+      if (response.status >= 500 && attempt < maxRetries) {
+        console.warn(`🎙️ API call failed with ${response.status}, retrying attempt ${attempt + 1}/${maxRetries}`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries) {
+        console.warn(`🎙️ API call failed with error, retrying attempt ${attempt + 1}/${maxRetries}:`, error);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      }
+    }
+  }
+  
+  throw lastError || new Error('Max retries exceeded');
+};
 
 serve(async (req) => {
   console.log(`🎙️ Request: ${req.method} ${req.url}`);
@@ -44,7 +74,7 @@ serve(async (req) => {
     console.log(`🎙️ Authenticated user: ${user.id}`);
 
     if (req.method === 'POST') {
-      // Create voice clone
+      // Create voice clone using instant voice cloning
       const formData = await req.formData();
       const voiceName = formData.get('voice_name') as string;
       const voiceDescription = formData.get('voice_description') as string;
@@ -56,7 +86,7 @@ serve(async (req) => {
 
       console.log(`🎙️ Creating voice clone: ${voiceName}`);
 
-      // Prepare form data for ElevenLabs
+      // Prepare form data for ElevenLabs instant voice cloning
       const elevenlabsFormData = new FormData();
       elevenlabsFormData.append('name', voiceName);
       if (voiceDescription) {
@@ -64,14 +94,16 @@ serve(async (req) => {
       }
       elevenlabsFormData.append('files', audioFile);
 
-      // Call ElevenLabs API
-      const response = await fetch('https://api.elevenlabs.io/v1/voices/add', {
-        method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-        },
-        body: elevenlabsFormData,
-      });
+      // Use instant voice cloning endpoint with retry logic
+      const response = await retryApiCall(() => 
+        fetch('https://api.elevenlabs.io/v1/voices/ivc/create', {
+          method: 'POST',
+          headers: {
+            'xi-api-key': ELEVENLABS_API_KEY,
+          },
+          body: elevenlabsFormData,
+        })
+      );
 
       console.log(`🎙️ ElevenLabs API response status: ${response.status}`);
 
@@ -139,17 +171,24 @@ serve(async (req) => {
 
       console.log(`🎙️ Deleting voice: ${voice_id}`);
 
-      // Delete from ElevenLabs
-      const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
-        method: 'DELETE',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-        },
-      });
+      // Delete from ElevenLabs with retry logic
+      try {
+        const deleteResponse = await retryApiCall(() => 
+          fetch(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
+            method: 'DELETE',
+            headers: {
+              'xi-api-key': ELEVENLABS_API_KEY,
+            },
+          })
+        );
 
-      if (!deleteResponse.ok) {
-        const errorText = await deleteResponse.text();
-        console.error('🎙️ ElevenLabs delete error:', errorText);
+        if (!deleteResponse.ok) {
+          const errorText = await deleteResponse.text();
+          console.error('🎙️ ElevenLabs delete error:', errorText);
+          // Continue with database deletion even if ElevenLabs fails
+        }
+      } catch (error) {
+        console.error('🎙️ ElevenLabs delete failed:', error);
         // Continue with database deletion even if ElevenLabs fails
       }
 
