@@ -1,13 +1,11 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 import { AIMessage } from '@/services/WaktiAIV2Service';
-import { Button } from '@/components/ui/button';
-import { ChevronDown } from 'lucide-react';
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -42,25 +40,6 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const scrollTimeoutRef = useRef<NodeJS.Timeout>();
-  const [showScrollButton, setShowScrollButton] = useState(false);
-
-  // Check if user is near bottom of chat
-  const checkScrollPosition = () => {
-    if (scrollAreaRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-      setShowScrollButton(!isNearBottom && sessionMessages.length > 3);
-    }
-  };
-
-  // Handle scroll events
-  useEffect(() => {
-    const scrollContainer = scrollAreaRef.current;
-    if (scrollContainer) {
-      scrollContainer.addEventListener('scroll', checkScrollPosition);
-      return () => scrollContainer.removeEventListener('scroll', checkScrollPosition);
-    }
-  }, [sessionMessages.length]);
 
   // ENHANCED: Robust auto-scroll to always show latest message
   useEffect(() => {
@@ -110,17 +89,6 @@ export function ChatMessages({
     };
   }, [sessionMessages, isLoading, showTaskConfirmation]);
 
-  // Manual scroll to bottom function
-  const handleScrollToBottom = () => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-      setShowScrollButton(false);
-    }
-  };
-
   // Check if the last user message has attached files for better loading indicator
   const lastUserMessage = sessionMessages.filter(msg => msg.role === 'user').pop();
   const hasAttachedFiles = lastUserMessage?.attachedFiles && lastUserMessage.attachedFiles.length > 0;
@@ -129,7 +97,7 @@ export function ChatMessages({
   const aiNickname = personalTouch?.aiNickname || 'WAKTI AI';
 
   return (
-    <div className="relative flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-16">
+    <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-16">
       {sessionMessages.length === 0 && !isLoading && (
         <div className="text-center text-muted-foreground py-12">
           <div className="text-2xl mb-2">🤖</div>
@@ -175,20 +143,6 @@ export function ChatMessages({
               type={pendingTaskData ? 'task' : 'reminder'}
             />
           </div>
-        </div>
-      )}
-
-      {/* Scroll to bottom button */}
-      {showScrollButton && (
-        <div className="fixed bottom-32 right-6 z-40">
-          <Button
-            onClick={handleScrollToBottom}
-            size="icon"
-            className="h-10 w-10 rounded-full bg-primary/90 hover:bg-primary shadow-lg backdrop-blur-sm border border-white/20 transition-all duration-200 hover:scale-110"
-            aria-label={language === 'ar' ? 'انتقل إلى الأسفل' : 'Scroll to bottom'}
-          >
-            <ChevronDown className="h-5 w-5" />
-          </Button>
         </div>
       )}
     </div>

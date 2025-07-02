@@ -11,6 +11,8 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
+import { Button } from '@/components/ui/button';
+import { ChevronDown } from 'lucide-react';
 
 // Debounced request handler
 const useDebounceCallback = (callback: Function, delay: number) => {
@@ -52,6 +54,9 @@ const WaktiAIV2 = () => {
   // ENHANCED: Personal touch state
   const [personalTouch, setPersonalTouch] = useState<any>(null);
   
+  // NEW: Scroll button state
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
@@ -70,6 +75,36 @@ const WaktiAIV2 = () => {
   const [allMessages, setAllMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
   const [isNewConversation, setIsNewConversation] = useState(true);
+
+  // NEW: Scroll detection for scroll button
+  useEffect(() => {
+    const checkScrollPosition = () => {
+      if (scrollAreaRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+        setShowScrollButton(!isNearBottom && allMessages.length > 3);
+      }
+    };
+
+    const scrollContainer = scrollAreaRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', checkScrollPosition);
+      // Check initial position
+      checkScrollPosition();
+      return () => scrollContainer.removeEventListener('scroll', checkScrollPosition);
+    }
+  }, [allMessages.length]);
+
+  // Manual scroll to bottom function
+  const handleScrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({
+        top: scrollAreaRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+      setShowScrollButton(false);
+    }
+  };
 
   // ENHANCED: Load personal touch settings with better caching
   useEffect(() => {
@@ -669,6 +704,21 @@ const WaktiAIV2 = () => {
           onCancelTaskConfirmation={handleCancelTaskConfirmation}
         />
       </div>
+      
+      {/* Scroll to bottom button */}
+      {showScrollButton && (
+        <div className="fixed bottom-32 right-6 z-50">
+          <Button
+            onClick={handleScrollToBottom}
+            size="icon"
+            className="h-8 w-8 rounded-full bg-primary/90 hover:bg-primary shadow-lg backdrop-blur-sm border border-white/20 transition-all duration-200 hover:scale-110"
+            aria-label={language === 'ar' ? 'انتقل إلى الأسفل' : 'Scroll to bottom'}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+      
       <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-t border-border">
         <ChatInput
           message={message}
