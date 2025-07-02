@@ -116,36 +116,29 @@ serve(async (req) => {
     }
 
     // Handle POST request (voice creation)
-    const requestBody = await req.json();
-    const { audio_url, voice_name, voice_description } = requestBody;
+    const formData = await req.formData();
+    const audioFile = formData.get('audio') as File;
+    const voiceName = formData.get('voiceName') as string;
     
     console.log(`🎙️ Voice cloning request:`, {
-      hasAudioUrl: !!audio_url,
-      voiceName: voice_name,
-      voiceDescription: voice_description
+      hasAudioFile: !!audioFile,
+      audioFileName: audioFile?.name,
+      audioFileSize: audioFile?.size,
+      audioFileType: audioFile?.type,
+      voiceName: voiceName
     });
 
-    if (!audio_url || !voice_name) {
-      throw new Error('Missing required fields: audio_url and voice_name are required');
+    if (!audioFile || !voiceName) {
+      throw new Error('Missing required fields: audio file and voiceName are required');
     }
 
-    console.log(`🎙️ Downloading audio from URL: ${audio_url.substring(0, 50)}...`);
+    console.log(`🎙️ Processing audio file: ${audioFile.name}, size: ${audioFile.size} bytes`);
 
-    // Download the audio file first
-    const audioResponse = await fetch(audio_url);
-    if (!audioResponse.ok) {
-      throw new Error(`Failed to download audio: ${audioResponse.status}`);
-    }
-
-    const audioBuffer = await audioResponse.arrayBuffer();
-    console.log(`🎙️ Audio downloaded, size: ${audioBuffer.byteLength} bytes`);
-
-    // Create FormData for the new ElevenLabs API
-    const formData = new FormData();
-    const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-    formData.append('files', audioBlob, 'voice_sample.mp3');
-    formData.append('name', voice_name);
-    formData.append('description', voice_description || 'Voice cloned via WAKTI');
+    // Create FormData for ElevenLabs API
+    const elevenLabsFormData = new FormData();
+    elevenLabsFormData.append('files', audioFile, audioFile.name);
+    elevenLabsFormData.append('name', voiceName);
+    elevenLabsFormData.append('description', `Voice cloned via WAKTI - ${voiceName}`);
 
     console.log(`🎙️ Calling new ElevenLabs Voice Cloning API...`);
 
@@ -155,7 +148,7 @@ serve(async (req) => {
       headers: {
         'xi-api-key': ELEVEN_LABS_API_KEY,
       },
-      body: formData,
+      body: elevenLabsFormData,
     });
 
     console.log(`🎙️ ElevenLabs API response status: ${elevenLabsResponse.status}`);
@@ -187,8 +180,8 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         voice_id: result.voice_id,
-        voice_name: voice_name,
-        voice_description: voice_description,
+        voice_name: voiceName,
+        voice_description: `Voice cloned via WAKTI - ${voiceName}`,
         elevenlabs_data: result
       })
       .select()
@@ -204,7 +197,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       voice_id: result.voice_id,
-      voice_name: voice_name,
+      voice_name: voiceName,
       message: 'Voice cloned successfully'
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
