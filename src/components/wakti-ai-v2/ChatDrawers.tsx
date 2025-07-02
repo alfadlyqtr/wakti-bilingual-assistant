@@ -16,7 +16,6 @@ interface ChatDrawersProps {
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   fetchConversations: () => void;
-  onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
   activeTrigger: string;
   onTriggerChange: (trigger: string) => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
@@ -36,7 +35,6 @@ export function ChatDrawers({
   onSelectConversation,
   onDeleteConversation,
   fetchConversations,
-  onSendMessage,
   activeTrigger,
   onTriggerChange,
   onTextGenerated,
@@ -85,6 +83,7 @@ export function ChatDrawers({
               onClose={() => setShowQuickActions(false)}
               onTriggerChange={onTriggerChange}
               activeTrigger={activeTrigger}
+              onTextGenerated={onTextGenerated}
             />
           </div>
         </DrawerContent>

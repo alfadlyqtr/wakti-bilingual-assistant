@@ -3,30 +3,32 @@ import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { 
-  MessageSquare, 
-  FileText, 
-  Palette,
-  Calculator,
-  Languages,
-  Search,
-  X,
   Bot,
+  Search,
   ImagePlus,
-  Mic
+  FileText,
+  Calculator,
+  X
 } from 'lucide-react';
-import { TextGenModal } from './TextGenModal';
 import { GameModeModal } from './GameModeModal';
+import TextGeneratorPopup from './TextGeneratorPopup';
 
 interface QuickActionsPanelProps {
   onClose: () => void;
   onTriggerChange?: (trigger: string) => void;
   activeTrigger?: string;
+  onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
 }
 
-export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'chat' }: QuickActionsPanelProps) {
+export function QuickActionsPanel({ 
+  onClose, 
+  onTriggerChange, 
+  activeTrigger = 'chat',
+  onTextGenerated 
+}: QuickActionsPanelProps) {
   const { language } = useTheme();
-  const [showTextGen, setShowTextGen] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
+  const [showTextGenerator, setShowTextGenerator] = useState(false);
 
   const aiModes = [
     {
@@ -66,19 +68,7 @@ export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'c
       description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
       color: 'text-purple-500',
       bgColor: 'bg-purple-50 dark:bg-purple-950/20',
-      action: () => setShowTextGen(true)
-    },
-    {
-      id: 'translator',
-      icon: Mic,
-      label: language === 'ar' ? 'مترجم الصوت' : 'Voice Translator',
-      description: language === 'ar' ? 'ترجمة صوتية في الوقت الفعلي' : 'Real-time voice translation',
-      color: 'text-blue-500',
-      bgColor: 'bg-blue-50 dark:bg-blue-950/20',
-      action: () => {
-        console.log('Voice Translator action - to be implemented');
-        onClose();
-      }
+      action: () => setShowTextGenerator(true)
     },
     {
       id: 'games',
@@ -102,7 +92,7 @@ export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'c
     <>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">
+          <h2 className="text-xl font-semibold text-foreground">
             {language === 'ar' ? 'أوضاع الذكاء الاصطناعي' : 'AI Modes'}
           </h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -122,16 +112,38 @@ export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'c
               <Button
                 key={mode.id}
                 variant={mode.isActive ? "default" : "ghost"}
-                className={`h-auto p-4 justify-start w-full ${mode.isActive ? '' : `hover:${mode.bgColor}`} transition-colors`}
+                className={`h-auto p-4 justify-start w-full ${
+                  mode.isActive 
+                    ? 'bg-primary text-primary-foreground shadow-sm' 
+                    : `hover:${mode.bgColor} bg-card border border-border/50`
+                } transition-all duration-200`}
                 onClick={() => handleModeSelect(mode.id)}
               >
                 <div className="flex items-center gap-3 w-full">
-                  <div className={`p-2 rounded-lg ${mode.isActive ? 'bg-white/20' : mode.bgColor}`}>
-                    <IconComponent className={`h-5 w-5 ${mode.isActive ? 'text-white' : mode.color}`} />
+                  <div className={`p-2 rounded-lg ${
+                    mode.isActive 
+                      ? 'bg-primary-foreground/20' 
+                      : mode.bgColor
+                  }`}>
+                    <IconComponent className={`h-5 w-5 ${
+                      mode.isActive 
+                        ? 'text-primary-foreground' 
+                        : mode.color
+                    }`} />
                   </div>
                   <div className="flex-1 text-left">
-                    <div className="font-medium">{mode.label}</div>
-                    <div className={`text-sm ${mode.isActive ? 'text-white/80' : 'text-muted-foreground'}`}>
+                    <div className={`font-medium ${
+                      mode.isActive 
+                        ? 'text-primary-foreground' 
+                        : 'text-foreground'
+                    }`}>
+                      {mode.label}
+                    </div>
+                    <div className={`text-sm ${
+                      mode.isActive 
+                        ? 'text-primary-foreground/80' 
+                        : 'text-muted-foreground'
+                    }`}>
                       {mode.description}
                     </div>
                   </div>
@@ -143,7 +155,7 @@ export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'c
 
         {/* Quick Tools Section */}
         <div className="pt-6 border-t border-border">
-          <h3 className="text-lg font-semibold mb-4">
+          <h3 className="text-lg font-semibold mb-4 text-foreground">
             {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
           </h3>
           
@@ -154,7 +166,7 @@ export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'c
                 <Button
                   key={tool.id}
                   variant="ghost"
-                  className={`h-auto p-4 justify-start w-full hover:${tool.bgColor} transition-colors`}
+                  className={`h-auto p-4 justify-start w-full hover:${tool.bgColor} bg-card border border-border/50 transition-all duration-200`}
                   onClick={tool.action}
                 >
                   <div className="flex items-center gap-3 w-full">
@@ -162,7 +174,7 @@ export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'c
                       <IconComponent className={`h-5 w-5 ${tool.color}`} />
                     </div>
                     <div className="flex-1 text-left">
-                      <div className="font-medium">{tool.label}</div>
+                      <div className="font-medium text-foreground">{tool.label}</div>
                       <div className="text-sm text-muted-foreground">
                         {tool.description}
                       </div>
@@ -175,11 +187,10 @@ export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'c
         </div>
       </div>
 
-      <TextGenModal 
-        open={showTextGen} 
-        onOpenChange={setShowTextGen}
-        onTriggerChange={(trigger) => console.log('Trigger changed:', trigger)}
-        onTextGenParams={(params) => console.log('Text gen params:', params)}
+      <TextGeneratorPopup 
+        isOpen={showTextGenerator} 
+        onClose={() => setShowTextGenerator(false)}
+        onTextGenerated={onTextGenerated}
       />
 
       <GameModeModal 
