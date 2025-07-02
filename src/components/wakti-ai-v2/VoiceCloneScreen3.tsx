@@ -387,32 +387,25 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       console.log('🌐 Text:', translationText);
       console.log('🌐 Target Language:', targetLanguage);
 
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        throw new Error('User not authenticated');
-      }
+      console.log('🌐 Calling voice-clone-translator function...');
 
-      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone-translator`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.session.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data: result, error: functionError } = await supabase.functions.invoke('voice-clone-translator', {
+        body: {
           original_text: translationText.trim(),
           target_language: targetLanguage
-        })
+        }
       });
 
-      console.log('🌐 Response status:', response.status);
+      console.log('🌐 Function response:', { result, functionError });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🌐 Response error:', errorText);
-        throw new Error(`Translation failed: ${response.status}`);
+      if (functionError) {
+        console.error('🌐 Function error:', functionError);
+        throw new Error(`Translation failed: ${functionError.message}`);
       }
 
-      const result = await response.json();
+      if (!result) {
+        throw new Error('No response from translation function');
+      }
       console.log('🌐 Translation result:', result);
 
       if (!result.success) {
