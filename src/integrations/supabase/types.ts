@@ -1919,6 +1919,7 @@ export type Database = {
           elevenlabs_data: Json | null
           id: string
           updated_at: string
+          user_email: string | null
           user_id: string
           voice_description: string | null
           voice_id: string
@@ -1929,6 +1930,7 @@ export type Database = {
           elevenlabs_data?: Json | null
           id?: string
           updated_at?: string
+          user_email?: string | null
           user_id: string
           voice_description?: string | null
           voice_id: string
@@ -1939,6 +1941,7 @@ export type Database = {
           elevenlabs_data?: Json | null
           id?: string
           updated_at?: string
+          user_email?: string | null
           user_id?: string
           voice_description?: string | null
           voice_id?: string

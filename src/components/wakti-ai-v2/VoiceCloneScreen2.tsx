@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ interface VoiceClone {
   voice_name: string;
   voice_id: string;
   user_email?: string;
+  created_at: string;
 }
 
 interface VoiceCloneScreen2Props {
@@ -40,7 +42,6 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
   const loadExistingVoices = async () => {
     try {
-      // Get current user's email
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.error('User not authenticated');
@@ -87,37 +88,49 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        } 
+      });
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
       mediaRecorderRef.current = mediaRecorder;
       
       const chunks: BlobPart[] = [];
       
       mediaRecorder.ondataavailable = (event) => {
-        chunks.push(event.data);
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
       };
       
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/wav' });
+        const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
         setAudioBlob(blob);
         stream.getTracks().forEach(track => track.stop());
       };
       
-      mediaRecorder.start();
+      mediaRecorder.start(1000); // Record in 1-second chunks
       setIsRecording(true);
       setRecordingTime(0);
       
       intervalRef.current = setInterval(() => {
         setRecordingTime(prev => {
-          if (prev >= 60) {
+          if (prev >= 180) { // Max 3 minutes as per ElevenLabs best practices
             stopRecording();
-            return 60;
+            return 180;
           }
           return prev + 1;
         });
       }, 1000);
       
     } catch (error) {
+      console.error('Microphone access error:', error);
       toast.error(language === 'ar' ? 'فشل في الوصول للميكروفون' : 'Failed to access microphone');
     }
   };
@@ -177,22 +190,34 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       return;
     }
 
-    // Validate minimum duration for recorded audio
+    // Validate minimum duration (at least 30 seconds as per requirements)
     if (recordingTime < 30) {
       toast.error(language === 'ar' ? 'التسجيل يجب أن يكون 30 ثانية على الأقل' : 'Recording must be at least 30 seconds');
+      return;
+    }
+
+    // Validate maximum duration (3 minutes as per ElevenLabs best practices)
+    if (recordingTime > 180) {
+      toast.error(language === 'ar' ? 'التسجيل يجب أن يكون أقل من 3 دقائق' : 'Recording must be less than 3 minutes');
       return;
     }
 
     setIsCloning(true);
 
     try {
+      // Convert WebM to a more compatible format if needed
+      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
+        type: 'audio/webm;codecs=opus'
+      });
+
       const formData = new FormData();
-      formData.append('audio', audioBlob);
+      formData.append('audio', audioFile);
       formData.append('voiceName', voiceName.trim());
 
-      console.log('Creating voice clone with formData:', {
-        audioSize: audioBlob.size,
-        voiceName: voiceName.trim()
+      console.log('Creating voice clone:', {
+        audioSize: audioFile.size,
+        voiceName: voiceName.trim(),
+        duration: recordingTime
       });
 
       const { data, error } = await supabase.functions.invoke('voice-clone', {
@@ -202,6 +227,10 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       if (error) {
         console.error('Voice clone error:', error);
         throw error;
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Voice cloning failed');
       }
 
       console.log('Voice clone success:', data);
@@ -214,7 +243,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
     } catch (error: any) {
       console.error('Error creating voice clone:', error);
-      toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء نسخة الصوت' : 'Failed to create voice clone'));
+      const errorMessage = error?.message || error?.error || 'Failed to create voice clone';
+      toast.error(language === 'ar' ? 'فشل في إنشاء نسخة الصوت: ' + errorMessage : 'Failed to create voice clone: ' + errorMessage);
     } finally {
       setIsCloning(false);
     }
@@ -227,12 +257,15 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   };
 
   const canRecord = existingVoices.length < 3;
-  const hasValidAudio = audioBlob && recordingTime >= 30;
+  const hasValidAudio = audioBlob && recordingTime >= 30 && recordingTime <= 180;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin" />
+        <span className="ml-2">
+          {language === 'ar' ? 'جاري التحميل...' : 'Loading voices...'}
+        </span>
       </div>
     );
   }
@@ -256,10 +289,10 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
           </h3>
           {existingVoices.map((voice) => (
             <div key={voice.id} className="flex items-center gap-2 p-2 bg-muted rounded-md">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-sm">{voice.voice_name}</span>
-              <span className="text-xs text-muted-foreground">
-                {language === 'ar' ? '🟢 مستنسخ' : '🟢 Cloned'}
+              <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+              <span className="text-sm font-medium">{voice.voice_name}</span>
+              <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                {language === 'ar' ? 'مستنسخ' : 'Cloned'}
               </span>
               {voice.user_email && (
                 <span className="text-xs text-muted-foreground ml-auto">
@@ -276,8 +309,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
           <p className="text-sm text-amber-800 dark:text-amber-200">
             {language === 'ar' 
-              ? 'لقد وصلت إلى الحد الأقصى من 3 أصوات. احذف صوتاً لإنشاء صوت جديد أو اشتر المزيد من الخانات.' 
-              : "You've reached your 3-voice limit. Delete a voice to create a new one or buy more slots."
+              ? 'لقد وصلت إلى الحد الأقصى من 3 أصوات. احذف صوتاً لإنشاء صوت جديد.' 
+              : "You've reached your 3-voice limit. Delete a voice to create a new one."
             }
           </p>
         </div>
@@ -298,8 +331,9 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                   variant={isRecording ? "destructive" : "default"}
                   size="lg"
                   className="flex-shrink-0"
+                  disabled={isCloning}
                 >
-                  {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {isRecording ? <Square className="h-4 w-4 mr-2" /> : <Mic className="h-4 w-4 mr-2" />}
                   {isRecording 
                     ? (language === 'ar' ? 'إيقاف' : 'Stop') 
                     : (language === 'ar' ? 'تسجيل' : 'Record')
@@ -307,12 +341,18 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                 </Button>
                 
                 <div className="text-lg font-mono">
-                  {formatTime(recordingTime)} / 1:00
+                  {formatTime(recordingTime)} / 3:00
                 </div>
                 
-                {recordingTime < 30 && recordingTime > 0 && (
+                {recordingTime > 0 && recordingTime < 30 && (
                   <span className="text-xs text-amber-600">
                     {language === 'ar' ? 'الحد الأدنى 30 ثانية' : 'Min 30 seconds'}
+                  </span>
+                )}
+                
+                {recordingTime >= 30 && recordingTime <= 180 && (
+                  <span className="text-xs text-green-600">
+                    {language === 'ar' ? 'مدة مناسبة' : 'Good duration'}
                   </span>
                 )}
               </div>
@@ -323,15 +363,21 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                     onClick={isPlaying ? pauseAudio : playAudio}
                     variant="outline"
                     size="sm"
+                    disabled={isCloning}
                   >
-                    {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                    {isPlaying ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
                     {isPlaying 
                       ? (language === 'ar' ? 'إيقاف مؤقت' : 'Pause') 
                       : (language === 'ar' ? 'تشغيل' : 'Play')
                     }
                   </Button>
-                  <Button onClick={deleteRecording} variant="outline" size="sm">
-                    <Trash2 className="h-3 w-3" />
+                  <Button 
+                    onClick={deleteRecording} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={isCloning}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
                     {language === 'ar' ? 'حذف' : 'Delete'}
                   </Button>
                 </div>
@@ -349,6 +395,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                 onChange={(e) => setVoiceName(e.target.value)}
                 placeholder={language === 'ar' ? 'مثال: صوتي الهادئ' : 'e.g., My Calm Voice'}
                 maxLength={50}
+                disabled={isCloning}
               />
             </div>
 
@@ -375,13 +422,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
       {/* Navigation */}
       <div className="flex gap-3 pt-4">
-        <Button onClick={onBack} variant="outline" className="flex-1">
+        <Button onClick={onBack} variant="outline" className="flex-1" disabled={isCloning}>
           {language === 'ar' ? 'رجوع' : 'Back'}
         </Button>
         <Button 
           onClick={onNext} 
           className="flex-1"
-          disabled={existingVoices.length === 0}
+          disabled={existingVoices.length === 0 || isCloning}
         >
           {language === 'ar' ? 'التالي ← استخدم صوتك' : 'Next → Use Your Voice'}
         </Button>
