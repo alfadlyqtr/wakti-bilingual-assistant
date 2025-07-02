@@ -16,6 +16,7 @@ interface ChatDrawersProps {
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   fetchConversations: () => void;
+  onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
   activeTrigger: string;
   onTriggerChange: (trigger: string) => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
@@ -35,6 +36,7 @@ export function ChatDrawers({
   onSelectConversation,
   onDeleteConversation,
   fetchConversations,
+  onSendMessage,
   activeTrigger,
   onTriggerChange,
   onTextGenerated,
@@ -80,10 +82,11 @@ export function ChatDrawers({
           </DrawerHeader>
           <div className="flex-1 overflow-hidden">
             <QuickActionsPanel 
-              onClose={() => setShowQuickActions(false)}
-              onTriggerChange={onTriggerChange}
-              activeTrigger={activeTrigger}
-              onTextGenerated={onTextGenerated}
+              onSendMessage={onSendMessage} 
+              activeTrigger={activeTrigger} 
+              onTriggerChange={onTriggerChange} 
+              onTextGenerated={onTextGenerated} 
+              onClose={() => setShowQuickActions(false)} 
             />
           </div>
         </DrawerContent>
