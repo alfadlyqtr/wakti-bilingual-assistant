@@ -16,17 +16,9 @@ import { GameModeModal } from './GameModeModal';
 
 interface QuickActionsPanelProps {
   onClose: () => void;
-  onTranslateToggle: () => void;
-  onSearchToggle: () => void;
-  onImageGenToggle: () => void;
 }
 
-export function QuickActionsPanel({ 
-  onClose, 
-  onTranslateToggle, 
-  onSearchToggle, 
-  onImageGenToggle 
-}: QuickActionsPanelProps) {
+export function QuickActionsPanel({ onClose }: QuickActionsPanelProps) {
   const { language } = useTheme();
   const [showTextGen, setShowTextGen] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
@@ -40,7 +32,7 @@ export function QuickActionsPanel({
       color: 'text-blue-500',
       bgColor: 'bg-blue-50 dark:bg-blue-950/20',
       action: () => {
-        onTranslateToggle();
+        console.log('Translate action - to be implemented');
         onClose();
       }
     },
@@ -52,7 +44,7 @@ export function QuickActionsPanel({
       color: 'text-green-500',
       bgColor: 'bg-green-50 dark:bg-green-950/20',
       action: () => {
-        onSearchToggle();
+        console.log('Search action - to be implemented');
         onClose();
       }
     },
@@ -64,7 +56,7 @@ export function QuickActionsPanel({
       color: 'text-purple-500',
       bgColor: 'bg-purple-50 dark:bg-purple-950/20',
       action: () => {
-        onImageGenToggle();
+        console.log('Image generation action - to be implemented');
         onClose();
       }
     },
@@ -132,6 +124,8 @@ export function QuickActionsPanel({
       <TextGenModal 
         open={showTextGen} 
         onOpenChange={setShowTextGen}
+        onTriggerChange={(trigger) => console.log('Trigger changed:', trigger)}
+        onTextGenParams={(params) => console.log('Text gen params:', params)}
       />
 
       <GameModeModal 

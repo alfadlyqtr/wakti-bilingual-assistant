@@ -8,20 +8,20 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Bot, Search, ImagePlus } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 
 interface TextGenModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onTriggerChange: (trigger: string) => void;
   onTextGenParams: (params: any) => void;
 }
 
-export function TextGenModal({ onTriggerChange, onTextGenParams }: TextGenModalProps) {
+export function TextGenModal({ open, onOpenChange, onTriggerChange, onTextGenParams }: TextGenModalProps) {
   const { language } = useTheme();
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
-  const [isOpen, setIsOpen] = useState(false);
 
   const triggers = [
     {
@@ -47,22 +47,13 @@ export function TextGenModal({ onTriggerChange, onTextGenParams }: TextGenModalP
   const handleTriggerSelect = (triggerId: string) => {
     setActiveTrigger(triggerId);
     onTriggerChange(triggerId);
-    setIsOpen(false);
+    onOpenChange(false);
   };
 
   const currentTrigger = triggers.find(t => t.id === activeTrigger);
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          {currentTrigger && <currentTrigger.icon className="h-4 w-4" />}
-          <span className="hidden sm:inline">{currentTrigger?.name}</span>
-          <Badge variant="secondary" className="text-xs">
-            {activeTrigger}
-          </Badge>
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
