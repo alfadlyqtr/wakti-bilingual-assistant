@@ -1913,6 +1913,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_voice_clones: {
+        Row: {
+          created_at: string
+          elevenlabs_data: Json | null
+          id: string
+          updated_at: string
+          user_id: string
+          voice_description: string | null
+          voice_id: string
+          voice_name: string
+        }
+        Insert: {
+          created_at?: string
+          elevenlabs_data?: Json | null
+          id?: string
+          updated_at?: string
+          user_id: string
+          voice_description?: string | null
+          voice_id: string
+          voice_name: string
+        }
+        Update: {
+          created_at?: string
+          elevenlabs_data?: Json | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+          voice_description?: string | null
+          voice_id?: string
+          voice_name?: string
+        }
+        Relationships: []
+      }
       user_voice_translation_quotas: {
         Row: {
           created_at: string
