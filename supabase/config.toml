@@ -154,9 +154,6 @@ verify_jwt = true
 [functions.paypal-webhook]
 verify_jwt = false
 
-[functions.voice-translator]
-verify_jwt = false
-
 [analytics]
 enabled = false
 port = 54327

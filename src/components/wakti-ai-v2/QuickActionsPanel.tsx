@@ -3,9 +3,8 @@ import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Search, Image, PenTool, Mic, Volume2, Zap, Gamepad2 } from 'lucide-react';
+import { MessageSquare, Search, Image, PenTool, Mic, Zap, Gamepad2 } from 'lucide-react';
 import TextGeneratorPopup from './TextGeneratorPopup';
-import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 import { GameModeModal } from './GameModeModal';
@@ -28,7 +27,6 @@ export function QuickActionsPanel({
     language
   } = useTheme();
   const [showTextGen, setShowTextGen] = useState(false);
-  const [showVoiceTranslator, setShowVoiceTranslator] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showBuyExtras, setShowBuyExtras] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
@@ -63,12 +61,6 @@ export function QuickActionsPanel({
     description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
     action: () => setShowTextGen(true),
     color: 'bg-purple-500'
-  }, {
-    icon: <Volume2 className="h-5 w-5" />,
-    label: language === 'ar' ? 'مترجم صوتي' : 'Voice Translator',
-    description: language === 'ar' ? 'ترجمة فورية بالصوت' : 'Real-time voice translation',
-    action: () => setShowVoiceTranslator(true),
-    color: 'bg-indigo-500'
   }, {
     icon: <Mic className="h-5 w-5" />,
     label: language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone',
@@ -166,9 +158,6 @@ export function QuickActionsPanel({
           onClose={() => setShowTextGen(false)} 
           onTextGenerated={onTextGenerated} 
         />
-
-        {/* Voice Translator Popup */}
-        <VoiceTranslatorPopup open={showVoiceTranslator} onOpenChange={setShowVoiceTranslator} />
 
         {/* Voice Clone Popup */}
         <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
