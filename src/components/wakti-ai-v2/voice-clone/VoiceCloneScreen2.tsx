@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -66,8 +65,7 @@ export function VoiceCloneScreen2({
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           sampleRate: 44100,
-          channelCount: 1,
-          volume: 1.0
+          channelCount: 1
         } 
       });
       
