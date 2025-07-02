@@ -119,7 +119,7 @@ serve(async (req) => {
     if (req.method === 'POST') {
       console.log('🎙️ Step 3: Processing voice clone creation request');
       
-      // Create voice clone using instant voice cloning
+      // Create voice clone using new two-step process
       const formData = await req.formData();
       console.log("🎙️ Step 3a: FormData received");
       
@@ -156,46 +156,82 @@ serve(async (req) => {
         console.log(`🎙️ Step 4: Audio file is already in correct format: ${audioFile.type}`);
       }
 
-      console.log(`🎙️ Step 5: Creating voice clone with name: ${voiceName}`);
+      console.log(`🎙️ Step 5: Creating voice preview with ElevenLabs API`);
 
-      // Prepare form data for ElevenLabs instant voice cloning
-      const elevenlabsFormData = new FormData();
-      elevenlabsFormData.append('name', voiceName);
-      if (voiceDescription) {
-        elevenlabsFormData.append('description', voiceDescription);
-      }
-      elevenlabsFormData.append('files', processedAudioFile);
+      // Step 1: Create voice preview using the new /v1/text-to-voice endpoint
+      const previewFormData = new FormData();
+      previewFormData.append('files', processedAudioFile);
 
-      console.log('🎙️ Step 6: Sending request to ElevenLabs API...');
-      console.log('🎙️ ElevenLabs API URL: https://api.elevenlabs.io/v1/voices/ivc/create');
-      console.log('🎙️ ElevenLabs API Key length:', ELEVENLABS_API_KEY.length);
+      console.log('🎙️ Step 5a: Sending request to create voice preview...');
+      console.log('🎙️ ElevenLabs Preview API URL: https://api.elevenlabs.io/v1/text-to-voice');
 
-      // Use instant voice cloning endpoint with retry logic
-      const response = await retryApiCall(() => 
-        fetch('https://api.elevenlabs.io/v1/voices/ivc/create', {
+      const previewResponse = await retryApiCall(() => 
+        fetch('https://api.elevenlabs.io/v1/text-to-voice', {
           method: 'POST',
           headers: {
             'xi-api-key': ELEVENLABS_API_KEY,
           },
-          body: elevenlabsFormData,
+          body: previewFormData,
         })
       );
 
-      console.log(`🎙️ Step 6: ElevenLabs API response status: ${response.status}`);
-      console.log(`🎙️ Step 6: ElevenLabs API response headers:`, Object.fromEntries(response.headers.entries()));
+      console.log(`🎙️ Step 5a: ElevenLabs Preview API response status: ${previewResponse.status}`);
+      console.log(`🎙️ Step 5a: ElevenLabs Preview API response headers:`, Object.fromEntries(previewResponse.headers.entries()));
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🎙️ ElevenLabs API error details:', {
-          status: response.status,
-          statusText: response.statusText,
+      if (!previewResponse.ok) {
+        const errorText = await previewResponse.text();
+        console.error('🎙️ ElevenLabs Preview API error details:', {
+          status: previewResponse.status,
+          statusText: previewResponse.statusText,
           body: errorText,
-          url: response.url
+          url: previewResponse.url
         });
-        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
+        throw new Error(`ElevenLabs Preview API error: ${previewResponse.status} - ${errorText}`);
       }
 
-      const result = await response.json();
+      // Get the generated_voice_id from the response header
+      const generatedVoiceId = previewResponse.headers.get('generated_voice_id');
+      console.log('🎙️ Step 5a: ✅ Voice preview created, generated_voice_id:', generatedVoiceId);
+
+      if (!generatedVoiceId) {
+        const responseText = await previewResponse.text();
+        console.error('🎙️ No generated_voice_id in response headers:', responseText);
+        throw new Error('Failed to get generated_voice_id from preview creation');
+      }
+
+      console.log('🎙️ Step 6: Creating final voice clone...');
+
+      // Step 2: Create the actual voice using the generated_voice_id
+      const createVoiceResponse = await retryApiCall(() => 
+        fetch('https://api.elevenlabs.io/v1/text-to-voice', {
+          method: 'POST',
+          headers: {
+            'xi-api-key': ELEVENLABS_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            voice_name: voiceName,
+            voice_description: voiceDescription || '',
+            generated_voice_id: generatedVoiceId,
+          }),
+        })
+      );
+
+      console.log(`🎙️ Step 6: ElevenLabs Create Voice API response status: ${createVoiceResponse.status}`);
+      console.log(`🎙️ Step 6: ElevenLabs Create Voice API response headers:`, Object.fromEntries(createVoiceResponse.headers.entries()));
+
+      if (!createVoiceResponse.ok) {
+        const errorText = await createVoiceResponse.text();
+        console.error('🎙️ ElevenLabs Create Voice API error details:', {
+          status: createVoiceResponse.status,
+          statusText: createVoiceResponse.statusText,
+          body: errorText,
+          url: createVoiceResponse.url
+        });
+        throw new Error(`ElevenLabs Create Voice API error: ${createVoiceResponse.status} - ${errorText}`);
+      }
+
+      const result = await createVoiceResponse.json();
       console.log('🎙️ Step 6: ✅ ElevenLabs API success, voice_id:', result.voice_id);
       console.log('🎙️ Step 6: Full ElevenLabs response:', result);
 
