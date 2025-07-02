@@ -1915,6 +1915,7 @@ export type Database = {
       }
       user_voice_clones: {
         Row: {
+          audio_file_url: string | null
           created_at: string
           elevenlabs_data: Json | null
           id: string
@@ -1925,6 +1926,7 @@ export type Database = {
           voice_name: string
         }
         Insert: {
+          audio_file_url?: string | null
           created_at?: string
           elevenlabs_data?: Json | null
           id?: string
@@ -1935,6 +1937,7 @@ export type Database = {
           voice_name: string
         }
         Update: {
+          audio_file_url?: string | null
           created_at?: string
           elevenlabs_data?: Json | null
           id?: string

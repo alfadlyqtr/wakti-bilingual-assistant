@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2 } from 'lucide-react';
+import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2, Upload, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -23,6 +23,7 @@ interface VoiceClone {
   id: string;
   voice_name: string;
   voice_id: string;
+  audio_file_url?: string;
 }
 
 interface VoiceCloneScreen2Props {
@@ -40,6 +41,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const [voiceDescription, setVoiceDescription] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
+  const [cloningStep, setCloningStep] = useState('');
   const [existingVoices, setExistingVoices] = useState<VoiceClone[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDeletingVoice, setIsDeletingVoice] = useState<string | null>(null);
@@ -268,9 +270,10 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     }
 
     setIsCloning(true);
+    setCloningStep(language === 'ar' ? 'جاري التحضير...' : 'Preparing...');
 
     try {
-      console.log('🎙️ === Voice Cloning Request ===');
+      console.log('🎙️ === Voice Cloning Request - SIMPLE FLOW ===');
       console.log('🎙️ Voice Name:', voiceName.trim());
       console.log('🎙️ Voice Description Length:', voiceDescription.trim().length);
       console.log('🎙️ Audio Blob Size:', audioBlob.size);
@@ -282,10 +285,20 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         throw new Error('No authentication session found');
       }
 
+      // Step 1: Show recording step (already done)
+      setCloningStep(language === 'ar' ? '✓ تسجيل مكتمل' : '✓ Recording Complete');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Step 2: Show saving step
+      setCloningStep(language === 'ar' ? '💾 حفظ الملف الصوتي...' : '💾 Saving Audio File...');
+      
       const formData = new FormData();
       formData.append('audio', audioBlob, 'voice-sample.wav');
       formData.append('voiceName', voiceName.trim());
       formData.append('voiceDescription', voiceDescription.trim());
+
+      // Step 3: Show sending step
+      setCloningStep(language === 'ar' ? '🚀 إرسال إلى ElevenLabs...' : '🚀 Sending to ElevenLabs...');
 
       // Use direct fetch for FormData upload
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone', {
@@ -309,6 +322,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         throw new Error(data.error || 'Voice cloning failed');
       }
 
+      setCloningStep(language === 'ar' ? '✅ تم إنشاء النسخة بنجاح!' : '✅ Voice Clone Created Successfully!');
+      
       toast.success(language === 'ar' ? 'تم إنشاء نسخة الصوت بنجاح' : 'Voice clone created successfully');
 
       console.log('🎙️ Voice cloned successfully:', data);
@@ -334,9 +349,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
           : 'Voice service not configured';
       }
       
+      setCloningStep(language === 'ar' ? '❌ فشل في العملية' : '❌ Process Failed');
       toast.error(errorMessage);
     } finally {
-      setIsCloning(false);
+      setTimeout(() => {
+        setIsCloning(false);
+        setCloningStep('');
+      }, 2000);
     }
   };
 
@@ -364,7 +383,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
           {language === 'ar' ? 'سجل صوتك' : 'Record Your Voice'}
         </h2>
         <p className="text-sm text-muted-foreground">
-          {language === 'ar' ? 'يمكنك إنشاء حتى 3 أصوات' : 'You can create up to 3 voices'}
+          {language === 'ar' ? 'التدفق البسيط: تسجيل → حفظ → إرسال' : 'Simple Flow: Record → Save → Send'}
         </p>
       </div>
 
@@ -380,8 +399,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                 <CheckCircle className="h-4 w-4 text-green-500" />
                 <span className="text-sm font-medium">{voice.voice_name}</span>
                 <span className="text-xs text-muted-foreground">
-                  {language === 'ar' ? '🟢 مستنسخ' : '🟢 Cloned'}
+                  {language === 'ar' ? '🟢 مستنسخ ومحفوظ' : '🟢 Cloned & Saved'}
                 </span>
+                {voice.audio_file_url && (
+                  <span className="text-xs text-blue-500">
+                    💾 {language === 'ar' ? 'محفوظ' : 'Stored'}
+                  </span>
+                )}
               </div>
               
               <AlertDialog>
@@ -406,8 +430,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                     </AlertDialogTitle>
                     <AlertDialogDescription>
                       {language === 'ar' 
-                        ? `هل أنت متأكد من حذف الصوت "${voice.voice_name}"؟ هذا الإجراء لا يمكن التراجع عنه.`
-                        : `Are you sure you want to delete the voice "${voice.voice_name}"? This action cannot be undone.`
+                        ? `هل أنت متأكد من حذف الصوت "${voice.voice_name}"؟ هذا الإجراء لا يمكن التراجع عنه وسيحذف الملف المحفوظ أيضاً.`
+                        : `Are you sure you want to delete the voice "${voice.voice_name}"? This action cannot be undone and will also delete the saved audio file.`
                       }
                     </AlertDialogDescription>
                   </AlertDialogHeader>
@@ -443,10 +467,26 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
       {canRecord && (
         <>
+          {/* Simple Flow Progress */}
+          {isCloning && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <div>
+                  <p className="font-medium text-blue-800 dark:text-blue-200">
+                    {language === 'ar' ? 'التدفق البسيط قيد التنفيذ' : 'Simple Flow in Progress'}
+                  </p>
+                  <p className="text-sm text-blue-600 dark:text-blue-300">{cloningStep}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Recording Section */}
           <div className="space-y-4">
             <div className="p-4 border rounded-lg space-y-4">
-              <h3 className="font-medium">
+              <h3 className="font-medium flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-600 rounded-full text-sm font-bold">1</span>
                 {language === 'ar' ? 'تسجيل صوتي' : 'Voice Recording'}
               </h3>
               
@@ -456,6 +496,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                   variant={isRecording ? "destructive" : "default"}
                   size="lg"
                   className="flex-shrink-0"
+                  disabled={isCloning}
                 >
                   {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   {isRecording 
@@ -481,6 +522,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                     onClick={isPlaying ? pauseAudio : playAudio}
                     variant="outline"
                     size="sm"
+                    disabled={isCloning}
                   >
                     {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
                     {isPlaying 
@@ -488,83 +530,110 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                       : (language === 'ar' ? 'تشغيل' : 'Play')
                     }
                   </Button>
-                  <Button onClick={deleteRecording} variant="outline" size="sm">
+                  <Button onClick={deleteRecording} variant="outline" size="sm" disabled={isCloning}>
                     <Trash2 className="h-3 w-3" />
                     {language === 'ar' ? 'حذف' : 'Delete'}
                   </Button>
+                  {hasValidAudio && (
+                    <span className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      {language === 'ar' ? 'جاهز للحفظ' : 'Ready to Save'}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Voice Name Input */}
-            <div className="space-y-2">
-              <Label htmlFor="voice-name">
-                {language === 'ar' ? 'اسم الصوت' : 'Voice Name'}
-              </Label>
-              <Input
-                id="voice-name"
-                value={voiceName}
-                onChange={(e) => setVoiceName(e.target.value)}
-                placeholder={language === 'ar' ? 'مثال: صوتي الهادئ' : 'e.g., My Calm Voice'}
-                maxLength={50}
-              />
-            </div>
+            {/* Voice Details Section */}
+            <div className="space-y-4">
+              <h3 className="font-medium flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 bg-green-100 text-green-600 rounded-full text-sm font-bold">2</span>
+                {language === 'ar' ? 'تفاصيل الصوت' : 'Voice Details'}
+              </h3>
 
-            {/* Voice Description Input */}
-            <div className="space-y-2">
-              <Label htmlFor="voice-description">
-                {language === 'ar' ? 'وصف الصوت' : 'Voice Description'}
-                <span className="text-red-500 ml-1">*</span>
-              </Label>
-              <Textarea
-                id="voice-description"
-                value={voiceDescription}
-                onChange={(e) => setVoiceDescription(e.target.value)}
-                placeholder={language === 'ar' ? 'مثال: صوت هادئ ومريح، مناسب للقراءة والمحادثة اليومية' : 'e.g., A calm and soothing voice, perfect for reading and daily conversation'}
-                className="min-h-[80px] resize-none"
-                minLength={20}
-                maxLength={1000}
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>
-                  {language === 'ar' ? 'الحد الأدنى 20 حرف، الأقصى 1000' : 'Min 20 chars, Max 1000'}
-                </span>
-                <span className={voiceDescription.length < 20 ? 'text-red-500' : voiceDescription.length > 1000 ? 'text-red-500' : 'text-green-600'}>
-                  {voiceDescription.length}/1000
-                </span>
+              <div className="space-y-2">
+                <Label htmlFor="voice-name">
+                  {language === 'ar' ? 'اسم الصوت' : 'Voice Name'}
+                </Label>
+                <Input
+                  id="voice-name"
+                  value={voiceName}
+                  onChange={(e) => setVoiceName(e.target.value)}
+                  placeholder={language === 'ar' ? 'مثال: صوتي الهادئ' : 'e.g., My Calm Voice'}
+                  maxLength={50}
+                  disabled={isCloning}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="voice-description">
+                  {language === 'ar' ? 'وصف الصوت' : 'Voice Description'}
+                  <span className="text-red-500 ml-1">*</span>
+                </Label>
+                <Textarea
+                  id="voice-description"
+                  value={voiceDescription}
+                  onChange={(e) => setVoiceDescription(e.target.value)}
+                  placeholder={language === 'ar' ? 'مثال: صوت هادئ ومريح، مناسب للقراءة والمحادثة اليومية' : 'e.g., A calm and soothing voice, perfect for reading and daily conversation'}
+                  className="min-h-[80px] resize-none"
+                  minLength={20}
+                  maxLength={1000}
+                  disabled={isCloning}
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>
+                    {language === 'ar' ? 'الحد الأدنى 20 حرف، الأقصى 1000' : 'Min 20 chars, Max 1000'}
+                  </span>
+                  <span className={voiceDescription.length < 20 ? 'text-red-500' : voiceDescription.length > 1000 ? 'text-red-500' : 'text-green-600'}>
+                    {voiceDescription.length}/1000
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Clone Button */}
-            <Button
-              onClick={createVoiceClone}
-              disabled={!hasValidAudio || !voiceName.trim() || !voiceDescription.trim() || voiceDescription.trim().length < 20 || voiceDescription.trim().length > 1000 || isCloning}
-              className="w-full"
-            >
-              {isCloning ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {language === 'ar' ? 'جاري الإنشاء...' : 'Creating Clone...'}
-                </>
-              ) : (
-                <>
-                  {language === 'ar' ? 'إنشاء النسخة' : 'Create Clone'}
-                </>
-              )}
-            </Button>
+            {/* Simple Flow Action Button */}
+            <div className="p-4 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50/50">
+              <div className="text-center space-y-3">
+                <h3 className="font-medium flex items-center justify-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded-full text-sm font-bold">3</span>
+                  {language === 'ar' ? 'تنفيذ التدفق البسيط' : 'Execute Simple Flow'}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'سيتم: حفظ الملف الصوتي → إرساله إلى ElevenLabs → حفظ النتيجة' : 'Will: Save audio file → Send to ElevenLabs → Save result'}
+                </p>
+                <Button
+                  onClick={createVoiceClone}
+                  disabled={!hasValidAudio || !voiceName.trim() || !voiceDescription.trim() || voiceDescription.trim().length < 20 || voiceDescription.trim().length > 1000 || isCloning}
+                  className="w-full"
+                  size="lg"
+                >
+                  {isCloning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {language === 'ar' ? 'جاري التنفيذ...' : 'Processing...'}
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      {language === 'ar' ? 'بدء التدفق البسيط' : 'Start Simple Flow'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
         </>
       )}
 
       {/* Navigation */}
       <div className="flex gap-3 pt-4">
-        <Button onClick={onBack} variant="outline" className="flex-1">
+        <Button onClick={onBack} variant="outline" className="flex-1" disabled={isCloning}>
           {language === 'ar' ? 'رجوع' : 'Back'}
         </Button>
         <Button 
           onClick={onNext} 
           className="flex-1"
-          disabled={existingVoices.length === 0}
+          disabled={existingVoices.length === 0 || isCloning}
         >
           {language === 'ar' ? 'التالي ← استخدم صوتك' : 'Next → Use Your Voice'}
         </Button>

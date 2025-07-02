@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
@@ -11,6 +12,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ELEVEN_LABS_API_KEY = Deno.env.get('ELEVEN_LABS_API_KEY');
 
 console.log("🎙️ VOICE CLONE: Function loaded");
@@ -18,6 +20,7 @@ console.log("🎙️ ElevenLabs API Key available:", !!ELEVEN_LABS_API_KEY);
 console.log("🎙️ Supabase URL:", SUPABASE_URL);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 function logRequestDetails(req: Request) {
   console.log(`🎙️ === REQUEST DETAILS ===`);
@@ -41,45 +44,6 @@ function logFormDataDetails(formData: FormData) {
     } else {
       console.log(`🎙️ FormData[${key}]: ${value}`);
     }
-  }
-}
-
-function logElevenLabsRequest(url: string, method: string, headers: Record<string, string>, body?: FormData) {
-  console.log(`🎙️ === ELEVENLABS API REQUEST ===`);
-  console.log(`🎙️ URL: ${url}`);
-  console.log(`🎙️ Method: ${method}`);
-  console.log(`🎙️ Headers:`);
-  for (const [key, value] of Object.entries(headers)) {
-    if (key === 'xi-api-key') {
-      console.log(`🎙️   ${key}: [REDACTED]`);
-    } else {
-      console.log(`🎙️   ${key}: ${value}`);
-    }
-  }
-  if (body) {
-    console.log(`🎙️ Body (FormData):`);
-    logFormDataDetails(body);
-  }
-}
-
-async function logElevenLabsResponse(response: Response, operation: string) {
-  console.log(`🎙️ === ELEVENLABS API RESPONSE (${operation}) ===`);
-  console.log(`🎙️ Status: ${response.status} ${response.statusText}`);
-  console.log(`🎙️ Headers:`);
-  for (const [key, value] of response.headers.entries()) {
-    console.log(`🎙️   ${key}: ${value}`);
-  }
-  
-  const responseText = await response.text();
-  console.log(`🎙️ Response Body: ${responseText}`);
-  
-  try {
-    const responseData = JSON.parse(responseText);
-    console.log(`🎙️ Parsed Response:`, responseData);
-    return { text: responseText, data: responseData };
-  } catch (e) {
-    console.log(`🎙️ Response is not valid JSON`);
-    return { text: responseText, data: null };
   }
 }
 
@@ -152,106 +116,111 @@ serve(async (req) => {
 
       console.log(`🗑️ Starting deletion process for voice: ${voice_id}`);
 
-      // Step 1: Delete from ElevenLabs first
-      const deleteUrl = `https://api.elevenlabs.io/v1/voices/${voice_id}`;
-      const deleteHeaders = {
-        'xi-api-key': ELEVEN_LABS_API_KEY,
-      };
+      // Step 1: Get voice record to find audio file URL
+      const { data: voiceRecord, error: fetchError } = await supabase
+        .from('user_voice_clones')
+        .select('*')
+        .eq('voice_id', voice_id)
+        .eq('user_id', user.id)
+        .single();
 
-      logElevenLabsRequest(deleteUrl, 'DELETE', deleteHeaders);
-      
+      if (fetchError) {
+        console.error('🗑️ Error fetching voice record:', fetchError);
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Voice not found in database'
+        }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Step 2: Delete from ElevenLabs
+      const deleteUrl = `https://api.elevenlabs.io/v1/voices/${voice_id}`;
       const deleteResponse = await fetch(deleteUrl, {
         method: 'DELETE',
-        headers: deleteHeaders,
+        headers: {
+          'xi-api-key': ELEVEN_LABS_API_KEY,
+        },
       });
 
-      const { text: deleteResponseText, data: deleteResponseData } = await logElevenLabsResponse(deleteResponse, 'DELETE');
+      const deleteResponseText = await deleteResponse.text();
+      console.log(`🗑️ ElevenLabs delete response: ${deleteResponse.status} - ${deleteResponseText}`);
 
       let elevenLabsSuccess = false;
-      let elevenLabsError = null;
-
       if (deleteResponse.ok) {
-        if (deleteResponseData && deleteResponseData.status === 'ok') {
-          elevenLabsSuccess = true;
-          console.log('🗑️ Successfully deleted voice from ElevenLabs');
-        } else {
-          elevenLabsError = `ElevenLabs delete failed: ${deleteResponseText}`;
-          console.error('🗑️', elevenLabsError);
+        try {
+          const deleteData = JSON.parse(deleteResponseText);
+          if (deleteData && deleteData.status === 'ok') {
+            elevenLabsSuccess = true;
+            console.log('🗑️ Successfully deleted voice from ElevenLabs');
+          }
+        } catch (e) {
+          if (deleteResponse.status === 200) {
+            elevenLabsSuccess = true;
+            console.log('🗑️ Successfully deleted voice from ElevenLabs (empty response)');
+          }
         }
-      } else {
-        elevenLabsError = `ElevenLabs API error ${deleteResponse.status}: ${deleteResponseText}`;
-        console.error('🗑️', elevenLabsError);
       }
 
-      // Step 2: Delete from database
-      let dbSuccess = false;
-      let dbError = null;
+      // Step 3: Delete audio file from storage if it exists
+      if (voiceRecord.audio_file_url) {
+        try {
+          // Extract file path from URL
+          const urlParts = voiceRecord.audio_file_url.split('/');
+          const fileName = urlParts[urlParts.length - 1];
+          const filePath = `${user.id}/${fileName}`;
+          
+          console.log(`🗑️ Deleting audio file: ${filePath}`);
+          
+          const { error: storageError } = await supabaseAdmin.storage
+            .from('voice-recordings')
+            .remove([filePath]);
 
-      try {
-        console.log(`🗑️ Deleting voice from database: ${voice_id}`);
-        
-        const { error: dbDeleteErr } = await supabase
-          .from('user_voice_clones')
-          .delete()
-          .eq('voice_id', voice_id)
-          .eq('user_id', user.id);
-
-        if (dbDeleteErr) {
-          dbError = `Database delete error: ${dbDeleteErr.message}`;
-          console.error('🗑️', dbError);
-        } else {
-          dbSuccess = true;
-          console.log('🗑️ Successfully deleted voice from database');
+          if (storageError) {
+            console.error('🗑️ Error deleting audio file:', storageError);
+          } else {
+            console.log('🗑️ Successfully deleted audio file from storage');
+          }
+        } catch (error) {
+          console.error('🗑️ Error processing audio file deletion:', error);
         }
-      } catch (error) {
-        dbError = `Database deletion failed: ${error.message}`;
-        console.error('🗑️', dbError);
       }
+
+      // Step 4: Delete from database
+      const { error: dbError } = await supabase
+        .from('user_voice_clones')
+        .delete()
+        .eq('voice_id', voice_id)
+        .eq('user_id', user.id);
 
       const processingTime = Date.now() - startTime;
-      console.log(`🗑️ Delete operation completed in ${processingTime}ms`);
 
-      // Determine overall success
-      if (elevenLabsSuccess && dbSuccess) {
-        return new Response(JSON.stringify({
-          success: true,
-          message: 'Voice deleted successfully from both ElevenLabs and database',
-          processingTime
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      } else if (elevenLabsSuccess && !dbSuccess) {
+      if (dbError) {
+        console.error('🗑️ Database delete error:', dbError);
         return new Response(JSON.stringify({
           success: false,
-          error: `Voice deleted from ElevenLabs but database cleanup failed: ${dbError}`,
-          processingTime
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      } else if (!elevenLabsSuccess && dbSuccess) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: `Voice deleted from database but ElevenLabs deletion failed: ${elevenLabsError}`,
-          processingTime
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      } else {
-        return new Response(JSON.stringify({
-          success: false,
-          error: `Both deletions failed. ElevenLabs: ${elevenLabsError}, Database: ${dbError}`,
+          error: `Database deletion failed: ${dbError.message}`,
           processingTime
         }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
+
+      console.log(`🗑️ Delete operation completed in ${processingTime}ms`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Voice deleted successfully',
+        processingTime
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
-    // Handle voice cloning (POST request)
-    console.log(`🎙️ Processing voice cloning request`);
+    // Handle voice cloning (POST request) - NEW SIMPLE FLOW
+    console.log(`🎙️ Processing voice cloning request - SIMPLE FLOW`);
     
     const formData = await req.formData();
     logFormDataDetails(formData);
@@ -319,43 +288,117 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🎙️ Starting voice cloning process...`);
+    console.log(`🎙️ === STARTING SIMPLE FLOW ===`);
+    console.log(`🎙️ Step 1: Recording completed ✓`);
 
-    // Create FormData for ElevenLabs voice creation API
-    const elevenLabsFormData = new FormData();
-    elevenLabsFormData.append('name', voiceName);
-    elevenLabsFormData.append('description', voiceDescription);
-    elevenLabsFormData.append('files', audioFile);
-    elevenLabsFormData.append('remove_background_noise', 'true'); // Changed to 'true' for better quality
-
-    const cloneUrl = 'https://api.elevenlabs.io/v1/voices/add';
-    const cloneHeaders = {
-      'xi-api-key': ELEVEN_LABS_API_KEY,
-    };
-
-    logElevenLabsRequest(cloneUrl, 'POST', cloneHeaders, elevenLabsFormData);
+    // STEP 2: SAVE TO STORAGE
+    console.log(`🎙️ Step 2: Saving audio to storage...`);
     
-    const elevenLabsResponse = await fetch(cloneUrl, {
-      method: 'POST',
-      headers: cloneHeaders,
-      body: elevenLabsFormData,
-    });
+    const fileName = `voice-${Date.now()}-${Math.random().toString(36).substring(7)}.wav`;
+    const filePath = `${user.id}/${fileName}`;
+    
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from('voice-recordings')
+      .upload(filePath, audioFile, {
+        contentType: audioFile.type || 'audio/wav',
+        upsert: false
+      });
 
-    const { text: cloneResponseText, data: cloneResponseData } = await logElevenLabsResponse(elevenLabsResponse, 'CLONE');
-
-    if (!elevenLabsResponse.ok) {
-      console.error('🎙️ ElevenLabs API error during cloning');
+    if (uploadError) {
+      console.error('🎙️ Storage upload error:', uploadError);
       return new Response(JSON.stringify({
         success: false,
-        error: `Voice cloning failed (${elevenLabsResponse.status}): ${cloneResponseText}`
+        error: `Failed to save audio file: ${uploadError.message}`
       }), {
-        status: elevenLabsResponse.status,
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    if (!cloneResponseData || !cloneResponseData.voice_id) {
-      console.error('🎙️ No voice_id in response:', cloneResponseData);
+    console.log(`🎙️ Step 2: Audio saved to storage ✓ - Path: ${uploadData.path}`);
+
+    // Get the file URL for storage in database
+    const { data: urlData } = supabaseAdmin.storage
+      .from('voice-recordings')
+      .getPublicUrl(filePath);
+
+    const audioFileUrl = urlData.publicUrl;
+    console.log(`🎙️ Audio file URL: ${audioFileUrl}`);
+
+    // STEP 3: SEND TO ELEVENLABS
+    console.log(`🎙️ Step 3: Sending to ElevenLabs...`);
+
+    // Download the file from storage to send to ElevenLabs
+    const { data: audioBuffer, error: downloadError } = await supabaseAdmin.storage
+      .from('voice-recordings')
+      .download(filePath);
+
+    if (downloadError) {
+      console.error('🎙️ Error downloading audio from storage:', downloadError);
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Failed to retrieve saved audio file'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Create FormData for ElevenLabs
+    const elevenLabsFormData = new FormData();
+    elevenLabsFormData.append('name', voiceName);
+    elevenLabsFormData.append('description', voiceDescription);
+    elevenLabsFormData.append('files', new File([audioBuffer], fileName, { type: 'audio/wav' }));
+    elevenLabsFormData.append('remove_background_noise', 'true');
+
+    const cloneUrl = 'https://api.elevenlabs.io/v1/voices/add';
+    const cloneResponse = await fetch(cloneUrl, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVEN_LABS_API_KEY,
+      },
+      body: elevenLabsFormData,
+    });
+
+    const cloneResponseText = await cloneResponse.text();
+    console.log(`🎙️ ElevenLabs response: ${cloneResponse.status} - ${cloneResponseText}`);
+
+    if (!cloneResponse.ok) {
+      console.error('🎙️ ElevenLabs API error during cloning');
+      // Clean up storage file on failure
+      await supabaseAdmin.storage.from('voice-recordings').remove([filePath]);
+      
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Voice cloning failed (${cloneResponse.status}): ${cloneResponseText}`
+      }), {
+        status: cloneResponse.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    let cloneData;
+    try {
+      cloneData = JSON.parse(cloneResponseText);
+    } catch (e) {
+      console.error('🎙️ Failed to parse ElevenLabs response:', e);
+      // Clean up storage file on failure
+      await supabaseAdmin.storage.from('voice-recordings').remove([filePath]);
+      
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid response from voice cloning service'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!cloneData || !cloneData.voice_id) {
+      console.error('🎙️ No voice_id in response:', cloneData);
+      // Clean up storage file on failure
+      await supabaseAdmin.storage.from('voice-recordings').remove([filePath]);
+      
       return new Response(JSON.stringify({
         success: false,
         error: 'No voice ID received from ElevenLabs voice cloning service'
@@ -365,22 +408,25 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🎙️ Voice cloned successfully with ID: ${cloneResponseData.voice_id}`);
+    console.log(`🎙️ Step 3: Voice cloned successfully with ID: ${cloneData.voice_id} ✓`);
 
-    // Save to database
-    console.log(`🎙️ Saving voice clone to database...`);
+    // STEP 4: SAVE TO DATABASE
+    console.log(`🎙️ Step 4: Saving voice clone to database...`);
+    
     const { data: dbResult, error: dbError } = await supabase
       .from('user_voice_clones')
       .insert({
         user_id: user.id,
-        voice_id: cloneResponseData.voice_id,
+        voice_id: cloneData.voice_id,
         voice_name: voiceName,
         voice_description: voiceDescription,
+        audio_file_url: audioFileUrl,
         elevenlabs_data: {
-          ...cloneResponseData,
+          ...cloneData,
           created_via: 'WAKTI',
           audio_file_size: audioFile.size,
-          audio_file_type: audioFile.type
+          audio_file_type: audioFile.type,
+          storage_path: filePath
         }
       })
       .select()
@@ -389,18 +435,17 @@ serve(async (req) => {
     if (dbError) {
       console.error('🎙️ Database insert error:', dbError);
       
-      // Cleanup: Try to delete the voice from ElevenLabs since DB save failed
+      // Cleanup: Delete voice from ElevenLabs and storage
       try {
-        console.log('🎙️ Cleaning up voice from ElevenLabs after DB error...');
-        const cleanupResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${cloneResponseData.voice_id}`, {
+        console.log('🎙️ Cleaning up after DB error...');
+        await fetch(`https://api.elevenlabs.io/v1/voices/${cloneData.voice_id}`, {
           method: 'DELETE',
-          headers: {
-            'xi-api-key': ELEVEN_LABS_API_KEY,
-          },
+          headers: { 'xi-api-key': ELEVEN_LABS_API_KEY },
         });
-        console.log('🎙️ Cleanup response status:', cleanupResponse.status);
+        await supabaseAdmin.storage.from('voice-recordings').remove([filePath]);
+        console.log('🎙️ Cleanup completed');
       } catch (cleanupError) {
-        console.error('🎙️ Failed to cleanup voice after DB error:', cleanupError);
+        console.error('🎙️ Failed to cleanup after DB error:', cleanupError);
       }
       
       return new Response(JSON.stringify({
@@ -413,13 +458,16 @@ serve(async (req) => {
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🎙️ Voice clone saved successfully in ${processingTime}ms:`, dbResult);
+    console.log(`🎙️ Step 4: Voice clone saved successfully ✓`);
+    console.log(`🎙️ === SIMPLE FLOW COMPLETED in ${processingTime}ms ===`);
+    console.log(`🎙️ Final result:`, dbResult);
 
     return new Response(JSON.stringify({
       success: true,
-      voice_id: cloneResponseData.voice_id,
+      voice_id: cloneData.voice_id,
       voice_name: voiceName,
-      message: 'Voice cloned successfully',
+      audio_file_url: audioFileUrl,
+      message: 'Voice cloned successfully using simple flow: Record → Save → Send',
       data: dbResult,
       processingTime
     }), {
