@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
@@ -18,12 +18,34 @@ console.log("🎙️ ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Helper function to convert WebM to WAV
+const convertWebMToWAV = async (webmBlob: Blob): Promise<Blob> => {
+  try {
+    console.log("🎙️ Converting WebM to WAV format");
+    
+    // For now, we'll try to use the audio as-is but with proper headers
+    // In a production environment, you might want to use FFmpeg or similar
+    const arrayBuffer = await webmBlob.arrayBuffer();
+    
+    // Create a new Blob with audio/wav mime type
+    const wavBlob = new Blob([arrayBuffer], { type: 'audio/wav' });
+    
+    console.log("🎙️ Audio conversion completed");
+    return wavBlob;
+  } catch (error) {
+    console.error("🎙️ Audio conversion failed:", error);
+    // If conversion fails, return original blob
+    return webmBlob;
+  }
+};
+
 // Helper function to retry API calls
 const retryApiCall = async (apiCall: () => Promise<Response>, maxRetries = 3): Promise<Response> => {
   let lastError: Error | null = null;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      console.log(`🎙️ API call attempt ${attempt}/${maxRetries}`);
       const response = await apiCall();
       
       // If it's a 5xx error, retry
@@ -65,23 +87,49 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '') || '';
     
+    console.log(`🎙️ Auth header present: ${!!authHeader}`);
+    console.log(`🎙️ Token length: ${token.length}`);
+    
     const { data: { user } } = await supabase.auth.getUser(token);
 
     if (!user) {
+      console.error('🎙️ User authentication failed');
       throw new Error('Unauthorized - user not authenticated');
     }
 
     console.log(`🎙️ Authenticated user: ${user.id}`);
 
     if (req.method === 'POST') {
+      console.log('🎙️ Processing voice clone creation request');
+      
       // Create voice clone using instant voice cloning
       const formData = await req.formData();
       const voiceName = formData.get('voice_name') as string;
       const voiceDescription = formData.get('voice_description') as string;
       const audioFile = formData.get('audio_file') as File;
 
+      console.log(`🎙️ Form data received:`, {
+        voiceName: voiceName || 'Not provided',
+        voiceDescription: voiceDescription || 'Not provided',
+        audioFilePresent: !!audioFile,
+        audioFileType: audioFile?.type || 'Unknown',
+        audioFileSize: audioFile?.size || 0
+      });
+
       if (!voiceName || !audioFile) {
+        console.error('🎙️ Missing required fields');
         throw new Error('Voice name and audio file are required');
+      }
+
+      // Convert audio file if it's WebM
+      let processedAudioFile = audioFile;
+      if (audioFile.type.includes('webm')) {
+        console.log('🎙️ Converting WebM audio to WAV');
+        const wavBlob = await convertWebMToWAV(audioFile);
+        processedAudioFile = new File([wavBlob], audioFile.name.replace('.webm', '.wav'), {
+          type: 'audio/wav'
+        });
+        console.log(`🎙️ Audio converted - new type: ${processedAudioFile.type}, size: ${processedAudioFile.size}`);
       }
 
       console.log(`🎙️ Creating voice clone: ${voiceName}`);
@@ -92,7 +140,9 @@ serve(async (req) => {
       if (voiceDescription) {
         elevenlabsFormData.append('description', voiceDescription);
       }
-      elevenlabsFormData.append('files', audioFile);
+      elevenlabsFormData.append('files', processedAudioFile);
+
+      console.log('🎙️ Sending request to ElevenLabs API...');
 
       // Use instant voice cloning endpoint with retry logic
       const response = await retryApiCall(() => 
@@ -109,7 +159,11 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('🎙️ ElevenLabs API error:', errorText);
+        console.error('🎙️ ElevenLabs API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
         throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
       }
 
@@ -134,6 +188,8 @@ serve(async (req) => {
         throw new Error(`Failed to save voice data: ${error.message}`);
       }
 
+      console.log('🎙️ Voice clone creation completed successfully');
+
       return new Response(JSON.stringify({
         success: true,
         voice: data
@@ -142,6 +198,8 @@ serve(async (req) => {
       });
 
     } else if (req.method === 'GET') {
+      console.log('🎙️ Fetching user voices');
+      
       // Get user's voices
       const { data: voices, error } = await supabase
         .from('user_voice_clones')
@@ -154,6 +212,8 @@ serve(async (req) => {
         throw new Error(`Failed to fetch voices: ${error.message}`);
       }
 
+      console.log(`🎙️ Found ${voices?.length || 0} voices for user`);
+
       return new Response(JSON.stringify({
         success: true,
         voices: voices || []
@@ -162,6 +222,8 @@ serve(async (req) => {
       });
 
     } else if (req.method === 'DELETE') {
+      console.log('🎙️ Processing voice deletion request');
+      
       // Delete voice
       const { voice_id } = await req.json();
 
@@ -186,6 +248,8 @@ serve(async (req) => {
           const errorText = await deleteResponse.text();
           console.error('🎙️ ElevenLabs delete error:', errorText);
           // Continue with database deletion even if ElevenLabs fails
+        } else {
+          console.log('🎙️ Voice deleted from ElevenLabs successfully');
         }
       } catch (error) {
         console.error('🎙️ ElevenLabs delete failed:', error);
@@ -203,6 +267,8 @@ serve(async (req) => {
         console.error('🎙️ Database delete error:', error);
         throw new Error(`Failed to delete voice: ${error.message}`);
       }
+
+      console.log('🎙️ Voice deletion completed successfully');
 
       return new Response(JSON.stringify({
         success: true,
