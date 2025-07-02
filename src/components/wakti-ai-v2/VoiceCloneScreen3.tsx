@@ -95,15 +95,19 @@ const DEFAULT_VOICES: VoiceClone[] = [
   }
 ];
 
-// Complete ElevenLabs Multilingual v2 supported languages (29 languages)
+// Complete ElevenLabs Multilingual v2 supported languages (41 languages)
 const TRANSLATION_LANGUAGES = [
   { code: 'en', name: { en: 'English', ar: 'الإنجليزية' } },
   { code: 'ar', name: { en: 'Arabic', ar: 'العربية' } },
+  { code: 'bn', name: { en: 'Bengali', ar: 'البنغالية' } },
   { code: 'bg', name: { en: 'Bulgarian', ar: 'البلغارية' } },
   { code: 'zh', name: { en: 'Chinese', ar: 'الصينية' } },
+  { code: 'hr', name: { en: 'Croatian', ar: 'الكرواتية' } },
   { code: 'cs', name: { en: 'Czech', ar: 'التشيكية' } },
   { code: 'da', name: { en: 'Danish', ar: 'الدنماركية' } },
   { code: 'nl', name: { en: 'Dutch', ar: 'الهولندية' } },
+  { code: 'et', name: { en: 'Estonian', ar: 'الإستونية' } },
+  { code: 'tl', name: { en: 'Filipino (Tagalog)', ar: 'الفلبينية (التاغالوغ)' } },
   { code: 'fi', name: { en: 'Finnish', ar: 'الفنلندية' } },
   { code: 'fr', name: { en: 'French', ar: 'الفرنسية' } },
   { code: 'de', name: { en: 'German', ar: 'الألمانية' } },
@@ -115,16 +119,24 @@ const TRANSLATION_LANGUAGES = [
   { code: 'it', name: { en: 'Italian', ar: 'الإيطالية' } },
   { code: 'ja', name: { en: 'Japanese', ar: 'اليابانية' } },
   { code: 'ko', name: { en: 'Korean', ar: 'الكورية' } },
+  { code: 'lv', name: { en: 'Latvian', ar: 'اللاتفية' } },
+  { code: 'lt', name: { en: 'Lithuanian', ar: 'الليتوانية' } },
+  { code: 'ms', name: { en: 'Malay', ar: 'الملايو' } },
   { code: 'no', name: { en: 'Norwegian', ar: 'النرويجية' } },
+  { code: 'fa', name: { en: 'Persian (Farsi)', ar: 'الفارسية' } },
   { code: 'pl', name: { en: 'Polish', ar: 'البولندية' } },
   { code: 'pt', name: { en: 'Portuguese', ar: 'البرتغالية' } },
   { code: 'ro', name: { en: 'Romanian', ar: 'الرومانية' } },
   { code: 'ru', name: { en: 'Russian', ar: 'الروسية' } },
+  { code: 'sr', name: { en: 'Serbian', ar: 'الصربية' } },
+  { code: 'sk', name: { en: 'Slovak', ar: 'السلوفاكية' } },
   { code: 'es', name: { en: 'Spanish', ar: 'الإسبانية' } },
+  { code: 'sw', name: { en: 'Swahili', ar: 'السواحلية' } },
   { code: 'sv', name: { en: 'Swedish', ar: 'السويدية' } },
   { code: 'th', name: { en: 'Thai', ar: 'التايلاندية' } },
   { code: 'tr', name: { en: 'Turkish', ar: 'التركية' } },
   { code: 'uk', name: { en: 'Ukrainian', ar: 'الأوكرانية' } },
+  { code: 'ur', name: { en: 'Urdu', ar: 'الأردية' } },
   { code: 'vi', name: { en: 'Vietnamese', ar: 'الفيتنامية' } }
 ];
 
