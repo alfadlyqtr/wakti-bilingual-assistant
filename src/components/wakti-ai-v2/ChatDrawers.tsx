@@ -82,7 +82,9 @@ export function ChatDrawers({
           </DrawerHeader>
           <div className="flex-1 overflow-hidden">
             <QuickActionsPanel 
-              onClose={() => setShowQuickActions(false)} 
+              onClose={() => setShowQuickActions(false)}
+              onTriggerChange={onTriggerChange}
+              activeTrigger={activeTrigger}
             />
           </div>
         </DrawerContent>

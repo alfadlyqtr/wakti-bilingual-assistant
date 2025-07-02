@@ -9,108 +9,162 @@ import {
   Calculator,
   Languages,
   Search,
-  X
+  X,
+  Bot,
+  ImagePlus,
+  Mic
 } from 'lucide-react';
 import { TextGenModal } from './TextGenModal';
 import { GameModeModal } from './GameModeModal';
 
 interface QuickActionsPanelProps {
   onClose: () => void;
+  onTriggerChange?: (trigger: string) => void;
+  activeTrigger?: string;
 }
 
-export function QuickActionsPanel({ onClose }: QuickActionsPanelProps) {
+export function QuickActionsPanel({ onClose, onTriggerChange, activeTrigger = 'chat' }: QuickActionsPanelProps) {
   const { language } = useTheme();
   const [showTextGen, setShowTextGen] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
 
-  const quickActions = [
+  const aiModes = [
     {
-      id: 'translate',
-      icon: Languages,
-      label: language === 'ar' ? 'ترجمة' : 'Translate',
-      description: language === 'ar' ? 'ترجم النصوص لأي لغة' : 'Translate text to any language',
+      id: 'chat',
+      icon: Bot,
+      label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
+      description: language === 'ar' ? 'محادثة عادية مع الذكاء الاصطناعي' : 'Normal chat with AI',
       color: 'text-blue-500',
       bgColor: 'bg-blue-50 dark:bg-blue-950/20',
-      action: () => {
-        console.log('Translate action - to be implemented');
-        onClose();
-      }
+      isActive: activeTrigger === 'chat'
     },
     {
       id: 'search',
       icon: Search,
       label: language === 'ar' ? 'بحث' : 'Search',
-      description: language === 'ar' ? 'ابحث في الإنترنت' : 'Search the web',
+      description: language === 'ar' ? 'بحث في الإنترنت' : 'Search the internet',
       color: 'text-green-500',
       bgColor: 'bg-green-50 dark:bg-green-950/20',
-      action: () => {
-        console.log('Search action - to be implemented');
-        onClose();
-      }
+      isActive: activeTrigger === 'search'
     },
     {
       id: 'image',
-      icon: Palette,
-      label: language === 'ar' ? 'صور AI' : 'AI Images',
-      description: language === 'ar' ? 'إنشاء صور بالذكاء الاصطناعي' : 'Generate AI images',
-      color: 'text-purple-500',
-      bgColor: 'bg-purple-50 dark:bg-purple-950/20',
-      action: () => {
-        console.log('Image generation action - to be implemented');
-        onClose();
-      }
-    },
+      icon: ImagePlus,
+      label: language === 'ar' ? 'صورة' : 'Image',
+      description: language === 'ar' ? 'إنشاء الصور' : 'Generate images',
+      color: 'text-orange-500',
+      bgColor: 'bg-orange-50 dark:bg-orange-950/20',
+      isActive: activeTrigger === 'image'
+    }
+  ];
+
+  const quickTools = [
     {
       id: 'textgen',
       icon: FileText,
-      label: language === 'ar' ? 'كتابة AI' : 'AI Writing',
-      description: language === 'ar' ? 'كتابة وتحرير النصوص' : 'Write and edit text',
-      color: 'text-orange-500',
-      bgColor: 'bg-orange-50 dark:bg-orange-950/20',
+      label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
+      description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
+      color: 'text-purple-500',
+      bgColor: 'bg-purple-50 dark:bg-purple-950/20',
       action: () => setShowTextGen(true)
+    },
+    {
+      id: 'translator',
+      icon: Mic,
+      label: language === 'ar' ? 'مترجم الصوت' : 'Voice Translator',
+      description: language === 'ar' ? 'ترجمة صوتية في الوقت الفعلي' : 'Real-time voice translation',
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-50 dark:bg-blue-950/20',
+      action: () => {
+        console.log('Voice Translator action - to be implemented');
+        onClose();
+      }
     },
     {
       id: 'games',
       icon: Calculator,
-      label: language === 'ar' ? 'ألعاب' : 'Games',
-      description: language === 'ar' ? 'العب الشطرنج وXO' : 'Play Chess & Tic-Tac-Toe',
-      color: 'text-red-500',  
+      label: language === 'ar' ? 'وضع اللعب' : 'Game Mode',
+      description: language === 'ar' ? 'العب الألعاب الذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
+      color: 'text-red-500',
       bgColor: 'bg-red-50 dark:bg-red-950/20',
       action: () => setShowGameMode(true)
     }
   ];
 
+  const handleModeSelect = (modeId: string) => {
+    if (onTriggerChange) {
+      onTriggerChange(modeId);
+    }
+    onClose();
+  };
+
   return (
     <>
-      <div className="absolute top-full left-0 right-0 mt-2 bg-background border border-border rounded-lg shadow-lg z-50 max-h-[70vh] overflow-y-auto">
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-lg">
-              {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
-            </h3>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">
+            {language === 'ar' ? 'أوضاع الذكاء الاصطناعي' : 'AI Modes'}
+          </h2>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        <div className="text-sm text-muted-foreground mb-4">
+          {language === 'ar' ? 'اختر الوضع المناسب لمهمتك' : 'Choose the right mode for your task'}
+        </div>
+
+        {/* AI Modes Section */}
+        <div className="space-y-3">
+          {aiModes.map((mode) => {
+            const IconComponent = mode.icon;
+            return (
+              <Button
+                key={mode.id}
+                variant={mode.isActive ? "default" : "ghost"}
+                className={`h-auto p-4 justify-start w-full ${mode.isActive ? '' : `hover:${mode.bgColor}`} transition-colors`}
+                onClick={() => handleModeSelect(mode.id)}
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <div className={`p-2 rounded-lg ${mode.isActive ? 'bg-white/20' : mode.bgColor}`}>
+                    <IconComponent className={`h-5 w-5 ${mode.isActive ? 'text-white' : mode.color}`} />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium">{mode.label}</div>
+                    <div className={`text-sm ${mode.isActive ? 'text-white/80' : 'text-muted-foreground'}`}>
+                      {mode.description}
+                    </div>
+                  </div>
+                </div>
+              </Button>
+            );
+          })}
+        </div>
+
+        {/* Quick Tools Section */}
+        <div className="pt-6 border-t border-border">
+          <h3 className="text-lg font-semibold mb-4">
+            {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
+          </h3>
           
-          <div className="grid grid-cols-1 gap-3">
-            {quickActions.map((action) => {
-              const IconComponent = action.icon;
+          <div className="space-y-3">
+            {quickTools.map((tool) => {
+              const IconComponent = tool.icon;
               return (
                 <Button
-                  key={action.id}
+                  key={tool.id}
                   variant="ghost"
-                  className={`h-auto p-4 justify-start hover:${action.bgColor} transition-colors`}
-                  onClick={action.action}
+                  className={`h-auto p-4 justify-start w-full hover:${tool.bgColor} transition-colors`}
+                  onClick={tool.action}
                 >
                   <div className="flex items-center gap-3 w-full">
-                    <div className={`p-2 rounded-lg ${action.bgColor}`}>
-                      <IconComponent className={`h-5 w-5 ${action.color}`} />
+                    <div className={`p-2 rounded-lg ${tool.bgColor}`}>
+                      <IconComponent className={`h-5 w-5 ${tool.color}`} />
                     </div>
                     <div className="flex-1 text-left">
-                      <div className="font-medium">{action.label}</div>
+                      <div className="font-medium">{tool.label}</div>
                       <div className="text-sm text-muted-foreground">
-                        {action.description}
+                        {tool.description}
                       </div>
                     </div>
                   </div>
