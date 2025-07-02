@@ -31,6 +31,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const [isCloning, setIsCloning] = useState(false);
   const [existingVoices, setExistingVoices] = useState<VoiceClone[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDeletingVoice, setIsDeletingVoice] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -294,6 +295,51 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     }
   };
 
+  const deleteVoiceClone = async (voiceId: string, voiceName: string) => {
+    setIsDeletingVoice(voiceId);
+    
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        throw new Error('User not authenticated');
+      }
+
+      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({
+          voice_id: voiceId,
+          action: 'delete'
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete voice');
+      }
+
+      setExistingVoices(prev => prev.filter(voice => voice.voice_id !== voiceId));
+      toast.success(language === 'ar' 
+        ? `تم حذف الصوت "${voiceName}" بنجاح` 
+        : `Voice "${voiceName}" deleted successfully`
+      );
+
+    } catch (error: any) {
+      console.error('Error deleting voice:', error);
+      toast.error(error.message || (language === 'ar' ? 'فشل في حذف الصوت' : 'Failed to delete voice'));
+    } finally {
+      setIsDeletingVoice(null);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -320,9 +366,17 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         <h2 className="text-xl font-semibold mb-2">
           {language === 'ar' ? 'سجل صوتك' : 'Record Your Voice'}
         </h2>
-        <p className="text-sm text-muted-foreground">
-          {language === 'ar' ? 'يمكنك إنشاء حتى 3 أصوات' : 'You can create up to 3 voices'}
-        </p>
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">
+            {language === 'ar' ? 'يمكنك إنشاء حتى 3 أصوات' : 'You can create up to 3 voices'}
+          </p>
+          <p className="text-xs font-medium">
+            {language === 'ar' 
+              ? `${existingVoices.length}/3 أصوات مستخدمة`
+              : `${existingVoices.length}/3 voices used`
+            }
+          </p>
+        </div>
       </div>
 
       {/* Audio Quality Guidelines */}
@@ -358,10 +412,23 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                 {language === 'ar' ? 'جاهز للاستخدام' : 'Ready to Use'}
               </span>
               {voice.user_email && (
-                <span className="text-xs text-muted-foreground ml-auto">
+                <span className="text-xs text-muted-foreground">
                   {voice.user_email}
                 </span>
               )}
+              <Button
+                onClick={() => deleteVoiceClone(voice.voice_id, voice.voice_name)}
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 ml-auto"
+                disabled={isDeletingVoice === voice.voice_id}
+              >
+                {isDeletingVoice === voice.voice_id ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3 w-3" />
+                )}
+              </Button>
             </div>
           ))}
         </div>

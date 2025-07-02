@@ -484,62 +484,19 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </div>
       </div>
 
-      {/* Voice Selector with Delete Functionality */}
+      {/* Voice Selector */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
           {language === 'ar' ? 'اختر الصوت' : 'Select Voice'}
         </label>
         <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId}>
-          <SelectTrigger>
+          <SelectTrigger className="h-12">
             <SelectValue placeholder={language === 'ar' ? 'اختر صوت' : 'Choose a voice'} />
           </SelectTrigger>
           <SelectContent>
             {voices.map((voice) => (
               <SelectItem key={voice.id} value={voice.voice_id}>
-                <div className="flex items-center justify-between w-full">
-                  <span>{voice.voice_name}</span>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 ml-2"
-                        disabled={isDeletingVoice === voice.voice_id}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {isDeletingVoice === voice.voice_id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3 w-3" />
-                        )}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {language === 'ar' ? 'حذف الصوت المستنسخ' : 'Delete Voice Clone'}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {language === 'ar' 
-                            ? `هل أنت متأكد من حذف الصوت "${voice.voice_name}"؟ هذا الإجراء لا يمكن التراجع عنه.`
-                            : `Are you sure you want to delete the voice "${voice.voice_name}"? This action cannot be undone.`
-                          }
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>
-                          {language === 'ar' ? 'إلغاء' : 'Cancel'}
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => deleteVoiceClone(voice.voice_id, voice.voice_name)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          {language === 'ar' ? 'حذف' : 'Delete'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
+                {voice.voice_name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -613,6 +570,28 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             </>
           )}
         </Button>
+
+        {/* Translated Text Display */}
+        {translatedText && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">
+                {language === 'ar' ? 'النص المترجم' : 'Translated Text'}
+              </label>
+              <Button
+                onClick={() => navigator.clipboard.writeText(translatedText)}
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="p-3 bg-muted rounded-lg text-sm">
+              {translatedText}
+            </div>
+          </div>
+        )}
 
       </div>
 

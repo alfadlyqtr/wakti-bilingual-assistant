@@ -124,9 +124,9 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
       <div className="flex gap-3 pt-4">
         <Button 
           onClick={onNext}
-          className="flex-1"
+          className="flex-[2]"
         >
-          {language === 'ar' ? 'ابدأ' : 'Get Started'}
+          {language === 'ar' ? 'ابدأ / استنسخ الأصوات' : 'Get Started / Clone Voices'}
         </Button>
         
         {hasExistingVoices && (
@@ -135,7 +135,7 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
             variant="outline"
             className="flex-1"
           >
-            {language === 'ar' ? 'تخطي' : 'Skip'}
+            {language === 'ar' ? 'المترجم' : 'Translator'}
           </Button>
         )}
       </div>
