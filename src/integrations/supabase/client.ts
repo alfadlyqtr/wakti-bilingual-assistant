@@ -15,6 +15,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true
+  },
+  global: {
+    headers: {
+      'x-app-name': 'WAKTI'
+    }
   }
 });
 

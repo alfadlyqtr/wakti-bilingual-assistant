@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Search, Image, PenTool, Gamepad2, Mic } from 'lucide-react';
+import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-react';
 import TextGeneratorPopup from './TextGeneratorPopup';
-import { VoiceClonePopup } from './voice-clone/VoiceClonePopup';
+import { VoiceClonePopup } from './VoiceClonePopup';
 import { GameModeModal } from './GameModeModal';
 
 interface QuickActionsProps {
@@ -62,10 +62,10 @@ export function QuickActionsPanel({
     color: 'bg-purple-500'
   }, {
     icon: <Mic className="h-5 w-5" />,
-    label: language === 'ar' ? 'نسخ الصوت والترجمة' : 'Voice Clone & Translator',
-    description: language === 'ar' ? 'انسخ صوتك وترجم النصوص بصوتك' : 'Clone your voice and translate texts with your voice',
+    label: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
+    description: language === 'ar' ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة' : 'Clone your voice, translate and speak in different languages',
     action: () => setShowVoiceClone(true),
-    color: 'bg-blue-500'
+    color: 'bg-pink-500'
   }, {
     icon: <Gamepad2 className="h-5 w-5" />,
     label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
@@ -155,10 +155,7 @@ export function QuickActionsPanel({
         />
 
         {/* Voice Clone Popup */}
-        <VoiceClonePopup 
-          isOpen={showVoiceClone} 
-          onClose={() => setShowVoiceClone(false)} 
-        />
+        <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
 
         {/* Game Mode Modal */}
         <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />

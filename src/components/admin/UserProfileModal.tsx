@@ -186,6 +186,41 @@ export const UserProfileModal = ({ user, isOpen, onClose, onUserUpdated }: UserP
             </CardContent>
           </Card>
 
+          {/* Voice Clone Usage */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base sm:text-lg flex items-center">
+                <Mic className="h-5 w-5 mr-2" />
+                Voice Clone Usage
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <div className="text-center py-4 text-sm">Loading voice usage...</div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Characters Used</span>
+                    <span className="text-sm">
+                      {statistics.voiceUsage.charactersUsed.toLocaleString()} / {statistics.voiceUsage.charactersLimit.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-accent-blue h-2 rounded-full" 
+                      style={{ 
+                        width: `${Math.min((statistics.voiceUsage.charactersUsed / statistics.voiceUsage.charactersLimit) * 100, 100)}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Remaining: {(statistics.voiceUsage.charactersLimit - statistics.voiceUsage.charactersUsed + statistics.voiceUsage.extraCharacters).toLocaleString()}</span>
+                    <span>Extra: {statistics.voiceUsage.extraCharacters.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </DialogContent>
     </Dialog>

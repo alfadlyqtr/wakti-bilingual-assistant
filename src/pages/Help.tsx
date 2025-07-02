@@ -75,6 +75,10 @@ export default function Help() {
             <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'ترجم النصوص أو الصوت بين اللغات المختلفة مع إمكانية التحويل إلى كلام.' : 'Translate text or voice between different languages with text-to-speech conversion.'}</p>
           </div>
           <div>
+            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}</h4>
+            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'أنشئ نسخة صوتية مخصصة من صوتك لاستخدامها في الردود الصوتية والتفاعلات.' : 'Create a personalized voice clone of your voice for use in voice responses and interactions.'}</p>
+          </div>
+          <div>
             <h4 className="font-medium mb-1 text-orange-400">{t('voiceFeatures', language)}</h4>
             <p className="text-sm text-muted-foreground/80">{t('voiceFeaturesDesc', language)}</p>
           </div>
