@@ -2,6 +2,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import { ElevenLabsClient } from "https://esm.sh/@elevenlabs/elevenlabs-js@2.4.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,12 +12,14 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
 console.log("🎙️ VOICE CLONE: Function initialized");
 console.log("🎙️ ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 serve(async (req) => {
   console.log(`🎙️ Request: ${req.method} ${req.url}`);
@@ -49,7 +52,7 @@ serve(async (req) => {
     console.log(`🎙️ Authenticated user: ${user.id} (${user.email})`);
 
     // Get user's profile to access email
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseService
       .from('profiles')
       .select('email')
       .eq('id', user.id)
@@ -74,8 +77,8 @@ serve(async (req) => {
 
       console.log(`🗑️ Deleting voice: ${voice_id}`);
 
-      // Verify the user owns this voice (using email)
-      const { data: voiceData, error: voiceError } = await supabase
+      // Verify the user owns this voice (using service role to bypass RLS)
+      const { data: voiceData, error: voiceError } = await supabaseService
         .from('user_voice_clones')
         .select('*')
         .eq('voice_id', voice_id)
@@ -89,29 +92,22 @@ serve(async (req) => {
 
       console.log(`🗑️ Confirmed voice ownership: ${voiceData.voice_name}`);
 
+      // Initialize ElevenLabs client
+      const elevenlabs = new ElevenLabsClient({
+        apiKey: ELEVENLABS_API_KEY,
+      });
+
       try {
-        // Delete from ElevenLabs using official API
-        const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
-          method: 'DELETE',
-          headers: {
-            'xi-api-key': ELEVENLABS_API_KEY,
-          },
-        });
-
-        console.log(`🗑️ ElevenLabs delete response: ${deleteResponse.status}`);
-
-        if (!deleteResponse.ok) {
-          const errorText = await deleteResponse.text();
-          console.error('🗑️ ElevenLabs delete error:', errorText);
-          // Continue with database deletion even if ElevenLabs deletion fails
-        }
+        // Delete from ElevenLabs using official client
+        await elevenlabs.voices.delete(voice_id);
+        console.log(`🗑️ Successfully deleted voice from ElevenLabs: ${voice_id}`);
       } catch (elevenLabsError) {
         console.error('🗑️ Error calling ElevenLabs delete API:', elevenLabsError);
-        // Continue with database deletion
+        // Continue with database deletion even if ElevenLabs deletion fails
       }
 
-      // Delete from database
-      const { error: dbDeleteError } = await supabase
+      // Delete from database using service role
+      const { error: dbDeleteError } = await supabaseService
         .from('user_voice_clones')
         .delete()
         .eq('voice_id', voice_id)
@@ -132,7 +128,7 @@ serve(async (req) => {
       });
     }
 
-    // Handle POST request (voice creation using official ElevenLabs method)
+    // Handle POST request (voice creation using official ElevenLabs client)
     if (req.method !== 'POST') {
       throw new Error('Method not allowed');
     }
@@ -164,39 +160,24 @@ serve(async (req) => {
       throw new Error('Invalid file type. Only audio files are allowed');
     }
 
-    // Convert File to proper format for ElevenLabs API
+    // Convert File to ArrayBuffer for ElevenLabs client
     const audioBuffer = await audioFile.arrayBuffer();
-    const audioBlob = new Blob([audioBuffer], { type: audioFile.type });
+    const audioUint8Array = new Uint8Array(audioBuffer);
 
-    console.log(`🎙️ Calling ElevenLabs Voice Clone API using official method...`);
+    console.log(`🎙️ Calling ElevenLabs Voice Clone API using official client...`);
 
-    // Use ElevenLabs official Voice Clone API (IVC - Instant Voice Cloning)
-    const elevenLabsFormData = new FormData();
-    elevenLabsFormData.append('files', audioBlob, audioFile.name);
-    elevenLabsFormData.append('name', voiceName);
-    elevenLabsFormData.append('description', `Voice cloned via WAKTI - ${voiceName} (${userEmail})`);
-
-    const elevenLabsResponse = await fetch('https://api.elevenlabs.io/v1/voices/add', {
-      method: 'POST',
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
-      },
-      body: elevenLabsFormData,
+    // Initialize ElevenLabs client
+    const elevenlabs = new ElevenLabsClient({
+      apiKey: ELEVENLABS_API_KEY,
     });
 
-    console.log(`🎙️ ElevenLabs API response status: ${elevenLabsResponse.status}`);
+    // Use ElevenLabs official Voice Clone API (IVC - Instant Voice Cloning)
+    const result = await elevenlabs.voices.ivc.create({
+      name: voiceName,
+      description: `Voice cloned via WAKTI - ${voiceName} (${userEmail})`,
+      files: [audioUint8Array],
+    });
 
-    if (!elevenLabsResponse.ok) {
-      const errorText = await elevenLabsResponse.text();
-      console.error('🎙️ ElevenLabs API error:', {
-        status: elevenLabsResponse.status,
-        statusText: elevenLabsResponse.statusText,
-        error: errorText
-      });
-      throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status} - ${errorText}`);
-    }
-
-    const result = await elevenLabsResponse.json();
     console.log('🎙️ Voice cloning result:', {
       voiceId: result.voice_id,
       voiceName: result.name
@@ -207,8 +188,8 @@ serve(async (req) => {
       throw new Error('No voice_id received from ElevenLabs API');
     }
 
-    // Save to database with email-based identification
-    const { data: dbResult, error: dbError } = await supabase
+    // Save to database using service role to bypass RLS
+    const { data: dbResult, error: dbError } = await supabaseService
       .from('user_voice_clones')
       .insert({
         user_id: user.id,
@@ -225,12 +206,8 @@ serve(async (req) => {
       console.error('🎙️ Database insert error:', dbError);
       // Try to cleanup ElevenLabs voice if database insert fails
       try {
-        await fetch(`https://api.elevenlabs.io/v1/voices/${result.voice_id}`, {
-          method: 'DELETE',
-          headers: {
-            'xi-api-key': ELEVENLABS_API_KEY,
-          },
-        });
+        await elevenlabs.voices.delete(result.voice_id);
+        console.log('🎙️ Cleaned up ElevenLabs voice after database error');
       } catch (cleanupError) {
         console.error('🎙️ Failed to cleanup ElevenLabs voice:', cleanupError);
       }

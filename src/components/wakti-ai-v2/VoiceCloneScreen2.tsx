@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -96,9 +95,11 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         } 
       });
       
-      // Use a more compatible format for better ElevenLabs compatibility
+      // Use MP3-compatible format for better ElevenLabs compatibility
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
         ? 'audio/webm;codecs=opus' 
+        : MediaRecorder.isTypeSupported('audio/mp4') 
+        ? 'audio/mp4'
         : 'audio/webm';
       
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
@@ -124,7 +125,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       
       intervalRef.current = setInterval(() => {
         setRecordingTime(prev => {
-          if (prev >= 180) { // Max 3 minutes as per ElevenLabs best practices
+          if (prev >= 180) { // Max 3 minutes as per ElevenLabs requirements
             stopRecording();
             return 180;
           }
@@ -193,13 +194,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       return;
     }
 
-    // Validate minimum duration (at least 30 seconds as per requirements)
-    if (recordingTime < 30) {
-      toast.error(language === 'ar' ? 'التسجيل يجب أن يكون 30 ثانية على الأقل' : 'Recording must be at least 30 seconds');
+    // Validate minimum duration (at least 60 seconds for better quality)
+    if (recordingTime < 60) {
+      toast.error(language === 'ar' ? 'التسجيل يجب أن يكون دقيقة واحدة على الأقل للحصول على جودة أفضل' : 'Recording must be at least 1 minute for better quality');
       return;
     }
 
-    // Validate maximum duration (3 minutes as per ElevenLabs best practices)
+    // Validate maximum duration (3 minutes as per ElevenLabs requirements)
     if (recordingTime > 180) {
       toast.error(language === 'ar' ? 'التسجيل يجب أن يكون أقل من 3 دقائق' : 'Recording must be less than 3 minutes');
       return;
@@ -208,8 +209,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     setIsCloning(true);
 
     try {
-      // Convert audio blob to the most compatible format
-      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
+      // Create audio file with proper naming for ElevenLabs
+      const audioFile = new File([audioBlob], `voice-clone-${Date.now()}.webm`, {
         type: audioBlob.type || 'audio/webm'
       });
 
@@ -217,7 +218,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       formData.append('audio', audioFile);
       formData.append('voiceName', voiceName.trim());
 
-      console.log('Creating voice clone with ElevenLabs official API:', {
+      console.log('Creating voice clone with ElevenLabs official client:', {
         audioSize: audioFile.size,
         voiceName: voiceName.trim(),
         duration: recordingTime,
@@ -238,7 +239,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       }
 
       console.log('Voice clone success:', data);
-      toast.success(language === 'ar' ? 'تم إنشاء نسخة الصوت بنجاح' : 'Voice clone created successfully');
+      toast.success(language === 'ar' ? 'تم إنشاء نسخة الصوت بنجاح! يمكنك الآن استخدامها في التطبيق.' : 'Voice clone created successfully! You can now use it in the app.');
 
       // Reload voices and reset form
       await loadExistingVoices();
@@ -254,8 +255,10 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         toast.error(language === 'ar' ? 'الملف الصوتي كبير جداً (الحد الأقصى 10 ميجابايت)' : 'Audio file too large (max 10MB)');
       } else if (errorMessage.includes('Invalid file type')) {
         toast.error(language === 'ar' ? 'نوع الملف غير صالح' : 'Invalid file type');
-      } else if (errorMessage.includes('ElevenLabs API')) {
-        toast.error(language === 'ar' ? 'خطأ في خدمة نسخ الصوت' : 'Voice cloning service error');
+      } else if (errorMessage.includes('Row Level Security')) {
+        toast.error(language === 'ar' ? 'خطأ في الصلاحيات، يرجى إعادة تسجيل الدخول' : 'Permission error, please re-login');
+      } else if (errorMessage.includes('ElevenLabs') || errorMessage.includes('API')) {
+        toast.error(language === 'ar' ? 'خطأ في خدمة نسخ الصوت، يرجى المحاولة مرة أخرى' : 'Voice cloning service error, please try again');
       } else {
         toast.error(language === 'ar' ? 'فشل في إنشاء نسخة الصوت: ' + errorMessage : 'Failed to create voice clone: ' + errorMessage);
       }
@@ -271,7 +274,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   };
 
   const canRecord = existingVoices.length < 3;
-  const hasValidAudio = audioBlob && recordingTime >= 30 && recordingTime <= 180;
+  const hasValidAudio = audioBlob && recordingTime >= 60 && recordingTime <= 180; // Updated to 60 seconds minimum
 
   if (loading) {
     return (
@@ -295,19 +298,20 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         </p>
       </div>
 
-      {/* Audio Quality Guidelines */}
+      {/* Audio Quality Guidelines - Updated */}
       <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-blue-800 dark:text-blue-200">
             <p className="font-medium mb-1">
-              {language === 'ar' ? 'نصائح لجودة أفضل:' : 'For best quality:'}
+              {language === 'ar' ? 'متطلبات ElevenLabs للجودة المثلى:' : 'ElevenLabs Requirements for Best Quality:'}
             </p>
             <ul className="text-xs space-y-1 list-disc list-inside">
-              <li>{language === 'ar' ? 'سجل في مكان هادئ' : 'Record in a quiet environment'}</li>
-              <li>{language === 'ar' ? 'تحدث بوضوح وثبات' : 'Speak clearly and consistently'}</li>
-              <li>{language === 'ar' ? 'تجنب الأصوات الخلفية' : 'Avoid background noise'}</li>
-              <li>{language === 'ar' ? 'اقرأ نصاً متنوعاً' : 'Read varied content'}</li>
+              <li>{language === 'ar' ? 'سجل لمدة دقيقة واحدة على الأقل (3 دقائق كحد أقصى)' : 'Record at least 1 minute (max 3 minutes)'}</li>
+              <li>{language === 'ar' ? 'تحدث بنبرة ثابتة ومتسقة' : 'Keep consistent tone and performance'}</li>
+              <li>{language === 'ar' ? 'سجل في مكان هادئ بدون ضوضاء خلفية' : 'Record in quiet environment without background noise'}</li>
+              <li>{language === 'ar' ? 'تجنب الصدى والتشويه' : 'Avoid reverb and artifacts'}</li>
+              <li>{language === 'ar' ? 'حافظ على مستوى صوت مثالي' : 'Maintain ideal volume levels'}</li>
             </ul>
           </div>
         </div>
@@ -324,7 +328,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
               <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
               <span className="text-sm font-medium">{voice.voice_name}</span>
               <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                {language === 'ar' ? 'مستنسخ' : 'Cloned'}
+                {language === 'ar' ? 'جاهز للاستخدام' : 'Ready to Use'}
               </span>
               {voice.user_email && (
                 <span className="text-xs text-muted-foreground ml-auto">
@@ -376,15 +380,15 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                   {formatTime(recordingTime)} / 3:00
                 </div>
                 
-                {recordingTime > 0 && recordingTime < 30 && (
+                {recordingTime > 0 && recordingTime < 60 && (
                   <span className="text-xs text-amber-600">
-                    {language === 'ar' ? 'الحد الأدنى 30 ثانية' : 'Min 30 seconds'}
+                    {language === 'ar' ? 'الحد الأدنى دقيقة واحدة' : 'Min 1 minute'}
                   </span>
                 )}
                 
-                {recordingTime >= 30 && recordingTime <= 180 && (
+                {recordingTime >= 60 && recordingTime <= 180 && (
                   <span className="text-xs text-green-600">
-                    {language === 'ar' ? 'مدة مناسبة' : 'Good duration'}
+                    {language === 'ar' ? 'مدة ممتازة!' : 'Perfect duration!'}
                   </span>
                 )}
               </div>
@@ -440,11 +444,11 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
               {isCloning ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {language === 'ar' ? 'جاري الإنشاء...' : 'Creating Clone...'}
+                  {language === 'ar' ? 'جاري الإنشاء بواسطة ElevenLabs...' : 'Creating with ElevenLabs...'}
                 </>
               ) : (
                 <>
-                  {language === 'ar' ? 'إنشاء النسخة' : 'Create Clone'}
+                  {language === 'ar' ? 'إنشاء النسخة' : 'Create Voice Clone'}
                 </>
               )}
             </Button>
