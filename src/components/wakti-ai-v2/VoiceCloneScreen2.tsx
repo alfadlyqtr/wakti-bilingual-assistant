@@ -3,6 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -35,6 +36,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [voiceName, setVoiceName] = useState('');
+  const [voiceDescription, setVoiceDescription] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
   const [existingVoices, setExistingVoices] = useState<VoiceClone[]>([]);
@@ -249,6 +251,16 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       return;
     }
 
+    if (!voiceDescription.trim() || voiceDescription.trim().length < 20) {
+      toast.error(language === 'ar' ? 'يرجى إدخال وصف للصوت (على الأقل 20 حرف)' : 'Please enter a voice description (at least 20 characters)');
+      return;
+    }
+
+    if (voiceDescription.trim().length > 1000) {
+      toast.error(language === 'ar' ? 'وصف الصوت يجب أن يكون أقل من 1000 حرف' : 'Voice description must be less than 1000 characters');
+      return;
+    }
+
     if (!audioBlob) {
       toast.error(language === 'ar' ? 'يرجى تسجيل ملف صوتي' : 'Please record an audio file');
       return;
@@ -264,8 +276,9 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
     try {
       const formData = new FormData();
-      formData.append('audio', audioBlob);
+      formData.append('audio', audioBlob, 'voice-sample.wav');
       formData.append('voiceName', voiceName.trim());
+      formData.append('voiceDescription', voiceDescription.trim());
 
       const { data, error } = await supabase.functions.invoke('voice-clone', {
         body: formData,
@@ -278,6 +291,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       // Reload voices and reset form
       await loadExistingVoices();
       setVoiceName('');
+      setVoiceDescription('');
       deleteRecording();
 
     } catch (error: any) {
@@ -458,10 +472,35 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
               />
             </div>
 
+            {/* Voice Description Input */}
+            <div className="space-y-2">
+              <Label htmlFor="voice-description">
+                {language === 'ar' ? 'وصف الصوت' : 'Voice Description'}
+                <span className="text-red-500 ml-1">*</span>
+              </Label>
+              <Textarea
+                id="voice-description"
+                value={voiceDescription}
+                onChange={(e) => setVoiceDescription(e.target.value)}
+                placeholder={language === 'ar' ? 'مثال: صوت هادئ ومريح، مناسب للقراءة والمحادثة اليومية' : 'e.g., A calm and soothing voice, perfect for reading and daily conversation'}
+                className="min-h-[80px] resize-none"
+                minLength={20}
+                maxLength={1000}
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>
+                  {language === 'ar' ? 'الحد الأدنى 20 حرف، الأقصى 1000' : 'Min 20 chars, Max 1000'}
+                </span>
+                <span className={voiceDescription.length < 20 ? 'text-red-500' : voiceDescription.length > 1000 ? 'text-red-500' : 'text-green-600'}>
+                  {voiceDescription.length}/1000
+                </span>
+              </div>
+            </div>
+
             {/* Clone Button */}
             <Button
               onClick={createVoiceClone}
-              disabled={!hasValidAudio || !voiceName.trim() || isCloning}
+              disabled={!hasValidAudio || !voiceName.trim() || !voiceDescription.trim() || voiceDescription.trim().length < 20 || voiceDescription.trim().length > 1000 || isCloning}
               className="w-full"
             >
               {isCloning ? (

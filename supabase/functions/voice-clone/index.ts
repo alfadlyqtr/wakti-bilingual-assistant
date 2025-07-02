@@ -206,10 +206,28 @@ serve(async (req) => {
       voiceDescription: voiceDescription
     });
 
-    if (!audioFile || !voiceName) {
-      throw new Error('Missing required fields: audio file and voice name are required');
+    if (!audioFile || !voiceName || !voiceDescription) {
+      throw new Error('Missing required fields: audio file, voice name, and voice description are required');
     }
 
+    if (voiceDescription.length < 20 || voiceDescription.length > 1000) {
+      throw new Error('Voice description must be between 20 and 1000 characters');
+    }
+
+    // Get user email from database
+    console.log(`🎙️ Getting user email for user: ${user.id}`);
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile?.email) {
+      console.error('🎙️ Failed to get user email:', profileError);
+      throw new Error('Failed to get user email for voice cloning');
+    }
+
+    console.log(`🎙️ User email: ${profile.email}`);
     console.log(`🎙️ Calling ElevenLabs Voice Cloning API...`);
 
     // Create FormData for ElevenLabs API
@@ -249,7 +267,7 @@ serve(async (req) => {
       throw new Error('No voice_id received from ElevenLabs API');
     }
 
-    // Save to database
+    // Save to database with user email and enhanced metadata
     const { data: dbResult, error: dbError } = await supabase
       .from('user_voice_clones')
       .insert({
@@ -257,7 +275,13 @@ serve(async (req) => {
         voice_id: result.voice_id,
         voice_name: voiceName,
         voice_description: voiceDescription,
-        elevenlabs_data: result
+        elevenlabs_data: {
+          ...result,
+          user_email: profile.email,
+          created_via: 'WAKTI',
+          audio_file_size: audioFile.size,
+          audio_file_type: audioFile.type
+        }
       })
       .select()
       .single();
