@@ -10,10 +10,10 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const ELEVEN_LABS_API_KEY = Deno.env.get('ELEVEN_LABS_API_KEY');
+const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
 console.log("🎵 VOICE TTS: Function loaded");
-console.log("🎵 ElevenLabs API Key available:", !!ELEVEN_LABS_API_KEY);
+console.log("🎵 ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -36,8 +36,8 @@ serve(async (req) => {
 
   try {
     // Check if API key is available
-    if (!ELEVEN_LABS_API_KEY) {
-      console.error('🎵 ELEVEN_LABS_API_KEY not found in environment');
+    if (!ELEVENLABS_API_KEY) {
+      console.error('🎵 ELEVENLABS_API_KEY not found in environment');
       throw new Error('ElevenLabs API key not configured');
     }
 
@@ -105,6 +105,12 @@ serve(async (req) => {
     }
 
     console.log(`🎵 Calling ElevenLabs TTS API with eleven_multilingual_v2 model...`);
+    console.log(`🎵 Request details:`, {
+      voiceId: voice_id,
+      textLength: text.length,
+      model: 'eleven_multilingual_v2',
+      voiceSettings
+    });
 
     // Call ElevenLabs TTS API with the corrected model and settings
     const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
@@ -112,7 +118,7 @@ serve(async (req) => {
       headers: {
         'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
-        'xi-api-key': ELEVEN_LABS_API_KEY,
+        'xi-api-key': ELEVENLABS_API_KEY,
       },
       body: JSON.stringify({
         text: text,
@@ -122,15 +128,28 @@ serve(async (req) => {
     });
 
     console.log(`🎵 ElevenLabs API response status: ${elevenLabsResponse.status}`);
+    console.log(`🎵 ElevenLabs API response headers:`, Object.fromEntries(elevenLabsResponse.headers.entries()));
 
     if (!elevenLabsResponse.ok) {
       const errorText = await elevenLabsResponse.text();
       console.error('🎵 ElevenLabs API error:', {
         status: elevenLabsResponse.status,
         statusText: elevenLabsResponse.statusText,
-        error: errorText
+        error: errorText,
+        voiceId: voice_id,
+        model: 'eleven_multilingual_v2'
       });
-      throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status} - ${errorText}`);
+      
+      // More specific error handling
+      if (elevenLabsResponse.status === 401) {
+        throw new Error('ElevenLabs API authentication failed - check API key');
+      } else if (elevenLabsResponse.status === 404) {
+        throw new Error(`Voice ID ${voice_id} not found in ElevenLabs - voice may have been deleted`);
+      } else if (elevenLabsResponse.status === 422) {
+        throw new Error('Invalid voice settings or text format');
+      } else {
+        throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status} - ${errorText}`);
+      }
     }
 
     // Get the audio data

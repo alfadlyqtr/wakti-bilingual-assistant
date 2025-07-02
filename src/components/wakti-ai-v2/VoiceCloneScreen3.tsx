@@ -389,7 +389,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       // Automatically populate the main TTS text area
       setText(result.translated_text);
       
-      toast.success(language === 'ar' ? 'تمت الترجمة بنجاح وتم نسخها إلى منطقة النص!' : 'Translation completed and copied to text area!');
+      toast.success(language === 'ar' ? 'تمت الترجمة بنجاح ونُسخت إلى منطقة النص الرئيسية!' : 'Translation completed and copied to main text area!');
 
     } catch (error: any) {
       console.error('🌐 Translation error:', error);
@@ -399,17 +399,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
-  const copyToClipboard = async () => {
-    if (!translatedText) return;
-    
-    try {
-      await navigator.clipboard.writeText(translatedText);
-      toast.success(language === 'ar' ? 'تم نسخ النص المترجم!' : 'Translated text copied!');
-    } catch (error) {
-      console.error('Failed to copy text:', error);
-      toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
-    }
-  };
 
   const downloadAudio = () => {
     if (audioUrl) {
@@ -625,26 +614,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           )}
         </Button>
 
-        {/* Translation Results */}
-        {translatedText && (
-          <div className="p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg border">
-            <div className="text-xs font-medium text-muted-foreground mb-2">
-              {language === 'ar' ? 'النص المترجم:' : 'Translated Text:'}
-            </div>
-            <div className="text-sm font-medium mb-3" dir="auto">{translatedText}</div>
-            
-            {/* Copy Button */}
-            <Button
-              onClick={copyToClipboard}
-              variant="outline"
-              size="sm"
-              className="w-full"
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              {language === 'ar' ? 'نسخ النص المترجم' : 'Copy Translated Text'}
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Enhanced Voice Style Selector */}
@@ -698,9 +667,21 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
 
       {/* Text Input with Arabic support - Updated to use totalAvailableCharacters consistently */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">
-          {language === 'ar' ? 'النص' : 'Text'}
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">
+            {language === 'ar' ? 'النص' : 'Text'}
+          </label>
+          {text && (
+            <Button
+              onClick={() => navigator.clipboard.writeText(text)}
+              variant="ghost"
+              size="sm"
+              className="h-auto p-1"
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
