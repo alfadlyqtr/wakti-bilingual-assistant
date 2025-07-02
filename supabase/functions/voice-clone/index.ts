@@ -214,28 +214,16 @@ serve(async (req) => {
       throw new Error('Voice description must be between 20 and 1000 characters');
     }
 
-    // Get user email from database
-    console.log(`🎙️ Getting user email for user: ${user.id}`);
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', user.id)
-      .single();
+    console.log(`🎙️ Starting voice cloning process...`);
 
-    if (profileError || !profile?.email) {
-      console.error('🎙️ Failed to get user email:', profileError);
-      throw new Error('Failed to get user email for voice cloning');
-    }
-
-    console.log(`🎙️ User email: ${profile.email}`);
-    console.log(`🎙️ Calling Voice Cloning API...`);
-
-    // Create FormData for voice service API
+    // Create FormData for ElevenLabs voice creation API
     const elevenLabsFormData = new FormData();
     elevenLabsFormData.append('name', voiceName);
     elevenLabsFormData.append('description', voiceDescription);
     elevenLabsFormData.append('files', audioFile);
 
+    console.log(`🎙️ Calling ElevenLabs voice creation API...`);
+    
     const elevenLabsResponse = await fetch('https://api.elevenlabs.io/v1/voices/add', {
       method: 'POST',
       headers: {
@@ -244,30 +232,31 @@ serve(async (req) => {
       body: elevenLabsFormData,
     });
 
-    console.log(`🎙️ Voice service API response status: ${elevenLabsResponse.status}`);
+    console.log(`🎙️ ElevenLabs API response status: ${elevenLabsResponse.status}`);
 
     if (!elevenLabsResponse.ok) {
       const errorText = await elevenLabsResponse.text();
-      console.error('🎙️ Voice service API error:', {
+      console.error('🎙️ ElevenLabs API error:', {
         status: elevenLabsResponse.status,
         statusText: elevenLabsResponse.statusText,
         error: errorText
       });
-      throw new Error(`Voice service API error: ${elevenLabsResponse.status} - ${errorText}`);
+      throw new Error(`Voice cloning failed: ${elevenLabsResponse.status} - ${errorText}`);
     }
 
     const result = await elevenLabsResponse.json();
-    console.log('🎙️ Voice cloning result received:', {
+    console.log('🎙️ Voice cloning result:', {
       voiceId: result.voice_id,
       voiceName: result.name
     });
 
     if (!result.voice_id) {
       console.error('🎙️ No voice_id in response:', result);
-      throw new Error('No voice_id received from voice service API');
+      throw new Error('No voice ID received from voice cloning service');
     }
 
-    // Save to database with user email and enhanced metadata
+    // Save to database
+    console.log(`🎙️ Saving voice clone to database...`);
     const { data: dbResult, error: dbError } = await supabase
       .from('user_voice_clones')
       .insert({
@@ -277,7 +266,6 @@ serve(async (req) => {
         voice_description: voiceDescription,
         elevenlabs_data: {
           ...result,
-          user_email: profile.email,
           created_via: 'WAKTI',
           audio_file_size: audioFile.size,
           audio_file_type: audioFile.type
@@ -288,6 +276,18 @@ serve(async (req) => {
 
     if (dbError) {
       console.error('🎙️ Database insert error:', dbError);
+      // Try to delete the voice from ElevenLabs since DB save failed
+      try {
+        await fetch(`https://api.elevenlabs.io/v1/voices/${result.voice_id}`, {
+          method: 'DELETE',
+          headers: {
+            'xi-api-key': ELEVEN_LABS_API_KEY,
+          },
+        });
+        console.log('🎙️ Cleaned up voice from ElevenLabs after DB error');
+      } catch (cleanupError) {
+        console.error('🎙️ Failed to cleanup voice after DB error:', cleanupError);
+      }
       throw new Error('Failed to save voice clone to database');
     }
 
