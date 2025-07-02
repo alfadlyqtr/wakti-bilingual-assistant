@@ -96,7 +96,17 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('🗑️ Delete response error:', errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        
+        // Try to parse JSON error for better error message
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -106,17 +116,47 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         throw new Error(result.error || 'Failed to delete voice');
       }
 
-      // Update local state
+      // Update local state - remove the deleted voice
       setExistingVoices(prev => prev.filter(voice => voice.voice_id !== voiceId));
 
+      // Show success message with details if available
+      const successMessage = result.message || `Voice "${voiceName}" deleted successfully`;
       toast.success(language === 'ar' 
         ? `تم حذف الصوت "${voiceName}" بنجاح` 
-        : `Voice "${voiceName}" deleted successfully`
+        : successMessage
       );
+
+      // Log deletion details for debugging
+      if (result.details) {
+        console.log('🗑️ Deletion details:', result.details);
+      }
 
     } catch (error: any) {
       console.error('🗑️ Error deleting voice:', error);
-      toast.error(error.message || (language === 'ar' ? 'فشل في حذف الصوت' : 'Failed to delete voice'));
+      
+      // Provide more specific error messages
+      let errorMessage = error.message;
+      if (errorMessage.includes('Voice not found or access denied')) {
+        errorMessage = language === 'ar' 
+          ? 'الصوت غير موجود أو تم حذفه مسبقاً' 
+          : 'Voice not found or already deleted';
+      } else if (errorMessage.includes('Database deletion failed')) {
+        errorMessage = language === 'ar' 
+          ? 'فشل في حذف الصوت من قاعدة البيانات' 
+          : 'Failed to remove voice from database';
+      } else if (errorMessage.includes('Failed to delete voice from ElevenLabs')) {
+        errorMessage = language === 'ar' 
+          ? 'فشل في حذف الصوت من ElevenLabs' 
+          : 'Failed to delete voice from ElevenLabs service';
+      }
+      
+      toast.error(errorMessage);
+      
+      // If the error suggests the voice might not exist, refresh the list
+      if (errorMessage.includes('not found') || errorMessage.includes('already deleted')) {
+        console.log('🗑️ Refreshing voice list due to "not found" error');
+        loadExistingVoices();
+      }
     } finally {
       setIsDeletingVoice(null);
     }

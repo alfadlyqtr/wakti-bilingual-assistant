@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
@@ -48,29 +49,38 @@ serve(async (req) => {
       const requestBody = await req.json();
       const { voice_id, action } = requestBody;
       
+      console.log(`🗑️ Delete request received:`, { voice_id, action, user_id: user.id });
+      
       if (action !== 'delete' || !voice_id) {
+        console.error('🗑️ Invalid delete request parameters');
         throw new Error('Invalid delete request - missing voice_id or action');
       }
 
-      console.log(`🗑️ Deleting voice: ${voice_id}`);
+      console.log(`🗑️ Starting deletion process for voice: ${voice_id}`);
 
-      // First, verify the user owns this voice
+      // First, check if voice exists in database and user owns it
       const { data: voiceData, error: voiceError } = await supabase
         .from('user_voice_clones')
         .select('*')
         .eq('voice_id', voice_id)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to avoid error if not found
 
-      if (voiceError || !voiceData) {
-        console.error('🗑️ Voice not found or not owned by user:', voiceError);
-        throw new Error('Voice not found or access denied');
-      }
+      console.log(`🗑️ Database lookup result:`, { 
+        found: !!voiceData, 
+        error: voiceError, 
+        voiceData: voiceData ? { id: voiceData.id, voice_name: voiceData.voice_name } : null 
+      });
 
-      console.log(`🗑️ Confirmed voice ownership: ${voiceData.voice_name}`);
+      // Handle different scenarios
+      let voiceExistsInDatabase = !!voiceData && !voiceError;
+      let voiceExistsInElevenLabs = false;
+      let elevenLabsDeleteSuccess = false;
 
+      // Try to delete from ElevenLabs first
       try {
-        // Delete from ElevenLabs first
+        console.log(`🗑️ Attempting to delete from ElevenLabs: ${voice_id}`);
+        
         const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/voices/${voice_id}`, {
           method: 'DELETE',
           headers: {
@@ -80,35 +90,104 @@ serve(async (req) => {
 
         console.log(`🗑️ ElevenLabs delete response status: ${deleteResponse.status}`);
 
-        if (!deleteResponse.ok) {
+        if (deleteResponse.ok) {
+          console.log('🗑️ Successfully deleted voice from ElevenLabs');
+          voiceExistsInElevenLabs = true;
+          elevenLabsDeleteSuccess = true;
+        } else if (deleteResponse.status === 404) {
+          console.log('🗑️ Voice not found in ElevenLabs (already deleted or never existed)');
+          voiceExistsInElevenLabs = false;
+          elevenLabsDeleteSuccess = true; // Consider it success if it's already gone
+        } else {
           const errorText = await deleteResponse.text();
           console.error('🗑️ ElevenLabs delete error:', errorText);
-          // Continue with database deletion even if ElevenLabs deletion fails
-        } else {
-          console.log('🗑️ Successfully deleted voice from ElevenLabs');
+          voiceExistsInElevenLabs = true; // Assume it exists but failed to delete
+          elevenLabsDeleteSuccess = false;
         }
       } catch (elevenLabsError) {
         console.error('🗑️ Error calling ElevenLabs delete API:', elevenLabsError);
-        // Continue with database deletion
+        voiceExistsInElevenLabs = true; // Assume it exists but we couldn't reach the API
+        elevenLabsDeleteSuccess = false;
       }
 
-      // Delete from database
-      const { error: dbDeleteError } = await supabase
-        .from('user_voice_clones')
-        .delete()
-        .eq('voice_id', voice_id)
-        .eq('user_id', user.id);
+      console.log(`🗑️ Status check:`, {
+        voiceExistsInDatabase,
+        voiceExistsInElevenLabs,
+        elevenLabsDeleteSuccess
+      });
 
-      if (dbDeleteError) {
-        console.error('🗑️ Database delete error:', dbDeleteError);
-        throw new Error('Failed to delete voice from database');
+      // Handle database deletion based on scenarios
+      let dbDeleteSuccess = false;
+      let dbDeleteError = null;
+
+      if (voiceExistsInDatabase) {
+        console.log(`🗑️ Deleting from database: ${voiceData.voice_name}`);
+        
+        const { error: dbDeleteErr } = await supabase
+          .from('user_voice_clones')
+          .delete()
+          .eq('voice_id', voice_id)
+          .eq('user_id', user.id);
+
+        if (dbDeleteErr) {
+          console.error('🗑️ Database delete error:', dbDeleteErr);
+          dbDeleteError = dbDeleteErr;
+        } else {
+          console.log('🗑️ Successfully deleted voice from database');
+          dbDeleteSuccess = true;
+        }
+      } else {
+        console.log('🗑️ Voice not found in database (already deleted or never existed)');
+        dbDeleteSuccess = true; // Consider it success if it's already gone
       }
 
-      console.log('🗑️ Successfully deleted voice from database');
+      // Determine overall success based on scenarios
+      let overallSuccess = false;
+      let resultMessage = '';
+
+      if (!voiceExistsInDatabase && !voiceExistsInElevenLabs) {
+        // Voice doesn't exist anywhere - consider success
+        overallSuccess = true;
+        resultMessage = 'Voice was already deleted or never existed';
+      } else if (voiceExistsInDatabase && !voiceExistsInElevenLabs) {
+        // Only in database - success if DB deletion worked
+        overallSuccess = dbDeleteSuccess;
+        resultMessage = dbDeleteSuccess ? 'Voice deleted from database successfully' : 'Failed to delete voice from database';
+      } else if (!voiceExistsInDatabase && voiceExistsInElevenLabs) {
+        // Only in ElevenLabs - success if ElevenLabs deletion worked
+        overallSuccess = elevenLabsDeleteSuccess;
+        resultMessage = elevenLabsDeleteSuccess ? 'Voice deleted from ElevenLabs successfully' : 'Failed to delete voice from ElevenLabs';
+      } else {
+        // Exists in both - success if both deletions worked
+        overallSuccess = dbDeleteSuccess && elevenLabsDeleteSuccess;
+        if (overallSuccess) {
+          resultMessage = 'Voice deleted successfully from both ElevenLabs and database';
+        } else if (!dbDeleteSuccess && !elevenLabsDeleteSuccess) {
+          resultMessage = 'Failed to delete voice from both ElevenLabs and database';
+        } else if (!dbDeleteSuccess) {
+          resultMessage = 'Deleted from ElevenLabs but failed to delete from database';
+        } else {
+          resultMessage = 'Deleted from database but failed to delete from ElevenLabs';
+        }
+      }
+
+      console.log(`🗑️ Final result:`, { overallSuccess, resultMessage });
+
+      if (!overallSuccess && dbDeleteError) {
+        throw new Error(`Database deletion failed: ${dbDeleteError.message}`);
+      } else if (!overallSuccess) {
+        throw new Error(resultMessage);
+      }
 
       return new Response(JSON.stringify({
         success: true,
-        message: 'Voice deleted successfully'
+        message: resultMessage,
+        details: {
+          voiceExistsInDatabase,
+          voiceExistsInElevenLabs,
+          dbDeleteSuccess,
+          elevenLabsDeleteSuccess
+        }
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
