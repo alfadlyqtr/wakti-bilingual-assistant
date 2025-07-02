@@ -2,7 +2,7 @@
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Mic2, FileAudio, AlertCircle } from 'lucide-react';
+import { Mic2, FileAudio, Languages, Sparkles } from 'lucide-react';
 
 interface VoiceCloneScreen1Props {
   onNext: () => void;
@@ -20,8 +20,14 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
           <Mic2 className="h-8 w-8 text-white" />
         </div>
         <h2 className="text-xl font-semibold mb-2">
-          {language === 'ar' ? 'إنشاء نسخة من صوتك' : 'Create Your Voice Clone'}
+          {language === 'ar' ? 'استوديو الصوت' : 'Voice Studio'}
         </h2>
+        <p className="text-sm text-muted-foreground">
+          {language === 'ar' 
+            ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة'
+            : 'Clone your voice, translate and speak in different languages'
+          }
+        </p>
       </div>
 
       <div className="space-y-4">
@@ -71,19 +77,48 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
           </div>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <AlertCircle className="h-4 w-4 text-amber-500" />
+              <Languages className="h-4 w-4 text-green-500" />
               <span className="font-medium">
-                {language === 'ar' ? 'حدود الاستخدام' : 'Usage Limits'}
+                {language === 'ar' ? 'ترجم واتكلم' : 'Translate & Speak'}
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
               {language === 'ar' 
-                ? 'يمكنك إنشاء حتى 3 أصوات - بمجرد الحفظ، يمكن حذفها لإنشاء أصوات جديدة. لديك 3000 حرف شهرياً، يمكن شراء المزيد.' 
-                : 'You can create up to 3 voices total — once saved, they can be deleted to clone more voices. You get 3,000 characters monthly, if all used up you can always buy more.'
+                ? 'ترجم النصوص إلى 29 لغة مختلفة واسمعها بصوتك المستنسخ' 
+                : 'Translate text to 29 different languages and hear it in your cloned voice'
               }
             </p>
           </div>
         </div>
+
+        <div className="flex items-start gap-3">
+          <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-sm flex items-center justify-center flex-shrink-0 mt-0.5">
+            4
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="h-4 w-4 text-purple-500" />
+              <span className="font-medium">
+                {language === 'ar' ? 'أساليب متنوعة' : 'Multiple Styles'}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {language === 'ar' 
+                ? 'اختر من أساليب مختلفة: عادي، إخباري، سردي، شعري، تعليمي، رياضي' 
+                : 'Choose from different styles: Neutral, News, Storytelling, Poetry, Teaching, Sports'
+              }
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-3 bg-muted/50 rounded-lg">
+        <p className="text-xs text-muted-foreground">
+          {language === 'ar' 
+            ? 'يمكنك إنشاء حتى 3 أصوات مختلفة. لديك حروف محدودة شهرياً للاستخدام.' 
+            : 'You can create up to 3 different voices. You have limited monthly characters for usage.'
+          }
+        </p>
       </div>
 
       <div className="flex gap-3 pt-4">

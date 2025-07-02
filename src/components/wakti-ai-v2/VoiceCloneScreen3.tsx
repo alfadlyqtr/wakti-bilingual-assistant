@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -130,7 +129,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [translatedText, setTranslatedText] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
 
-  // Use the extended quota management hook to get voice quota data (updated for 6000 chars)
+  // Use the extended quota management hook to get voice quota data
   const { 
     userVoiceQuota, 
     isLoadingVoiceQuota, 
@@ -456,14 +455,14 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-xl font-semibold mb-2">
-          {language === 'ar' ? 'مختبر الصوت المستنسخ' : 'Voice Clone Lab'}
+          {language === 'ar' ? 'استوديو الصوت' : 'Voice Studio'}
         </h2>
         <p className="text-sm text-muted-foreground">
           {language === 'ar' ? 'أنشئ كلام أو ترجم النصوص بصوتك المستنسخ' : 'Generate speech or translate text with your cloned voice'}
         </p>
       </div>
 
-      {/* Character Usage - Updated for 6000 characters */}
+      {/* Character Usage - Updated to use totalAvailableCharacters */}
       <div className="p-3 bg-muted rounded-lg">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium">
@@ -586,7 +585,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </Select>
         </div>
 
-        {/* Text Input - Removed Voice Input Button */}
+        {/* Text Input - Using totalAvailableCharacters instead of hardcoded 6000 */}
         <div className="space-y-2">
           <label className="text-sm font-medium">
             {language === 'ar' ? 'النص للترجمة' : 'Text to Translate'}
@@ -600,10 +599,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             }
             className="min-h-20 resize-none"
             dir="auto"
-            maxLength={6000}
+            maxLength={totalAvailableCharacters}
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{translationText.length} / 6000 {language === 'ar' ? 'حرف' : 'characters'}</span>
+            <span>{translationText.length} / {totalAvailableCharacters} {language === 'ar' ? 'حرف' : 'characters'}</span>
           </div>
         </div>
 
@@ -697,7 +696,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </div>
       </div>
 
-      {/* Text Input with Arabic support - Updated for 6000 characters and new placeholder */}
+      {/* Text Input with Arabic support - Updated to use totalAvailableCharacters consistently */}
       <div className="space-y-2">
         <label className="text-sm font-medium">
           {language === 'ar' ? 'النص' : 'Text'}

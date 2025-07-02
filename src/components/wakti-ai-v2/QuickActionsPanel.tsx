@@ -62,8 +62,8 @@ export function QuickActionsPanel({
     color: 'bg-purple-500'
   }, {
     icon: <Mic className="h-5 w-5" />,
-    label: language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone',
-    description: language === 'ar' ? 'إنشاء نسخة من صوتك' : 'Create a copy of your voice',
+    label: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
+    description: language === 'ar' ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة' : 'Clone your voice, translate and speak in different languages',
     action: () => setShowVoiceClone(true),
     color: 'bg-pink-500'
   }, {
