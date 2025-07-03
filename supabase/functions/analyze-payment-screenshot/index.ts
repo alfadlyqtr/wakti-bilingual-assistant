@@ -75,78 +75,12 @@ const runSecurityValidations = async (supabase: any, payment: any, analysis: any
   validations.highConfidence = analysis.confidence > 85;
   validations.tamperingValid = !analysis.tamperingDetected;
 
-  // Enhanced Time Validation with Renewal Support
-  const now = new Date();
-  const userCreatedAt = new Date(payment.account_created_at);
-  const ninetyMinutesAgo = 90 * 60 * 1000; // 90 minutes in milliseconds
-  
-  console.log('🕐 Time Validation Analysis:', {
-    now: now.toISOString(),
-    userCreatedAt: userCreatedAt.toISOString(),
-    accountAge: now.getTime() - userCreatedAt.getTime(),
-    ninetyMinutesThreshold: ninetyMinutesAgo
-  });
+  // Time Validation Removed - Fawran payments now work 24/7
+  // All time-based restrictions have been eliminated for better user experience
+  let timeValidationPassed = true; // Always pass time validation
+  let validationMethod = 'no_time_restrictions';
 
-  // Step 1: Check if account is new (within 90 minutes of creation)
-  const isNewAccount = (now.getTime() - userCreatedAt.getTime()) <= ninetyMinutesAgo;
-  
-  let timeValidationPassed = false;
-  let validationMethod = '';
-
-  if (isNewAccount) {
-    // New account - use original validation logic
-    if (analysis.timestamp) {
-      const ninetyMinutesAfterCreation = new Date(userCreatedAt.getTime() + ninetyMinutesAgo);
-      timeValidationPassed = analysis.isWithinTimeLimit && now <= ninetyMinutesAfterCreation;
-      validationMethod = 'new_account';
-      
-      console.log('✅ New Account Time Validation:', {
-        method: validationMethod,
-        screenshotWithinLimit: analysis.isWithinTimeLimit,
-        currentTimeValid: now <= ninetyMinutesAfterCreation,
-        result: timeValidationPassed
-      });
-    }
-  } else {
-    // Renewal check - look for last approved payment
-    console.log('🔄 Checking Renewal Eligibility...');
-    
-    const { data: lastApprovedPayment } = await supabase
-      .from('pending_fawran_payments')
-      .select('reviewed_at')
-      .eq('user_id', payment.user_id)
-      .eq('status', 'approved')
-      .order('reviewed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (lastApprovedPayment && analysis.timestamp) {
-      const lastApprovedAt = new Date(lastApprovedPayment.reviewed_at);
-      const screenshotTime = new Date(analysis.timestamp);
-      
-      // Check if screenshot is within 90 minutes of last approved payment
-      const timeSinceLastPayment = screenshotTime.getTime() - lastApprovedAt.getTime();
-      const isValidRenewal = timeSinceLastPayment >= 0 && timeSinceLastPayment <= ninetyMinutesAgo;
-      
-      timeValidationPassed = isValidRenewal;
-      validationMethod = 'renewal';
-      
-      console.log('🔄 Renewal Time Validation:', {
-        method: validationMethod,
-        lastApprovedAt: lastApprovedAt.toISOString(),
-        screenshotTime: screenshotTime.toISOString(),
-        timeSinceLastPayment: timeSinceLastPayment,
-        maxAllowed: ninetyMinutesAgo,
-        result: timeValidationPassed
-      });
-    } else {
-      // No previous approved payments found
-      timeValidationPassed = false;
-      validationMethod = 'no_previous_payments';
-      
-      console.log('❌ No Previous Approved Payments Found for Renewal');
-    }
-  }
+  console.log('✅ Time Validation Bypassed - No Time Restrictions Applied');
 
   validations.timeValid = timeValidationPassed;
 

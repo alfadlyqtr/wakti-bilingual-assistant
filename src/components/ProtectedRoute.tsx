@@ -102,7 +102,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         
         if (hasActiveSubscription && profile.next_billing_date) {
           const nextBillingDate = new Date(profile.next_billing_date);
-          const gracePeriodDays = 7; // 7 days grace period after due date
+          const gracePeriodDays = 1; // 1 day grace period after due date
           const gracePeriodEnd = new Date(nextBillingDate);
           gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays);
           
