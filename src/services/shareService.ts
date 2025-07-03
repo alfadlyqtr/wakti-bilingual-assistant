@@ -4,7 +4,7 @@ import { Maw3dEvent } from "@/types/maw3d";
 import { format } from 'date-fns';
 
 export class ShareService {
-  // Share Maw3d event - Updated to use dynamic event data
+  // Share Maw3d event - Updated to share only clean URL without descriptive text
   static async shareEvent(event: Maw3dEvent): Promise<void> {
     console.log('=== ShareService.shareEvent START ===');
     console.log('Called with event:', event.id, 'shortId:', event.short_id);
@@ -14,27 +14,14 @@ export class ShareService {
       const eventUrl = `${window.location.origin}/maw3d/${event.short_id}`;
       console.log('Generated Maw3d event link:', eventUrl);
       
-      // Create dynamic share content based on event data
-      const eventDate = format(new Date(event.event_date), 'EEEE, MMMM d, yyyy');
-      const shareTitle = event.title;
-      
-      // Create descriptive share text with event details
-      let shareText = `${event.title}`;
-      if (event.description) {
-        shareText += ` - ${event.description}`;
-      }
-      shareText += ` on ${eventDate}`;
-      if (event.location) {
-        shareText += ` at ${event.location}`;
-      }
-      
+      // Clean share data - only title for link preview, no descriptive text
       const shareData = {
-        title: shareTitle,
-        text: shareText,
-        url: eventUrl
+        title: event.title, // This will appear in the link preview
+        url: eventUrl // Only the clean URL will be shared
+        // No 'text' property - this prevents descriptive text from appearing before the link
       };
       
-      console.log('Generated dynamic share data:', shareData);
+      console.log('Generated clean share data:', shareData);
       
       // Check if Web Share API is available
       console.log('Checking navigator.share availability:', !!navigator.share);
