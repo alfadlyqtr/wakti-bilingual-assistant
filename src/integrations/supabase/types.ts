@@ -847,6 +847,7 @@ export type Database = {
       }
       maw3d_rsvps: {
         Row: {
+          comment: string | null
           created_at: string
           event_id: string
           guest_name: string
@@ -855,6 +856,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          comment?: string | null
           created_at?: string
           event_id: string
           guest_name: string
@@ -863,6 +865,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          comment?: string | null
           created_at?: string
           event_id?: string
           guest_name?: string

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster } from "@/components/ui/toaster";
@@ -19,6 +20,7 @@ export default function Maw3dView() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [guestName, setGuestName] = useState('');
+  const [guestComment, setGuestComment] = useState('');
   const [hasResponded, setHasResponded] = useState(false);
   const [userResponse, setUserResponse] = useState<'accepted' | 'declined' | null>(null);
   const [submittedName, setSubmittedName] = useState('');
@@ -163,13 +165,14 @@ export default function Maw3dView() {
 
     setIsSubmitting(true);
     try {
-      await Maw3dService.createRsvp(event.id, response, trimmedName);
+      await Maw3dService.createRsvp(event.id, response, trimmedName, guestComment.trim() || undefined);
       
       // Store in localStorage immediately after successful submission
       const localKey = `rsvp_submitted_${event.short_id}`;
       localStorage.setItem(localKey, 'true');
       localStorage.setItem(`${localKey}_name`, trimmedName);
       localStorage.setItem(`${localKey}_response`, response);
+      localStorage.setItem(`${localKey}_comment`, guestComment.trim() || '');
       
       // Update state
       setHasResponded(true);
@@ -332,16 +335,30 @@ export default function Maw3dView() {
                     {t('areYouAttending', eventLanguage)}
                   </h3>
                   
-                  <div className="space-y-4">
-                    <div>
-                      <Input
-                        placeholder={t('enterYourName', eventLanguage)}
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        className={eventLanguage === 'ar' ? 'text-right' : ''}
-                        dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
-                      />
-                    </div>
+                   <div className="space-y-4">
+                     <div>
+                       <Input
+                         placeholder={t('enterYourName', eventLanguage)}
+                         value={guestName}
+                         onChange={(e) => setGuestName(e.target.value)}
+                         className={eventLanguage === 'ar' ? 'text-right' : ''}
+                         dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
+                       />
+                     </div>
+                     
+                     <div>
+                       <Textarea
+                         placeholder={eventLanguage === 'ar' ? 'اترك تعليقاً للمنظم (اختياري)' : 'Leave a comment for the host (optional)'}
+                         value={guestComment}
+                         onChange={(e) => setGuestComment(e.target.value)}
+                         className={`min-h-[80px] resize-none ${eventLanguage === 'ar' ? 'text-right' : ''}`}
+                         dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
+                         maxLength={300}
+                       />
+                       <p className="text-xs text-muted-foreground mt-1">
+                         {guestComment.length}/300
+                       </p>
+                     </div>
                     
                     <div className="flex gap-3">
                       <Button

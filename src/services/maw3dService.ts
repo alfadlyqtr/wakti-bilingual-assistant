@@ -293,11 +293,12 @@ export class Maw3dService {
     return data || [];
   }
 
-  static async createRsvp(eventId: string, response: 'accepted' | 'declined', guestName: string): Promise<Maw3dRsvp> {
+  static async createRsvp(eventId: string, response: 'accepted' | 'declined', guestName: string, comment?: string): Promise<Maw3dRsvp> {
     console.log('=== CREATING GUEST RSVP ===');
     console.log('Event ID:', eventId);
     console.log('Response:', response);
     console.log('Guest Name:', guestName);
+    console.log('Comment:', comment);
     
     // Guest name is required
     if (!guestName?.trim()) {
@@ -307,6 +308,7 @@ export class Maw3dService {
     }
 
     const trimmedName = guestName.trim();
+    const trimmedComment = comment?.trim() || null;
     
     // Check for duplicate names for this event
     const { data: existingRsvp } = await supabase
@@ -325,6 +327,7 @@ export class Maw3dService {
       event_id: eventId,
       response,
       guest_name: trimmedName,
+      comment: trimmedComment,
       user_id: null // Always null for guest system
     };
 

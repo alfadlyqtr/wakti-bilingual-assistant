@@ -94,6 +94,7 @@ export interface Maw3dRsvp {
   user_id?: string | null;
   guest_name?: string;
   response: 'accepted' | 'declined';
+  comment?: string | null;
   created_at: string;
   updated_at: string;
 }
