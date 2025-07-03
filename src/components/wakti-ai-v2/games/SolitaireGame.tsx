@@ -440,7 +440,7 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
     return (
       <div 
         className={`
-          w-12 h-16 sm:w-14 sm:h-18 md:w-16 md:h-20 rounded-lg 
+          w-16 h-20 sm:w-18 md:w-20 rounded-lg 
           border-2 border-blue-600 dark:border-blue-400
           flex flex-col items-center justify-center text-xs sm:text-sm font-bold
           transition-all duration-200 cursor-pointer relative
@@ -492,7 +492,7 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
           {/* Stock and Waste - Left */}
           <div className="flex gap-1">
             <div 
-              className="w-12 h-16 sm:w-14 sm:h-18 rounded-lg border-2 border-dashed border-blue-400 dark:border-blue-300 
+              className="w-16 h-20 rounded-lg border-2 border-dashed border-blue-400 dark:border-blue-300 
                          flex items-center justify-center cursor-pointer hover:border-blue-600 dark:hover:border-blue-200 
                          transition-all duration-200 bg-blue-50 dark:bg-blue-900/30
                          hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
@@ -504,7 +504,7 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
                 </span>
               )}
             </div>
-            <div className="w-12 h-16 sm:w-14 sm:h-18 rounded-lg border-2 border-blue-600 dark:border-blue-400 
+            <div className="w-16 h-20 rounded-lg border-2 border-blue-600 dark:border-blue-400 
                            flex items-center justify-center bg-blue-50 dark:bg-blue-900/30 shadow-md">
               {gameState.waste.length > 0 ? (
                 <div onClick={() => selectCard(gameState.waste[gameState.waste.length - 1], 'waste')}>
@@ -521,12 +521,12 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
             </div>
           </div>
 
-          {/* Foundations - Right (Only show 2 on mobile to fit) */}
+          {/* Foundations - Right */}
           <div className="flex gap-1">
-            {Object.entries(SUITS).slice(0, window.innerWidth < 640 ? 2 : 4).map(([suit, symbol]) => (
+            {Object.entries(SUITS).map(([suit, symbol]) => (
               <div 
                 key={suit}
-                className="w-12 h-16 sm:w-14 sm:h-18 rounded-lg border-2 border-blue-600 dark:border-blue-400 
+                className="w-16 h-20 rounded-lg border-2 border-blue-600 dark:border-blue-400 
                            flex items-center justify-center cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 
                            transition-all duration-200 bg-blue-50 dark:bg-blue-900/30
                            hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
@@ -554,58 +554,24 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
           </div>
         </div>
 
-        {/* Foundations Row 2 (Mobile only - for remaining suits) */}
-        {window.innerWidth < 640 && (
-          <div className="flex gap-1 justify-end mb-2">
-            {Object.entries(SUITS).slice(2).map(([suit, symbol]) => (
-              <div 
-                key={suit}
-                className="w-12 h-16 rounded-lg border-2 border-blue-600 dark:border-blue-400 
-                           flex items-center justify-center cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 
-                           transition-all duration-200 bg-blue-50 dark:bg-blue-900/30
-                           hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
-                onClick={() => selectEmptySpace('foundation', suit as Suit)}
-              >
-                {gameState.foundations[suit as Suit].length > 0 ? (
-                  <div onClick={(e) => {
-                    e.stopPropagation();
-                    const topCard = gameState.foundations[suit as Suit][gameState.foundations[suit as Suit].length - 1];
-                    selectCard(topCard, 'foundation');
-                  }}>
-                    {renderCard(gameState.foundations[suit as Suit][gameState.foundations[suit as Suit].length - 1])}
-                  </div>
-                ) : (
-                  <span className={`text-lg font-bold 
-                    ${suit === 'hearts' || suit === 'diamonds' 
-                      ? 'text-red-500 dark:text-red-400' 
-                      : 'text-gray-700 dark:text-gray-300'
-                    }`}>
-                    {symbol}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Tableau - Horizontal Scroll on Mobile */}
-        <div className="overflow-x-auto pb-2">
-          <div className="flex gap-1 min-w-fit">
+        {/* Tableau - Horizontal Scroll */}
+        <div className="overflow-x-auto pb-16">
+          <div className="flex gap-2 min-w-fit px-2">
             {gameState.tableau.map((pile, pileIndex) => (
               <div 
                 key={pileIndex}
-                className="flex flex-col gap-1 min-h-16 w-12 sm:w-14 flex-shrink-0"
+                className="flex flex-col gap-1 min-h-20 w-16 flex-shrink-0"
                 onClick={() => pile.length === 0 && selectEmptySpace('tableau', pileIndex)}
               >
                 {pile.length === 0 ? (
-                  <div className="w-12 h-16 sm:w-14 sm:h-18 rounded-lg border-2 border-dashed border-blue-400 dark:border-blue-300 
+                  <div className="w-16 h-20 rounded-lg border-2 border-dashed border-blue-400 dark:border-blue-300 
                                  cursor-pointer hover:border-blue-600 dark:hover:border-blue-200 transition-all duration-200 
                                  bg-blue-50 dark:bg-blue-900/30 hover:scale-105 active:scale-95 shadow-md hover:shadow-lg" />
                 ) : (
                   pile.map((card, cardIndex) => (
                     <div 
                       key={card.id}
-                      className={`${cardIndex > 0 ? '-mt-8 sm:-mt-10' : ''} relative hover:z-20 transition-all duration-200`}
+                      className={`${cardIndex > 0 ? '-mt-12' : ''} relative hover:z-20 transition-all duration-200`}
                       style={{ zIndex: cardIndex }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -624,22 +590,24 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
         </div>
       </div>
 
-      {/* Bottom Stats */}
-      <div className="fixed bottom-16 left-2 right-2 
-                      bg-blue-900/95 dark:bg-blue-800/95 backdrop-blur rounded-lg px-3 py-2 
-                      border border-blue-600 dark:border-blue-400 shadow-xl z-40">
-        <div className="flex items-center justify-between text-xs font-bold text-white">
+      {/* Compact Bottom Left Stats */}
+      <div className="fixed bottom-2 left-2 
+                      bg-blue-900/90 dark:bg-blue-800/90 backdrop-blur-sm rounded-lg px-2 py-1 
+                      border border-blue-600/50 dark:border-blue-400/50 shadow-lg z-40">
+        <div className="flex items-center gap-3 text-xs font-medium text-white">
           <span className="flex items-center gap-1">
             <span className="text-yellow-300">🏆</span>
-            {gameState.score}
+            <span className="text-yellow-200">{gameState.score}</span>
           </span>
           <span className="flex items-center gap-1">
             <span className="text-blue-300">🎯</span>
-            {gameState.moves}
+            <span className="text-blue-200">{gameState.moves}</span>
           </span>
           <span className="flex items-center gap-1">
             <span className="text-green-300">⏱️</span>
-            {Math.floor(timer / 60).toString().padStart(2, '0')}:{(timer % 60).toString().padStart(2, '0')}
+            <span className="text-green-200">
+              {Math.floor(timer / 60).toString().padStart(2, '0')}:{(timer % 60).toString().padStart(2, '0')}
+            </span>
           </span>
         </div>
       </div>
