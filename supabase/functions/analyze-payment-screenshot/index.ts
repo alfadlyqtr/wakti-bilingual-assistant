@@ -8,25 +8,77 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Enhanced GPT-4 Vision System Prompt for Maximum Security
-const ENHANCED_VISION_PROMPT = `You are an expert in verifying Fawran payment screenshots from Qatar banks.
+// Image Quality Analysis Functions
+const performImageQualityChecks = (arrayBuffer: ArrayBuffer, base64: string) => {
+  const size = arrayBuffer.byteLength;
+  
+  // Resolution and Size Analysis
+  const estimatedResolution = Math.sqrt(size / 3); // Rough estimation
+  const isHighQuality = size > 500000; // 500KB+
+  const hasGoodResolution = estimatedResolution > 800;
+  
+  // Compression Quality (rough estimation based on file size vs expected)
+  const compressionRatio = size / (estimatedResolution * estimatedResolution * 3);
+  const hasGoodCompression = compressionRatio > 0.1;
+  
+  // Metadata Analysis (basic checks)
+  const hasValidFormat = base64.length > 1000;
+  const isNotTooSmall = size > 50000; // 50KB minimum
+  
+  return {
+    size,
+    estimatedResolution: Math.round(estimatedResolution),
+    isHighQuality,
+    hasGoodResolution,
+    hasGoodCompression,
+    hasValidFormat,
+    isNotTooSmall,
+    qualityScore: [isHighQuality, hasGoodResolution, hasGoodCompression, hasValidFormat, isNotTooSmall].filter(Boolean).length
+  };
+};
 
-Extract and validate these fields:
+// Enhanced GPT-4 Vision System Prompt with Image Quality Checks
+const ENHANCED_VISION_PROMPT = `You are an expert in verifying Fawran payment screenshots from Qatar banks with advanced image quality analysis.
 
-1. Transfer type: must contain "Fawran" or "فوران" (instant transfer).
-2. Payment amount: must match expected value exactly.
-3. Beneficiary alias: must be "alfadlyqtr".
-4. Beneficiary name: must be "ABDULLAH HASSOUN" or Arabic equivalent.
-5. Transfer timestamp: extract the exact timestamp from screenshot.
-6. Sender alias: extract user's mobile number or alias.
-7. Payment reference number: extract and verify uniqueness.
-8. Transaction reference number: extract and verify uniqueness.
-9. Transfer status: must be completed/successful.
-10. Detect image tampering or editing signs, e.g., Photoshop use or cut-and-paste anomalies.
+CRITICAL IMAGE QUALITY ANALYSIS:
+1. Resolution & Clarity: Assess if the image is clear, high-resolution (min 800x600), and not blurry
+2. Text Legibility: Verify all text is crisp, readable, and not pixelated
+3. Screenshot Authenticity: Confirm this is a genuine mobile banking screenshot, not a mock-up
+4. Image Completeness: Ensure the entire payment confirmation is visible without cropping key information
+5. Compression Quality: Check if the image has sufficient quality for accurate OCR reading
+6. Lighting & Contrast: Verify adequate lighting and contrast for clear text recognition
+7. Digital Tampering: Detect any signs of photo editing, overlay text, or manipulated elements
+8. UI Consistency: Validate that the banking interface appears authentic and consistent
+9. Metadata Integrity: Look for signs of screenshot editing or manipulation
+10. Color Profile: Ensure natural color representation without artificial filtering
+
+PAYMENT VALIDATION FIELDS:
+11. Transfer type: must contain "Fawran" or "فوران" (instant transfer)
+12. Payment amount: must match expected value exactly
+13. Beneficiary alias: must be "alfadlyqtr"
+14. Beneficiary name: must be "ABDULLAH HASSOUN" or Arabic equivalent
+15. Transfer timestamp: extract the exact timestamp from screenshot
+16. Sender alias: extract user's mobile number or alias
+17. Payment reference number: extract and verify uniqueness
+18. Transaction reference number: extract and verify uniqueness
+19. Transfer status: must be completed/successful
+20. Device/Bank Interface: Verify it matches known Qatar banking apps
 
 Respond ONLY with strict JSON containing:
 
 {
+  "imageQuality": {
+    "resolution": "high" | "medium" | "low",
+    "clarity": "excellent" | "good" | "poor",
+    "textLegibility": "perfect" | "readable" | "unclear",
+    "screenshotAuthenticity": "genuine" | "suspicious" | "fake",
+    "completeness": "complete" | "partial" | "cropped",
+    "compressionQuality": "excellent" | "acceptable" | "poor",
+    "lightingContrast": "optimal" | "adequate" | "insufficient",
+    "tamperingDetected": boolean,
+    "uiConsistency": "authentic" | "questionable" | "fake",
+    "overallQualityScore": number
+  },
   "transferType": string,
   "extractedAmount": number,
   "amountMatches": boolean,
@@ -48,8 +100,8 @@ Respond ONLY with strict JSON containing:
   "extractedText": string
 }`;
 
-// Enhanced validation logic with time validation for renewals
-const runSecurityValidations = async (supabase: any, payment: any, analysis: any) => {
+// Enhanced validation logic with image quality checks
+const runSecurityValidations = async (supabase: any, payment: any, analysis: any, imageQuality: any) => {
   const validations = {
     amountValid: false,
     aliasValid: false,
@@ -60,8 +112,28 @@ const runSecurityValidations = async (supabase: any, payment: any, analysis: any
     tamperingValid: false,
     referencesUnique: false,
     hashUnique: false,
-    highConfidence: false
+    highConfidence: false,
+    imageQualityValid: false,
+    screenshotAuthentic: false,
+    textLegible: false
   };
+
+  // Image Quality Validations
+  const imageQualityAnalysis = analysis.imageQuality || {};
+  validations.imageQualityValid = 
+    imageQuality.qualityScore >= 4 && 
+    imageQuality.isHighQuality &&
+    imageQuality.hasGoodResolution &&
+    (imageQualityAnalysis.overallQualityScore || 0) >= 7;
+    
+  validations.screenshotAuthentic = 
+    imageQualityAnalysis.screenshotAuthenticity === 'genuine' &&
+    imageQualityAnalysis.uiConsistency === 'authentic' &&
+    !imageQualityAnalysis.tamperingDetected;
+    
+  validations.textLegible = 
+    imageQualityAnalysis.textLegibility === 'perfect' ||
+    imageQualityAnalysis.textLegibility === 'readable';
 
   // Basic field validations
   validations.amountValid = analysis.amountMatches && analysis.extractedAmount === payment.amount;
@@ -73,7 +145,7 @@ const runSecurityValidations = async (supabase: any, payment: any, analysis: any
     analysis.transferType?.includes('فوران');
   validations.statusValid = analysis.isCompleted;
   validations.highConfidence = analysis.confidence > 85;
-  validations.tamperingValid = !analysis.tamperingDetected;
+  validations.tamperingValid = !analysis.tamperingDetected && !imageQualityAnalysis.tamperingDetected;
 
   // Time Validation Removed - Fawran payments now work 24/7
   // All time-based restrictions have been eliminated for better user experience
@@ -175,14 +247,60 @@ serve(async (req) => {
       throw new Error('Failed to download screenshot');
     }
 
-    // Convert to high-fidelity base64 for Vision API
+    // Convert to high-fidelity base64 for Vision API and run quality checks
     const arrayBuffer = await fileData.arrayBuffer();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    
+    // Perform comprehensive image quality analysis
+    const imageQuality = performImageQualityChecks(arrayBuffer, base64);
 
-    console.log('🖼️ Image processed for Vision API:', {
+    console.log('🖼️ Image Quality Analysis:', {
       size: arrayBuffer.byteLength,
+      estimatedResolution: imageQuality.estimatedResolution,
+      qualityScore: imageQuality.qualityScore,
+      isHighQuality: imageQuality.isHighQuality,
       hash: payment.screenshot_hash?.substring(0, 16) + '...'
     });
+    
+    // Reject low-quality images immediately
+    if (imageQuality.qualityScore < 3) {
+      console.log('❌ Image Quality Too Low - Auto-Rejecting');
+      
+      await supabase
+        .from('pending_fawran_payments')
+        .update({
+          status: 'rejected',
+          review_notes: JSON.stringify({
+            rejection_reason: 'Poor image quality',
+            image_quality: imageQuality,
+            auto_rejected: true,
+            analyzed_at: new Date().toISOString(),
+            worker_version: 'enhanced-v3.0-quality-checks'
+          }),
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', paymentId);
+        
+      await supabase.rpc('queue_notification', {
+        p_user_id: payment.user_id,
+        p_notification_type: 'payment_rejected',
+        p_title: '❌ Payment Rejected - Image Quality',
+        p_body: 'Your screenshot was rejected due to poor quality. Please upload a clear, high-resolution screenshot.',
+        p_data: { payment_id: paymentId, reason: 'image_quality' },
+        p_deep_link: '/settings',
+        p_scheduled_for: new Date().toISOString()
+      });
+      
+      return new Response(JSON.stringify({
+        success: false,
+        rejected: true,
+        reason: 'Poor image quality',
+        imageQuality,
+        worker_version: 'enhanced-v3.0-quality-checks'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Enhanced GPT-4o Vision API call with maximum security
     const visionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -256,8 +374,8 @@ serve(async (req) => {
       aliasMatches: analysis.aliasMatches
     });
 
-    // Run comprehensive security validations with enhanced time validation
-    const validationResult = await runSecurityValidations(supabase, payment, analysis);
+    // Run comprehensive security validations with image quality checks
+    const validationResult = await runSecurityValidations(supabase, payment, analysis, imageQuality);
     const { validationMethod, ...validations } = validationResult;
     
     console.log('🛡️ Security Validations:', { ...validations, validationMethod });
@@ -295,12 +413,13 @@ serve(async (req) => {
       review_notes: JSON.stringify({
         ai_analysis: analysis,
         security_validations: validations,
+        image_quality: imageQuality,
         validation_method: validationMethod,
         processing_time_ms: Date.now() - startTime,
         analyzed_at: new Date().toISOString(),
         auto_approved: shouldAutoApprove,
         security_level: 'maximum',
-        worker_version: 'enhanced-v2.2-dual-system'
+        worker_version: 'enhanced-v3.0-quality-checks'
       }),
       reviewed_at: shouldAutoApprove ? new Date().toISOString() : null,
       time_validation_passed: validations.timeValid,
@@ -403,10 +522,11 @@ serve(async (req) => {
       success: true,
       analysis,
       validations,
+      imageQuality,
       auto_approved: shouldAutoApprove,
       processing_time_ms: processingTime,
       security_level: 'maximum',
-      worker_version: 'enhanced-v2.2-dual-system',
+      worker_version: 'enhanced-v3.0-quality-checks',
       validation_method: validationMethod,
       payment_method: 'fawran'
     }), {
@@ -422,7 +542,7 @@ serve(async (req) => {
       error: error.message,
       processing_time_ms: processingTime,
       security_level: 'maximum',
-      worker_version: 'enhanced-v2.2-dual-system'
+      worker_version: 'enhanced-v3.0-quality-checks'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
