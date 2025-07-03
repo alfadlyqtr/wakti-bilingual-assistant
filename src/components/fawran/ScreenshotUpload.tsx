@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -57,6 +56,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
   const [isUploading, setIsUploading] = useState(false);
   const [imageHash, setImageHash] = useState<string>('');
   const [isDuplicate, setIsDuplicate] = useState(false);
+  const [aliasError, setAliasError] = useState('');
 
   const amount = selectedPlan === 'monthly' ? 60 : 600;
 
@@ -77,6 +77,30 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
     const fileInput = document.getElementById('file-input') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
+    }
+  };
+
+  const validateAlias = (value: string) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      setAliasError(language === 'ar' ? 'الاسم المستعار مطلوب' : 'Alias name is required');
+      return false;
+    }
+    if (trimmedValue.length < 2) {
+      setAliasError(language === 'ar' ? 'الاسم المستعار يجب أن يكون حرفين على الأقل' : 'Alias must be at least 2 characters');
+      return false;
+    }
+    setAliasError('');
+    return true;
+  };
+
+  const handleAliasChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSenderAlias(value);
+    if (value.trim()) {
+      validateAlias(value);
+    } else {
+      setAliasError('');
     }
   };
 
@@ -146,11 +170,19 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
   };
 
   const handleSubmit = async () => {
-    if (!selectedFile || !senderAlias.trim() || !user) {
+    if (!selectedFile || !user) {
       toast.error(language === 'ar' ? 'حقول مطلوبة' : 'Required fields', {
         description: language === 'ar' 
           ? 'يرجى اختيار صورة وإدخال الاسم المستعار'
           : 'Please select a screenshot and enter your alias'
+      });
+      return;
+    }
+
+    // Validate alias before submission
+    if (!validateAlias(senderAlias)) {
+      toast.error(language === 'ar' ? 'الاسم المستعار مطلوب' : 'Alias name required', {
+        description: aliasError
       });
       return;
     }
@@ -346,23 +378,30 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
           />
         </div>
 
-        {/* Sender Alias Field */}
+        {/* Sender Alias Field - Now Mandatory */}
         <div>
           <Label htmlFor="senderAlias" className="text-sm sm:text-base">
             {language === 'ar' ? 'اسمك المستعار في فوران' : 'Your Fawran Alias Name'}
+            <span className="text-red-500 ml-1">*</span>
           </Label>
           <Input
             id="senderAlias"
             type="text"
             value={senderAlias}
-            onChange={(e) => setSenderAlias(e.target.value)}
+            onChange={handleAliasChange}
             placeholder={language === 'ar' 
               ? 'أدخل اسمك المستعار في فوران أو رقم الهاتف المسجل'
               : 'Enter your Fawran alias or registered mobile number'
             }
             required
-            className="mt-2"
+            className={`mt-2 ${aliasError ? 'border-red-500 focus:border-red-500' : ''}`}
           />
+          {aliasError && (
+            <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {aliasError}
+            </p>
+          )}
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             {language === 'ar' 
               ? 'هذا الاسم يجب أن يطابق الاسم الظاهر في صورة التحويل'
@@ -508,7 +547,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         {/* Submit Button */}
         <Button 
           onClick={handleSubmit} 
-          disabled={!selectedFile || !senderAlias.trim() || isUploading}
+          disabled={!selectedFile || !senderAlias.trim() || !!aliasError || isUploading}
           className="w-full"
           size="lg"
         >
