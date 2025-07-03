@@ -1,3 +1,4 @@
+
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, RefreshCw, Smartphone } from "lucide-react";
@@ -83,7 +84,7 @@ export default function AdminDashboard() {
               Last Updated: {new Date().toLocaleTimeString()}
             </Badge>
           </div>
-          <RealTimeActivityFeed activity={recentActivity} isLoading={isLoading} />
+          <RealTimeActivityFeed activities={recentActivity} isLoading={isLoading} />
         </div>
         
         {/* Enhanced Fawran Payment Stats */}
@@ -92,7 +93,12 @@ export default function AdminDashboard() {
             <Smartphone className="h-5 w-5 text-accent-cyan" />
             Payment Intelligence + Gifts
           </h2>
-          <FawranStatsCards stats={stats.fawranStats} isLoading={isLoading} />
+          <FawranStatsCards 
+            stats={stats.fawranStats} 
+            autoApprovalRate={stats.autoApprovalRate}
+            avgProcessingTime={stats.avgProcessingTime}
+            isLoading={isLoading} 
+          />
         </div>
       </div>
 
