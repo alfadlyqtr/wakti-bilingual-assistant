@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, ArrowLeft, AlertCircle, LogOut } from 'lucide-react';
+import { Upload, ArrowLeft, AlertCircle, LogOut, X, FileImage } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
@@ -52,9 +52,11 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
   const { language } = useTheme();
   const { user, signOut } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>('');
   const [senderAlias, setSenderAlias] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [imageHash, setImageHash] = useState<string>('');
+  const [isDuplicate, setIsDuplicate] = useState(false);
 
   const amount = selectedPlan === 'monthly' ? 60 : 600;
 
@@ -63,6 +65,18 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       await signOut();
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setImagePreview('');
+    setImageHash('');
+    setIsDuplicate(false);
+    // Reset the file input
+    const fileInput = document.getElementById('file-input') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
     }
   };
 
@@ -106,13 +120,22 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         .maybeSingle();
 
       if (existingHash) {
+        setIsDuplicate(true);
         toast.error(language === 'ar' ? 'صورة مكررة' : 'Duplicate image detected', {
           description: language === 'ar' 
-            ? 'هذه الصورة تم رفعها من قبل. يرجى استخدام صورة أخرى.'
-            : 'This image has been uploaded before. Please use a different screenshot.'
+            ? 'هذه الصورة تم رفعها من قبل. يمكنك المتابعة أو اختيار صورة أخرى.'
+            : 'This image has been uploaded before. You can continue or choose a different screenshot.'
         });
-        return;
+      } else {
+        setIsDuplicate(false);
       }
+
+      // Create image preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
 
       setSelectedFile(file);
       console.log('File validation passed, hash generated:', hash.substring(0, 16) + '...');
@@ -178,17 +201,19 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
 
       console.log('Generated public URL:', publicUrl);
 
-      // Store screenshot hash first
-      console.log('Storing screenshot hash...');
-      const { error: hashError } = await supabase
-        .from('screenshot_hashes')
-        .insert({
-          user_id: user.id,
-          image_hash: imageHash
-        });
+      // Store screenshot hash first (only if not duplicate)
+      if (!isDuplicate) {
+        console.log('Storing screenshot hash...');
+        const { error: hashError } = await supabase
+          .from('screenshot_hashes')
+          .insert({
+            user_id: user.id,
+            image_hash: imageHash
+          });
 
-      if (hashError) {
-        console.error('Hash storage error (continuing anyway):', hashError);
+        if (hashError) {
+          console.error('Hash storage error (continuing anyway):', hashError);
+        }
       }
 
       // Insert payment record with all required fields
@@ -204,7 +229,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
         account_created_at: userData.user.created_at,
         time_validation_passed: false,
         tampering_detected: false,
-        duplicate_detected: false,
+        duplicate_detected: isDuplicate,
         payment_reference_number: null,
         transaction_reference_number: null
       };
@@ -224,8 +249,8 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
 
       console.log('Payment record created successfully:', paymentData);
 
-      // Update screenshot hash with payment ID
-      if (paymentData.id) {
+      // Update screenshot hash with payment ID (only if not duplicate)
+      if (paymentData.id && !isDuplicate) {
         await supabase
           .from('screenshot_hashes')
           .update({ payment_id: paymentData.id })
@@ -352,43 +377,102 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
             {language === 'ar' ? 'صورة تأكيد التحويل' : 'Transfer Confirmation Screenshot'}
           </Label>
           <Card className="p-4 sm:p-6 border-dashed border-2 hover:border-primary/50 transition-colors mt-2">
-            <div className="text-center">
-              <Upload className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
-              <div className="mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => document.getElementById('file-input')?.click()}
-                  className="w-full sm:w-auto text-sm sm:text-base"
-                >
-                  {language === 'ar' ? 'اختر صورة' : 'Choose Image'}
-                </Button>
-                <input
-                  id="file-input"
-                  type="file"
-                  accept=".png,.jpg,.jpeg,.webp"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {language === 'ar' 
-                  ? 'PNG, JPG, JPEG, WebP (حد أقصى 5 ميجابايت)'
-                  : 'PNG, JPG, JPEG, WebP (max 5MB)'
-                }
-              </p>
-              {selectedFile && (
-                <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <p className="text-sm font-medium text-green-700 dark:text-green-300 break-all">
-                    ✅ {selectedFile.name}
-                  </p>
-                  {imageHash && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Hash: {imageHash.substring(0, 16)}...
-                    </p>
-                  )}
+            {!selectedFile ? (
+              <div className="text-center">
+                <Upload className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
+                <div className="mb-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => document.getElementById('file-input')?.click()}
+                    className="w-full sm:w-auto text-sm sm:text-base"
+                  >
+                    {language === 'ar' ? 'اختر صورة' : 'Choose Image'}
+                  </Button>
+                  <input
+                    id="file-input"
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
                 </div>
-              )}
-            </div>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {language === 'ar' 
+                    ? 'PNG, JPG, JPEG, WebP (حد أقصى 5 ميجابايت)'
+                    : 'PNG, JPG, JPEG, WebP (max 5MB)'
+                  }
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Image Preview */}
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <FileImage className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                        {language === 'ar' ? 'الصورة المحددة:' : 'Selected Image:'}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearSelectedFile}
+                      className="h-6 w-6 p-0 hover:bg-red-100 dark:hover:bg-red-900/20"
+                    >
+                      <X className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </div>
+                  
+                  {imagePreview && (
+                    <div className="relative border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800">
+                      <img 
+                        src={imagePreview} 
+                        alt="Screenshot preview" 
+                        className="w-full h-40 object-contain"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div className="text-sm">
+                      <p className="font-medium text-green-700 dark:text-green-300 break-all">
+                        📁 {selectedFile.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {language === 'ar' ? 'الحجم:' : 'Size:'} {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                      {imageHash && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Hash: {imageHash.substring(0, 16)}...
+                        </p>
+                      )}
+                      {isDuplicate && (
+                        <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded">
+                          <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">
+                            ⚠️ {language === 'ar' 
+                              ? 'صورة مكررة - يمكنك المتابعة إذا كانت هذه دفعة جديدة'
+                              : 'Duplicate image - you can continue if this is a new payment'
+                            }
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Change Image Button */}
+                <div className="text-center">
+                  <Button
+                    variant="outline"
+                    onClick={() => document.getElementById('file-input')?.click()}
+                    className="text-sm"
+                  >
+                    {language === 'ar' ? 'تغيير الصورة' : 'Change Image'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
 
@@ -405,7 +489,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
                 <li>• {language === 'ar' ? 'كشف التلاعب بالصور' : 'Image tampering detection'}</li>
                 <li>• {language === 'ar' ? 'تحقق من توقيت التحويل' : 'Transfer timing verification'}</li>
                 <li>• {language === 'ar' ? 'فحص أرقام المراجع' : 'Reference number validation'}</li>
-                <li>• {language === 'ar' ? 'معالجة خلال 90 ثانية' : '90-second processing guarantee'}</li>
+                <li>• {language === 'ar' ? 'معالجة خلال 2-3 دقائق' : '2-3 minute processing guarantee'}</li>
               </ul>
             </div>
           </div>

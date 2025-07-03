@@ -120,6 +120,19 @@ export function PaymentInstructions({ selectedPlan, onContinue, onBack }: Paymen
         </div>
       </Card>
 
+      {/* Processing Time Notice */}
+      <Card className="p-3 sm:p-4 mb-4 sm:mb-6 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+        <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+          <Clock className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+          <div className="font-medium text-sm sm:text-base">
+            {language === 'ar' 
+              ? '⚡ معالجة الدفع خلال 2-3 دقائق بنظام الأمان المحسن'
+              : '⚡ Payment processing in 2-3 minutes with enhanced security'
+            }
+          </div>
+        </div>
+      </Card>
+
       {/* Payment Steps */}
       <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
         {steps.map((step) => (
