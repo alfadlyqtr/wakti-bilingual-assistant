@@ -6,6 +6,7 @@ import { t } from '@/utils/translations';
 
 interface SolitaireGameProps {
   onBack: () => void;
+  onStatsChange?: (stats: { score: number; moves: number; timer: number }) => void;
 }
 
 // Card types and constants
@@ -145,7 +146,7 @@ const initializeGame = (): GameState => {
   };
 };
 
-export function SolitaireGame({ onBack }: SolitaireGameProps) {
+export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
   const { language } = useTheme();
   const [gameState, setGameState] = useState<GameState>(initializeGame);
   const [timer, setTimer] = useState(0);
@@ -161,6 +162,11 @@ export function SolitaireGame({ onBack }: SolitaireGameProps) {
     }
     return () => clearInterval(interval);
   }, [isTimerRunning, gameState.gameWon]);
+
+  // Update parent with stats
+  useEffect(() => {
+    onStatsChange?.({ score: gameState.score, moves: gameState.moves, timer });
+  }, [gameState.score, gameState.moves, timer, onStatsChange]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -419,43 +425,33 @@ export function SolitaireGame({ onBack }: SolitaireGameProps) {
     return (
       <div 
         className={`
-          w-8 h-12 rounded border border-border/20 flex items-center justify-center text-xs font-medium
-          transition-all duration-200 cursor-pointer
+          w-12 h-16 rounded-lg border border-border/20 flex flex-col items-center justify-center text-sm font-bold
+          transition-all duration-200 cursor-pointer relative
           ${card.faceUp 
-            ? `bg-gradient-to-br from-card to-card/80 ${isRed ? 'text-red-500' : 'text-slate-700 dark:text-slate-300'} shadow-sm`
-            : 'bg-gradient-to-br from-accent/20 to-accent/10 text-accent border-accent/30'
+            ? `bg-gradient-to-br from-background to-background/90 ${isRed ? 'text-red-500' : 'text-foreground'} shadow-lg border-border`
+            : 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground border-primary/30 shadow-md'
           }
-          ${isSelected ? 'ring-2 ring-primary shadow-glow scale-105' : 'hover:scale-102'}
+          ${isSelected ? 'ring-2 ring-accent shadow-glow scale-105 z-10' : 'hover:scale-102 hover:shadow-lg'}
         `}
       >
-        {card.faceUp ? `${SUITS[card.suit]}${card.face}` : ''}
+        {card.faceUp ? (
+          <>
+            <span className="text-xs leading-none">{card.face}</span>
+            <span className="text-lg leading-none">{SUITS[card.suit]}</span>
+          </>
+        ) : (
+          <div className="w-full h-full rounded-lg bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center">
+            <span className="text-xs font-bold opacity-60">W</span>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col h-full space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          className="flex items-center gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {t('back', language)}
-        </Button>
-        
-        <div className="flex items-center gap-4 text-sm">
-          <span>{language === 'ar' ? 'النقاط' : 'Score'}: {gameState.score}</span>
-          <span>{language === 'ar' ? 'الحركات' : 'Moves'}: {gameState.moves}</span>
-          <span>{formatTime(timer)}</span>
-        </div>
-      </div>
+    <div className="flex flex-col h-full space-y-4">{/* Game Controls */}
 
-      {/* Game Controls */}
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex items-center justify-center gap-2 pb-2">
         <Button size="sm" onClick={newGame} variant="outline">
           <RotateCcw className="h-4 w-4 mr-1" />
           {language === 'ar' ? 'لعبة جديدة' : 'New Game'}
@@ -472,16 +468,18 @@ export function SolitaireGame({ onBack }: SolitaireGameProps) {
       {/* Game Board */}
       <div className="flex-1 space-y-3">
         {/* Top Row: Stock, Waste, and Foundations */}
-        <div className="flex justify-between">
+        <div className="flex justify-between items-start mb-4">
           {/* Stock and Waste */}
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <div 
-              className="w-8 h-12 rounded border-2 border-dashed border-accent/30 flex items-center justify-center cursor-pointer hover:border-accent/50"
+              className="w-12 h-16 rounded-lg border-2 border-dashed border-accent/40 flex items-center justify-center cursor-pointer hover:border-accent/60 transition-colors bg-accent/5"
               onClick={drawFromStock}
             >
-              {gameState.stock.length > 0 ? renderCard(gameState.stock[0]) : ''}
+              {gameState.stock.length > 0 ? renderCard(gameState.stock[0]) : (
+                <span className="text-xs text-muted-foreground">Stock</span>
+              )}
             </div>
-            <div className="w-8 h-12 rounded border border-border/20 flex items-center justify-center">
+            <div className="w-12 h-16 rounded-lg border border-border/30 flex items-center justify-center bg-background/50">
               {gameState.waste.length > 0 ? (
                 <div onClick={() => selectCard(gameState.waste[gameState.waste.length - 1], 'waste')}>
                   {renderCard(gameState.waste[gameState.waste.length - 1], 
@@ -489,16 +487,18 @@ export function SolitaireGame({ onBack }: SolitaireGameProps) {
                     gameState.selectedCards[0].id === gameState.waste[gameState.waste.length - 1]?.id
                   )}
                 </div>
-              ) : ''}
+              ) : (
+                <span className="text-xs text-muted-foreground">Waste</span>
+              )}
             </div>
           </div>
 
           {/* Foundations */}
-          <div className="flex gap-1">
+          <div className="flex gap-2">
             {Object.entries(SUITS).map(([suit, symbol]) => (
               <div 
                 key={suit}
-                className="w-8 h-12 rounded border border-border/20 flex items-center justify-center cursor-pointer hover:bg-accent/5"
+                className="w-12 h-16 rounded-lg border border-border/30 flex items-center justify-center cursor-pointer hover:bg-accent/5 transition-colors bg-background/50"
                 onClick={() => selectEmptySpace('foundation', suit as Suit)}
               >
                 {gameState.foundations[suit as Suit].length > 0 ? (
@@ -510,7 +510,7 @@ export function SolitaireGame({ onBack }: SolitaireGameProps) {
                     {renderCard(gameState.foundations[suit as Suit][gameState.foundations[suit as Suit].length - 1])}
                   </div>
                 ) : (
-                  <span className="text-muted-foreground text-xs">{symbol}</span>
+                  <span className="text-muted-foreground text-xl font-bold">{symbol}</span>
                 )}
               </div>
             ))}
@@ -518,20 +518,20 @@ export function SolitaireGame({ onBack }: SolitaireGameProps) {
         </div>
 
         {/* Tableau */}
-        <div className="flex gap-1 justify-center">
+        <div className="flex gap-2 justify-center">
           {gameState.tableau.map((pile, pileIndex) => (
             <div 
               key={pileIndex}
-              className="flex flex-col gap-1 min-h-16 w-8"
+              className="flex flex-col gap-1 min-h-20 w-12"
               onClick={() => pile.length === 0 && selectEmptySpace('tableau', pileIndex)}
             >
               {pile.length === 0 ? (
-                <div className="w-8 h-12 rounded border-2 border-dashed border-muted-foreground/20 cursor-pointer hover:border-muted-foreground/40" />
+                <div className="w-12 h-16 rounded-lg border-2 border-dashed border-muted-foreground/30 cursor-pointer hover:border-muted-foreground/50 transition-colors bg-accent/5" />
               ) : (
                 pile.map((card, cardIndex) => (
                   <div 
                     key={card.id}
-                    className={`${cardIndex > 0 ? '-mt-8' : ''}`}
+                    className={`${cardIndex > 0 ? '-mt-10' : ''} relative z-${cardIndex}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       selectCard(card, 'tableau', pileIndex);
@@ -550,8 +550,8 @@ export function SolitaireGame({ onBack }: SolitaireGameProps) {
 
       {/* Win Message */}
       {gameState.gameWon && (
-        <div className="text-center p-4 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg border border-green-500/20">
-          <h3 className="text-lg font-bold text-green-600 dark:text-green-400">
+        <div className="text-center p-4 bg-gradient-to-r from-emerald-500/10 to-green-500/10 rounded-lg border border-emerald-500/20 shadow-lg">
+          <h3 className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
             {language === 'ar' ? '🎉 مبروك!' : '🎉 Congratulations!'}
           </h3>
           <p className="text-sm text-muted-foreground">

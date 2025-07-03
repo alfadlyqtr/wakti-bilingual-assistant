@@ -18,6 +18,7 @@ type GameType = 'selection' | 'tic-tac-toe' | 'chess' | 'solitaire';
 export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
   const { language } = useTheme();
   const [currentGame, setCurrentGame] = useState<GameType>('selection');
+  const [gameStats, setGameStats] = useState({ score: 0, moves: 0, timer: 0 });
 
   const handleClose = () => {
     setCurrentGame('selection');
@@ -80,7 +81,7 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
       case 'chess':
         return <ChessGame onBack={handleBack} />;
       case 'solitaire':
-        return <SolitaireGame onBack={handleBack} />;
+        return <SolitaireGame onBack={handleBack} onStatsChange={setGameStats} />;
       default:
         return renderGameSelection();
     }
@@ -115,14 +116,24 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
               }
             </DialogTitle>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClose}
-            className="h-8 w-8 p-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          
+          <div className="flex items-center gap-4">
+            {currentGame === 'solitaire' && (
+              <div className="flex items-center gap-3 text-sm font-medium">
+                <span className="text-primary">{language === 'ar' ? 'النقاط' : 'Score'}: {gameStats.score}</span>
+                <span className="text-primary">{language === 'ar' ? 'الحركات' : 'Moves'}: {gameStats.moves}</span>
+                <span className="text-primary">{Math.floor(gameStats.timer / 60).toString().padStart(2, '0')}:{(gameStats.timer % 60).toString().padStart(2, '0')}</span>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClose}
+              className="h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </DialogHeader>
         
         <div className="mt-4">
