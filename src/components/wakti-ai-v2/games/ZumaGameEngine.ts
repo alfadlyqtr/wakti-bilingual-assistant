@@ -34,7 +34,11 @@ export class ZumaGameEngine {
       matchCount: 3
     };
 
-    this.initPixi();
+    this.initialize();
+  }
+
+  private async initialize() {
+    await this.initPixi();
     this.createPath();
     this.createShooter();
     this.setupEventListeners();

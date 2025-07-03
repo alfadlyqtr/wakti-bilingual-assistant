@@ -40,14 +40,27 @@ export function ZumaGame({ onBack }: ZumaGameProps) {
 
   useEffect(() => {
     if (canvasRef.current && gameState === 'playing') {
-      gameEngineRef.current = new ZumaGameEngine(canvasRef.current, {
+      // Ensure canvas has proper dimensions
+      const canvas = canvasRef.current;
+      const parent = canvas.parentElement;
+      if (parent) {
+        canvas.width = parent.offsetWidth || 600;
+        canvas.height = parent.offsetHeight || 400;
+      }
+
+      gameEngineRef.current = new ZumaGameEngine(canvas, {
         onScoreUpdate: setScore,
         onLevelUpdate: setLevel,
         onGameOver: handleGameOver,
         onGameComplete: handleGameComplete
       });
 
-      gameEngineRef.current.start();
+      // Start game after a brief delay to ensure initialization
+      setTimeout(() => {
+        if (gameEngineRef.current) {
+          gameEngineRef.current.start();
+        }
+      }, 100);
 
       return () => {
         if (gameEngineRef.current) {
