@@ -28,40 +28,29 @@ export class ShareService {
         console.log('Using navigator.share');
         console.log('Share data prepared:', shareData);
         
-        if (navigator.canShare && !navigator.canShare(shareData)) {
-          console.log('Data cannot be shared, falling back to clipboard');
-          throw new Error('Data cannot be shared');
+        try {
+          await navigator.share(shareData);
+          console.log('Native share completed successfully');
+          return; // Exit if successful
+        } catch (shareError) {
+          console.log('Native share failed, falling back to clipboard:', shareError);
+          // Continue to clipboard fallback
         }
-        
-        console.log('Can share this data:', navigator.canShare ? navigator.canShare(shareData) : 'canShare not supported');
-        
-        await navigator.share(shareData);
-        console.log('Native share completed successfully');
-      } else {
-        throw new Error('Web Share API not supported');
       }
-    } catch (error) {
-      console.error('Error in native share:', error);
-      console.log('Falling back to clipboard...');
       
-      // Fallback to clipboard
-      try {
-        const eventUrl = `${window.location.origin}/maw3d/${shortId}`;
-        console.log('Generated Maw3d event link:', eventUrl);
-        console.log('Attempting clipboard copy with link:', eventUrl);
-        
-        console.log('Writing to clipboard...');
-        await navigator.clipboard.writeText(eventUrl);
-        console.log('Clipboard copy successful');
-        
-        // Show success message
-        if ('toast' in window) {
-          (window as any).toast?.success?.('Link copied to clipboard!');
-        }
-      } catch (clipboardError) {
-        console.error('Clipboard fallback failed:', clipboardError);
-        throw new Error('Failed to share event link');
-      }
+      // Fallback to clipboard (always runs if share fails or isn't supported)
+      console.log('Falling back to clipboard...');
+      await navigator.clipboard.writeText(eventUrl);
+      console.log('Clipboard copy successful');
+      
+      // Show success message
+      const { toast } = await import('sonner');
+      toast.success('Event link copied to clipboard!');
+    } catch (error) {
+      console.error('Error in shareEvent:', error);
+      const { toast } = await import('sonner');
+      toast.error('Failed to share event link');
+      throw error;
     }
     
     console.log('=== ShareService.shareEvent END ===');
