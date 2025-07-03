@@ -14,7 +14,7 @@ import { t } from '@/utils/translations';
 import CalendarDropdown from '@/components/events/CalendarDropdown';
 
 export default function Maw3dView() {
-  const { id } = useParams();
+  const { shortId } = useParams();
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,10 +36,10 @@ export default function Maw3dView() {
   const eventLanguage: 'en' | 'ar' = (event?.language === 'ar' ? 'ar' : 'en');
 
   useEffect(() => {
-    if (id) {
+    if (shortId) {
       fetchEvent();
     }
-  }, [id]);
+  }, [shortId]);
 
   useEffect(() => {
     // Check localStorage for previous RSVP when event is loaded
@@ -74,27 +74,27 @@ export default function Maw3dView() {
     try {
       setIsLoading(true);
       console.log('=== MAW3D VIEW: Starting fetch ===');
-      console.log('URL ID:', id);
+      console.log('URL shortId:', shortId);
       
-      if (!id) {
-        console.error('No ID provided in URL');
+      if (!shortId) {
+        console.error('No shortId provided in URL');
         toast.error('Event ID is missing from URL');
         return;
       }
 
       let eventData: Maw3dEvent | null = null;
 
-      // Check if the ID is a UUID (for authenticated users) or a short ID (for public sharing)
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      // Check if the shortId is a UUID (for authenticated users) or a short ID (for public sharing)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(shortId);
       console.log('Is UUID:', isUUID);
       
       try {
         if (isUUID) {
           console.log('Fetching by UUID...');
-          eventData = await Maw3dService.getEvent(id);
+          eventData = await Maw3dService.getEvent(shortId);
         } else {
           console.log('Fetching by short ID...');
-          eventData = await Maw3dService.getEventByShortId(id);
+          eventData = await Maw3dService.getEventByShortId(shortId);
         }
         console.log('Event fetch result:', eventData);
       } catch (fetchError) {
