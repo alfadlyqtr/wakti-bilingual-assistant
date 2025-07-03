@@ -74,14 +74,14 @@ export default function Maw3dManage() {
   };
 
   const handleShare = async () => {
-    if (!event?.short_id) {
+    if (!event) {
       toast.error('Cannot generate link for this event');
       return;
     }
     
     try {
-      // Pass both eventId and shortId to ShareService
-      await ShareService.shareEvent(event.id, event.short_id);
+      // Pass the full event object to ShareService
+      await ShareService.shareEvent(event);
     } catch (error) {
       console.error('Error sharing event:', error);
       toast.error('Failed to share event');

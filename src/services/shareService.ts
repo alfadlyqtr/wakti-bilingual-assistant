@@ -1,24 +1,40 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { Maw3dEvent } from "@/types/maw3d";
+import { format } from 'date-fns';
 
 export class ShareService {
-  // Share Maw3d event - Fixed to use correct URL format
-  static async shareEvent(eventId: string, shortId: string): Promise<void> {
+  // Share Maw3d event - Updated to use dynamic event data
+  static async shareEvent(event: Maw3dEvent): Promise<void> {
     console.log('=== ShareService.shareEvent START ===');
-    console.log('Called with eventId:', eventId, 'shortId:', shortId);
+    console.log('Called with event:', event.id, 'shortId:', event.short_id);
     
     try {
       // Generate the correct Maw3d event URL using the /maw3d/:id route
-      const eventUrl = `${window.location.origin}/maw3d/${shortId}`;
+      const eventUrl = `${window.location.origin}/maw3d/${event.short_id}`;
       console.log('Generated Maw3d event link:', eventUrl);
       
+      // Create dynamic share content based on event data
+      const eventDate = format(new Date(event.event_date), 'EEEE, MMMM d, yyyy');
+      const shareTitle = event.title;
+      
+      // Create descriptive share text with event details
+      let shareText = `${event.title}`;
+      if (event.description) {
+        shareText += ` - ${event.description}`;
+      }
+      shareText += ` on ${eventDate}`;
+      if (event.location) {
+        shareText += ` at ${event.location}`;
+      }
+      
       const shareData = {
-        title: 'WAKTI Event',
-        text: 'Check out this event!',
+        title: shareTitle,
+        text: shareText,
         url: eventUrl
       };
       
-      console.log('Generated link for sharing:', eventUrl);
+      console.log('Generated dynamic share data:', shareData);
       
       // Check if Web Share API is available
       console.log('Checking navigator.share availability:', !!navigator.share);

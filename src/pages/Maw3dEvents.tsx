@@ -53,8 +53,8 @@ export default function Maw3dEvents() {
     console.log('Share button clicked for event:', event.id, 'shortId:', event.short_id);
     
     try {
-      // Pass both eventId and shortId to ShareService
-      await ShareService.shareEvent(event.id, event.short_id);
+      // Pass the full event object to ShareService
+      await ShareService.shareEvent(event);
     } catch (error) {
       console.error('Error in handleShare:', error);
       toast.error('Failed to share event');
