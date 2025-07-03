@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Zap, Play, Pause } from 'lucide-react';
@@ -440,9 +441,8 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
     return (
       <div 
         className={`
-          w-16 h-20 sm:w-18 md:w-20 rounded-lg 
-          border-2 border-blue-600 dark:border-blue-400
-          flex flex-col items-center justify-center text-xs sm:text-sm font-bold
+          w-12 h-16 rounded border-2 border-blue-600 dark:border-blue-400
+          flex flex-col items-center justify-center text-xs font-bold
           transition-all duration-200 cursor-pointer relative
           shadow-md hover:shadow-lg active:scale-95
           ${card.faceUp 
@@ -461,7 +461,7 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
             <span className="text-sm leading-none">{SUITS[card.suit]}</span>
           </>
         ) : (
-          <div className="w-full h-full rounded-lg flex items-center justify-center relative overflow-hidden">
+          <div className="w-full h-full rounded flex items-center justify-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 dark:from-blue-800 dark:via-blue-700 dark:to-blue-600"></div>
             <span 
               className="text-lg font-black relative z-10 text-white"
@@ -484,15 +484,15 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
   };
 
   return (
-    <div className="flex flex-col h-full space-y-2 relative bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 rounded-xl p-2">
+    <div className="flex flex-col h-full space-y-1 relative bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 rounded-xl p-1">
       {/* Game Board */}
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-1">
         {/* Top Row: Stock, Waste, and Foundations */}
-        <div className="flex items-start justify-between mb-2 gap-1">
+        <div className="flex items-start justify-between mb-1 gap-0.5">
           {/* Stock and Waste - Left */}
-          <div className="flex gap-1">
+          <div className="flex gap-0.5">
             <div 
-              className="w-16 h-20 rounded-lg border-2 border-dashed border-blue-400 dark:border-blue-300 
+              className="w-12 h-16 rounded border-2 border-dashed border-blue-400 dark:border-blue-300 
                          flex items-center justify-center cursor-pointer hover:border-blue-600 dark:hover:border-blue-200 
                          transition-all duration-200 bg-blue-50 dark:bg-blue-900/30
                          hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
@@ -504,7 +504,7 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
                 </span>
               )}
             </div>
-            <div className="w-16 h-20 rounded-lg border-2 border-blue-600 dark:border-blue-400 
+            <div className="w-12 h-16 rounded border-2 border-blue-600 dark:border-blue-400 
                            flex items-center justify-center bg-blue-50 dark:bg-blue-900/30 shadow-md">
               {gameState.waste.length > 0 ? (
                 <div onClick={() => selectCard(gameState.waste[gameState.waste.length - 1], 'waste')}>
@@ -522,11 +522,11 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
           </div>
 
           {/* Foundations - Right */}
-          <div className="flex gap-1">
+          <div className="flex gap-0.5">
             {Object.entries(SUITS).map(([suit, symbol]) => (
               <div 
                 key={suit}
-                className="w-16 h-20 rounded-lg border-2 border-blue-600 dark:border-blue-400 
+                className="w-12 h-16 rounded border-2 border-blue-600 dark:border-blue-400 
                            flex items-center justify-center cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 
                            transition-all duration-200 bg-blue-50 dark:bg-blue-900/30
                            hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
@@ -541,7 +541,7 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
                     {renderCard(gameState.foundations[suit as Suit][gameState.foundations[suit as Suit].length - 1])}
                   </div>
                 ) : (
-                  <span className={`text-lg font-bold 
+                  <span className={`text-sm font-bold 
                     ${suit === 'hearts' || suit === 'diamonds' 
                       ? 'text-red-500 dark:text-red-400' 
                       : 'text-gray-700 dark:text-gray-300'
@@ -555,23 +555,23 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
         </div>
 
         {/* Tableau - Horizontal Scroll */}
-        <div className="overflow-x-auto pb-16">
-          <div className="flex gap-2 min-w-fit px-2">
+        <div className="overflow-x-auto pb-12">
+          <div className="flex gap-1 min-w-fit px-1">
             {gameState.tableau.map((pile, pileIndex) => (
               <div 
                 key={pileIndex}
-                className="flex flex-col gap-1 min-h-20 w-16 flex-shrink-0"
+                className="flex flex-col gap-0.5 min-h-16 w-12 flex-shrink-0"
                 onClick={() => pile.length === 0 && selectEmptySpace('tableau', pileIndex)}
               >
                 {pile.length === 0 ? (
-                  <div className="w-16 h-20 rounded-lg border-2 border-dashed border-blue-400 dark:border-blue-300 
+                  <div className="w-12 h-16 rounded border-2 border-dashed border-blue-400 dark:border-blue-300 
                                  cursor-pointer hover:border-blue-600 dark:hover:border-blue-200 transition-all duration-200 
                                  bg-blue-50 dark:bg-blue-900/30 hover:scale-105 active:scale-95 shadow-md hover:shadow-lg" />
                 ) : (
                   pile.map((card, cardIndex) => (
                     <div 
                       key={card.id}
-                      className={`${cardIndex > 0 ? '-mt-12' : ''} relative hover:z-20 transition-all duration-200`}
+                      className={`${cardIndex > 0 ? '-mt-8' : ''} relative hover:z-20 transition-all duration-200`}
                       style={{ zIndex: cardIndex }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -594,7 +594,7 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
       <div className="fixed bottom-2 left-2 
                       bg-blue-900/90 dark:bg-blue-800/90 backdrop-blur-sm rounded-lg px-2 py-1 
                       border border-blue-600/50 dark:border-blue-400/50 shadow-lg z-40">
-        <div className="flex items-center gap-3 text-xs font-medium text-white">
+        <div className="flex items-center gap-2 text-xs font-medium text-white">
           <span className="flex items-center gap-1">
             <span className="text-yellow-300">🏆</span>
             <span className="text-yellow-200">{gameState.score}</span>
@@ -614,11 +614,11 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
 
       {/* Win Message */}
       {gameState.gameWon && (
-        <div className="absolute inset-4 flex items-center justify-center z-50">
-          <div className="text-center p-6 
+        <div className="absolute inset-2 flex items-center justify-center z-50">
+          <div className="text-center p-4 
                           bg-emerald-500/95 dark:bg-emerald-600/95 rounded-2xl border-2 border-emerald-400 dark:border-emerald-300 
                           shadow-2xl backdrop-blur animate-fade-in">
-            <h3 className="text-xl font-black text-white mb-2">
+            <h3 className="text-lg font-black text-white mb-2">
               {language === 'ar' ? '🎉 مبروك!' : '🎉 Congratulations!'}
             </h3>
             <p className="text-sm text-emerald-50 font-semibold">

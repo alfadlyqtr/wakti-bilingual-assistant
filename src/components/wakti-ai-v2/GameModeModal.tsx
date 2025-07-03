@@ -95,7 +95,7 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent 
-        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="max-w-2xl max-h-[95vh] overflow-y-auto"
         hideCloseButton={true}
       >
         <DialogHeader className="flex flex-row items-center justify-between">
