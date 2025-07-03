@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift } from "lucide-react";
@@ -38,21 +39,12 @@ interface Subscription {
   start_date: string;
   next_billing_date: string;
   payment_method: string;
-  paypal_subscription_id: string;
+  fawran_payment_id: string;
   is_gift: boolean;
   gift_duration: string;
   gift_given_by: string;
   created_at: string;
 }
-
-// Protected legacy PayPal users
-const LEGACY_PAYPAL_USERS = [
-  'ahmadalsayyed40@gmail.com',
-  'alfadly@tmw.qa',
-  'albuhaddoudhilal@gmail.com',
-  'alanoud.qtr6@gmail.com',
-  'mohamedbingha974@gmail.com'
-];
 
 export default function AdminSubscriptions() {
   const navigate = useNavigate();
@@ -193,7 +185,6 @@ export default function AdminSubscriptions() {
         p_billing_amount: activationData.isGift ? 0 : activationData.billingAmount,
         p_billing_currency: 'QAR',
         p_payment_method: activationData.isGift ? 'gift' : activationData.paymentMethod,
-        p_paypal_subscription_id: null,
         p_fawran_payment_id: null,
         p_is_gift: activationData.isGift,
         p_gift_duration: activationData.isGift ? activationData.giftDuration : null,
@@ -206,7 +197,6 @@ export default function AdminSubscriptions() {
         p_billing_amount: activationData.isGift ? 0 : activationData.billingAmount,
         p_billing_currency: 'QAR',
         p_payment_method: activationData.isGift ? 'gift' : activationData.paymentMethod,
-        p_paypal_subscription_id: null,
         p_fawran_payment_id: null,
         p_is_gift: activationData.isGift,
         p_gift_duration: activationData.isGift ? activationData.giftDuration : null,
@@ -248,11 +238,6 @@ export default function AdminSubscriptions() {
   };
 
   const handleDeactivateSubscription = async (user: User) => {
-    if (LEGACY_PAYPAL_USERS.includes(user.email)) {
-      toast.error('Cannot deactivate protected legacy PayPal users');
-      return;
-    }
-
     try {
       const { error } = await supabase
         .from('profiles')
@@ -293,12 +278,9 @@ export default function AdminSubscriptions() {
     }
   };
 
-  const getPaymentMethodLabel = (method: string, email: string, isGift: boolean = false) => {
+  const getPaymentMethodLabel = (method: string, isGift: boolean = false) => {
     if (isGift) {
       return 'Gift Subscription';
-    }
-    if (LEGACY_PAYPAL_USERS.includes(email)) {
-      return 'PayPal Legacy (Protected)';
     }
     switch (method) {
       case 'fawran':
@@ -310,12 +292,9 @@ export default function AdminSubscriptions() {
     }
   };
 
-  const getPaymentMethodColor = (method: string, email: string, isGift: boolean = false) => {
+  const getPaymentMethodColor = (method: string, isGift: boolean = false) => {
     if (isGift) {
       return 'text-accent-purple';
-    }
-    if (LEGACY_PAYPAL_USERS.includes(email)) {
-      return 'text-accent-blue';
     }
     switch (method) {
       case 'fawran':
@@ -382,7 +361,7 @@ export default function AdminSubscriptions() {
       {/* Header */}
       <AdminHeader
         title="Subscription Management"
-        subtitle="Dual Payment System: Fawran Modern + Legacy PayPal Protection + Gift Subscriptions"
+        subtitle="Modern Fawran AI-Verified Payments + Admin Gift Subscriptions"
         icon={<Shield className="h-5 w-5 text-accent-blue" />}
       >
         <Button onClick={loadData} variant="outline" size="sm" className="text-xs">
@@ -418,7 +397,7 @@ export default function AdminSubscriptions() {
       {/* Main Content */}
       <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
             <CardHeader className="pb-3">
               <CardTitle className="text-enhanced-heading flex items-center text-sm">
@@ -469,20 +448,6 @@ export default function AdminSubscriptions() {
             <CardContent>
               <div className="text-2xl font-bold text-accent-cyan">
                 {users.filter(u => u.payment_method === 'fawran').length}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <UserCog className="h-4 w-4 mr-2 text-accent-orange" />
-                Legacy Protected
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-accent-orange">
-                {users.filter(u => LEGACY_PAYPAL_USERS.includes(u.email)).length}
               </div>
             </CardContent>
           </Card>
@@ -612,15 +577,10 @@ export default function AdminSubscriptions() {
                         <div className="space-y-1">
                           <Badge 
                             variant="outline" 
-                            className={`text-xs w-full justify-center border-current ${getPaymentMethodColor(user.payment_method, user.email, isGift)}`}
+                            className={`text-xs w-full justify-center border-current ${getPaymentMethodColor(user.payment_method, isGift)}`}
                           >
-                            {getPaymentMethodLabel(user.payment_method, user.email, isGift).split(' ')[0]}
+                            {getPaymentMethodLabel(user.payment_method, isGift).split(' ')[0]}
                           </Badge>
-                          {LEGACY_PAYPAL_USERS.includes(user.email) && (
-                            <Badge variant="secondary" className="text-xs w-full justify-center text-accent-orange">
-                              Protected
-                            </Badge>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -654,33 +614,19 @@ export default function AdminSubscriptions() {
                     {/* Enhanced Action Buttons with Debug Info */}
                     <div className="flex gap-2 pt-2 border-t border-border/50">
                       {user.is_subscribed ? (
-                        <>
-                          {!LEGACY_PAYPAL_USERS.includes(user.email) && (
-                            <Button 
-                              size="sm" 
-                              variant="destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                console.log('[DEBUG] Deactivating subscription for:', user.email);
-                                handleDeactivateSubscription(user);
-                              }}
-                              className="flex-1 text-xs hover:bg-destructive/90"
-                            >
-                              <UserX className="h-3 w-3 mr-1" />
-                              Deactivate
-                            </Button>
-                          )}
-                          {LEGACY_PAYPAL_USERS.includes(user.email) && (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              disabled
-                              className="flex-1 text-xs"
-                            >
-                              Protected User
-                            </Button>
-                          )}
-                        </>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            console.log('[DEBUG] Deactivating subscription for:', user.email);
+                            handleDeactivateSubscription(user);
+                          }}
+                          className="flex-1 text-xs hover:bg-destructive/90"
+                        >
+                          <UserX className="h-3 w-3 mr-1" />
+                          Deactivate
+                        </Button>
                       ) : (
                         <Button 
                           size="sm" 

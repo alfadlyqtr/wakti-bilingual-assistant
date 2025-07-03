@@ -54,7 +54,7 @@ export default function AdminDashboard() {
       {/* Header */}
       <AdminHeader
         title="Admin Dashboard"
-        subtitle="Real-time system monitoring and management"
+        subtitle="Modern Fawran AI-Payment System + Gift Subscriptions"
         icon={<Shield className="h-5 w-5 text-accent-blue" />}
       >
         <Button onClick={refetch} variant="outline" size="sm" className="text-xs">
@@ -91,7 +91,7 @@ export default function AdminDashboard() {
         <div className="space-y-4">
           <h2 className="text-xl font-semibold text-enhanced-heading flex items-center gap-2">
             <Smartphone className="h-5 w-5 text-accent-cyan" />
-            Payment Intelligence + Gifts
+            Fawran AI Payment Intelligence + Gifts
           </h2>
           <FawranStatsCards 
             stats={stats.fawranStats} 

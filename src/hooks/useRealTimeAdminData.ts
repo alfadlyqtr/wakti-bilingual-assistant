@@ -14,7 +14,6 @@ interface AdminStats {
   avgProcessingTime: number;
   giftSubscriptions: number;
   paymentMethodDistribution: {
-    paypal: number;
     fawran: number;
     manual: number;
     legacy: number;
@@ -64,7 +63,7 @@ export const useRealTimeAdminData = () => {
     autoApprovalRate: 0,
     avgProcessingTime: 0,
     giftSubscriptions: 0,
-    paymentMethodDistribution: { paypal: 0, fawran: 0, manual: 0, legacy: 0 },
+    paymentMethodDistribution: { fawran: 0, manual: 0, legacy: 0 },
     fawranStats: {
       totalPayments: 0,
       pendingPayments: 0,
@@ -145,18 +144,21 @@ export const useRealTimeAdminData = () => {
         time_validation_failed_count: 0
       };
 
-      // Get payment method distribution
+      // Get payment method distribution (without PayPal)
       const { data: paymentMethodData } = await supabase.rpc('get_payment_method_stats');
       const paymentMethodDistribution = {
-        paypal: 0,
         fawran: 0,
         manual: 0,
         legacy: 0
       };
 
       paymentMethodData?.forEach((method: any) => {
-        if (method.payment_method) {
-          paymentMethodDistribution[method.payment_method as keyof typeof paymentMethodDistribution] = method.user_count;
+        if (method.payment_method === 'fawran') {
+          paymentMethodDistribution.fawran = method.user_count;
+        } else if (method.payment_method === 'manual') {
+          paymentMethodDistribution.manual = method.user_count;
+        } else {
+          paymentMethodDistribution.legacy = method.user_count;
         }
       });
 
