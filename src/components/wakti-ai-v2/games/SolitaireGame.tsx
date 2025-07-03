@@ -298,16 +298,21 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
         }
 
         if (placed) {
-          // Remove cards from source
+          // Remove cards from source - Fixed logic
           if (prev.selectedPile !== null) {
+            // Remove from tableau pile
             newState.tableau[prev.selectedPile] = prev.tableau[prev.selectedPile].slice(0, -targetCards.length);
-            // Flip top card if it exists
-            const topCardIndex = newState.tableau[prev.selectedPile].length - 1;
-            if (topCardIndex >= 0 && !newState.tableau[prev.selectedPile][topCardIndex].faceUp) {
-              newState.tableau[prev.selectedPile][topCardIndex].faceUp = true;
+            // Flip top card if it exists and is face down
+            const remainingPile = newState.tableau[prev.selectedPile];
+            if (remainingPile.length > 0 && !remainingPile[remainingPile.length - 1].faceUp) {
+              remainingPile[remainingPile.length - 1].faceUp = true;
             }
-          } else if (prev.waste.length > 0 && prev.waste[prev.waste.length - 1].id === targetCards[0].id) {
-            newState.waste = prev.waste.slice(0, -1);
+          } else {
+            // Remove from waste pile - ensure we only remove if it's the selected card
+            if (prev.waste.length > 0 && targetCards.length === 1 && 
+                prev.waste[prev.waste.length - 1].id === targetCards[0].id) {
+              newState.waste = prev.waste.slice(0, -1);
+            }
           }
 
           newState.score += targetCards.length * 10;
@@ -332,7 +337,7 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
           selectedPile: null
         };
       } else {
-        // Select new cards
+        // Select new cards - only allow selection of moveable cards
         if (source === 'waste' && prev.waste.length > 0) {
           const topWaste = prev.waste[prev.waste.length - 1];
           if (topWaste.id === card.id) {
