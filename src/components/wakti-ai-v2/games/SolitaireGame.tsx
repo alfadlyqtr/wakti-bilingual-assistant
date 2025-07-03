@@ -7,6 +7,11 @@ import { t } from '@/utils/translations';
 interface SolitaireGameProps {
   onBack: () => void;
   onStatsChange?: (stats: { score: number; moves: number; timer: number }) => void;
+  onActionsChange?: (actions: {
+    newGame: () => void;
+    toggleTimer: () => void;
+    autoComplete: () => void;
+  }) => void;
 }
 
 // Card types and constants
@@ -146,11 +151,78 @@ const initializeGame = (): GameState => {
   };
 };
 
-export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
+export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: SolitaireGameProps) {
   const { language } = useTheme();
   const [gameState, setGameState] = useState<GameState>(initializeGame);
   const [timer, setTimer] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(true);
+
+  const newGame = useCallback(() => {
+    setGameState(initializeGame());
+    setTimer(0);
+    setIsTimerRunning(true);
+  }, []);
+
+  const toggleTimer = useCallback(() => {
+    setIsTimerRunning(prev => !prev);
+  }, []);
+
+  const autoComplete = useCallback(() => {
+    // Simple auto-complete logic - move all face-up cards to foundations if possible
+    setGameState(prev => {
+      let newState = { ...prev };
+      let moved = false;
+
+      // Try to move from waste
+      if (newState.waste.length > 0) {
+        const wasteCard = newState.waste[newState.waste.length - 1];
+        for (const suit of Object.keys(SUITS) as Suit[]) {
+          if (canPlaceOnFoundation(wasteCard, newState.foundations[suit])) {
+            newState.foundations[suit] = [...newState.foundations[suit], wasteCard];
+            newState.waste = newState.waste.slice(0, -1);
+            moved = true;
+            break;
+          }
+        }
+      }
+
+      // Try to move from tableau
+      for (let i = 0; i < 7; i++) {
+        const pile = newState.tableau[i];
+        if (pile.length > 0) {
+          const topCard = pile[pile.length - 1];
+          if (topCard.faceUp) {
+            for (const suit of Object.keys(SUITS) as Suit[]) {
+              if (canPlaceOnFoundation(topCard, newState.foundations[suit])) {
+                newState.foundations[suit] = [...newState.foundations[suit], topCard];
+                newState.tableau[i] = pile.slice(0, -1);
+                // Flip next card if exists
+                if (newState.tableau[i].length > 0 && !newState.tableau[i][newState.tableau[i].length - 1].faceUp) {
+                  newState.tableau[i][newState.tableau[i].length - 1].faceUp = true;
+                }
+                moved = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (moved) {
+        newState.moves += 1;
+        newState.score += 10;
+        
+        // Check for win
+        const totalFoundationCards = Object.values(newState.foundations).reduce((sum, pile) => sum + pile.length, 0);
+        if (totalFoundationCards === 52) {
+          newState.gameWon = true;
+          setIsTimerRunning(false);
+        }
+      }
+
+      return newState;
+    });
+  }, []);
 
   // Timer effect
   useEffect(() => {
@@ -163,10 +235,15 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
     return () => clearInterval(interval);
   }, [isTimerRunning, gameState.gameWon]);
 
-  // Update parent with stats
+  // Update parent with stats and actions
   useEffect(() => {
     onStatsChange?.({ score: gameState.score, moves: gameState.moves, timer });
-  }, [gameState.score, gameState.moves, timer, onStatsChange]);
+    onActionsChange?.({
+      newGame,
+      toggleTimer,
+      autoComplete
+    });
+  }, [gameState.score, gameState.moves, timer, onStatsChange, onActionsChange, newGame, toggleTimer, autoComplete]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -352,72 +429,6 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
     });
   }, []);
 
-  const newGame = useCallback(() => {
-    setGameState(initializeGame());
-    setTimer(0);
-    setIsTimerRunning(true);
-  }, []);
-
-  const toggleTimer = useCallback(() => {
-    setIsTimerRunning(prev => !prev);
-  }, []);
-
-  const autoComplete = useCallback(() => {
-    // Simple auto-complete logic - move all face-up cards to foundations if possible
-    setGameState(prev => {
-      let newState = { ...prev };
-      let moved = false;
-
-      // Try to move from waste
-      if (newState.waste.length > 0) {
-        const wasteCard = newState.waste[newState.waste.length - 1];
-        for (const suit of Object.keys(SUITS) as Suit[]) {
-          if (canPlaceOnFoundation(wasteCard, newState.foundations[suit])) {
-            newState.foundations[suit] = [...newState.foundations[suit], wasteCard];
-            newState.waste = newState.waste.slice(0, -1);
-            moved = true;
-            break;
-          }
-        }
-      }
-
-      // Try to move from tableau
-      for (let i = 0; i < 7; i++) {
-        const pile = newState.tableau[i];
-        if (pile.length > 0) {
-          const topCard = pile[pile.length - 1];
-          if (topCard.faceUp) {
-            for (const suit of Object.keys(SUITS) as Suit[]) {
-              if (canPlaceOnFoundation(topCard, newState.foundations[suit])) {
-                newState.foundations[suit] = [...newState.foundations[suit], topCard];
-                newState.tableau[i] = pile.slice(0, -1);
-                // Flip next card if exists
-                if (newState.tableau[i].length > 0 && !newState.tableau[i][newState.tableau[i].length - 1].faceUp) {
-                  newState.tableau[i][newState.tableau[i].length - 1].faceUp = true;
-                }
-                moved = true;
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      if (moved) {
-        newState.moves += 1;
-        newState.score += 10;
-        
-        // Check for win
-        const totalFoundationCards = Object.values(newState.foundations).reduce((sum, pile) => sum + pile.length, 0);
-        if (totalFoundationCards === 52) {
-          newState.gameWon = true;
-          setIsTimerRunning(false);
-        }
-      }
-
-      return newState;
-    });
-  }, []);
 
   const renderCard = (card: Card, isSelected: boolean = false) => {
     const isRed = COLORS[card.suit] === 'red';
@@ -425,7 +436,7 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
     return (
       <div 
         className={`
-          w-12 h-16 rounded-lg border border-border/20 flex flex-col items-center justify-center text-sm font-bold
+          w-16 h-20 rounded-lg border border-border/20 flex flex-col items-center justify-center text-base font-bold
           transition-all duration-200 cursor-pointer relative
           ${card.faceUp 
             ? `bg-gradient-to-br from-background to-background/90 ${isRed ? 'text-red-500' : 'text-foreground'} shadow-lg border-border`
@@ -436,12 +447,12 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
       >
         {card.faceUp ? (
           <>
-            <span className="text-xs leading-none">{card.face}</span>
-            <span className="text-lg leading-none">{SUITS[card.suit]}</span>
+            <span className="text-sm leading-none">{card.face}</span>
+            <span className="text-xl leading-none">{SUITS[card.suit]}</span>
           </>
         ) : (
           <div className="w-full h-full rounded-lg bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center">
-            <span className="text-xs font-bold opacity-60">W</span>
+            <span className="text-sm font-bold opacity-60">W</span>
           </div>
         )}
       </div>
@@ -449,37 +460,22 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
   };
 
   return (
-    <div className="flex flex-col h-full space-y-4">{/* Game Controls */}
-
-      <div className="flex items-center justify-center gap-2 pb-2">
-        <Button size="sm" onClick={newGame} variant="outline">
-          <RotateCcw className="h-4 w-4 mr-1" />
-          {language === 'ar' ? 'لعبة جديدة' : 'New Game'}
-        </Button>
-        <Button size="sm" onClick={toggleTimer} variant="outline">
-          {isTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-        </Button>
-        <Button size="sm" onClick={autoComplete} variant="outline">
-          <Zap className="h-4 w-4 mr-1" />
-          {language === 'ar' ? 'إكمال تلقائي' : 'Auto Complete'}
-        </Button>
-      </div>
-
+    <div className="flex flex-col h-full space-y-4 relative">
       {/* Game Board */}
       <div className="flex-1 space-y-3">
-        {/* Top Row: Stock, Waste, and Foundations */}
-        <div className="flex justify-between items-start mb-4">
-          {/* Stock and Waste */}
+        {/* Top Row: Stock, Waste, and Centered Foundations */}
+        <div className="flex items-start justify-between mb-4">
+          {/* Stock and Waste - Left */}
           <div className="flex gap-3">
             <div 
-              className="w-12 h-16 rounded-lg border-2 border-dashed border-accent/40 flex items-center justify-center cursor-pointer hover:border-accent/60 transition-colors bg-accent/5"
+              className="w-16 h-20 rounded-lg border-2 border-dashed border-accent/40 flex items-center justify-center cursor-pointer hover:border-accent/60 transition-colors bg-accent/5"
               onClick={drawFromStock}
             >
               {gameState.stock.length > 0 ? renderCard(gameState.stock[0]) : (
                 <span className="text-xs text-muted-foreground">Stock</span>
               )}
             </div>
-            <div className="w-12 h-16 rounded-lg border border-border/30 flex items-center justify-center bg-background/50">
+            <div className="w-16 h-20 rounded-lg border border-border/30 flex items-center justify-center bg-background/50">
               {gameState.waste.length > 0 ? (
                 <div onClick={() => selectCard(gameState.waste[gameState.waste.length - 1], 'waste')}>
                   {renderCard(gameState.waste[gameState.waste.length - 1], 
@@ -493,12 +489,12 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
             </div>
           </div>
 
-          {/* Foundations */}
-          <div className="flex gap-2">
+          {/* Foundations - Center */}
+          <div className="flex gap-3 justify-center">
             {Object.entries(SUITS).map(([suit, symbol]) => (
               <div 
                 key={suit}
-                className="w-12 h-16 rounded-lg border border-border/30 flex items-center justify-center cursor-pointer hover:bg-accent/5 transition-colors bg-background/50"
+                className="w-16 h-20 rounded-lg border border-border/30 flex items-center justify-center cursor-pointer hover:bg-accent/5 transition-colors bg-background/50"
                 onClick={() => selectEmptySpace('foundation', suit as Suit)}
               >
                 {gameState.foundations[suit as Suit].length > 0 ? (
@@ -510,11 +506,14 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
                     {renderCard(gameState.foundations[suit as Suit][gameState.foundations[suit as Suit].length - 1])}
                   </div>
                 ) : (
-                  <span className="text-muted-foreground text-xl font-bold">{symbol}</span>
+                  <span className="text-muted-foreground text-2xl font-bold">{symbol}</span>
                 )}
               </div>
             ))}
           </div>
+
+          {/* Empty space for balance - Right */}
+          <div className="w-36"></div>
         </div>
 
         {/* Tableau */}
@@ -522,16 +521,16 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
           {gameState.tableau.map((pile, pileIndex) => (
             <div 
               key={pileIndex}
-              className="flex flex-col gap-1 min-h-20 w-12"
+              className="flex flex-col gap-1 min-h-20 w-16"
               onClick={() => pile.length === 0 && selectEmptySpace('tableau', pileIndex)}
             >
               {pile.length === 0 ? (
-                <div className="w-12 h-16 rounded-lg border-2 border-dashed border-muted-foreground/30 cursor-pointer hover:border-muted-foreground/50 transition-colors bg-accent/5" />
+                <div className="w-16 h-20 rounded-lg border-2 border-dashed border-muted-foreground/30 cursor-pointer hover:border-muted-foreground/50 transition-colors bg-accent/5" />
               ) : (
                 pile.map((card, cardIndex) => (
                   <div 
                     key={card.id}
-                    className={`${cardIndex > 0 ? '-mt-10' : ''} relative z-${cardIndex}`}
+                    className={`${cardIndex > 0 ? '-mt-12' : ''} relative z-${cardIndex}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       selectCard(card, 'tableau', pileIndex);
@@ -545,6 +544,15 @@ export function SolitaireGame({ onBack, onStatsChange }: SolitaireGameProps) {
               )}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Bottom Left Stats */}
+      <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm rounded-lg px-3 py-2 border border-border/30 shadow-lg">
+        <div className="flex items-center gap-4 text-sm font-medium">
+          <span className="text-primary">{language === 'ar' ? 'النقاط' : 'Score'}: {gameState.score}</span>
+          <span className="text-primary">{language === 'ar' ? 'الحركات' : 'Moves'}: {gameState.moves}</span>
+          <span className="text-primary">{Math.floor(timer / 60).toString().padStart(2, '0')}:{(timer % 60).toString().padStart(2, '0')}</span>
         </div>
       </div>
 

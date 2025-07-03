@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X, RotateCcw, Zap, Play, Pause } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { TicTacToeGame } from './games/TicTacToeGame';
 import { ChessGame } from './games/ChessGame';
@@ -19,6 +19,11 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
   const { language } = useTheme();
   const [currentGame, setCurrentGame] = useState<GameType>('selection');
   const [gameStats, setGameStats] = useState({ score: 0, moves: 0, timer: 0 });
+  const [gameActions, setGameActions] = useState<{
+    newGame?: () => void;
+    toggleTimer?: () => void;
+    autoComplete?: () => void;
+  }>({});
 
   const handleClose = () => {
     setCurrentGame('selection');
@@ -81,7 +86,7 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
       case 'chess':
         return <ChessGame onBack={handleBack} />;
       case 'solitaire':
-        return <SolitaireGame onBack={handleBack} onStatsChange={setGameStats} />;
+        return <SolitaireGame onBack={handleBack} onStatsChange={setGameStats} onActionsChange={setGameActions} />;
       default:
         return renderGameSelection();
     }
@@ -117,12 +122,20 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
             </DialogTitle>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             {currentGame === 'solitaire' && (
-              <div className="flex items-center gap-3 text-sm font-medium">
-                <span className="text-primary">{language === 'ar' ? 'النقاط' : 'Score'}: {gameStats.score}</span>
-                <span className="text-primary">{language === 'ar' ? 'الحركات' : 'Moves'}: {gameStats.moves}</span>
-                <span className="text-primary">{Math.floor(gameStats.timer / 60).toString().padStart(2, '0')}:{(gameStats.timer % 60).toString().padStart(2, '0')}</span>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={gameActions.newGame} variant="outline" className="h-8 text-xs">
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  {language === 'ar' ? 'جديدة' : 'New'}
+                </Button>
+                <Button size="sm" onClick={gameActions.toggleTimer} variant="outline" className="h-8 w-8 p-0">
+                  {gameStats.timer ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                </Button>
+                <Button size="sm" onClick={gameActions.autoComplete} variant="outline" className="h-8 text-xs">
+                  <Zap className="h-3 w-3 mr-1" />
+                  {language === 'ar' ? 'تلقائي' : 'Auto'}
+                </Button>
               </div>
             )}
             <Button
