@@ -64,23 +64,4 @@ export const games = {
   tap_square: "Tap a square",
   white: "White",
   black: "Black",
-  
-  // Zuma Game
-  zuma: "Zuma",
-  zuma_description: "Shoot colored balls and match three or more to pop them!",
-  zuma_instructions: "Tap the screen to shoot balls. Prevent the chain from reaching the end!",
-  new_game: "New Game",
-  continue_game: "Continue Game",
-  main_menu: "Main Menu",
-  game_paused: "Game Paused",
-  game_over: "Game Over!",
-  victory: "Victory!",
-  congratulations: "🎉 Congratulations!",
-  final_score: "Final Score:",
-  best_score: "Best Score:",
-  new_best_score: "New Best Score!",
-  score: "Score:",
-  level: "Level:",
-  resume: "Resume",
-  pause: "Pause"
 };
