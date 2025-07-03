@@ -44,8 +44,8 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
             </div>
             <p className="text-sm text-muted-foreground">
               {language === 'ar' 
-                ? 'الحد الأدنى 30 ثانية، يُفضل في غرفة هادئة' 
-                : 'Minimum 30 seconds, quiet room recommended'
+                ? 'الحد الأدنى دقيقة واحدة، يُفضل في غرفة هادئة' 
+                : 'Minimum 1 minute, quiet room recommended'
               }
             </p>
           </div>
@@ -84,8 +84,8 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
             </div>
             <p className="text-sm text-muted-foreground">
               {language === 'ar' 
-                ? 'ترجم النصوص إلى 29 لغة مختلفة واسمعها بصوتك المستنسخ' 
-                : 'Translate text to 29 different languages and hear it in your cloned voice'
+                ? 'ترجم النصوص إلى 50 لغة مختلفة واسمعها بصوتك المستنسخ أو الافتراضي' 
+                : 'Translate text to 50 different languages and hear it in your cloned or default voice'
               }
             </p>
           </div>
