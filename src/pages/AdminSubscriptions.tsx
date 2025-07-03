@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift } from "lucide-react";
@@ -64,6 +63,8 @@ export default function AdminSubscriptions() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showActivationModal, setShowActivationModal] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [activationData, setActivationData] = useState({
     planName: "Monthly Plan",
     billingAmount: 60,
@@ -79,19 +80,29 @@ export default function AdminSubscriptions() {
 
   const validateAdminSession = async () => {
     const storedSession = localStorage.getItem('admin_session');
+    console.log('[DEBUG] Checking admin session:', storedSession ? 'exists' : 'missing');
+    
     if (!storedSession) {
+      console.error('[DEBUG] No admin session found');
       navigate('/mqtr');
       return;
     }
-
+    
     try {
       const session = JSON.parse(storedSession);
+      console.log('[DEBUG] Admin session parsed:', { 
+        admin_id: session.admin_id, 
+        expires_at: session.expires_at,
+        isExpired: new Date(session.expires_at) < new Date()
+      });
       if (new Date(session.expires_at) < new Date()) {
         localStorage.removeItem('admin_session');
+        console.error('[DEBUG] Admin session expired');
         navigate('/mqtr');
         return;
       }
     } catch (err) {
+      console.error('[DEBUG] Error parsing admin session:', err);
       navigate('/mqtr');
     }
   };
@@ -129,22 +140,54 @@ export default function AdminSubscriptions() {
 
   const getCurrentAdminId = () => {
     const storedSession = localStorage.getItem('admin_session');
-    if (!storedSession) return null;
+    console.log('[DEBUG] Checking admin session:', storedSession ? 'exists' : 'missing');
+    
+    if (!storedSession) {
+      console.error('[DEBUG] No admin session found');
+      return null;
+    }
+    
     try {
       const session = JSON.parse(storedSession);
+      console.log('[DEBUG] Admin session parsed:', { 
+        admin_id: session.admin_id, 
+        expires_at: session.expires_at,
+        isExpired: new Date(session.expires_at) < new Date()
+      });
       return session.admin_id;
-    } catch {
+    } catch (error) {
+      console.error('[DEBUG] Error parsing admin session:', error);
       return null;
     }
   };
 
   const handleActivateSubscription = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser) {
+      console.error('[DEBUG] No user selected for activation');
+      toast.error('No user selected');
+      return;
+    }
 
+    console.log('[DEBUG] Starting activation process for user:', {
+      userId: selectedUser.id,
+      email: selectedUser.email,
+      currentStatus: selectedUser.is_subscribed,
+      activationData
+    });
+
+    setIsActivating(true);
+    
     try {
       const adminId = getCurrentAdminId();
       
-      const { error } = await supabase.rpc('admin_activate_subscription', {
+      if (!adminId) {
+        console.error('[DEBUG] No admin ID available');
+        toast.error('Admin session invalid - please login again');
+        setIsActivating(false);
+        return;
+      }
+
+      console.log('[DEBUG] Calling admin_activate_subscription with params:', {
         p_user_id: selectedUser.id,
         p_plan_name: activationData.isGift ? `Gift ${activationData.giftDuration.replace('_', ' ')}` : activationData.planName,
         p_billing_amount: activationData.isGift ? 0 : activationData.billingAmount,
@@ -157,25 +200,50 @@ export default function AdminSubscriptions() {
         p_gift_given_by: activationData.isGift ? adminId : null
       });
 
-      if (error) throw error;
-
-      const actionType = activationData.isGift ? 'Gift subscription' : 'Subscription';
-      const duration = activationData.isGift ? activationData.giftDuration.replace('_', ' ') : '';
-      toast.success(`${actionType} activated for ${selectedUser.email} ${duration ? `(${duration})` : ''}`);
-      
-      setShowActivationModal(false);
-      setSelectedUser(null);
-      setActivationData({
-        planName: "Monthly Plan",
-        billingAmount: 60,
-        paymentMethod: "manual",
-        isGift: false,
-        giftDuration: "1_month"
+      const { data, error } = await supabase.rpc('admin_activate_subscription', {
+        p_user_id: selectedUser.id,
+        p_plan_name: activationData.isGift ? `Gift ${activationData.giftDuration.replace('_', ' ')}` : activationData.planName,
+        p_billing_amount: activationData.isGift ? 0 : activationData.billingAmount,
+        p_billing_currency: 'QAR',
+        p_payment_method: activationData.isGift ? 'gift' : activationData.paymentMethod,
+        p_paypal_subscription_id: null,
+        p_fawran_payment_id: null,
+        p_is_gift: activationData.isGift,
+        p_gift_duration: activationData.isGift ? activationData.giftDuration : null,
+        p_gift_given_by: activationData.isGift ? adminId : null
       });
-      loadData();
+
+      console.log('[DEBUG] RPC Response:', { data, error });
+
+      if (error) {
+        console.error('[DEBUG] Activation error:', error);
+        toast.error(`Failed to activate subscription: ${error.message}`);
+        setDebugInfo({ error: error.message, code: error.code, details: error.details });
+      } else {
+        console.log('[DEBUG] Activation successful:', data);
+        const actionType = activationData.isGift ? 'Gift subscription' : 'Subscription';
+        const duration = activationData.isGift ? activationData.giftDuration.replace('_', ' ') : '';
+        toast.success(`${actionType} activated for ${selectedUser.email} ${duration ? `(${duration})` : ''}`);
+        
+        setShowActivationModal(false);
+        setSelectedUser(null);
+        setActivationData({
+          planName: "Monthly Plan",
+          billingAmount: 60,
+          paymentMethod: "manual",
+          isGift: false,
+          giftDuration: "1_month"
+        });
+        
+        // Reload data to see changes
+        loadData();
+      }
     } catch (error) {
-      console.error('Error activating subscription:', error);
-      toast.error('Failed to activate subscription');
+      console.error('[DEBUG] Exception during activation:', error);
+      toast.error(`Activation failed: ${String(error)}`);
+      setDebugInfo({ exception: String(error) });
+    } finally {
+      setIsActivating(false);
     }
   };
 
@@ -323,6 +391,30 @@ export default function AdminSubscriptions() {
         </Button>
       </AdminHeader>
 
+      {/* Debug Info Panel */}
+      {debugInfo && (
+        <div className="p-4">
+          <Card className="bg-red-50 border-red-200">
+            <CardHeader>
+              <CardTitle className="text-red-800">Debug Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <pre className="text-sm overflow-auto">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+              <Button 
+                onClick={() => setDebugInfo(null)} 
+                variant="outline" 
+                size="sm" 
+                className="mt-2"
+              >
+                Clear Debug Info
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
@@ -435,7 +527,15 @@ export default function AdminSubscriptions() {
                 className={`enhanced-card cursor-pointer transition-all ${
                   selectedUser?.id === user.id ? 'ring-2 ring-accent-blue' : ''
                 } ${isGift ? 'border-accent-purple/30 bg-gradient-to-r from-purple-50/50 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/20' : ''}`}
-                onClick={() => setSelectedUser(user)}
+                onClick={() => {
+                  console.log('[DEBUG] User selected:', {
+                    id: user.id,
+                    email: user.email,
+                    is_subscribed: user.is_subscribed,
+                    subscription_status: user.subscription_status
+                  });
+                  setSelectedUser(user);
+                }}
               >
                 <CardContent className="p-4">
                   <div className="space-y-3">
@@ -551,7 +651,7 @@ export default function AdminSubscriptions() {
                       </div>
                     )}
 
-                    {/* Action Buttons */}
+                    {/* Enhanced Action Buttons with Debug Info */}
                     <div className="flex gap-2 pt-2 border-t border-border/50">
                       {user.is_subscribed ? (
                         <>
@@ -561,6 +661,7 @@ export default function AdminSubscriptions() {
                               variant="destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                console.log('[DEBUG] Deactivating subscription for:', user.email);
                                 handleDeactivateSubscription(user);
                               }}
                               className="flex-1 text-xs hover:bg-destructive/90"
@@ -585,6 +686,11 @@ export default function AdminSubscriptions() {
                           size="sm" 
                           onClick={(e) => {
                             e.stopPropagation();
+                            console.log('[DEBUG] Opening activation modal for:', {
+                              id: user.id,
+                              email: user.email,
+                              is_subscribed: user.is_subscribed
+                            });
                             setSelectedUser(user);
                             setShowActivationModal(true);
                           }}
@@ -613,7 +719,7 @@ export default function AdminSubscriptions() {
         )}
       </div>
 
-      {/* Enhanced Activation Modal */}
+      {/* Enhanced Activation Modal with Debug Info */}
       <Dialog open={showActivationModal} onOpenChange={setShowActivationModal}>
         <DialogContent className="max-w-md mx-4">
           <DialogHeader>
@@ -634,6 +740,19 @@ export default function AdminSubscriptions() {
               {activationData.isGift ? 'Give a gift subscription to' : 'Activate subscription for'} {selectedUser?.email}
             </DialogDescription>
           </DialogHeader>
+          
+          {/* Debug Info in Modal */}
+          {selectedUser && (
+            <div className="text-xs bg-gray-100 p-2 rounded mb-4">
+              <strong>Debug Info:</strong><br/>
+              User ID: {selectedUser.id}<br/>
+              Email: {selectedUser.email}<br/>
+              Currently Subscribed: {selectedUser.is_subscribed ? 'Yes' : 'No'}<br/>
+              Status: {selectedUser.subscription_status || 'N/A'}<br/>
+              Admin ID: {getCurrentAdminId() || 'Not found'}
+            </div>
+          )}
+          
           <div className="space-y-4">
             {/* Gift Toggle */}
             <div className="flex items-center space-x-2 p-3 bg-accent-purple/10 rounded-lg border border-accent-purple/20">
@@ -725,6 +844,7 @@ export default function AdminSubscriptions() {
             <Button 
               variant="outline" 
               onClick={() => {
+                console.log('[DEBUG] Closing activation modal');
                 setShowActivationModal(false);
                 setSelectedUser(null);
                 setActivationData({
@@ -735,14 +855,24 @@ export default function AdminSubscriptions() {
                   giftDuration: "1_month"
                 });
               }}
+              disabled={isActivating}
             >
               Cancel
             </Button>
             <Button 
-              onClick={handleActivateSubscription}
+              onClick={() => {
+                console.log('[DEBUG] Activation button clicked');
+                handleActivateSubscription();
+              }}
+              disabled={isActivating}
               className={`${activationData.isGift ? 'bg-accent-purple hover:bg-accent-purple/90' : 'btn-enhanced hover:shadow-glow'}`}
             >
-              {activationData.isGift ? (
+              {isActivating ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Activating...
+                </>
+              ) : activationData.isGift ? (
                 <>
                   <Gift className="h-4 w-4 mr-2" />
                   Give Gift
