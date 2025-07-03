@@ -95,12 +95,16 @@ const DEFAULT_VOICES: VoiceClone[] = [
   }
 ];
 
-// Complete ElevenLabs Multilingual v2 supported languages (41 languages)
+// Complete ElevenLabs Multilingual v2 supported languages (50 languages)
 const TRANSLATION_LANGUAGES = [
   { code: 'en', name: { en: 'English', ar: 'الإنجليزية' } },
   { code: 'ar', name: { en: 'Arabic', ar: 'العربية' } },
+  { code: 'af', name: { en: 'Afrikaans', ar: 'الأفريقانية' } },
+  { code: 'sq', name: { en: 'Albanian', ar: 'الألبانية' } },
   { code: 'bn', name: { en: 'Bengali', ar: 'البنغالية' } },
+  { code: 'eu', name: { en: 'Basque', ar: 'الباسكية' } },
   { code: 'bg', name: { en: 'Bulgarian', ar: 'البلغارية' } },
+  { code: 'ca', name: { en: 'Catalan', ar: 'الكاتالونية' } },
   { code: 'zh', name: { en: 'Chinese', ar: 'الصينية' } },
   { code: 'hr', name: { en: 'Croatian', ar: 'الكرواتية' } },
   { code: 'cs', name: { en: 'Czech', ar: 'التشيكية' } },
@@ -110,18 +114,22 @@ const TRANSLATION_LANGUAGES = [
   { code: 'tl', name: { en: 'Filipino (Tagalog)', ar: 'الفلبينية (التاغالوغ)' } },
   { code: 'fi', name: { en: 'Finnish', ar: 'الفنلندية' } },
   { code: 'fr', name: { en: 'French', ar: 'الفرنسية' } },
+  { code: 'ka', name: { en: 'Georgian', ar: 'الجورجية' } },
   { code: 'de', name: { en: 'German', ar: 'الألمانية' } },
   { code: 'el', name: { en: 'Greek', ar: 'اليونانية' } },
   { code: 'he', name: { en: 'Hebrew', ar: 'العبرية' } },
   { code: 'hi', name: { en: 'Hindi', ar: 'الهندية' } },
   { code: 'hu', name: { en: 'Hungarian', ar: 'المجرية' } },
+  { code: 'is', name: { en: 'Icelandic', ar: 'الآيسلندية' } },
   { code: 'id', name: { en: 'Indonesian', ar: 'الإندونيسية' } },
   { code: 'it', name: { en: 'Italian', ar: 'الإيطالية' } },
   { code: 'ja', name: { en: 'Japanese', ar: 'اليابانية' } },
   { code: 'ko', name: { en: 'Korean', ar: 'الكورية' } },
   { code: 'lv', name: { en: 'Latvian', ar: 'اللاتفية' } },
   { code: 'lt', name: { en: 'Lithuanian', ar: 'الليتوانية' } },
-  { code: 'ms', name: { en: 'Malay', ar: 'الملايو' } },
+  { code: 'lb', name: { en: 'Luxembourgish', ar: 'اللوكسمبورغية' } },
+  { code: 'ms', name: { en: 'Malaysian', ar: 'الماليزية' } },
+  { code: 'mt', name: { en: 'Maltese', ar: 'المالطية' } },
   { code: 'no', name: { en: 'Norwegian', ar: 'النرويجية' } },
   { code: 'fa', name: { en: 'Persian (Farsi)', ar: 'الفارسية' } },
   { code: 'pl', name: { en: 'Polish', ar: 'البولندية' } },
@@ -155,8 +163,11 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   // Translation states
   const [translationText, setTranslationText] = useState('');
   const [targetLanguage, setTargetLanguage] = useState('ar');
-  const [translatedText, setTranslatedText] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
+
+  // Default preferences
+  const [defaultVoiceId, setDefaultVoiceId] = useState<string>('');
+  const [defaultStyle, setDefaultStyle] = useState<string>('neutral');
 
   // Use the extended quota management hook to get voice quota data
   const { 
@@ -169,7 +180,35 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
 
   useEffect(() => {
     loadData();
+    loadDefaultPreferences();
   }, []);
+
+  const loadDefaultPreferences = () => {
+    const savedDefaultVoice = localStorage.getItem('wakti-default-voice');
+    const savedDefaultStyle = localStorage.getItem('wakti-default-style');
+    
+    if (savedDefaultVoice) {
+      setDefaultVoiceId(savedDefaultVoice);
+      setSelectedVoiceId(savedDefaultVoice);
+    }
+    
+    if (savedDefaultStyle) {
+      setDefaultStyle(savedDefaultStyle);
+      setSelectedStyle(savedDefaultStyle);
+    }
+  };
+
+  const setAsDefaultVoice = (voiceId: string) => {
+    localStorage.setItem('wakti-default-voice', voiceId);
+    setDefaultVoiceId(voiceId);
+    toast.success(language === 'ar' ? 'تم تعيين الصوت كافتراضي' : 'Voice set as default');
+  };
+
+  const setAsDefaultVoiceStyle = (style: string) => {
+    localStorage.setItem('wakti-default-style', style);
+    setDefaultStyle(style);
+    toast.success(language === 'ar' ? 'تم تعيين الأسلوب كافتراضي' : 'Style set as default');
+  };
 
   const loadData = async () => {
     try {
@@ -380,7 +419,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     if (!canTranslate) return;
 
     setIsTranslating(true);
-    setTranslatedText('');
 
     try {
       console.log('🌐 === Translation Request ===');
@@ -412,10 +450,11 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         throw new Error(result.error || 'Translation failed');
       }
 
-      setTranslatedText(result.translated_text);
-      
       // Automatically populate the main TTS text area
       setText(result.translated_text);
+      
+      // Clear translation input after successful translation
+      setTranslationText('');
       
       toast.success(language === 'ar' ? 'تمت الترجمة بنجاح ونُسخت إلى منطقة النص الرئيسية!' : 'Translation completed and copied to main text area!');
 
@@ -457,7 +496,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           {language === 'ar' ? 'استوديو الصوت' : 'Voice Studio'}
         </h2>
         <p className="text-sm text-muted-foreground">
-          {language === 'ar' ? 'أنشئ كلام أو ترجم النصوص بصوتك المستنسخ' : 'Generate speech or translate text with your cloned voice'}
+          {language === 'ar' 
+            ? 'أنشئ كلام أو ترجم النصوص بصوتك المستنسخ أو الافتراضي • 50 لغة متاحة للترجمة • أساليب صوتية متنوعة'
+            : 'Generate speech or translate text with your cloned or default voice • 50 languages available • Multiple voice styles'
+          }
         </p>
       </div>
 
@@ -496,9 +538,24 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
 
       {/* Voice Selector */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">
-          {language === 'ar' ? 'اختر الصوت' : 'Select Voice'}
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">
+            {language === 'ar' ? 'اختر الصوت' : 'Select Voice'}
+          </label>
+          {selectedVoiceId && (
+            <Button
+              onClick={() => setAsDefaultVoice(selectedVoiceId)}
+              variant="outline"
+              size="sm"
+              className="text-xs"
+            >
+              {defaultVoiceId === selectedVoiceId ? 
+                (language === 'ar' ? '✓ افتراضي' : '✓ Default') : 
+                (language === 'ar' ? 'جعل افتراضي' : 'Set Default')
+              }
+            </Button>
+          )}
+        </div>
         <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId}>
           <SelectTrigger className="h-12">
             <SelectValue placeholder={language === 'ar' ? 'اختر صوت' : 'Choose a voice'} />
@@ -513,6 +570,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
                   <span className="text-xs text-muted-foreground">
                     ({language === 'ar' ? 'افتراضي' : 'Default'})
                   </span>
+                  {defaultVoiceId === voice.voice_id && <span className="text-green-600">✓</span>}
                 </div>
               </SelectItem>
             ))}
@@ -528,6 +586,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
                       <span className="text-xs text-muted-foreground">
                         ({language === 'ar' ? 'مستنسخ' : 'Cloned'})
                       </span>
+                      {defaultVoiceId === voice.voice_id && <span className="text-green-600">✓</span>}
                     </div>
                   </SelectItem>
                 ))}
@@ -565,24 +624,24 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </Select>
         </div>
 
-        {/* Text Input - Using totalAvailableCharacters instead of hardcoded 6000 */}
+        {/* Text Input - 100 characters max for translation (free) */}
         <div className="space-y-2">
           <label className="text-sm font-medium">
-            {language === 'ar' ? 'النص للترجمة' : 'Text to Translate'}
+            {language === 'ar' ? 'النص للترجمة (100 حرف مجاناً)' : 'Text to Translate (100 chars free)'}
           </label>
           <Textarea
             value={translationText}
             onChange={(e) => setTranslationText(e.target.value)}
             placeholder={language === 'ar' 
-              ? 'اكتب ما تريد ترجمته بأي لغة...'
-              : 'Type whatever you want to translate in any language...'
+              ? 'اكتب ما تريد ترجمته بأي لغة... (مجاني ولا يحسب من الحصة)'
+              : 'Type whatever you want to translate in any language... (free, doesn\'t count against quota)'
             }
             className="min-h-20 resize-none"
             dir="auto"
-            maxLength={totalAvailableCharacters}
+            maxLength={100}
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{translationText.length} / {totalAvailableCharacters} {language === 'ar' ? 'حرف' : 'characters'}</span>
+            <span>{translationText.length} / 100 {language === 'ar' ? 'حرف (مجاني)' : 'characters (free)'}</span>
           </div>
         </div>
 
@@ -600,48 +659,39 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           ) : (
             <>
               <Languages className="h-4 w-4 mr-2" />
-              {language === 'ar' ? 'ترجم' : 'Translate'}
+              {language === 'ar' ? 'ترجم (50 لغة متاحة)' : 'Translate (50 languages available)'}
             </>
           )}
         </Button>
-
-        {/* Translated Text Display */}
-        {translatedText && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">
-                {language === 'ar' ? 'النص المترجم' : 'Translated Text'}
-              </label>
-              <Button
-                onClick={() => navigator.clipboard.writeText(translatedText)}
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-              >
-                <Copy className="h-3 w-3" />
-              </Button>
-            </div>
-            <div className="p-3 bg-muted rounded-lg text-sm">
-              {translatedText}
-            </div>
-          </div>
-        )}
 
       </div>
 
       {/* Enhanced Voice Style Selector */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium">
-            {language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}
-          </label>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">
+              {language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}
+            </label>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowStyleDetails(!showStyleDetails)}
+              className="h-auto p-1"
+            >
+              <Info className="h-3 w-3" />
+            </Button>
+          </div>
           <Button
-            variant="ghost"
+            onClick={() => setAsDefaultVoiceStyle(selectedStyle)}
+            variant="outline"
             size="sm"
-            onClick={() => setShowStyleDetails(!showStyleDetails)}
-            className="h-auto p-1"
+            className="text-xs"
           >
-            <Info className="h-3 w-3" />
+            {defaultStyle === selectedStyle ? 
+              (language === 'ar' ? '✓ افتراضي' : '✓ Default') : 
+              (language === 'ar' ? 'جعل افتراضي' : 'Set Default')
+            }
           </Button>
         </div>
         
