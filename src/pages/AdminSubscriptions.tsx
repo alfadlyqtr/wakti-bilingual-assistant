@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar } from "lucide-react";
+import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
@@ -39,6 +40,9 @@ interface Subscription {
   next_billing_date: string;
   payment_method: string;
   paypal_subscription_id: string;
+  is_gift: boolean;
+  gift_duration: string;
+  gift_given_by: string;
   created_at: string;
 }
 
@@ -63,7 +67,9 @@ export default function AdminSubscriptions() {
   const [activationData, setActivationData] = useState({
     planName: "Monthly Plan",
     billingAmount: 60,
-    paymentMethod: "manual"
+    paymentMethod: "manual",
+    isGift: false,
+    giftDuration: "1_month"
   });
 
   useEffect(() => {
@@ -121,29 +127,50 @@ export default function AdminSubscriptions() {
     }
   };
 
+  const getCurrentAdminId = () => {
+    const storedSession = localStorage.getItem('admin_session');
+    if (!storedSession) return null;
+    try {
+      const session = JSON.parse(storedSession);
+      return session.admin_id;
+    } catch {
+      return null;
+    }
+  };
+
   const handleActivateSubscription = async () => {
     if (!selectedUser) return;
 
     try {
+      const adminId = getCurrentAdminId();
+      
       const { error } = await supabase.rpc('admin_activate_subscription', {
         p_user_id: selectedUser.id,
-        p_plan_name: activationData.planName,
-        p_billing_amount: activationData.billingAmount,
+        p_plan_name: activationData.isGift ? `Gift ${activationData.giftDuration.replace('_', ' ')}` : activationData.planName,
+        p_billing_amount: activationData.isGift ? 0 : activationData.billingAmount,
         p_billing_currency: 'QAR',
-        p_payment_method: activationData.paymentMethod,
+        p_payment_method: activationData.isGift ? 'gift' : activationData.paymentMethod,
         p_paypal_subscription_id: null,
-        p_fawran_payment_id: null
+        p_fawran_payment_id: null,
+        p_is_gift: activationData.isGift,
+        p_gift_duration: activationData.isGift ? activationData.giftDuration : null,
+        p_gift_given_by: activationData.isGift ? adminId : null
       });
 
       if (error) throw error;
 
-      toast.success(`Subscription activated for ${selectedUser.email}`);
+      const actionType = activationData.isGift ? 'Gift subscription' : 'Subscription';
+      const duration = activationData.isGift ? activationData.giftDuration.replace('_', ' ') : '';
+      toast.success(`${actionType} activated for ${selectedUser.email} ${duration ? `(${duration})` : ''}`);
+      
       setShowActivationModal(false);
       setSelectedUser(null);
       setActivationData({
         planName: "Monthly Plan",
         billingAmount: 60,
-        paymentMethod: "manual"
+        paymentMethod: "manual",
+        isGift: false,
+        giftDuration: "1_month"
       });
       loadData();
     } catch (error) {
@@ -184,7 +211,10 @@ export default function AdminSubscriptions() {
     }
   };
 
-  const getPaymentMethodIcon = (method: string) => {
+  const getPaymentMethodIcon = (method: string, isGift: boolean = false) => {
+    if (isGift) {
+      return <Gift className="h-4 w-4 text-accent-purple" />;
+    }
     switch (method) {
       case 'fawran':
         return <Smartphone className="h-4 w-4 text-accent-green" />;
@@ -195,7 +225,10 @@ export default function AdminSubscriptions() {
     }
   };
 
-  const getPaymentMethodLabel = (method: string, email: string) => {
+  const getPaymentMethodLabel = (method: string, email: string, isGift: boolean = false) => {
+    if (isGift) {
+      return 'Gift Subscription';
+    }
     if (LEGACY_PAYPAL_USERS.includes(email)) {
       return 'PayPal Legacy (Protected)';
     }
@@ -209,7 +242,10 @@ export default function AdminSubscriptions() {
     }
   };
 
-  const getPaymentMethodColor = (method: string, email: string) => {
+  const getPaymentMethodColor = (method: string, email: string, isGift: boolean = false) => {
+    if (isGift) {
+      return 'text-accent-purple';
+    }
     if (LEGACY_PAYPAL_USERS.includes(email)) {
       return 'text-accent-blue';
     }
@@ -223,6 +259,33 @@ export default function AdminSubscriptions() {
     }
   };
 
+  const getUserSubscription = (userId: string): Subscription | null => {
+    return subscriptions.find(sub => sub.user_id === userId && sub.status === 'active') || null;
+  };
+
+  const isGiftSubscription = (user: User): boolean => {
+    const subscription = getUserSubscription(user.id);
+    return subscription?.is_gift || false;
+  };
+
+  const getGiftDuration = (user: User): string => {
+    const subscription = getUserSubscription(user.id);
+    return subscription?.gift_duration?.replace('_', ' ') || '';
+  };
+
+  const getRemainingGiftTime = (user: User): string => {
+    if (!isGiftSubscription(user) || !user.next_billing_date) return '';
+    
+    const expiryDate = new Date(user.next_billing_date);
+    const now = new Date();
+    const diffTime = expiryDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 0) return 'Expired';
+    if (diffDays === 1) return '1 day left';
+    return `${diffDays} days left`;
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = !searchTerm || 
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -230,10 +293,13 @@ export default function AdminSubscriptions() {
     
     const matchesFilter = filterStatus === "all" || 
       (filterStatus === "subscribed" && user.is_subscribed) ||
-      (filterStatus === "unsubscribed" && !user.is_subscribed);
+      (filterStatus === "unsubscribed" && !user.is_subscribed) ||
+      (filterStatus === "gifts" && isGiftSubscription(user));
     
     return matchesSearch && matchesFilter;
   });
+
+  const giftSubscriptionsCount = users.filter(user => isGiftSubscription(user)).length;
 
   if (isLoading) {
     return (
@@ -248,7 +314,7 @@ export default function AdminSubscriptions() {
       {/* Header */}
       <AdminHeader
         title="Subscription Management"
-        subtitle="Dual Payment System: Fawran Modern + Legacy PayPal Protection"
+        subtitle="Dual Payment System: Fawran Modern + Legacy PayPal Protection + Gift Subscriptions"
         icon={<Shield className="h-5 w-5 text-accent-blue" />}
       >
         <Button onClick={loadData} variant="outline" size="sm" className="text-xs">
@@ -260,7 +326,7 @@ export default function AdminSubscriptions() {
       {/* Main Content */}
       <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
             <CardHeader className="pb-3">
               <CardTitle className="text-enhanced-heading flex items-center text-sm">
@@ -290,12 +356,26 @@ export default function AdminSubscriptions() {
           <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
             <CardHeader className="pb-3">
               <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <Smartphone className="h-4 w-4 mr-2 text-accent-purple" />
-                Fawran Users
+                <Gift className="h-4 w-4 mr-2 text-accent-purple" />
+                Gift Subs
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-accent-purple">
+                {giftSubscriptionsCount}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-cyan/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Smartphone className="h-4 w-4 mr-2 text-accent-cyan" />
+                Fawran Users
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-accent-cyan">
                 {users.filter(u => u.payment_method === 'fawran').length}
               </div>
             </CardContent>
@@ -336,164 +416,190 @@ export default function AdminSubscriptions() {
                 <SelectItem value="all">All Users</SelectItem>
                 <SelectItem value="subscribed">Subscribed</SelectItem>
                 <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
+                <SelectItem value="gifts">Gift Subscriptions</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
-        {/* Beautiful Subscription Cards - Quota Management Style */}
+        {/* Beautiful Subscription Cards */}
         <div className="grid gap-4">
-          {filteredUsers.map((user) => (
-            <Card 
-              key={user.id} 
-              className={`enhanced-card cursor-pointer transition-all ${
-                selectedUser?.id === user.id ? 'ring-2 ring-accent-blue' : ''
-              }`}
-              onClick={() => setSelectedUser(user)}
-            >
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  {/* User Info Row with Avatar */}
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-medium text-sm">
-                        {(user.display_name || user.email).charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-enhanced-heading text-base">
-                        {user.display_name || "No name"}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Member since: {new Date(user.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    {selectedUser?.id === user.id && (
-                      <Badge className="bg-accent-blue text-xs flex-shrink-0">Selected</Badge>
-                    )}
-                  </div>
-
-                  {/* Subscription Information Grid */}
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
-                    {/* Subscription Status */}
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <CheckCircle className="h-3 w-3 text-accent-green flex-shrink-0" />
-                        <span className="text-xs font-medium">Subscription</span>
-                      </div>
-                      <div className="space-y-1">
-                        {user.is_subscribed ? (
-                          <Badge variant="outline" className="text-xs w-full justify-center border-accent-green text-accent-green">
-                            {user.plan_name || 'Active'}
-                          </Badge>
+          {filteredUsers.map((user) => {
+            const isGift = isGiftSubscription(user);
+            const giftDuration = getGiftDuration(user);
+            const remainingTime = getRemainingGiftTime(user);
+            
+            return (
+              <Card 
+                key={user.id} 
+                className={`enhanced-card cursor-pointer transition-all ${
+                  selectedUser?.id === user.id ? 'ring-2 ring-accent-blue' : ''
+                } ${isGift ? 'border-accent-purple/30 bg-gradient-to-r from-purple-50/50 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/20' : ''}`}
+                onClick={() => setSelectedUser(user)}
+              >
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    {/* User Info Row with Avatar */}
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-10 h-10 ${isGift ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gradient-primary'} rounded-full flex items-center justify-center flex-shrink-0`}>
+                        {isGift ? (
+                          <Gift className="w-5 h-5 text-white" />
                         ) : (
-                          <Badge variant="outline" className="text-xs w-full justify-center">
-                            Unsubscribed
-                          </Badge>
+                          <span className="text-white font-medium text-sm">
+                            {(user.display_name || user.email).charAt(0).toUpperCase()}
+                          </span>
                         )}
-                        {user.subscription_status && (
-                          <Badge variant="secondary" className="text-xs w-full justify-center">
-                            {user.subscription_status}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-enhanced-heading text-base">
+                          {user.display_name || "No name"}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Member since: {new Date(user.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        {selectedUser?.id === user.id && (
+                          <Badge className="bg-accent-blue text-xs">Selected</Badge>
+                        )}
+                        {isGift && (
+                          <Badge className="bg-accent-purple text-xs">
+                            <Gift className="w-3 h-3 mr-1" />
+                            Gift
                           </Badge>
                         )}
                       </div>
                     </div>
 
-                    {/* Payment Method */}
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        {getPaymentMethodIcon(user.payment_method)}
-                        <span className="text-xs font-medium">Payment</span>
+                    {/* Subscription Information Grid */}
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                      {/* Subscription Status */}
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="h-3 w-3 text-accent-green flex-shrink-0" />
+                          <span className="text-xs font-medium">Subscription</span>
+                        </div>
+                        <div className="space-y-1">
+                          {user.is_subscribed ? (
+                            <Badge variant="outline" className={`text-xs w-full justify-center ${isGift ? 'border-accent-purple text-accent-purple' : 'border-accent-green text-accent-green'}`}>
+                              {user.plan_name || 'Active'}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs w-full justify-center">
+                              Unsubscribed
+                            </Badge>
+                          )}
+                          {user.subscription_status && (
+                            <Badge variant="secondary" className="text-xs w-full justify-center">
+                              {user.subscription_status}
+                            </Badge>
+                          )}
+                          {isGift && remainingTime && (
+                            <Badge variant="outline" className="text-xs w-full justify-center border-accent-purple text-accent-purple">
+                              {remainingTime}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <Badge 
-                          variant="outline" 
-                          className={`text-xs w-full justify-center border-current ${getPaymentMethodColor(user.payment_method, user.email)}`}
-                        >
-                          {getPaymentMethodLabel(user.payment_method, user.email).split(' ')[0]}
-                        </Badge>
-                        {LEGACY_PAYPAL_USERS.includes(user.email) && (
-                          <Badge variant="secondary" className="text-xs w-full justify-center text-accent-orange">
-                            Protected
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Billing Information (if subscribed) */}
-                  {user.is_subscribed && (user.next_billing_date || user.billing_start_date) && (
-                    <div className="pt-2 border-t border-border/50">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Calendar className="h-3 w-3 text-accent-purple" />
-                        <span className="text-xs font-medium">Billing Info</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        {user.billing_start_date && (
-                          <div>
-                            <span className="block">Started:</span>
-                            <span>{new Date(user.billing_start_date).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                        {user.next_billing_date && (
-                          <div>
-                            <span className="block">Next billing:</span>
-                            <span>{new Date(user.next_billing_date).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 pt-2 border-t border-border/50">
-                    {user.is_subscribed ? (
-                      <>
-                        {!LEGACY_PAYPAL_USERS.includes(user.email) && (
-                          <Button 
-                            size="sm" 
-                            variant="destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeactivateSubscription(user);
-                            }}
-                            className="flex-1 text-xs hover:bg-destructive/90"
+                      {/* Payment Method */}
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          {getPaymentMethodIcon(user.payment_method, isGift)}
+                          <span className="text-xs font-medium">Payment</span>
+                        </div>
+                        <div className="space-y-1">
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs w-full justify-center border-current ${getPaymentMethodColor(user.payment_method, user.email, isGift)}`}
                           >
-                            <UserX className="h-3 w-3 mr-1" />
-                            Deactivate
-                          </Button>
-                        )}
-                        {LEGACY_PAYPAL_USERS.includes(user.email) && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            disabled
-                            className="flex-1 text-xs"
-                          >
-                            Protected User
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <Button 
-                        size="sm" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedUser(user);
-                          setShowActivationModal(true);
-                        }}
-                        className="flex-1 btn-enhanced text-xs hover:shadow-glow"
-                      >
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Activate Subscription
-                      </Button>
+                            {getPaymentMethodLabel(user.payment_method, user.email, isGift).split(' ')[0]}
+                          </Badge>
+                          {LEGACY_PAYPAL_USERS.includes(user.email) && (
+                            <Badge variant="secondary" className="text-xs w-full justify-center text-accent-orange">
+                              Protected
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Billing Information (if subscribed) */}
+                    {user.is_subscribed && (user.next_billing_date || user.billing_start_date) && (
+                      <div className="pt-2 border-t border-border/50">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Calendar className="h-3 w-3 text-accent-purple" />
+                          <span className="text-xs font-medium">
+                            {isGift ? 'Gift Info' : 'Billing Info'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                          {user.billing_start_date && (
+                            <div>
+                              <span className="block">Started:</span>
+                              <span>{new Date(user.billing_start_date).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                          {user.next_billing_date && (
+                            <div>
+                              <span className="block">{isGift ? 'Expires:' : 'Next billing:'}</span>
+                              <span>{new Date(user.next_billing_date).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 pt-2 border-t border-border/50">
+                      {user.is_subscribed ? (
+                        <>
+                          {!LEGACY_PAYPAL_USERS.includes(user.email) && (
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeactivateSubscription(user);
+                              }}
+                              className="flex-1 text-xs hover:bg-destructive/90"
+                            >
+                              <UserX className="h-3 w-3 mr-1" />
+                              Deactivate
+                            </Button>
+                          )}
+                          {LEGACY_PAYPAL_USERS.includes(user.email) && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              disabled
+                              className="flex-1 text-xs"
+                            >
+                              Protected User
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedUser(user);
+                            setShowActivationModal(true);
+                          }}
+                          className="flex-1 btn-enhanced text-xs hover:shadow-glow"
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Activate Subscription
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         {filteredUsers.length === 0 && (
@@ -507,60 +613,113 @@ export default function AdminSubscriptions() {
         )}
       </div>
 
-      {/* Activation Modal */}
+      {/* Enhanced Activation Modal */}
       <Dialog open={showActivationModal} onOpenChange={setShowActivationModal}>
         <DialogContent className="max-w-md mx-4">
           <DialogHeader>
-            <DialogTitle>Activate Subscription</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {activationData.isGift ? (
+                <>
+                  <Gift className="h-5 w-5 text-accent-purple" />
+                  Gift Subscription
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-5 w-5 text-accent-green" />
+                  Activate Subscription
+                </>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              Activate subscription for {selectedUser?.email}
+              {activationData.isGift ? 'Give a gift subscription to' : 'Activate subscription for'} {selectedUser?.email}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Plan Type</Label>
-              <Select 
-                value={activationData.planName} 
-                onValueChange={(value) => setActivationData(prev => ({
+            {/* Gift Toggle */}
+            <div className="flex items-center space-x-2 p-3 bg-accent-purple/10 rounded-lg border border-accent-purple/20">
+              <Switch
+                id="gift-mode"
+                checked={activationData.isGift}
+                onCheckedChange={(checked) => setActivationData(prev => ({
                   ...prev, 
-                  planName: value,
-                  billingAmount: value.includes('Yearly') ? 600 : 60
+                  isGift: checked,
+                  billingAmount: checked ? 0 : 60
                 }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Monthly Plan">Monthly Plan (60 QAR)</SelectItem>
-                  <SelectItem value="Yearly Plan">Yearly Plan (600 QAR)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label>Payment Method</Label>
-              <Select 
-                value={activationData.paymentMethod} 
-                onValueChange={(value) => setActivationData(prev => ({...prev, paymentMethod: value}))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">Manual Admin Activation</SelectItem>
-                  <SelectItem value="fawran">Fawran (when linked to payment)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label>Billing Amount</Label>
-              <Input
-                type="number"
-                value={activationData.billingAmount}
-                onChange={(e) => setActivationData(prev => ({...prev, billingAmount: Number(e.target.value)}))}
               />
+              <Label htmlFor="gift-mode" className="flex items-center gap-2">
+                <Gift className="h-4 w-4 text-accent-purple" />
+                Gift Subscription
+              </Label>
             </div>
+
+            {activationData.isGift ? (
+              /* Gift Options */
+              <div>
+                <Label>Gift Duration</Label>
+                <Select 
+                  value={activationData.giftDuration} 
+                  onValueChange={(value) => setActivationData(prev => ({...prev, giftDuration: value}))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1_week">1 Week Gift</SelectItem>
+                    <SelectItem value="2_weeks">2 Weeks Gift</SelectItem>
+                    <SelectItem value="1_month">1 Month Gift</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              /* Regular Subscription Options */
+              <>
+                <div>
+                  <Label>Plan Type</Label>
+                  <Select 
+                    value={activationData.planName} 
+                    onValueChange={(value) => setActivationData(prev => ({
+                      ...prev, 
+                      planName: value,
+                      billingAmount: value.includes('Yearly') ? 600 : 60
+                    }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Monthly Plan">Monthly Plan (60 QAR)</SelectItem>
+                      <SelectItem value="Yearly Plan">Yearly Plan (600 QAR)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label>Payment Method</Label>
+                  <Select 
+                    value={activationData.paymentMethod} 
+                    onValueChange={(value) => setActivationData(prev => ({...prev, paymentMethod: value}))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">Manual Admin Activation</SelectItem>
+                      <SelectItem value="fawran">Fawran (when linked to payment)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label>Billing Amount</Label>
+                  <Input
+                    type="number"
+                    value={activationData.billingAmount}
+                    onChange={(e) => setActivationData(prev => ({...prev, billingAmount: Number(e.target.value)}))}
+                    disabled={activationData.isGift}
+                  />
+                </div>
+              </>
+            )}
           </div>
           <div className="flex justify-end space-x-2">
             <Button 
@@ -568,15 +727,29 @@ export default function AdminSubscriptions() {
               onClick={() => {
                 setShowActivationModal(false);
                 setSelectedUser(null);
+                setActivationData({
+                  planName: "Monthly Plan",
+                  billingAmount: 60,
+                  paymentMethod: "manual",
+                  isGift: false,
+                  giftDuration: "1_month"
+                });
               }}
             >
               Cancel
             </Button>
             <Button 
               onClick={handleActivateSubscription}
-              className="btn-enhanced hover:shadow-glow"
+              className={`${activationData.isGift ? 'bg-accent-purple hover:bg-accent-purple/90' : 'btn-enhanced hover:shadow-glow'}`}
             >
-              Activate Subscription
+              {activationData.isGift ? (
+                <>
+                  <Gift className="h-4 w-4 mr-2" />
+                  Give Gift
+                </>
+              ) : (
+                'Activate Subscription'
+              )}
             </Button>
           </div>
         </DialogContent>

@@ -1311,7 +1311,10 @@ export type Database = {
           billing_cycle: string
           created_at: string | null
           fawran_payment_id: string | null
+          gift_duration: string | null
+          gift_given_by: string | null
           id: string
+          is_gift: boolean | null
           next_billing_date: string
           payment_method: string | null
           paypal_plan_id: string
@@ -1328,7 +1331,10 @@ export type Database = {
           billing_cycle?: string
           created_at?: string | null
           fawran_payment_id?: string | null
+          gift_duration?: string | null
+          gift_given_by?: string | null
           id?: string
+          is_gift?: boolean | null
           next_billing_date: string
           payment_method?: string | null
           paypal_plan_id: string
@@ -1345,7 +1351,10 @@ export type Database = {
           billing_cycle?: string
           created_at?: string | null
           fawran_payment_id?: string | null
+          gift_duration?: string | null
+          gift_given_by?: string | null
           id?: string
+          is_gift?: boolean | null
           next_billing_date?: string
           payment_method?: string | null
           paypal_plan_id?: string
@@ -2051,6 +2060,18 @@ export type Database = {
               p_plan_name: string
               p_billing_amount?: number
               p_billing_currency?: string
+              p_payment_method?: string
+              p_paypal_subscription_id?: string
+              p_fawran_payment_id?: string
+              p_is_gift?: boolean
+              p_gift_duration?: string
+              p_gift_given_by?: string
+            }
+          | {
+              p_user_id: string
+              p_plan_name: string
+              p_billing_amount?: number
+              p_billing_currency?: string
               p_paypal_plan_id?: string
             }
         Returns: boolean
@@ -2127,6 +2148,10 @@ export type Database = {
         Returns: undefined
       }
       cleanup_old_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      deactivate_expired_gift_subscriptions: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }

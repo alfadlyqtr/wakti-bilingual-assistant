@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CreditCard, MessageSquare, BarChart3, TrendingUp, UserPlus, Clock } from "lucide-react";
+import { Users, CreditCard, MessageSquare, BarChart3, TrendingUp, UserPlus, Clock, Gift } from "lucide-react";
 
 interface StatsCardsProps {
   stats: {
@@ -10,6 +10,7 @@ interface StatsCardsProps {
     onlineUsers: number;
     monthlyRevenue: number;
     newUsersToday: number;
+    giftSubscriptions?: number;
   };
   isLoading: boolean;
 }
@@ -18,7 +19,7 @@ export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        {[...Array(6)].map((_, i) => (
+        {[...Array(7)].map((_, i) => (
           <Card key={i} className="enhanced-card animate-pulse">
             <CardContent className="p-3 sm:p-4">
               <div className="h-16 bg-gradient-secondary/20 rounded"></div>
@@ -32,6 +33,7 @@ export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
   // Calculate derived stats
   const freeUsers = stats.totalUsers - stats.activeSubscriptions;
   const expiringSoon = 0; // This would come from subscription expiry logic
+  const giftSubscriptions = stats.giftSubscriptions || 0;
 
   const statsData = [
     {
@@ -49,6 +51,13 @@ export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
       description: "Paying customers"
     },
     {
+      title: "Gift Subscriptions",
+      value: giftSubscriptions.toLocaleString(),
+      icon: Gift,
+      color: "text-accent-purple",
+      description: "Active gifts"
+    },
+    {
       title: "Expiring Soon (7 days)",
       value: expiringSoon.toLocaleString(),
       icon: Clock,
@@ -59,7 +68,7 @@ export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
       title: "Free Users",
       value: freeUsers.toLocaleString(),
       icon: UserPlus,
-      color: "text-accent-purple",
+      color: "text-accent-cyan",
       description: "Non-subscribers"
     },
     {
@@ -73,13 +82,13 @@ export const RealTimeStatsCards = ({ stats, isLoading }: StatsCardsProps) => {
       title: "Monthly Revenue",
       value: `${stats.monthlyRevenue.toFixed(0)} QAR`,
       icon: TrendingUp,
-      color: "text-accent-cyan",
+      color: "text-accent-green",
       description: "This month"
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
       {statsData.map((stat, index) => (
         <Card key={index} className="enhanced-card hover:shadow-vibrant transition-all duration-300">
           <CardHeader className="pb-2">

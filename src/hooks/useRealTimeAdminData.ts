@@ -12,6 +12,7 @@ interface AdminStats {
   pendingFawranPayments: number;
   autoApprovalRate: number;
   avgProcessingTime: number;
+  giftSubscriptions: number;
   paymentMethodDistribution: {
     paypal: number;
     fawran: number;
@@ -33,7 +34,7 @@ interface AdminStats {
 
 interface AdminActivity {
   id: string;
-  type: 'user_signup' | 'subscription_activated' | 'fawran_payment' | 'message_received';
+  type: 'user_signup' | 'subscription_activated' | 'fawran_payment' | 'message_received' | 'gift_given';
   title: string;
   description: string;
   timestamp: string;
@@ -62,6 +63,7 @@ export const useRealTimeAdminData = () => {
     pendingFawranPayments: 0,
     autoApprovalRate: 0,
     avgProcessingTime: 0,
+    giftSubscriptions: 0,
     paymentMethodDistribution: { paypal: 0, fawran: 0, manual: 0, legacy: 0 },
     fawranStats: {
       totalPayments: 0,
@@ -90,6 +92,15 @@ export const useRealTimeAdminData = () => {
       const totalUsers = userStats?.length || 0;
       const activeUsers = userStats?.filter(u => u.is_logged_in).length || 0;
       const subscribedUsers = userStats?.filter(u => u.is_subscribed && u.subscription_status === 'active').length || 0;
+
+      // Get gift subscriptions count
+      const { data: giftSubs } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('is_gift', true)
+        .eq('status', 'active');
+
+      const giftSubscriptions = giftSubs?.length || 0;
 
       // Get monthly revenue
       const { data: subscriptions } = await supabase
@@ -164,6 +175,7 @@ export const useRealTimeAdminData = () => {
         pendingFawranPayments: fawranStats.pending_payments,
         autoApprovalRate,
         avgProcessingTime: Math.round(fawranStats.avg_processing_time_ms / 1000) || 0,
+        giftSubscriptions,
         paymentMethodDistribution,
         fawranStats: {
           totalPayments: fawranStats.total_payments,
@@ -186,6 +198,27 @@ export const useRealTimeAdminData = () => {
   const fetchRecentActivity = async () => {
     try {
       const activities: AdminActivity[] = [];
+
+      // Get recent gift subscriptions from admin activity logs
+      const { data: giftActivities } = await supabase
+        .from('admin_activity_logs')
+        .select('*')
+        .eq('action', 'gift_subscription_activated')
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      giftActivities?.forEach(activity => {
+        const details = activity.details as any;
+        activities.push({
+          id: activity.id,
+          type: 'gift_given',
+          title: 'Gift Subscription Given',
+          description: `${details?.user_email} - ${details?.gift_duration?.replace('_', ' ')} gift`,
+          timestamp: activity.created_at,
+          user_email: details?.user_email,
+          status: 'active'
+        });
+      });
 
       // Get recent Fawran payments
       const { data: fawranPayments } = await supabase
@@ -238,7 +271,7 @@ export const useRealTimeAdminData = () => {
         activities.push({
           id: sub.id,
           type: 'subscription_activated',
-          title: 'Subscription Activated',
+          title: sub.is_gift ? 'Gift Subscription Activated' : 'Subscription Activated',
           description: `${(sub.profiles as any)?.email} - ${sub.plan_name}`,
           timestamp: sub.created_at,
           user_email: (sub.profiles as any)?.email,
@@ -302,11 +335,13 @@ export const useRealTimeAdminData = () => {
     id: activity.id,
     type: activity.type === 'user_signup' ? 'user_registration' as const : 
           activity.type === 'subscription_activated' ? 'subscription_activation' as const :
+          activity.type === 'gift_given' ? 'subscription_activation' as const :
           activity.type === 'fawran_payment' ? 'contact_submission' as const : 'task_creation' as const,
     message: activity.title + (activity.description ? ` - ${activity.description}` : ''),
     timestamp: activity.timestamp,
     status: activity.type === 'fawran_payment' ? 'warning' as const : 
-            activity.type === 'subscription_activated' ? 'success' as const : 'info' as const
+            activity.type === 'subscription_activated' ? 'success' as const :
+            activity.type === 'gift_given' ? 'success' as const : 'info' as const
   }));
 
   return {
