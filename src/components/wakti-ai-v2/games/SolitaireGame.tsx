@@ -434,30 +434,50 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
     });
   }, []);
 
-
   const renderCard = (card: Card, isSelected: boolean = false) => {
     const isRed = COLORS[card.suit] === 'red';
     
     return (
       <div 
         className={`
-          w-16 h-20 rounded-lg border border-border/20 flex flex-col items-center justify-center text-base font-bold
-          transition-all duration-200 cursor-pointer relative
+          w-16 h-20 sm:w-20 sm:h-24 md:w-22 md:h-26 rounded-xl 
+          border-2 border-blue-700 dark:border-blue-400
+          flex flex-col items-center justify-center text-sm sm:text-base font-bold
+          transition-all duration-300 cursor-pointer relative
+          shadow-lg hover:shadow-xl active:scale-95
           ${card.faceUp 
-            ? `bg-gradient-to-br from-background to-background/90 ${isRed ? 'text-red-500' : 'text-foreground'} shadow-lg border-border`
-            : 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground border-primary/30 shadow-md'
+            ? `bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-gray-800 dark:via-gray-700 dark:to-gray-600 
+               ${isRed ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`
+            : `bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 
+               dark:from-blue-700 dark:via-blue-600 dark:to-blue-500
+               text-white border-blue-600 dark:border-blue-300
+               shadow-[0_0_20px_rgba(37,99,235,0.5)] dark:shadow-[0_0_25px_rgba(96,165,250,0.6)]`
           }
-          ${isSelected ? 'ring-2 ring-accent shadow-glow scale-105 z-10' : 'hover:scale-102 hover:shadow-lg'}
+          ${isSelected ? 'ring-4 ring-blue-500 dark:ring-blue-300 shadow-[0_0_30px_rgba(37,99,235,0.8)] scale-105 z-10' : 'hover:scale-105'}
         `}
       >
         {card.faceUp ? (
           <>
-            <span className="text-sm leading-none">{card.face}</span>
-            <span className="text-xl leading-none">{SUITS[card.suit]}</span>
+            <span className="text-xs sm:text-sm leading-none font-black">{card.face}</span>
+            <span className="text-lg sm:text-xl leading-none">{SUITS[card.suit]}</span>
           </>
         ) : (
-          <div className="w-full h-full rounded-lg bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center">
-            <span className="text-sm font-bold opacity-60">W</span>
+          <div className="w-full h-full rounded-xl flex items-center justify-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 dark:from-blue-700 dark:via-blue-600 dark:to-blue-500"></div>
+            <span 
+              className="text-2xl sm:text-3xl font-black relative z-10 text-white
+                         shadow-[0_0_15px_rgba(255,255,255,0.8)] dark:shadow-[0_0_20px_rgba(255,255,255,0.9)]
+                         animate-pulse"
+              style={{
+                textShadow: `
+                  0 0 10px rgba(255,255,255,0.8),
+                  0 0 20px rgba(96,165,250,0.6),
+                  0 0 30px rgba(37,99,235,0.4)
+                `
+              }}
+            >
+              W
+            </span>
           </div>
         )}
       </div>
@@ -465,22 +485,29 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
   };
 
   return (
-    <div className="flex flex-col h-full space-y-4 relative">
+    <div className="flex flex-col h-full space-y-3 sm:space-y-4 relative bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 rounded-xl p-2 sm:p-4">
       {/* Game Board */}
-      <div className="flex-1 space-y-3">
-        {/* Top Row: Stock, Waste, and Centered Foundations */}
-        <div className="flex items-start justify-between mb-4">
+      <div className="flex-1 space-y-2 sm:space-y-3">
+        {/* Top Row: Stock, Waste, and Foundations */}
+        <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
           {/* Stock and Waste - Left */}
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             <div 
-              className="w-16 h-20 rounded-lg border-2 border-dashed border-accent/40 flex items-center justify-center cursor-pointer hover:border-accent/60 transition-colors bg-accent/5"
+              className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl border-2 border-dashed border-blue-400 dark:border-blue-300 
+                         flex items-center justify-center cursor-pointer hover:border-blue-600 dark:hover:border-blue-200 
+                         transition-all duration-300 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30
+                         hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
               onClick={drawFromStock}
             >
               {gameState.stock.length > 0 ? renderCard(gameState.stock[0]) : (
-                <span className="text-xs text-muted-foreground">Stock</span>
+                <span className="text-xs sm:text-sm text-blue-600 dark:text-blue-300 font-semibold text-center">
+                  {language === 'ar' ? 'المخزون' : 'Stock'}
+                </span>
               )}
             </div>
-            <div className="w-16 h-20 rounded-lg border border-border/30 flex items-center justify-center bg-background/50">
+            <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl border-2 border-blue-700 dark:border-blue-400 
+                           flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30
+                           shadow-lg">
               {gameState.waste.length > 0 ? (
                 <div onClick={() => selectCard(gameState.waste[gameState.waste.length - 1], 'waste')}>
                   {renderCard(gameState.waste[gameState.waste.length - 1], 
@@ -489,17 +516,22 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
                   )}
                 </div>
               ) : (
-                <span className="text-xs text-muted-foreground">Waste</span>
+                <span className="text-xs sm:text-sm text-blue-600 dark:text-blue-300 font-semibold text-center">
+                  {language === 'ar' ? 'المهملات' : 'Waste'}
+                </span>
               )}
             </div>
           </div>
 
           {/* Foundations - Center */}
-          <div className="flex gap-3 justify-center">
+          <div className="flex gap-1 sm:gap-2 justify-center">
             {Object.entries(SUITS).map(([suit, symbol]) => (
               <div 
                 key={suit}
-                className="w-16 h-20 rounded-lg border border-border/30 flex items-center justify-center cursor-pointer hover:bg-accent/5 transition-colors bg-background/50"
+                className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl border-2 border-blue-700 dark:border-blue-400 
+                           flex items-center justify-center cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 
+                           transition-all duration-300 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30
+                           hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
                 onClick={() => selectEmptySpace('foundation', suit as Suit)}
               >
                 {gameState.foundations[suit as Suit].length > 0 ? (
@@ -511,31 +543,41 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
                     {renderCard(gameState.foundations[suit as Suit][gameState.foundations[suit as Suit].length - 1])}
                   </div>
                 ) : (
-                  <span className="text-muted-foreground text-2xl font-bold">{symbol}</span>
+                  <span className={`text-2xl sm:text-3xl font-bold 
+                    ${suit === 'hearts' || suit === 'diamonds' 
+                      ? 'text-red-500 dark:text-red-400' 
+                      : 'text-gray-700 dark:text-gray-300'
+                    }`}>
+                    {symbol}
+                  </span>
                 )}
               </div>
             ))}
           </div>
 
           {/* Empty space for balance - Right */}
-          <div className="w-36"></div>
+          <div className="w-32 sm:w-40"></div>
         </div>
 
         {/* Tableau */}
-        <div className="flex gap-2 justify-center">
+        <div className="flex gap-1 sm:gap-2 justify-center overflow-x-auto pb-2">
           {gameState.tableau.map((pile, pileIndex) => (
             <div 
               key={pileIndex}
-              className="flex flex-col gap-1 min-h-20 w-16"
+              className="flex flex-col gap-1 min-h-20 sm:min-h-24 w-16 sm:w-20 flex-shrink-0"
               onClick={() => pile.length === 0 && selectEmptySpace('tableau', pileIndex)}
             >
               {pile.length === 0 ? (
-                <div className="w-16 h-20 rounded-lg border-2 border-dashed border-muted-foreground/30 cursor-pointer hover:border-muted-foreground/50 transition-colors bg-accent/5" />
+                <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl border-2 border-dashed border-blue-400 dark:border-blue-300 
+                               cursor-pointer hover:border-blue-600 dark:hover:border-blue-200 transition-all duration-300 
+                               bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30
+                               hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl" />
               ) : (
                 pile.map((card, cardIndex) => (
                   <div 
                     key={card.id}
-                    className={`${cardIndex > 0 ? '-mt-12' : ''} relative z-${cardIndex}`}
+                    className={`${cardIndex > 0 ? '-mt-10 sm:-mt-12' : ''} relative hover:z-20 transition-all duration-200`}
+                    style={{ zIndex: cardIndex }}
                     onClick={(e) => {
                       e.stopPropagation();
                       selectCard(card, 'tableau', pileIndex);
@@ -552,24 +594,48 @@ export function SolitaireGame({ onBack, onStatsChange, onActionsChange }: Solita
         </div>
       </div>
 
-      {/* Bottom Left Stats */}
-      <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm rounded-lg px-3 py-2 border border-border/30 shadow-lg">
-        <div className="flex items-center gap-4 text-sm font-medium">
-          <span className="text-primary">{language === 'ar' ? 'النقاط' : 'Score'}: {gameState.score}</span>
-          <span className="text-primary">{language === 'ar' ? 'الحركات' : 'Moves'}: {gameState.moves}</span>
-          <span className="text-primary">{Math.floor(timer / 60).toString().padStart(2, '0')}:{(timer % 60).toString().padStart(2, '0')}</span>
+      {/* Bottom Stats */}
+      <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 
+                      bg-gradient-to-r from-blue-900/90 to-blue-800/90 dark:from-blue-700/90 dark:to-blue-600/90 
+                      backdrop-blur-md rounded-xl px-3 py-2 sm:px-4 sm:py-3 
+                      border border-blue-600 dark:border-blue-400 shadow-2xl
+                      shadow-[0_0_20px_rgba(37,99,235,0.4)] dark:shadow-[0_0_25px_rgba(96,165,250,0.5)]">
+        <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm font-bold text-white">
+          <span className="flex items-center gap-1">
+            <span className="text-yellow-300">🏆</span>
+            {language === 'ar' ? 'النقاط' : 'Score'}: {gameState.score}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="text-blue-300">🎯</span>
+            {language === 'ar' ? 'الحركات' : 'Moves'}: {gameState.moves}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="text-green-300">⏱️</span>
+            {Math.floor(timer / 60).toString().padStart(2, '0')}:{(timer % 60).toString().padStart(2, '0')}
+          </span>
         </div>
       </div>
 
       {/* Win Message */}
       {gameState.gameWon && (
-        <div className="text-center p-4 bg-gradient-to-r from-emerald-500/10 to-green-500/10 rounded-lg border border-emerald-500/20 shadow-lg">
-          <h3 className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-            {language === 'ar' ? '🎉 مبروك!' : '🎉 Congratulations!'}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {language === 'ar' ? 'النتيجة النهائية' : 'Final Score'}: {gameState.score} | {language === 'ar' ? 'الوقت' : 'Time'}: {formatTime(timer)}
-          </p>
+        <div className="absolute inset-4 flex items-center justify-center z-50">
+          <div className="text-center p-6 sm:p-8 
+                          bg-gradient-to-br from-emerald-500/95 via-green-500/95 to-teal-500/95 
+                          dark:from-emerald-600/95 dark:via-green-600/95 dark:to-teal-600/95
+                          rounded-2xl border-2 border-emerald-400 dark:border-emerald-300 
+                          shadow-2xl backdrop-blur-md
+                          shadow-[0_0_40px_rgba(16,185,129,0.6)] dark:shadow-[0_0_50px_rgba(52,211,153,0.7)]
+                          animate-fade-in">
+            <h3 className="text-xl sm:text-2xl font-black text-white mb-2 sm:mb-3">
+              {language === 'ar' ? '🎉 مبروك!' : '🎉 Congratulations!'}
+            </h3>
+            <p className="text-sm sm:text-base text-emerald-50 font-semibold">
+              {language === 'ar' ? 'النتيجة النهائية' : 'Final Score'}: <span className="text-yellow-200 font-bold">{gameState.score}</span>
+            </p>
+            <p className="text-sm sm:text-base text-emerald-50 font-semibold">
+              {language === 'ar' ? 'الوقت' : 'Time'}: <span className="text-yellow-200 font-bold">{formatTime(timer)}</span>
+            </p>
+          </div>
         </div>
       )}
     </div>
