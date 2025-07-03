@@ -71,39 +71,70 @@ export default function Maw3dView() {
   const fetchEvent = async () => {
     try {
       setIsLoading(true);
-      if (!id) return;
+      console.log('=== MAW3D VIEW: Starting fetch ===');
+      console.log('URL ID:', id);
+      
+      if (!id) {
+        console.error('No ID provided in URL');
+        toast.error('Event ID is missing from URL');
+        return;
+      }
 
       let eventData: Maw3dEvent | null = null;
 
       // Check if the ID is a UUID (for authenticated users) or a short ID (for public sharing)
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      console.log('Is UUID:', isUUID);
       
-      if (isUUID) {
-        // Fetch by UUID
-        eventData = await Maw3dService.getEvent(id);
-      } else {
-        // Fetch by short ID (public sharing)
-        eventData = await Maw3dService.getEventByShortId(id);
+      try {
+        if (isUUID) {
+          console.log('Fetching by UUID...');
+          eventData = await Maw3dService.getEvent(id);
+        } else {
+          console.log('Fetching by short ID...');
+          eventData = await Maw3dService.getEventByShortId(id);
+        }
+        console.log('Event fetch result:', eventData);
+      } catch (fetchError) {
+        console.error('Error in service call:', fetchError);
+        throw fetchError;
       }
 
       if (!eventData) {
-        toast.error(t('eventNotFound', eventLanguage));
+        console.error('No event data returned from service');
+        toast.error('Event not found or no longer available');
         return;
       }
 
-      console.log('=== MAW3D VIEW: Event loaded ===');
-      console.log('Event image_blur value:', eventData.image_blur);
-      console.log('Event image_blur type:', typeof eventData.image_blur);
+      console.log('=== MAW3D VIEW: Event loaded successfully ===');
+      console.log('Event details:', {
+        id: eventData.id,
+        title: eventData.title,
+        is_public: eventData.is_public,
+        short_id: eventData.short_id,
+        image_blur: eventData.image_blur
+      });
 
       setEvent(eventData);
       
       if (eventData.is_public) {
-        const rsvpData = await Maw3dService.getRsvps(eventData.id);
-        setRsvps(rsvpData);
+        console.log('Loading RSVPs for public event...');
+        try {
+          const rsvpData = await Maw3dService.getRsvps(eventData.id);
+          console.log('RSVPs loaded:', rsvpData);
+          setRsvps(rsvpData);
+        } catch (rsvpError) {
+          console.error('Error loading RSVPs:', rsvpError);
+          // Don't fail the whole component if RSVPs fail to load
+        }
       }
     } catch (error) {
       console.error('Error fetching event:', error);
-      toast.error(t('errorLoadingEvent', eventLanguage));
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      toast.error('Failed to load event. Please check if the link is correct.');
     } finally {
       setIsLoading(false);
     }
