@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -29,7 +30,6 @@ import Maw3dCreate from "./pages/Maw3dCreate";
 import Maw3dManage from "./pages/Maw3dManage";
 import Maw3dView from "./pages/Maw3dView";
 import Maw3dEdit from "./pages/Maw3dEdit";
-import Maw3dEvents from "./pages/Maw3dEvents";
 import Tasjeel from "./pages/Tasjeel";
 import SharedTask from "./pages/SharedTask";
 import ContactUs from "./pages/ContactUs";
@@ -92,11 +92,11 @@ function App() {
                     <Route path="/wakti-ai-v2" element={<AppLayout><WaktiAIV2 /></AppLayout>} />
                     <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
                     <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
+                    {/* Unified Maw3d route - removed redundant /maw3d/events */}
                     <Route path="/maw3d" element={<AppLayout><Maw3d /></AppLayout>} />
                     <Route path="/maw3d/create" element={<AppLayout><Maw3dCreate /></AppLayout>} />
                     <Route path="/maw3d/manage/:id" element={<AppLayout><Maw3dManage /></AppLayout>} />
                     <Route path="/maw3d/edit/:id" element={<AppLayout><Maw3dEdit /></AppLayout>} />
-                    <Route path="/maw3d/events" element={<AppLayout><Maw3dEvents /></AppLayout>} />
                     <Route path="/tasjeel" element={<AppLayout><Tasjeel /></AppLayout>} />
                     
                     {/* Admin routes */}

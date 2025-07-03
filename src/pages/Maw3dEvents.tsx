@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,47 +8,27 @@ import { Plus, Calendar, Clock, MapPin, Edit, Share2, Trash2 } from 'lucide-reac
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { Maw3dService } from '@/services/maw3dService';
+import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { ShareService } from '@/services/shareService';
-import { Maw3dEvent } from '@/types/maw3d';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { Maw3dService } from '@/services/maw3dService';
 
 export default function Maw3dEvents() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { language } = useTheme();
-  const [events, setEvents] = useState<Maw3dEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  // Use the same optimized hook as the main Maw3d page for consistent performance
+  const { events, loading: isLoading, error } = useOptimizedMaw3dEvents();
 
-  useEffect(() => {
-    fetchEvents();
-  }, []);
-
-  const fetchEvents = async () => {
-    try {
-      setIsLoading(true);
-      const userEvents = await Maw3dService.getUserEvents();
-      console.log('=== MAW3D EVENTS: Events loaded ===');
-      userEvents.forEach((event, index) => {
-        console.log(`Event ${index + 1} image_blur:`, event.image_blur, `(type: ${typeof event.image_blur})`);
-      });
-      setEvents(userEvents);
-    } catch (error) {
-      console.error('Error fetching events:', error);
-      toast.error('Failed to load events');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleEventClick = (event: Maw3dEvent) => {
+  const handleEventClick = (event: any) => {
     console.log('Event clicked:', event.id);
     // Navigate to management view since users only see their own events now
     navigate(`/maw3d/manage/${event.id}`);
   };
 
-  const handleShare = async (event: Maw3dEvent, e: React.MouseEvent) => {
+  const handleShare = async (event: any, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event click
     console.log('Share button clicked for event:', event.id, 'shortId:', event.short_id);
     
@@ -73,7 +53,7 @@ export default function Maw3dEvents() {
     
     try {
       await Maw3dService.deleteEvent(eventId);
-      setEvents(events.filter(event => event.id !== eventId));
+      // The optimized hook will automatically refresh the data
       toast.success(t("eventDeleted", language));
     } catch (error) {
       console.error('Error deleting event:', error);
@@ -81,7 +61,7 @@ export default function Maw3dEvents() {
     }
   };
 
-  const formatEventTime = (event: Maw3dEvent) => {
+  const formatEventTime = (event: any) => {
     if (event.is_all_day) {
       return t("allDay", language);
     }
@@ -99,7 +79,7 @@ export default function Maw3dEvents() {
     return `${formatTime(event.start_time || '')} - ${formatTime(event.end_time || '')}`;
   };
 
-  const getBackgroundStyle = (event: Maw3dEvent) => {
+  const getBackgroundStyle = (event: any) => {
     console.log('=== MAW3D EVENTS: Getting background style ===');
     console.log('Event background_type:', event.background_type);
     console.log('Event image_blur:', event.image_blur, `(type: ${typeof event.image_blur})`);
@@ -124,7 +104,7 @@ export default function Maw3dEvents() {
     }
   };
 
-  const getBlurredBackgroundStyle = (event: Maw3dEvent) => {
+  const getBlurredBackgroundStyle = (event: any) => {
     if ((event.background_type === 'image' || event.background_type === 'ai') && 
         event.image_blur && Number(event.image_blur) > 0) {
       console.log('Creating blurred background with blur:', `${event.image_blur}px`);
@@ -137,6 +117,21 @@ export default function Maw3dEvents() {
     }
     return null;
   };
+
+  // Handle error state
+  if (error) {
+    return (
+      <div className="flex-1 overflow-y-auto scrollbar-hide bg-background p-4">
+        <div className="text-center py-12">
+          <h3 className="text-lg font-medium mb-2">{t('errorLoadingEvent', language)}</h3>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()} variant="outline">
+            {t('retry', language)}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
