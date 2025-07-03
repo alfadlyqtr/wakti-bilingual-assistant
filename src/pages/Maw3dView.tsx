@@ -346,19 +346,19 @@ export default function Maw3dView() {
                        />
                      </div>
                      
-                     <div>
-                       <Textarea
-                         placeholder={eventLanguage === 'ar' ? 'اترك تعليقاً للمنظم (اختياري)' : 'Leave a comment for the host (optional)'}
-                         value={guestComment}
-                         onChange={(e) => setGuestComment(e.target.value)}
-                         className={`min-h-[80px] resize-none ${eventLanguage === 'ar' ? 'text-right' : ''}`}
-                         dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
-                         maxLength={300}
-                       />
-                       <p className="text-xs text-muted-foreground mt-1">
-                         {guestComment.length}/300
-                       </p>
-                     </div>
+                      <div>
+                        <Textarea
+                          placeholder={eventLanguage === 'ar' ? 'اترك تعليقاً للمنظم (اختياري)' : 'Leave a comment for the host (optional)'}
+                          value={guestComment}
+                          onChange={(e) => setGuestComment(e.target.value)}
+                          className={`min-h-[80px] resize-none ${eventLanguage === 'ar' ? 'text-right' : ''}`}
+                          dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
+                          maxLength={80}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {guestComment.length}/80
+                        </p>
+                      </div>
                     
                     <div className="flex gap-3">
                       <Button
