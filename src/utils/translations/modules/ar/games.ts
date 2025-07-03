@@ -64,4 +64,14 @@ export const gamesAr = {
   tap_square: "اضغط على المربع",
   white: "أبيض",
   black: "أسود",
+  
+  // Solitaire Game
+  solitaire: "سوليتير",
+  score: "النقاط",
+  moves: "الحركات",
+  time: "الوقت",
+  new_game: "لعبة جديدة",
+  auto_complete: "إكمال تلقائي",
+  congratulations: "🎉 مبروك!",
+  final_score: "النتيجة النهائية:",
 };

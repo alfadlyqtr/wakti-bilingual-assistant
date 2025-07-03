@@ -6,13 +6,14 @@ import { ArrowLeft, X } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { TicTacToeGame } from './games/TicTacToeGame';
 import { ChessGame } from './games/ChessGame';
+import { SolitaireGame } from './games/SolitaireGame';
 
 interface GameModeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-type GameType = 'selection' | 'tic-tac-toe' | 'chess';
+type GameType = 'selection' | 'tic-tac-toe' | 'chess' | 'solitaire';
 
 export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
   const { language } = useTheme();
@@ -58,6 +59,16 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
             <span>{language === 'ar' ? 'العب شطرنج' : 'Play Chess'}</span>
           </div>
         </Button>
+        
+        <Button
+          onClick={() => setCurrentGame('solitaire')}
+          className="h-20 text-lg bg-green-600 hover:bg-green-700 text-white"
+        >
+          <div className="flex items-center space-x-3">
+            <span className="text-2xl">🃏</span>
+            <span>{language === 'ar' ? 'العب سوليتير' : 'Play Solitaire'}</span>
+          </div>
+        </Button>
       </div>
     </div>
   );
@@ -68,6 +79,8 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
         return <TicTacToeGame onBack={handleBack} />;
       case 'chess':
         return <ChessGame onBack={handleBack} />;
+      case 'solitaire':
+        return <SolitaireGame onBack={handleBack} />;
       default:
         return renderGameSelection();
     }
@@ -96,7 +109,9 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
                 ? (language === 'ar' ? 'وضع الألعاب' : 'Game Mode')
                 : currentGame === 'tic-tac-toe'
                 ? (language === 'ar' ? 'إكس أو' : 'Tic-Tac-Toe')
-                : (language === 'ar' ? 'شطرنج' : 'Chess')
+                : currentGame === 'chess'
+                ? (language === 'ar' ? 'شطرنج' : 'Chess')
+                : (language === 'ar' ? 'سوليتير' : 'Solitaire')
               }
             </DialogTitle>
           </div>

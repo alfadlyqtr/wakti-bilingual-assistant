@@ -64,4 +64,14 @@ export const games = {
   tap_square: "Tap a square",
   white: "White",
   black: "Black",
+  
+  // Solitaire Game
+  solitaire: "Solitaire",
+  score: "Score",
+  moves: "Moves",
+  time: "Time",
+  new_game: "New Game",
+  auto_complete: "Auto Complete",
+  congratulations: "🎉 Congratulations!",
+  final_score: "Final Score:",
 };
