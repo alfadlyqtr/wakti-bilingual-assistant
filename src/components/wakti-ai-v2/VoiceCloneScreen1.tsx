@@ -115,8 +115,8 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
       <div className="p-3 bg-muted/50 rounded-lg">
         <p className="text-xs text-muted-foreground">
           {language === 'ar' 
-            ? 'يمكنك إنشاء حتى 3 أصوات مختلفة. لديك حروف محدودة شهرياً للاستخدام.' 
-            : 'You can create up to 3 different voices. You have limited monthly characters for usage.'
+            ? 'يمكنك إنشاء حتى صوتين. الأصوات غير المستخدمة لمدة 60 يوماً يتم حذفها تلقائياً.' 
+            : 'You can create up to 2 voices. Voices unused for 60 days are automatically deleted.'
           }
         </p>
       </div>

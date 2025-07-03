@@ -219,6 +219,9 @@ serve(async (req) => {
     }
 
     // Save to database using service role to bypass RLS
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + (60 * 24 * 60 * 60 * 1000)).toISOString(); // 60 days from now
+    
     const { data: dbResult, error: dbError } = await supabaseService
       .from('user_voice_clones')
       .insert({
@@ -227,7 +230,9 @@ serve(async (req) => {
         voice_id: result.voiceId, // FIXED: Use correct property name
         voice_name: voiceName,
         voice_description: `Voice cloned via WAKTI - ${voiceName} (${userEmail})`,
-        elevenlabs_data: result
+        elevenlabs_data: result,
+        last_used_at: now,
+        expires_at: expiresAt
       })
       .select()
       .single();

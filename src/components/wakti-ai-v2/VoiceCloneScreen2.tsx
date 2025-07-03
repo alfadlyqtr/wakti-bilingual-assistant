@@ -14,6 +14,8 @@ interface VoiceClone {
   voice_id: string;
   user_email?: string;
   created_at: string;
+  expires_at?: string;
+  last_used_at?: string;
 }
 
 interface VoiceCloneScreen2Props {
@@ -68,7 +70,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       // Load voices using both user_id and user_email for compatibility
       const { data, error } = await supabase
         .from('user_voice_clones')
-        .select('*')
+        .select('id, voice_name, voice_id, user_email, created_at, expires_at, last_used_at')
         .or(`user_id.eq.${user.id},user_email.eq.${userEmail}`)
         .order('created_at', { ascending: false });
 
@@ -346,7 +348,16 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const canRecord = existingVoices.length < 3;
+  const getDaysRemaining = (expiresAt?: string) => {
+    if (!expiresAt) return null;
+    const now = new Date();
+    const expiryDate = new Date(expiresAt);
+    const diffTime = expiryDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const canRecord = existingVoices.length < 2;
   const hasValidAudio = audioBlob && recordingTime >= 60 && recordingTime <= 180;
 
   if (loading) {
@@ -368,12 +379,12 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         </h2>
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">
-            {language === 'ar' ? 'يمكنك إنشاء حتى 3 أصوات' : 'You can create up to 3 voices'}
+            {language === 'ar' ? 'يمكنك إنشاء حتى صوتين' : 'You can create up to 2 voices'}
           </p>
           <p className="text-xs font-medium">
             {language === 'ar' 
-              ? `${existingVoices.length}/3 أصوات مستخدمة`
-              : `${existingVoices.length}/3 voices used`
+              ? `أصواتك (${existingVoices.length}/2)`
+              : `Your Voices (${existingVoices.length}/2)`
             }
           </p>
         </div>
@@ -398,39 +409,75 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         </div>
       </div>
 
+      {/* Voice Expiration Warning */}
+      <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-amber-800 dark:text-amber-200">
+            <p className="font-medium">
+              {language === 'ar' ? 'تنبيه: الحذف التلقائي' : 'Notice: Auto-Deletion'}
+            </p>
+            <p className="text-xs mt-1">
+              {language === 'ar' 
+                ? 'الأصوات غير المستخدمة لمدة 60 يوماً سيتم حذفها تلقائياً. استخدم أصواتك بانتظام للاحتفاظ بها.'
+                : 'Voices unused for 60 days will be automatically deleted. Use your voices regularly to keep them active.'
+              }
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Existing Voices */}
       {existingVoices.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-medium text-sm">
             {language === 'ar' ? 'أصواتك المحفوظة' : 'Your Saved Voices'}
           </h3>
-          {existingVoices.map((voice) => (
-            <div key={voice.id} className="flex items-center gap-2 p-2 bg-muted rounded-md">
-              <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-              <span className="text-sm font-medium">{voice.voice_name}</span>
-              <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                {language === 'ar' ? 'جاهز للاستخدام' : 'Ready to Use'}
-              </span>
-              {voice.user_email && (
-                <span className="text-xs text-muted-foreground">
-                  {voice.user_email}
+          {existingVoices.map((voice) => {
+            const daysRemaining = getDaysRemaining(voice.expires_at);
+            const isExpiringSoon = daysRemaining !== null && daysRemaining <= 7;
+            
+            return (
+              <div key={voice.id} className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                <div className="flex-1">
+                  <span className="text-sm font-medium">{voice.voice_name}</span>
+                  {daysRemaining !== null && (
+                    <div className="text-xs text-muted-foreground">
+                      {daysRemaining > 0 ? (
+                        <span className={isExpiringSoon ? 'text-amber-600' : ''}>
+                          {language === 'ar' 
+                            ? `${daysRemaining} أيام متبقية`
+                            : `${daysRemaining} days remaining`
+                          }
+                        </span>
+                      ) : (
+                        <span className="text-red-600">
+                          {language === 'ar' ? 'منتهي الصلاحية' : 'Expired'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                  {language === 'ar' ? 'جاهز' : 'Ready'}
                 </span>
-              )}
-              <Button
-                onClick={() => deleteVoiceClone(voice.voice_id, voice.voice_name)}
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 ml-auto"
-                disabled={isDeletingVoice === voice.voice_id}
-              >
-                {isDeletingVoice === voice.voice_id ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Trash2 className="h-3 w-3" />
-                )}
-              </Button>
-            </div>
-          ))}
+                <Button
+                  onClick={() => deleteVoiceClone(voice.voice_id, voice.voice_name)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                  disabled={isDeletingVoice === voice.voice_id}
+                >
+                  {isDeletingVoice === voice.voice_id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
+                  )}
+                </Button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -439,8 +486,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
         <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
           <p className="text-sm text-amber-800 dark:text-amber-200">
             {language === 'ar' 
-              ? 'لقد وصلت إلى الحد الأقصى من 3 أصوات. احذف صوتاً لإنشاء صوت جديد.' 
-              : "You've reached your 3-voice limit. Delete a voice to create a new one."
+              ? 'لقد وصلت إلى الحد الأقصى من صوتين. احذف صوتاً لإنشاء صوت جديد.' 
+              : "You've reached your 2-voice limit. Delete a voice to create a new one."
             }
           </p>
         </div>

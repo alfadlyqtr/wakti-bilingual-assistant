@@ -1920,7 +1920,9 @@ export type Database = {
         Row: {
           created_at: string
           elevenlabs_data: Json | null
+          expires_at: string | null
           id: string
+          last_used_at: string | null
           updated_at: string
           user_email: string | null
           user_id: string
@@ -1931,7 +1933,9 @@ export type Database = {
         Insert: {
           created_at?: string
           elevenlabs_data?: Json | null
+          expires_at?: string | null
           id?: string
+          last_used_at?: string | null
           updated_at?: string
           user_email?: string | null
           user_id: string
@@ -1942,7 +1946,9 @@ export type Database = {
         Update: {
           created_at?: string
           elevenlabs_data?: Json | null
+          expires_at?: string | null
           id?: string
+          last_used_at?: string | null
           updated_at?: string
           user_email?: string | null
           user_id?: string
@@ -2105,6 +2111,10 @@ export type Database = {
         Returns: undefined
       }
       cleanup_expired_maw3d_events: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_expired_voice_clones: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
@@ -2407,6 +2417,10 @@ export type Database = {
       }
       update_overdue_tasks: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      update_voice_activity: {
+        Args: { p_voice_id: string }
         Returns: undefined
       }
       upsert_user_personalization: {
