@@ -224,11 +224,14 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       const allVoices = [...DEFAULT_VOICES, ...(voicesData || [])];
       setVoices(allVoices);
       
-      // Set default selection to first default voice if no user voices, otherwise first user voice
-      if (voicesData && voicesData.length > 0) {
-        setSelectedVoiceId(voicesData[0].voice_id);
-      } else {
-        setSelectedVoiceId(DEFAULT_VOICES[0].voice_id);
+      // Only set initial selection if no default is saved
+      const savedDefaultVoice = localStorage.getItem('wakti-default-voice');
+      if (!savedDefaultVoice) {
+        if (voicesData && voicesData.length > 0) {
+          setSelectedVoiceId(voicesData[0].voice_id);
+        } else {
+          setSelectedVoiceId(DEFAULT_VOICES[0].voice_id);
+        }
       }
 
       // Load voice quota using the hook
@@ -498,7 +501,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         <p className="text-sm text-muted-foreground">
           {language === 'ar' 
             ? 'أنشئ كلام أو ترجم النصوص بصوتك المستنسخ أو الافتراضي • 50 لغة متاحة للترجمة • أساليب صوتية متنوعة'
-            : 'Generate speech or translate text with your cloned or default voice • 50 languages available • Multiple voice styles'
+            : 'Generate speech or translate text with your cloned or default voice • 50 languages available for translation • Multiple voice styles'
           }
         </p>
       </div>
@@ -624,24 +627,24 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </Select>
         </div>
 
-        {/* Text Input - 100 characters max for translation (free) */}
+        {/* Text Input - 100 characters max for translation */}
         <div className="space-y-2">
           <label className="text-sm font-medium">
-            {language === 'ar' ? 'النص للترجمة (100 حرف مجاناً)' : 'Text to Translate (100 chars free)'}
+            {language === 'ar' ? 'النص للترجمة' : 'Text to Translate'}
           </label>
           <Textarea
             value={translationText}
             onChange={(e) => setTranslationText(e.target.value)}
             placeholder={language === 'ar' 
-              ? 'اكتب ما تريد ترجمته بأي لغة... (مجاني ولا يحسب من الحصة)'
-              : 'Type whatever you want to translate in any language... (free, doesn\'t count against quota)'
+              ? 'اكتب ما تريد ترجمته بأي لغة...'
+              : 'Type whatever you want to translate in any language...'
             }
             className="min-h-20 resize-none"
             dir="auto"
             maxLength={100}
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{translationText.length} / 100 {language === 'ar' ? 'حرف (مجاني)' : 'characters (free)'}</span>
+            <span>{translationText.length} / 100 {language === 'ar' ? 'حرف' : 'characters'}</span>
           </div>
         </div>
 
@@ -659,7 +662,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           ) : (
             <>
               <Languages className="h-4 w-4 mr-2" />
-              {language === 'ar' ? 'ترجم (50 لغة متاحة)' : 'Translate (50 languages available)'}
+              {language === 'ar' ? 'ترجم' : 'Translate'}
             </>
           )}
         </Button>
