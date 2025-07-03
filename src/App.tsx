@@ -10,6 +10,7 @@ import { AppLayout } from "@/components/AppLayout";
 
 // Import all your existing components
 import Index from "./pages/Index";
+import RootHandler from "@/components/RootHandler";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -63,7 +64,8 @@ function App() {
                 <div className="min-h-screen bg-background font-sans antialiased">
                   <Routes>
                     {/* Public routes */}
-                    <Route path="/" element={<Index />} />
+                    <Route path="/" element={<RootHandler />} />
+                    <Route path="/home" element={<Index />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
