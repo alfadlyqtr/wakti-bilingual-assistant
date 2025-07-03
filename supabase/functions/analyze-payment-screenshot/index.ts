@@ -85,11 +85,8 @@ const runSecurityValidations = async (supabase: any, payment: any, analysis: any
   validations.timeValid = timeValidationPassed;
 
   console.log('🛡️ Final Time Validation Result:', {
-    isNewAccount,
     validationMethod,
-    timeValidationPassed,
-    accountCreatedAt: userCreatedAt.toISOString(),
-    currentTime: now.toISOString()
+    timeValidationPassed
   });
 
   // Check reference number uniqueness
@@ -369,9 +366,7 @@ serve(async (req) => {
       // Queue manual review notification
       console.log('🔍 Sending to Manual Review');
       
-      const reasonText = validationMethod === 'no_previous_payments' ? 
-        'Account older than 90 minutes with no previous payments - manual verification required.' :
-        'Security verification required by our enhanced fraud protection system.';
+      const reasonText = 'Security verification required by our enhanced fraud protection system.';
       
       await supabase.rpc('queue_notification', {
         p_user_id: payment.user_id,

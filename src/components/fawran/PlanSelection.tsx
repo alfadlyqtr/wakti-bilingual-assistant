@@ -51,8 +51,8 @@ export function PlanSelection({ onPlanSelect }: PlanSelectionProps) {
         <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
           <p className="text-xs sm:text-sm text-green-700 dark:text-green-300 font-medium">
             {language === 'ar' 
-              ? '✅ تم إنشاء حسابك وتأكيد البريد الإلكتروني - شكراً لك! يجب إكمال الاشتراك خلال 90 دقيقة من إنشاء الحساب 👇'
-              : '✅ Your account created and email confirmed - thank you! Must complete subscription within 90 minutes from account creation 👇'
+              ? '✅ تم إنشاء حسابك وتأكيد البريد الإلكتروني - شكراً لك! يرجى اختيار خطة الاشتراك لتفعيل حسابك 👇'
+              : '✅ Your account created and email confirmed - thank you! Please select a subscription plan to activate your account 👇'
             }
           </p>
         </div>

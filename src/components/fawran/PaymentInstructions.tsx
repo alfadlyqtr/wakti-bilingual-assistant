@@ -89,8 +89,8 @@ export function PaymentInstructions({ selectedPlan, onContinue, onBack }: Paymen
       <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
         <p className="text-xs sm:text-sm text-green-700 dark:text-green-300 font-medium">
           {language === 'ar' 
-            ? '✅ تم إنشاء حسابك وتأكيد البريد الإلكتروني - شكراً لك! يجب إكمال الاشتراك خلال 90 دقيقة من إنشاء الحساب 👇'
-            : '✅ Your account created and email confirmed - thank you! Must complete subscription within 90 minutes from account creation 👇'
+            ? '✅ تم إنشاء حسابك وتأكيد البريد الإلكتروني - شكراً لك! اتبع التعليمات أدناه لإكمال الدفع 👇'
+            : '✅ Your account created and email confirmed - thank you! Follow the instructions below to complete payment 👇'
           }
         </p>
       </div>
@@ -108,13 +108,13 @@ export function PaymentInstructions({ selectedPlan, onContinue, onBack }: Paymen
       </div>
 
       {/* Important Notice */}
-      <Card className="p-3 sm:p-4 mb-4 sm:mb-6 bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
-        <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-          <Clock className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+      <Card className="p-3 sm:p-4 mb-4 sm:mb-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
           <div className="font-medium text-sm sm:text-base">
             {language === 'ar' 
-              ? '⚠️ يجب إكمال التحويل خلال 90 دقيقة (1.5 ساعة) من التقديم'
-              : '⚠️ Transfers must be completed within 90 minutes (1.5 hours) of submission'
+              ? '💡 فوران متاح 24/7 - يمكنك الدفع في أي وقت!'
+              : '💡 Fawran is available 24/7 - you can pay anytime!'
             }
           </div>
         </div>
