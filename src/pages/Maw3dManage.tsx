@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Share2, Trash2, CheckCircle, XCircle, User } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Share2, Trash2, CheckCircle, XCircle, User, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -298,9 +298,9 @@ export default function Maw3dManage() {
               {acceptedRsvps.length > 0 ? (
                 <div className="space-y-2">
                   {acceptedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center gap-3 p-2 bg-green-50/70 dark:bg-green-950/10 rounded-md border border-green-100 dark:border-green-800/30 hover:shadow-sm transition-shadow">
+                    <div key={rsvp.id} className="flex items-start gap-3 p-3 bg-green-50/70 dark:bg-green-950/10 rounded-md border border-green-100 dark:border-green-800/30 hover:shadow-sm transition-shadow">
                       {/* Avatar */}
-                      <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
+                      <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 mt-0.5">
                         {rsvp.guest_name.charAt(0).toUpperCase()}
                       </div>
                       
@@ -309,14 +309,25 @@ export default function Maw3dManage() {
                         <h3 className="font-medium text-green-800 dark:text-green-200 truncate text-sm">
                           {rsvp.guest_name}
                         </h3>
-                        <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                        <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mb-1">
                           <Clock className="w-3 h-3" />
                           {format(new Date(rsvp.created_at), 'MMM d, yyyy • h:mm a')}
                         </div>
+                        {/* Comment Display */}
+                        {rsvp.comment && (
+                          <div className="mt-2 p-2 bg-white/50 dark:bg-green-800/20 rounded border border-green-200/50 dark:border-green-700/30">
+                            <div className="flex items-start gap-1">
+                              <MessageCircle className="w-3 h-3 text-green-600 flex-shrink-0 mt-0.5" />
+                              <p className="text-xs text-green-700 dark:text-green-300 leading-relaxed break-words" dir="auto">
+                                {rsvp.comment}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
                       {/* Status */}
-                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
                     </div>
                   ))}
                 </div>
@@ -346,9 +357,9 @@ export default function Maw3dManage() {
               {declinedRsvps.length > 0 ? (
                 <div className="space-y-2">
                   {declinedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center gap-3 p-2 bg-red-50/70 dark:bg-red-950/10 rounded-md border border-red-100 dark:border-red-800/30 hover:shadow-sm transition-shadow">
+                    <div key={rsvp.id} className="flex items-start gap-3 p-3 bg-red-50/70 dark:bg-red-950/10 rounded-md border border-red-100 dark:border-red-800/30 hover:shadow-sm transition-shadow">
                       {/* Avatar */}
-                      <div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
+                      <div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 mt-0.5">
                         {rsvp.guest_name.charAt(0).toUpperCase()}
                       </div>
                       
@@ -357,14 +368,25 @@ export default function Maw3dManage() {
                         <h3 className="font-medium text-red-800 dark:text-red-200 truncate text-sm">
                           {rsvp.guest_name}
                         </h3>
-                        <div className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+                        <div className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 mb-1">
                           <Clock className="w-3 h-3" />
                           {format(new Date(rsvp.created_at), 'MMM d, yyyy • h:mm a')}
                         </div>
+                        {/* Comment Display */}
+                        {rsvp.comment && (
+                          <div className="mt-2 p-2 bg-white/50 dark:bg-red-800/20 rounded border border-red-200/50 dark:border-red-700/30">
+                            <div className="flex items-start gap-1">
+                              <MessageCircle className="w-3 h-3 text-red-600 flex-shrink-0 mt-0.5" />
+                              <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed break-words" dir="auto">
+                                {rsvp.comment}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
                       {/* Status */}
-                      <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                      <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
                     </div>
                   ))}
                 </div>
