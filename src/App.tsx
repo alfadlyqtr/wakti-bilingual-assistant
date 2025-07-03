@@ -92,7 +92,7 @@ function App() {
                     <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
                     <Route path="/maw3d" element={<AppLayout><Maw3d /></AppLayout>} />
                     <Route path="/maw3d/create" element={<AppLayout><Maw3dCreate /></AppLayout>} />
-                    <Route path="/maw3d/manage" element={<AppLayout><Maw3dManage /></AppLayout>} />
+                    <Route path="/maw3d/manage/:id" element={<AppLayout><Maw3dManage /></AppLayout>} />
                     <Route path="/maw3d/edit/:id" element={<AppLayout><Maw3dEdit /></AppLayout>} />
                     <Route path="/maw3d/events" element={<AppLayout><Maw3dEvents /></AppLayout>} />
                     <Route path="/tasjeel" element={<AppLayout><Tasjeel /></AppLayout>} />
