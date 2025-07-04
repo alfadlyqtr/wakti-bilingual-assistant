@@ -1,3 +1,4 @@
+
 /**
  * Shared helpers and constants for Wakti Edge Function
  */
@@ -44,7 +45,7 @@ export function generateModeSuggestion(suggestedMode: string, language: string =
       case 'image':
         return "We're chatting here—if you want an image for this, tap the image button below! 🎨";
       case 'chat':
-        return "That’s a quick answer from me. If you want to chat more, just keep talking! 😊";
+        return "That's a quick answer from me. If you want to chat more, just keep talking! 😊";
       default:
         return "Try the buttons below for the best experience for your request!";
     }

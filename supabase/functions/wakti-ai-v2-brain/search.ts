@@ -1,3 +1,4 @@
+
 /**
  * Search utilities for Wakti Edge Function
  */
