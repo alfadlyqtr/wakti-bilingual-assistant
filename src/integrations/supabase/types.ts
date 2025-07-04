@@ -2284,6 +2284,10 @@ export type Database = {
         Args: { other_user_id: string }
         Returns: undefined
       }
+      process_expired_subscriptions: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       process_translation_credits_purchase: {
         Args: { p_user_id: string; p_transaction_id: string; p_amount: number }
         Returns: boolean

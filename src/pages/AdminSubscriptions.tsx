@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift } from "lucide-react";
@@ -62,7 +61,7 @@ export default function AdminSubscriptions() {
     billingAmount: 60,
     paymentMethod: "manual",
     isGift: false,
-    giftDuration: "1_month"
+    giftDuration: "1_week"
   });
 
   useEffect(() => {
@@ -249,7 +248,14 @@ export default function AdminSubscriptions() {
 
   const handleDeactivateSubscription = async (user: User) => {
     try {
-      const { error } = await supabase
+      console.log('[DEBUG] Starting deactivation for user:', {
+        userId: user.id,
+        email: user.email,
+        currentStatus: user.is_subscribed
+      });
+
+      // Update user profile first
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           is_subscribed: false,
@@ -258,19 +264,62 @@ export default function AdminSubscriptions() {
         })
         .eq('id', user.id);
 
-      if (error) throw error;
+      if (profileError) {
+        console.error('[DEBUG] Profile update error:', profileError);
+        throw profileError;
+      }
 
-      // Also update the subscription record
-      await supabase
+      // Update subscription record
+      const { error: subsError } = await supabase
         .from('subscriptions')
-        .update({ status: 'cancelled' })
-        .eq('user_id', user.id);
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id)
+        .eq('status', 'active');
 
+      if (subsError) {
+        console.error('[DEBUG] Subscription update error:', subsError);
+        throw subsError;
+      }
+
+      console.log('[DEBUG] Deactivation successful for:', user.email);
       toast.success(`Subscription deactivated for ${user.email}`);
       loadData();
     } catch (error) {
-      console.error('Error deactivating subscription:', error);
-      toast.error('Failed to deactivate subscription');
+      console.error('[DEBUG] Error deactivating subscription:', error);
+      toast.error(`Failed to deactivate subscription: ${error.message}`);
+    }
+  };
+
+  const handleProcessExpiredSubscriptions = async () => {
+    try {
+      console.log('[DEBUG] Manually processing expired subscriptions...');
+      toast.info('Processing expired subscriptions...');
+      
+      const { data, error } = await supabase.functions.invoke('process-expired-subscriptions');
+      
+      if (error) {
+        console.error('[DEBUG] Error processing expired subscriptions:', error);
+        toast.error(`Failed to process expired subscriptions: ${error.message}`);
+        return;
+      }
+      
+      console.log('[DEBUG] Expired subscriptions processed:', data);
+      const expiredCount = data?.result?.expired_count || 0;
+      
+      if (expiredCount > 0) {
+        toast.success(`Successfully processed ${expiredCount} expired subscription(s)`);
+      } else {
+        toast.info('No expired subscriptions found');
+      }
+      
+      // Reload data to see changes
+      loadData();
+    } catch (error) {
+      console.error('[DEBUG] Exception processing expired subscriptions:', error);
+      toast.error(`Failed to process expired subscriptions: ${String(error)}`);
     }
   };
 
@@ -371,13 +420,19 @@ export default function AdminSubscriptions() {
       {/* Header */}
       <AdminHeader
         title="Subscription Management"
-        subtitle="Modern Fawran AI-Verified Payments + Admin Gift Subscriptions"
+        subtitle="Modern Fawran AI-Verified Payments + Admin Gift Subscriptions + Auto-Expiry System"
         icon={<Shield className="h-5 w-5 text-accent-blue" />}
       >
-        <Button onClick={loadData} variant="outline" size="sm" className="text-xs">
-          <RefreshCw className="h-4 w-4 mr-1" />
-          <span className="hidden sm:inline">Refresh</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleProcessExpiredSubscriptions} variant="outline" size="sm" className="text-xs">
+            <XCircle className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Process Expired</span>
+          </Button>
+          <Button onClick={loadData} variant="outline" size="sm" className="text-xs">
+            <RefreshCw className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
+        </div>
       </AdminHeader>
 
       {/* Debug Info Panel */}
