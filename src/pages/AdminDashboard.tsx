@@ -10,6 +10,7 @@ import { EnhancedStatsCards } from "@/components/admin/EnhancedStatsCards";
 import { ScrollableRecentActivity } from "@/components/admin/ScrollableRecentActivity";
 import { PaymentSystemStatus } from "@/components/admin/PaymentSystemStatus";
 import { FawranStatsCards } from "@/components/admin/FawranStatsCards";
+import { FawranSystemTest } from "@/components/admin/FawranSystemTest";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -71,6 +72,14 @@ export default function AdminDashboard() {
           <h2 className="text-xl font-semibold text-enhanced-heading">Payment System Health</h2>
           <PaymentSystemStatus fawranStats={stats.fawranStats} />
         </div>
+
+        {/* Fawran System Diagnostics - Only show if no payments detected */}
+        {stats.fawranStats.totalPayments === 0 && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-enhanced-heading">System Diagnostics</h2>
+            <FawranSystemTest />
+          </div>
+        )}
 
         {/* Recent Activity with Scroll */}
         <div className="space-y-4">

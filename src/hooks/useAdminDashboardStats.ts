@@ -72,21 +72,21 @@ export const useAdminDashboardStats = () => {
     try {
       console.log('[DEBUG] Fetching admin dashboard stats...');
       
-      // Get main dashboard stats
+      // Get main dashboard stats using the new SQL function
       const { data: dashboardStats, error: dashboardError } = await supabase.rpc('get_admin_dashboard_stats');
       if (dashboardError) {
         console.error('[DEBUG] Dashboard stats error:', dashboardError);
         throw dashboardError;
       }
 
-      // Get Fawran payment stats
+      // Get Fawran payment stats using the new SQL function
       const { data: fawranStats, error: fawranError } = await supabase.rpc('get_fawran_payment_stats');
       if (fawranError) {
         console.error('[DEBUG] Fawran stats error:', fawranError);
         throw fawranError;
       }
 
-      // Get payment method distribution
+      // Get payment method distribution using the new SQL function
       const { data: paymentMethodData, error: paymentError } = await supabase.rpc('get_payment_method_stats');
       if (paymentError) {
         console.error('[DEBUG] Payment method stats error:', paymentError);
@@ -133,11 +133,12 @@ export const useAdminDashboardStats = () => {
         paymentMethodDistribution
       });
 
-      console.log('[DEBUG] Stats updated:', {
+      console.log('[DEBUG] Stats updated successfully:', {
         totalUsers: mainStats.total_users,
         giftSubscriptions: mainStats.gift_subscriptions,
         expiringSoon: mainStats.expiring_soon,
-        monthlyRevenue: mainStats.monthly_revenue
+        monthlyRevenue: mainStats.monthly_revenue,
+        fawranPayments: fawranStatsData.total_payments
       });
 
     } catch (error) {
@@ -149,7 +150,7 @@ export const useAdminDashboardStats = () => {
     try {
       const activities: RecentActivity[] = [];
 
-      // Get recent subscription activations
+      // Get recent subscription activations from admin activity logs
       const { data: recentSubs } = await supabase
         .from('admin_activity_logs')
         .select('*')
@@ -186,24 +187,23 @@ export const useAdminDashboardStats = () => {
         }
       });
 
-      // Get recent user signups
+      // Get recent user signups (limit to confirmed users)
       const { data: newUsers } = await supabase
         .from('profiles')
         .select('email, created_at')
         .neq('display_name', '[DELETED USER]')
+        .not('email', 'is', null)
         .order('created_at', { ascending: false })
         .limit(5);
 
       newUsers?.forEach(user => {
-        if (user.email) {
-          activities.push({
-            id: user.email + user.created_at,
-            type: 'user_registration',
-            message: `New user registered: ${user.email}`,
-            timestamp: user.created_at,
-            status: 'info'
-          });
-        }
+        activities.push({
+          id: user.email + user.created_at,
+          type: 'user_registration',
+          message: `New user registered: ${user.email}`,
+          timestamp: user.created_at,
+          status: 'info'
+        });
       });
 
       // Get recent Fawran payments
@@ -224,7 +224,7 @@ export const useAdminDashboardStats = () => {
         });
       });
 
-      // Sort all activities by timestamp
+      // Sort all activities by timestamp and limit to 15 most recent
       activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setRecentActivity(activities.slice(0, 15));
 

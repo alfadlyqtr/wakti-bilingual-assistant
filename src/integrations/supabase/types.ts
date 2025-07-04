@@ -2142,6 +2142,20 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_admin_dashboard_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_users: number
+          active_subscriptions: number
+          gift_subscriptions: number
+          expiring_soon: number
+          unsubscribed_users: number
+          unconfirmed_accounts: number
+          monthly_revenue: number
+          new_users_this_month: number
+          pending_messages: number
+        }[]
+      }
       get_current_user_id: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -2212,7 +2226,6 @@ export type Database = {
         Returns: {
           payment_method: string
           user_count: number
-          total_revenue: number
         }[]
       }
       gtrgm_compress: {
