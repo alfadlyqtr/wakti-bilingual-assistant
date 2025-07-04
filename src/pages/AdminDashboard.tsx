@@ -1,19 +1,19 @@
 
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, RefreshCw, Smartphone } from "lucide-react";
+import { Shield, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
-import { useRealTimeAdminData } from "@/hooks/useRealTimeAdminData";
-import { RealTimeStatsCards } from "@/components/admin/RealTimeStatsCards";
+import { useAdminDashboardStats } from "@/hooks/useAdminDashboardStats";
+import { EnhancedStatsCards } from "@/components/admin/EnhancedStatsCards";
+import { ScrollableRecentActivity } from "@/components/admin/ScrollableRecentActivity";
+import { PaymentSystemStatus } from "@/components/admin/PaymentSystemStatus";
 import { FawranStatsCards } from "@/components/admin/FawranStatsCards";
-import { RealTimeActivityFeed } from "@/components/admin/RealTimeActivityFeed";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { stats, recentActivity, isLoading, refetch } = useRealTimeAdminData();
+  const { stats, recentActivity, isLoading, refetch } = useAdminDashboardStats();
 
   useEffect(() => {
     validateAdminSession();
@@ -38,23 +38,18 @@ export default function AdminDashboard() {
     }
   };
 
-  // Enhanced stats mapping with gift subscriptions
-  const enhancedStats = {
-    totalUsers: stats.totalUsers,
-    activeSubscriptions: stats.subscribedUsers,
-    pendingMessages: stats.pendingMessages,
-    onlineUsers: stats.activeUsers,
-    monthlyRevenue: stats.monthlyRevenue,
-    newUsersToday: stats.newUsersThisMonth,
-    giftSubscriptions: stats.giftSubscriptions
-  };
+  const autoApprovalRate = stats.fawranStats.totalPayments > 0 
+    ? Math.round((stats.fawranStats.autoApprovedPayments / stats.fawranStats.totalPayments) * 100)
+    : 0;
+
+  const avgProcessingTime = Math.round(stats.fawranStats.avgProcessingTimeMs / 1000) || 0;
 
   return (
     <div className="bg-gradient-background min-h-screen text-foreground pb-20">
       {/* Header */}
       <AdminHeader
         title="Admin Dashboard"
-        subtitle="Modern Fawran AI-Payment System + Gift Subscriptions"
+        subtitle="Enhanced System Overview with Real-time Monitoring"
         icon={<Shield className="h-5 w-5 text-accent-blue" />}
       >
         <Button onClick={refetch} variant="outline" size="sm" className="text-xs">
@@ -65,38 +60,31 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <div className="p-4 space-y-6">
-        {/* Enhanced Stats Overview */}
+        {/* Enhanced System Overview */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-enhanced-heading">System Overview</h2>
-            <Badge variant="outline" className="text-accent-green border-accent-green">
-              Live Data
-            </Badge>
-          </div>
-          <RealTimeStatsCards stats={enhancedStats} isLoading={isLoading} />
+          <h2 className="text-xl font-semibold text-enhanced-heading">System Overview</h2>
+          <EnhancedStatsCards stats={stats} isLoading={isLoading} />
         </div>
 
-        {/* Real-Time Activity Feed */}
+        {/* Payment System Status */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-enhanced-heading">Recent Activity</h2>
-            <Badge variant="secondary">
-              Last Updated: {new Date().toLocaleTimeString()}
-            </Badge>
-          </div>
-          <RealTimeActivityFeed activities={recentActivity} isLoading={isLoading} />
+          <h2 className="text-xl font-semibold text-enhanced-heading">Payment System Health</h2>
+          <PaymentSystemStatus fawranStats={stats.fawranStats} />
+        </div>
+
+        {/* Recent Activity with Scroll */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-enhanced-heading">Recent Activity</h2>
+          <ScrollableRecentActivity activities={recentActivity} isLoading={isLoading} />
         </div>
         
-        {/* Enhanced Fawran Payment Stats */}
+        {/* Detailed Fawran Stats */}
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-enhanced-heading flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-accent-cyan" />
-            Fawran AI Payment Intelligence + Gifts
-          </h2>
+          <h2 className="text-xl font-semibold text-enhanced-heading">Fawran Payment Intelligence</h2>
           <FawranStatsCards 
             stats={stats.fawranStats} 
-            autoApprovalRate={stats.autoApprovalRate}
-            avgProcessingTime={stats.avgProcessingTime}
+            autoApprovalRate={autoApprovalRate}
+            avgProcessingTime={avgProcessingTime}
             isLoading={isLoading} 
           />
         </div>
