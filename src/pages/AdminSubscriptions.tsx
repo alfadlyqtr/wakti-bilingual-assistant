@@ -213,7 +213,17 @@ export default function AdminSubscriptions() {
         console.log('[DEBUG] Activation successful:', data);
         const actionType = activationData.isGift ? 'Gift subscription' : 'Subscription';
         const duration = activationData.isGift ? activationData.giftDuration.replace('_', ' ') : '';
-        toast.success(`${actionType} activated for ${selectedUser.email} ${duration ? `(${duration})` : ''}`);
+        const durationDays = activationData.isGift ? 
+          (activationData.giftDuration === '1_week' ? '7 days' :
+           activationData.giftDuration === '2_weeks' ? '14 days' :
+           activationData.giftDuration === '1_month' ? '30 days' : '') : '';
+        
+        toast.success(`${actionType} activated for ${selectedUser.email} ${durationDays ? `(${durationDays})` : ''}`);
+        
+        if (data?.expiry_date) {
+          const expiryDate = new Date(data.expiry_date).toLocaleDateString();
+          toast.info(`Subscription expires on: ${expiryDate}`);
+        }
         
         setShowActivationModal(false);
         setSelectedUser(null);
@@ -222,7 +232,7 @@ export default function AdminSubscriptions() {
           billingAmount: 60,
           paymentMethod: "manual",
           isGift: false,
-          giftDuration: "1_month"
+          giftDuration: "1_week"
         });
         
         // Reload data to see changes
@@ -718,7 +728,7 @@ export default function AdminSubscriptions() {
             </div>
 
             {activationData.isGift ? (
-              /* Gift Options */
+              /* Gift Options with precise duration labels */
               <div>
                 <Label>Gift Duration</Label>
                 <Select 
@@ -729,11 +739,16 @@ export default function AdminSubscriptions() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1_week">1 Week Gift</SelectItem>
-                    <SelectItem value="2_weeks">2 Weeks Gift</SelectItem>
-                    <SelectItem value="1_month">1 Month Gift</SelectItem>
+                    <SelectItem value="1_week">1 Week Gift (7 days)</SelectItem>
+                    <SelectItem value="2_weeks">2 Weeks Gift (14 days)</SelectItem>
+                    <SelectItem value="1_month">1 Month Gift (30 days)</SelectItem>
                   </SelectContent>
                 </Select>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {activationData.giftDuration === '1_week' && 'Expires exactly 7 days from activation'}
+                  {activationData.giftDuration === '2_weeks' && 'Expires exactly 14 days from activation'}
+                  {activationData.giftDuration === '1_month' && 'Expires exactly 30 days from activation'}
+                </div>
               </div>
             ) : (
               /* Regular Subscription Options */
@@ -798,7 +813,7 @@ export default function AdminSubscriptions() {
                   billingAmount: 60,
                   paymentMethod: "manual",
                   isGift: false,
-                  giftDuration: "1_month"
+                  giftDuration: "1_week"
                 });
               }}
               disabled={isActivating}
