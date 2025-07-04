@@ -114,14 +114,13 @@ export default function AdminFawranPayments() {
 
       if (updateError) throw updateError;
 
-      // Activate subscription using the admin function
+      // Activate subscription using the clean admin function (NO PayPal parameters)
       const { error: activateError } = await supabase.rpc('admin_activate_subscription', {
         p_user_id: payment.user_id,
         p_plan_name: payment.plan_type === 'yearly' ? 'Yearly Plan' : 'Monthly Plan',
         p_billing_amount: payment.amount,
         p_billing_currency: 'QAR',
         p_payment_method: 'fawran',
-        p_paypal_subscription_id: null,
         p_fawran_payment_id: payment.id
       });
 

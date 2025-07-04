@@ -1148,7 +1148,6 @@ export type Database = {
           next_billing_date: string | null
           notification_preferences: Json | null
           payment_method: string | null
-          paypal_subscription_id: string | null
           plan_name: string | null
           settings: Json | null
           subscription_status: string | null
@@ -1176,7 +1175,6 @@ export type Database = {
           next_billing_date?: string | null
           notification_preferences?: Json | null
           payment_method?: string | null
-          paypal_subscription_id?: string | null
           plan_name?: string | null
           settings?: Json | null
           subscription_status?: string | null
@@ -1204,7 +1202,6 @@ export type Database = {
           next_billing_date?: string | null
           notification_preferences?: Json | null
           payment_method?: string | null
-          paypal_subscription_id?: string | null
           plan_name?: string | null
           settings?: Json | null
           subscription_status?: string | null
@@ -1317,8 +1314,6 @@ export type Database = {
           is_gift: boolean | null
           next_billing_date: string
           payment_method: string | null
-          paypal_plan_id: string
-          paypal_subscription_id: string
           plan_name: string
           start_date: string
           status: string
@@ -1337,8 +1332,6 @@ export type Database = {
           is_gift?: boolean | null
           next_billing_date: string
           payment_method?: string | null
-          paypal_plan_id: string
-          paypal_subscription_id: string
           plan_name: string
           start_date: string
           status?: string
@@ -1357,8 +1350,6 @@ export type Database = {
           is_gift?: boolean | null
           next_billing_date?: string
           payment_method?: string | null
-          paypal_plan_id?: string
-          paypal_subscription_id?: string
           plan_name?: string
           start_date?: string
           status?: string
@@ -2039,41 +2030,17 @@ export type Database = {
     }
     Functions: {
       admin_activate_subscription: {
-        Args:
-          | {
-              p_user_id: string
-              p_plan_name: string
-              p_billing_amount?: number
-              p_billing_currency?: string
-            }
-          | {
-              p_user_id: string
-              p_plan_name: string
-              p_billing_amount?: number
-              p_billing_currency?: string
-              p_payment_method?: string
-              p_paypal_subscription_id?: string
-              p_fawran_payment_id?: string
-            }
-          | {
-              p_user_id: string
-              p_plan_name: string
-              p_billing_amount?: number
-              p_billing_currency?: string
-              p_payment_method?: string
-              p_paypal_subscription_id?: string
-              p_fawran_payment_id?: string
-              p_is_gift?: boolean
-              p_gift_duration?: string
-              p_gift_given_by?: string
-            }
-          | {
-              p_user_id: string
-              p_plan_name: string
-              p_billing_amount?: number
-              p_billing_currency?: string
-              p_paypal_plan_id?: string
-            }
+        Args: {
+          p_user_id: string
+          p_plan_name: string
+          p_billing_amount?: number
+          p_billing_currency?: string
+          p_payment_method?: string
+          p_fawran_payment_id?: string
+          p_is_gift?: boolean
+          p_gift_duration?: string
+          p_gift_given_by?: string
+        }
         Returns: boolean
       }
       admin_gift_translation_credits: {
@@ -2246,22 +2213,6 @@ export type Database = {
           payment_method: string
           user_count: number
           total_revenue: number
-        }[]
-      }
-      get_user_payment_history: {
-        Args: { p_user_id: string }
-        Returns: {
-          id: string
-          paypal_subscription_id: string
-          paypal_plan_id: string
-          plan_name: string
-          billing_amount: number
-          billing_currency: string
-          billing_cycle: string
-          status: string
-          start_date: string
-          next_billing_date: string
-          created_at: string
         }[]
       }
       gtrgm_compress: {

@@ -1,14 +1,13 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Smartphone, UserCog, Archive } from "lucide-react";
+import { CreditCard, Smartphone, UserCog, Gift } from "lucide-react";
 
 interface PaymentMethodDistributionProps {
   distribution: {
-    paypal: number;
     fawran: number;
     manual: number;
-    legacy: number;
+    gift: number;
   };
   isLoading: boolean;
 }
@@ -22,7 +21,7 @@ export function PaymentMethodDistribution({ distribution, isLoading }: PaymentMe
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {[...Array(4)].map((_, i) => (
+            {[...Array(3)].map((_, i) => (
               <div key={i} className="flex justify-between items-center animate-pulse">
                 <div className="h-4 bg-muted rounded w-24"></div>
                 <div className="h-6 bg-muted rounded w-12"></div>
@@ -39,39 +38,30 @@ export function PaymentMethodDistribution({ distribution, isLoading }: PaymentMe
   const paymentMethods = [
     {
       key: 'fawran',
-      label: 'Fawran (GPT-4 Vision)',
+      label: 'Fawran (AI Verified)',
       count: distribution.fawran,
       icon: Smartphone,
       color: 'text-accent-green',
       bgColor: 'bg-accent-green/10',
-      description: 'AI-verified payments'
-    },
-    {
-      key: 'paypal',
-      label: 'PayPal (Legacy)',
-      count: distribution.paypal,
-      icon: CreditCard,
-      color: 'text-accent-blue',
-      bgColor: 'bg-accent-blue/10',
-      description: 'PayPal subscriptions'
+      description: 'AI-verified bank transfers'
     },
     {
       key: 'manual',
       label: 'Manual Admin',
       count: distribution.manual,
       icon: UserCog,
-      color: 'text-accent-orange',
-      bgColor: 'bg-accent-orange/10',
-      description: 'Admin-activated'
+      color: 'text-accent-blue',
+      bgColor: 'bg-accent-blue/10',
+      description: 'Admin-activated accounts'
     },
     {
-      key: 'legacy',
-      label: 'Legacy/Unknown',
-      count: distribution.legacy,
-      icon: Archive,
-      color: 'text-muted-foreground',
-      bgColor: 'bg-muted/10',
-      description: 'Pre-tracking era'
+      key: 'gift',
+      label: 'Gift Subscriptions',
+      count: distribution.gift,
+      icon: Gift,
+      color: 'text-accent-purple',
+      bgColor: 'bg-accent-purple/10',
+      description: 'Gifted by admin'
     }
   ];
 
@@ -119,7 +109,7 @@ export function PaymentMethodDistribution({ distribution, isLoading }: PaymentMe
             <div className="flex items-center space-x-2 text-accent-green">
               <Smartphone className="h-4 w-4" />
               <span className="text-sm font-medium">
-                Fawran System Active: {Math.round((distribution.fawran / total) * 100)}% of users on modern payment system
+                Fawran AI System: {Math.round((distribution.fawran / total) * 100)}% of subscriptions verified automatically
               </span>
             </div>
           </div>
