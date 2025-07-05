@@ -54,11 +54,6 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Camera preview modal state
-  const [cameraPreviewUrl, setCameraPreviewUrl] = useState<string | null>(null);
-  const [cameraFile, setCameraFile] = useState<File | null>(null);
-  const [showCameraPreview, setShowCameraPreview] = useState(false);
-
   // Use optimized file upload hook
   const {
     isUploading,
@@ -124,31 +119,17 @@ export function ChatInput({
     await uploadFiles(files);
   };
 
-  // ---- Camera Snap and Upload (NEW) ----
-  const handleCameraChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // ---- Camera Photo Upload (FIXED) ----
+  const handleCameraChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files && files[0]) {
-      const file = files[0];
-      setCameraFile(file);
-      setCameraPreviewUrl(URL.createObjectURL(file));
-      setShowCameraPreview(true);
+    if (files && files.length > 0) {
+      // Use the same optimized upload system as regular files
+      await uploadFiles(files);
     }
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
-  };
-
-  const handleSendCameraPhoto = () => {
-    if (cameraFile) {
-      onSendMessage('', 'text', [cameraFile]);
-      setCameraFile(null);
-      setCameraPreviewUrl(null);
-      setShowCameraPreview(false);
+    // Clear the input
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = '';
     }
-  };
-
-  const handleCancelCamera = () => {
-    setCameraFile(null);
-    setCameraPreviewUrl(null);
-    setShowCameraPreview(false);
   };
 
   // Layout & Mode highlighting classes
@@ -158,36 +139,6 @@ export function ChatInput({
   return (
     <div className="w-full">
       <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
-        {/* Camera Preview Modal */}
-        {showCameraPreview && cameraPreviewUrl && (
-          <div className="fixed inset-0 z-[200] bg-black/70 flex flex-col items-center justify-center">
-            <div className="bg-background rounded-2xl p-4 shadow-2xl w-80 flex flex-col items-center gap-4">
-              <img
-                src={cameraPreviewUrl}
-                alt="Camera preview"
-                className="w-full h-60 object-contain rounded-xl bg-black/10"
-              />
-              <div className="flex gap-2 mt-2 w-full">
-                <Button
-                  className="flex-1"
-                  variant="default"
-                  onClick={handleSendCameraPhoto}
-                  disabled={isLoading}
-                >
-                  {language === 'ar' ? 'إرسال' : 'Send'}
-                </Button>
-                <Button
-                  className="flex-1"
-                  variant="ghost"
-                  onClick={handleCancelCamera}
-                >
-                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Uploaded Files Display - Updated to show optimized files */}
         {uploadedFiles.length > 0 && (
           <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
