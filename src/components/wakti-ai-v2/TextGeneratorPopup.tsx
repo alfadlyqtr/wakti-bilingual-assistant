@@ -151,18 +151,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         }
       }
 
-      console.log('🎯 Text Generator: Using unified-ai-brain for text generation');
+      console.log('🎯 Text Generator: Using text-generator function for standalone text generation');
       
-      // FIXED: Use unified-ai-brain instead of text-generator
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      // FIXED: Use text-generator function instead of unified-ai-brain
+      const { data, error } = await supabase.functions.invoke('text-generator', {
         body: {
-          message: prompt,
-          userId: (await supabase.auth.getUser()).data.user?.id,
-          language: language,
-          activeTrigger: 'chat',
-          inputType: 'text',
-          conversationId: null,
-          attachedFiles: []
+          prompt: prompt,
+          mode: activeTab,
+          language: language
         }
       });
 
@@ -180,13 +176,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         throw new Error(errorMessage);
       }
 
-      if (!data?.response) {
+      if (!data?.generatedText) {
         const errorMessage = 'No text generated';
         setLastError(errorMessage);
         throw new Error(errorMessage);
       }
 
-      setGeneratedText(data.response);
+      setGeneratedText(data.generatedText);
       setActiveTab('generated'); // Switch to generated text tab
       showSuccess(language === 'ar' ? 'تم إنشاء النص بنجاح!' : 'Text generated successfully!');
       
