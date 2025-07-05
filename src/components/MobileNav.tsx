@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -53,7 +52,7 @@ export function MobileNav() {
   };
   
   return (
-    <nav className="fixed bottom-0 left-0 w-full z-50">
+    <nav className="fixed bottom-1 left-0 w-full z-50">
       <div className="bg-gradient-nav backdrop-blur-lg border-t border-border/50 shadow-vibrant">
         <ul className="flex justify-around items-center h-16 px-2">
           {navItems.map((item) => {
