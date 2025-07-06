@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import { DuplicatePaymentResolver } from "@/components/admin/DuplicatePaymentResolver";
 
 interface FawranPayment {
   id: string;
@@ -38,6 +39,7 @@ export default function AdminFawranPayments() {
   const [selectedPayment, setSelectedPayment] = useState<FawranPayment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const [duplicatePayments, setDuplicatePayments] = useState<FawranPayment[]>([]);
 
   useEffect(() => {
     validateAdminSession();
@@ -106,6 +108,7 @@ export default function AdminFawranPayments() {
         })) as FawranPayment[];
         
         setPayments(processedPayments);
+        findDuplicatePayments(processedPayments);
         console.log('✅ Loaded payments with fallback query:', processedPayments.length);
         return;
       }
@@ -120,6 +123,7 @@ export default function AdminFawranPayments() {
       })) as FawranPayment[];
 
       setPayments(processedPayments);
+      findDuplicatePayments(processedPayments);
       
       // Check for stuck payments and show alert
       const stuckPayments = processedPayments.filter(p => isPaymentStuck(p));
@@ -138,6 +142,33 @@ export default function AdminFawranPayments() {
       toast.error(`Failed to load Fawran payments: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const findDuplicatePayments = (allPayments: FawranPayment[]) => {
+    // Find duplicates by grouping by email and checking for multiple approved/pending payments
+    const emailGroups = allPayments.reduce((acc, payment) => {
+      if (!acc[payment.email]) {
+        acc[payment.email] = [];
+      }
+      acc[payment.email].push(payment);
+      return acc;
+    }, {} as Record<string, FawranPayment[]>);
+
+    const duplicates: FawranPayment[] = [];
+    Object.entries(emailGroups).forEach(([email, payments]) => {
+      const approvedOrPending = payments.filter(p => 
+        p.status === 'approved' || p.status === 'pending'
+      );
+      if (approvedOrPending.length > 1) {
+        duplicates.push(...approvedOrPending);
+      }
+    });
+
+    setDuplicatePayments(duplicates);
+    
+    if (duplicates.length > 0) {
+      console.log(`⚠️ Found ${duplicates.length} duplicate payments across ${new Set(duplicates.map(d => d.email)).size} users`);
     }
   };
 
@@ -309,6 +340,8 @@ export default function AdminFawranPayments() {
         return <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 shadow-lg"><CheckCircle className="h-3 w-3 mr-1" />Approved</Badge>;
       case 'rejected':
         return <Badge className="bg-gradient-to-r from-red-500 to-rose-500 text-white border-0 shadow-lg"><XCircle className="h-3 w-3 mr-1" />Rejected</Badge>;
+      case 'refunded':
+        return <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 shadow-lg">💰 Refunded</Badge>;
       default:
         return <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 shadow-lg animate-pulse"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
     }
@@ -330,6 +363,8 @@ export default function AdminFawranPayments() {
         return 'bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 dark:from-green-950/20 dark:via-emerald-950/20 dark:to-teal-950/20 border-green-200 dark:border-green-800';
       case 'rejected':
         return 'bg-gradient-to-br from-red-50 via-rose-50 to-pink-50 dark:from-red-950/20 dark:via-rose-950/20 dark:to-pink-950/20 border-red-200 dark:border-red-800';
+      case 'refunded':
+        return 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/20 dark:via-indigo-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800';
       default:
         return 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/20 dark:via-indigo-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all duration-300';
     }
@@ -368,6 +403,14 @@ export default function AdminFawranPayments() {
 
       {/* Main Content */}
       <div className="p-4 space-y-6">
+        {/* Duplicate Payment Resolver */}
+        {duplicatePayments.length > 0 && (
+          <DuplicatePaymentResolver
+            duplicates={duplicatePayments}
+            onResolved={loadPayments}
+          />
+        )}
+
         {/* Enhanced Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300">
@@ -422,7 +465,7 @@ export default function AdminFawranPayments() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">
-                {payments.filter(p => isPaymentStuck(p) || p.tampering_detected).length}
+                {payments.filter(p => isPaymentStuck(p) || p.tampering_detected).length + duplicatePayments.length}
               </div>
               <div className="text-red-100 text-xs mt-1">Needs immediate attention</div>
             </CardContent>
@@ -447,6 +490,12 @@ export default function AdminFawranPayments() {
                             <Badge variant="destructive" className="text-xs animate-pulse bg-gradient-to-r from-red-500 to-rose-500 border-0">
                               <AlertTriangle className="h-3 w-3 mr-1" />
                               URGENT - STUCK PAYMENT
+                            </Badge>
+                          )}
+                          {duplicatePayments.some(d => d.email === payment.email) && (
+                            <Badge className="text-xs bg-orange-500 text-white animate-pulse">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              DUPLICATE
                             </Badge>
                           )}
                         </div>
