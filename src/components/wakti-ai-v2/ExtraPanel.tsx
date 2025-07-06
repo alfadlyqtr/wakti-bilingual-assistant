@@ -36,6 +36,14 @@ export function ExtraPanel({
   const { language } = useTheme();
   const [conversationsOpen, setConversationsOpen] = useState(false);
 
+  // Convert AIConversation to the format expected by ConversationsList
+  const mappedConversations = conversations.map(conv => ({
+    id: conv.id,
+    title: conv.title,
+    last_message_at: conv.lastMessageAt.toISOString(),
+    created_at: conv.createdAt.toISOString()
+  }));
+
   return (
     <div className="h-full overflow-y-auto space-y-4">
       {/* Personal Touch Manager - Always visible */}
@@ -61,7 +69,7 @@ export function ExtraPanel({
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-0">
           <ConversationsList
-            conversations={conversations}
+            conversations={mappedConversations}
             currentConversationId={currentConversationId}
             onSelectConversation={onSelectConversation}
             onDeleteConversation={onDeleteConversation}

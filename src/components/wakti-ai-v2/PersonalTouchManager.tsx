@@ -59,7 +59,7 @@ export function PersonalTouchManager() {
   const handleSave = () => {
     saveWaktiPersonalTouch(formData);
     
-    // NEW: Clear the cache immediately so settings take effect without refresh
+    // Clear the cache so settings take effect without refresh
     WaktiAIV2Service.clearPersonalTouchCache();
     
     showSuccess(language === 'ar' ? 'تم حفظ الإعدادات!' : 'Settings saved!');

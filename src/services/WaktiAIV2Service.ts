@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMemoryService } from './ChatMemoryService';
 
@@ -60,6 +59,13 @@ class WaktiAIV2ServiceClass {
         this.processing = false;
       }
     }, 1000); // Process queue every second
+  }
+
+  // NEW: Clear personal touch cache method
+  clearPersonalTouchCache() {
+    // Clear any cached personal touch data if we had it
+    // For now this is a placeholder since personal touch is stored in localStorage
+    console.log('Personal touch cache cleared - settings will reload from localStorage');
   }
 
   // ULTRA-FAST: Get or create conversation (with caching)
