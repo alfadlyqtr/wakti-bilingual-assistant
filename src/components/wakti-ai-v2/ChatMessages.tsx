@@ -48,13 +48,16 @@ export function ChatMessages({
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
 
+  // Limit messages to last 70 for optimal performance and memory usage
+  const displayMessages = sessionMessages.slice(-70);
+
   // Check if user is at bottom of scroll
   const checkIfAtBottom = () => {
     if (scrollAreaRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
       const atBottom = scrollHeight - scrollTop - clientHeight < 100; // 100px threshold
       setIsAtBottom(atBottom);
-      setShowScrollButton(!atBottom && sessionMessages.length > 0);
+      setShowScrollButton(!atBottom && displayMessages.length > 0);
     }
   };
 
@@ -125,10 +128,10 @@ export function ChatMessages({
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-  }, [sessionMessages, isLoading, showTaskConfirmation, isAtBottom]);
+  }, [displayMessages, isLoading, showTaskConfirmation, isAtBottom]);
 
   // Check if the last user message has attached files for better loading indicator
-  const lastUserMessage = sessionMessages.filter(msg => msg.role === 'user').pop();
+  const lastUserMessage = displayMessages.filter(msg => msg.role === 'user').pop();
   const hasAttachedFiles = lastUserMessage?.attachedFiles && lastUserMessage.attachedFiles.length > 0;
 
   // FIXED: Get AI nickname from personalTouch, fallback to "WAKTI AI"
@@ -136,8 +139,8 @@ export function ChatMessages({
 
   return (
     <>
-      <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-16">
-        {sessionMessages.length === 0 && !isLoading && (
+      <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-32">
+        {displayMessages.length === 0 && !isLoading && (
           <div className="text-center text-muted-foreground py-12">
             <div className="text-2xl mb-2">🤖</div>
             <p className="text-lg font-medium mb-2">
@@ -152,7 +155,7 @@ export function ChatMessages({
           </div>
         )}
 
-        {sessionMessages.map((message, index) => (
+        {displayMessages.map((message, index) => (
           <div key={message.id}>
             <ChatBubble
               message={message}

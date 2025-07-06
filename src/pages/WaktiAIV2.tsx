@@ -432,8 +432,8 @@ const WaktiAIV2 = () => {
         isLoading={isLoading}
       />
 
-      <div className="flex flex-col h-full w-full">
-        <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
+      <div className="flex flex-col h-full w-full relative">
+        <div className="flex-1 overflow-y-auto pb-24" ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -469,18 +469,20 @@ const WaktiAIV2 = () => {
           )}
         </div>
 
-        {/* Fixed input area */}
-        <div className="sticky bottom-0 z-10 bg-background/80 backdrop-blur-sm border-t border-border/40">
-          <ChatInput
-            message={message}
-            setMessage={setMessage}
-            isLoading={isLoading}
-            sessionMessages={sessionMessages}
-            onSendMessage={handleSendMessage}
-            onClearChat={handleClearChat}
-            onOpenPlusDrawer={handleOpenPlusDrawer}
-            activeTrigger={activeTrigger}
-          />
+        {/* FIXED: Input area now truly fixed to bottom */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
+          <div className="max-w-4xl mx-auto">
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              isLoading={isLoading}
+              sessionMessages={sessionMessages}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat}
+              onOpenPlusDrawer={handleOpenPlusDrawer}
+              activeTrigger={activeTrigger}
+            />
+          </div>
         </div>
       </div>
 

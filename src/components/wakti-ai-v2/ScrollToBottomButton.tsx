@@ -16,7 +16,7 @@ export function ScrollToBottomButton({ visible, onClick }: ScrollToBottomButtonP
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+    <div className="fixed bottom-24 right-4 z-40 animate-in fade-in slide-in-from-bottom-2 duration-200">
       <Button
         onClick={onClick}
         size="sm"
