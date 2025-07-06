@@ -91,6 +91,21 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // CRITICAL FIX: Add event listener for conversations drawer
+  useEffect(() => {
+    const handleOpenConversationsDrawer = () => {
+      console.log('💬 EXTRA BUTTON: Opening conversations drawer');
+      setShowConversations(true);
+    };
+
+    // Listen for the custom event dispatched by ChatInput
+    window.addEventListener("open-wakti-conversations", handleOpenConversationsDrawer);
+
+    return () => {
+      window.removeEventListener("open-wakti-conversations", handleOpenConversationsDrawer);
+    };
+  }, []);
+
   useEffect(() => {
     loadUserProfile();
     loadPersonalTouch();
@@ -469,8 +484,8 @@ const WaktiAIV2 = () => {
           )}
         </div>
 
-        {/* FIXED: Input area positioned above mobile nav */}
-        <div className="fixed bottom-20 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
+        {/* CRITICAL FIX: Adjusted input positioning for mobile nav clearance */}
+        <div className="fixed bottom-24 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto">
             <ChatInput
               message={message}

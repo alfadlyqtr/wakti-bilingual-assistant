@@ -14,7 +14,24 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-console.log("🚀 WAKTI AI ULTRA-FAST: Timeout-protected with pre-processing personalization");
+// CRITICAL FIX: Current date context for AI
+const getCurrentDateContext = () => {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    weekday: 'long'
+  });
+  const timeStr = now.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+  return `Current date and time: ${dateStr}, ${timeStr}`;
+};
+
+console.log("🚀 WAKTI AI ULTRA-FAST: Enhanced with current date context");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,7 +39,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 ULTRA-FAST AI: Processing with timeout protection");
+    console.log("🚀 ULTRA-FAST AI: Processing with timeout protection and current date context");
     const startTime = Date.now();
 
     // Auth handling
@@ -101,7 +118,9 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🚀 ULTRA-FAST: User ${user.id} | Personal Touch: ${!!personalTouch} | Speed Mode: ${speedOptimized} | Aggressive: ${aggressiveOptimization}`);
+    // CRITICAL FIX: Include current date in all AI processing
+    const currentDateContext = getCurrentDateContext();
+    console.log(`🚀 ULTRA-FAST: ${currentDateContext} | User ${user.id} | Personal Touch: ${!!personalTouch}`);
 
     // ULTRA-FAST: Process attached files with minimal overhead (ENHANCED for Vision)
     let processedFiles = [];
@@ -156,6 +175,7 @@ serve(async (req) => {
         taskCreationEnabled: true,
         personalizedResponse: false,
         taskDetected: true,
+        currentDateContext, // CRITICAL FIX: Include date context
         ultraFastMode: {
           speedOptimized,
           aggressiveOptimization,
@@ -191,7 +211,7 @@ serve(async (req) => {
             
             // CRITICAL FIX: Extract response field from result object
             const chatResult = await processWithBuddyChatAI(
-              `${message}\n\nSearch Context: ${context}`,
+              `${currentDateContext}\n\n${message}\n\nSearch Context: ${context}`,
               userId,
               conversationId,
               language,
@@ -206,7 +226,7 @@ serve(async (req) => {
           } else {
             // CRITICAL FIX: Extract response field from result object
             const chatResult = await processWithBuddyChatAI(
-              message,
+              `${currentDateContext}\n\n${message}`,
               userId,
               conversationId,
               language,
@@ -222,7 +242,7 @@ serve(async (req) => {
         } else {
           // CRITICAL FIX: Extract response field from result object
           const chatResult = await processWithBuddyChatAI(
-            message,
+            `${currentDateContext}\n\n${message}`,
             userId,
             conversationId,
             language,
@@ -282,9 +302,9 @@ serve(async (req) => {
         
         console.log(`🚀 ULTRA-FAST CHAT: Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
         
-        // CRITICAL FIX: Extract response field from result object
+        // CRITICAL FIX: Extract response field from result object + include date context
         const chatResult = await processWithBuddyChatAI(
-          message,
+          `${currentDateContext}\n\n${message}`,
           userId,
           conversationId,
           language,
@@ -325,6 +345,7 @@ serve(async (req) => {
       aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
+      currentDateContext, // CRITICAL FIX: Include date context in response
       ultraFastMode: {
         speedOptimized,
         aggressiveOptimization,
@@ -344,7 +365,8 @@ serve(async (req) => {
     
     return new Response(JSON.stringify({
       error: error.message || 'Processing error',
-      success: false
+      success: false,
+      currentDateContext: getCurrentDateContext() // Include date even in errors
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Mic2, FileAudio, Languages, Sparkles } from 'lucide-react';
+import { Mic2, FileAudio, Languages, Sparkles, Volume2 } from 'lucide-react';
 
 interface VoiceCloneScreen1Props {
   onNext: () => void;
@@ -121,21 +120,38 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
         </p>
       </div>
 
-      <div className="flex gap-3 pt-4">
+      <div className="space-y-3 pt-4">
+        {/* Primary action - Clone voice */}
         <Button 
           onClick={onNext}
-          className="flex-[2]"
+          className="w-full h-12 text-base"
         >
-          {language === 'ar' ? 'ابدأ / استنسخ الأصوات' : 'Get Started / Clone Voices'}
+          <Mic2 className="h-5 w-5 mr-2" />
+          {language === 'ar' ? 'استنسخ صوتي' : 'Clone My Voice'}
         </Button>
         
+        {/* Secondary action - Use default voice and go to translator */}
+        <Button 
+          onClick={onSkip}
+          variant="outline"
+          className="w-full h-12 text-base"
+        >
+          <Volume2 className="h-5 w-5 mr-2" />
+          {language === 'ar' ? 'استخدم الصوت الافتراضي والمترجم' : 'Use Default Voice & Translator'}
+        </Button>
+
+        {/* Existing voices option */}
         {hasExistingVoices && (
           <Button 
-            onClick={onSkip}
-            variant="outline"
-            className="flex-1"
+            onClick={() => {
+              // Navigate to voice management screen
+              console.log('Navigate to existing voices');
+            }}
+            variant="ghost"
+            className="w-full h-10 text-sm"
           >
-            {language === 'ar' ? 'المترجم' : 'Translator'}
+            <FileAudio className="h-4 w-4 mr-2" />
+            {language === 'ar' ? 'إدارة الأصوات الموجودة' : 'Manage Existing Voices'}
           </Button>
         )}
       </div>

@@ -63,15 +63,18 @@ export function ChatInput({
     clearFiles
   } = useOptimizedFileUpload();
 
-  // Handler to open Conversations Drawer (💬)
+  // CRITICAL FIX: Handler to open Conversations Drawer (💬)
   const handleOpenConversationsDrawer = () => {
+    console.log('💬 EXTRA BUTTON: Dispatching custom event');
     if (typeof window !== "undefined") {
       const nativeEvent = new CustomEvent("open-wakti-conversations");
       window.dispatchEvent(nativeEvent);
     }
   };
+  
   // Handler to open Quick Actions Drawer (⚡)
   const handleOpenQuickActionsDrawer = () => {
+    console.log('⚡ QUICK ACTIONS: Opening drawer');
     if (onOpenPlusDrawer) onOpenPlusDrawer();
   };
 
@@ -168,8 +171,8 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main Input Area */}
-        <div className="px-2 pb-2">
+        {/* Main Input Area - CRITICAL FIX: Improved spacing and padding */}
+        <div className="px-3 pb-3">
           <div className="max-w-4xl mx-auto">
             <div
               className={`
@@ -189,10 +192,11 @@ export function ChatInput({
                   onUpload={triggerUpload}
                   isLoading={isLoading}
                 />
+                {/* CRITICAL FIX: Enhanced Extra button with proper event dispatch */}
                 <button
                   onClick={handleOpenConversationsDrawer}
                   aria-label={language === "ar" ? "إضافي" : "Extra"}
-                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
+                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
                   disabled={isLoading}
                   type="button"
                   tabIndex={0}
@@ -202,10 +206,11 @@ export function ChatInput({
                     {language === 'ar' ? 'إضافي' : 'Extra'}
                   </span>
                 </button>
+                {/* CRITICAL FIX: Enhanced Quick Actions button */}
                 <button
                   onClick={handleOpenQuickActionsDrawer}
                   aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
-                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
+                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
                   disabled={isLoading}
                   type="button"
                   tabIndex={0}
@@ -234,8 +239,9 @@ export function ChatInput({
                   className="hidden"
                 />
               </div>
-              {/* INPUT ROW: Textarea + Send */}
-              <div className="relative flex items-end gap-1 px-3 pb-2 pt-0.5">
+              
+              {/* INPUT ROW: Textarea + Send - CRITICAL FIX: Better spacing and height management */}
+              <div className="relative flex items-end gap-2 px-3 pb-3 pt-0.5">
                 <div className="flex-1 flex items-end">
                   <Textarea
                     value={message}
@@ -248,7 +254,7 @@ export function ChatInput({
                       shadow-inner shadow-primary/10
                       backdrop-blur-[3px] resize-none
                       focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
-                      py-3 px-3 min-h-[36px] max-h-32 text-base
+                      py-3 px-4 min-h-[42px] max-h-32 text-base leading-relaxed
                       placeholder:text-foreground/50
                       rounded-xl
                       outline-none transition-all duration-200
