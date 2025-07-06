@@ -32,13 +32,13 @@ export interface ConversationContext {
 }
 
 class WaktiAIV2ServiceClass {
-  private memoryService: ChatMemoryService;
+  private memoryService: typeof ChatMemoryService;
   private conversationCache = new Map<string, ConversationContext>();
   private saveQueue: Array<() => Promise<void>> = [];
   private processing = false;
 
   constructor() {
-    this.memoryService = new ChatMemoryService();
+    this.memoryService = ChatMemoryService;
     this.startBackgroundProcessor();
   }
 
@@ -61,7 +61,7 @@ class WaktiAIV2ServiceClass {
     }, 1000); // Process queue every second
   }
 
-  // NEW: Clear personal touch cache method
+  // Clear personal touch cache method
   clearPersonalTouchCache() {
     // Clear any cached personal touch data if we had it
     // For now this is a placeholder since personal touch is stored in localStorage
@@ -314,8 +314,7 @@ class WaktiAIV2ServiceClass {
       // ULTRA-FAST: Update memory service in background
       this.saveQueue.push(async () => {
         try {
-          await this.memoryService.addMessage(userMessage);
-          await this.memoryService.addMessage(assistantMessage);
+          await this.memoryService.addExchange(userMessage.content, assistantMessage.content, userId);
           console.log('✅ Memory: ChatMemoryService updated');
         } catch (error) {
           console.warn('Memory service update failed:', error);
