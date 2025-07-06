@@ -81,20 +81,42 @@ export async function processWithBuddyChatAI(
     // Prepare messages for API
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...contextMessages,
-      { role: 'user', content: message }
+      ...contextMessages
     ];
 
-    // Handle vision files if present
+    // CRITICAL FIX: Handle vision files correctly
     if (processedFiles && processedFiles.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      lastMessage.content = [
-        { type: 'text', text: message },
-        ...processedFiles.map(file => ({
-          type: 'image_url',
-          image_url: { url: file.publicUrl || file.url }
-        }))
+      console.log('📁 VISION API: Processing files for AI:', JSON.stringify(processedFiles.map(f => ({
+        type: f.type,
+        name: f.name,
+        hasImageUrl: !!f.image_url,
+        imageUrlType: f.image_url?.url ? 'url' : 'unknown'
+      })), null, 2));
+
+      // Create content array with text and images
+      const messageContent = [
+        { type: 'text', text: message }
       ];
+
+      // Add images to the message content
+      for (const file of processedFiles) {
+        if (file.type === 'image_url' && file.image_url && file.image_url.url) {
+          console.log(`🖼️ VISION API: Adding image to message: ${file.name}`);
+          messageContent.push({
+            type: 'image_url',
+            image_url: {
+              url: file.image_url.url,
+              detail: file.image_url.detail || 'high'
+            }
+          });
+        } else {
+          console.error(`❌ VISION API: Invalid file structure for ${file.name}:`, file);
+        }
+      }
+
+      messages.push({ role: 'user', content: messageContent });
+    } else {
+      messages.push({ role: 'user', content: message });
     }
 
     // ULTRA-FAST: Use available API with timeout protection
@@ -105,7 +127,7 @@ export async function processWithBuddyChatAI(
     
     const model = OPENAI_API_KEY ? 'gpt-4o-mini' : 'deepseek-chat';
 
-    console.log(`🚀 ULTRA-FAST: Using ${OPENAI_API_KEY ? 'OpenAI' : 'DeepSeek'} with context: ${contextMessages.length} messages`);
+    console.log(`🚀 ULTRA-FAST: Using ${OPENAI_API_KEY ? 'OpenAI' : 'DeepSeek'} with context: ${contextMessages.length} messages, files: ${processedFiles.length}`);
 
     const response = await Promise.race([
       fetch(apiUrl, {

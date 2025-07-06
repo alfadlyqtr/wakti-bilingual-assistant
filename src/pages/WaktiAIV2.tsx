@@ -126,11 +126,13 @@ const WaktiAIV2 = () => {
   };
 
   // Message sending with task creation detection
-  const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text') => {
+  const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
       return;
     }
+
+    console.log('🚀 SEND MESSAGE: Starting with files:', attachedFiles);
 
     setIsLoading(true);
     setError(null);
@@ -147,7 +149,7 @@ const WaktiAIV2 = () => {
         content: messageContent,
         timestamp: new Date(),
         inputType: inputType,
-        attachedFiles: processedFiles
+        attachedFiles: attachedFiles // Pass the files to display in UI
       };
       
       setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
@@ -176,7 +178,7 @@ const WaktiAIV2 = () => {
         currentConversationId,
         inputType,
         activeTrigger,
-        processedFiles,
+        attachedFiles, // Pass files to AI service
         handleStreamUpdate,
         handleTaskDetected // Pass task detection callback
       );

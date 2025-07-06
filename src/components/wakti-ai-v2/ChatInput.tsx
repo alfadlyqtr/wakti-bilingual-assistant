@@ -88,15 +88,18 @@ export function ChatInput({
 
   const handleSend = () => {
     if (message.trim() || uploadedFiles.length > 0) {
-      // Convert optimized files to format expected by AI service
+      // CRITICAL FIX: Convert optimized files to format expected by AI service
       const optimizedFiles = uploadedFiles.map(file => ({
         id: file.id,
         name: file.name,
         type: file.type,
         size: file.size,
+        url: file.url,
         publicUrl: file.publicUrl,
         optimized: true // Flag to indicate this is an optimized upload
       }));
+      
+      console.log('📤 SENDING FILES:', optimizedFiles);
       
       onSendMessage(message, 'text', optimizedFiles.length > 0 ? optimizedFiles : undefined);
       setMessage('');
@@ -111,6 +114,7 @@ export function ChatInput({
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
+      console.log('📁 FILE INPUT: Selected files:', files.length);
       await uploadFiles(files);
     }
     if (fileInputRef.current) {
@@ -119,6 +123,7 @@ export function ChatInput({
   };
 
   const handleFilesSelected = async (files: FileList) => {
+    console.log('📁 DRAG DROP: Selected files:', files.length);
     await uploadFiles(files);
   };
 
@@ -126,6 +131,7 @@ export function ChatInput({
   const handleCameraChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
+      console.log('📸 CAMERA: Captured files:', files.length);
       // Use the same optimized upload system as regular files
       await uploadFiles(files);
     }
@@ -142,7 +148,7 @@ export function ChatInput({
   return (
     <div className="w-full">
       <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
-        {/* Uploaded Files Display - Updated to show optimized files */}
+        {/* Uploaded Files Display - CRITICAL FIX: Enhanced display */}
         {uploadedFiles.length > 0 && (
           <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
             <div className="max-w-4xl mx-auto">
@@ -153,7 +159,7 @@ export function ChatInput({
                 <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
                   {uploadedFiles.length}
                 </span>
-                <span className="text-xs text-green-500">⚡ Optimized</span>
+                <span className="text-xs text-green-500">⚡ Ready for AI</span>
               </div>
               <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
                 {uploadedFiles.map((file, index) => (
