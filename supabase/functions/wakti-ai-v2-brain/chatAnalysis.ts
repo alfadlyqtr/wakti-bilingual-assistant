@@ -84,13 +84,15 @@ export async function processWithBuddyChatAI(
       ...contextMessages
     ];
 
-    // CRITICAL FIX: Handle vision files correctly
+    // CRITICAL FIX: Enhanced Vision API file processing with proper format handling
     if (processedFiles && processedFiles.length > 0) {
       console.log('📁 VISION API: Processing files for AI:', JSON.stringify(processedFiles.map(f => ({
         type: f.type,
         name: f.name,
         hasImageUrl: !!f.image_url,
-        imageUrlType: f.image_url?.url ? 'url' : 'unknown'
+        hasPublicUrl: !!f.publicUrl,
+        hasUrl: !!f.url,
+        optimized: f.optimized
       })), null, 2));
 
       // Create content array with text and images
@@ -98,19 +100,52 @@ export async function processWithBuddyChatAI(
         { type: 'text', text: message }
       ];
 
-      // Add images to the message content
+      // CRITICAL FIX: Handle different file input formats and convert to Vision API format
       for (const file of processedFiles) {
-        if (file.type === 'image_url' && file.image_url && file.image_url.url) {
-          console.log(`🖼️ VISION API: Adding image to message: ${file.name}`);
-          messageContent.push({
-            type: 'image_url',
-            image_url: {
-              url: file.image_url.url,
-              detail: file.image_url.detail || 'high'
-            }
-          });
-        } else {
-          console.error(`❌ VISION API: Invalid file structure for ${file.name}:`, file);
+        if (file.type && file.type.startsWith('image/')) {
+          let imageUrl = null;
+          
+          // Method 1: Check if it's already in Vision API format
+          if (file.type === 'image_url' && file.image_url && file.image_url.url) {
+            console.log(`🖼️ VISION API: Using existing Vision format for ${file.name}`);
+            messageContent.push({
+              type: 'image_url',
+              image_url: {
+                url: file.image_url.url,
+                detail: file.image_url.detail || 'high'
+              }
+            });
+            continue;
+          }
+          
+          // Method 2: Convert from optimized upload format
+          if (file.optimized && file.publicUrl) {
+            console.log(`🖼️ VISION API: Converting optimized upload for ${file.name}`);
+            imageUrl = file.publicUrl;
+          }
+          // Method 3: Use regular URL
+          else if (file.url) {
+            console.log(`🖼️ VISION API: Using regular URL for ${file.name}`);
+            imageUrl = file.url;
+          }
+          // Method 4: Use publicUrl without optimized flag
+          else if (file.publicUrl) {
+            console.log(`🖼️ VISION API: Using publicUrl for ${file.name}`);
+            imageUrl = file.publicUrl;
+          }
+
+          if (imageUrl) {
+            messageContent.push({
+              type: 'image_url',
+              image_url: {
+                url: imageUrl,
+                detail: 'high' // For better image analysis
+              }
+            });
+            console.log(`✅ Successfully processed image for Vision API: ${file.name}`);
+          } else {
+            console.error(`❌ No valid URL found for image: ${file.name}`, file);
+          }
         }
       }
 

@@ -31,7 +31,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI ULTRA-FAST: Enhanced with current date context");
+console.log("🚀 WAKTI AI ULTRA-FAST: Enhanced with current date context and fixed Vision API");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -122,7 +122,7 @@ serve(async (req) => {
     const currentDateContext = getCurrentDateContext();
     console.log(`🚀 ULTRA-FAST: ${currentDateContext} | User ${user.id} | Personal Touch: ${!!personalTouch}`);
 
-    // CRITICAL FIX: Enhanced file processing with comprehensive format handling
+    // CRITICAL FIX: Enhanced file processing with proper format standardization
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
       console.log(`📁 PROCESSING ${attachedFiles.length} files:`, JSON.stringify(attachedFiles.map(f => ({
@@ -130,11 +130,10 @@ serve(async (req) => {
         type: f.type,
         hasUrl: !!f.url,
         hasPublicUrl: !!f.publicUrl,
-        hasContent: !!f.content,
         optimized: f.optimized
       })), null, 2));
       
-      processedFiles = await processAttachedFilesRobust(attachedFiles);
+      processedFiles = await processAttachedFilesForVision(attachedFiles);
       console.log(`🚀 ULTRA-FAST: Successfully processed ${processedFiles.length} files for Vision API`);
     }
 
@@ -383,56 +382,51 @@ serve(async (req) => {
   }
 });
 
-// CRITICAL FIX: Bulletproof file processing with comprehensive format handling
-async function processAttachedFilesRobust(attachedFiles: any[]): Promise<any[]> {
+// CRITICAL FIX: Dedicated Vision API file processing function
+async function processAttachedFilesForVision(attachedFiles: any[]): Promise<any[]> {
   if (!attachedFiles || attachedFiles.length === 0) {
-    console.log("📁 No files to process");
+    console.log("📁 No files to process for Vision API");
     return [];
   }
 
-  console.log("📁 ROBUST FILE PROCESSING: Starting with", attachedFiles.length, "files");
+  console.log("📁 VISION API FILE PROCESSING: Starting with", attachedFiles.length, "files");
 
   const processedFiles = [];
 
   for (let i = 0; i < attachedFiles.length; i++) {
     const file = attachedFiles[i];
-    console.log(`📁 Processing file ${i + 1}:`, {
+    console.log(`📁 Processing file ${i + 1} for Vision API:`, {
       name: file.name,
       type: file.type,
       size: file.size,
       hasUrl: !!file.url,
       hasPublicUrl: !!file.publicUrl,
-      hasContent: !!file.content,
       optimized: file.optimized
     });
 
     try {
-      // CRITICAL: Handle images for Vision API
+      // CRITICAL: Handle images for Vision API with standardized format
       if (file.type && file.type.startsWith('image/')) {
         let imageUrl = null;
         
-        // Method 1: Try optimized public URL first (preferred)
+        // Method 1: Try optimized public URL first (preferred for uploads)
         if (file.optimized && file.publicUrl) {
-          console.log(`🖼️ Using optimized public URL for ${file.name}`);
+          console.log(`🖼️ VISION API: Using optimized public URL for ${file.name}`);
           imageUrl = file.publicUrl;
         }
         // Method 2: Try regular URL
         else if (file.url) {
-          console.log(`🖼️ Using regular URL for ${file.name}`);
+          console.log(`🖼️ VISION API: Using regular URL for ${file.name}`);
           imageUrl = file.url;
         }
         // Method 3: Try publicUrl without optimized flag
         else if (file.publicUrl) {
-          console.log(`🖼️ Using publicUrl for ${file.name}`);
+          console.log(`🖼️ VISION API: Using publicUrl for ${file.name}`);
           imageUrl = file.publicUrl;
-        }
-        // Method 4: Fall back to Base64 if available
-        else if (file.content) {
-          console.log(`🖼️ Using Base64 content for ${file.name}`);
-          imageUrl = `data:${file.type};base64,${file.content}`;
         }
 
         if (imageUrl) {
+          // STANDARDIZED FORMAT: Always use the same Vision API format
           processedFiles.push({
             type: 'image_url',
             image_url: {
@@ -443,41 +437,29 @@ async function processAttachedFilesRobust(attachedFiles: any[]): Promise<any[]> 
             originalType: file.type,
             size: file.size
           });
-          console.log(`✅ Successfully processed image: ${file.name}`);
+          console.log(`✅ Successfully processed image for Vision API: ${file.name}`);
         } else {
-          console.error(`❌ No valid URL found for image: ${file.name}`);
+          console.error(`❌ No valid URL found for image: ${file.name}`, file);
         }
       }
-      // Handle text files
+      // Handle text files (if needed)
       else if (file.type === 'text/plain' && file.content) {
         console.log(`📄 Processing text file: ${file.name}`);
         processedFiles.push({
           type: 'text',
-          content: atob(file.content), // Decode Base64 text content
+          content: file.content,
           name: file.name,
           originalType: file.type
         });
         console.log(`✅ Successfully processed text file: ${file.name}`);
       }
-      // Handle other file types
-      else {
-        console.log(`📎 Processing generic file: ${file.name}`);
-        processedFiles.push({
-          type: 'file',
-          name: file.name,
-          originalType: file.type,
-          size: file.size,
-          url: file.url || file.publicUrl
-        });
-        console.log(`✅ Successfully processed file: ${file.name}`);
-      }
     } catch (error) {
-      console.error(`❌ Error processing file ${file.name}:`, error);
+      console.error(`❌ Error processing file ${file.name} for Vision API:`, error);
       // Continue processing other files even if one fails
     }
   }
 
-  console.log(`📁 ROBUST FILE PROCESSING: Completed. Processed ${processedFiles.length}/${attachedFiles.length} files successfully`);
+  console.log(`📁 VISION API FILE PROCESSING: Completed. Processed ${processedFiles.length}/${attachedFiles.length} files successfully`);
   
   return processedFiles;
 }

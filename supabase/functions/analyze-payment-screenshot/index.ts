@@ -7,6 +7,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// CRITICAL FIX: Add OpenAI Vision API for actual screenshot analysis
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+
 interface PaymentAnalysisResult {
   paymentValid: boolean;
   amount?: number;
@@ -17,6 +20,7 @@ interface PaymentAnalysisResult {
   duplicateDetected: boolean;
   confidence: number;
   issues: string[];
+  visionAnalysis?: any; // NEW: Vision analysis results
 }
 
 serve(async (req) => {
@@ -53,11 +57,12 @@ serve(async (req) => {
       id: payment.id,
       email: payment.email,
       amount: payment.amount,
-      plan_type: payment.plan_type
+      plan_type: payment.plan_type,
+      has_screenshot: !!payment.screenshot_url
     });
 
-    // BULLETPROOF ANALYSIS - Multiple validation layers
-    const analysisResult = await performEnhancedAnalysis(payment);
+    // ENHANCED ANALYSIS - Multiple validation layers with Vision AI
+    const analysisResult = await performEnhancedAnalysisWithVision(payment);
     
     console.log('🧠 Analysis result:', analysisResult);
 
@@ -67,7 +72,7 @@ serve(async (req) => {
 
     if (analysisResult.paymentValid && analysisResult.confidence >= 0.8) {
       finalStatus = 'approved';
-      reviewNotes = `✅ AUTOMATED APPROVAL - High confidence validation (${Math.round(analysisResult.confidence * 100)}%)`;
+      reviewNotes = `✅ AUTOMATED APPROVAL - High confidence validation (${Math.round(analysisResult.confidence * 100)}%)${analysisResult.visionAnalysis ? ' with Vision AI verification' : ''}`;
       
       // Activate subscription immediately for high-confidence approvals
       try {
@@ -138,7 +143,8 @@ serve(async (req) => {
       paymentId,
       finalStatus,
       confidence: analysisResult.confidence,
-      autoProcessed: finalStatus !== 'pending'
+      autoProcessed: finalStatus !== 'pending',
+      visionUsed: !!analysisResult.visionAnalysis
     });
 
     return new Response(JSON.stringify({
@@ -165,11 +171,53 @@ serve(async (req) => {
   }
 });
 
-async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisResult> {
+async function performEnhancedAnalysisWithVision(payment: any): Promise<PaymentAnalysisResult> {
   const issues: string[] = [];
   let confidence = 1.0;
+  let visionAnalysis = null;
   
-  // 1. BASIC VALIDATION
+  // 1. VISION AI ANALYSIS (NEW FEATURE)
+  if (payment.screenshot_url && OPENAI_API_KEY) {
+    console.log('🔍 VISION AI: Analyzing screenshot with OpenAI Vision API');
+    try {
+      visionAnalysis = await analyzeScreenshotWithVision(payment.screenshot_url, payment.amount, payment.plan_type);
+      
+      if (visionAnalysis.success) {
+        console.log('✅ VISION AI: Analysis successful', visionAnalysis.findings);
+        
+        // Adjust confidence based on vision analysis
+        if (visionAnalysis.confidence_score >= 0.8) {
+          confidence *= 1.2; // Boost confidence for good vision analysis
+        } else if (visionAnalysis.confidence_score < 0.3) {
+          confidence *= 0.3; // Reduce confidence for poor vision analysis
+          issues.push('Vision AI detected suspicious screenshot content');
+        }
+        
+        // Check for specific vision findings
+        if (visionAnalysis.findings.amount_mismatch) {
+          issues.push('Vision AI detected amount mismatch in screenshot');
+          confidence *= 0.2;
+        }
+        
+        if (visionAnalysis.findings.tampered_detected) {
+          issues.push('Vision AI detected potential tampering');
+          confidence *= 0.1;
+        }
+      } else {
+        console.warn('⚠️ VISION AI: Analysis failed, falling back to basic validation');
+        issues.push('Vision AI analysis failed');
+        confidence *= 0.8; // Slight penalty for failed vision analysis
+      }
+    } catch (visionError) {
+      console.error('❌ VISION AI: Error during analysis:', visionError);
+      issues.push('Vision AI processing error');
+      confidence *= 0.8;
+    }
+  } else if (!OPENAI_API_KEY) {
+    console.warn('⚠️ VISION AI: OpenAI API key not configured, skipping Vision analysis');
+  }
+  
+  // 2. BASIC VALIDATION (existing logic)
   if (!payment.screenshot_url) {
     issues.push('No screenshot provided');
     confidence *= 0.1;
@@ -180,7 +228,7 @@ async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisRes
     confidence *= 0.7;
   }
   
-  // 2. TIME VALIDATION - Check if payment was submitted within reasonable time
+  // 3. TIME VALIDATION - Check if payment was submitted within reasonable time
   const submittedAt = new Date(payment.submitted_at);
   const now = new Date();
   const timeDiff = now.getTime() - submittedAt.getTime();
@@ -192,7 +240,7 @@ async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisRes
     confidence *= 0.3;
   }
   
-  // 3. AMOUNT VALIDATION
+  // 4. AMOUNT VALIDATION
   const expectedAmount = payment.plan_type === 'monthly' ? 60 : 600;
   const amountValid = payment.amount === expectedAmount;
   if (!amountValid) {
@@ -200,7 +248,7 @@ async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisRes
     confidence *= 0.2;
   }
   
-  // 4. DUPLICATE DETECTION - Enhanced check
+  // 5. DUPLICATE DETECTION - Enhanced check
   let duplicateDetected = false;
   try {
     // Check for multiple payments from same user with same amount in last 24 hours
@@ -225,7 +273,7 @@ async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisRes
     console.warn('⚠️ Duplicate check failed:', dupError);
   }
   
-  // 5. TAMPERING DETECTION - Basic checks
+  // 6. TAMPERING DETECTION - Basic checks
   let tamperingDetected = false;
   
   // Check for suspicious patterns in screenshot URL
@@ -235,7 +283,12 @@ async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisRes
     confidence *= 0.1;
   }
   
-  // 6. SENDER ALIAS VALIDATION
+  // Add vision-based tampering detection
+  if (visionAnalysis && visionAnalysis.findings && visionAnalysis.findings.tampered_detected) {
+    tamperingDetected = true;
+  }
+  
+  // 7. SENDER ALIAS VALIDATION
   if (payment.sender_alias) {
     // Basic format validation for Qatar banking aliases
     const aliasPattern = /^[a-zA-Z0-9]{3,20}$/;
@@ -245,11 +298,11 @@ async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisRes
     }
   }
   
-  // 7. CONFIDENCE CALCULATION
+  // 8. CONFIDENCE CALCULATION
   const baseConfidence = 0.8; // Start with high confidence
   const finalConfidence = Math.max(0, Math.min(1, confidence * baseConfidence));
   
-  // 8. PAYMENT VALIDITY DETERMINATION
+  // 9. PAYMENT VALIDITY DETERMINATION
   const paymentValid = finalConfidence >= 0.3 && !tamperingDetected && amountValid;
   
   console.log('🔍 Enhanced analysis details:', {
@@ -259,7 +312,8 @@ async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisRes
     tamperingDetected,
     confidence: finalConfidence,
     issues: issues.length,
-    paymentValid
+    paymentValid,
+    visionAnalysisUsed: !!visionAnalysis
   });
   
   return {
@@ -271,6 +325,117 @@ async function performEnhancedAnalysis(payment: any): Promise<PaymentAnalysisRes
     tamperingDetected,
     duplicateDetected,
     confidence: finalConfidence,
-    issues
+    issues,
+    visionAnalysis // Include vision analysis results
   };
+}
+
+// NEW FUNCTION: Vision AI screenshot analysis
+async function analyzeScreenshotWithVision(screenshotUrl: string, expectedAmount: number, planType: string) {
+  try {
+    console.log('🔍 VISION AI: Analyzing screenshot:', screenshotUrl);
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', // Vision-capable model
+        messages: [
+          {
+            role: 'system',
+            content: `You are a payment screenshot analyzer for Fawran payment system in Qatar. 
+            Expected payment amount: ${expectedAmount} QAR for ${planType} plan.
+            Analyze the screenshot for:
+            1. Payment amount verification
+            2. Sender information
+            3. Transaction timestamp
+            4. Signs of tampering or editing
+            5. Overall authenticity
+            
+            Respond with JSON format:
+            {
+              "amount_found": number or null,
+              "amount_matches": boolean,
+              "sender_info": "string or null",
+              "timestamp_visible": boolean,
+              "tampered_detected": boolean,
+              "authenticity_score": 0.0-1.0,
+              "confidence_score": 0.0-1.0,
+              "details": "analysis details"
+            }`
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Please analyze this Fawran payment screenshot. Expected amount: ${expectedAmount} QAR`
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: screenshotUrl,
+                  detail: 'high'
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.1 // Low temperature for consistent analysis
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Vision API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const analysisText = data.choices[0].message.content;
+    
+    console.log('🔍 VISION AI: Raw analysis:', analysisText);
+    
+    // Try to parse JSON response
+    let parsedAnalysis;
+    try {
+      parsedAnalysis = JSON.parse(analysisText);
+    } catch (parseError) {
+      console.warn('⚠️ VISION AI: Failed to parse JSON, using fallback');
+      parsedAnalysis = {
+        amount_found: null,
+        amount_matches: false,
+        sender_info: null,
+        timestamp_visible: false,
+        tampered_detected: false,
+        authenticity_score: 0.5,
+        confidence_score: 0.3,
+        details: analysisText
+      };
+    }
+    
+    return {
+      success: true,
+      findings: {
+        amount_found: parsedAnalysis.amount_found,
+        amount_mismatch: !parsedAnalysis.amount_matches,
+        sender_info: parsedAnalysis.sender_info,
+        timestamp_visible: parsedAnalysis.timestamp_visible,
+        tampered_detected: parsedAnalysis.tampered_detected,
+        authenticity_score: parsedAnalysis.authenticity_score || 0.5
+      },
+      confidence_score: parsedAnalysis.confidence_score || 0.5,
+      raw_analysis: analysisText
+    };
+    
+  } catch (error) {
+    console.error('❌ VISION AI: Analysis failed:', error);
+    return {
+      success: false,
+      error: error.message,
+      confidence_score: 0
+    };
+  }
 }
