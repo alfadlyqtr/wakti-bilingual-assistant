@@ -12,8 +12,8 @@ export interface OptimizedUploadedFile {
   publicUrl: string;
   optimized: boolean;
   thumbnail?: string;
-  // CRITICAL: Add Vision API compatible format
-  image_url?: {
+  // CRITICAL: Vision API compatible format
+  image_url: {
     url: string;
     detail: string;
   };
@@ -26,7 +26,7 @@ export function useOptimizedFileUpload() {
 
   const uploadFiles = async (files: FileList) => {
     setIsUploading(true);
-    console.log('📤 OPTIMIZED UPLOAD: Starting upload of', files.length, 'files');
+    console.log('📤 VISION UPLOAD: Starting upload of', files.length, 'files');
     
     const uploadPromises = Array.from(files).map(uploadSingleFile);
     
@@ -37,14 +37,14 @@ export function useOptimizedFileUpload() {
       if (successfulUploads.length > 0) {
         setUploadedFiles(prev => [...prev, ...successfulUploads]);
         showSuccess(`Successfully uploaded ${successfulUploads.length} file(s)`);
-        console.log('✅ OPTIMIZED UPLOAD: Successfully uploaded', successfulUploads.length, 'files');
+        console.log('✅ VISION UPLOAD: Successfully uploaded', successfulUploads.length, 'files with Vision format');
       }
       
       if (successfulUploads.length < files.length) {
         showError(`Failed to upload ${files.length - successfulUploads.length} file(s)`);
       }
     } catch (error) {
-      console.error('❌ OPTIMIZED UPLOAD: Upload error:', error);
+      console.error('❌ VISION UPLOAD: Upload error:', error);
       showError('Failed to upload files');
     } finally {
       setIsUploading(false);
@@ -55,14 +55,14 @@ export function useOptimizedFileUpload() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.error('❌ OPTIMIZED UPLOAD: User not authenticated');
+        console.error('❌ VISION UPLOAD: User not authenticated');
         throw new Error('User not authenticated');
       }
 
       const fileId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const filePath = `${user.id}/${fileId}-${file.name}`;
 
-      console.log(`📤 OPTIMIZED UPLOAD: Uploading file: ${file.name} (${file.type}) to path: ${filePath}`);
+      console.log(`📤 VISION UPLOAD: Uploading file: ${file.name} (${file.type}) to path: ${filePath}`);
 
       // Upload to ai-temp-images bucket
       const { error: uploadError } = await supabase.storage
@@ -73,7 +73,7 @@ export function useOptimizedFileUpload() {
         });
 
       if (uploadError) {
-        console.error('❌ OPTIMIZED UPLOAD: Storage upload error:', uploadError);
+        console.error('❌ VISION UPLOAD: Storage upload error:', uploadError);
         throw uploadError;
       }
 
@@ -82,17 +82,19 @@ export function useOptimizedFileUpload() {
         .from('ai-temp-images')
         .getPublicUrl(filePath);
 
+      console.log(`📤 VISION UPLOAD: Generated public URL: ${publicUrl}`);
+
       // Create thumbnail for images if needed
       let thumbnail = undefined;
       if (file.type.startsWith('image/')) {
         try {
           thumbnail = await createImageThumbnail(file);
         } catch (thumbError) {
-          console.warn('⚠️ OPTIMIZED UPLOAD: Thumbnail creation failed:', thumbError);
+          console.warn('⚠️ VISION UPLOAD: Thumbnail creation failed:', thumbError);
         }
       }
 
-      // CRITICAL FIX: Create Vision API compatible format
+      // CRITICAL: Create properly formatted file object for Vision API
       const optimizedFile: OptimizedUploadedFile = {
         id: fileId,
         name: file.name,
@@ -102,17 +104,19 @@ export function useOptimizedFileUpload() {
         publicUrl,
         optimized: true,
         thumbnail,
-        // DIRECT Vision API format for images
-        image_url: file.type.startsWith('image/') ? {
+        // DIRECT Vision API format - this is what OpenAI expects
+        image_url: {
           url: publicUrl,
           detail: 'high'
-        } : undefined
+        }
       };
 
-      console.log(`✅ OPTIMIZED UPLOAD: Successfully uploaded with Vision format: ${file.name} -> ${publicUrl}`);
+      console.log(`✅ VISION UPLOAD: File ready for Vision API: ${file.name}`);
+      console.log(`🔗 VISION URL: ${publicUrl}`);
+      
       return optimizedFile;
     } catch (error) {
-      console.error(`❌ OPTIMIZED UPLOAD: Single file upload error for ${file.name}:`, error);
+      console.error(`❌ VISION UPLOAD: Single file upload error for ${file.name}:`, error);
       showError(`Failed to upload ${file.name}: ${error.message}`);
       return null;
     }
@@ -154,12 +158,12 @@ export function useOptimizedFileUpload() {
   };
 
   const removeFile = (fileId: string) => {
-    console.log('🗑️ OPTIMIZED UPLOAD: Removing file:', fileId);
+    console.log('🗑️ VISION UPLOAD: Removing file:', fileId);
     setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
   const clearFiles = () => {
-    console.log('🗑️ OPTIMIZED UPLOAD: Clearing all files');
+    console.log('🗑️ VISION UPLOAD: Clearing all files');
     setUploadedFiles([]);
   };
 

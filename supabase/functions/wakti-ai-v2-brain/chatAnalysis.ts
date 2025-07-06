@@ -17,9 +17,10 @@ export async function processWithBuddyChatAI(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log('🚀 VISION AI: Processing with restored Vision system');
+    console.log('🚀 VISION AI: Processing message with Vision system');
+    console.log('🖼️ VISION FILES:', processedFiles.length, 'files provided');
     
-    // NEW: Check for task creation triggers
+    // Check for task creation triggers
     const taskTriggers = {
       en: ['create task', 'create a task', 'new task', 'add task', 'make task', 'create reminder', 'remind me'],
       ar: ['أنشئ مهمة', 'إنشاء مهمة', 'مهمة جديدة', 'أضف مهمة', 'أنشئ تذكير', 'ذكرني']
@@ -49,8 +50,15 @@ export async function processWithBuddyChatAI(
     }));
     contextMessages.push(...formattedRecentMessages);
     
-    // Build system prompt with personalization + task creation awareness
-    let systemPrompt = `You are WAKTI AI, an intelligent assistant. Be helpful, concise, and friendly.`;
+    // CRITICAL: Enhanced system prompt for Vision API
+    let systemPrompt = `You are WAKTI AI, an intelligent assistant with vision capabilities. When users send images:
+
+1. ALWAYS acknowledge that you can see the image by starting with "I can see..."
+2. Describe what you observe in detail
+3. Answer any questions about the image content
+4. Be helpful, concise, and friendly
+
+If you cannot see an image that was sent, something is wrong with the system.`;
     
     if (shouldCreateTask) {
       systemPrompt += ` The user wants to create a task or reminder. Acknowledge this and provide helpful suggestions about the task details.`;
@@ -84,27 +92,24 @@ export async function processWithBuddyChatAI(
       ...contextMessages
     ];
 
-    // RESTORED: Direct Vision API processing with proper format handling
+    // CRITICAL: Process images for Vision API
     if (processedFiles && processedFiles.length > 0) {
-      console.log('🖼️ VISION API: Processing files with restored format:', JSON.stringify(processedFiles.map(f => ({
-        type: f.type,
-        name: f.name,
-        hasImageUrl: !!f.image_url,
-        hasPublicUrl: !!f.publicUrl,
-        optimized: f.optimized
-      })), null, 2));
-
+      console.log('🖼️ VISION API: Processing', processedFiles.length, 'files for Vision');
+      
       // Create content array with text and images
       const messageContent = [
         { type: 'text', text: message }
       ];
 
-      // RESTORED: Handle Vision API format directly
+      // Process each image file
       for (const file of processedFiles) {
         if (file.type && file.type.startsWith('image/')) {
-          // Method 1: Use direct Vision API format (RESTORED PATH)
+          console.log(`🖼️ VISION API: Processing image: ${file.name}`);
+          console.log(`🔗 VISION URL: ${file.publicUrl || file.image_url?.url}`);
+          
+          // Use the proper Vision API format
           if (file.image_url && file.image_url.url) {
-            console.log(`🖼️ VISION API: Using direct Vision format for ${file.name}`);
+            console.log(`✅ VISION API: Using direct image_url format`);
             messageContent.push({
               type: 'image_url',
               image_url: {
@@ -112,12 +117,8 @@ export async function processWithBuddyChatAI(
                 detail: file.image_url.detail || 'high'
               }
             });
-            continue;
-          }
-          
-          // Method 2: Fallback to publicUrl
-          if (file.publicUrl) {
-            console.log(`🖼️ VISION API: Using publicUrl fallback for ${file.name}`);
+          } else if (file.publicUrl) {
+            console.log(`✅ VISION API: Using publicUrl fallback`);
             messageContent.push({
               type: 'image_url',
               image_url: {
@@ -126,32 +127,33 @@ export async function processWithBuddyChatAI(
               }
             });
           } else {
-            console.error(`❌ No valid URL found for image: ${file.name}`, file);
+            console.error(`❌ VISION API: No valid URL found for image: ${file.name}`);
           }
         }
       }
 
       messages.push({ role: 'user', content: messageContent });
+      console.log(`🖼️ VISION API: Message content prepared with ${messageContent.length - 1} images`);
     } else {
       messages.push({ role: 'user', content: message });
     }
 
-    // RESTORED: Use OpenAI Vision model (the one that was working)
-    const apiKey = OPENAI_API_KEY || DEEPSEEK_API_KEY;
-    const apiUrl = OPENAI_API_KEY 
-      ? 'https://api.openai.com/v1/chat/completions'
-      : 'https://api.deepseek.com/chat/completions';
-    
-    // CRITICAL: Use gpt-4o-mini for Vision (the working model)
-    const model = OPENAI_API_KEY ? 'gpt-4o-mini' : 'deepseek-chat';
+    // CRITICAL: Use OpenAI with proper Vision model
+    if (!OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
 
-    console.log(`🚀 VISION API: Using ${OPENAI_API_KEY ? 'OpenAI gpt-4o-mini' : 'DeepSeek'} with context: ${contextMessages.length} messages, files: ${processedFiles.length}`);
+    const apiUrl = 'https://api.openai.com/v1/chat/completions';
+    const model = 'gpt-4o'; // Use the proper Vision model you mentioned was working
+
+    console.log(`🚀 VISION API: Using OpenAI ${model} for Vision processing`);
+    console.log(`📤 VISION API: Sending request with ${messages.length} messages`);
 
     const response = await Promise.race([
       fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -163,25 +165,27 @@ export async function processWithBuddyChatAI(
         }),
       }),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('AI API timeout')), 12000)
+        setTimeout(() => reject(new Error('Vision API timeout')), 15000)
       )
     ]) as Response;
 
     if (!response.ok) {
-      throw new Error(`AI API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('❌ VISION API: Response not OK:', response.status, errorText);
+      throw new Error(`Vision API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('📥 VISION API: Response received');
     
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid AI API response structure');
+      console.error('❌ VISION API: Invalid response structure:', data);
+      throw new Error('Invalid Vision API response structure');
     }
 
     const aiResponse = data.choices[0].message.content;
+    console.log('✅ VISION AI: Response generated successfully');
     
-    console.log('🚀 VISION AI: Response generated successfully');
-    
-    // ENHANCED: Return response with task creation intent
     return {
       response: aiResponse,
       model: model,
@@ -196,7 +200,6 @@ export async function processWithBuddyChatAI(
   } catch (error) {
     console.error('🚨 VISION AI: Processing error:', error);
     
-    // Return error in consistent format
     return {
       response: language === 'ar' 
         ? 'عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'
