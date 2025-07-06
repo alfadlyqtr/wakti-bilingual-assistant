@@ -139,7 +139,7 @@ export function ChatMessages({
 
   return (
     <>
-      <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-32">
+      <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-44">
         {displayMessages.length === 0 && !isLoading && (
           <div className="text-center text-muted-foreground py-12">
             <div className="text-2xl mb-2">🤖</div>

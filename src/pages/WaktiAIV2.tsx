@@ -433,7 +433,7 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 overflow-y-auto pb-24" ref={scrollAreaRef}>
+        <div className="flex-1 overflow-y-auto pb-44" ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -469,8 +469,8 @@ const WaktiAIV2 = () => {
           )}
         </div>
 
-        {/* FIXED: Input area now truly fixed to bottom */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
+        {/* FIXED: Input area positioned above mobile nav */}
+        <div className="fixed bottom-20 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto">
             <ChatInput
               message={message}
