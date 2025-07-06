@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
+import { UltraFastWaktiAIService } from '@/services/UltraFastWaktiAIService';
+import { UltraFastMemoryCache } from '@/services/UltraFastMemoryCache';
+import { StreamingResponseManager } from '@/services/StreamingResponseManager';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -12,7 +15,7 @@ import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { Button } from '@/components/ui/button';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Zap, Database, TrendingUp } from 'lucide-react';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -58,6 +61,12 @@ const WaktiAIV2 = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isClearingChat, setIsClearingChat] = useState(false);
 
+  // ULTRA-FAST: New state for optimizations
+  const [ultraFastMode, setUltraFastMode] = useState(true);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [cacheStats, setCacheStats] = useState<any>(null);
+  const [responseTime, setResponseTime] = useState<number | null>(null);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { language } = useTheme();
@@ -93,6 +102,11 @@ const WaktiAIV2 = () => {
     loadUserProfile();
     loadPersonalTouch();
     loadChatSession();
+    
+    // ULTRA-FAST: Load cache stats
+    if (ultraFastMode) {
+      setCacheStats(UltraFastWaktiAIService.getCacheStats());
+    }
   }, []);
 
   useEffect(() => {
@@ -101,64 +115,120 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
+  // ULTRA-FAST: Enhanced message sending with streaming
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text') => {
-    if (isQuotaExceeded) {
-      showError(language === 'ar' ? 'تجاوزت الحد اليومي لعدد الرسائل المجانية. يرجى الترقية للاستمتاع بالمزيد.' : 'You have exceeded your daily limit of free messages. Please upgrade to enjoy more.');
-      return;
-    }
-
-    if (isExtendedQuotaExceeded) {
-      showError(language === 'ar' ? 'تجاوزت الحد المسموح به للمرفقات اليومية. يرجى إزالة المرفقات أو الترقية للاستمتاع بالمزيد.' : 'You have exceeded the allowed limit for daily attachments. Please remove attachments or upgrade to enjoy more.');
-      return;
-    }
-
-    if (isAIQuotaExceeded) {
-      showError(language === 'ar' ? 'تجاوزت الحد المسموح به لعدد طلبات الذكاء الاصطناعي اليومية. يرجى الترقية للاستمتاع بالمزيد.' : 'You have exceeded the allowed limit for daily AI requests. Please upgrade to enjoy more.');
+    if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
+      showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
       return;
     }
 
     setIsLoading(true);
     setError(null);
+    setStreamingMessage('');
+    const startTime = Date.now();
 
     try {
-      const aiResponse = await WaktiAIV2Service.sendMessage(
-        messageContent,
-        userProfile?.id,
-        language,
-        currentConversationId,
-        inputType,
-        sessionMessages,
-        false,
-        activeTrigger,
-        '',
-        processedFiles
-      );
+      // ULTRA-FAST: Use new ultra-fast service
+      if (ultraFastMode) {
+        console.log('🚀 ULTRA-FAST MODE: Processing message');
+        
+        // Add user message immediately to UI
+        const tempUserMessage: AIMessage = {
+          id: `user-temp-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: inputType,
+          attachedFiles: processedFiles
+        };
+        
+        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+        
+        // Start streaming placeholder
+        const tempAssistantMessage: AIMessage = {
+          id: `assistant-temp-${Date.now()}`,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date()
+        };
+        
+        setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
+        
+        // Handle streaming updates
+        const handleStreamUpdate = (chunk: string, isComplete: boolean) => {
+          if (isComplete) {
+            setStreamingMessage('');
+          } else {
+            setStreamingMessage(prev => prev + chunk);
+          }
+        };
+        
+        const aiResponse = await UltraFastWaktiAIService.sendMessageUltraFast(
+          messageContent,
+          userProfile?.id,
+          language,
+          currentConversationId,
+          inputType,
+          activeTrigger,
+          processedFiles,
+          handleStreamUpdate
+        );
+        
+        // Update session messages with final response
+        setSessionMessages(prevMessages => {
+          const newMessages = [...prevMessages];
+          // Replace temp messages with real ones
+          newMessages[newMessages.length - 2] = aiResponse.userMessage;
+          newMessages[newMessages.length - 1] = aiResponse.assistantMessage;
+          return newMessages;
+        });
+        
+        setCurrentConversationId(aiResponse.conversationId);
+        setIsNewConversation(false);
+        setResponseTime(Date.now() - startTime);
+        
+        // Update cache stats
+        setCacheStats(UltraFastWaktiAIService.getCacheStats());
+        
+        console.log('✅ ULTRA-FAST: Completed in', Date.now() - startTime, 'ms');
+        
+      } else {
+        // Fallback to original service
+        const aiResponse = await WaktiAIV2Service.sendMessage(
+          messageContent,
+          userProfile?.id,
+          language,
+          currentConversationId,
+          inputType,
+          sessionMessages,
+          false,
+          activeTrigger,
+          '',
+          processedFiles
+        );
 
-      setSessionMessages(prevMessages => [...prevMessages, {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: messageContent,
-        timestamp: new Date(),
-        inputType: inputType,
-        attachedFiles: processedFiles
-      }, {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: aiResponse.response,
-        timestamp: new Date()
-      }]);
+        setSessionMessages(prevMessages => [...prevMessages, {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: inputType,
+          attachedFiles: processedFiles
+        }, {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: aiResponse.response,
+          timestamp: new Date()
+        }]);
 
-      setCurrentConversationId(aiResponse.conversationId);
-      setIsNewConversation(false);
+        setCurrentConversationId(aiResponse.conversationId);
+        setIsNewConversation(false);
+        setResponseTime(Date.now() - startTime);
+      }
+      
       setProcessedFiles([]);
-
-      // Save chat session
-      WaktiAIV2Service.saveChatSession(sessionMessages, aiResponse.conversationId);
-
-      // Check quota after successful message
       checkQuotas();
-
-      // Reset file input
+      
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -166,8 +236,10 @@ const WaktiAIV2 = () => {
     } catch (err: any) {
       console.error("Error sending message:", err);
       setError(err.message || 'Failed to send message');
+      setResponseTime(Date.now() - startTime);
     } finally {
       setIsLoading(false);
+      setStreamingMessage('');
     }
   };
 
@@ -191,7 +263,18 @@ const WaktiAIV2 = () => {
     setSessionMessages([]);
     setCurrentConversationId(null);
     setIsNewConversation(true);
-    WaktiAIV2Service.clearChatSession();
+    setStreamingMessage('');
+    setResponseTime(null);
+    
+    if (ultraFastMode) {
+      // Clear ultra-fast caches
+      if (userProfile?.id && currentConversationId) {
+        UltraFastWaktiAIService.clearConversationUltraFast(userProfile.id, currentConversationId);
+      }
+    } else {
+      WaktiAIV2Service.clearChatSession();
+    }
+    
     setIsSidebarOpen(false);
   };
 
@@ -379,6 +462,15 @@ const WaktiAIV2 = () => {
     setShowQuickActions(true);
   };
 
+  // Toggle ultra-fast mode
+  const toggleUltraFastMode = () => {
+    setUltraFastMode(!ultraFastMode);
+    showSuccess(ultraFastMode 
+      ? (language === 'ar' ? 'تم تعطيل الوضع السريع' : 'Ultra-fast mode disabled')
+      : (language === 'ar' ? 'تم تفعيل الوضع السريع' : 'Ultra-fast mode enabled')
+    );
+  };
+
   return (
     <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -413,6 +505,37 @@ const WaktiAIV2 = () => {
           hasMessages={sessionMessages.length > 0}
         />
 
+        {/* ULTRA-FAST: Performance indicators */}        
+        <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border-b">
+          <Button
+            variant={ultraFastMode ? "default" : "outline"}
+            size="sm"
+            onClick={toggleUltraFastMode}
+            className="flex items-center gap-2"
+          >
+            <Zap className={`w-4 h-4 ${ultraFastMode ? 'text-yellow-300' : ''}`} />
+            {ultraFastMode ? 'ULTRA-FAST' : 'STANDARD'}
+          </Button>
+          
+          {responseTime && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <TrendingUp className="w-3 h-3" />
+              {responseTime}ms
+            </div>
+          )}
+          
+          {ultraFastMode && cacheStats && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Database className="w-3 h-3" />
+              Cache: {cacheStats.memoryCache?.hot?.size || 0}H/{cacheStats.memoryCache?.warm?.size || 0}W
+            </div>
+          )}
+          
+          <div className="flex items-center gap-1 text-xs font-medium text-green-600">
+            ⚡ Superior Memory + Ultra Speed
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages}
@@ -431,6 +554,22 @@ const WaktiAIV2 = () => {
             conversationId={currentConversationId}
             isNewConversation={isNewConversation}
           />
+          
+          {/* Show streaming message if active */}
+          {streamingMessage && (
+            <div className="px-4 py-2">
+              <div className="flex justify-start">
+                <div className="max-w-md bg-muted rounded-lg p-3">
+                  <div className="text-sm">{streamingMessage}</div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse"></div>
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse delay-100"></div>
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse delay-200"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <ChatInput
