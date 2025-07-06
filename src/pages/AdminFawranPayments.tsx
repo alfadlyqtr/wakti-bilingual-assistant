@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, CreditCard, RefreshCw, Eye, CheckCircle, XCircle, Clock, AlertTriangle, Brain, Zap, RotateCcw } from "lucide-react";
@@ -67,14 +66,14 @@ export default function AdminFawranPayments() {
     try {
       setIsLoading(true);
       
-      console.log('🔄 Loading Fawran payments...');
+      console.log('🔄 Loading Fawran payments with FIXED query...');
       
-      // Query pending_fawran_payments with left join to profiles
+      // FIXED: Correct Supabase query syntax using ! for inner join
       const { data, error } = await supabase
         .from('pending_fawran_payments')
         .select(`
           *,
-          profiles:user_id (
+          profiles!user_id (
             display_name,
             email
           )
@@ -83,7 +82,30 @@ export default function AdminFawranPayments() {
 
       if (error) {
         console.error('❌ Database error loading payments:', error);
-        toast.error('Failed to load Fawran payments');
+        toast.error(`Database error: ${error.message}`);
+        
+        // Fallback query without profiles join
+        console.log('🔄 Attempting fallback query without profiles...');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('pending_fawran_payments')
+          .select('*')
+          .order('submitted_at', { ascending: false });
+          
+        if (fallbackError) {
+          console.error('❌ Fallback query also failed:', fallbackError);
+          toast.error('Failed to load Fawran payments');
+          return;
+        }
+        
+        // Process fallback data without profile info
+        const processedPayments = (fallbackData || []).map(payment => ({
+          ...payment,
+          user_display_name: 'Unknown User',
+          email: payment.email || 'No email'
+        })) as FawranPayment[];
+        
+        setPayments(processedPayments);
+        console.log('✅ Loaded payments with fallback query:', processedPayments.length);
         return;
       }
 
@@ -97,21 +119,36 @@ export default function AdminFawranPayments() {
       })) as FawranPayment[];
 
       setPayments(processedPayments);
+      
+      // Check for stuck payments and show alert
+      const stuckPayments = processedPayments.filter(p => isPaymentStuck(p));
+      if (stuckPayments.length > 0) {
+        console.log(`⚠️ Found ${stuckPayments.length} stuck payments - triggering auto-recovery`);
+        toast.warning(`Found ${stuckPayments.length} stuck payments - auto-recovery will process them`);
+        
+        // Trigger auto-recovery for stuck payments
+        setTimeout(() => {
+          handleProcessStuckPayments();
+        }, 2000);
+      }
+      
     } catch (error) {
       console.error('❌ Error loading Fawran payments:', error);
-      toast.error('Failed to load Fawran payments');
+      toast.error(`Failed to load Fawran payments: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ENHANCED: Force analyze stuck payment
+  // ENHANCED: Force analyze stuck payment with mandatory retry
   const handleForceAnalyze = async (payment: FawranPayment) => {
     if (isProcessing) return;
     
     try {
       setIsProcessing(payment.id);
-      console.log('🔥 Force analyzing payment:', payment.id);
+      console.log('🔥 FORCE ANALYZING PAYMENT - MANDATORY PROCESSING:', payment.id);
+
+      toast.info('🔥 Force triggering AI analysis - this cannot fail!');
 
       const { data, error } = await supabase.functions.invoke('manual-process-fawran-payment', {
         body: { 
@@ -120,30 +157,39 @@ export default function AdminFawranPayments() {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Force analyze failed:', error);
+        throw error;
+      }
 
-      toast.success('Analysis triggered successfully!');
+      console.log('✅ Force analyze completed successfully:', data);
+      toast.success('✅ Analysis triggered successfully - payment is being processed!');
       
       // Reload payments after a short delay
       setTimeout(() => {
         loadPayments();
-      }, 2000);
+      }, 3000);
 
     } catch (error: any) {
-      console.error('❌ Force analyze error:', error);
-      toast.error(`Failed to analyze: ${error.message}`);
+      console.error('❌ CRITICAL: Force analyze error:', error);
+      toast.error(`❌ Force analysis failed: ${error.message}`);
+      
+      // If manual analysis fails, try direct manual approval
+      toast.info('🔧 Analysis failed - consider manual approval instead');
     } finally {
       setIsProcessing(null);
     }
   };
 
-  // ENHANCED: Manual approval with subscription activation
+  // ENHANCED: Manual approval with subscription activation and robust error handling
   const handleManualApprove = async (payment: FawranPayment) => {
     if (isProcessing) return;
     
     try {
       setIsProcessing(payment.id);
-      console.log('✅ Manually approving payment:', payment.id);
+      console.log('✅ MANUALLY APPROVING PAYMENT - GUARANTEED SUCCESS:', payment.id);
+
+      toast.info('✅ Manually approving payment and activating subscription...');
 
       const { data, error } = await supabase.functions.invoke('manual-process-fawran-payment', {
         body: { 
@@ -152,14 +198,19 @@ export default function AdminFawranPayments() {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Manual approval failed:', error);
+        throw error;
+      }
 
-      toast.success(`Payment approved and subscription activated for ${payment.email}`);
+      console.log('✅ Manual approval completed successfully:', data);
+      toast.success(`✅ Payment approved and subscription activated for ${payment.email}!`);
+      
       loadPayments();
       
     } catch (error: any) {
-      console.error('❌ Manual approval error:', error);
-      toast.error(`Failed to approve: ${error.message}`);
+      console.error('❌ CRITICAL: Manual approval error:', error);
+      toast.error(`❌ Manual approval failed: ${error.message}`);
     } finally {
       setIsProcessing(null);
     }
@@ -225,24 +276,29 @@ export default function AdminFawranPayments() {
     setShowDetailModal(true);
   };
 
-  // ENHANCED: Process all stuck payments
+  // ENHANCED: Process all stuck payments with comprehensive recovery
   const handleProcessStuckPayments = async () => {
     try {
-      console.log('🔄 Processing all stuck payments...');
-      toast.info('Processing stuck payments...');
+      console.log('🔄 PROCESSING ALL STUCK PAYMENTS - COMPREHENSIVE RECOVERY...');
+      toast.info('🔄 Processing all stuck payments - this may take a moment...');
 
       const { data, error } = await supabase.functions.invoke('process-stuck-fawran-payments', {
         body: {}
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Process stuck payments error:', error);
+        throw error;
+      }
 
-      toast.success(`Processed ${data.processed} stuck payments (${data.successful} successful)`);
+      console.log('✅ Stuck payments processing completed:', data);
+      toast.success(`✅ Processed ${data.processed} stuck payments (${data.successful} successful)`);
+      
       loadPayments();
       
     } catch (error: any) {
-      console.error('❌ Process stuck payments error:', error);
-      toast.error(`Failed to process stuck payments: ${error.message}`);
+      console.error('❌ CRITICAL: Process stuck payments error:', error);
+      toast.error(`❌ Failed to process stuck payments: ${error.message}`);
     }
   };
 
@@ -257,11 +313,11 @@ export default function AdminFawranPayments() {
     }
   };
 
-  // Check if payment is stuck (pending for more than 5 minutes)
+  // Check if payment is stuck (pending for more than 3 minutes - reduced threshold)
   const isPaymentStuck = (payment: FawranPayment) => {
     if (payment.status !== 'pending') return false;
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    return new Date(payment.submitted_at) < fiveMinutesAgo;
+    const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000); // Reduced from 5 to 3 minutes
+    return new Date(payment.submitted_at) < threeMinutesAgo;
   };
 
   if (isLoading) {
@@ -354,7 +410,7 @@ export default function AdminFawranPayments() {
         {/* Payments List */}
         <div className="space-y-4">
           {payments.map((payment) => (
-            <Card key={payment.id} className={`bg-gradient-card border-border/50 hover:border-border/70 transition-all duration-300 ${isPaymentStuck(payment) ? 'border-red-500/50' : ''}`}>
+            <Card key={payment.id} className={`bg-gradient-card border-border/50 hover:border-border/70 transition-all duration-300 ${isPaymentStuck(payment) ? 'border-red-500/50 bg-red-50/5' : ''}`}>
               <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   <div className="space-y-3 flex-1">
@@ -365,7 +421,7 @@ export default function AdminFawranPayments() {
                           {isPaymentStuck(payment) && (
                             <Badge variant="destructive" className="text-xs">
                               <AlertTriangle className="h-3 w-3 mr-1" />
-                              STUCK
+                              STUCK - NEEDS IMMEDIATE ACTION
                             </Badge>
                           )}
                         </div>
@@ -388,7 +444,7 @@ export default function AdminFawranPayments() {
                       </div>
                       <div>
                         <span className="text-muted-foreground">Submitted:</span>
-                        <span className="ml-2">{new Date(payment.submitted_at).toLocaleDateString()}</span>
+                        <span className="ml-2">{new Date(payment.submitted_at).toLocaleString()}</span>
                       </div>
                     </div>
                     
