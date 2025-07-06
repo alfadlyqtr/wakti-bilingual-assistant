@@ -1,11 +1,11 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
-import { MemoryStatusIndicator } from './MemoryStatusIndicator';
+import { ScrollToBottomButton } from './ScrollToBottomButton';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 
 interface ChatMessagesProps {
@@ -22,7 +22,6 @@ interface ChatMessagesProps {
   onTaskConfirmation: (taskData: any) => void;
   onReminderConfirmation: (reminderData: any) => void;
   onCancelTaskConfirmation: () => void;
-  // NEW: Memory status props
   conversationId?: string | null;
   isNewConversation?: boolean;
 }
@@ -46,11 +45,42 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  // Check if user is at bottom of scroll
+  const checkIfAtBottom = () => {
+    if (scrollAreaRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 100; // 100px threshold
+      setIsAtBottom(atBottom);
+      setShowScrollButton(!atBottom && sessionMessages.length > 0);
+    }
+  };
+
+  // Scroll to bottom function
+  const scrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({
+        top: scrollAreaRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  // Add scroll listener
+  useEffect(() => {
+    const scrollContainer = scrollAreaRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', checkIfAtBottom);
+      return () => scrollContainer.removeEventListener('scroll', checkIfAtBottom);
+    }
+  }, [scrollAreaRef]);
 
   // ENHANCED: Robust auto-scroll to always show latest message
   useEffect(() => {
-    const scrollToBottom = () => {
-      if (scrollAreaRef.current) {
+    const scrollToBottomInstant = () => {
+      if (scrollAreaRef.current && isAtBottom) {
         // Clear any existing timeout
         if (scrollTimeoutRef.current) {
           clearTimeout(scrollTimeoutRef.current);
@@ -84,8 +114,10 @@ export function ChatMessages({
       }
     };
 
-    // Immediate scroll
-    scrollToBottom();
+    // Only auto-scroll if user was already at bottom
+    if (isAtBottom) {
+      scrollToBottomInstant();
+    }
 
     // Cleanup timeout on unmount
     return () => {
@@ -93,7 +125,7 @@ export function ChatMessages({
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-  }, [sessionMessages, isLoading, showTaskConfirmation]);
+  }, [sessionMessages, isLoading, showTaskConfirmation, isAtBottom]);
 
   // Check if the last user message has attached files for better loading indicator
   const lastUserMessage = sessionMessages.filter(msg => msg.role === 'user').pop();
@@ -103,74 +135,62 @@ export function ChatMessages({
   const aiNickname = personalTouch?.aiNickname || 'WAKTI AI';
 
   return (
-    <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-16">
-      {sessionMessages.length === 0 && !isLoading && (
-        <div className="text-center text-muted-foreground py-12">
-          <div className="text-2xl mb-2">🤖</div>
-          <p className="text-lg font-medium mb-2">
-            {language === 'ar' ? `مرحباً! أنا ${aiNickname}` : `Hello! I'm ${aiNickname}`}
-          </p>
-          <p className="text-sm mb-4">
-            {language === 'ar' 
-              ? 'كيف يمكنني مساعدتك اليوم؟'
-              : 'How can I help you today?'
-            }
-          </p>
-          
-          {/* ENHANCED: Memory Status Indicator */}
-          <div className="flex justify-center mt-4">
-            <MemoryStatusIndicator
-              conversationId={conversationId}
-              messageCount={sessionMessages.length}
-              isNewConversation={isNewConversation}
+    <>
+      <div className="flex-1 p-4 space-y-4 max-w-4xl mx-auto w-full pb-16">
+        {sessionMessages.length === 0 && !isLoading && (
+          <div className="text-center text-muted-foreground py-12">
+            <div className="text-2xl mb-2">🤖</div>
+            <p className="text-lg font-medium mb-2">
+              {language === 'ar' ? `مرحباً! أنا ${aiNickname}` : `Hello! I'm ${aiNickname}`}
+            </p>
+            <p className="text-sm mb-4">
+              {language === 'ar' 
+                ? 'كيف يمكنني مساعدتك اليوم؟'
+                : 'How can I help you today?'
+              }
+            </p>
+          </div>
+        )}
+
+        {sessionMessages.map((message, index) => (
+          <div key={message.id}>
+            <ChatBubble
+              message={message}
+              userProfile={userProfile}
+              activeTrigger={activeTrigger}
             />
           </div>
-        </div>
-      )}
+        ))}
 
-      {/* ENHANCED: Show memory status for ongoing conversations */}
-      {sessionMessages.length > 0 && (
-        <div className="flex justify-center mb-4">
-          <MemoryStatusIndicator
-            conversationId={conversationId}
-            messageCount={sessionMessages.length}
-            isNewConversation={isNewConversation}
-          />
-        </div>
-      )}
-
-      {sessionMessages.map((message, index) => (
-        <div key={message.id}>
-          <ChatBubble
-            message={message}
-            userProfile={userProfile}
-            activeTrigger={activeTrigger}
-          />
-        </div>
-      ))}
-
-      {isLoading && (
-        <div>
-          <TypingIndicator 
-            hasAttachedFiles={hasAttachedFiles}
-            isVisionProcessing={hasAttachedFiles}
-          />
-        </div>
-      )}
-
-      {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
-        <div className="flex justify-start">
-          <div className="max-w-md">
-            <EditableTaskConfirmationCard
-              data={pendingTaskData || pendingReminderData}
-              isLoading={taskConfirmationLoading}
-              onConfirm={pendingTaskData ? onTaskConfirmation : onReminderConfirmation}
-              onCancel={onCancelTaskConfirmation}
-              type={pendingTaskData ? 'task' : 'reminder'}
+        {isLoading && (
+          <div>
+            <TypingIndicator 
+              hasAttachedFiles={hasAttachedFiles}
+              isVisionProcessing={hasAttachedFiles}
             />
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
+          <div className="flex justify-start">
+            <div className="max-w-md">
+              <EditableTaskConfirmationCard
+                data={pendingTaskData || pendingReminderData}
+                isLoading={taskConfirmationLoading}
+                onConfirm={pendingTaskData ? onTaskConfirmation : onReminderConfirmation}
+                onCancel={onCancelTaskConfirmation}
+                type={pendingTaskData ? 'task' : 'reminder'}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Scroll to bottom button */}
+      <ScrollToBottomButton 
+        visible={showScrollButton} 
+        onClick={scrollToBottom}
+      />
+    </>
   );
 }

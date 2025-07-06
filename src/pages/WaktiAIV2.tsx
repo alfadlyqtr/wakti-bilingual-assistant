@@ -469,16 +469,19 @@ const WaktiAIV2 = () => {
           )}
         </div>
 
-        <ChatInput
-          message={message}
-          setMessage={setMessage}
-          isLoading={isLoading}
-          sessionMessages={sessionMessages}
-          onSendMessage={handleSendMessage}
-          onClearChat={handleClearChat}
-          onOpenPlusDrawer={handleOpenPlusDrawer}
-          activeTrigger={activeTrigger}
-        />
+        {/* Fixed input area */}
+        <div className="sticky bottom-0 z-10 bg-background/80 backdrop-blur-sm border-t border-border/40">
+          <ChatInput
+            message={message}
+            setMessage={setMessage}
+            isLoading={isLoading}
+            sessionMessages={sessionMessages}
+            onSendMessage={handleSendMessage}
+            onClearChat={handleClearChat}
+            onOpenPlusDrawer={handleOpenPlusDrawer}
+            activeTrigger={activeTrigger}
+          />
+        </div>
       </div>
 
       <NotificationBars
