@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -376,6 +375,10 @@ const WaktiAIV2 = () => {
     setMessage(text);
   };
 
+  const handleOpenPlusDrawer = () => {
+    setShowQuickActions(true);
+  };
+
   return (
     <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -431,8 +434,14 @@ const WaktiAIV2 = () => {
         </div>
 
         <ChatInput
-          onSendMessage={handleSendMessage}
+          message={message}
+          setMessage={setMessage}
           isLoading={isLoading}
+          sessionMessages={sessionMessages}
+          onSendMessage={handleSendMessage}
+          onClearChat={handleClearChat}
+          onOpenPlusDrawer={handleOpenPlusDrawer}
+          activeTrigger={activeTrigger}
         />
       </div>
 
