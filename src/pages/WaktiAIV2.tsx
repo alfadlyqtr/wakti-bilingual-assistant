@@ -292,7 +292,7 @@ const WaktiAIV2 = () => {
   };
 
   const uploadFile = async (file: File) => {
-    setIsUploading(true);
+    setIsUploading(1);
     setUploadProgress(0);
 
     try {
@@ -326,7 +326,7 @@ const WaktiAIV2 = () => {
       console.error("File upload error:", error);
       showError(language === 'ar' ? 'فشل في تحميل الملف' : 'Failed to upload file');
     } finally {
-      setIsUploading(false);
+      setIsUploading(0);
       setUploadProgress(0);
     }
   };
