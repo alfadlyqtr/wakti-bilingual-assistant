@@ -26,7 +26,7 @@ export function useOptimizedFileUpload() {
 
   const uploadFiles = async (files: FileList) => {
     setIsUploading(true);
-    console.log('📤 VISION UPLOAD: Starting upload of', files.length, 'files');
+    console.log('📤 ENHANCED VISION UPLOAD: Starting upload of', files.length, 'files');
     
     const uploadPromises = Array.from(files).map(uploadSingleFile);
     
@@ -36,16 +36,16 @@ export function useOptimizedFileUpload() {
       
       if (successfulUploads.length > 0) {
         setUploadedFiles(prev => [...prev, ...successfulUploads]);
-        showSuccess(`Successfully uploaded ${successfulUploads.length} file(s)`);
-        console.log('✅ VISION UPLOAD: Successfully uploaded', successfulUploads.length, 'files with Vision format');
+        showSuccess(`Successfully uploaded ${successfulUploads.length} file(s) for enhanced Vision processing`);
+        console.log('✅ ENHANCED VISION UPLOAD: Successfully uploaded', successfulUploads.length, 'files with enhanced Vision format');
       }
       
       if (successfulUploads.length < files.length) {
         showError(`Failed to upload ${files.length - successfulUploads.length} file(s)`);
       }
     } catch (error) {
-      console.error('❌ VISION UPLOAD: Upload error:', error);
-      showError('Failed to upload files');
+      console.error('❌ ENHANCED VISION UPLOAD: Upload error:', error);
+      showError('Failed to upload files for Vision processing');
     } finally {
       setIsUploading(false);
     }
@@ -55,14 +55,14 @@ export function useOptimizedFileUpload() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.error('❌ VISION UPLOAD: User not authenticated');
+        console.error('❌ ENHANCED VISION UPLOAD: User not authenticated');
         throw new Error('User not authenticated');
       }
 
       const fileId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const filePath = `${user.id}/${fileId}-${file.name}`;
 
-      console.log(`📤 VISION UPLOAD: Uploading file: ${file.name} (${file.type}) to path: ${filePath}`);
+      console.log(`📤 ENHANCED VISION UPLOAD: Processing file: ${file.name} (${file.type}) -> ${filePath}`);
 
       // Upload to ai-temp-images bucket
       const { error: uploadError } = await supabase.storage
@@ -73,7 +73,7 @@ export function useOptimizedFileUpload() {
         });
 
       if (uploadError) {
-        console.error('❌ VISION UPLOAD: Storage upload error:', uploadError);
+        console.error('❌ ENHANCED VISION UPLOAD: Storage upload error:', uploadError);
         throw uploadError;
       }
 
@@ -82,7 +82,7 @@ export function useOptimizedFileUpload() {
         .from('ai-temp-images')
         .getPublicUrl(filePath);
 
-      console.log(`📤 VISION UPLOAD: Generated public URL: ${publicUrl}`);
+      console.log(`📤 ENHANCED VISION UPLOAD: Generated URL for enhanced processing: ${publicUrl}`);
 
       // Create thumbnail for images if needed
       let thumbnail = undefined;
@@ -90,11 +90,11 @@ export function useOptimizedFileUpload() {
         try {
           thumbnail = await createImageThumbnail(file);
         } catch (thumbError) {
-          console.warn('⚠️ VISION UPLOAD: Thumbnail creation failed:', thumbError);
+          console.warn('⚠️ ENHANCED VISION UPLOAD: Thumbnail creation failed:', thumbError);
         }
       }
 
-      // CRITICAL: Create properly formatted file object for Vision API
+      // ENHANCED Vision API format - exactly what OpenAI expects
       const optimizedFile: OptimizedUploadedFile = {
         id: fileId,
         name: file.name,
@@ -104,20 +104,20 @@ export function useOptimizedFileUpload() {
         publicUrl,
         optimized: true,
         thumbnail,
-        // DIRECT Vision API format - this is what OpenAI expects
+        // CRITICAL: Enhanced Vision API format with proper structure
         image_url: {
           url: publicUrl,
-          detail: 'high'
+          detail: 'high' // Always use high detail for enhanced Vision
         }
       };
 
-      console.log(`✅ VISION UPLOAD: File ready for Vision API: ${file.name}`);
-      console.log(`🔗 VISION URL: ${publicUrl}`);
+      console.log(`✅ ENHANCED VISION UPLOAD: File ready for enhanced Vision API: ${file.name}`);
+      console.log(`🔗 ENHANCED VISION URL: ${publicUrl}`);
       
       return optimizedFile;
     } catch (error) {
-      console.error(`❌ VISION UPLOAD: Single file upload error for ${file.name}:`, error);
-      showError(`Failed to upload ${file.name}: ${error.message}`);
+      console.error(`❌ ENHANCED VISION UPLOAD: Single file upload error for ${file.name}:`, error);
+      showError(`Failed to upload ${file.name} for Vision processing: ${error.message}`);
       return null;
     }
   };

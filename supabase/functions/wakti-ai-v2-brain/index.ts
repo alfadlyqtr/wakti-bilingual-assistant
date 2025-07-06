@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -30,7 +29,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI VISION: Enhanced with proper Vision API support");
+console.log("🚀 WAKTI AI VISION: Enhanced Vision system with dynamic prompts and retry logic");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -38,7 +37,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 VISION AI: Processing request with restored Vision system");
+    console.log("🚀 VISION AI: Processing request with enhanced Vision system");
     const startTime = Date.now();
 
     // Auth handling
@@ -85,7 +84,7 @@ serve(async (req) => {
       conversationSummary = '',
       recentMessages = [],
       customSystemPrompt = '',
-      maxTokens = 400,
+      maxTokens = 4096,
       userStyle = 'detailed',
       userTone = 'neutral',
       speedOptimized = true,
@@ -120,10 +119,10 @@ serve(async (req) => {
     const currentDateContext = getCurrentDateContext();
     console.log(`🚀 VISION AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
 
-    // CRITICAL: Process files for Vision API
+    // ENHANCED FILE PROCESSING for Vision API
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`📁 VISION API: Processing ${attachedFiles.length} files`);
+      console.log(`📁 VISION API: Processing ${attachedFiles.length} files with enhanced pipeline`);
       
       processedFiles = attachedFiles.filter(file => {
         if (file.type && file.type.startsWith('image/')) {
@@ -132,20 +131,20 @@ serve(async (req) => {
             console.error(`❌ VISION API: No valid URL for image: ${file.name}`);
             return false;
           }
-          console.log(`✅ VISION API: File ready: ${file.name} -> ${file.image_url?.url || file.publicUrl}`);
+          console.log(`✅ VISION API: Enhanced processing for: ${file.name} -> ${file.image_url?.url || file.publicUrl}`);
           return true;
         }
         return false;
       });
       
-      console.log(`🚀 VISION AI: Prepared ${processedFiles.length} files for Vision API`);
+      console.log(`🚀 VISION AI: Prepared ${processedFiles.length} files for enhanced Vision API`);
     }
 
-    // Optimize context for speed
+    // Optimize context for speed if needed
     let minimalRecentMessages = aggressiveOptimization ? recentMessages.slice(-2) : recentMessages.slice(-3);
     let minimalConversationSummary = aggressiveOptimization ? '' : conversationSummary.substring(0, 200);
     
-    console.log(`🚀 SPEED MODE: Context messages: ${minimalRecentMessages.length}, Summary: ${minimalConversationSummary.length} chars`);
+    console.log(`🚀 CONTEXT: Messages: ${minimalRecentMessages.length}, Summary: ${minimalConversationSummary.length} chars`);
 
     // Task detection
     let taskAnalysisResult = null;
@@ -203,7 +202,7 @@ serve(async (req) => {
       });
     }
 
-    // Main processing
+    // Main processing with enhanced Vision support
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -303,8 +302,8 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 VISION AI CHAT: Processing with Vision system`);
-        console.log(`🖼️ VISION FILES: ${processedFiles.length} files ready for Vision API`);
+        console.log(`🚀 VISION AI CHAT: Processing with enhanced Vision system`);
+        console.log(`🖼️ VISION FILES: ${processedFiles.length} files ready for enhanced Vision API`);
         
         const chatResult = await processWithBuddyChatAI(
           `${currentDateContext}\n\n${message}`,
@@ -319,16 +318,17 @@ serve(async (req) => {
           activeTrigger
         );
         response = chatResult.response;
+        console.log(`🎯 VISION RESULT: Model used: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}`);
         break;
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 VISION AI: Processed in ${processingTime}ms with Vision support`);
+    console.log(`🚀 VISION AI: Enhanced processing completed in ${processingTime}ms`);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: aggressiveOptimization ? 'hyper_fast' : (speedOptimized ? 'ultra_fast' : 'speed_optimized'),
+      intent: aggressiveOptimization ? 'hyper_fast' : (speedOptimized ? 'ultra_fast' : 'enhanced_vision'),
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -344,10 +344,11 @@ serve(async (req) => {
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: OPENAI_API_KEY ? 'openai' : 'deepseek',
+      aiProvider: 'openai_enhanced_vision',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
+      visionEnhanced: processedFiles.length > 0,
       ultraFastMode: {
         speedOptimized,
         aggressiveOptimization,
@@ -366,7 +367,7 @@ serve(async (req) => {
     console.error("🚨 VISION AI: Critical Error:", error);
     
     return new Response(JSON.stringify({
-      error: error.message || 'Processing error',
+      error: error.message || 'Enhanced Vision processing error',
       success: false,
       currentDateContext: getCurrentDateContext()
     }), {
