@@ -10,12 +10,13 @@ export interface OptimizedUploadedFile {
   type: string;
   url: string;
   publicUrl: string;
+  optimized: boolean; // CRITICAL: Add this flag for consistent handling
 }
 
 export function useOptimizedFileUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<OptimizedUploadedFile[]>([]);
-  const { showError } = useToastHelper();
+  const { showError, showSuccess } = useToastHelper();
 
   const uploadFiles = async (files: FileList) => {
     setIsUploading(true);
@@ -24,10 +25,18 @@ export function useOptimizedFileUpload() {
     try {
       const results = await Promise.all(uploadPromises);
       const successfulUploads = results.filter(Boolean) as OptimizedUploadedFile[];
-      setUploadedFiles(prev => [...prev, ...successfulUploads]);
+      
+      if (successfulUploads.length > 0) {
+        setUploadedFiles(prev => [...prev, ...successfulUploads]);
+        showSuccess(`Successfully uploaded ${successfulUploads.length} file(s)`);
+      }
+      
+      if (successfulUploads.length < files.length) {
+        showError(`Failed to upload ${files.length - successfulUploads.length} file(s)`);
+      }
     } catch (error) {
       console.error('Upload error:', error);
-      showError('Failed to upload some files');
+      showError('Failed to upload files');
     } finally {
       setIsUploading(false);
     }
@@ -40,6 +49,8 @@ export function useOptimizedFileUpload() {
 
       const fileId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const filePath = `${user.id}/${fileId}-${file.name}`;
+
+      console.log(`📤 Uploading file: ${file.name} (${file.type}) to path: ${filePath}`);
 
       const { error: uploadError } = await supabase.storage
         .from('ai-temp-images')
@@ -54,16 +65,21 @@ export function useOptimizedFileUpload() {
         .from('ai-temp-images')
         .getPublicUrl(filePath);
 
-      return {
+      const optimizedFile: OptimizedUploadedFile = {
         id: fileId,
         name: file.name,
         size: file.size,
         type: file.type,
         url: filePath,
-        publicUrl
+        publicUrl,
+        optimized: true // CRITICAL: Set this flag for AI processing
       };
+
+      console.log(`✅ Successfully uploaded: ${file.name} -> ${publicUrl}`);
+      return optimizedFile;
     } catch (error) {
-      console.error('Single file upload error:', error);
+      console.error(`❌ Single file upload error for ${file.name}:`, error);
+      showError(`Failed to upload ${file.name}`);
       return null;
     }
   };

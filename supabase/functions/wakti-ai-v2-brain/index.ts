@@ -122,11 +122,20 @@ serve(async (req) => {
     const currentDateContext = getCurrentDateContext();
     console.log(`🚀 ULTRA-FAST: ${currentDateContext} | User ${user.id} | Personal Touch: ${!!personalTouch}`);
 
-    // ULTRA-FAST: Process attached files with minimal overhead (ENHANCED for Vision)
+    // CRITICAL FIX: Enhanced file processing with comprehensive format handling
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      processedFiles = await processAttachedFilesOptimized(attachedFiles);
-      console.log(`🚀 ULTRA-FAST: Processed ${processedFiles.length} files (Vision-ready)`);
+      console.log(`📁 PROCESSING ${attachedFiles.length} files:`, JSON.stringify(attachedFiles.map(f => ({
+        name: f.name,
+        type: f.type,
+        hasUrl: !!f.url,
+        hasPublicUrl: !!f.publicUrl,
+        hasContent: !!f.content,
+        optimized: f.optimized
+      })), null, 2));
+      
+      processedFiles = await processAttachedFilesRobust(attachedFiles);
+      console.log(`🚀 ULTRA-FAST: Successfully processed ${processedFiles.length} files for Vision API`);
     }
 
     // ULTRA-FAST: Minimal context for maximum speed
@@ -374,45 +383,101 @@ serve(async (req) => {
   }
 });
 
-// HYPER-OPTIMIZED: Process files with URL handling for Vision API
-async function processAttachedFilesOptimized(attachedFiles: any[]): Promise<any[]> {
-  if (!attachedFiles || attachedFiles.length === 0) return [];
+// CRITICAL FIX: Bulletproof file processing with comprehensive format handling
+async function processAttachedFilesRobust(attachedFiles: any[]): Promise<any[]> {
+  if (!attachedFiles || attachedFiles.length === 0) {
+    console.log("📁 No files to process");
+    return [];
+  }
 
-  return attachedFiles.map(file => {
-    // ENHANCED: For Vision API, we need the public URL
-    if (file.type && file.type.startsWith('image/')) {
-      // If file is optimized with public URL, use it directly for Vision
-      if (file.optimized && file.publicUrl) {
-        console.log("🔍 VISION: Using optimized public URL for Vision API");
-        return {
-          type: 'image',
-          publicUrl: file.publicUrl,
-          optimized: true,
-          ...file
-        };
-      }
-      
-      // If we have a regular URL, use it
-      if (file.url) {
-        console.log("🔍 VISION: Using regular URL for Vision API");
-        return {
-          type: 'image',
-          url: file.url,
-          ...file
-        };
-      }
-    }
-    
-    // Fallback to existing Base64 processing for non-Vision files
-    if (file.content) {
-      return {
-        type: 'image_url',
-        image_url: {
-          url: `data:${file.type};base64,${file.content}`
+  console.log("📁 ROBUST FILE PROCESSING: Starting with", attachedFiles.length, "files");
+
+  const processedFiles = [];
+
+  for (let i = 0; i < attachedFiles.length; i++) {
+    const file = attachedFiles[i];
+    console.log(`📁 Processing file ${i + 1}:`, {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      hasUrl: !!file.url,
+      hasPublicUrl: !!file.publicUrl,
+      hasContent: !!file.content,
+      optimized: file.optimized
+    });
+
+    try {
+      // CRITICAL: Handle images for Vision API
+      if (file.type && file.type.startsWith('image/')) {
+        let imageUrl = null;
+        
+        // Method 1: Try optimized public URL first (preferred)
+        if (file.optimized && file.publicUrl) {
+          console.log(`🖼️ Using optimized public URL for ${file.name}`);
+          imageUrl = file.publicUrl;
         }
-      };
+        // Method 2: Try regular URL
+        else if (file.url) {
+          console.log(`🖼️ Using regular URL for ${file.name}`);
+          imageUrl = file.url;
+        }
+        // Method 3: Try publicUrl without optimized flag
+        else if (file.publicUrl) {
+          console.log(`🖼️ Using publicUrl for ${file.name}`);
+          imageUrl = file.publicUrl;
+        }
+        // Method 4: Fall back to Base64 if available
+        else if (file.content) {
+          console.log(`🖼️ Using Base64 content for ${file.name}`);
+          imageUrl = `data:${file.type};base64,${file.content}`;
+        }
+
+        if (imageUrl) {
+          processedFiles.push({
+            type: 'image_url',
+            image_url: {
+              url: imageUrl,
+              detail: 'high' // For better image analysis
+            },
+            name: file.name,
+            originalType: file.type,
+            size: file.size
+          });
+          console.log(`✅ Successfully processed image: ${file.name}`);
+        } else {
+          console.error(`❌ No valid URL found for image: ${file.name}`);
+        }
+      }
+      // Handle text files
+      else if (file.type === 'text/plain' && file.content) {
+        console.log(`📄 Processing text file: ${file.name}`);
+        processedFiles.push({
+          type: 'text',
+          content: atob(file.content), // Decode Base64 text content
+          name: file.name,
+          originalType: file.type
+        });
+        console.log(`✅ Successfully processed text file: ${file.name}`);
+      }
+      // Handle other file types
+      else {
+        console.log(`📎 Processing generic file: ${file.name}`);
+        processedFiles.push({
+          type: 'file',
+          name: file.name,
+          originalType: file.type,
+          size: file.size,
+          url: file.url || file.publicUrl
+        });
+        console.log(`✅ Successfully processed file: ${file.name}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error processing file ${file.name}:`, error);
+      // Continue processing other files even if one fails
     }
-    
-    return null;
-  }).filter(Boolean);
+  }
+
+  console.log(`📁 ROBUST FILE PROCESSING: Completed. Processed ${processedFiles.length}/${attachedFiles.length} files successfully`);
+  
+  return processedFiles;
 }
