@@ -8,31 +8,33 @@ import { ScreenshotUpload } from "./ScreenshotUpload";
 import { PaymentProcessing } from "./PaymentProcessing";
 import { PaymentResult } from "./PaymentResult";
 import { PaymentStatusTracker } from "./PaymentStatusTracker";
-import { useAuthStore } from "@/store/authStore";
+import { useAuth } from "@/contexts/AuthContext";
+
+export type PlanType = 'monthly' | 'yearly';
 
 interface FawranPaymentOverlayProps {
-  isOpen: boolean;
+  userEmail: string;
   onClose: () => void;
 }
 
 type PaymentStep = 'plan' | 'instructions' | 'upload' | 'processing' | 'result' | 'status';
 
-export function FawranPaymentOverlay({ isOpen, onClose }: FawranPaymentOverlayProps) {
+export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverlayProps) {
   const [currentStep, setCurrentStep] = useState<PaymentStep>('plan');
-  const [selectedPlan, setSelectedPlan] = useState<{ type: 'monthly' | 'yearly'; amount: number } | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
   const [paymentResult, setPaymentResult] = useState<{ success: boolean; message: string } | null>(null);
-  const { user } = useAuthStore();
+  const [paymentId, setPaymentId] = useState<string>('');
+  const { user } = useAuth();
 
   // Reset state when overlay opens
   useEffect(() => {
-    if (isOpen) {
-      setCurrentStep('plan');
-      setSelectedPlan(null);
-      setPaymentResult(null);
-    }
-  }, [isOpen]);
+    setCurrentStep('plan');
+    setSelectedPlan(null);
+    setPaymentResult(null);
+    setPaymentId('');
+  }, [userEmail]);
 
-  const handlePlanSelect = (plan: { type: 'monthly' | 'yearly'; amount: number }) => {
+  const handlePlanSelect = (plan: PlanType) => {
     setSelectedPlan(plan);
     setCurrentStep('instructions');
   };
@@ -41,7 +43,8 @@ export function FawranPaymentOverlay({ isOpen, onClose }: FawranPaymentOverlayPr
     setCurrentStep('upload');
   };
 
-  const handleUploadComplete = () => {
+  const handleUploadComplete = (data: { screenshotUrl: string; senderAlias: string; paymentId: string }) => {
+    setPaymentId(data.paymentId);
     setCurrentStep('processing');
   };
 
@@ -64,12 +67,10 @@ export function FawranPaymentOverlay({ isOpen, onClose }: FawranPaymentOverlayPr
     }
   };
 
-  const handleTryAgain = () => {
+  const handleStartOver = () => {
     setCurrentStep('upload');
     setPaymentResult(null);
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -90,7 +91,7 @@ export function FawranPaymentOverlay({ isOpen, onClose }: FawranPaymentOverlayPr
 
           {currentStep === 'instructions' && selectedPlan && (
             <PaymentInstructions
-              plan={selectedPlan}
+              selectedPlan={selectedPlan}
               onContinue={handleContinueToUpload}
               onBack={() => setCurrentStep('plan')}
             />
@@ -98,17 +99,21 @@ export function FawranPaymentOverlay({ isOpen, onClose }: FawranPaymentOverlayPr
 
           {currentStep === 'upload' && selectedPlan && (
             <ScreenshotUpload
-              plan={selectedPlan}
+              userEmail={userEmail}
+              selectedPlan={selectedPlan}
               onUploadComplete={handleUploadComplete}
               onBack={() => setCurrentStep('instructions')}
             />
           )}
 
-          {currentStep === 'processing' && (
-            <PaymentProcessing onComplete={handleProcessingComplete} />
+          {currentStep === 'processing' && paymentId && (
+            <PaymentProcessing 
+              paymentId={paymentId}
+              onProcessingComplete={handleProcessingComplete} 
+            />
           )}
 
-          {currentStep === 'status' && user && (
+          {currentStep === 'status' && user && paymentId && (
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-enhanced-heading mb-2">
@@ -135,7 +140,7 @@ export function FawranPaymentOverlay({ isOpen, onClose }: FawranPaymentOverlayPr
           {currentStep === 'result' && paymentResult && (
             <PaymentResult
               result={paymentResult}
-              onTryAgain={paymentResult.success ? undefined : handleTryAgain}
+              onStartOver={paymentResult.success ? undefined : handleStartOver}
               onClose={onClose}
             />
           )}
