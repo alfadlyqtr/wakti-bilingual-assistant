@@ -19,6 +19,18 @@ export async function processWithBuddyChatAI(
   try {
     console.log('🚀 ULTRA-FAST: Processing with BuddyChat AI');
     
+    // NEW: Check for task creation triggers
+    const taskTriggers = {
+      en: ['create task', 'create a task', 'new task', 'add task', 'make task', 'create reminder', 'remind me'],
+      ar: ['أنشئ مهمة', 'إنشاء مهمة', 'مهمة جديدة', 'أضف مهمة', 'أنشئ تذكير', 'ذكرني']
+    };
+    
+    const shouldCreateTask = taskTriggers[language as 'en' | 'ar']?.some(trigger => 
+      message.toLowerCase().includes(trigger.toLowerCase())
+    ) || taskTriggers.en.some(trigger => 
+      message.toLowerCase().includes(trigger.toLowerCase())
+    );
+    
     // Build context from recent messages and summary
     let contextMessages = [];
     
@@ -37,8 +49,12 @@ export async function processWithBuddyChatAI(
     }));
     contextMessages.push(...formattedRecentMessages);
     
-    // Build system prompt with personalization
+    // Build system prompt with personalization + task creation awareness
     let systemPrompt = `You are WAKTI AI, an intelligent assistant. Be helpful, concise, and friendly.`;
+    
+    if (shouldCreateTask) {
+      systemPrompt += ` The user wants to create a task or reminder. Acknowledge this and provide helpful suggestions about the task details.`;
+    }
     
     if (personalTouch) {
       if (personalTouch.nickname) {
@@ -125,13 +141,16 @@ export async function processWithBuddyChatAI(
     
     console.log('🚀 ULTRA-FAST: AI response generated successfully');
     
-    // CRITICAL FIX: Return consistent object structure
+    // ENHANCED: Return response with task creation intent
     return {
       response: aiResponse,
       model: model,
       tokensUsed: data.usage?.total_tokens || 0,
       contextUsed: contextMessages.length,
-      personalizedResponse: !!personalTouch
+      personalizedResponse: !!personalTouch,
+      taskCreationIntent: shouldCreateTask,
+      intent: shouldCreateTask ? 'task_creation' : 'chat',
+      confidence: shouldCreateTask ? 'high' : 'medium'
     };
 
   } catch (error) {
@@ -146,6 +165,7 @@ export async function processWithBuddyChatAI(
       tokensUsed: 0,
       contextUsed: 0,
       personalizedResponse: false,
+      taskCreationIntent: false,
       error: error.message
     };
   }

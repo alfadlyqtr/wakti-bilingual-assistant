@@ -1,4 +1,5 @@
-// Ultra-Fast Memory Cache System with Hot/Warm/Cold layers
+
+// Ultra-Fast Memory Cache System with Hot/Warm/Cold layers + Summary Integration
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
@@ -11,6 +12,8 @@ interface ConversationCache {
   summary: string;
   messageCount: number;
   conversationId: string;
+  hasSummary?: boolean;
+  summaryTokens?: number;
 }
 
 class UltraFastMemoryCacheClass {
@@ -27,7 +30,7 @@ class UltraFastMemoryCacheClass {
   private readonly MAX_HOT_ENTRIES = 10;
   private readonly MAX_WARM_ENTRIES = 50;
 
-  // ULTRA-FAST: Get conversation context with 3-layer cache
+  // ULTRA-FAST: Get conversation context with 3-layer cache + summary priority
   async getConversationContext(userId: string, conversationId: string | null): Promise<ConversationCache | null> {
     if (!conversationId) return null;
     
@@ -38,7 +41,7 @@ class UltraFastMemoryCacheClass {
     if (hotEntry && this.isHotCacheValid(hotEntry)) {
       hotEntry.accessCount++;
       hotEntry.lastAccessed = Date.now();
-      console.log('🔥 HOT CACHE HIT:', conversationId);
+      console.log('🔥 HOT CACHE HIT:', conversationId, 'Summary:', !!hotEntry.data.summary);
       return hotEntry.data;
     }
     
@@ -47,26 +50,93 @@ class UltraFastMemoryCacheClass {
     if (warmData) {
       // Promote to hot cache
       this.setHotCache(cacheKey, warmData);
-      console.log('🌡️ WARM CACHE HIT:', conversationId);
+      console.log('🌡️ WARM CACHE HIT:', conversationId, 'Summary:', !!warmData.summary);
       return warmData;
     }
     
-    // ❄️ LAYER 3: COLD Cache (database) - background load
+    // ❄️ LAYER 3: Try to load summary from database for emergency context
+    try {
+      const { supabase } = await import('../integrations/supabase/client');
+      const { data: summaryData } = await supabase
+        .from('ai_conversation_summaries')
+        .select('compressed_summary, summary_text, message_count')
+        .eq('user_id', userId)
+        .eq('conversation_id', conversationId)
+        .single();
+      
+      if (summaryData) {
+        const emergencyContext: ConversationCache = {
+          messages: [], // Empty for now, will be loaded in background
+          summary: summaryData.compressed_summary || summaryData.summary_text || '',
+          messageCount: summaryData.message_count || 0,
+          conversationId,
+          hasSummary: true,
+          summaryTokens: Math.floor((summaryData.compressed_summary || summaryData.summary_text || '').length / 4)
+        };
+        
+        // Cache the emergency context
+        this.setHotCache(cacheKey, emergencyContext);
+        console.log('📚 EMERGENCY SUMMARY LOADED:', conversationId, 'Tokens:', emergencyContext.summaryTokens);
+        return emergencyContext;
+      }
+    } catch (error) {
+      console.warn('Summary load failed:', error);
+    }
+    
+    // ❄️ LAYER 4: COLD Cache miss - return null for background loading
     console.log('❄️ COLD CACHE MISS - Loading from database:', conversationId);
-    return null; // Return null immediately, load in background
+    return null;
   }
 
-  // ULTRA-FAST: Set conversation context in all cache layers
+  // NEW: Synchronous method for internal use
+  getConversationContextSync(userId: string, conversationId: string): ConversationCache | null {
+    const cacheKey = `${userId}_${conversationId}`;
+    const hotEntry = this.hotCache.get(cacheKey);
+    
+    if (hotEntry && this.isHotCacheValid(hotEntry)) {
+      return hotEntry.data;
+    }
+    
+    return this.getFromWarmCache(cacheKey);
+  }
+
+  // ENHANCED: Set conversation context with summary awareness
   setConversationContext(userId: string, conversationId: string, data: ConversationCache): void {
     const cacheKey = `${userId}_${conversationId}`;
     
+    // Enhance data with summary info
+    const enhancedData = {
+      ...data,
+      hasSummary: !!data.summary,
+      summaryTokens: data.summary ? Math.floor(data.summary.length / 4) : 0
+    };
+    
     // Set in hot cache
-    this.setHotCache(cacheKey, data);
+    this.setHotCache(cacheKey, enhancedData);
     
     // Set in warm cache (background)
-    this.setWarmCacheBackground(cacheKey, data);
+    this.setWarmCacheBackground(cacheKey, enhancedData);
     
-    console.log('💾 CACHED:', conversationId, 'Messages:', data.messages.length);
+    console.log('💾 CACHED:', conversationId, 'Messages:', data.messages.length, 'Summary:', !!data.summary);
+  }
+
+  // NEW: Get compressed context for AI system prompt
+  getCompressedContext(userId: string, conversationId: string): { 
+    summary: string; 
+    recentMessages: any[]; 
+    tokens: number 
+  } {
+    const context = this.getConversationContextSync(userId, conversationId);
+    
+    if (!context) {
+      return { summary: '', recentMessages: [], tokens: 0 };
+    }
+    
+    const summary = context.summary || '';
+    const recentMessages = context.messages.slice(-3); // Last 3 messages
+    const tokens = (context.summaryTokens || 0) + (recentMessages.length * 50); // Rough estimate
+    
+    return { summary, recentMessages, tokens };
   }
 
   // HOT Cache management
@@ -196,21 +266,23 @@ class UltraFastMemoryCacheClass {
     console.log('🗑️ ALL CACHES CLEARED');
   }
 
-  // Get cache statistics
+  // Enhanced cache statistics
   getCacheStats(): any {
     const hotStats = {
       size: this.hotCache.size,
-      entries: Array.from(this.hotCache.keys())
+      entries: Array.from(this.hotCache.keys()),
+      withSummary: Array.from(this.hotCache.values()).filter(entry => entry.data.hasSummary).length
     };
     
-    let warmStats = { size: 0, entries: [] };
+    let warmStats = { size: 0, entries: [], withSummary: 0 };
     try {
       const stored = localStorage.getItem(this.warmStorageKey);
       if (stored) {
         const warmCache = JSON.parse(stored);
         warmStats = {
           size: Object.keys(warmCache).length,
-          entries: Object.keys(warmCache)
+          entries: Object.keys(warmCache),
+          withSummary: Object.values(warmCache).filter((entry: any) => entry.data?.hasSummary).length
         };
       }
     } catch {

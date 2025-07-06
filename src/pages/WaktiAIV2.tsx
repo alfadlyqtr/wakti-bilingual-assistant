@@ -67,6 +67,10 @@ const WaktiAIV2 = () => {
   const [cacheStats, setCacheStats] = useState<any>(null);
   const [responseTime, setResponseTime] = useState<number | null>(null);
 
+  // ENHANCED: New state for task creation and summaries
+  const [taskCreationActive, setTaskCreationActive] = useState(false);
+  const [summaryInfo, setSummaryInfo] = useState<any>(null);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { language } = useTheme();
@@ -103,9 +107,14 @@ const WaktiAIV2 = () => {
     loadPersonalTouch();
     loadChatSession();
     
-    // ULTRA-FAST: Load cache stats
+    // ULTRA-FAST: Load cache stats with summary info
     if (ultraFastMode) {
-      setCacheStats(UltraFastWaktiAIService.getCacheStats());
+      const stats = UltraFastWaktiAIService.getCacheStats();
+      setCacheStats(stats);
+      setSummaryInfo({
+        hotWithSummary: stats.memoryCache?.hot?.withSummary || 0,
+        warmWithSummary: stats.memoryCache?.warm?.withSummary || 0
+      });
     }
   }, []);
 
@@ -115,7 +124,7 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  // ULTRA-FAST: Enhanced message sending with streaming
+  // ENHANCED: Message sending with task creation detection
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text') => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
@@ -127,10 +136,19 @@ const WaktiAIV2 = () => {
     setStreamingMessage('');
     const startTime = Date.now();
 
+    // ENHANCED: Check for task creation intent
+    const { EnhancedTaskCreationService } = await import('@/services/EnhancedTaskCreationService');
+    const taskIntent = EnhancedTaskCreationService.detectTaskCreationIntent(messageContent);
+    
+    if (taskIntent) {
+      setTaskCreationActive(true);
+      console.log('🎯 TASK CREATION DETECTED:', taskIntent.language, taskIntent.confidence);
+    }
+
     try {
-      // ULTRA-FAST: Use new ultra-fast service
+      // ULTRA-FAST: Use enhanced ultra-fast service
       if (ultraFastMode) {
-        console.log('🚀 ULTRA-FAST MODE: Processing message');
+        console.log('🚀 ULTRA-FAST MODE: Processing with enhanced memory');
         
         // Add user message immediately to UI
         const tempUserMessage: AIMessage = {
@@ -187,10 +205,21 @@ const WaktiAIV2 = () => {
         setIsNewConversation(false);
         setResponseTime(Date.now() - startTime);
         
-        // Update cache stats
-        setCacheStats(UltraFastWaktiAIService.getCacheStats());
+        // ENHANCED: Update stats with summary info
+        const stats = UltraFastWaktiAIService.getCacheStats();
+        setCacheStats(stats);
+        setSummaryInfo({
+          hotWithSummary: stats.memoryCache?.hot?.withSummary || 0,
+          warmWithSummary: stats.memoryCache?.warm?.withSummary || 0,
+          summaryTokens: aiResponse.summaryTokens || 0
+        });
         
-        console.log('✅ ULTRA-FAST: Completed in', Date.now() - startTime, 'ms');
+        // Show task creation success
+        if (aiResponse.taskCreated) {
+          showSuccess(language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!');
+        }
+        
+        console.log('✅ ULTRA-FAST: Completed with enhanced memory in', Date.now() - startTime, 'ms');
         
       } else {
         // Fallback to original service
@@ -240,6 +269,7 @@ const WaktiAIV2 = () => {
     } finally {
       setIsLoading(false);
       setStreamingMessage('');
+      setTaskCreationActive(false);
     }
   };
 
@@ -265,9 +295,11 @@ const WaktiAIV2 = () => {
     setIsNewConversation(true);
     setStreamingMessage('');
     setResponseTime(null);
+    setSummaryInfo(null);
+    setTaskCreationActive(false);
     
     if (ultraFastMode) {
-      // Clear ultra-fast caches
+      // Clear ultra-fast caches with summary cleanup
       if (userProfile?.id && currentConversationId) {
         UltraFastWaktiAIService.clearConversationUltraFast(userProfile.id, currentConversationId);
       }
@@ -505,7 +537,7 @@ const WaktiAIV2 = () => {
           hasMessages={sessionMessages.length > 0}
         />
 
-        {/* ULTRA-FAST: Performance indicators */}        
+        {/* ENHANCED: Performance indicators with summary info */}        
         <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border-b">
           <Button
             variant={ultraFastMode ? "default" : "outline"}
@@ -531,8 +563,20 @@ const WaktiAIV2 = () => {
             </div>
           )}
           
+          {summaryInfo && summaryInfo.summaryTokens > 0 && (
+            <div className="flex items-center gap-1 text-xs text-blue-600">
+              📚 Summary: {summaryInfo.summaryTokens}T
+            </div>
+          )}
+          
+          {taskCreationActive && (
+            <div className="flex items-center gap-1 text-xs text-green-600 animate-pulse">
+              📝 Creating Task...
+            </div>
+          )}
+          
           <div className="flex items-center gap-1 text-xs font-medium text-green-600">
-            ⚡ Superior Memory + Ultra Speed
+            ⚡ Superior Memory + Ultra Speed + Smart Tasks
           </div>
         </div>
 

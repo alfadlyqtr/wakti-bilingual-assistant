@@ -235,35 +235,47 @@ export type Database = {
       }
       ai_conversation_summaries: {
         Row: {
+          compressed_summary: string | null
+          context_tokens: number | null
           conversation_id: string | null
           created_at: string
+          expires_at: string | null
           id: string
           last_message_date: string
           message_count: number
           messages_since_summary: number | null
           summary_text: string
+          summary_version: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          compressed_summary?: string | null
+          context_tokens?: number | null
           conversation_id?: string | null
           created_at?: string
+          expires_at?: string | null
           id?: string
           last_message_date?: string
           message_count?: number
           messages_since_summary?: number | null
           summary_text: string
+          summary_version?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          compressed_summary?: string | null
+          context_tokens?: number | null
           conversation_id?: string | null
           created_at?: string
+          expires_at?: string | null
           id?: string
           last_message_date?: string
           message_count?: number
           messages_since_summary?: number | null
           summary_text?: string
+          summary_version?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -2102,6 +2114,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      cleanup_expired_summaries: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_expired_voice_clones: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -2415,6 +2431,25 @@ export type Database = {
       update_voice_activity: {
         Args: { p_voice_id: string }
         Returns: undefined
+      }
+      upsert_conversation_summary: {
+        Args: {
+          p_user_id: string
+          p_conversation_id: string
+          p_summary_text: string
+          p_message_count: number
+          p_compressed_summary?: string
+          p_context_tokens?: number
+        }
+        Returns: {
+          id: string
+          summary_text: string
+          compressed_summary: string
+          message_count: number
+          context_tokens: number
+          created_at: string
+          updated_at: string
+        }[]
       }
       upsert_user_personalization: {
         Args: {
