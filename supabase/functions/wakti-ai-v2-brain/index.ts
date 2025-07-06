@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -29,7 +30,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI VISION: Fixed Vision system with gpt-4-vision-preview and base64 images");
+console.log("🚀 WAKTI AI: Fixed AI system with proper model selection");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -37,7 +38,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 VISION AI: Processing request with fixed Vision system");
+    console.log("🚀 AI: Processing request with fixed AI system");
     const startTime = Date.now();
 
     const skipAuth = req.headers.get('x-skip-auth') === 'true';
@@ -116,28 +117,28 @@ serve(async (req) => {
     }
 
     const currentDateContext = getCurrentDateContext();
-    console.log(`🚀 VISION AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
+    console.log(`🚀 AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
 
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`📁 VISION API: Processing ${attachedFiles.length} files with base64 pipeline`);
+      console.log(`📁 AI: Processing ${attachedFiles.length} files`);
       
       processedFiles = attachedFiles.filter(file => {
         if (file.type && file.type.startsWith('image/')) {
           const hasValidUrl = file.image_url?.url;
           if (!hasValidUrl) {
-            console.error(`❌ VISION API: No valid URL for image: ${file.name}`);
+            console.error(`❌ AI: No valid URL for image: ${file.name}`);
             return false;
           }
           
           const isBase64 = file.image_url.url.startsWith('data:image/');
-          console.log(`✅ VISION API: Processing ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${file.image_url.url.substring(0, 50)}...`);
+          console.log(`✅ AI: Processing ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${file.image_url.url.substring(0, 50)}...`);
           return true;
         }
         return false;
       });
       
-      console.log(`🚀 VISION AI: Prepared ${processedFiles.length} files with base64 encoding for Vision API`);
+      console.log(`🚀 AI: Prepared ${processedFiles.length} files for processing`);
     }
 
     let minimalRecentMessages = aggressiveOptimization ? recentMessages.slice(-2) : recentMessages.slice(-3);
@@ -208,7 +209,7 @@ serve(async (req) => {
     switch (activeTrigger) {
       case 'search':
         if (!aggressiveOptimization) {
-          console.log("🔍 FAST SEARCH: Speed-optimized search");
+          console.log("🔍 SEARCH: Speed-optimized search");
           const searchResult = await executeRegularSearch(message, language);
           if (searchResult.success) {
             browsingUsed = true;
@@ -262,7 +263,7 @@ serve(async (req) => {
 
       case 'image':
         if (!aggressiveOptimization) {
-          console.log("🎨 FAST IMAGE: Speed-optimized image generation");
+          console.log("🎨 IMAGE: Speed-optimized image generation");
           try {
             const imageResult = await generateImageWithRunware(message, user.id, language);
             
@@ -284,7 +285,7 @@ serve(async (req) => {
               response = imageResult.error;
             }
           } catch (error) {
-            console.error("Fast image generation error:", error);
+            console.error("Image generation error:", error);
             response = language === 'ar' 
               ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
               : `❌ Sorry, an error occurred while generating the image.`;
@@ -298,8 +299,8 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 VISION AI CHAT: Processing with fixed Vision system`);
-        console.log(`🖼️ VISION FILES: ${processedFiles.length} files ready for gpt-4-vision-preview`);
+        console.log(`🚀 AI CHAT: Processing with fixed AI system`);
+        console.log(`🖼️ FILES: ${processedFiles.length} files ready for processing`);
         
         const chatResult = await processWithBuddyChatAI(
           `${currentDateContext}\n\n${message}`,
@@ -314,17 +315,17 @@ serve(async (req) => {
           activeTrigger
         );
         response = chatResult.response;
-        console.log(`🎯 VISION RESULT: Model used: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}`);
+        console.log(`🎯 RESULT: Model used: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}`);
         break;
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 VISION AI: Fixed processing completed in ${processingTime}ms`);
+    console.log(`🚀 AI: Processing completed in ${processingTime}ms`);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: aggressiveOptimization ? 'hyper_fast' : (speedOptimized ? 'ultra_fast' : 'fixed_vision'),
+      intent: aggressiveOptimization ? 'hyper_fast' : (speedOptimized ? 'ultra_fast' : 'fixed_ai'),
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -340,7 +341,7 @@ serve(async (req) => {
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: 'openai_vision_fixed',
+      aiProvider: 'openai_fixed',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
@@ -360,10 +361,10 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 VISION AI: Critical Error:", error);
+    console.error("🚨 AI: Critical Error:", error);
     
     return new Response(JSON.stringify({
-      error: error.message || 'Fixed Vision processing error',
+      error: error.message || 'AI processing error',
       success: false,
       currentDateContext: getCurrentDateContext()
     }), {

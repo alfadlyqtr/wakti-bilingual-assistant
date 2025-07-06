@@ -17,8 +17,8 @@ export async function processWithBuddyChatAI(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log('🚀 VISION AI: Processing message with corrected Vision system');
-    console.log('🖼️ VISION FILES:', processedFiles.length, 'files provided');
+    console.log('🚀 AI: Processing message');
+    console.log('🖼️ FILES:', processedFiles.length, 'files provided');
     
     // Check for task creation triggers 
     const taskTriggers = {
@@ -50,10 +50,26 @@ export async function processWithBuddyChatAI(
     }));
     contextMessages.push(...formattedRecentMessages);
     
-    // FIXED: Correct bilingual system prompt as specified
-    let systemPrompt = `ENGLISH: You are a precise, visual AI assistant. When users upload images, extract every visible detail — including text, layout, people, scenes, objects, and context. Always respond with a clear, structured summary and direct answers to the user's question. Start your reply with: "I can see..."
+    // Check if this is an image processing request
+    const hasImages = processedFiles && processedFiles.length > 0 && 
+                     processedFiles.some(file => file.type && file.type.startsWith('image/'));
+    
+    let systemPrompt = '';
+    let model = '';
+    
+    if (hasImages) {
+      // Vision processing with images
+      console.log('🖼️ VISION: Processing with images using gpt-4o');
+      model = 'gpt-4o';
+      systemPrompt = `ENGLISH: You are a precise, visual AI assistant. When users upload images, extract every visible detail — including text, layout, people, scenes, objects, and context. Always respond with a clear, structured summary and direct answers to the user's question. Start your reply with: "I can see..."
 
 ARABIC: أنت مساعد ذكي دقيق يعتمد على الرؤية. عند رفع المستخدمين للصور، استخرج جميع التفاصيل الظاهرة — بما في ذلك النصوص، التخطيط، الأشخاص، المشاهد، الأشياء، والسياق. أجب دائماً بملخص منظم وواضح، وابدأ ردك بعبارة: "أرى أن..."`;
+    } else {
+      // Regular text chat
+      console.log('💬 CHAT: Processing text-only using gpt-4o-mini');
+      model = 'gpt-4o-mini';
+      systemPrompt = `You are a helpful AI assistant. Respond naturally and conversationally to the user's questions and requests.`;
+    }
     
     if (shouldCreateTask) {
       systemPrompt += ` The user wants to create a task or reminder. Acknowledge this and provide helpful suggestions about the task details.`;
@@ -87,11 +103,10 @@ ARABIC: أنت مساعد ذكي دقيق يعتمد على الرؤية. عند
       ...contextMessages
     ];
 
-    // FIXED: Vision processing with base64 images
-    if (processedFiles && processedFiles.length > 0) {
-      console.log('🖼️ VISION API: Processing', processedFiles.length, 'files for Vision');
+    if (hasImages) {
+      console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Vision');
       
-      // Create content array with text and images
+      // Create content array with text and images for Vision
       const messageContent = [
         { type: 'text', text: message }
       ];
@@ -99,7 +114,7 @@ ARABIC: أنت مساعد ذكي دقيق يعتمد على الرؤية. عند
       // Process each image file with base64 data
       for (const file of processedFiles) {
         if (file.type && file.type.startsWith('image/')) {
-          console.log(`🖼️ VISION API: Processing image: ${file.name}`);
+          console.log(`🖼️ VISION: Processing image: ${file.name}`);
           
           const imageUrl = file.image_url?.url;
           console.log(`🔗 VISION URL: ${imageUrl ? imageUrl.substring(0, 50) + '...' : 'NOT FOUND'}`);
@@ -108,43 +123,41 @@ ARABIC: أنت مساعد ذكي دقيق يعتمد على الرؤية. عند
             messageContent.push({
               type: 'image_url',
               image_url: {
-                url: imageUrl, // This is now base64 data URL
-                detail: 'auto' // Changed from 'high' to 'auto'
+                url: imageUrl,
+                detail: 'auto'
               }
             });
           } else {
-            console.error(`❌ VISION API: No valid URL found for image: ${file.name}`);
+            console.error(`❌ VISION: No valid URL found for image: ${file.name}`);
           }
         }
       }
 
       messages.push({ role: 'user', content: messageContent });
-      console.log(`🖼️ VISION API: Message content prepared with ${messageContent.length - 1} images`);
+      console.log(`🖼️ VISION: Message content prepared with ${messageContent.length - 1} images`);
     } else {
+      // Simple text message for regular chat
       messages.push({ role: 'user', content: message });
     }
 
-    // FIXED: Use only gpt-4-vision-preview, no fallbacks
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
     }
 
-    const model = 'gpt-4-vision-preview'; // FIXED: Correct Vision model
-    console.log(`🚀 VISION API: Using model ${model}`);
+    console.log(`🚀 AI: Using model ${model}`);
 
     try {
       const apiUrl = 'https://api.openai.com/v1/chat/completions';
 
-      // FIXED: Log the complete request payload for debugging
       const requestPayload = {
         model,
         messages,
         max_tokens: maxTokens,
-        temperature: 0.3, // FIXED: Changed from 0 to 0.3
+        temperature: 0.7,
         stream: false
       };
       
-      console.log('📤 VISION API REQUEST PAYLOAD:', JSON.stringify({
+      console.log('📤 API REQUEST:', JSON.stringify({
         model: requestPayload.model,
         messages: requestPayload.messages.map(msg => ({
           role: msg.role,
@@ -172,29 +185,27 @@ ARABIC: أنت مساعد ذكي دقيق يعتمد على الرؤية. عند
         body: JSON.stringify(requestPayload),
       });
 
-      // FIXED: Log the actual response details for debugging
-      console.log(`📥 VISION API RESPONSE: Status ${response.status}`);
+      console.log(`📥 API RESPONSE: Status ${response.status}`);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ VISION API ERROR: Status ${response.status}`);
-        console.error(`❌ VISION API ERROR BODY:`, errorText);
+        console.error(`❌ API ERROR: Status ${response.status}`);
+        console.error(`❌ API ERROR BODY:`, errorText);
         
-        // FIXED: Return actual OpenAI error instead of masking it
-        throw new Error(`Vision API error (${response.status}): ${errorText}`);
+        throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
       }
 
       const data = await response.json();
-      console.log(`📥 VISION API: Success with model ${model}`);
+      console.log(`📥 API: Success with model ${model}`);
       
       if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        console.error('❌ VISION API: Invalid response structure:', data);
-        throw new Error('Invalid Vision API response structure');
+        console.error('❌ API: Invalid response structure:', data);
+        throw new Error('Invalid API response structure');
       }
 
       const aiResponse = data.choices[0].message.content;
-      console.log('✅ VISION AI: Response generated successfully');
-      console.log('🎯 VISION RESPONSE PREVIEW:', aiResponse.substring(0, 100) + '...');
+      console.log('✅ AI: Response generated successfully');
+      console.log('🎯 RESPONSE PREVIEW:', aiResponse.substring(0, 100) + '...');
       
       return {
         response: aiResponse,
@@ -208,14 +219,12 @@ ARABIC: أنت مساعد ذكي دقيق يعتمد على الرؤية. عند
       };
 
     } catch (error) {
-      console.error(`🚨 VISION AI: API error:`, error);
-      
-      // FIXED: Return the actual error instead of masking it
+      console.error(`🚨 AI: API error:`, error);
       throw error;
     }
 
   } catch (error) {
-    console.error('🚨 VISION AI: Critical processing error:', error);
+    console.error('🚨 AI: Critical processing error:', error);
     
     return {
       response: language === 'ar' 
