@@ -1,4 +1,3 @@
-
 // Ultra-Fast Wakti AI Service with enhanced memory, summaries, and task creation
 import { supabase } from '@/integrations/supabase/client';
 import { UltraFastMemoryCache } from './UltraFastMemoryCache';
@@ -17,7 +16,8 @@ class UltraFastWaktiAIServiceClass {
     inputType: 'text' | 'voice' = 'text',
     activeTrigger: string = 'chat',
     attachedFiles: any[] = [],
-    onStreamUpdate?: (chunk: string, isComplete: boolean) => void
+    onStreamUpdate?: (chunk: string, isComplete: boolean) => void,
+    onTaskDetected?: (taskData: any) => void
   ) {
     try {
       // Get user ID
@@ -80,7 +80,7 @@ class UltraFastWaktiAIServiceClass {
           recentMessages: compressedContext.recentMessages,
           speedOptimized: true,
           aggressiveOptimization: true,
-          maxTokens: 350, // Slightly increased for task responses
+          maxTokens: 350,
           personalTouch: this.getPersonalTouch()
         }
       });
@@ -117,25 +117,22 @@ class UltraFastWaktiAIServiceClass {
         actionTaken: data.actionTaken
       };
       
-      // STEP 7: Handle task creation if intent detected
+      // STEP 7: Handle task creation if intent detected - TRIGGER FORM INSTEAD OF DIRECT CREATION
       let taskCreated = false;
+      let taskData = null;
       if (taskIntent && taskIntent.confidence > 0.7) {
         try {
-          const taskData = EnhancedTaskCreationService.parseTaskFromMessage(message, taskIntent.language);
-          console.log('📝 CREATING TASK:', taskData.title, `(${taskData.language})`);
+          taskData = EnhancedTaskCreationService.parseTaskFromMessage(message, taskIntent.language);
+          console.log('📝 TASK DETECTED - TRIGGERING FORM:', taskData.title, `(${taskData.language})`);
           
-          // Queue task creation in background (non-blocking)
-          BackgroundProcessingQueue.enqueue('database_save', {
-            userId,
-            conversationId: actualConversationId,
-            userMessage,
-            assistantMessage,
-            taskData // Include task data for creation
-          });
+          // Trigger the task confirmation form instead of creating directly
+          if (onTaskDetected) {
+            onTaskDetected(taskData);
+          }
           
-          taskCreated = true;
+          taskCreated = false; // Will be created after user confirms
         } catch (error) {
-          console.error('Task creation failed:', error);
+          console.error('Task parsing failed:', error);
         }
       }
       
@@ -151,22 +148,19 @@ class UltraFastWaktiAIServiceClass {
       UltraFastMemoryCache.setConversationContext(userId, actualConversationId, updatedContext);
       
       // STEP 9: Queue background operations (non-blocking)
-      if (!taskIntent) {
-        // Normal database save
-        BackgroundProcessingQueue.enqueue('database_save', {
-          userId,
-          conversationId: actualConversationId,
-          userMessage,
-          assistantMessage
-        });
-      }
+      BackgroundProcessingQueue.enqueue('database_save', {
+        userId,
+        conversationId: actualConversationId,
+        userMessage,
+        assistantMessage
+      });
       
       // STEP 10: Complete streaming if active
       if (onStreamUpdate) {
         StreamingResponseManager.completeStream(actualConversationId, assistantMessage.content);
       }
       
-      console.log('✅ ULTRA-FAST: Completed with superior memory + task creation');
+      console.log('✅ ULTRA-FAST: Completed with superior memory + task detection');
       
       return {
         ...data,
@@ -179,6 +173,7 @@ class UltraFastWaktiAIServiceClass {
         processingTime: Date.now(),
         taskCreated,
         taskIntent: taskIntent,
+        taskData: taskData,
         summaryTokens: compressedContext.tokens
       };
       

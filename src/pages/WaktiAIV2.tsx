@@ -14,8 +14,6 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
-import { Button } from '@/components/ui/button';
-import { ChevronDown, Zap, Database, TrendingUp } from 'lucide-react';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -61,15 +59,8 @@ const WaktiAIV2 = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isClearingChat, setIsClearingChat] = useState(false);
 
-  // ULTRA-FAST: New state for optimizations
-  const [ultraFastMode, setUltraFastMode] = useState(true);
+  // Streaming and ultra-fast states
   const [streamingMessage, setStreamingMessage] = useState('');
-  const [cacheStats, setCacheStats] = useState<any>(null);
-  const [responseTime, setResponseTime] = useState<number | null>(null);
-
-  // ENHANCED: New state for task creation and summaries
-  const [taskCreationActive, setTaskCreationActive] = useState(false);
-  const [summaryInfo, setSummaryInfo] = useState<any>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,16 +97,6 @@ const WaktiAIV2 = () => {
     loadUserProfile();
     loadPersonalTouch();
     loadChatSession();
-    
-    // ULTRA-FAST: Load cache stats with summary info
-    if (ultraFastMode) {
-      const stats = UltraFastWaktiAIService.getCacheStats();
-      setCacheStats(stats);
-      setSummaryInfo({
-        hotWithSummary: stats.memoryCache?.hot?.withSummary || 0,
-        warmWithSummary: stats.memoryCache?.warm?.withSummary || 0
-      });
-    }
   }, []);
 
   useEffect(() => {
@@ -124,7 +105,14 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  // ENHANCED: Message sending with task creation detection
+  // Handle task detection from AI response
+  const handleTaskDetected = (taskData: any) => {
+    console.log('🎯 TASK DETECTED - SHOWING FORM:', taskData);
+    setPendingTaskData(taskData);
+    setShowTaskConfirmation(true);
+  };
+
+  // Message sending with task creation detection
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text') => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
@@ -136,124 +124,65 @@ const WaktiAIV2 = () => {
     setStreamingMessage('');
     const startTime = Date.now();
 
-    // ENHANCED: Check for task creation intent
-    const { EnhancedTaskCreationService } = await import('@/services/EnhancedTaskCreationService');
-    const taskIntent = EnhancedTaskCreationService.detectTaskCreationIntent(messageContent);
-    
-    if (taskIntent) {
-      setTaskCreationActive(true);
-      console.log('🎯 TASK CREATION DETECTED:', taskIntent.language, taskIntent.confidence);
-    }
-
     try {
-      // ULTRA-FAST: Use enhanced ultra-fast service
-      if (ultraFastMode) {
-        console.log('🚀 ULTRA-FAST MODE: Processing with enhanced memory');
-        
-        // Add user message immediately to UI
-        const tempUserMessage: AIMessage = {
-          id: `user-temp-${Date.now()}`,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          inputType: inputType,
-          attachedFiles: processedFiles
-        };
-        
-        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
-        
-        // Start streaming placeholder
-        const tempAssistantMessage: AIMessage = {
-          id: `assistant-temp-${Date.now()}`,
-          role: 'assistant',
-          content: '',
-          timestamp: new Date()
-        };
-        
-        setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
-        
-        // Handle streaming updates
-        const handleStreamUpdate = (chunk: string, isComplete: boolean) => {
-          if (isComplete) {
-            setStreamingMessage('');
-          } else {
-            setStreamingMessage(prev => prev + chunk);
-          }
-        };
-        
-        const aiResponse = await UltraFastWaktiAIService.sendMessageUltraFast(
-          messageContent,
-          userProfile?.id,
-          language,
-          currentConversationId,
-          inputType,
-          activeTrigger,
-          processedFiles,
-          handleStreamUpdate
-        );
-        
-        // Update session messages with final response
-        setSessionMessages(prevMessages => {
-          const newMessages = [...prevMessages];
-          // Replace temp messages with real ones
-          newMessages[newMessages.length - 2] = aiResponse.userMessage;
-          newMessages[newMessages.length - 1] = aiResponse.assistantMessage;
-          return newMessages;
-        });
-        
-        setCurrentConversationId(aiResponse.conversationId);
-        setIsNewConversation(false);
-        setResponseTime(Date.now() - startTime);
-        
-        // ENHANCED: Update stats with summary info
-        const stats = UltraFastWaktiAIService.getCacheStats();
-        setCacheStats(stats);
-        setSummaryInfo({
-          hotWithSummary: stats.memoryCache?.hot?.withSummary || 0,
-          warmWithSummary: stats.memoryCache?.warm?.withSummary || 0,
-          summaryTokens: aiResponse.summaryTokens || 0
-        });
-        
-        // Show task creation success
-        if (aiResponse.taskCreated) {
-          showSuccess(language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!');
+      console.log('🚀 ULTRA-FAST MODE: Processing with enhanced memory');
+      
+      // Add user message immediately to UI
+      const tempUserMessage: AIMessage = {
+        id: `user-temp-${Date.now()}`,
+        role: 'user',
+        content: messageContent,
+        timestamp: new Date(),
+        inputType: inputType,
+        attachedFiles: processedFiles
+      };
+      
+      setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+      
+      // Start streaming placeholder
+      const tempAssistantMessage: AIMessage = {
+        id: `assistant-temp-${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date()
+      };
+      
+      setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
+      
+      // Handle streaming updates
+      const handleStreamUpdate = (chunk: string, isComplete: boolean) => {
+        if (isComplete) {
+          setStreamingMessage('');
+        } else {
+          setStreamingMessage(prev => prev + chunk);
         }
-        
-        console.log('✅ ULTRA-FAST: Completed with enhanced memory in', Date.now() - startTime, 'ms');
-        
-      } else {
-        // Fallback to original service
-        const aiResponse = await WaktiAIV2Service.sendMessage(
-          messageContent,
-          userProfile?.id,
-          language,
-          currentConversationId,
-          inputType,
-          sessionMessages,
-          false,
-          activeTrigger,
-          '',
-          processedFiles
-        );
-
-        setSessionMessages(prevMessages => [...prevMessages, {
-          id: `user-${Date.now()}`,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          inputType: inputType,
-          attachedFiles: processedFiles
-        }, {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: aiResponse.response,
-          timestamp: new Date()
-        }]);
-
-        setCurrentConversationId(aiResponse.conversationId);
-        setIsNewConversation(false);
-        setResponseTime(Date.now() - startTime);
-      }
+      };
+      
+      const aiResponse = await UltraFastWaktiAIService.sendMessageUltraFast(
+        messageContent,
+        userProfile?.id,
+        language,
+        currentConversationId,
+        inputType,
+        activeTrigger,
+        processedFiles,
+        handleStreamUpdate,
+        handleTaskDetected // Pass task detection callback
+      );
+      
+      // Update session messages with final response
+      setSessionMessages(prevMessages => {
+        const newMessages = [...prevMessages];
+        // Replace temp messages with real ones
+        newMessages[newMessages.length - 2] = aiResponse.userMessage;
+        newMessages[newMessages.length - 1] = aiResponse.assistantMessage;
+        return newMessages;
+      });
+      
+      setCurrentConversationId(aiResponse.conversationId);
+      setIsNewConversation(false);
+      
+      console.log('✅ ULTRA-FAST: Completed with enhanced memory in', Date.now() - startTime, 'ms');
       
       setProcessedFiles([]);
       checkQuotas();
@@ -265,11 +194,9 @@ const WaktiAIV2 = () => {
     } catch (err: any) {
       console.error("Error sending message:", err);
       setError(err.message || 'Failed to send message');
-      setResponseTime(Date.now() - startTime);
     } finally {
       setIsLoading(false);
       setStreamingMessage('');
-      setTaskCreationActive(false);
     }
   };
 
@@ -294,17 +221,10 @@ const WaktiAIV2 = () => {
     setCurrentConversationId(null);
     setIsNewConversation(true);
     setStreamingMessage('');
-    setResponseTime(null);
-    setSummaryInfo(null);
-    setTaskCreationActive(false);
     
-    if (ultraFastMode) {
-      // Clear ultra-fast caches with summary cleanup
-      if (userProfile?.id && currentConversationId) {
-        UltraFastWaktiAIService.clearConversationUltraFast(userProfile.id, currentConversationId);
-      }
-    } else {
-      WaktiAIV2Service.clearChatSession();
+    // Clear ultra-fast caches
+    if (userProfile?.id && currentConversationId) {
+      UltraFastWaktiAIService.clearConversationUltraFast(userProfile.id, currentConversationId);
     }
     
     setIsSidebarOpen(false);
@@ -494,15 +414,6 @@ const WaktiAIV2 = () => {
     setShowQuickActions(true);
   };
 
-  // Toggle ultra-fast mode
-  const toggleUltraFastMode = () => {
-    setUltraFastMode(!ultraFastMode);
-    showSuccess(ultraFastMode 
-      ? (language === 'ar' ? 'تم تعطيل الوضع السريع' : 'Ultra-fast mode disabled')
-      : (language === 'ar' ? 'تم تفعيل الوضع السريع' : 'Ultra-fast mode enabled')
-    );
-  };
-
   return (
     <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -536,49 +447,6 @@ const WaktiAIV2 = () => {
           onClearChat={handleClearChat}
           hasMessages={sessionMessages.length > 0}
         />
-
-        {/* ENHANCED: Performance indicators with summary info */}        
-        <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border-b">
-          <Button
-            variant={ultraFastMode ? "default" : "outline"}
-            size="sm"
-            onClick={toggleUltraFastMode}
-            className="flex items-center gap-2"
-          >
-            <Zap className={`w-4 h-4 ${ultraFastMode ? 'text-yellow-300' : ''}`} />
-            {ultraFastMode ? 'ULTRA-FAST' : 'STANDARD'}
-          </Button>
-          
-          {responseTime && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingUp className="w-3 h-3" />
-              {responseTime}ms
-            </div>
-          )}
-          
-          {ultraFastMode && cacheStats && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Database className="w-3 h-3" />
-              Cache: {cacheStats.memoryCache?.hot?.size || 0}H/{cacheStats.memoryCache?.warm?.size || 0}W
-            </div>
-          )}
-          
-          {summaryInfo && summaryInfo.summaryTokens > 0 && (
-            <div className="flex items-center gap-1 text-xs text-blue-600">
-              📚 Summary: {summaryInfo.summaryTokens}T
-            </div>
-          )}
-          
-          {taskCreationActive && (
-            <div className="flex items-center gap-1 text-xs text-green-600 animate-pulse">
-              📝 Creating Task...
-            </div>
-          )}
-          
-          <div className="flex items-center gap-1 text-xs font-medium text-green-600">
-            ⚡ Superior Memory + Ultra Speed + Smart Tasks
-          </div>
-        </div>
 
         <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
           <ChatMessages
