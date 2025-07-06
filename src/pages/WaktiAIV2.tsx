@@ -9,7 +9,6 @@ import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
 import { useAIQuotaManagement } from '@/hooks/useAIQuotaManagement';
 import { supabase } from '@/integrations/supabase/client';
-import { ChatHeader } from '@/components/wakti-ai-v2/ChatHeader';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
@@ -49,13 +48,12 @@ const WaktiAIV2 = () => {
   const [taskConfirmationLoading, setTaskConfirmationLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [processedFiles, setProcessedFiles] = useState<any[]>([]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const [isExtendedQuotaExceeded, setIsExtendedQuotaExceeded] = useState(false);
   const [isAIQuotaExceeded, setIsAIQuotaExceeded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isUploading, setIsUploading] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isClearingChat, setIsClearingChat] = useState(false);
 
@@ -152,8 +150,6 @@ const WaktiAIV2 = () => {
       // Handle streaming updates
       const handleStreamUpdate = (chunk: string, isComplete: boolean) => {
         if (isComplete) {
-          setStreamingMessage('');
-        } else {
           setStreamingMessage(prev => prev + chunk);
         }
       };
@@ -437,17 +433,6 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full">
-        <ChatHeader
-          currentConversationId={currentConversationId}
-          activeTrigger={activeTrigger}
-          onToggleConversations={() => setShowConversations(!showConversations)}
-          onNewConversation={handleNewConversation}
-          onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
-          onTriggerChange={handleTriggerChange}
-          onClearChat={handleClearChat}
-          hasMessages={sessionMessages.length > 0}
-        />
-
         <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages}
