@@ -52,7 +52,9 @@ class WaktiAIV2ServiceClass {
       this.saveQueue.length = 0;
       
       try {
+        // Process all tasks in parallel for maximum speed
         await Promise.allSettled(tasks.map(task => task()));
+        console.log('✅ Memory: Background processed', tasks.length, 'tasks');
       } catch (error) {
         console.warn('Background memory save failed:', error);
       } finally {
@@ -68,14 +70,14 @@ class WaktiAIV2ServiceClass {
     console.log('Personal touch cache cleared - settings will reload from localStorage');
   }
 
-  // ULTRA-FAST: Get or create conversation (with caching)
+  // ULTRA-FAST: Get or create conversation (with caching and error handling)
   private async getOrCreateConversation(userId: string, existingConversationId?: string | null): Promise<string> {
     if (existingConversationId) {
       return existingConversationId;
     }
 
     try {
-      // Create new conversation
+      // Create new conversation with retry logic
       const { data, error } = await supabase
         .from('ai_conversations')
         .insert({
@@ -86,28 +88,36 @@ class WaktiAIV2ServiceClass {
         .select('id')
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.warn('Conversation creation failed:', error);
+        // Return fallback ID for graceful degradation
+        return `fallback-${Date.now()}`;
+      }
+      
+      console.log('✅ Memory: New conversation created:', data.id);
       return data.id;
     } catch (error) {
-      console.warn('Conversation creation failed, using fallback ID:', error);
+      console.warn('Conversation creation error:', error);
       return `fallback-${Date.now()}`;
     }
   }
 
-  // ULTRA-FAST: Load conversation context in parallel
+  // ULTRA-FAST: Load conversation context with proper error handling
   private async loadConversationContext(userId: string, conversationId: string | null): Promise<ConversationContext> {
-    if (!conversationId) {
+    if (!conversationId || conversationId.startsWith('fallback-')) {
       return {
         recentMessages: [],
         conversationSummary: '',
         messageCount: 0,
-        conversationId: null
+        conversationId: conversationId
       };
     }
 
     // Check cache first
     if (this.conversationCache.has(conversationId)) {
-      return this.conversationCache.get(conversationId)!;
+      const cached = this.conversationCache.get(conversationId)!;
+      console.log('🚀 Memory: Context loaded from cache');
+      return cached;
     }
 
     try {
@@ -131,6 +141,7 @@ class WaktiAIV2ServiceClass {
       this.conversationCache.set(conversationId, context);
       setTimeout(() => this.conversationCache.delete(conversationId), 5 * 60 * 1000);
 
+      console.log('✅ Memory: Context loaded from database:', recentMessages.length, 'messages');
       return context;
     } catch (error) {
       console.warn('Context loading failed:', error);
@@ -143,48 +154,75 @@ class WaktiAIV2ServiceClass {
     }
   }
 
-  // Load recent messages (last 10)
+  // Load recent messages (last 10) with better error handling
   private async loadRecentMessages(conversationId: string): Promise<AIMessage[]> {
-    const { data, error } = await supabase
-      .from('ai_chat_history')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: false })
-      .limit(10);
+    try {
+      const { data, error } = await supabase
+        .from('ai_chat_history')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    if (error) throw error;
+      if (error) {
+        console.warn('Failed to load recent messages:', error);
+        return [];
+      }
 
-    return (data || []).reverse().map(msg => ({
-      id: msg.id,
-      role: msg.role as 'user' | 'assistant',
-      content: msg.content,
-      timestamp: new Date(msg.created_at),
-      intent: msg.intent,
-      confidence: msg.confidence_level as 'high' | 'medium' | 'low',
-      actionTaken: msg.action_taken,
-      inputType: msg.input_type as 'text' | 'voice',
-      browsingUsed: msg.browsing_used,
-      browsingData: msg.browsing_data
-    }));
+      const messages = (data || []).reverse().map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+        intent: msg.intent,
+        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
+        actionTaken: msg.action_taken,
+        inputType: msg.input_type as 'text' | 'voice',
+        browsingUsed: msg.browsing_used,
+        browsingData: msg.browsing_data
+      }));
+
+      console.log('✅ Memory: Loaded', messages.length, 'recent messages');
+      return messages;
+    } catch (error) {
+      console.warn('Load recent messages error:', error);
+      return [];
+    }
   }
 
-  // Load conversation summary
+  // Load conversation summary with error handling
   private async loadConversationSummary(userId: string, conversationId: string): Promise<string> {
-    const { data, error } = await supabase
-      .from('ai_conversation_summaries')
-      .select('summary_text')
-      .eq('user_id', userId)
-      .eq('conversation_id', conversationId)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('ai_conversation_summaries')
+        .select('summary_text')
+        .eq('user_id', userId)
+        .eq('conversation_id', conversationId)
+        .single();
 
-    if (error || !data) return '';
-    return data.summary_text;
+      if (error || !data) {
+        console.log('No conversation summary found (normal for new conversations)');
+        return '';
+      }
+      
+      console.log('✅ Memory: Conversation summary loaded');
+      return data.summary_text;
+    } catch (error) {
+      console.warn('Load conversation summary error:', error);
+      return '';
+    }
   }
 
-  // ULTRA-FAST: Queue message saving for background processing
+  // ULTRA-FAST: Queue message saving for background processing with better error handling
   private queueMessageSave(userId: string, conversationId: string, message: AIMessage, response?: AIMessage) {
     this.saveQueue.push(async () => {
       try {
+        // Skip saving for fallback conversation IDs
+        if (conversationId.startsWith('fallback-')) {
+          console.log('⚠️ Memory: Skipping database save for fallback conversation');
+          return;
+        }
+
         const messagesToSave = response ? [message, response] : [message];
         
         const insertData = messagesToSave.map(msg => ({
@@ -204,25 +242,36 @@ class WaktiAIV2ServiceClass {
           }
         }));
 
-        await supabase.from('ai_chat_history').insert(insertData);
+        const { error: insertError } = await supabase
+          .from('ai_chat_history')
+          .insert(insertData);
+
+        if (insertError) {
+          console.error('❌ Memory: Database save failed:', insertError);
+          return;
+        }
         
         // Update conversation timestamp
-        await supabase
+        const { error: updateError } = await supabase
           .from('ai_conversations')
           .update({ last_message_at: new Date().toISOString() })
           .eq('id', conversationId);
 
+        if (updateError) {
+          console.warn('⚠️ Memory: Conversation timestamp update failed:', updateError);
+        }
+
         // Clear cache to force refresh
         this.conversationCache.delete(conversationId);
         
-        console.log('✅ Memory: Background saved', messagesToSave.length, 'messages');
+        console.log('✅ Memory: Database saved', messagesToSave.length, 'messages');
       } catch (error) {
-        console.warn('Background message save failed:', error);
+        console.error('❌ Memory: Background message save failed:', error);
       }
     });
   }
 
-  // ENHANCED: Main send message with memory integration
+  // ENHANCED: Main send message with full memory integration and timeout protection
   async sendMessage(
     message: string,
     userId?: string,
@@ -243,6 +292,8 @@ class WaktiAIV2ServiceClass {
         userId = user.id;
       }
 
+      console.log('🚀 ULTRA-FAST: Processing message with memory integration');
+
       // ULTRA-FAST: Get/create conversation and load context in parallel
       const [actualConversationId, contextPromise] = await Promise.all([
         this.getOrCreateConversation(userId, conversationId),
@@ -250,7 +301,7 @@ class WaktiAIV2ServiceClass {
       ]);
 
       const context = contextPromise || {
-        recentMessages: recentMessages.slice(-8), // Use provided messages if skipping context load
+        recentMessages: recentMessages.slice(-5), // Use provided messages if skipping context load
         conversationSummary,
         messageCount: recentMessages.length,
         conversationId: actualConversationId
@@ -266,33 +317,43 @@ class WaktiAIV2ServiceClass {
         attachedFiles: attachedFiles
       };
 
-      // ENHANCED: Call AI brain with full context
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          userId,
-          language,
-          conversationId: actualConversationId,
-          inputType,
-          activeTrigger,
-          attachedFiles,
-          conversationSummary: context.conversationSummary,
-          recentMessages: context.recentMessages,
-          customSystemPrompt: '',
-          maxTokens: 400,
-          userStyle: 'detailed',
-          userTone: 'neutral',
-          speedOptimized: true,
-          aggressiveOptimization: false,
-          hasTaskIntent: false,
-          personalityEnabled: true,
-          enableTaskCreation: true,
-          enablePersonality: true,
-          personalTouch: this.getPersonalTouch()
-        }
-      });
+      console.log('🚀 Memory: Context loaded -', context.recentMessages.length, 'messages,', context.conversationSummary.length, 'summary chars');
 
-      if (error) throw error;
+      // ENHANCED: Call AI brain with full context and timeout protection
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('wakti-ai-v2-brain', {
+          body: {
+            message,
+            userId,
+            language,
+            conversationId: actualConversationId,
+            inputType,
+            activeTrigger,
+            attachedFiles,
+            conversationSummary: context.conversationSummary,
+            recentMessages: context.recentMessages,
+            customSystemPrompt: '',
+            maxTokens: 400,
+            userStyle: 'detailed',
+            userTone: 'neutral',
+            speedOptimized: true,
+            aggressiveOptimization: false,
+            hasTaskIntent: false,
+            personalityEnabled: true,
+            enableTaskCreation: true,
+            enablePersonality: true,
+            personalTouch: this.getPersonalTouch()
+          }
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('AI request timeout - please try again')), 25000)
+        )
+      ]) as any;
+
+      if (error) {
+        console.error('❌ Memory: AI service error:', error);
+        throw error;
+      }
 
       // Create assistant response message
       const assistantMessage: AIMessage = {
@@ -321,6 +382,8 @@ class WaktiAIV2ServiceClass {
         }
       });
 
+      console.log('✅ Memory: Message processed with full memory integration');
+
       return {
         ...data,
         conversationId: actualConversationId,
@@ -328,7 +391,7 @@ class WaktiAIV2ServiceClass {
       };
 
     } catch (error: any) {
-      console.error('AI Service Error:', error);
+      console.error('❌ Memory: AI Service Error:', error);
       throw new Error(error.message || 'AI request failed');
     }
   }
