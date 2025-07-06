@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -39,7 +38,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 ULTRA-FAST AI: Processing with timeout protection and current date context");
+    console.log("🚀 VISION AI: Processing with restored Vision system and current date context");
     const startTime = Date.now();
 
     // Auth handling
@@ -120,21 +119,34 @@ serve(async (req) => {
 
     // CRITICAL FIX: Include current date in all AI processing
     const currentDateContext = getCurrentDateContext();
-    console.log(`🚀 ULTRA-FAST: ${currentDateContext} | User ${user.id} | Personal Touch: ${!!personalTouch}`);
+    console.log(`🚀 VISION AI: ${currentDateContext} | User ${user.id} | Personal Touch: ${!!personalTouch}`);
 
-    // CRITICAL FIX: Enhanced file processing with proper format standardization
+    // RESTORED: Direct file processing for Vision API
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`📁 PROCESSING ${attachedFiles.length} files:`, JSON.stringify(attachedFiles.map(f => ({
+      console.log(`📁 VISION API: Processing ${attachedFiles.length} files with restored format:`, JSON.stringify(attachedFiles.map(f => ({
         name: f.name,
         type: f.type,
-        hasUrl: !!f.url,
+        hasImageUrl: !!f.image_url,
         hasPublicUrl: !!f.publicUrl,
         optimized: f.optimized
       })), null, 2));
       
-      processedFiles = await processAttachedFilesForVision(attachedFiles);
-      console.log(`🚀 ULTRA-FAST: Successfully processed ${processedFiles.length} files for Vision API`);
+      // DIRECT PASS: Files are already in correct format from useOptimizedFileUpload
+      processedFiles = attachedFiles.filter(file => {
+        if (file.type && file.type.startsWith('image/')) {
+          const hasValidUrl = file.image_url?.url || file.publicUrl;
+          if (!hasValidUrl) {
+            console.error(`❌ VISION API: No valid URL for image: ${file.name}`, file);
+            return false;
+          }
+          console.log(`✅ VISION API: File ready for processing: ${file.name}`);
+          return true;
+        }
+        return false;
+      });
+      
+      console.log(`🚀 VISION AI: Successfully prepared ${processedFiles.length} files for Vision API`);
     }
 
     // ULTRA-FAST: Minimal context for maximum speed
@@ -303,12 +315,12 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 ULTRA-FAST CHAT: Processing with timeout protection and personalization`);
+        console.log(`🚀 VISION AI CHAT: Processing with restored Vision system and personalization`);
         
         // ULTRA-FAST: Minimal context for lightning speed
         let chatContext = aggressiveOptimization ? '' : minimalConversationSummary;
         
-        console.log(`🚀 ULTRA-FAST CHAT: Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Personal Touch: ${!!personalTouch}`);
+        console.log(`🚀 VISION AI CHAT: Context: ${chatContext?.length || 0} | Messages: ${minimalRecentMessages.length} | Files: ${processedFiles.length} | Personal Touch: ${!!personalTouch}`);
         
         // CRITICAL FIX: Extract response field from result object + include date context
         const chatResult = await processWithBuddyChatAI(
@@ -328,7 +340,7 @@ serve(async (req) => {
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 ULTRA-FAST: Processed in ${processingTime}ms (${aggressiveOptimization ? 'HYPER-FAST' : speedOptimized ? 'ULTRA-FAST' : 'SPEED'} mode)`);
+    console.log(`🚀 VISION AI: Processed in ${processingTime}ms (${aggressiveOptimization ? 'HYPER-FAST' : speedOptimized ? 'ULTRA-FAST' : 'SPEED'} mode)`);
 
     // ULTRA-FAST: Response structure optimized for speed
     const result = {
@@ -369,7 +381,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 ULTRA-FAST: Critical Error:", error);
+    console.error("🚨 VISION AI: Critical Error:", error);
     
     return new Response(JSON.stringify({
       error: error.message || 'Processing error',
@@ -382,84 +394,19 @@ serve(async (req) => {
   }
 });
 
-// CRITICAL FIX: Dedicated Vision API file processing function
-async function processAttachedFilesForVision(attachedFiles: any[]): Promise<any[]> {
-  if (!attachedFiles || attachedFiles.length === 0) {
-    console.log("📁 No files to process for Vision API");
-    return [];
-  }
-
-  console.log("📁 VISION API FILE PROCESSING: Starting with", attachedFiles.length, "files");
-
-  const processedFiles = [];
-
-  for (let i = 0; i < attachedFiles.length; i++) {
-    const file = attachedFiles[i];
-    console.log(`📁 Processing file ${i + 1} for Vision API:`, {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      hasUrl: !!file.url,
-      hasPublicUrl: !!file.publicUrl,
-      optimized: file.optimized
-    });
-
-    try {
-      // CRITICAL: Handle images for Vision API with standardized format
-      if (file.type && file.type.startsWith('image/')) {
-        let imageUrl = null;
-        
-        // Method 1: Try optimized public URL first (preferred for uploads)
-        if (file.optimized && file.publicUrl) {
-          console.log(`🖼️ VISION API: Using optimized public URL for ${file.name}`);
-          imageUrl = file.publicUrl;
-        }
-        // Method 2: Try regular URL
-        else if (file.url) {
-          console.log(`🖼️ VISION API: Using regular URL for ${file.name}`);
-          imageUrl = file.url;
-        }
-        // Method 3: Try publicUrl without optimized flag
-        else if (file.publicUrl) {
-          console.log(`🖼️ VISION API: Using publicUrl for ${file.name}`);
-          imageUrl = file.publicUrl;
-        }
-
-        if (imageUrl) {
-          // STANDARDIZED FORMAT: Always use the same Vision API format
-          processedFiles.push({
-            type: 'image_url',
-            image_url: {
-              url: imageUrl,
-              detail: 'high' // For better image analysis
-            },
-            name: file.name,
-            originalType: file.type,
-            size: file.size
-          });
-          console.log(`✅ Successfully processed image for Vision API: ${file.name}`);
-        } else {
-          console.error(`❌ No valid URL found for image: ${file.name}`, file);
-        }
-      }
-      // Handle text files (if needed)
-      else if (file.type === 'text/plain' && file.content) {
-        console.log(`📄 Processing text file: ${file.name}`);
-        processedFiles.push({
-          type: 'text',
-          content: file.content,
-          name: file.name,
-          originalType: file.type
-        });
-        console.log(`✅ Successfully processed text file: ${file.name}`);
-      }
-    } catch (error) {
-      console.error(`❌ Error processing file ${file.name} for Vision API:`, error);
-      // Continue processing other files even if one fails
-    }
-  }
-
-  console.log(`📁 VISION API FILE PROCESSING: Completed. Processed ${processedFiles.length}/${attachedFiles.length} files successfully`);
-  
-  return processedFiles;
-}
+// CRITICAL FIX: Current date context for AI
+const getCurrentDateContext = () => {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    weekday: 'long'
+  });
+  const timeStr = now.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+  return `Current date and time: ${dateStr}, ${timeStr}`;
+};

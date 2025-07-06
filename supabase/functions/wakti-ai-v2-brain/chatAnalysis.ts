@@ -17,7 +17,7 @@ export async function processWithBuddyChatAI(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log('🚀 ULTRA-FAST: Processing with BuddyChat AI');
+    console.log('🚀 VISION AI: Processing with restored Vision system');
     
     // NEW: Check for task creation triggers
     const taskTriggers = {
@@ -84,14 +84,13 @@ export async function processWithBuddyChatAI(
       ...contextMessages
     ];
 
-    // CRITICAL FIX: Enhanced Vision API file processing with proper format handling
+    // RESTORED: Direct Vision API processing with proper format handling
     if (processedFiles && processedFiles.length > 0) {
-      console.log('📁 VISION API: Processing files for AI:', JSON.stringify(processedFiles.map(f => ({
+      console.log('🖼️ VISION API: Processing files with restored format:', JSON.stringify(processedFiles.map(f => ({
         type: f.type,
         name: f.name,
         hasImageUrl: !!f.image_url,
         hasPublicUrl: !!f.publicUrl,
-        hasUrl: !!f.url,
         optimized: f.optimized
       })), null, 2));
 
@@ -100,14 +99,12 @@ export async function processWithBuddyChatAI(
         { type: 'text', text: message }
       ];
 
-      // CRITICAL FIX: Handle different file input formats and convert to Vision API format
+      // RESTORED: Handle Vision API format directly
       for (const file of processedFiles) {
         if (file.type && file.type.startsWith('image/')) {
-          let imageUrl = null;
-          
-          // Method 1: Check if it's already in Vision API format
-          if (file.type === 'image_url' && file.image_url && file.image_url.url) {
-            console.log(`🖼️ VISION API: Using existing Vision format for ${file.name}`);
+          // Method 1: Use direct Vision API format (RESTORED PATH)
+          if (file.image_url && file.image_url.url) {
+            console.log(`🖼️ VISION API: Using direct Vision format for ${file.name}`);
             messageContent.push({
               type: 'image_url',
               image_url: {
@@ -118,31 +115,16 @@ export async function processWithBuddyChatAI(
             continue;
           }
           
-          // Method 2: Convert from optimized upload format
-          if (file.optimized && file.publicUrl) {
-            console.log(`🖼️ VISION API: Converting optimized upload for ${file.name}`);
-            imageUrl = file.publicUrl;
-          }
-          // Method 3: Use regular URL
-          else if (file.url) {
-            console.log(`🖼️ VISION API: Using regular URL for ${file.name}`);
-            imageUrl = file.url;
-          }
-          // Method 4: Use publicUrl without optimized flag
-          else if (file.publicUrl) {
-            console.log(`🖼️ VISION API: Using publicUrl for ${file.name}`);
-            imageUrl = file.publicUrl;
-          }
-
-          if (imageUrl) {
+          // Method 2: Fallback to publicUrl
+          if (file.publicUrl) {
+            console.log(`🖼️ VISION API: Using publicUrl fallback for ${file.name}`);
             messageContent.push({
               type: 'image_url',
               image_url: {
-                url: imageUrl,
-                detail: 'high' // For better image analysis
+                url: file.publicUrl,
+                detail: 'high'
               }
             });
-            console.log(`✅ Successfully processed image for Vision API: ${file.name}`);
           } else {
             console.error(`❌ No valid URL found for image: ${file.name}`, file);
           }
@@ -154,15 +136,16 @@ export async function processWithBuddyChatAI(
       messages.push({ role: 'user', content: message });
     }
 
-    // ULTRA-FAST: Use available API with timeout protection
+    // RESTORED: Use OpenAI Vision model (the one that was working)
     const apiKey = OPENAI_API_KEY || DEEPSEEK_API_KEY;
     const apiUrl = OPENAI_API_KEY 
       ? 'https://api.openai.com/v1/chat/completions'
       : 'https://api.deepseek.com/chat/completions';
     
+    // CRITICAL: Use gpt-4o-mini for Vision (the working model)
     const model = OPENAI_API_KEY ? 'gpt-4o-mini' : 'deepseek-chat';
 
-    console.log(`🚀 ULTRA-FAST: Using ${OPENAI_API_KEY ? 'OpenAI' : 'DeepSeek'} with context: ${contextMessages.length} messages, files: ${processedFiles.length}`);
+    console.log(`🚀 VISION API: Using ${OPENAI_API_KEY ? 'OpenAI gpt-4o-mini' : 'DeepSeek'} with context: ${contextMessages.length} messages, files: ${processedFiles.length}`);
 
     const response = await Promise.race([
       fetch(apiUrl, {
@@ -196,7 +179,7 @@ export async function processWithBuddyChatAI(
 
     const aiResponse = data.choices[0].message.content;
     
-    console.log('🚀 ULTRA-FAST: AI response generated successfully');
+    console.log('🚀 VISION AI: Response generated successfully');
     
     // ENHANCED: Return response with task creation intent
     return {
@@ -211,7 +194,7 @@ export async function processWithBuddyChatAI(
     };
 
   } catch (error) {
-    console.error('🚨 ULTRA-FAST: AI processing error:', error);
+    console.error('🚨 VISION AI: Processing error:', error);
     
     // Return error in consistent format
     return {

@@ -10,8 +10,13 @@ export interface OptimizedUploadedFile {
   type: string;
   url: string;
   publicUrl: string;
-  optimized: boolean; // CRITICAL: Add this flag for consistent handling
-  thumbnail?: string; // For image previews
+  optimized: boolean;
+  thumbnail?: string;
+  // CRITICAL: Add Vision API compatible format
+  image_url?: {
+    url: string;
+    detail: string;
+  };
 }
 
 export function useOptimizedFileUpload() {
@@ -87,6 +92,7 @@ export function useOptimizedFileUpload() {
         }
       }
 
+      // CRITICAL FIX: Create Vision API compatible format
       const optimizedFile: OptimizedUploadedFile = {
         id: fileId,
         name: file.name,
@@ -94,11 +100,16 @@ export function useOptimizedFileUpload() {
         type: file.type,
         url: filePath,
         publicUrl,
-        optimized: true, // CRITICAL: Set this flag for AI processing
-        thumbnail
+        optimized: true,
+        thumbnail,
+        // DIRECT Vision API format for images
+        image_url: file.type.startsWith('image/') ? {
+          url: publicUrl,
+          detail: 'high'
+        } : undefined
       };
 
-      console.log(`✅ OPTIMIZED UPLOAD: Successfully uploaded: ${file.name} -> ${publicUrl}`);
+      console.log(`✅ OPTIMIZED UPLOAD: Successfully uploaded with Vision format: ${file.name} -> ${publicUrl}`);
       return optimizedFile;
     } catch (error) {
       console.error(`❌ OPTIMIZED UPLOAD: Single file upload error for ${file.name}:`, error);
