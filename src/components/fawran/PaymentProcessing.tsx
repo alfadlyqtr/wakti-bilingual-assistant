@@ -1,216 +1,222 @@
-
-import React, { useEffect, useState } from 'react';
-import { useTheme } from '@/providers/ThemeProvider';
-import { Card } from '@/components/ui/card';
-import { Bot, Calendar, Mic, MessageSquare, Sparkles, Shield } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, Brain, Shield, CheckCircle, AlertCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useTheme } from "@/providers/ThemeProvider";
 
 interface PaymentProcessingProps {
   paymentId: string;
-  onProcessingComplete: (result: { success: boolean; needsReview?: boolean; message?: string }) => void;
+  onProcessingComplete: (result: { success: boolean; message: string }) => void;
 }
 
 export function PaymentProcessing({ paymentId, onProcessingComplete }: PaymentProcessingProps) {
+  const [progress, setProgress] = useState(0);
+  const [currentStep, setCurrentStep] = useState(0);
   const { language } = useTheme();
-  const [currentFeature, setCurrentFeature] = useState(0);
 
-  const features = [
+  const steps = [
     {
-      icon: Shield,
-      title: language === 'ar' ? 'نظام الأمان المحسن' : 'Enhanced Security System',
-      description: language === 'ar' 
-        ? 'نظام GPT-4 Vision يحلل دفعتك بدقة عالية'
-        : 'GPT-4 Vision system analyzes your payment with high precision',
-      color: 'text-green-600'
+      icon: <Brain className="h-5 w-5" />,
+      title: language === 'ar' ? 'تحليل الصورة باستخدام الذكاء الاصطناعي' : 'AI Image Analysis',
+      description: language === 'ar' ? 'فحص تفاصيل الدفع' : 'Analyzing payment details'
     },
     {
-      icon: Bot,
-      title: language === 'ar' ? 'مساعد WAKTI الذكي' : 'WAKTI AI Assistant',
-      description: language === 'ar' 
-        ? 'احصل على مساعدة ذكية في جميع مهامك اليومية'
-        : 'Get intelligent help with all your daily tasks',
-      color: 'text-blue-600'
+      icon: <Shield className="h-5 w-5" />,
+      title: language === 'ar' ? 'فحص الأمان' : 'Security Verification',
+      description: language === 'ar' ? 'التحقق من صحة المعاملة' : 'Verifying transaction authenticity'
     },
     {
-      icon: Calendar,
-      title: language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
-      description: language === 'ar' 
-        ? 'نظم حياتك بسهولة مع المهام الذكية والتذكيرات'
-        : 'Organize your life easily with smart tasks and reminders',
-      color: 'text-green-600'
-    },
-    {
-      icon: Sparkles,
-      title: language === 'ar' ? 'الأحداث والمواعيد' : 'Events & Appointments',
-      description: language === 'ar' 
-        ? 'أنشئ وشارك الأحداث بتصاميم احترافية'
-        : 'Create and share events with professional designs',
-      color: 'text-pink-600'
-    },
-    {
-      icon: Mic,
-      title: language === 'ar' ? 'التسجيل الصوتي' : 'Voice Recording',
-      description: language === 'ar' 
-        ? 'سجل أفكارك واحصل على ملخصات ذكية'
-        : 'Record your thoughts and get intelligent summaries',
-      color: 'text-orange-600'
-    },
-    {
-      icon: MessageSquare,
-      title: language === 'ar' ? 'التواصل الآمن' : 'Secure Messaging',
-      description: language === 'ar' 
-        ? 'تواصل مع جهات الاتصال بأمان وخصوصية'
-        : 'Communicate with contacts safely and privately',
-      color: 'text-purple-600'
+      icon: <CheckCircle className="h-5 w-5" />,
+      title: language === 'ar' ? 'معالجة الطلب' : 'Processing Request',
+      description: language === 'ar' ? 'تجهيز حسابك' : 'Preparing your account'
     }
   ];
 
-  // Rotate through features
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentFeature((prev) => (prev + 1) % features.length);
-    }, 3000);
+    let progressInterval: NodeJS.Timeout;
+    let stepInterval: NodeJS.Timeout;
+    let pollInterval: NodeJS.Timeout;
 
-    return () => clearInterval(interval);
-  }, [features.length]);
-
-  // Check payment status
-  useEffect(() => {
-    let isSubscribed = true;
-    
-    const checkPaymentStatus = async () => {
-      try {
-        console.log('Checking payment status for ID:', paymentId);
-        
-        const { data, error } = await supabase
-          .from('pending_fawran_payments')
-          .select('status, review_notes')
-          .eq('id', paymentId)
-          .single();
-
-        if (error) {
-          console.error('Error checking payment status:', error);
-          return;
-        }
-
-        console.log('Payment status data:', data);
-
-        if (!isSubscribed) return; // Component unmounted
-
-        if (data.status === 'approved') {
-          console.log('Payment approved!');
-          onProcessingComplete({ 
-            success: true, 
-            message: language === 'ar' 
-              ? 'تم تأكيد الدفع بنجاح! مرحباً بك في WAKTI.'
-              : 'Payment verified successfully! Welcome to WAKTI.'
-          });
-        } else if (data.status === 'rejected' || data.status === 'flagged') {
-          console.log('Payment needs review:', data.status);
-          onProcessingComplete({ 
-            success: false, 
-            needsReview: true,
-            message: language === 'ar' 
-              ? 'نحتاج لمراجعة دفعتك يدوياً. يرجى التواصل معنا للمساعدة.'
-              : 'We need to review your payment manually. Please contact us for assistance.'
-          });
-        }
-      } catch (error) {
-        console.error('Payment status check failed:', error);
-      }
-    };
-
-    // Check immediately, then every 5 seconds
-    checkPaymentStatus();
-    const interval = setInterval(checkPaymentStatus, 5000);
-
-    // Auto-timeout after 3 minutes if no response (updated from 2 minutes)
-    const timeout = setTimeout(() => {
-      if (isSubscribed) {
-        console.log('Payment verification timeout');
-        onProcessingComplete({ 
-          success: false, 
-          needsReview: true,
-          message: language === 'ar' 
-            ? 'نحتاج لمراجعة دفعتك يدوياً. سنتواصل معك قريباً.'
-            : 'We need to review your payment manually. We\'ll contact you soon.'
+    const startProcessing = async () => {
+      console.log('🔄 Starting payment processing for ID:', paymentId);
+      
+      // Animate progress
+      progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 95) return 95; // Keep some room for completion
+          return prev + Math.random() * 15;
         });
-      }
-    }, 180000); // 3 minutes
+      }, 500);
 
-    return () => {
-      isSubscribed = false;
-      clearInterval(interval);
-      clearTimeout(timeout);
+      // Animate steps
+      stepInterval = setInterval(() => {
+        setCurrentStep(prev => (prev + 1) % steps.length);
+      }, 2000);
+
+      // Poll for payment status
+      const pollStatus = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('pending_fawran_payments')
+            .select('status, review_notes')
+            .eq('id', paymentId)
+            .single();
+
+          if (error) {
+            console.error('❌ Polling error:', error);
+            return;
+          }
+
+          console.log('📊 Payment status:', data.status);
+
+          if (data.status === 'approved') {
+            clearAllIntervals();
+            setProgress(100);
+            setCurrentStep(2);
+            setTimeout(() => {
+              onProcessingComplete({
+                success: true,
+                message: language === 'ar' ? 
+                  'تم قبول الدفع وتفعيل الاشتراك!' : 
+                  'Payment approved and subscription activated!'
+              });
+            }, 1000);
+          } else if (data.status === 'rejected') {
+            clearAllIntervals();
+            setProgress(100);
+            onProcessingComplete({
+              success: false,
+              message: language === 'ar' ? 
+                'تم رفض الدفع. يرجى المحاولة مرة أخرى أو التواصل مع الدعم.' : 
+                'Payment was rejected. Please try again or contact support.'
+            });
+          } else if (data.status === 'pending') {
+            // Keep polling - payment still being processed
+            console.log('⏳ Payment still processing...');
+          }
+        } catch (error) {
+          console.error('❌ Status polling error:', error);
+        }
+      };
+
+      // Start polling immediately and then every 3 seconds
+      await pollStatus();
+      pollInterval = setInterval(pollStatus, 3000);
+
+      // Trigger AI analysis after a short delay
+      setTimeout(async () => {
+        try {
+          console.log('🧠 Triggering AI analysis...');
+          const response = await supabase.functions.invoke('analyze-payment-screenshot', {
+            body: { paymentId }
+          });
+          
+          if (response.error) {
+            console.error('❌ AI analysis trigger error:', response.error);
+          } else {
+            console.log('✅ AI analysis triggered successfully');
+          }
+        } catch (error) {
+          console.error('❌ Failed to trigger AI analysis:', error);
+        }
+      }, 2000);
     };
-  }, [paymentId, language, onProcessingComplete]);
 
-  const currentFeatureData = features[currentFeature];
-  const IconComponent = currentFeatureData.icon;
+    const clearAllIntervals = () => {
+      if (progressInterval) clearInterval(progressInterval);
+      if (stepInterval) clearInterval(stepInterval);
+      if (pollInterval) clearInterval(pollInterval);
+    };
+
+    startProcessing();
+
+    // Cleanup on unmount
+    return () => {
+      clearAllIntervals();
+    };
+  }, [paymentId, onProcessingComplete, language]);
 
   return (
-    <div className="p-4 sm:p-8 text-center">
-      <div className="mb-8">
-        <div className="relative inline-block">
-          <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-primary rounded-full animate-pulse"></div>
-          </div>
-        </div>
-        
-        <h2 className="text-xl sm:text-2xl font-bold mb-2">
-          {language === 'ar' ? 'جاري التحقق من الدفع...' : 'Verifying payment...'}
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-enhanced-heading mb-2">
+          {language === 'ar' ? 'معالجة الدفع' : 'Processing Payment'}
         </h2>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          {language === 'ar' 
-            ? 'يرجى الانتظار، هذا عادة ما يستغرق 2-3 دقائق!'
-            : 'Hang tight! This usually takes 2-3 minutes.'}
+        <p className="text-muted-foreground">
+          {language === 'ar' ? 
+            'يتم تحليل دفعتك باستخدام الذكاء الاصطناعي المتقدم' : 
+            'Your payment is being analyzed using advanced AI technology'
+          }
         </p>
       </div>
 
-      {/* Feature Carousel */}
-      <Card className="p-4 sm:p-6 max-w-md mx-auto">
-        <div className="text-center">
-          <div className={`inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-4 ${currentFeatureData.color}`}>
-            <IconComponent className="h-5 w-5 sm:h-6 sm:w-6" />
+      {/* Progress Bar */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <div className="flex justify-between text-sm">
+              <span>{language === 'ar' ? 'التقدم' : 'Progress'}</span>
+              <span>{Math.round(progress)}%</span>
+            </div>
+            <Progress value={progress} className="h-3" />
           </div>
-          
-          <h3 className="font-bold text-base sm:text-lg mb-2">
-            {currentFeatureData.title}
-          </h3>
-          
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            {currentFeatureData.description}
-          </p>
-        </div>
-        
-        {/* Progress dots */}
-        <div className="flex justify-center gap-2 mt-4">
-          {features.map((_, index) => (
-            <div
-              key={index}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                index === currentFeature ? 'bg-primary' : 'bg-muted'
-              }`}
-            />
-          ))}
-        </div>
+        </CardContent>
       </Card>
 
-      <div className="mt-6 space-y-2">
-        <p className="text-xs text-muted-foreground">
-          {language === 'ar' 
-            ? 'نستخدم تقنية GPT-4 Vision للتحقق من دفعتك تلقائياً'
-            : 'We use GPT-4 Vision technology to automatically verify your payment'
-          }
-        </p>
-        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-          {language === 'ar' 
-            ? '🔒 نظام أمان متقدم • 99.9% دقة كشف الاحتيال'
-            : '🔒 Advanced security system • 99.9% fraud detection accuracy'
-          }
-        </p>
+      {/* Processing Steps */}
+      <div className="space-y-4">
+        {steps.map((step, index) => (
+          <Card key={index} className={`
+            transition-all duration-500 
+            ${index === currentStep ? 'border-primary bg-primary/5' : 'border-border'}
+            ${index < currentStep ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}
+          `}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                <div className={`
+                  flex items-center justify-center w-10 h-10 rounded-full
+                  ${index === currentStep ? 'bg-primary text-primary-foreground animate-pulse' : ''}
+                  ${index < currentStep ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground'}
+                `}>
+                  {index === currentStep ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    step.icon
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold">{step.title}</h3>
+                  <p className="text-sm text-muted-foreground">{step.description}</p>
+                </div>
+                {index < currentStep && (
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      {/* Processing Notice */}
+      <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-blue-800 dark:text-blue-200">
+                {language === 'ar' ? '⏰ المعالجة الآلية' : '⏰ Automated Processing'}
+              </p>
+              <p className="mt-1 text-blue-700 dark:text-blue-300">
+                {language === 'ar' ? 
+                  'يتم تحليل دفعتك تلقائياً. عادة ما تستغرق هذه العملية 1-3 دقائق.' :
+                  'Your payment is being processed automatically. This usually takes 1-3 minutes.'
+                }
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

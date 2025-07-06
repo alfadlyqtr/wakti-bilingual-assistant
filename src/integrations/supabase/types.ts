@@ -2409,6 +2409,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      resolve_duplicate_subscription: {
+        Args: {
+          p_user_email: string
+          p_keep_payment_id: string
+          p_refund_payment_id: string
+        }
+        Returns: Json
+      }
       send_admin_message: {
         Args: {
           p_admin_id: string

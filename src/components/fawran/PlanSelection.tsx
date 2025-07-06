@@ -1,11 +1,9 @@
 
-import React from 'react';
-import { useTheme } from '@/providers/ThemeProvider';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Check, Star, LogOut } from 'lucide-react';
-import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
+import { Check, Zap, Crown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useTheme } from "@/providers/ThemeProvider";
 import type { PlanType } from './FawranPaymentOverlay';
 
 interface PlanSelectionProps {
@@ -14,166 +12,142 @@ interface PlanSelectionProps {
 
 export function PlanSelection({ onPlanSelect }: PlanSelectionProps) {
   const { language } = useTheme();
-  const { signOut } = useAuth();
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Logout failed:', error);
+  const plans = [
+    {
+      type: 'monthly' as PlanType,
+      name: language === 'ar' ? 'الخطة الشهرية' : 'Monthly Plan',
+      price: '60 QAR',
+      period: language === 'ar' ? 'شهرياً' : 'per month',
+      description: language === 'ar' ? 'مثالية للتجربة والاستخدام المؤقت' : 'Perfect for trying out and temporary use',
+      icon: <Zap className="h-6 w-6" />,
+      features: [
+        language === 'ar' ? 'جميع الميزات المتقدمة' : 'All premium features',
+        language === 'ar' ? 'دعم فني 24/7' : '24/7 technical support',
+        language === 'ar' ? 'تحديثات تلقائية' : 'Automatic updates',
+        language === 'ar' ? 'مزامنة عبر الأجهزة' : 'Cross-device sync'
+      ],
+      popular: false
+    },
+    {
+      type: 'yearly' as PlanType,
+      name: language === 'ar' ? 'الخطة السنوية' : 'Yearly Plan',
+      price: '600 QAR',
+      period: language === 'ar' ? 'سنوياً' : 'per year',
+      originalPrice: '720 QAR',
+      description: language === 'ar' ? 'الأفضل قيمة - وفر 120 ريال!' : 'Best value - Save 120 QAR!',
+      icon: <Crown className="h-6 w-6" />,
+      features: [
+        language === 'ar' ? 'جميع ميزات الخطة الشهرية' : 'All monthly plan features',
+        language === 'ar' ? 'خصم 17% (توفير 120 ريال)' : '17% discount (Save 120 QAR)',
+        language === 'ar' ? 'دعم أولوية' : 'Priority support',
+        language === 'ar' ? 'وصول مبكر للميزات الجديدة' : 'Early access to new features'
+      ],
+      popular: true
     }
-  };
+  ];
 
   return (
-    <div className="p-4 sm:p-8 relative">
-      {/* Logout Button - Top Left */}
-      <div className="absolute top-2 sm:top-4 left-2 sm:left-4">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={handleLogout}
-          className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
-        >
-          <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
-          <span className="hidden sm:inline">
-            {language === 'ar' ? 'خروج' : 'Logout'}
-          </span>
-        </Button>
-      </div>
-
-      {/* Language Toggle - Top Right */}
-      <div className="absolute top-2 sm:top-4 right-2 sm:right-4">
-        <ThemeLanguageToggle />
-      </div>
-
-      <div className="text-center mb-6 sm:mb-8 mt-12 sm:mt-8">
-        {/* Account Creation Indicator */}
-        <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-          <p className="text-xs sm:text-sm text-green-700 dark:text-green-300 font-medium">
-            {language === 'ar' 
-              ? '✅ تم إنشاء حسابك وتأكيد البريد الإلكتروني - شكراً لك! يرجى اختيار خطة الاشتراك لتفعيل حسابك 👇'
-              : '✅ Your account created and email confirmed - thank you! Please select a subscription plan to activate your account 👇'
-            }
-          </p>
-        </div>
-
-        <h2 className="text-2xl sm:text-3xl font-bold mb-3 sm:mb-4">
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-enhanced-heading mb-2">
           {language === 'ar' ? 'اختر خطة الاشتراك' : 'Choose Your Subscription Plan'}
         </h2>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          {language === 'ar' 
-            ? 'ادفع بسهولة باستخدام فوران من أي بنك في قطر'
-            : 'Pay easily using Fawran from any bank in Qatar'
+        <p className="text-muted-foreground">
+          {language === 'ar' ? 
+            'فعل حسابك للاستمتاع بجميع ميزات واكتي المتقدمة' : 
+            'Activate your account to enjoy all of Wakti\'s premium features'
           }
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4 sm:gap-6 max-w-4xl mx-auto">
-        {/* Monthly Plan */}
-        <Card className="p-4 sm:p-6 hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/50">
-          <div className="text-center">
-            <h3 className="text-lg sm:text-xl font-bold mb-2">
-              {language === 'ar' ? 'الخطة الشهرية' : 'Monthly Plan'}
-            </h3>
-            <div className="text-3xl sm:text-4xl font-bold text-primary mb-4">
-              60 QAR
-            </div>
-            <p className="text-sm text-muted-foreground mb-6">
-              {language === 'ar' ? 'شهرياً' : 'per month'}
-            </p>
+      <div className="grid gap-6 md:grid-cols-2">
+        {plans.map((plan) => (
+          <Card 
+            key={plan.type}
+            className={`
+              relative transition-all duration-300 hover:shadow-xl cursor-pointer
+              ${plan.popular ? 'border-primary shadow-lg scale-105' : 'border-border hover:border-primary/50'}
+            `}
+            onClick={() => onPlanSelect(plan.type)}
+          >
+            {plan.popular && (
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <Badge className="bg-gradient-to-r from-primary to-purple-600 text-white px-4 py-1">
+                  {language === 'ar' ? '🔥 الأكثر شعبية' : '🔥 Most Popular'}
+                </Badge>
+              </div>
+            )}
             
-            <ul className="space-y-2 sm:space-y-3 mb-6 text-left">
-              <li className="flex items-center gap-2">
-                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm">
-                  {language === 'ar' ? 'جميع ميزات WAKTI' : 'All WAKTI features'}
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm">
-                  {language === 'ar' ? 'مساعد الذكي' : 'AI Assistant'}
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm">
-                  {language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders'}
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm">
-                  {language === 'ar' ? 'ادفع كما تستخدم شهرياً' : 'Pay as you go monthly'}
-                </span>
-              </li>
-            </ul>
+            <CardHeader className="text-center pb-4">
+              <div className={`
+                mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4
+                ${plan.popular ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}
+              `}>
+                {plan.icon}
+              </div>
+              
+              <CardTitle className="text-xl">{plan.name}</CardTitle>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-3xl font-bold text-enhanced-heading">{plan.price}</span>
+                  {plan.originalPrice && (
+                    <span className="text-lg text-muted-foreground line-through">{plan.originalPrice}</span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">{plan.period}</p>
+              </div>
+              
+              <CardDescription className="text-center">
+                {plan.description}
+              </CardDescription>
+            </CardHeader>
 
-            <Button 
-              className="w-full text-sm sm:text-base"
-              onClick={() => onPlanSelect('monthly')}
-            >
-              {language === 'ar' ? 'اختر الخطة الشهرية' : 'Select Monthly Plan'}
-            </Button>
-          </div>
-        </Card>
+            <CardContent className="space-y-4">
+              <ul className="space-y-3">
+                {plan.features.map((feature, index) => (
+                  <li key={index} className="flex items-center gap-3">
+                    <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                    <span className="text-sm">{feature}</span>
+                  </li>
+                ))}
+              </ul>
 
-        {/* Yearly Plan */}
-        <Card className="p-4 sm:p-6 hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/50 relative">
-          <div className="absolute -top-2 sm:-top-3 -right-2 sm:-right-3">
-            <div className="bg-green-500 text-white px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-              <Star className="h-3 w-3" />
-              {language === 'ar' ? 'وفر 17%' : 'Save 17%'}
-            </div>
-          </div>
-          
-          <div className="text-center">
-            <h3 className="text-lg sm:text-xl font-bold mb-2">
-              {language === 'ar' ? 'الخطة السنوية' : 'Yearly Plan'}
-            </h3>
-            <div className="text-3xl sm:text-4xl font-bold text-primary mb-4">
-              600 QAR
-            </div>
-            <p className="text-sm text-muted-foreground mb-6">
-              {language === 'ar' ? 'سنوياً' : 'per year'}
-            </p>
-            
-            <ul className="space-y-2 sm:space-y-3 mb-6 text-left">
-              <li className="flex items-center gap-2">
-                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm">
-                  {language === 'ar' ? 'جميع ميزات WAKTI' : 'All WAKTI features'}
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm">
-                  {language === 'ar' ? 'مساعد الذكي' : 'AI Assistant'}
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm">
-                  {language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders'}
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm font-medium text-green-600">
-                  {language === 'ar' ? 'توفير 120 ريال سنوياً' : 'Save 120 QAR yearly'}
-                </span>
-              </li>
-            </ul>
-
-            <Button 
-              className="w-full bg-green-600 hover:bg-green-700 text-sm sm:text-base"
-              onClick={() => onPlanSelect('yearly')}
-            >
-              {language === 'ar' ? 'اختر الخطة السنوية' : 'Select Yearly Plan'}
-            </Button>
-          </div>
-        </Card>
+              <Button 
+                className={`
+                  w-full mt-6
+                  ${plan.popular 
+                    ? 'bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90' 
+                    : ''
+                  }
+                `}
+                size="lg"
+                onClick={() => onPlanSelect(plan.type)}
+              >
+                {language === 'ar' ? 'اختيار هذه الخطة' : 'Choose This Plan'}
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      {/* Payment Method Info */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+        <CardContent className="p-6">
+          <div className="text-center space-y-2">
+            <h3 className="font-semibold text-blue-800 dark:text-blue-200">
+              {language === 'ar' ? '💳 الدفع عبر فوران' : '💳 Payment via Fawran'}
+            </h3>
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              {language === 'ar' ? 
+                'دفع آمن وسريع عبر نظام فوران للتحويلات الفورية - متاح 24/7' :
+                'Secure and fast payment via Fawran instant transfer system - Available 24/7'
+              }
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
