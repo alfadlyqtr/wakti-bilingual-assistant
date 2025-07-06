@@ -1139,7 +1139,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_pending_fawran_payments_user_id"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -2042,17 +2050,27 @@ export type Database = {
     }
     Functions: {
       admin_activate_subscription: {
-        Args: {
-          p_user_id: string
-          p_plan_name: string
-          p_billing_amount?: number
-          p_billing_currency?: string
-          p_payment_method?: string
-          p_fawran_payment_id?: string
-          p_is_gift?: boolean
-          p_gift_duration?: string
-          p_gift_given_by?: string
-        }
+        Args:
+          | {
+              p_user_id: string
+              p_plan_name: string
+              p_billing_amount?: number
+              p_billing_currency?: string
+              p_payment_method?: string
+              p_fawran_payment_id?: string
+              p_is_gift?: boolean
+              p_gift_duration?: string
+              p_gift_given_by?: string
+            }
+          | {
+              p_user_id: string
+              p_plan_name: string
+              p_billing_amount?: number
+              p_billing_currency?: string
+              p_payment_method?: string
+              p_paypal_subscription_id?: string
+              p_fawran_payment_id?: string
+            }
         Returns: boolean
       }
       admin_gift_translation_credits: {
@@ -2314,6 +2332,10 @@ export type Database = {
         Returns: undefined
       }
       process_expired_subscriptions: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      process_stuck_fawran_payments: {
         Args: Record<PropertyKey, never>
         Returns: Json
       }

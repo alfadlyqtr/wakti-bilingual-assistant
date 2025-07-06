@@ -200,21 +200,39 @@ serve(async (req) => {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     
     if (!openaiApiKey) {
+      console.error('❌ CRITICAL: OpenAI API key not configured');
       throw new Error('OpenAI API key not configured');
+    }
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('❌ CRITICAL: Supabase configuration missing');
+      throw new Error('Supabase configuration missing');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('🚀 ULTRA-ROBUST GPT-4 Vision Fawran Worker Started - GUARANTEED PROCESSING:', paymentId);
 
-    // Get payment submission with enhanced fields
+    // Get payment submission with enhanced error handling
     const { data: payment, error: paymentError } = await supabase
       .from('pending_fawran_payments')
-      .select('*')
+      .select(`
+        *,
+        profiles!user_id (
+          display_name,
+          email
+        )
+      `)
       .eq('id', paymentId)
       .single();
 
-    if (paymentError || !payment) {
+    if (paymentError) {
+      console.error('❌ CRITICAL: Database error fetching payment:', paymentError);
+      throw new Error(`Failed to fetch payment: ${paymentError.message}`);
+    }
+
+    if (!payment) {
+      console.error('❌ CRITICAL: Payment not found:', paymentId);
       throw new Error('Payment submission not found');
     }
 
@@ -227,15 +245,20 @@ serve(async (req) => {
     });
 
     // Send initial processing notification
-    await supabase.rpc('queue_notification', {
-      p_user_id: payment.user_id,
-      p_notification_type: 'payment_processing',
-      p_title: '🚀 Ultra-Fast Processing Started',
-      p_body: 'Your Fawran payment is being analyzed with our enhanced GPT-4 Vision system - guaranteed results!',
-      p_data: { payment_id: paymentId, security_level: 'maximum', guaranteed: true },
-      p_deep_link: '/settings',
-      p_scheduled_for: new Date().toISOString()
-    });
+    try {
+      await supabase.rpc('queue_notification', {
+        p_user_id: payment.user_id,
+        p_notification_type: 'payment_processing',
+        p_title: '🚀 Ultra-Fast Processing Started',
+        p_body: 'Your Fawran payment is being analyzed with our enhanced GPT-4 Vision system - guaranteed results!',
+        p_data: { payment_id: paymentId, security_level: 'maximum', guaranteed: true },
+        p_deep_link: '/settings',
+        p_scheduled_for: new Date().toISOString()
+      });
+    } catch (notificationError) {
+      console.warn('⚠️ Notification queue failed:', notificationError);
+      // Don't fail the main process for notification issues
+    }
 
     // Download and process screenshot with enhanced error handling
     const screenshotPath = payment.screenshot_url.split('/').pop()!;
@@ -256,6 +279,7 @@ serve(async (req) => {
     }
 
     if (downloadError) {
+      console.error('❌ CRITICAL: Screenshot download failed after retries:', downloadError);
       throw new Error('Failed to download screenshot after multiple attempts');
     }
 
@@ -287,28 +311,32 @@ serve(async (req) => {
             image_quality: imageQuality,
             auto_rejected: true,
             analyzed_at: new Date().toISOString(),
-            worker_version: 'ultra-robust-v4.0'
+            worker_version: 'ultra-robust-v5.0'
           }),
           reviewed_at: new Date().toISOString()
         })
         .eq('id', paymentId);
         
-      await supabase.rpc('queue_notification', {
-        p_user_id: payment.user_id,
-        p_notification_type: 'payment_rejected',
-        p_title: '❌ Payment Rejected - Image Quality',
-        p_body: 'Your screenshot was rejected due to poor quality. Please upload a clear, high-resolution screenshot.',
-        p_data: { payment_id: paymentId, reason: 'image_quality' },
-        p_deep_link: '/settings',
-        p_scheduled_for: new Date().toISOString()
-      });
+      try {
+        await supabase.rpc('queue_notification', {
+          p_user_id: payment.user_id,
+          p_notification_type: 'payment_rejected',
+          p_title: '❌ Payment Rejected - Image Quality',
+          p_body: 'Your screenshot was rejected due to poor quality. Please upload a clear, high-resolution screenshot.',
+          p_data: { payment_id: paymentId, reason: 'image_quality' },
+          p_deep_link: '/settings',
+          p_scheduled_for: new Date().toISOString()
+        });
+      } catch (notificationError) {
+        console.warn('⚠️ Rejection notification failed:', notificationError);
+      }
       
       return new Response(JSON.stringify({
         success: false,
         rejected: true,
         reason: 'Poor image quality',
         imageQuality,
-        worker_version: 'ultra-robust-v4.0'
+        worker_version: 'ultra-robust-v5.0'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -349,6 +377,10 @@ serve(async (req) => {
           }),
         });
 
+        if (!visionResponse.ok) {
+          throw new Error(`OpenAI API HTTP ${visionResponse.status}: ${visionResponse.statusText}`);
+        }
+
         aiResponse = await visionResponse.json();
         
         if (aiResponse.error) {
@@ -361,7 +393,10 @@ serve(async (req) => {
         
       } catch (error) {
         console.error(`❌ GPT-4o Vision attempt ${attempt} failed:`, error);
-        if (attempt === 3) throw error;
+        if (attempt === 3) {
+          console.error('❌ CRITICAL: All GPT-4o Vision attempts failed');
+          throw error;
+        }
         await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
       }
     }
@@ -374,7 +409,7 @@ serve(async (req) => {
       const cleanJson = analysisText.replace(/```json\n?|\n?```/g, '').trim();
       analysis = JSON.parse(cleanJson);
     } catch (parseError) {
-      console.error('JSON Parse Error:', parseError);
+      console.error('❌ JSON Parse Error:', parseError);
       analysis = {
         transferType: null,
         extractedAmount: null,
@@ -429,14 +464,18 @@ serve(async (req) => {
 
     // Store reference numbers if unique and valid
     if (validations.referencesUnique && (analysis.paymentReferenceNumber || analysis.transactionReferenceNumber)) {
-      await supabase
-        .from('used_reference_numbers')
-        .insert({
-          reference_number: analysis.paymentReferenceNumber,
-          transaction_reference: analysis.transactionReferenceNumber,
-          used_by: payment.user_id,
-          payment_id: payment.id
-        });
+      try {
+        await supabase
+          .from('used_reference_numbers')
+          .insert({
+            reference_number: analysis.paymentReferenceNumber,
+            transaction_reference: analysis.transactionReferenceNumber,
+            used_by: payment.user_id,
+            payment_id: payment.id
+          });
+      } catch (refError) {
+        console.warn('⚠️ Reference number storage failed:', refError);
+      }
     }
 
     // Update payment with comprehensive analysis results
@@ -451,7 +490,7 @@ serve(async (req) => {
         analyzed_at: new Date().toISOString(),
         auto_approved: shouldAutoApprove,
         security_level: 'maximum',
-        worker_version: 'ultra-robust-v4.0',
+        worker_version: 'ultra-robust-v5.0',
         guaranteed_processing: true
       }),
       reviewed_at: shouldAutoApprove ? new Date().toISOString() : null,
@@ -491,48 +530,58 @@ serve(async (req) => {
       });
 
       if (!subscriptionError) {
-        await supabase.rpc('queue_notification', {
-          p_user_id: payment.user_id,
-          p_notification_type: 'subscription_activated',
-          p_title: '🎉 Payment Auto-Approved & Subscription Activated!',
-          p_body: `Your ${planType} subscription has been automatically approved by our ultra-fast AI system. Welcome to Wakti Premium!`,
-          p_data: { 
-            plan_type: payment.plan_type, 
-            amount: payment.amount,
-            payment_method: 'fawran',
-            payment_id: payment.id,
-            security_verified: true,
-            auto_approved: true,
-            processing_time_ms: processingTime,
-            validation_method: validationMethod,
-            ultra_fast: true
-          },
-          p_deep_link: '/dashboard',
-          p_scheduled_for: new Date().toISOString()
-        });
+        try {
+          await supabase.rpc('queue_notification', {
+            p_user_id: payment.user_id,
+            p_notification_type: 'subscription_activated',
+            p_title: '🎉 Payment Auto-Approved & Subscription Activated!',
+            p_body: `Your ${planType} subscription has been automatically approved by our ultra-fast AI system. Welcome to Wakti Premium!`,
+            p_data: { 
+              plan_type: payment.plan_type, 
+              amount: payment.amount,
+              payment_method: 'fawran',
+              payment_id: payment.id,
+              security_verified: true,
+              auto_approved: true,
+              processing_time_ms: processingTime,
+              validation_method: validationMethod,
+              ultra_fast: true
+            },
+            p_deep_link: '/dashboard',
+            p_scheduled_for: new Date().toISOString()
+          });
+        } catch (notificationError) {
+          console.warn('⚠️ Success notification failed:', notificationError);
+        }
+      } else {
+        console.error('❌ Subscription activation failed:', subscriptionError);
       }
     } else {
       // Queue manual review notification
       console.log('🔍 Sending to Manual Review');
       
-      await supabase.rpc('queue_notification', {
-        p_user_id: payment.user_id,
-        p_notification_type: 'payment_under_review',
-        p_title: '🔍 Payment Under Enhanced Security Review',
-        p_body: 'Your payment requires additional verification by our security team. You will be notified once approved.',
-        p_data: { 
-          payment_amount: payment.amount,
-          plan_type: payment.plan_type,
-          payment_method: 'fawran',
-          payment_id: payment.id,
-          confidence: analysis.confidence,
-          security_issues: analysis.tamperingDetected ? analysis.tamperingReasons : [],
-          processing_time_ms: processingTime,
-          validation_method: validationMethod
-        },
-        p_deep_link: '/settings',
-        p_scheduled_for: new Date().toISOString()
-      });
+      try {
+        await supabase.rpc('queue_notification', {
+          p_user_id: payment.user_id,
+          p_notification_type: 'payment_under_review',
+          p_title: '🔍 Payment Under Enhanced Security Review',
+          p_body: 'Your payment requires additional verification by our security team. You will be notified once approved.',
+          p_data: { 
+            payment_amount: payment.amount,
+            plan_type: payment.plan_type,
+            payment_method: 'fawran',
+            payment_id: payment.id,
+            confidence: analysis.confidence,
+            security_issues: analysis.tamperingDetected ? analysis.tamperingReasons : [],
+            processing_time_ms: processingTime,
+            validation_method: validationMethod
+          },
+          p_deep_link: '/settings',
+          p_scheduled_for: new Date().toISOString()
+        });
+      } catch (notificationError) {
+        console.warn('⚠️ Review notification failed:', notificationError);
+      }
     }
 
     console.log('🚀 ULTRA-ROBUST GPT-4 Vision Fawran Worker Completed Successfully - GUARANTEED!');
@@ -545,7 +594,7 @@ serve(async (req) => {
       auto_approved: shouldAutoApprove,
       processing_time_ms: processingTime,
       security_level: 'maximum',
-      worker_version: 'ultra-robust-v4.0',
+      worker_version: 'ultra-robust-v5.0',
       validation_method: validationMethod,
       payment_method: 'fawran',
       guaranteed_processing: true
@@ -562,7 +611,7 @@ serve(async (req) => {
       error: error.message,
       processing_time_ms: processingTime,
       security_level: 'maximum',
-      worker_version: 'ultra-robust-v4.0',
+      worker_version: 'ultra-robust-v5.0',
       guaranteed_processing: false
     }), {
       status: 500,
