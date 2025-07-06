@@ -5,6 +5,7 @@ import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
+import { MemoryStatusIndicator } from './MemoryStatusIndicator';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 
 interface ChatMessagesProps {
@@ -21,6 +22,9 @@ interface ChatMessagesProps {
   onTaskConfirmation: (taskData: any) => void;
   onReminderConfirmation: (reminderData: any) => void;
   onCancelTaskConfirmation: () => void;
+  // NEW: Memory status props
+  conversationId?: string | null;
+  isNewConversation?: boolean;
 }
 
 export function ChatMessages({
@@ -37,6 +41,8 @@ export function ChatMessages({
   onTaskConfirmation,
   onReminderConfirmation,
   onCancelTaskConfirmation,
+  conversationId,
+  isNewConversation = false,
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const scrollTimeoutRef = useRef<NodeJS.Timeout>();
@@ -104,12 +110,32 @@ export function ChatMessages({
           <p className="text-lg font-medium mb-2">
             {language === 'ar' ? `مرحباً! أنا ${aiNickname}` : `Hello! I'm ${aiNickname}`}
           </p>
-          <p className="text-sm">
+          <p className="text-sm mb-4">
             {language === 'ar' 
               ? 'كيف يمكنني مساعدتك اليوم؟'
               : 'How can I help you today?'
             }
           </p>
+          
+          {/* ENHANCED: Memory Status Indicator */}
+          <div className="flex justify-center mt-4">
+            <MemoryStatusIndicator
+              conversationId={conversationId}
+              messageCount={sessionMessages.length}
+              isNewConversation={isNewConversation}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ENHANCED: Show memory status for ongoing conversations */}
+      {sessionMessages.length > 0 && (
+        <div className="flex justify-center mb-4">
+          <MemoryStatusIndicator
+            conversationId={conversationId}
+            messageCount={sessionMessages.length}
+            isNewConversation={isNewConversation}
+          />
         </div>
       )}
 

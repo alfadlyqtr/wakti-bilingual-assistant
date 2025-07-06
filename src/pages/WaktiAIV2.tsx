@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -71,7 +72,7 @@ const WaktiAIV2 = () => {
     MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
 
-  // FIXED: Unified message state - no more separate session/conversation messages
+  // ENHANCED: Unified message state with memory integration
   const [allMessages, setAllMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
   const [isNewConversation, setIsNewConversation] = useState(true);
@@ -173,29 +174,29 @@ const WaktiAIV2 = () => {
     fetchUserProfile();
   }, []);
 
-  // FIXED: Improved session loading with proper conversation persistence
+  // ENHANCED: Session loading with memory integration
   useEffect(() => {
     if (!hasLoadedSession) {
       const savedSession = WaktiAIV2Service.loadChatSession();
       if (savedSession && savedSession.messages && savedSession.messages.length > 0) {
-        console.log('🔄 PERSISTENCE: Restoring previous session with', savedSession.messages.length, 'messages');
+        console.log('🧠 MEMORY: Restoring session with', savedSession.messages.length, 'messages');
         setAllMessages(savedSession.messages);
         if (savedSession.conversationId) {
           setCurrentConversationId(savedSession.conversationId);
         }
-        setIsNewConversation(false); // This is a continuing conversation
+        setIsNewConversation(false);
       } else {
-        console.log('🔄 PERSISTENCE: No previous session found, starting fresh');
+        console.log('🧠 MEMORY: Starting fresh conversation');
         setIsNewConversation(true);
       }
       setHasLoadedSession(true);
     }
   }, [hasLoadedSession]);
 
-  // FIXED: Auto-save with proper persistence
+  // ENHANCED: Auto-save with memory integration
   useEffect(() => {
     if (hasLoadedSession && allMessages.length > 0) {
-      console.log('💾 PERSISTENCE: Auto-saving session with', allMessages.length, 'messages');
+      console.log('🧠 MEMORY: Auto-saving session with', allMessages.length, 'messages');
       WaktiAIV2Service.saveChatSession(allMessages, currentConversationId);
     }
   }, [allMessages, currentConversationId, hasLoadedSession]);
@@ -346,7 +347,7 @@ const WaktiAIV2 = () => {
     setAllMessages(prev => [...prev, cancelMessage]);
   };
 
-  // ENHANCED: Lightning-fast message sending with FULL personalization
+  // ULTRA-FAST: Enhanced message sending with full memory integration
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
@@ -368,7 +369,7 @@ const WaktiAIV2 = () => {
     abortControllerRef.current = new AbortController();
 
     try {
-      console.log('🚀 ENHANCED AI: Lightning speed processing with FULL personalization');
+      console.log('🧠 MEMORY: Sending message with full context integration');
       const startTime = Date.now();
 
       // ULTRA-FAST: Handle Voice quota check only if needed (non-blocking)
@@ -393,16 +394,16 @@ const WaktiAIV2 = () => {
       const hasVisionFiles = attachedFiles && attachedFiles.length > 0;
       const timeoutDuration = hasVisionFiles ? 30000 : 15000; // 30s for Vision, 15s for regular
 
-      // ENHANCED: Timeout-protected API call with FULL personalization
+      // 🧠 MEMORY INTEGRATION: Call enhanced service with memory
       const response = await Promise.race([
-        WaktiAIV2ServiceClass.sendMessage(
+        WaktiAIV2ServiceClass.prototype.sendMessage.call(WaktiAIV2Service, 
           message,
           undefined, // userId will be handled by auth cache
           language,
           currentConversationId,
           inputType,
-          updatedMessages.slice(-8), // ENHANCED context
-          false,
+          updatedMessages.slice(-8), // Recent context
+          false, // Don't skip context load
           activeTrigger,
           '', // Let service handle conversation summary
           attachedFiles || []
@@ -424,13 +425,13 @@ const WaktiAIV2 = () => {
         })
       ]) as any;
 
-      // ENHANCED: Create assistant message with FULL personalization applied
+      // ENHANCED: Create assistant message with full memory context
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: response.response, // Already fully personalized
+        content: response.response,
         timestamp: new Date(),
-        intent: response.intent || 'enhanced_chat',
+        intent: response.intent || 'enhanced_chat_with_memory',
         confidence: response.confidence || 'high',
         actionTaken: response.actionTaken || false,
         imageUrl: response.imageUrl,
@@ -441,8 +442,14 @@ const WaktiAIV2 = () => {
       const finalMessages = [...updatedMessages, assistantMessage];
       setAllMessages(finalMessages);
       
+      // Update conversation ID if new
+      if (response.conversationId && response.conversationId !== currentConversationId) {
+        setCurrentConversationId(response.conversationId);
+        setIsNewConversation(false);
+      }
+      
       const responseTime = Date.now() - startTime;
-      console.log(`🚀 ENHANCED AI: Total time: ${responseTime}ms (FULLY PERSONALIZED)`);
+      console.log(`🧠 MEMORY: Total response time: ${responseTime}ms (WITH FULL MEMORY INTEGRATION)`);
 
       // FIXED: Handle EXPLICIT task creation only
       if (response.needsConfirmation && response.pendingTaskData) {
@@ -462,7 +469,7 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🚨 ENHANCED AI: Error:', error);
+      console.error('🧠 MEMORY: Enhanced AI Error:', error);
       
       // IMPROVED: Better error messages with Vision-specific handling
       if (error.message?.includes('timeout') || error.message?.includes('longer than expected')) {
@@ -508,7 +515,7 @@ const WaktiAIV2 = () => {
   // loadFullConversationHistory
   const loadFullConversationHistory = async (conversationId: string) => {
     try {
-      console.log('📚 Loading full conversation history for:', conversationId);
+      console.log('🧠 MEMORY: Loading full conversation history for:', conversationId);
       
       const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
       
@@ -526,16 +533,16 @@ const WaktiAIV2 = () => {
       }));
       
       setAllMessages(convertedMessages);
-      console.log('📚 Loaded full conversation history:', convertedMessages.length, 'messages');
+      console.log('🧠 MEMORY: Loaded full conversation history:', convertedMessages.length, 'messages');
       
     } catch (error) {
       console.error('❌ Error loading full conversation history:', error);
     }
   };
 
-  // FIXED: Only start new conversation when explicitly requested
+  // ENHANCED: Start new conversation with memory
   const handleNewConversation = async () => {
-    console.log('🆕 PERSISTENCE: User explicitly requested new conversation');
+    console.log('🧠 MEMORY: User explicitly requested new conversation');
     
     // Cancel any in-progress request
     if (abortControllerRef.current) {
@@ -555,10 +562,10 @@ const WaktiAIV2 = () => {
     showSuccess(language === 'ar' ? 'بدأت محادثة جديدة' : 'Started new conversation');
   };
 
-  // FIXED: Load existing conversation without clearing current session
+  // ENHANCED: Load existing conversation with memory
   const handleSelectConversation = async (conversationId: string) => {
     try {
-      console.log('🔄 PERSISTENCE: Loading existing conversation:', conversationId);
+      console.log('🧠 MEMORY: Loading existing conversation:', conversationId);
       
       // Cancel any in-progress request
       if (abortControllerRef.current) {
@@ -584,9 +591,9 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // FIXED: Clear current chat only (not start new conversation)
+  // ENHANCED: Clear current chat with memory
   const handleClearChat = () => {
-    console.log('🧹 PERSISTENCE: Clearing current chat session');
+    console.log('🧠 MEMORY: Clearing current chat session');
     
     // Cancel any in-progress request
     if (abortControllerRef.current) {
