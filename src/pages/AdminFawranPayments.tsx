@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, CreditCard, RefreshCw, Eye, CheckCircle, XCircle, Clock, AlertTriangle, Brain } from "lucide-react";
+import { Shield, CreditCard, RefreshCw, Eye, CheckCircle, XCircle, Clock, AlertTriangle, Brain, Zap, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ export default function AdminFawranPayments() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPayment, setSelectedPayment] = useState<FawranPayment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
   useEffect(() => {
     validateAdminSession();
@@ -66,6 +67,8 @@ export default function AdminFawranPayments() {
     try {
       setIsLoading(true);
       
+      console.log('🔄 Loading Fawran payments...');
+      
       // Query pending_fawran_payments with left join to profiles
       const { data, error } = await supabase
         .from('pending_fawran_payments')
@@ -79,10 +82,12 @@ export default function AdminFawranPayments() {
         .order('submitted_at', { ascending: false });
 
       if (error) {
-        console.error('Database error:', error);
+        console.error('❌ Database error loading payments:', error);
         toast.error('Failed to load Fawran payments');
         return;
       }
+
+      console.log('✅ Successfully loaded payments:', data?.length || 0);
 
       // Process the data to handle missing profiles gracefully
       const processedPayments = (data || []).map(payment => ({
@@ -93,10 +98,70 @@ export default function AdminFawranPayments() {
 
       setPayments(processedPayments);
     } catch (error) {
-      console.error('Error loading Fawran payments:', error);
+      console.error('❌ Error loading Fawran payments:', error);
       toast.error('Failed to load Fawran payments');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ENHANCED: Force analyze stuck payment
+  const handleForceAnalyze = async (payment: FawranPayment) => {
+    if (isProcessing) return;
+    
+    try {
+      setIsProcessing(payment.id);
+      console.log('🔥 Force analyzing payment:', payment.id);
+
+      const { data, error } = await supabase.functions.invoke('manual-process-fawran-payment', {
+        body: { 
+          paymentId: payment.id,
+          action: 'force_analyze'
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success('Analysis triggered successfully!');
+      
+      // Reload payments after a short delay
+      setTimeout(() => {
+        loadPayments();
+      }, 2000);
+
+    } catch (error: any) {
+      console.error('❌ Force analyze error:', error);
+      toast.error(`Failed to analyze: ${error.message}`);
+    } finally {
+      setIsProcessing(null);
+    }
+  };
+
+  // ENHANCED: Manual approval with subscription activation
+  const handleManualApprove = async (payment: FawranPayment) => {
+    if (isProcessing) return;
+    
+    try {
+      setIsProcessing(payment.id);
+      console.log('✅ Manually approving payment:', payment.id);
+
+      const { data, error } = await supabase.functions.invoke('manual-process-fawran-payment', {
+        body: { 
+          paymentId: payment.id,
+          action: 'approve'
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Payment approved and subscription activated for ${payment.email}`);
+      loadPayments();
+      
+    } catch (error: any) {
+      console.error('❌ Manual approval error:', error);
+      toast.error(`Failed to approve: ${error.message}`);
+    } finally {
+      setIsProcessing(null);
     }
   };
 
@@ -160,6 +225,27 @@ export default function AdminFawranPayments() {
     setShowDetailModal(true);
   };
 
+  // ENHANCED: Process all stuck payments
+  const handleProcessStuckPayments = async () => {
+    try {
+      console.log('🔄 Processing all stuck payments...');
+      toast.info('Processing stuck payments...');
+
+      const { data, error } = await supabase.functions.invoke('process-stuck-fawran-payments', {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      toast.success(`Processed ${data.processed} stuck payments (${data.successful} successful)`);
+      loadPayments();
+      
+    } catch (error: any) {
+      console.error('❌ Process stuck payments error:', error);
+      toast.error(`Failed to process stuck payments: ${error.message}`);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'approved':
@@ -169,6 +255,13 @@ export default function AdminFawranPayments() {
       default:
         return <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
     }
+  };
+
+  // Check if payment is stuck (pending for more than 5 minutes)
+  const isPaymentStuck = (payment: FawranPayment) => {
+    if (payment.status !== 'pending') return false;
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    return new Date(payment.submitted_at) < fiveMinutesAgo;
   };
 
   if (isLoading) {
@@ -187,10 +280,16 @@ export default function AdminFawranPayments() {
         subtitle={`${payments.filter(p => p.status === 'pending').length} pending payments`}
         icon={<CreditCard className="h-5 w-5 text-accent-purple" />}
       >
-        <Button onClick={loadPayments} variant="outline" size="sm" className="text-xs">
-          <RefreshCw className="h-4 w-4 mr-1" />
-          <span className="hidden sm:inline">Refresh</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleProcessStuckPayments} variant="outline" size="sm" className="text-xs">
+            <RotateCcw className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Process Stuck</span>
+          </Button>
+          <Button onClick={loadPayments} variant="outline" size="sm" className="text-xs">
+            <RefreshCw className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
+        </div>
       </AdminHeader>
 
       {/* Main Content */}
@@ -240,13 +339,13 @@ export default function AdminFawranPayments() {
           <Card className="bg-gradient-card border-border/50 hover:border-destructive/30 transition-all duration-300">
             <CardHeader className="pb-3">
               <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <XCircle className="h-4 w-4 mr-2 text-destructive" />
-                Rejected
+                <AlertTriangle className="h-4 w-4 mr-2 text-destructive" />
+                Stuck/Issues
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-destructive">
-                {payments.filter(p => p.status === 'rejected').length}
+                {payments.filter(p => isPaymentStuck(p)).length}
               </div>
             </CardContent>
           </Card>
@@ -255,14 +354,20 @@ export default function AdminFawranPayments() {
         {/* Payments List */}
         <div className="space-y-4">
           {payments.map((payment) => (
-            <Card key={payment.id} className="bg-gradient-card border-border/50 hover:border-border/70 transition-all duration-300">
+            <Card key={payment.id} className={`bg-gradient-card border-border/50 hover:border-border/70 transition-all duration-300 ${isPaymentStuck(payment) ? 'border-red-500/50' : ''}`}>
               <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   <div className="space-y-3 flex-1">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-semibold text-enhanced-heading text-base">
+                        <div className="font-semibold text-enhanced-heading text-base flex items-center gap-2">
                           {payment.email}
+                          {isPaymentStuck(payment) && (
+                            <Badge variant="destructive" className="text-xs">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              STUCK
+                            </Badge>
+                          )}
                         </div>
                         <div className="text-sm text-muted-foreground">
                           {payment.user_display_name} • {payment.plan_type} Plan
@@ -315,7 +420,7 @@ export default function AdminFawranPayments() {
                     </div>
                   </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button 
                       size="sm" 
                       variant="outline"
@@ -325,20 +430,45 @@ export default function AdminFawranPayments() {
                       <Eye className="h-3 w-3 mr-1" />
                       Details
                     </Button>
+                    
                     {payment.status === 'pending' && (
                       <>
+                        {isPaymentStuck(payment) && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleForceAnalyze(payment)}
+                            disabled={isProcessing === payment.id}
+                            className="text-xs hover:bg-accent-blue/10 border-blue-500 text-blue-600"
+                          >
+                            {isProcessing === payment.id ? (
+                              <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-1" />
+                            ) : (
+                              <Brain className="h-3 w-3 mr-1" />
+                            )}
+                            Force Analyze
+                          </Button>
+                        )}
+                        
                         <Button 
                           size="sm" 
-                          onClick={() => handleApprovePayment(payment)}
+                          onClick={() => handleManualApprove(payment)}
+                          disabled={isProcessing === payment.id}
                           className="btn-enhanced text-xs hover:shadow-glow"
                         >
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Approve
+                          {isProcessing === payment.id ? (
+                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />
+                          ) : (
+                            <Zap className="h-3 w-3 mr-1" />
+                          )}
+                          Manual Approve
                         </Button>
+                        
                         <Button 
                           size="sm" 
                           variant="destructive"
                           onClick={() => handleRejectPayment(payment)}
+                          disabled={isProcessing === payment.id}
                           className="text-xs"
                         >
                           <XCircle className="h-3 w-3 mr-1" />
@@ -470,22 +600,39 @@ export default function AdminFawranPayments() {
               {/* Action Buttons */}
               {selectedPayment.status === 'pending' && (
                 <div className="flex gap-2 pt-4 border-t">
+                  {isPaymentStuck(selectedPayment) && (
+                    <Button 
+                      onClick={() => {
+                        handleForceAnalyze(selectedPayment);
+                        setShowDetailModal(false);
+                      }}
+                      disabled={isProcessing === selectedPayment.id}
+                      className="flex-1 btn-enhanced"
+                    >
+                      <Brain className="h-4 w-4 mr-2" />
+                      Force Analyze
+                    </Button>
+                  )}
+                  
                   <Button 
                     onClick={() => {
-                      handleApprovePayment(selectedPayment);
+                      handleManualApprove(selectedPayment);
                       setShowDetailModal(false);
                     }}
+                    disabled={isProcessing === selectedPayment.id}
                     className="flex-1 btn-enhanced"
                   >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Approve & Activate Subscription
+                    <Zap className="h-4 w-4 mr-2" />
+                    Manual Approve & Activate
                   </Button>
+                  
                   <Button 
                     variant="destructive"
                     onClick={() => {
                       handleRejectPayment(selectedPayment);
                       setShowDetailModal(false);
                     }}
+                    disabled={isProcessing === selectedPayment.id}
                     className="flex-1"
                   >
                     <XCircle className="h-4 w-4 mr-2" />

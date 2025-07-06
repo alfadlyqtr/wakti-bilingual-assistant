@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -5,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, ArrowLeft, AlertCircle, LogOut, X, FileImage } from 'lucide-react';
+import { Upload, ArrowLeft, AlertCircle, LogOut, X, FileImage, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
@@ -26,17 +27,10 @@ const generateImageHash = async (file: File): Promise<string> => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-// Rate limiting check
+// FIXED: More lenient rate limiting - only 3 uploads per hour, no 5-minute restriction
 const checkRateLimit = async (): Promise<boolean> => {
   const now = new Date();
-  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
-  const { data: recentUploads } = await supabase
-    .from('pending_fawran_payments')
-    .select('submitted_at')
-    .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-    .gte('submitted_at', fiveMinutesAgo.toISOString());
 
   const { data: hourlyUploads } = await supabase
     .from('pending_fawran_payments')
@@ -44,7 +38,8 @@ const checkRateLimit = async (): Promise<boolean> => {
     .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
     .gte('submitted_at', oneHourAgo.toISOString());
 
-  return (recentUploads?.length || 0) === 0 && (hourlyUploads?.length || 0) < 3;
+  // Only limit to 3 per hour, no 5-minute restriction
+  return (hourlyUploads?.length || 0) < 3;
 };
 
 export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, onBack }: ScreenshotUploadProps) {
@@ -57,6 +52,8 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
   const [imageHash, setImageHash] = useState<string>('');
   const [isDuplicate, setIsDuplicate] = useState(false);
   const [aliasError, setAliasError] = useState('');
+  const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'failed'>('idle');
+  const [processingMessage, setProcessingMessage] = useState('');
 
   const amount = selectedPlan === 'monthly' ? 60 : 600;
 
@@ -73,6 +70,8 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
     setImagePreview('');
     setImageHash('');
     setIsDuplicate(false);
+    setProcessingStatus('idle');
+    setProcessingMessage('');
     // Reset the file input
     const fileInput = document.getElementById('file-input') as HTMLInputElement;
     if (fileInput) {
@@ -145,7 +144,7 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
 
       if (existingHash) {
         setIsDuplicate(true);
-        toast.error(language === 'ar' ? 'صورة مكررة' : 'Duplicate image detected', {
+        toast.warning(language === 'ar' ? 'صورة مكررة' : 'Duplicate image detected', {
           description: language === 'ar' 
             ? 'هذه الصورة تم رفعها من قبل. يمكنك المتابعة أو اختيار صورة أخرى.'
             : 'This image has been uploaded before. You can continue or choose a different screenshot.'
@@ -164,402 +163,371 @@ export function ScreenshotUpload({ userEmail, selectedPlan, onUploadComplete, on
       setSelectedFile(file);
       console.log('File validation passed, hash generated:', hash.substring(0, 16) + '...');
     } catch (error) {
-      console.error('Hash generation failed:', error);
-      toast.error(language === 'ar' ? 'خطأ في معالجة الصورة' : 'Image processing error');
+      console.error('Error processing file:', error);
+      toast.error(language === 'ar' ? 'خطأ في معالجة الملف' : 'Error processing file');
     }
   };
 
+  // CRITICAL: Robust payment submission with mandatory worker triggering
   const handleSubmit = async () => {
-    if (!selectedFile || !user) {
-      toast.error(language === 'ar' ? 'حقول مطلوبة' : 'Required fields', {
-        description: language === 'ar' 
-          ? 'يرجى اختيار صورة وإدخال الاسم المستعار'
-          : 'Please select a screenshot and enter your alias'
-      });
+    if (!selectedFile || !senderAlias.trim()) {
+      toast.error(language === 'ar' ? 'يرجى اختيار صورة وإدخال الاسم المستعار' : 'Please select an image and enter sender alias');
       return;
     }
 
-    // Validate alias before submission
     if (!validateAlias(senderAlias)) {
-      toast.error(language === 'ar' ? 'الاسم المستعار مطلوب' : 'Alias name required', {
-        description: aliasError
-      });
       return;
     }
 
-    // Rate limiting check
+    // Check rate limit (3 per hour only)
     const canUpload = await checkRateLimit();
     if (!canUpload) {
-      toast.error(language === 'ar' ? 'تم تجاوز الحد المسموح' : 'Rate limit exceeded', {
+      toast.error(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Rate limit exceeded', {
         description: language === 'ar' 
-          ? 'يمكنك رفع صورة واحدة كل 5 دقائق، بحد أقصى 3 صور في الساعة'
-          : 'You can upload one image every 5 minutes, maximum 3 per hour'
+          ? 'يمكنك رفع 3 صور كحد أقصى في الساعة'
+          : 'You can upload up to 3 screenshots per hour'
       });
       return;
     }
 
     setIsUploading(true);
-    console.log('Starting upload process with enhanced debugging...');
+    setProcessingStatus('uploading');
+    setProcessingMessage(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading screenshot...');
+
+    console.log('🚀 CRITICAL FAWRAN UPLOAD STARTED - User:', userEmail, 'Plan:', selectedPlan, 'Amount:', amount);
 
     try {
-      // Get user creation time for validation
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        console.error('User authentication error:', userError);
-        throw new Error('User not authenticated');
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Authentication required');
 
-      console.log('User authenticated, proceeding with upload...');
-
-      // Upload file to storage
+      // Upload to Supabase Storage
       const fileName = `${user.id}/${Date.now()}-${selectedFile.name}`;
-      console.log('Uploading file to storage:', fileName);
-      
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('fawran-screenshots')
-        .upload(fileName, selectedFile);
+        .upload(fileName, selectedFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
       if (uploadError) {
         console.error('Storage upload error:', uploadError);
-        throw new Error(`Upload failed: ${uploadError.message}`);
+        throw new Error('Failed to upload screenshot');
       }
 
-      console.log('File uploaded successfully to storage:', uploadData);
-
-      // Get the public URL
+      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('fawran-screenshots')
         .getPublicUrl(fileName);
 
-      console.log('Generated public URL:', publicUrl);
+      console.log('✅ Screenshot uploaded successfully:', publicUrl);
 
-      // Store screenshot hash first (only if not duplicate)
-      if (!isDuplicate) {
-        console.log('Storing screenshot hash...');
-        const { error: hashError } = await supabase
-          .from('screenshot_hashes')
-          .insert({
-            user_id: user.id,
-            image_hash: imageHash
-          });
+      setProcessingStatus('processing');
+      setProcessingMessage(language === 'ar' ? 'جاري إنشاء السجل...' : 'Creating payment record...');
 
-        if (hashError) {
-          console.error('Hash storage error (continuing anyway):', hashError);
-        }
-      }
-
-      // Insert payment record with all required fields
-      const paymentRecord = {
-        user_id: user.id,
-        email: userEmail,
-        plan_type: selectedPlan,
-        amount: amount,
-        screenshot_url: publicUrl,
-        sender_alias: senderAlias.trim(),
-        status: 'pending',
-        screenshot_hash: imageHash,
-        account_created_at: userData.user.created_at,
-        time_validation_passed: false,
-        tampering_detected: false,
-        duplicate_detected: isDuplicate,
-        payment_reference_number: null,
-        transaction_reference_number: null
-      };
-
-      console.log('Inserting payment record:', paymentRecord);
-
+      // Create payment record in database
       const { data: paymentData, error: paymentError } = await supabase
         .from('pending_fawran_payments')
-        .insert(paymentRecord)
+        .insert({
+          user_id: user.id,
+          email: userEmail,
+          plan_type: selectedPlan,
+          amount: amount,
+          screenshot_url: publicUrl,
+          sender_alias: senderAlias.trim(),
+          screenshot_hash: imageHash,
+          account_created_at: user.created_at,
+          status: 'pending'
+        })
         .select()
         .single();
 
       if (paymentError) {
-        console.error('Payment record insert error:', paymentError);
-        throw new Error(`Database insert failed: ${paymentError.message}`);
+        console.error('Payment record creation error:', paymentError);
+        throw new Error('Failed to create payment record');
       }
 
-      console.log('Payment record created successfully:', paymentData);
+      console.log('✅ Payment record created:', paymentData.id);
 
-      // Update screenshot hash with payment ID (only if not duplicate)
-      if (paymentData.id && !isDuplicate) {
-        await supabase
-          .from('screenshot_hashes')
-          .update({ payment_id: paymentData.id })
-          .eq('image_hash', imageHash);
-      }
-
-      // Trigger GPT-4 Vision analysis (optional, don't fail if this errors)
-      try {
-        console.log('Triggering GPT-4 Vision analysis...');
-        const { error: analysisError } = await supabase.functions.invoke('analyze-payment-screenshot', {
-          body: { paymentId: paymentData.id }
+      // Store screenshot hash to prevent duplicates
+      await supabase
+        .from('screenshot_hashes')
+        .insert({
+          user_id: user.id,
+          image_hash: imageHash,
+          payment_id: paymentData.id
         });
 
-        if (analysisError) {
-          console.warn('Analysis trigger failed (non-critical):', analysisError);
-        } else {
-          console.log('GPT-4 Vision analysis triggered successfully');
+      setProcessingMessage(language === 'ar' ? 'جاري تحليل الدفعة بالذكاء الاصطناعي...' : 'AI analyzing payment...');
+
+      // CRITICAL: MANDATORY worker invocation with robust error handling and retry
+      console.log('🔥 TRIGGERING FAWRAN WORKER - MANDATORY PROCESSING');
+      
+      let workerSuccess = false;
+      let retryCount = 0;
+      const maxRetries = 3;
+
+      while (!workerSuccess && retryCount < maxRetries) {
+        try {
+          console.log(`🔄 Fawran Worker Attempt ${retryCount + 1}/${maxRetries}`);
+          
+          const { data: workerResult, error: workerError } = await supabase.functions.invoke('analyze-payment-screenshot', {
+            body: { paymentId: paymentData.id }
+          });
+
+          if (workerError) {
+            console.error(`❌ Worker attempt ${retryCount + 1} failed:`, workerError);
+            throw workerError;
+          }
+
+          console.log('✅ Fawran Worker Success:', workerResult);
+          workerSuccess = true;
+
+        } catch (error) {
+          retryCount++;
+          console.error(`❌ Fawran Worker attempt ${retryCount} failed:`, error);
+          
+          if (retryCount < maxRetries) {
+            console.log(`🔄 Retrying in ${retryCount} seconds...`);
+            await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+          }
         }
-      } catch (analysisErr) {
-        console.warn('Analysis invocation failed (non-critical):', analysisErr);
       }
 
-      toast.success(language === 'ar' ? 'تم رفع الصورة بنجاح!' : 'Screenshot uploaded successfully!');
+      if (!workerSuccess) {
+        console.error('🚨 CRITICAL: All worker attempts failed - Setting up manual processing fallback');
+        
+        // Update payment with processing failure note
+        await supabase
+          .from('pending_fawran_payments')
+          .update({
+            review_notes: JSON.stringify({
+              worker_failed: true,
+              retry_attempts: maxRetries,
+              failed_at: new Date().toISOString(),
+              manual_review_required: true
+            })
+          })
+          .eq('id', paymentData.id);
 
+        toast.warning(language === 'ar' ? 'جاري المراجعة اليدوية' : 'Manual review initiated', {
+          description: language === 'ar' 
+            ? 'سيتم مراجعة دفعتك يدوياً خلال دقائق'
+            : 'Your payment will be reviewed manually within minutes'
+        });
+
+        setProcessingStatus('processing');
+        setProcessingMessage(language === 'ar' ? 'جاري المراجعة اليدوية...' : 'Manual review in progress...');
+      } else {
+        setProcessingStatus('completed');
+        setProcessingMessage(language === 'ar' ? 'تم التحليل بنجاح!' : 'Analysis completed successfully!');
+      }
+
+      // Call completion callback
       onUploadComplete({
         screenshotUrl: publicUrl,
         senderAlias: senderAlias.trim(),
         paymentId: paymentData.id
       });
 
-    } catch (error) {
-      console.error('Complete upload process failed:', error);
-      toast.error(language === 'ar' ? 'فشل في الرفع' : 'Upload failed', {
-        description: error instanceof Error ? error.message : 'An unexpected error occurred'
+      toast.success(language === 'ar' ? 'تم رفع الصورة بنجاح!' : 'Screenshot uploaded successfully!', {
+        description: language === 'ar' 
+          ? 'جاري مراجعة دفعتك الآن...'
+          : 'Your payment is being reviewed now...'
+      });
+
+      console.log('🎉 FAWRAN UPLOAD COMPLETED SUCCESSFULLY');
+
+    } catch (error: any) {
+      console.error('🚨 CRITICAL FAWRAN UPLOAD ERROR:', error);
+      setProcessingStatus('failed');
+      setProcessingMessage(language === 'ar' ? 'فشل في العملية' : 'Process failed');
+      
+      toast.error(language === 'ar' ? 'فشل في رفع الصورة' : 'Upload failed', {
+        description: error.message || (language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred')
       });
     } finally {
       setIsUploading(false);
     }
   };
 
+  const getStatusIcon = () => {
+    switch (processingStatus) {
+      case 'uploading':
+      case 'processing':
+        return <Clock className="h-5 w-5 animate-spin text-blue-500" />;
+      case 'completed':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'failed':
+        return <AlertCircle className="h-5 w-5 text-red-500" />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="p-4 sm:p-8">
-      {/* Header with controls */}
-      <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <div className="flex items-center gap-1 sm:gap-2">
-          <Button variant="ghost" size="sm" onClick={onBack} className="p-1 sm:p-2">
-            <ArrowLeft className="h-4 w-4" />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 p-4">
+      <div className="max-w-md mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onBack}
+            className="text-gray-600 hover:text-gray-800"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {language === 'ar' ? 'رجوع' : 'Back'}
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleLogout} className="p-1 sm:p-2">
-            <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline ml-1 text-xs sm:text-sm">
-              {language === 'ar' ? 'خروج' : 'Logout'}
-            </span>
-          </Button>
-        </div>
-        <ThemeLanguageToggle />
-      </div>
-
-      {/* Account Creation Indicator */}
-      <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-        <p className="text-xs sm:text-sm text-green-700 dark:text-green-300 font-medium">
-          {language === 'ar' 
-            ? '✅ تم إنشاء حسابك وتأكيد البريد الإلكتروني - شكراً لك! ارفع صورة تأكيد التحويل لإكمال التفعيل 👇'
-            : '✅ Your account created and email confirmed - thank you! Upload your transfer confirmation screenshot to complete activation 👇'
-          }
-        </p>
-      </div>
-
-      <div className="mb-4 sm:mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold mb-2">
-          {language === 'ar' ? 'رفع صورة التأكيد' : 'Upload Payment Screenshot'}
-        </h2>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          {language === 'ar' 
-            ? `ارفع صورة تأكيد تحويل ${amount} QAR`
-            : `Upload your ${amount} QAR transfer confirmation`
-          }
-        </p>
-      </div>
-
-      <div className="space-y-4 sm:space-y-6">
-        {/* Email Field */}
-        <div>
-          <Label htmlFor="email" className="text-sm sm:text-base">
-            {language === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            value={userEmail}
-            disabled
-            className="bg-muted mt-2"
-          />
+          
+          <div className="flex items-center gap-2">
+            <ThemeLanguageToggle />
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleLogout}
+              className="text-gray-600 hover:text-gray-800"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
-        {/* Sender Alias Field - Now Mandatory */}
-        <div>
-          <Label htmlFor="senderAlias" className="text-sm sm:text-base">
-            {language === 'ar' ? 'اسمك المستعار في فوران' : 'Your Fawran Alias Name'}
-            <span className="text-red-500 ml-1">*</span>
-          </Label>
-          <Input
-            id="senderAlias"
-            type="text"
-            value={senderAlias}
-            onChange={handleAliasChange}
-            placeholder={language === 'ar' 
-              ? 'أدخل اسمك المستعار في فوران أو رقم الهاتف المسجل'
-              : 'Enter your Fawran alias or registered mobile number'
-            }
-            required
-            className={`mt-2 ${aliasError ? 'border-red-500 focus:border-red-500' : ''}`}
-          />
-          {aliasError && (
-            <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-              <AlertCircle className="h-3 w-3" />
-              {aliasError}
+        {/* Main Card */}
+        <Card className="p-6 space-y-6 bg-white/80 backdrop-blur-sm border-0 shadow-xl">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              {language === 'ar' ? 'رفع صورة الدفع' : 'Upload Payment Screenshot'}
+            </h2>
+            <p className="text-gray-600">
+              {language === 'ar' 
+                ? `خطة ${selectedPlan === 'monthly' ? 'شهرية' : 'سنوية'} - ${amount} ريال قطري`
+                : `${selectedPlan === 'monthly' ? 'Monthly' : 'Yearly'} Plan - ${amount} QAR`
+              }
             </p>
-          )}
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            {language === 'ar' 
-              ? 'هذا الاسم يجب أن يطابق الاسم الظاهر في صورة التحويل'
-              : 'This name must match the sender name shown in your transfer screenshot'
-            }
-          </p>
-        </div>
+          </div>
 
-        {/* Screenshot Upload */}
-        <div>
-          <Label htmlFor="screenshot" className="text-sm sm:text-base">
-            {language === 'ar' ? 'صورة تأكيد التحويل' : 'Transfer Confirmation Screenshot'}
-          </Label>
-          <Card className="p-4 sm:p-6 border-dashed border-2 hover:border-primary/50 transition-colors mt-2">
+          {/* File Upload Area */}
+          <div className="space-y-4">
+            <Label htmlFor="file-input" className="text-sm font-medium text-gray-700">
+              {language === 'ar' ? 'صورة تحويل فوران' : 'Fawran Transfer Screenshot'}
+            </Label>
+            
             {!selectedFile ? (
-              <div className="text-center">
-                <Upload className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
-                <div className="mb-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => document.getElementById('file-input')?.click()}
-                    className="w-full sm:w-auto text-sm sm:text-base"
-                  >
-                    {language === 'ar' ? 'اختر صورة' : 'Choose Image'}
-                  </Button>
-                  <input
-                    id="file-input"
-                    type="file"
-                    accept=".png,.jpg,.jpeg,.webp"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                </div>
-                <p className="text-xs sm:text-sm text-muted-foreground">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer">
+                <input
+                  id="file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={isUploading}
+                />
+                <label htmlFor="file-input" className="cursor-pointer">
+                  <FileImage className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-sm text-gray-600">
+                    {language === 'ar' 
+                      ? 'انقر لاختيار صورة أو اسحبها هنا'
+                      : 'Click to select image or drag here'
+                    }
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {language === 'ar' 
+                      ? 'PNG, JPG, JPEG أو WebP (حد أقصى 5 ميجابايت)'
+                      : 'PNG, JPG, JPEG or WebP (max 5MB)'
+                    }
+                  </p>
+                </label>
+              </div>
+            ) : (
+              <div className="relative">
+                <img 
+                  src={imagePreview} 
+                  alt="Screenshot preview" 
+                  className="w-full h-48 object-contain bg-gray-50 rounded-lg border"
+                />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={clearSelectedFile}
+                  className="absolute top-2 right-2 h-8 w-8 p-0"
+                  disabled={isUploading}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                
+                {isDuplicate && (
+                  <div className="absolute bottom-2 left-2 bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">
+                    {language === 'ar' ? 'مكرر' : 'Duplicate'}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Sender Alias Input */}
+          <div className="space-y-2">
+            <Label htmlFor="sender-alias" className="text-sm font-medium text-gray-700">
+              {language === 'ar' ? 'الاسم المستعار للمرسل' : 'Sender Alias'}
+            </Label>
+            <Input
+              id="sender-alias"
+              type="text"
+              value={senderAlias}
+              onChange={handleAliasChange}
+              placeholder={language === 'ar' ? 'رقم الهاتف أو الاسم المستعار' : 'Phone number or alias'}
+              className={`w-full ${aliasError ? 'border-red-500' : ''}`}
+              disabled={isUploading}
+            />
+            {aliasError && (
+              <p className="text-sm text-red-600">{aliasError}</p>
+            )}
+          </div>
+
+          {/* Processing Status */}
+          {processingStatus !== 'idle' && (
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              {getStatusIcon()}
+              <span className="text-sm text-gray-700">{processingMessage}</span>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <Button
+            onClick={handleSubmit}
+            disabled={!selectedFile || !senderAlias.trim() || isUploading || !!aliasError}
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-3 rounded-lg transition-all duration-200 disabled:opacity-50"
+          >
+            {isUploading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                {language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}
+              </div>
+            ) : (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                {language === 'ar' ? 'رفع الصورة' : 'Upload Screenshot'}
+              </>
+            )}
+          </Button>
+
+          {/* Important Notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-800">
+                <p className="font-medium mb-1">
+                  {language === 'ar' ? 'ملاحظة مهمة:' : 'Important Note:'}
+                </p>
+                <p>
                   {language === 'ar' 
-                    ? 'PNG, JPG, JPEG, WebP (حد أقصى 5 ميجابايت)'
-                    : 'PNG, JPG, JPEG, WebP (max 5MB)'
+                    ? 'تأكد من وضوح تفاصيل التحويل في الصورة. سيتم مراجعة دفعتك خلال دقائق.'
+                    : 'Ensure transfer details are clearly visible in the screenshot. Your payment will be reviewed within minutes.'
                   }
                 </p>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Image Preview */}
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <FileImage className="h-4 w-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                        {language === 'ar' ? 'الصورة المحددة:' : 'Selected Image:'}
-                      </span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearSelectedFile}
-                      className="h-6 w-6 p-0 hover:bg-red-100 dark:hover:bg-red-900/20"
-                    >
-                      <X className="h-4 w-4 text-red-600" />
-                    </Button>
-                  </div>
-                  
-                  {imagePreview && (
-                    <div className="relative border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800">
-                      <img 
-                        src={imagePreview} 
-                        alt="Screenshot preview" 
-                        className="w-full h-40 object-contain"
-                      />
-                    </div>
-                  )}
-                  
-                  <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <div className="text-sm">
-                      <p className="font-medium text-green-700 dark:text-green-300 break-all">
-                        📁 {selectedFile.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {language === 'ar' ? 'الحجم:' : 'Size:'} {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
-                      {imageHash && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Hash: {imageHash.substring(0, 16)}...
-                        </p>
-                      )}
-                      {isDuplicate && (
-                        <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded">
-                          <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">
-                            ⚠️ {language === 'ar' 
-                              ? 'صورة مكررة - يمكنك المتابعة إذا كانت هذه دفعة جديدة'
-                              : 'Duplicate image - you can continue if this is a new payment'
-                            }
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Change Image Button */}
-                <div className="text-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => document.getElementById('file-input')?.click()}
-                    className="text-sm"
-                  >
-                    {language === 'ar' ? 'تغيير الصورة' : 'Change Image'}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Enhanced Security Notice */}
-        <Card className="p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-            <div className="text-xs sm:text-sm text-blue-700 dark:text-blue-300">
-              <div className="font-medium mb-1">
-                {language === 'ar' ? 'نظام الأمان المحسن' : 'Enhanced Security System'}
-              </div>
-              <ul className="space-y-1 text-xs">
-                <li>• {language === 'ar' ? 'فحص الصور المكررة تلقائياً' : 'Automatic duplicate image detection'}</li>
-                <li>• {language === 'ar' ? 'كشف التلاعب بالصور' : 'Image tampering detection'}</li>
-                <li>• {language === 'ar' ? 'تحقق من توقيت التحويل' : 'Transfer timing verification'}</li>
-                <li>• {language === 'ar' ? 'فحص أرقام المراجع' : 'Reference number validation'}</li>
-                <li>• {language === 'ar' ? 'معالجة خلال 2-3 دقائق' : '2-3 minute processing guarantee'}</li>
-              </ul>
             </div>
           </div>
         </Card>
-
-        {/* Fraud Warning */}
-        <div className="text-center p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-xs sm:text-sm font-bold text-red-700 dark:text-red-300">
-            {language === 'ar' 
-              ? '⚠️ الاحتيال لن يُتساهل معه وستكون عرضة للشروط القانونية'
-              : '⚠️ Fraud will not be tolerated and you will be subject to legal terms'
-            }
-          </p>
-        </div>
-
-        {/* Submit Button */}
-        <Button 
-          onClick={handleSubmit} 
-          disabled={!selectedFile || !senderAlias.trim() || !!aliasError || isUploading}
-          className="w-full"
-          size="lg"
-        >
-          {isUploading ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              {language === 'ar' ? 'جاري المعالجة المحسنة...' : 'Enhanced Processing...'}
-            </>
-          ) : (
-            language === 'ar' ? 'رفع وتأكيد الدفع' : 'Upload & Confirm Payment'
-          )}
-        </Button>
       </div>
     </div>
   );
