@@ -18,9 +18,72 @@ console.log("🚀 WAKTI AI V2: Simple Claude 3.5 Implementation");
 serve(async (req) => {
   console.log("📨 REQUEST RECEIVED:", req.method);
 
+  // Handle CORS
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      },
+    });
+  }
+
   try {
-    const requestBody = await req.json();
+    // ROBUST REQUEST BODY PARSING
+    let requestBody;
+    const contentType = req.headers.get('content-type') || '';
     
+    if (!contentType.includes('application/json')) {
+      console.error("❌ INVALID CONTENT TYPE:", contentType);
+      return new Response(JSON.stringify({
+        error: "Invalid content type. Expected application/json",
+        success: false
+      }), {
+        status: 400,
+        headers: { 
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    const rawBody = await req.text();
+    console.log("📝 RAW BODY LENGTH:", rawBody.length);
+    
+    if (!rawBody || rawBody.trim() === '') {
+      console.error("❌ EMPTY REQUEST BODY");
+      return new Response(JSON.stringify({
+        error: "Empty request body",
+        success: false
+      }), {
+        status: 400,
+        headers: { 
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    try {
+      requestBody = JSON.parse(rawBody);
+      console.log("✅ JSON PARSED SUCCESSFULLY");
+    } catch (jsonError) {
+      console.error("❌ JSON PARSING ERROR:", jsonError);
+      return new Response(JSON.stringify({
+        error: "Invalid JSON format",
+        success: false,
+        details: jsonError.message
+      }), {
+        status: 400,
+        headers: { 
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // Extract and validate required parameters
     const {
       message,
       userId,
@@ -34,22 +97,30 @@ serve(async (req) => {
 
     // Validate required parameters
     if (!message?.trim()) {
+      console.error("❌ MISSING MESSAGE");
       return new Response(JSON.stringify({
         error: "Message is required",
         success: false
       }), {
         status: 400,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     }
 
     if (!userId) {
+      console.error("❌ MISSING USER ID");
       return new Response(JSON.stringify({
         error: "User ID is required",
         success: false
       }), {
         status: 400,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     }
 
@@ -97,11 +168,14 @@ serve(async (req) => {
     console.log(`✅ ${activeTrigger.toUpperCase()} MODE: Request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
-      headers: { "Content-Type": "application/json" }
+      headers: { 
+        "Content-Type": "application/json",
+        'Access-Control-Allow-Origin': '*'
+      }
     });
 
   } catch (error) {
-    console.error("🚨 Critical error:", error);
+    console.error("🚨 CRITICAL ERROR:", error);
 
     const errorResponse = {
       error: "Internal server error",
@@ -115,7 +189,10 @@ serve(async (req) => {
 
     return new Response(JSON.stringify(errorResponse), {
       status: 500,
-      headers: { "Content-Type": "application/json" }
+      headers: { 
+        "Content-Type": "application/json",
+        'Access-Control-Allow-Origin': '*'
+      }
     });
   }
 });
@@ -136,7 +213,6 @@ async function processChatMode(message: string, userId: string, conversationId: 
 
   // Load context only if conversation exists
   let contextMessages = [];
-  let conversationSummary = '';
   
   if (conversationId) {
     try {
@@ -157,7 +233,7 @@ async function processChatMode(message: string, userId: string, conversationId: 
     }
   }
   
-  return await callClaudeAPI(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens);
+  return await callClaudeAPI(message, contextMessages, language, attachedFiles, maxTokens);
 }
 
 // SIMPLE SEARCH MODE
@@ -200,7 +276,7 @@ async function processSearchMode(message: string, language: string) {
       searchResults.map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.content}`).join('\n')
     }`;
     
-    return await callClaudeAPI(searchContext, [], '', language, [], 4096);
+    return await callClaudeAPI(searchContext, [], language, [], 4096);
     
   } catch (error) {
     console.error('❌ SEARCH ERROR:', error);
@@ -284,7 +360,7 @@ async function processImageMode(message: string, userId: string, language: strin
 }
 
 // SIMPLE CLAUDE 3.5 API CALL
-async function callClaudeAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number) {
+async function callClaudeAPI(message: string, contextMessages: any[], language: string, attachedFiles: any[], maxTokens: number) {
   console.log("🤖 CLAUDE 3.5: Making API call");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
@@ -301,14 +377,6 @@ async function callClaudeAPI(message: string, contextMessages: any[], conversati
   // Build messages array
   const messages = [];
   
-  // Add conversation summary if available
-  if (conversationSummary) {
-    messages.push({
-      role: "user",
-      content: `Previous conversation context: ${conversationSummary}`
-    });
-  }
-  
   // Add recent messages if available
   if (contextMessages.length > 0) {
     contextMessages.forEach(msg => {
@@ -320,27 +388,7 @@ async function callClaudeAPI(message: string, contextMessages: any[], conversati
   }
   
   // Add current message
-  if (attachedFiles && attachedFiles.length > 0) {
-    // Handle vision with images
-    const messageContent = [{ type: 'text', text: message }];
-    
-    attachedFiles.forEach(file => {
-      if (file.type?.startsWith('image/') && file.base64Data) {
-        messageContent.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: file.type,
-            data: file.base64Data
-          }
-        });
-      }
-    });
-    
-    messages.push({ role: 'user', content: messageContent });
-  } else {
-    messages.push({ role: 'user', content: message });
-  }
+  messages.push({ role: 'user', content: message });
   
   try {
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {

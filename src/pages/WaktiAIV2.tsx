@@ -128,6 +128,17 @@ const WaktiAIV2 = () => {
       return;
     }
 
+    // VALIDATE INPUT BEFORE SENDING
+    if (!messageContent || !messageContent.trim()) {
+      showError(language === 'ar' ? 'يرجى كتابة رسالة' : 'Please enter a message');
+      return;
+    }
+
+    if (!userProfile?.id) {
+      showError(language === 'ar' ? 'يرجى تسجيل الدخول' : 'Please login first');
+      return;
+    }
+
     console.log('🚀 SEND MESSAGE: Starting with Claude 3.5 (No Streaming)');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
@@ -221,6 +232,23 @@ const WaktiAIV2 = () => {
         message: err.message,
         totalTime: totalTime + 'ms',
         stack: err.stack?.substring(0, 300)
+      });
+      
+      // Remove loading message and show error
+      setSessionMessages(prevMessages => {
+        const newMessages = [...prevMessages];
+        // Remove the loading message
+        newMessages.pop();
+        // Add error message
+        newMessages.push({
+          id: `assistant-error-${Date.now()}`,
+          role: 'assistant',
+          content: language === 'ar' 
+            ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
+            : '❌ An error occurred while processing your request. Please try again.',
+          timestamp: new Date()
+        });
+        return newMessages;
       });
       
       setError(err.message || 'Failed to send message');

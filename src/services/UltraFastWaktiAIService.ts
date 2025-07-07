@@ -67,21 +67,30 @@ export class UltraFastWaktiAIServiceClass {
 
       console.log('📝 MESSAGES: Created UI messages');
 
-      // Prepare request payload for Edge Function
+      // Prepare request payload for Edge Function - ENSURE PROPER JSON
       const requestPayload = {
-        message,
-        userId,
-        language,
+        message: message.trim(),
+        userId: userId,
+        language: language,
         conversationId: tempConversationId,
-        inputType,
-        activeTrigger,
+        inputType: inputType,
+        activeTrigger: activeTrigger,
         attachedFiles: attachedFiles || [],
         maxTokens: 4096
       };
 
-      console.log('🎯 PAYLOAD: Prepared for Edge Function');
+      // VALIDATE PAYLOAD BEFORE SENDING
+      if (!requestPayload.message || !requestPayload.userId) {
+        throw new Error('Invalid request payload: missing required fields');
+      }
 
-      // Call Supabase Edge Function
+      console.log('🎯 PAYLOAD: Prepared for Edge Function', {
+        messageLength: requestPayload.message.length,
+        userId: requestPayload.userId.substring(0, 8) + '...',
+        mode: requestPayload.activeTrigger
+      });
+
+      // Call Supabase Edge Function with proper error handling
       console.log('🔗 CALLING: wakti-ai-v2-brain Edge Function...');
       
       const { data: response, error: functionError } = await supabase.functions
@@ -115,7 +124,8 @@ export class UltraFastWaktiAIServiceClass {
       console.log('🎯 RESPONSE DETAILS:', {
         success: response.success,
         hasResponse: !!response.response,
-        mode: response.mode
+        mode: response.mode,
+        imageUrl: response.imageUrl ? 'Present' : 'None'
       });
 
       // Update assistant message with response
