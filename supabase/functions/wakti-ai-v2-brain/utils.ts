@@ -15,7 +15,7 @@ export function generateConversationId(): string {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// EMERGENCY FIX: Enhanced API key validation with detailed logging
+// Enhanced API key validation with detailed logging
 export function validateApiKeys(): { valid: boolean; missing: string[] } {
   const keys = {
     ANTHROPIC_API_KEY,
@@ -62,7 +62,7 @@ export function logWithTimestamp(message: string, data?: any) {
   }
 }
 
-// EMERGENCY FIX: Enhanced Claude API helper with better error handling
+// Enhanced Claude API helper with better error handling
 export async function callClaudeAPI(
   messages: any[],
   maxTokens: number = 4096,
@@ -101,7 +101,7 @@ export async function callClaudeAPI(
   return result;
 }
 
-// EMERGENCY FIX: Enhanced DeepSeek fallback with better error handling
+// Enhanced DeepSeek fallback with better error handling
 export async function callDeepSeekAPI(
   messages: any[],
   maxTokens: number = 4096

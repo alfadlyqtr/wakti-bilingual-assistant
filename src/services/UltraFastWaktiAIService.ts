@@ -1,4 +1,5 @@
-// COMPREHENSIVE FIX: Ultra-Fast Wakti AI Service with Enhanced Claude 3.5 Sonnet Integration
+
+// WAKTI AI Service with Enhanced Claude 3.5 Sonnet Integration
 import { supabase } from '@/integrations/supabase/client';
 import { UltraFastMemoryCache } from './UltraFastMemoryCache';
 import { StreamingResponseManager } from './StreamingResponseManager';
@@ -7,7 +8,7 @@ import { EnhancedTaskCreationService } from './EnhancedTaskCreationService';
 import { AIMessage } from './WaktiAIV2Service';
 
 class UltraFastWaktiAIServiceClass {
-  // COMPREHENSIVE FIX: Enhanced message sending with full error handling and validation
+  // Enhanced message sending with full error handling and validation
   async sendMessageUltraFast(
     message: string,
     userId?: string,
@@ -30,13 +31,13 @@ class UltraFastWaktiAIServiceClass {
       // Generate or use existing conversation ID
       const actualConversationId = conversationId || `claude-${Date.now()}`;
       
-      console.log('🚀 COMPREHENSIVE FIX: Processing message with enhanced Claude 3.5 Sonnet integration');
+      console.log('🚀 WAKTI AI: Processing message with enhanced Claude 3.5 Sonnet integration');
       
-      // ENHANCED: Check for task creation intent FIRST
+      // Check for task creation intent FIRST
       const taskIntent = EnhancedTaskCreationService.detectTaskCreationIntent(message);
       console.log('🎯 TASK INTENT:', taskIntent ? `${taskIntent.language} (${taskIntent.confidence})` : 'None');
       
-      // MEMORY FIX: Get enhanced context from database
+      // Get enhanced context from database
       let contextData = await UltraFastMemoryCache.getConversationContext(userId, actualConversationId);
       
       // If no cache hit, queue background context loading
@@ -62,16 +63,16 @@ class UltraFastWaktiAIServiceClass {
       
       // Get FULL context for AI system prompt
       const fullContext = UltraFastMemoryCache.getFullContext(userId, actualConversationId);
-      console.log('🧠 COMPREHENSIVE FIX: Context loaded:', fullContext.recentMessages.length, 'messages,', fullContext.summary.length, 'chars summary');
+      console.log('🧠 WAKTI AI: Context loaded:', fullContext.recentMessages.length, 'messages,', fullContext.summary.length, 'chars summary');
       
-      console.log('🚀 COMPREHENSIVE FIX: Sending to Claude 3.5 Sonnet with enhanced context + Vision support');
+      console.log('🚀 WAKTI AI: Sending to Claude 3.5 Sonnet with enhanced context + Vision support');
       
-      // VISION FIX: Enhanced file validation with proper error handling
+      // Enhanced file validation with proper error handling
       let validatedFiles = [];
       if (attachedFiles && attachedFiles.length > 0) {
         validatedFiles = attachedFiles.filter(file => {
           if (file.type && file.type.startsWith('image/')) {
-            // CRITICAL FIX: Check multiple possible URL locations
+            // Check multiple possible URL locations
             const hasValidUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
             
             if (hasValidUrl) {
@@ -79,24 +80,24 @@ class UltraFastWaktiAIServiceClass {
               
               // Enhanced validation for base64 format
               if (imageUrl.startsWith('data:image/')) {
-                console.log(`✅ COMPREHENSIVE FIX: Valid Vision file: ${file.name} -> ${imageUrl.substring(0, 50)}...`);
+                console.log(`✅ WAKTI AI: Valid Vision file: ${file.name} -> ${imageUrl.substring(0, 50)}...`);
                 return true;
               } else {
-                console.error(`❌ COMPREHENSIVE FIX: Invalid URL format for ${file.name}: ${imageUrl.substring(0, 50)}...`);
+                console.error(`❌ WAKTI AI: Invalid URL format for ${file.name}: ${imageUrl.substring(0, 50)}...`);
                 return false;
               }
             } else {
-              console.error(`❌ COMPREHENSIVE FIX: No valid URL for ${file.name}`);
+              console.error(`❌ WAKTI AI: No valid URL for ${file.name}`);
               return false;
             }
           }
           return false;
         });
         
-        console.log(`🖼️ COMPREHENSIVE FIX: Vision processing ready - ${validatedFiles.length} of ${attachedFiles.length} files validated`);
+        console.log(`🖼️ WAKTI AI: Vision processing ready - ${validatedFiles.length} of ${attachedFiles.length} files validated`);
       }
       
-      // COMPREHENSIVE FIX: Call enhanced Claude brain service with full error handling
+      // Call enhanced Claude brain service with full error handling
       const aiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -114,7 +115,7 @@ class UltraFastWaktiAIServiceClass {
         }
       });
       
-      // COMPREHENSIVE FIX: Enhanced timeout handling (20 seconds for Vision processing)
+      // Enhanced timeout handling (20 seconds for Vision processing)
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Request timeout - please try again')), 20000)
       );
@@ -122,9 +123,9 @@ class UltraFastWaktiAIServiceClass {
       const { data, error } = await Promise.race([aiPromise, timeoutPromise]) as any;
       
       if (error) {
-        console.error('❌ COMPREHENSIVE FIX: AI Error:', error);
+        console.error('❌ WAKTI AI: AI Error:', error);
         
-        // ENHANCED ERROR HANDLING: More specific error messages
+        // Enhanced error handling: More specific error messages
         let errorMessage = 'AI processing failed';
         
         if (error.message.includes('API key')) {
@@ -205,7 +206,7 @@ class UltraFastWaktiAIServiceClass {
         StreamingResponseManager.completeStream(actualConversationId, assistantMessage.content);
       }
       
-      console.log('✅ COMPREHENSIVE FIX: Completed with enhanced context + Vision + Error handling');
+      console.log('✅ WAKTI AI: Completed with enhanced context + Vision + Error handling');
       
       return {
         ...data,
@@ -222,19 +223,19 @@ class UltraFastWaktiAIServiceClass {
         contextRestored: true, // ALWAYS true now
         fullContextUsed: true, // FULL context used
         visionEnabled: validatedFiles.length > 0,
-        comprehensiveFixApplied: true, // COMPREHENSIVE FIX confirmation
+        waktiAIRepaired: true, // WAKTI AI repair confirmation
         claudeModel: 'claude-3-5-sonnet-20241022'
       };
       
     } catch (error: any) {
-      console.error('❌ COMPREHENSIVE FIX: Service Error:', error);
+      console.error('❌ WAKTI AI: Service Error:', error);
       
       // Complete streaming on error
       if (onStreamUpdate && conversationId) {
         StreamingResponseManager.completeStream(conversationId);
       }
       
-      // ENHANCED ERROR HANDLING: Surface meaningful errors
+      // Enhanced error handling: Surface meaningful errors
       let userFriendlyError = 'Sorry, I encountered an error processing your request.';
       
       if (error.message.includes('timeout')) {
@@ -299,7 +300,7 @@ class UltraFastWaktiAIServiceClass {
   
   clearConversationUltraFast(userId: string, conversationId: string): void {
     UltraFastMemoryCache.invalidateConversation(userId, conversationId);
-    console.log('🗑️ COMPREHENSIVE FIX: Conversation cleared with enhanced context');
+    console.log('🗑️ WAKTI AI: Conversation cleared with enhanced context');
   }
   
   getCacheStats(): any {
@@ -309,8 +310,8 @@ class UltraFastWaktiAIServiceClass {
       streamingActive: StreamingResponseManager.isStreaming('any'),
       taskCreationActive: true,
       contextRestored: true, // ALWAYS true
-      visionEnabled: true, // COMPREHENSIVE FIX includes Vision
-      comprehensiveFixApplied: true, // COMPREHENSIVE FIX confirmation
+      visionEnabled: true, // WAKTI AI includes Vision
+      waktiAIRepaired: true, // WAKTI AI repair confirmation
       claudeModel: 'claude-3-5-sonnet-20241022',
       timestamp: Date.now()
     };

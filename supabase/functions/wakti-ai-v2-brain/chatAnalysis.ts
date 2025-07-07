@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { callClaudeAPI, callDeepSeekAPI, logWithTimestamp, validateApiKeys } from './utils.ts';
 
@@ -15,15 +14,15 @@ export async function processWithClaudeAI(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log('🚀 COMPREHENSIVE FIX: Starting Claude processing with full validation');
+    console.log('🚀 WAKTI AI: Starting Claude processing with full validation');
     
-    // EMERGENCY FIX: Validate API keys at start
+    // Validate API keys at start
     const keyValidation = validateApiKeys();
     if (!keyValidation.valid) {
       throw new Error(`Missing API keys: ${keyValidation.missing.join(', ')}`);
     }
     
-    console.log('🖼️ VISION FIX: Processing', processedFiles.length, 'files for Vision');
+    console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Vision');
     
     // Check for task creation triggers 
     const taskTriggers = {
@@ -37,7 +36,7 @@ export async function processWithClaudeAI(
       message.toLowerCase().includes(trigger.toLowerCase())
     );
     
-    // MEMORY FIX: Build FULL context from recent messages and summary
+    // Build FULL context from recent messages and summary
     let contextMessages = [];
     
     // Add conversation summary as system context if available
@@ -46,7 +45,7 @@ export async function processWithClaudeAI(
         role: 'user',
         content: `Previous conversation context: ${conversationSummary}`
       });
-      console.log(`🧠 MEMORY FIX: Added conversation summary (${conversationSummary.length} chars)`);
+      console.log(`🧠 CONTEXT: Added conversation summary (${conversationSummary.length} chars)`);
     }
     
     // Add recent messages for immediate context (last 3-4 messages)
@@ -55,17 +54,17 @@ export async function processWithClaudeAI(
       content: msg.content
     }));
     contextMessages.push(...formattedRecentMessages);
-    console.log(`🧠 MEMORY FIX: Added ${formattedRecentMessages.length} recent messages`);
+    console.log(`🧠 CONTEXT: Added ${formattedRecentMessages.length} recent messages`);
     
-    // VISION FIX: Enhanced image processing with proper validation
+    // Enhanced image processing with proper validation
     const hasImages = processedFiles && processedFiles.length > 0 && 
                      processedFiles.some(file => file.type && file.type.startsWith('image/'));
     
     let systemPrompt = '';
     
     if (hasImages) {
-      // VISION PROCESSING with Claude 3.5 Sonnet - FIXED
-      console.log('🖼️ VISION FIX: Processing with images using Claude 3.5 Sonnet');
+      // VISION PROCESSING with Claude 3.5 Sonnet
+      console.log('🖼️ VISION: Processing with images using Claude 3.5 Sonnet');
       
       // BILINGUAL VISION SYSTEM PROMPTS
       systemPrompt = language === 'ar' 
@@ -85,7 +84,7 @@ If the image is blurry, low resolution, or unclear — say that.
 Do not make up information. Be honest about what you can or cannot see.`;
     } else {
       // Regular text chat
-      console.log('💬 CHAT FIX: Processing text-only using Claude 3.5 Sonnet');
+      console.log('💬 CHAT: Processing text-only using Claude 3.5 Sonnet');
       
       // Regular chat prompt with personalization
       systemPrompt = `You are a helpful AI assistant. Respond naturally and conversationally to the user's questions and requests.`;
@@ -129,19 +128,19 @@ Do not make up information. Be honest about what you can or cannot see.`;
     }
 
     if (hasImages) {
-      console.log('🖼️ VISION FIX: Processing', processedFiles.length, 'files for Claude Vision');
+      console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Claude Vision');
       
       // Create content array with text and images for Vision
       const messageContent = [
         { type: 'text', text: message }
       ];
 
-      // EMERGENCY VISION FIX: Enhanced image processing with proper validation
+      // Enhanced image processing with proper validation
       for (const file of processedFiles) {
         if (file.type && file.type.startsWith('image/')) {
-          console.log(`🖼️ VISION FIX: Processing image: ${file.name}`);
+          console.log(`🖼️ VISION: Processing image: ${file.name}`);
           
-          // CRITICAL FIX: Proper image URL handling
+          // Proper image URL handling
           let imageUrl = file.image_url?.url;
           
           // Check multiple possible URL locations
@@ -165,12 +164,12 @@ Do not make up information. Be honest about what you can or cannot see.`;
                   data: base64Data
                 }
               });
-              console.log(`✅ VISION FIX: Successfully added image ${file.name} (${base64Data.length} chars)`);
+              console.log(`✅ VISION: Successfully added image ${file.name} (${base64Data.length} chars)`);
             } else {
-              console.error(`❌ VISION FIX: Invalid base64 data for ${file.name}`);
+              console.error(`❌ VISION: Invalid base64 data for ${file.name}`);
             }
           } else {
-            console.error(`❌ VISION FIX: No valid base64 URL found for image: ${file.name}`);
+            console.error(`❌ VISION: No valid base64 URL found for image: ${file.name}`);
           }
         }
       }
@@ -179,7 +178,7 @@ Do not make up information. Be honest about what you can or cannot see.`;
         role: 'user', 
         content: messageContent 
       });
-      console.log(`🖼️ VISION FIX: Message content prepared with ${messageContent.length - 1} images`);
+      console.log(`🖼️ VISION: Message content prepared with ${messageContent.length - 1} images`);
     } else {
       // Simple text message for regular chat
       claudeMessages.push({ 
@@ -196,13 +195,13 @@ Do not make up information. Be honest about what you can or cannot see.`;
       });
     }
 
-    // COMPREHENSIVE FIX: Enhanced retry logic with detailed error handling
+    // Enhanced retry logic with detailed error handling
     let lastError;
     const maxRetries = 2;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔄 COMPREHENSIVE FIX - ATTEMPT ${attempt + 1}: Processing request`);
+        console.log(`🔄 ATTEMPT ${attempt + 1}: Processing request`);
         
         if (attempt === 0) {
           // Primary: Claude 3.5 Sonnet
@@ -231,9 +230,7 @@ Do not make up information. Be honest about what you can or cannot see.`;
             attempt: attempt + 1,
             fallbackUsed: false,
             visionUsed: hasImages,
-            fullContextRestored: true,
-            comprehensiveFixApplied: true,
-            apiKeysValidated: true
+            fullContextRestored: true
           };
 
         } else {
@@ -262,9 +259,7 @@ Do not make up information. Be honest about what you can or cannot see.`;
               attempt: attempt + 1,
               fallbackUsed: true,
               visionUsed: false,
-              fullContextRestored: true,
-              comprehensiveFixApplied: true,
-              apiKeysValidated: true
+              fullContextRestored: true
             };
           } else {
             // Regular chat fallback
@@ -288,15 +283,13 @@ Do not make up information. Be honest about what you can or cannot see.`;
               attempt: attempt + 1,
               fallbackUsed: true,
               visionUsed: false,
-              fullContextRestored: true,
-              comprehensiveFixApplied: true,
-              apiKeysValidated: true
+              fullContextRestored: true
             };
           }
         }
 
       } catch (error) {
-        console.error(`🚨 COMPREHENSIVE FIX: Attempt ${attempt + 1} failed:`, error);
+        console.error(`🚨 Attempt ${attempt + 1} failed:`, error);
         lastError = error;
         
         if (attempt < maxRetries) {
@@ -307,13 +300,13 @@ Do not make up information. Be honest about what you can or cannot see.`;
     }
     
     // All retries failed - return meaningful error
-    console.error('🚨 COMPREHENSIVE FIX: All retry attempts failed:', lastError);
+    console.error('🚨 All retry attempts failed:', lastError);
     throw lastError;
 
   } catch (error) {
-    console.error('🚨 COMPREHENSIVE FIX: Critical processing error:', error);
+    console.error('🚨 Critical processing error:', error);
     
-    // ENHANCED ERROR HANDLING: More meaningful error messages
+    // Enhanced error handling: More meaningful error messages
     let userFriendlyMessage = '';
     
     if (error.message.includes('API key')) {
@@ -340,9 +333,7 @@ Do not make up information. Be honest about what you can or cannot see.`;
       error: error.message,
       userFriendlyError: userFriendlyMessage,
       visionUsed: false,
-      fullContextRestored: false,
-      comprehensiveFixApplied: false,
-      apiKeysValidated: false
+      fullContextRestored: false
     };
   }
 }

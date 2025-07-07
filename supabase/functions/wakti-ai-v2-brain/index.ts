@@ -30,7 +30,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 COMPREHENSIVE FIX: WAKTI AI Edge Function Starting - Claude 3.5 Sonnet System");
+console.log("🚀 WAKTI AI: Edge Function Starting - Claude 3.5 Sonnet System");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -38,17 +38,16 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 COMPREHENSIVE FIX: Processing request with full validation system");
+    console.log("🚀 WAKTI AI: Processing request with full validation system");
     const startTime = Date.now();
 
-    // EMERGENCY FIX: Validate API keys at startup
+    // Validate API keys at startup
     const keyValidation = validateApiKeys();
     if (!keyValidation.valid) {
       console.error("❌ CRITICAL: Missing API keys at startup:", keyValidation.missing);
       return new Response(JSON.stringify({ 
         error: `System configuration incomplete. Missing: ${keyValidation.missing.join(', ')}`,
-        success: false,
-        comprehensiveFixApplied: false
+        success: false
       }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -130,20 +129,20 @@ serve(async (req) => {
     }
 
     const currentDateContext = getCurrentDateContext();
-    console.log(`🚀 COMPREHENSIVE FIX: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
+    console.log(`🚀 WAKTI AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
 
-    // VISION FIX: Enhanced image processing with comprehensive validation
+    // Enhanced image processing with comprehensive validation
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`📁 VISION FIX: Validating ${attachedFiles.length} files`);
+      console.log(`📁 VISION: Validating ${attachedFiles.length} files`);
       
       processedFiles = attachedFiles.filter(file => {
         if (file.type && file.type.startsWith('image/')) {
-          // CRITICAL FIX: Check multiple possible URL locations
+          // Check multiple possible URL locations
           const hasValidUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
           
           if (!hasValidUrl) {
-            console.error(`❌ VISION FIX: No valid URL for image: ${file.name}`);
+            console.error(`❌ VISION: No valid URL for image: ${file.name}`);
             return false;
           }
           
@@ -153,11 +152,11 @@ serve(async (req) => {
           const isValidUrl = isBase64 || imageUrl.startsWith('http');
           
           if (!isValidUrl) {
-            console.error(`❌ VISION FIX: Invalid URL format for ${file.name}: ${imageUrl.substring(0, 50)}...`);
+            console.error(`❌ VISION: Invalid URL format for ${file.name}: ${imageUrl.substring(0, 50)}...`);
             return false;
           }
           
-          console.log(`✅ VISION FIX: Valid image ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${imageUrl.substring(0, 50)}...`);
+          console.log(`✅ VISION: Valid image ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${imageUrl.substring(0, 50)}...`);
           return true;
         }
         return false;
@@ -166,23 +165,22 @@ serve(async (req) => {
       if (processedFiles.length === 0 && attachedFiles.length > 0) {
         return new Response(JSON.stringify({
           error: "❌ Unable to process the uploaded images. Please upload valid JPEG or PNG files with proper data URLs.",
-          success: false,
-          comprehensiveFixApplied: true
+          success: false
         }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
       
-      console.log(`🚀 VISION FIX: Successfully validated ${processedFiles.length} files for Claude Vision processing`);
+      console.log(`🚀 VISION: Successfully validated ${processedFiles.length} files for Claude Vision processing`);
     }
 
-    // MEMORY FIX: Enhanced context loading from database
+    // Enhanced context loading from database
     let contextRecentMessages = [];
     let contextConversationSummary = '';
     
     if (conversationId) {
-      console.log(`🧠 MEMORY FIX: Loading full context for conversation ${conversationId}`);
+      console.log(`🧠 CONTEXT: Loading full context for conversation ${conversationId}`);
       
       try {
         // Get conversation summary from database
@@ -195,7 +193,7 @@ serve(async (req) => {
 
         if (summaryData && !summaryError) {
           contextConversationSummary = summaryData.summary_text || '';
-          console.log(`🧠 MEMORY FIX: Loaded summary (${contextConversationSummary.length} chars, ${summaryData.message_count} messages)`);
+          console.log(`🧠 CONTEXT: Loaded summary (${contextConversationSummary.length} chars, ${summaryData.message_count} messages)`);
         }
 
         // Get recent messages from database
@@ -212,25 +210,25 @@ serve(async (req) => {
             role: msg.role,
             content: msg.content
           }));
-          console.log(`🧠 MEMORY FIX: Loaded ${contextRecentMessages.length} recent messages from database`);
+          console.log(`🧠 CONTEXT: Loaded ${contextRecentMessages.length} recent messages from database`);
         }
       } catch (contextError) {
-        console.error('🧠 MEMORY FIX ERROR:', contextError);
+        console.error('🧠 CONTEXT ERROR:', contextError);
       }
     }
     
     // Fallback to provided context if database load failed
     if (contextRecentMessages.length === 0 && recentMessages.length > 0) {
       contextRecentMessages = recentMessages.slice(-4);
-      console.log(`🧠 MEMORY FIX FALLBACK: Using provided messages (${contextRecentMessages.length})`);
+      console.log(`🧠 CONTEXT FALLBACK: Using provided messages (${contextRecentMessages.length})`);
     }
     
     if (!contextConversationSummary && conversationSummary) {
       contextConversationSummary = conversationSummary;
-      console.log(`🧠 MEMORY FIX FALLBACK: Using provided summary (${contextConversationSummary.length} chars)`);
+      console.log(`🧠 CONTEXT FALLBACK: Using provided summary (${contextConversationSummary.length} chars)`);
     }
     
-    console.log(`🧠 MEMORY FIX COMPLETE: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
+    console.log(`🧠 CONTEXT COMPLETE: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
 
     // TASK DETECTION
     let taskAnalysisResult = null;
@@ -271,8 +269,7 @@ serve(async (req) => {
         taskDetected: true,
         currentDateContext,
         contextRestored: true,
-        fullContextUsed: true,
-        comprehensiveFixApplied: true
+        fullContextUsed: true
       };
 
       console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
@@ -281,7 +278,7 @@ serve(async (req) => {
       });
     }
 
-    // MAIN PROCESSING WITH CLAUDE - COMPREHENSIVE FIX
+    // MAIN PROCESSING WITH CLAUDE
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -359,7 +356,7 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 COMPREHENSIVE FIX: Processing with Claude 3.5 Sonnet System`);
+        console.log(`🚀 WAKTI AI: Processing with Claude 3.5 Sonnet System`);
         console.log(`🖼️ VISION: ${processedFiles.length} files ready for Claude Vision processing`);
         
         const chatResult = await processWithClaudeAI(
@@ -380,12 +377,12 @@ serve(async (req) => {
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 COMPREHENSIVE FIX: Processing completed successfully in ${processingTime}ms`);
+    console.log(`🚀 WAKTI AI: Processing completed successfully in ${processingTime}ms`);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'comprehensive_fix_complete',
+      intent: 'wakti_ai_complete',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -400,7 +397,7 @@ serve(async (req) => {
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: 'wakti_ai_comprehensive_fix',
+      aiProvider: 'wakti_ai_system',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
@@ -408,7 +405,6 @@ serve(async (req) => {
       contextRestored: true,
       modelsUsed: processedFiles.length > 0 ? 'claude-3-5-sonnet-20241022 with vision' : 'claude-3-5-sonnet-20241022 with deepseek fallback',
       fallbacksAvailable: true,
-      comprehensiveFixApplied: true,
       fullContextUsed: true,
       apiKeysValidated: true
     };
@@ -418,9 +414,9 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 COMPREHENSIVE FIX: Critical Error:", error);
+    console.error("🚨 WAKTI AI: Critical Error:", error);
     
-    // ENHANCED ERROR HANDLING with specific error types
+    // Enhanced error handling with specific error types
     let userFriendlyError = 'Sorry, I encountered an error processing your request. Please try again.';
     let statusCode = 500;
     
@@ -446,8 +442,6 @@ serve(async (req) => {
       success: false,
       currentDateContext: getCurrentDateContext(),
       contextRestored: false,
-      comprehensiveFixApplied: false,
-      apiKeysValidated: false,
       errorDetails: error.message
     }), {
       status: statusCode,
