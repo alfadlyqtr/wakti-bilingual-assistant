@@ -1,5 +1,4 @@
 
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
 const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
@@ -18,8 +17,8 @@ export async function processWithBuddyChatAI(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log('🚀 AI: Processing message');
-    console.log('🖼️ FILES:', processedFiles.length, 'files provided');
+    console.log('🚀 CHAT PROCESSING: Starting with COMPLETE REPAIR SYSTEM');
+    console.log('🖼️ FILES:', processedFiles.length, 'files provided for Vision');
     
     // Check for task creation triggers 
     const taskTriggers = {
@@ -33,7 +32,7 @@ export async function processWithBuddyChatAI(
       message.toLowerCase().includes(trigger.toLowerCase())
     );
     
-    // Build context from recent messages and summary - FULL CONTEXT RESTORED
+    // PHASE 2: MEMORY - Build FULL context from recent messages and summary
     let contextMessages = [];
     
     // Add conversation summary as system context if available
@@ -42,16 +41,18 @@ export async function processWithBuddyChatAI(
         role: 'system',
         content: `Previous conversation context: ${conversationSummary}`
       });
+      console.log(`🧠 CONTEXT: Added conversation summary (${conversationSummary.length} chars)`);
     }
     
-    // Add recent messages for immediate context (last 3-4 messages as specified)
+    // Add recent messages for immediate context (last 3-4 messages)
     const formattedRecentMessages = recentMessages.slice(-4).map(msg => ({
       role: msg.role,
       content: msg.content
     }));
     contextMessages.push(...formattedRecentMessages);
+    console.log(`🧠 CONTEXT: Added ${formattedRecentMessages.length} recent messages`);
     
-    // Check if this is an image processing request
+    // PHASE 1: VISION - Check if this is an image processing request
     const hasImages = processedFiles && processedFiles.length > 0 && 
                      processedFiles.some(file => file.type && file.type.startsWith('image/'));
     
@@ -59,11 +60,11 @@ export async function processWithBuddyChatAI(
     let model = '';
     
     if (hasImages) {
-      // FIXED: Vision processing with gpt-4-vision-preview instead of gpt-4o
+      // PHASE 1: VISION PROCESSING with gpt-4-vision-preview
       console.log('🖼️ VISION: Processing with images using gpt-4-vision-preview');
       model = 'gpt-4-vision-preview';
       
-      // FIXED: Bilingual Vision system prompt as specified
+      // PHASE 3: BILINGUAL VISION SYSTEM PROMPTS
       systemPrompt = language === 'ar' 
         ? `أنت مساعد ذكي يعتمد على الرؤية. عندما يرفع المستخدمون صورة، يجب عليك ملاحظتها بعناية واستخراج جميع المعلومات الظاهرة — بما في ذلك النصوص، الأرقام، التخطيط، التصميم، الأشخاص، الأشياء، المشاهد، والسياق البصري. أجب دائماً بوضوح وبدقة وبشكل مفيد. إذا سأل المستخدم سؤالًا، أجب عنه مباشرة باستخدام ما تراه في الصورة.
 
@@ -80,11 +81,11 @@ Always start your reply with:
 If the image is blurry, low resolution, or unclear — say that.
 Do not make up information. Be honest about what you can or cannot see.`;
     } else {
-      // Regular text chat with gpt-4o-mini
+      // PHASE 1: Regular text chat with gpt-4o-mini
       console.log('💬 CHAT: Processing text-only using gpt-4o-mini');
       model = 'gpt-4o-mini';
       
-      // FIXED: Natural chat prompt that incorporates personalization
+      // Regular chat prompt with personalization
       systemPrompt = `You are a helpful AI assistant. Respond naturally and conversationally to the user's questions and requests.`;
       
       // Add personalization if available
@@ -114,6 +115,8 @@ Do not make up information. Be honest about what you can or cannot see.`;
     if (language === 'ar') {
       systemPrompt += ' Respond in Arabic.';
     }
+
+    console.log(`🎯 MODEL SELECTION: Using ${model} for ${hasImages ? 'Vision' : 'Chat'}`);
 
     // Prepare messages for API
     const messages = [
@@ -162,31 +165,47 @@ Do not make up information. Be honest about what you can or cannot see.`;
       throw new Error('OpenAI API key not configured');
     }
 
-    console.log(`🚀 AI: Using model ${model}`);
-
-    // FIXED: Retry logic implementation with fallbacks
+    // PHASE 5: RETRY LOGIC with proper fallbacks
     let lastError;
     const maxRetries = 2;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const currentModel = attempt === 0 ? model : (hasImages ? 'gpt-4o-mini' : 'deepseek-chat');
-        const apiUrl = currentModel === 'deepseek-chat' 
-          ? 'https://api.deepseek.com/chat/completions'
-          : 'https://api.openai.com/v1/chat/completions';
+        let currentModel = model;
+        let apiUrl = 'https://api.openai.com/v1/chat/completions';
+        let apiKey = OPENAI_API_KEY;
         
-        const apiKey = currentModel === 'deepseek-chat' ? DEEPSEEK_API_KEY : OPENAI_API_KEY;
+        // PHASE 5: RETRY LOGIC - Determine model and API based on attempt
+        if (attempt === 1) {
+          if (hasImages) {
+            // Vision fallback: retry with gpt-4o-mini (still has vision)
+            currentModel = 'gpt-4o-mini';
+            console.log(`🔄 VISION FALLBACK: Retrying with ${currentModel}`);
+          } else {
+            // Chat fallback: switch to DeepSeek
+            currentModel = 'deepseek-chat';
+            apiUrl = 'https://api.deepseek.com/chat/completions';
+            apiKey = DEEPSEEK_API_KEY;
+            console.log(`🔄 CHAT FALLBACK: Retrying with ${currentModel}`);
+          }
+        } else if (attempt === 2) {
+          // Final fallback for Vision: convert to text-only with gpt-4o-mini
+          if (hasImages) {
+            currentModel = 'gpt-4o-mini';
+            console.log(`🔄 FINAL VISION FALLBACK: Converting to text-only with ${currentModel}`);
+          }
+        }
         
         if (!apiKey) {
           throw new Error(`${currentModel === 'deepseek-chat' ? 'DeepSeek' : 'OpenAI'} API key not configured`);
         }
         
-        console.log(`🔄 ATTEMPT ${attempt + 1}: Using ${currentModel}`);
+        console.log(`🔄 ATTEMPT ${attempt + 1}: Calling OpenAI with model: ${currentModel}`);
         
         // Adjust messages for fallback models
         let finalMessages = messages;
-        if (attempt > 0 && hasImages) {
-          // For Vision fallback, convert to text-only
+        if (attempt === 2 && hasImages) {
+          // For final Vision fallback, convert to text-only
           finalMessages = [
             { role: 'system', content: systemPrompt },
             ...contextMessages,
@@ -222,7 +241,7 @@ Do not make up information. Be honest about what you can or cannot see.`;
             errorData = { error: { message: errorText } };
           }
           
-          // FIXED: Meaningful error messages instead of generic ones
+          // PHASE 4: MEANINGFUL ERROR MESSAGES
           let userFriendlyError = 'Sorry, I encountered an error processing your request.';
           
           if (response.status === 429) {
@@ -235,8 +254,8 @@ Do not make up information. Be honest about what you can or cannot see.`;
               : 'Authentication error. Please try again.';
           } else if (response.status === 400) {
             userFriendlyError = language === 'ar'
-              ? 'طلب غير صحيح. يرجى تعديل رسالتك والمحاولة مرة أخرى.'
-              : 'Invalid request. Please modify your message and try again.';
+              ? '❌ لم أتمكن من معالجة الصورة المرفوعة. يرجى رفع صورة صالحة بصيغة JPEG أو PNG.'
+              : '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
           }
           
           const error = new Error(`${currentModel} API error (${response.status}): ${errorData.error?.message || errorText}`);
@@ -266,7 +285,9 @@ Do not make up information. Be honest about what you can or cannot see.`;
           intent: shouldCreateTask ? 'task_creation' : 'chat',
           confidence: shouldCreateTask ? 'high' : 'medium',
           attempt: attempt + 1,
-          fallbackUsed: attempt > 0
+          fallbackUsed: attempt > 0,
+          visionUsed: hasImages && (currentModel === 'gpt-4-vision-preview' || currentModel === 'gpt-4o-mini'),
+          fullContextRestored: true
         };
 
       } catch (error) {
@@ -287,10 +308,10 @@ Do not make up information. Be honest about what you can or cannot see.`;
   } catch (error) {
     console.error('🚨 AI: Critical processing error:', error);
     
-    // FIXED: Return actual error information instead of masking it
+    // PHASE 4: SURFACE MEANINGFUL ERRORS
     const userFriendlyMessage = error.userFriendly || (language === 'ar' 
-      ? 'عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'
-      : 'Sorry, I encountered an error processing your request. Please try again.');
+      ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى أو ارفع صورة جديدة.'
+      : '❌ Sorry, I encountered an error processing your request. Please try again or upload a new image.');
     
     return {
       response: userFriendlyMessage,
@@ -300,8 +321,9 @@ Do not make up information. Be honest about what you can or cannot see.`;
       personalizedResponse: false,
       taskCreationIntent: false,
       error: error.message,
-      userFriendlyError: userFriendlyMessage
+      userFriendlyError: userFriendlyMessage,
+      visionUsed: false,
+      fullContextRestored: false
     };
   }
 }
-

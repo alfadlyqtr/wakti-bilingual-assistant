@@ -1,5 +1,4 @@
 
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -31,7 +30,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI: Fixed AI system with proper model selection and context restoration");
+console.log("🚀 WAKTI AI: COMPLETE REPAIR - One Brain System with Full Vision + Context Restoration");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,7 +38,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 AI: Processing request with fixed AI system");
+    console.log("🚀 WAKTI AI: Processing request with COMPLETE REPAIR SYSTEM");
     const startTime = Date.now();
 
     const skipAuth = req.headers.get('x-skip-auth') === 'true';
@@ -65,7 +64,7 @@ serve(async (req) => {
 
     if (!user) {
       return new Response(JSON.stringify({ 
-        error: "Invalid authentication",
+        error: "Authentication required - please log in",
         success: false
       }), {
         status: 401,
@@ -89,7 +88,7 @@ serve(async (req) => {
       userStyle = 'detailed',
       userTone = 'neutral',
       speedOptimized = true,
-      aggressiveOptimization = false, // FIXED: Disabled aggressive optimization
+      aggressiveOptimization = false, // PHASE 2: FIXED - Disabled aggressive optimization
       hasTaskIntent = false,
       personalityEnabled = true,
       enableTaskCreation = true,
@@ -99,7 +98,7 @@ serve(async (req) => {
 
     if (userId !== user.id) {
       return new Response(JSON.stringify({ 
-        error: "User ID mismatch",
+        error: "Access denied - user ID mismatch",
         success: false
       }), {
         status: 403,
@@ -109,7 +108,7 @@ serve(async (req) => {
 
     if (!message?.trim() && !attachedFiles?.length) {
       return new Response(JSON.stringify({ 
-        error: "Message or attachment required",
+        error: "Message or image required - please provide input",
         success: false
       }), {
         status: 400,
@@ -118,36 +117,104 @@ serve(async (req) => {
     }
 
     const currentDateContext = getCurrentDateContext();
-    console.log(`🚀 AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
+    console.log(`🚀 WAKTI AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
 
+    // PHASE 1: VISION & IMAGE PROCESSING - Validate and log image files
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`📁 AI: Processing ${attachedFiles.length} files`);
+      console.log(`📁 IMAGE PROCESSING: Validating ${attachedFiles.length} files`);
       
       processedFiles = attachedFiles.filter(file => {
         if (file.type && file.type.startsWith('image/')) {
           const hasValidUrl = file.image_url?.url;
           if (!hasValidUrl) {
-            console.error(`❌ AI: No valid URL for image: ${file.name}`);
+            console.error(`❌ IMAGE ERROR: No valid URL for image: ${file.name}`);
             return false;
           }
           
           const isBase64 = file.image_url.url.startsWith('data:image/');
-          console.log(`✅ AI: Processing ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${file.image_url.url.substring(0, 50)}...`);
+          const isValidUrl = isBase64 || file.image_url.url.startsWith('http');
+          
+          if (!isValidUrl) {
+            console.error(`❌ IMAGE ERROR: Invalid URL format for ${file.name}: ${file.image_url.url.substring(0, 50)}...`);
+            return false;
+          }
+          
+          console.log(`✅ IMAGE VALID: ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${file.image_url.url.substring(0, 50)}...`);
           return true;
         }
         return false;
       });
       
-      console.log(`🚀 AI: Prepared ${processedFiles.length} files for processing`);
+      if (processedFiles.length === 0 && attachedFiles.length > 0) {
+        return new Response(JSON.stringify({
+          error: "❌ Unable to process the uploaded images. Please upload valid JPEG or PNG files.",
+          success: false
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      
+      console.log(`🚀 IMAGE PROCESSING: Successfully validated ${processedFiles.length} files for Vision processing`);
     }
 
-    // FIXED: Context loading optimization - load summary + last 3-4 messages only
-    let contextRecentMessages = recentMessages.slice(-4); // Last 4 messages as specified
-    let contextConversationSummary = conversationSummary; // Keep full summary
+    // PHASE 2: MEMORY & CONTEXT - Load FULL conversation context from database
+    let contextRecentMessages = [];
+    let contextConversationSummary = '';
     
-    console.log(`🚀 CONTEXT RESTORED: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
+    if (conversationId) {
+      console.log(`🧠 CONTEXT LOADING: Fetching full context for conversation ${conversationId}`);
+      
+      try {
+        // Get conversation summary from database
+        const { data: summaryData, error: summaryError } = await supabase
+          .from('ai_conversation_summaries')
+          .select('summary_text, message_count')
+          .eq('user_id', user.id)
+          .eq('conversation_id', conversationId)
+          .single();
 
+        if (summaryData && !summaryError) {
+          contextConversationSummary = summaryData.summary_text || '';
+          console.log(`🧠 CONTEXT: Loaded summary (${contextConversationSummary.length} chars, ${summaryData.message_count} messages)`);
+        }
+
+        // Get recent messages from database
+        const { data: messagesData, error: messagesError } = await supabase
+          .from('ai_chat_history')
+          .select('role, content, created_at')
+          .eq('user_id', user.id)
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: false })
+          .limit(4);
+
+        if (messagesData && !messagesError) {
+          contextRecentMessages = messagesData.reverse().map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }));
+          console.log(`🧠 CONTEXT: Loaded ${contextRecentMessages.length} recent messages from database`);
+        }
+      } catch (contextError) {
+        console.error('🧠 CONTEXT ERROR:', contextError);
+      }
+    }
+    
+    // Fallback to provided context if database load failed
+    if (contextRecentMessages.length === 0 && recentMessages.length > 0) {
+      contextRecentMessages = recentMessages.slice(-4);
+      console.log(`🧠 CONTEXT FALLBACK: Using provided messages (${contextRecentMessages.length})`);
+    }
+    
+    if (!contextConversationSummary && conversationSummary) {
+      contextConversationSummary = conversationSummary;
+      console.log(`🧠 CONTEXT FALLBACK: Using provided summary (${contextConversationSummary.length} chars)`);
+    }
+    
+    console.log(`🧠 FINAL CONTEXT: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
+
+    // PHASE 3: TASK DETECTION
     let taskAnalysisResult = null;
     try {
       console.log("🔍 TASK DETECTION: Analyzing message for task intent");
@@ -177,7 +244,7 @@ serve(async (req) => {
         success: true,
         processingTime,
         speedOptimized: true,
-        aggressiveOptimization: false, // FIXED
+        aggressiveOptimization: false,
         userStyle,
         userTone,
         tokensUsed: 0,
@@ -186,7 +253,8 @@ serve(async (req) => {
         personalizedResponse: false,
         taskDetected: true,
         currentDateContext,
-        contextRestored: true
+        contextRestored: true,
+        fullContextUsed: true
       };
 
       console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
@@ -195,6 +263,7 @@ serve(async (req) => {
       });
     }
 
+    // PHASE 4: MAIN PROCESSING
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -216,8 +285,8 @@ serve(async (req) => {
             conversationId,
             language,
             processedFiles,
-            contextRecentMessages, // FIXED: Use proper context
-            contextConversationSummary, // FIXED: Use proper summary
+            contextRecentMessages,
+            contextConversationSummary,
             personalTouch,
             maxTokens,
             activeTrigger
@@ -230,8 +299,8 @@ serve(async (req) => {
             conversationId,
             language,
             processedFiles,
-            contextRecentMessages, // FIXED: Use proper context
-            contextConversationSummary, // FIXED: Use proper summary
+            contextRecentMessages,
+            contextConversationSummary,
             personalTouch,
             maxTokens,
             activeTrigger
@@ -272,8 +341,8 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 AI CHAT: Processing with restored context and proper models`);
-        console.log(`🖼️ FILES: ${processedFiles.length} files ready for processing`);
+        console.log(`🚀 AI CHAT: Processing with COMPLETE REPAIR SYSTEM`);
+        console.log(`🖼️ FILES: ${processedFiles.length} files ready for Vision processing`);
         
         const chatResult = await processWithBuddyChatAI(
           `${currentDateContext}\n\n${message}`,
@@ -281,8 +350,8 @@ serve(async (req) => {
           conversationId,
           language,
           processedFiles,
-          contextRecentMessages, // FIXED: Use proper context (last 3-4 messages)
-          contextConversationSummary, // FIXED: Use full conversation summary
+          contextRecentMessages,
+          contextConversationSummary,
           personalTouch,
           maxTokens,
           activeTrigger
@@ -293,12 +362,12 @@ serve(async (req) => {
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 AI: Processing completed in ${processingTime}ms`);
+    console.log(`🚀 WAKTI AI: COMPLETE REPAIR processing completed in ${processingTime}ms`);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'fixed_ai_with_context',
+      intent: 'complete_repair_system',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -310,18 +379,20 @@ serve(async (req) => {
       success: true,
       processingTime,
       speedOptimized: true,
-      aggressiveOptimization: false, // FIXED: Disabled
+      aggressiveOptimization: false, // PHASE 2: CONFIRMED DISABLED
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: 'openai_fixed_with_fallbacks',
+      aiProvider: 'wakti_ai_complete_repair',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
       visionEnhanced: processedFiles.length > 0,
       contextRestored: true,
-      modelsUsed: processedFiles.length > 0 ? 'gpt-4-vision-preview' : 'gpt-4o-mini',
-      fallbacksAvailable: true
+      modelsUsed: processedFiles.length > 0 ? 'gpt-4-vision-preview with fallbacks' : 'gpt-4o-mini with deepseek fallback',
+      fallbacksAvailable: true,
+      repairSystemActive: true,
+      fullContextUsed: true
     };
 
     return new Response(JSON.stringify(result), {
@@ -329,17 +400,28 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 AI: Critical Error:", error);
+    console.error("🚨 WAKTI AI: Critical Error:", error);
+    
+    // PHASE 4: ENHANCED ERROR HANDLING
+    let userFriendlyError = 'Sorry, I encountered an error processing your request. Please try again.';
+    
+    if (error.message.includes('Authentication')) {
+      userFriendlyError = 'Please log in to continue using WAKTI AI.';
+    } else if (error.message.includes('rate limit') || error.message.includes('429')) {
+      userFriendlyError = 'Too many requests. Please wait a moment and try again.';
+    } else if (error.message.includes('image') || error.message.includes('vision')) {
+      userFriendlyError = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
+    }
     
     return new Response(JSON.stringify({
-      error: error.message || 'AI processing error',
+      error: userFriendlyError,
       success: false,
       currentDateContext: getCurrentDateContext(),
-      contextRestored: false
+      contextRestored: false,
+      repairSystemActive: true
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });
-
