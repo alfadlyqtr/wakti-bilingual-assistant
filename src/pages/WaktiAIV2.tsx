@@ -3,7 +3,6 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { UltraFastWaktiAIService } from '@/services/UltraFastWaktiAIService';
 import { UltraFastMemoryCache } from '@/services/UltraFastMemoryCache';
-import { StreamingResponseManager } from '@/services/StreamingResponseManager';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -56,10 +55,6 @@ const WaktiAIV2 = () => {
   const [isUploading, setIsUploading] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isClearingChat, setIsClearingChat] = useState(false);
-
-  // Enhanced streaming states
-  const [streamingMessage, setStreamingMessage] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,14 +121,14 @@ const WaktiAIV2 = () => {
     setShowTaskConfirmation(true);
   };
 
-  // ENHANCED: Message sending with Claude 4 streaming support
+  // SIMPLE MESSAGE SENDING WITH CLAUDE 3.5
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
       return;
     }
 
-    console.log('🚀 SEND MESSAGE: Starting with enhanced Claude 4 integration');
+    console.log('🚀 SEND MESSAGE: Starting with Claude 3.5 (No Streaming)');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
@@ -144,8 +139,6 @@ const WaktiAIV2 = () => {
 
     setIsLoading(true);
     setError(null);
-    setStreamingMessage('');
-    setIsStreaming(true);
     const startTime = Date.now();
 
     try {
@@ -156,34 +149,22 @@ const WaktiAIV2 = () => {
         content: messageContent,
         timestamp: new Date(),
         inputType: inputType,
-        attachedFiles: attachedFiles // Pass the files to display in UI
+        attachedFiles: attachedFiles
       };
       
       setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
       
-      // Start streaming placeholder
+      // Start loading placeholder
       const tempAssistantMessage: AIMessage = {
         id: `assistant-temp-${Date.now()}`,
         role: 'assistant',
-        content: '',
+        content: language === 'ar' ? 'يكتب...' : 'Typing...',
         timestamp: new Date()
       };
       
       setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
       
-      // Enhanced streaming handler with real-time updates
-      const handleStreamUpdate = (chunk: string, isComplete: boolean) => {
-        console.log('🌊 STREAM UPDATE:', { chunk: chunk.substring(0, 50) + '...', isComplete });
-        setStreamingMessage(prev => prev + chunk);
-        
-        if (isComplete) {
-          console.log('✅ STREAM COMPLETED');
-          setIsStreaming(false);
-          setStreamingMessage('');
-        }
-      };
-      
-      console.log('📡 CALLING: UltraFastWaktiAIService with streaming enabled');
+      console.log('📡 CALLING: UltraFastWaktiAIService');
       
       const aiResponse = await UltraFastWaktiAIService.sendMessageUltraFast(
         messageContent,
@@ -192,16 +173,16 @@ const WaktiAIV2 = () => {
         currentConversationId,
         inputType,
         activeTrigger,
-        attachedFiles, // Pass files to AI service
-        handleStreamUpdate, // Enable streaming
-        handleTaskDetected // Pass task detection callback
+        attachedFiles,
+        undefined, // No streaming callback
+        handleTaskDetected
       );
       
       console.log('📨 AI RESPONSE:', {
         success: aiResponse.success,
         responseTime: aiResponse.responseTime + 'ms',
         hasContent: !!aiResponse.assistantMessage?.content,
-        claude4Enabled: aiResponse.claude4Enabled
+        claude35Enabled: !aiResponse.claude4Enabled
       });
 
       if (!aiResponse.success) {
@@ -230,10 +211,8 @@ const WaktiAIV2 = () => {
         fileInputRef.current.value = '';
       }
 
-      // Show success message if Claude 4 is working
-      if (aiResponse.claude4Enabled) {
-        console.log('🎉 CLAUDE 4: Successfully powered by Claude 4 Sonnet');
-      }
+      // Show success message for Claude 3.5
+      console.log('🎉 CLAUDE 3.5: Successfully powered by Claude 3.5 Sonnet');
 
     } catch (err: any) {
       const totalTime = Date.now() - startTime;
@@ -251,8 +230,6 @@ const WaktiAIV2 = () => {
       );
     } finally {
       setIsLoading(false);
-      setIsStreaming(false);
-      setStreamingMessage('');
     }
   };
 
@@ -276,7 +253,6 @@ const WaktiAIV2 = () => {
     setSessionMessages([]);
     setCurrentConversationId(null);
     setIsNewConversation(true);
-    setStreamingMessage('');
     
     // Clear ultra-fast caches
     if (userProfile?.id && currentConversationId) {
@@ -511,25 +487,6 @@ const WaktiAIV2 = () => {
             conversationId={currentConversationId}
             isNewConversation={isNewConversation}
           />
-          
-          {/* Enhanced streaming message display */}
-          {(streamingMessage || isStreaming) && (
-            <div className="px-4 py-2">
-              <div className="flex justify-start">
-                <div className="max-w-md bg-muted rounded-lg p-3">
-                  <div className="text-sm">{streamingMessage}</div>
-                  <div className="flex items-center gap-1 mt-1">
-                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse"></div>
-                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse delay-100"></div>
-                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse delay-200"></div>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {language === 'ar' ? 'Claude 4 يكتب...' : 'Claude 4 typing...'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* CRITICAL FIX: Adjusted input positioning for mobile nav clearance */}

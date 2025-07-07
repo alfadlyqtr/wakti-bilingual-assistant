@@ -10,46 +10,135 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Get API keys
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI CLAUDE 4: Edge Function Starting - Mode-Based Architecture");
+console.log("🚀 WAKTI AI V2: Simple Claude 3.5 Implementation");
 
-// Mode-based processing functions
+serve(async (req) => {
+  console.log("📨 REQUEST RECEIVED:", req.method);
+
+  try {
+    const requestBody = await req.json();
+    
+    const {
+      message,
+      userId,
+      language = 'en',
+      conversationId = null,
+      inputType = 'text',
+      activeTrigger = 'chat',
+      attachedFiles = [],
+      maxTokens = 4096
+    } = requestBody;
+
+    // Validate required parameters
+    if (!message?.trim()) {
+      return new Response(JSON.stringify({
+        error: "Message is required",
+        success: false
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (!userId) {
+      return new Response(JSON.stringify({
+        error: "User ID is required",
+        success: false
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    console.log(`🎯 MODE: ${activeTrigger.toUpperCase()}`);
+    console.log(`📝 MESSAGE: ${message.substring(0, 100)}...`);
+
+    let result;
+    const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // MODE-BASED PROCESSING
+    switch (activeTrigger) {
+      case 'search':
+        result = await processSearchMode(message, language);
+        break;
+        
+      case 'image':
+        result = await processImageMode(message, userId, language);
+        break;
+        
+      default: // chat mode
+        result = await processChatMode(message, userId, conversationId, language, attachedFiles, maxTokens);
+    }
+
+    // Prepare final response
+    const finalResponse = {
+      response: result.response || 'Response received',
+      conversationId: finalConversationId,
+      intent: activeTrigger,
+      confidence: 'high',
+      actionTaken: null,
+      imageUrl: result.imageUrl || null,
+      browsingUsed: activeTrigger === 'search',
+      browsingData: null,
+      needsConfirmation: false,
+      pendingTaskData: null,
+      pendingReminderData: null,
+      success: result.success !== false,
+      processingTime: Date.now(),
+      aiProvider: 'claude-3-5-sonnet-20241022',
+      claude4Enabled: false,
+      mode: activeTrigger,
+      fallbackUsed: false
+    };
+
+    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: Request completed successfully!`);
+
+    return new Response(JSON.stringify(finalResponse), {
+      headers: { "Content-Type": "application/json" }
+    });
+
+  } catch (error) {
+    console.error("🚨 Critical error:", error);
+
+    const errorResponse = {
+      error: "Internal server error",
+      response: language === 'ar' 
+        ? 'عذراً، حدث خطأ. حاول مرة أخرى.'
+        : 'Sorry, an error occurred. Please try again.',
+      success: false,
+      timestamp: new Date().toISOString(),
+      details: error.message
+    };
+
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+});
+
+// SIMPLE CHAT MODE
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number) {
-  console.log("💬 CHAT MODE: Processing message");
+  console.log("💬 CHAT MODE: Processing with Claude 3.5");
   
-  // Check for explicit task creation keywords ONLY
-  const taskKeywords = {
-    en: ['create task', 'make task', 'add task', 'new task', 'create reminder', 'make reminder', 'add reminder'],
-    ar: ['أنشئ مهمة', 'اضف مهمة', 'مهمة جديدة', 'أنشئ تذكير', 'اضف تذكير']
-  };
-  
-  const isTaskCreation = taskKeywords[language as 'en' | 'ar']?.some(keyword => 
-    message.toLowerCase().includes(keyword.toLowerCase())
-  ) || taskKeywords.en.some(keyword => 
-    message.toLowerCase().includes(keyword.toLowerCase())
-  );
-  
-  if (isTaskCreation) {
-    console.log("📝 TASK CREATION: Detected explicit task keywords");
+  if (!ANTHROPIC_API_KEY) {
     return {
       response: language === 'ar' 
-        ? '✅ تم اكتشاف طلب إنشاء مهمة. هل تريد المتابعة؟'
-        : '✅ Task creation detected. Would you like to proceed?',
-      intent: 'task_creation',
-      needsConfirmation: true,
-      taskCreationIntent: true
+        ? '❌ خدمة الذكي الاصطناعي غير متاحة'
+        : '❌ AI service not available',
+      error: 'Claude API not configured',
+      success: false
     };
   }
-  
-  // Load context ONLY if conversationId exists
+
+  // Load context only if conversation exists
   let contextMessages = [];
   let conversationSummary = '';
   
   if (conversationId) {
-    console.log("🧠 CONTEXT: Loading for existing conversation");
     try {
       // Load recent messages
       const { data: recentMessages } = await supabase
@@ -57,35 +146,21 @@ async function processChatMode(message: string, userId: string, conversationId: 
         .select('role, content, created_at')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: false })
-        .limit(6);
+        .limit(4);
       
       if (recentMessages && recentMessages.length > 0) {
         contextMessages = recentMessages.reverse();
         console.log(`📚 CONTEXT: Loaded ${contextMessages.length} recent messages`);
       }
-      
-      // Load conversation summary
-      const { data: summaryData } = await supabase
-        .from('ai_conversation_summaries')
-        .select('summary_text')
-        .eq('conversation_id', conversationId)
-        .maybeSingle();
-      
-      if (summaryData) {
-        conversationSummary = summaryData.summary_text;
-        console.log("📋 CONTEXT: Loaded conversation summary");
-      }
     } catch (error) {
       console.warn("⚠️ CONTEXT: Failed to load context, continuing without it");
     }
-  } else {
-    console.log("🆕 NEW CONVERSATION: Skipping context loading");
   }
   
-  // Call Claude 4 API
   return await callClaudeAPI(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens);
 }
 
+// SIMPLE SEARCH MODE
 async function processSearchMode(message: string, language: string) {
   console.log("🔍 SEARCH MODE: Processing search request");
   
@@ -94,7 +169,8 @@ async function processSearchMode(message: string, language: string) {
       response: language === 'ar' 
         ? '❌ خدمة البحث غير متاحة حالياً'
         : '❌ Search service not available',
-      error: 'Search service not configured'
+      error: 'Search service not configured',
+      success: false
     };
   }
   
@@ -107,7 +183,7 @@ async function processSearchMode(message: string, language: string) {
         query: message,
         search_depth: "basic",
         include_answer: true,
-        max_results: 5
+        max_results: 3
       })
     });
     
@@ -115,19 +191,7 @@ async function processSearchMode(message: string, language: string) {
       throw new Error(`Search API error: ${searchResponse.status}`);
     }
     
-    const responseText = await searchResponse.text();
-    if (!responseText?.trim()) {
-      throw new Error('Empty search response');
-    }
-    
-    let searchData;
-    try {
-      searchData = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error('❌ SEARCH JSON parsing error:', jsonError);
-      throw new Error('Invalid search response format');
-    }
-    
+    const searchData = await searchResponse.json();
     const searchResults = searchData.results || [];
     const searchAnswer = searchData.answer || '';
     
@@ -144,11 +208,13 @@ async function processSearchMode(message: string, language: string) {
       response: language === 'ar' 
         ? '❌ حدث خطأ أثناء البحث. حاول مرة أخرى.'
         : '❌ Search failed. Please try again.',
-      error: error.message
+      error: error.message,
+      success: false
     };
   }
 }
 
+// SIMPLE IMAGE MODE
 async function processImageMode(message: string, userId: string, language: string) {
   console.log("🎨 IMAGE MODE: Processing image generation");
   
@@ -157,7 +223,8 @@ async function processImageMode(message: string, userId: string, language: strin
       response: language === 'ar' 
         ? '❌ خدمة إنشاء الصور غير متاحة'
         : '❌ Image generation service not available',
-      error: 'Image generation not configured'
+      error: 'Image generation not configured',
+      success: false
     };
   }
   
@@ -189,19 +256,7 @@ async function processImageMode(message: string, userId: string, language: strin
       throw new Error(`Image API error: ${imageResponse.status}`);
     }
     
-    const responseText = await imageResponse.text();
-    if (!responseText?.trim()) {
-      throw new Error('Empty image response');
-    }
-    
-    let imageData;
-    try {
-      imageData = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error('❌ IMAGE JSON parsing error:', jsonError);
-      throw new Error('Invalid image response format');
-    }
-    
+    const imageData = await imageResponse.json();
     const imageResult = imageData.data?.find((item: any) => item.taskType === 'imageInference');
     
     if (imageResult?.imageURL) {
@@ -222,17 +277,15 @@ async function processImageMode(message: string, userId: string, language: strin
       response: language === 'ar' 
         ? '❌ فشل في إنشاء الصورة. حاول مرة أخرى.'
         : '❌ Image generation failed. Please try again.',
-      error: error.message
+      error: error.message,
+      success: false
     };
   }
 }
 
+// SIMPLE CLAUDE 3.5 API CALL
 async function callClaudeAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number) {
-  console.log("🤖 CLAUDE 4: Making API call");
-  
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('Claude API not configured');
-  }
+  console.log("🤖 CLAUDE 3.5: Making API call");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -242,8 +295,8 @@ async function callClaudeAPI(message: string, contextMessages: any[], conversati
   });
   
   const systemPrompt = language === 'ar'
-    ? `أنت WAKTI AI، مساعد ذكي متقدم مدعوم بـ Claude 4. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. اجب بالعربية.`
-    : `You are WAKTI AI, an advanced AI assistant powered by Claude 4. You are helpful, collaborative, and smart. Today's date: ${currentDate}. Respond in English.`;
+    ? `أنت WAKTI AI، مساعد ذكي متقدم. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. اجب بالعربية.`
+    : `You are WAKTI AI, an advanced AI assistant. You are helpful, collaborative, and smart. Today's date: ${currentDate}. Respond in English.`;
   
   // Build messages array
   const messages = [];
@@ -306,23 +359,10 @@ async function callClaudeAPI(message: string, contextMessages: any[], conversati
     });
     
     if (!claudeResponse.ok) {
-      const errorText = await claudeResponse.text();
-      throw new Error(`Claude API error (${claudeResponse.status}): ${errorText}`);
+      throw new Error(`Claude API error: ${claudeResponse.status}`);
     }
     
-    const responseText = await claudeResponse.text();
-    if (!responseText?.trim()) {
-      throw new Error('Empty Claude response');
-    }
-    
-    let claudeData;
-    try {
-      claudeData = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error('❌ CLAUDE JSON parsing error:', jsonError);
-      throw new Error('Invalid Claude response format');
-    }
-    
+    const claudeData = await claudeResponse.json();
     const aiResponse = claudeData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
     
     return {
@@ -334,52 +374,6 @@ async function callClaudeAPI(message: string, contextMessages: any[], conversati
   } catch (error) {
     console.error('❌ CLAUDE ERROR:', error);
     
-    // Fallback to DeepSeek if available
-    if (DEEPSEEK_API_KEY) {
-      console.log("🔄 FALLBACK: Trying DeepSeek");
-      try {
-        const fallbackResponse = await fetch('https://api.deepseek.com/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: message }
-            ],
-            max_tokens: maxTokens,
-            temperature: 0.7
-          }),
-        });
-        
-        if (fallbackResponse.ok) {
-          const responseText = await fallbackResponse.text();
-          if (responseText?.trim()) {
-            try {
-              const deepSeekData = JSON.parse(responseText);
-              const fallbackText = deepSeekData.choices?.[0]?.message?.content;
-              if (fallbackText) {
-                return {
-                  response: fallbackText,
-                  model: 'deepseek-chat',
-                  success: true,
-                  fallbackUsed: true
-                };
-              }
-            } catch (jsonError) {
-              console.error('❌ DEEPSEEK JSON parsing error:', jsonError);
-            }
-          }
-        }
-      } catch (fallbackError) {
-        console.error('❌ DEEPSEEK FALLBACK ERROR:', fallbackError);
-      }
-    }
-    
-    // Return user-friendly error
     return {
       response: language === 'ar' 
         ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'
@@ -389,129 +383,3 @@ async function callClaudeAPI(message: string, contextMessages: any[], conversati
     };
   }
 }
-
-serve(async (req) => {
-  console.log("📨 REQUEST RECEIVED:", req.method);
-
-  try {
-    // Parse request body with proper error handling
-    let requestBody;
-    try {
-      const rawBody = await req.text();
-      if (!rawBody?.trim()) {
-        throw new Error('Empty request body');
-      }
-      requestBody = JSON.parse(rawBody);
-    } catch (parseError) {
-      console.error("❌ JSON parsing error:", parseError);
-      return new Response(JSON.stringify({
-        error: "Invalid JSON in request body",
-        success: false
-      }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    const {
-      message,
-      userId,
-      language = 'en',
-      conversationId = null,
-      inputType = 'text',
-      activeTrigger = 'chat',
-      attachedFiles = [],
-      maxTokens = 4096
-    } = requestBody;
-
-    // Validate required parameters
-    if (!message?.trim()) {
-      return new Response(JSON.stringify({
-        error: "Message is required",
-        success: false
-      }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    if (!userId) {
-      return new Response(JSON.stringify({
-        error: "User ID is required",
-        success: false
-      }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    console.log(`🎯 MODE: ${activeTrigger.toUpperCase()}`);
-    console.log(`📝 MESSAGE: ${message.substring(0, 100)}...`);
-
-    // MODE-BASED PROCESSING - COMPLETELY SEPARATE PATHS
-    let result;
-    
-    switch (activeTrigger) {
-      case 'chat':
-        result = await processChatMode(message, userId, conversationId, language, attachedFiles, maxTokens);
-        break;
-        
-      case 'search':
-        result = await processSearchMode(message, language);
-        break;
-        
-      case 'image':
-        result = await processImageMode(message, userId, language);
-        break;
-        
-      default:
-        console.warn(`⚠️ UNKNOWN MODE: ${activeTrigger}, defaulting to chat`);
-        result = await processChatMode(message, userId, conversationId, language, attachedFiles, maxTokens);
-    }
-
-    // Generate conversation ID if needed
-    const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    // Prepare final response
-    const finalResponse = {
-      response: result.response,
-      conversationId: finalConversationId,
-      intent: result.intent || activeTrigger,
-      confidence: 'high',
-      actionTaken: result.actionTaken || null,
-      imageUrl: result.imageUrl || null,
-      browsingUsed: activeTrigger === 'search',
-      browsingData: null,
-      needsConfirmation: result.needsConfirmation || false,
-      pendingTaskData: result.taskCreationIntent ? { title: message } : null,
-      pendingReminderData: null,
-      success: result.success !== false,
-      processingTime: Date.now(),
-      aiProvider: result.model || 'claude-3-5-sonnet-20241022',
-      claude4Enabled: true,
-      mode: activeTrigger,
-      fallbackUsed: result.fallbackUsed || false
-    };
-
-    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: Request completed successfully!`);
-
-    return new Response(JSON.stringify(finalResponse), {
-      headers: { "Content-Type": "application/json" }
-    });
-
-  } catch (error) {
-    console.error("🚨 Critical error:", error);
-
-    const errorResponse = {
-      error: "Internal server error",
-      success: false,
-      timestamp: new Date().toISOString(),
-      details: error.message
-    };
-
-    return new Response(JSON.stringify(errorResponse), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
-  }
-});
