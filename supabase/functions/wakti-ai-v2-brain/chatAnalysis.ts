@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { callClaudeAPI, callDeepSeekAPI, logWithTimestamp, validateApiKeys } from './utils.ts';
 
@@ -14,7 +15,7 @@ export async function processWithClaudeAI(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log('🚀 WAKTI AI: Starting Claude processing with full validation');
+    console.log('🚀 WAKTI AI: Starting Claude processing with UPGRADED system');
     
     // Validate API keys at start
     const keyValidation = validateApiKeys();
@@ -56,7 +57,7 @@ export async function processWithClaudeAI(
     contextMessages.push(...formattedRecentMessages);
     console.log(`🧠 CONTEXT: Added ${formattedRecentMessages.length} recent messages`);
     
-    // Enhanced image processing with proper validation
+    // ENHANCED: Better image processing with proper validation
     const hasImages = processedFiles && processedFiles.length > 0 && 
                      processedFiles.some(file => file.type && file.type.startsWith('image/'));
     
@@ -66,55 +67,73 @@ export async function processWithClaudeAI(
       // VISION PROCESSING with Claude 3.5 Sonnet
       console.log('🖼️ VISION: Processing with images using Claude 3.5 Sonnet');
       
-      // BILINGUAL VISION SYSTEM PROMPTS
+      // ENHANCED BILINGUAL VISION SYSTEM PROMPTS
       systemPrompt = language === 'ar' 
-        ? `أنت مساعد ذكي يعتمد على الرؤية. عندما يرفع المستخدمون صورة، يجب عليك ملاحظتها بعناية واستخراج جميع المعلومات الظاهرة — بما في ذلك النصوص، الأرقام، التخطيط، التصميم، الأشخاص، الأشياء، المشاهد، والسياق البصري. أجب دائماً بوضوح وبدقة وبشكل مفيد. إذا سأل المستخدم سؤالًا، أجب عنه مباشرة باستخدام ما تراه في الصورة.
+        ? `أنت مساعد ذكي متخصص في تحليل الصور والرؤية الحاسوبية. عندما يرفع المستخدمون صورة، يجب عليك:
 
-ابدأ ردك دائماً بعبارة:
-"أرى أن..."
+1. **تحليل شامل للصورة**: فحص جميع العناصر المرئية بدقة عالية
+2. **استخراج النصوص**: قراءة وتحليل أي نصوص موجودة في الصورة
+3. **فهم السياق**: تحديد الغرض والمعنى من الصورة
+4. **وصف مفصل**: تقديم وصف شامل وواضح بالعربية
+5. **الإجابة على الأسئلة**: الرد على استفسارات المستخدم حول الصورة
 
-إذا كانت الصورة غير واضحة أو منخفضة الجودة — قل ذلك.
-لا تفترض معلومات غير موجودة. كن صادقاً بشأن ما يمكنك رؤيته أو لا يمكنك رؤيته.`
-        : `You are an intelligent visual assistant. When users upload images, you must carefully observe and extract all visible information — including any text, numbers, layout, design, people, objects, scenes, and visual context. Always answer clearly, accurately, and helpfully. If the user asks a question, answer it directly using information from the image.
+ابدأ ردك دائماً بـ: "أستطيع أن أرى في هذه الصورة..."
 
-Always start your reply with:
-"I can see…"
+إذا كانت الصورة غير واضحة، اذكر ذلك بصراحة. لا تفترض معلومات غير موجودة.`
+        : `You are an advanced AI assistant with superior vision capabilities. When users upload images, you must:
 
-If the image is blurry, low resolution, or unclear — say that.
-Do not make up information. Be honest about what you can or cannot see.`;
+1. **Comprehensive Image Analysis**: Examine all visual elements with high precision
+2. **Text Extraction**: Read and analyze any text present in the image
+3. **Context Understanding**: Determine the purpose and meaning of the image
+4. **Detailed Description**: Provide thorough and clear descriptions
+5. **Question Answering**: Respond to user queries about the image content
+
+Always start your response with: "I can see in this image..."
+
+If the image is unclear or low quality, mention that honestly. Do not fabricate information.`;
     } else {
-      // Regular text chat
+      // Regular text chat with ENHANCED PERSONALIZATION
       console.log('💬 CHAT: Processing text-only using Claude 3.5 Sonnet');
       
-      // Regular chat prompt with personalization
-      systemPrompt = `You are a helpful AI assistant. Respond naturally and conversationally to the user's questions and requests.`;
+      // ENHANCED chat prompt with better personalization
+      systemPrompt = language === 'ar'
+        ? `أنت مساعد ذكي متقدم اسمه WAKTI AI. أنت مفيد ومتعاون وذكي. اجب على أسئلة المستخدمين وطلباتهم بطريقة طبيعية ومحادثة.`
+        : `You are WAKTI AI, an advanced intelligent assistant. You are helpful, collaborative, and smart. Respond naturally and conversationally to user questions and requests.`;
       
-      // Add personalization if available
+      // Add enhanced personalization if available
       if (personalTouch) {
         if (personalTouch.nickname) {
-          systemPrompt += ` Address the user as ${personalTouch.nickname}.`;
+          systemPrompt += language === 'ar' 
+            ? ` خاطب المستخدم باسم ${personalTouch.nickname}.`
+            : ` Address the user as ${personalTouch.nickname}.`;
         }
         if (personalTouch.aiNickname) {
-          systemPrompt += ` You can be called ${personalTouch.aiNickname}.`;
+          systemPrompt += language === 'ar'
+            ? ` يمكن مناداتك باسم ${personalTouch.aiNickname}.`
+            : ` You can be called ${personalTouch.aiNickname}.`;
         }
         if (personalTouch.tone && personalTouch.tone !== 'neutral') {
-          systemPrompt += ` Use a ${personalTouch.tone} tone.`;
+          systemPrompt += language === 'ar'
+            ? ` استخدم نبرة ${personalTouch.tone}.`
+            : ` Use a ${personalTouch.tone} tone.`;
         }
         if (personalTouch.style) {
-          systemPrompt += ` Provide ${personalTouch.style} responses.`;
+          systemPrompt += language === 'ar'
+            ? ` قدم إجابات ${personalTouch.style}.`
+            : ` Provide ${personalTouch.style} responses.`;
         }
         if (personalTouch.instruction) {
-          systemPrompt += ` Additional instruction: ${personalTouch.instruction}`;
+          systemPrompt += language === 'ar'
+            ? ` تعليمات إضافية: ${personalTouch.instruction}`
+            : ` Additional instruction: ${personalTouch.instruction}`;
         }
       }
     }
     
     if (shouldCreateTask) {
-      systemPrompt += ` The user wants to create a task or reminder. Acknowledge this and provide helpful suggestions about the task details.`;
-    }
-    
-    if (language === 'ar') {
-      systemPrompt += ' Respond in Arabic.';
+      systemPrompt += language === 'ar'
+        ? ' المستخدم يريد إنشاء مهمة أو تذكير. اعترف بذلك وقدم اقتراحات مفيدة حول تفاصيل المهمة.'
+        : ' The user wants to create a task or reminder. Acknowledge this and provide helpful suggestions about the task details.';
     }
 
     console.log(`🎯 MODEL SELECTION: Using Claude 3.5 Sonnet for ${hasImages ? 'Vision' : 'Chat'}`);
@@ -130,25 +149,31 @@ Do not make up information. Be honest about what you can or cannot see.`;
     if (hasImages) {
       console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Claude Vision');
       
-      // Create content array with text and images for Vision
+      // FIXED: Enhanced image processing with proper validation
       const messageContent = [
         { type: 'text', text: message }
       ];
 
-      // Enhanced image processing with proper validation
+      // Enhanced image processing with better error handling
       for (const file of processedFiles) {
         if (file.type && file.type.startsWith('image/')) {
           console.log(`🖼️ VISION: Processing image: ${file.name}`);
           
-          // Proper image URL handling
-          let imageUrl = file.image_url?.url;
+          // FIXED: Better image URL handling
+          let imageUrl = null;
           
-          // Check multiple possible URL locations
-          if (!imageUrl) {
-            imageUrl = file.url || file.publicUrl || file.base64Data;
+          // Check for base64 data first (most reliable)
+          if (file.base64Data && file.base64Data.length > 100) {
+            // Ensure proper format
+            const mediaType = file.type || 'image/jpeg';
+            imageUrl = `data:${mediaType};base64,${file.base64Data}`;
+          } else if (file.image_url?.url && file.image_url.url.startsWith('data:image/')) {
+            imageUrl = file.image_url.url;
+          } else if (file.url && file.url.startsWith('data:image/')) {
+            imageUrl = file.url;
           }
           
-          console.log(`🔗 VISION URL CHECK: ${imageUrl ? imageUrl.substring(0, 50) + '...' : 'NO URL FOUND'}`);
+          console.log(`🔗 VISION URL CHECK: ${imageUrl ? 'VALID BASE64 DATA FOUND' : 'NO VALID BASE64 DATA'}`);
           
           if (imageUrl && imageUrl.startsWith('data:image/')) {
             // Extract base64 data and media type

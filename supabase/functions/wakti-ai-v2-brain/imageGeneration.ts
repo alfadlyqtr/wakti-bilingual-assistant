@@ -1,219 +1,168 @@
 
-/**
- * Image generation for Wakti Edge Function
- */
-import { supabase, RUNWARE_API_KEY, DEEPSEEK_API_KEY } from "./utils.ts";
+// WAKTI AI Image Generation with Runware API
+import { RUNWARE_API_KEY, DEEPSEEK_API_KEY } from './utils.ts';
 
-// Utility: Detects if input contains Arabic characters
-function containsArabic(text: string): boolean {
-  if (!text) return false;
-  return /[\u0600-\u06FF]/.test(text);
-}
-
-// Translate Arabic text to English via DeepSeek ONLY, now with enhanced logging and error handling
-async function translateToEnglishDeepSeek(prompt: string): Promise<string> {
-  console.log("  [translateToEnglishDeepSeek] Starting translation for:", prompt);
-  if (!DEEPSEEK_API_KEY) {
-    console.error("  [translateToEnglishDeepSeek] CRITICAL: DEEPSEEK_API_KEY is not configured.");
-    throw new Error("DeepSeek API key not set for translation");
-  }
-
-  const systemPrompt = "You are a professional translator. Given the following Arabic prompt for image generation, translate it to clear English, optimized for AI image creation. Respond with only the English translation, and DO NOT include any explanations, notes, or non-English words.";
-  const body = {
-      model: "deepseek-chat",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 512
-  };
-
-  console.log("  [translateToEnglishDeepSeek] Sending request to DeepSeek API.");
-  
-  // Add timeout to DeepSeek API call
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-  
+export async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
   try {
-    const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-        "Content-Type": "application/json",
+    console.log('🎨 IMAGE GEN: Starting Runware image generation for:', prompt);
+    
+    if (!RUNWARE_API_KEY) {
+      console.error('❌ IMAGE GEN: Runware API key not configured');
+      return {
+        success: false,
+        error: language === 'ar' 
+          ? 'خدمة إنشاء الصور غير متاحة' 
+          : 'Image generation service not configured',
+        imageUrl: null
+      };
+    }
+
+    // Translate prompt if needed (Arabic to English for better generation)
+    let translatedPrompt = prompt;
+    let translation_status = 'not_needed';
+    
+    if (language === 'ar' && DEEPSEEK_API_KEY) {
+      try {
+        console.log('🌐 TRANSLATE: Translating Arabic prompt to English');
+        
+        const translateResponse = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: 'system',
+                content: 'Translate the following Arabic text to English for image generation. Return only the translation, no additional text.'
+              },
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            max_tokens: 200,
+            temperature: 0.3
+          })
+        });
+
+        if (translateResponse.ok) {
+          const translateData = await translateResponse.json();
+          translatedPrompt = translateData.choices[0].message.content.trim();
+          translation_status = 'success';
+          console.log('✅ TRANSLATE: Successfully translated prompt:', translatedPrompt);
+        } else {
+          console.warn('⚠️ TRANSLATE: Translation failed, using original prompt');
+          translation_status = 'failed';
+        }
+      } catch (translateError) {
+        console.warn('⚠️ TRANSLATE: Translation error:', translateError);
+        translation_status = 'failed';
+      }
+    }
+
+    // Generate unique task UUID
+    const taskUUID = crypto.randomUUID();
+    
+    const imageGenPayload = [
+      {
+        taskType: "authentication",
+        apiKey: RUNWARE_API_KEY
       },
-      body: JSON.stringify(body),
-      signal: controller.signal
+      {
+        taskType: "imageInference",
+        taskUUID: taskUUID,
+        positivePrompt: translatedPrompt,
+        width: 1024,
+        height: 1024,
+        model: "runware:100@1",
+        numberResults: 1,
+        outputFormat: "WEBP",
+        CFGScale: 1,
+        scheduler: "FlowMatchEulerDiscreteScheduler",
+        strength: 0.8
+      }
+    ];
+
+    console.log('🎨 IMAGE GEN: Calling Runware API with payload:', JSON.stringify(imageGenPayload, null, 2));
+
+    const response = await fetch('https://api.runware.ai/v1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(imageGenPayload)
     });
 
-    clearTimeout(timeoutId);
+    console.log('🎨 IMAGE GEN: Runware response status:', response.status);
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error(`  [translateToEnglishDeepSeek] DeepSeek API returned status ${resp.status}:`, errText);
-      throw new Error("DeepSeek translation API request failed.");
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ IMAGE GEN: Runware API error:', response.status, errorText);
+      return {
+        success: false,
+        error: language === 'ar' 
+          ? `خطأ في إنشاء الصورة: ${response.status}` 
+          : `Image generation error: ${response.status}`,
+        imageUrl: null,
+        translation_status
+      };
     }
 
-    const data = await resp.json();
-    const translation = data.choices?.[0]?.message?.content?.trim() || "";
-    console.log(`  [translateToEnglishDeepSeek] Received translation: "${translation}"`);
+    const responseData = await response.json();
+    console.log('🎨 IMAGE GEN: Runware response received:', JSON.stringify(responseData, null, 2));
 
-    if (!translation || containsArabic(translation)) {
-      console.error(`  [translateToEnglishDeepSeek] Translation result is invalid (empty or still contains Arabic).`);
-      throw new Error("Invalid translation result from DeepSeek API.");
-    }
-    
-    return translation;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      console.error("  [translateToEnglishDeepSeek] Request timed out after 30 seconds");
-      throw new Error("Translation request timed out");
-    }
-    throw error;
-  }
-}
-
-export async function generateImageWithRunware(prompt: string, userId: string, language: string = "en") {
-  try {
-    console.log("🎨 [generateImageWithRunware] Starting image generation with prompt:", prompt);
-    console.log("🎨 [generateImageWithRunware] Language:", language, "| User ID:", userId);
-    
-    let runwarePrompt = prompt;
-    let translatedPrompt: string | null = null;
-    let translation_status: 'not_needed' | 'pending' | 'success' | 'failed_no_key' | 'failed_api_error' = 'not_needed';
-
-    // Dedicated handler for Arabic prompts
-    if (containsArabic(prompt)) {
-      console.log("🗣️ [generateImageWithRunware] Arabic detected in prompt. Initiating dedicated translation handler.");
-      translation_status = 'pending';
-
-      try {
-        translatedPrompt = await translateToEnglishDeepSeek(prompt);
-        runwarePrompt = translatedPrompt;
-        translation_status = 'success';
-        console.log("🗣️ [generateImageWithRunware] Translation successful:", translatedPrompt);
-      } catch (err: any) {
-        console.error("❌ [generateImageWithRunware] Translation workflow failed:", err.message);
-        translation_status = err.message.includes("API key not set") ? 'failed_no_key' : 'failed_api_error';
-        const userErrorMessage = language === 'ar'
-            ? 'عفواً، فشلت محاولة ترجمة الوصف من العربية إلى الإنجليزية. يرجى المحاولة مرة أخرى أو استخدام وصف باللغة الإنجليزية.'
-            : 'Sorry, the prompt translation from Arabic to English failed. Please try again or use an English prompt.';
+    // Process the response
+    if (responseData.data && responseData.data.length > 0) {
+      // Find the image result
+      const imageResult = responseData.data.find((item: any) => item.taskType === 'imageInference');
+      
+      if (imageResult && imageResult.imageURL) {
+        console.log('✅ IMAGE GEN: Successfully generated image:', imageResult.imageURL);
+        
+        return {
+          success: true,
+          error: null,
+          imageUrl: imageResult.imageURL,
+          translation_status,
+          translatedPrompt: translation_status === 'success' ? translatedPrompt : null,
+          seed: imageResult.seed,
+          cost: imageResult.cost
+        };
+      } else {
+        console.error('❌ IMAGE GEN: No image URL in response');
         return {
           success: false,
-          error: userErrorMessage,
-          translation_status: translation_status,
+          error: language === 'ar' 
+            ? 'لم يتم إنشاء الصورة بنجاح' 
+            : 'Image generation failed - no image URL returned',
+          imageUrl: null,
+          translation_status
         };
       }
     } else {
-      console.log("🇺🇸 [generateImageWithRunware] English prompt detected, skipping translation");
+      console.error('❌ IMAGE GEN: Invalid response structure');
+      return {
+        success: false,
+        error: language === 'ar' 
+          ? 'استجابة غير صالحة من خدمة إنشاء الصور' 
+          : 'Invalid response from image generation service',
+        imageUrl: null,
+        translation_status
+      };
     }
 
-    console.log(`🚀 [generateImageWithRunware] Proceeding to Runware with prompt: "${runwarePrompt}"`);
-    
-    // Validate Runware API key
-    if (!RUNWARE_API_KEY) {
-      console.error("❌ [generateImageWithRunware] RUNWARE_API_KEY is not configured");
-      throw new Error("Runware API key not configured");
-    }
-
-    // Add timeout to Runware API call
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.error("⏰ [generateImageWithRunware] Runware API request timed out after 60 seconds");
-      controller.abort();
-    }, 60000); // 60 second timeout
-
-    console.log("📡 [generateImageWithRunware] Sending request to Runware API...");
-    
-    try {
-      const response = await fetch("https://api.runware.ai/v1", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([
-          {
-            taskType: "authentication",
-            apiKey: RUNWARE_API_KEY,
-          },
-          {
-            taskType: "imageInference",
-            taskUUID: crypto.randomUUID(),
-            positivePrompt: runwarePrompt,
-            model: "runware:100@1",
-            width: 512,
-            height: 512,
-            numberResults: 1,
-            outputFormat: "WEBP",
-            CFGScale: 1,
-            scheduler: "FlowMatchEulerDiscreteScheduler",
-            steps: 4,
-          },
-        ]),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      console.log("📡 [generateImageWithRunware] Runware response status:", response.status);
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log("📡 [generateImageWithRunware] Runware response data:", result);
-
-        const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
-
-        if (imageResult && imageResult.imageURL) {
-          console.log("✅ [generateImageWithRunware] Image generation successful:", imageResult.imageURL);
-          
-          try {
-            await supabase
-              .from('images')
-              .insert({
-                user_id: userId,
-                prompt: prompt,
-                image_url: imageResult.imageURL,
-                metadata: {
-                  provider: "runware",
-                  imageUUID: imageResult.imageUUID,
-                  originalPrompt: prompt,
-                  translatedPrompt: translatedPrompt
-                }
-              });
-            console.log("💾 [generateImageWithRunware] Image saved to database");
-          } catch (dbError) {
-            console.log("⚠️ [generateImageWithRunware] Could not save image to database:", dbError);
-          }
-
-          return {
-            success: true,
-            imageUrl: imageResult.imageURL,
-            originalPrompt: prompt,
-            translatedPrompt: translatedPrompt,
-            translation_status: translation_status
-          };
-        } else {
-          console.error("❌ [generateImageWithRunware] No image URL in Runware response:", result);
-          throw new Error('No image URL in Runware response');
-        }
-      } else {
-        const errorText = await response.text();
-        console.error("❌ [generateImageWithRunware] Runware API error:", response.status, errorText);
-        throw new Error(`Runware API failed: ${response.status} - ${errorText}`);
-      }
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        console.error("⏰ [generateImageWithRunware] Runware API request was aborted due to timeout");
-        throw new Error("Image generation request timed out. Please try again.");
-      }
-      throw error;
-    }
-
-  } catch (error: any) {
-    console.error('❌ [generateImageWithRunware] Error generating image with Runware:', error);
+  } catch (error) {
+    console.error('❌ IMAGE GEN: Critical error in generateImageWithRunware:', error);
     return {
       success: false,
-      error: error.message,
-      translation_status: 'not_needed'
+      error: language === 'ar' 
+        ? 'خطأ في إنشاء الصورة' 
+        : 'Image generation failed',
+      imageUrl: null,
+      translation_status: 'failed'
     };
   }
 }

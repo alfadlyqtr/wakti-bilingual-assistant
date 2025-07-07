@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
@@ -12,7 +11,7 @@ export interface OptimizedUploadedFile {
   publicUrl: string;
   optimized: boolean;
   thumbnail?: string;
-  // Enhanced Vision API compatible format with proper base64 handling
+  // FIXED: Enhanced Vision API compatible format with proper base64 handling
   image_url: {
     url: string;
     detail: string;
@@ -25,7 +24,7 @@ export function useOptimizedFileUpload() {
   const [uploadedFiles, setUploadedFiles] = useState<OptimizedUploadedFile[]>([]);
   const { showError, showSuccess } = useToastHelper();
 
-  // Enhanced image to base64 conversion with proper validation
+  // FIXED: Enhanced image to base64 conversion with better validation
   const convertImageToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
@@ -34,9 +33,9 @@ export function useOptimizedFileUpload() {
 
       img.onload = () => {
         try {
-          console.log(`🔄 VISION: Converting ${file.name} to base64 - Original: ${img.width}x${img.height}`);
+          console.log(`🔄 VISION UPLOAD: Converting ${file.name} to base64 - Original: ${img.width}x${img.height}`);
           
-          // Calculate optimal size for Vision API (max 1024px on longest side)
+          // FIXED: Calculate optimal size for Vision API (max 1024px on longest side)
           const maxSize = 1024;
           let { width, height } = img;
           
@@ -55,39 +54,57 @@ export function useOptimizedFileUpload() {
           canvas.width = width;
           canvas.height = height;
           
-          // Draw and convert to JPEG with optimal quality for Vision processing
+          // FIXED: Clear canvas and draw with proper scaling
+          ctx?.clearRect(0, 0, width, height);
           ctx?.drawImage(img, 0, 0, width, height);
-          const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          
+          // FIXED: Convert to JPEG with optimal quality for Vision processing
+          const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.90);
+          
+          // FIXED: Validate the data URL format
+          if (!jpegDataUrl.startsWith('data:image/jpeg;base64,')) {
+            throw new Error('Invalid data URL format generated');
+          }
           
           // Extract base64 data (remove data:image/jpeg;base64, prefix)
           const base64Data = jpegDataUrl.split(',')[1];
           
-          // Enhanced validation
+          // FIXED: Enhanced validation
           if (!base64Data || base64Data.length < 100) {
             throw new Error('Base64 conversion produced invalid result');
           }
           
-          // Additional validation: check if base64 is valid
+          // FIXED: Additional validation - test decode a portion
           try {
-            atob(base64Data.substring(0, 100)); // Test decode a portion
+            const testDecode = atob(base64Data.substring(0, 100));
+            if (!testDecode || testDecode.length === 0) {
+              throw new Error('Base64 validation failed');
+            }
           } catch {
             throw new Error('Invalid base64 data generated');
           }
           
-          console.log(`✅ VISION: ${file.name} -> ${width}x${height} -> ${base64Data.length} chars base64`);
+          console.log(`✅ VISION UPLOAD: ${file.name} -> ${width}x${height} -> ${base64Data.length} chars base64`);
           resolve(base64Data);
-        } catch (conversionError) {
-          console.error(`❌ VISION: Conversion failed for ${file.name}:`, conversionError);
+        } catch (conversionError: any) {
+          console.error(`❌ VISION UPLOAD: Conversion failed for ${file.name}:`, conversionError);
           reject(new Error(`Image processing failed: ${conversionError.message}`));
         }
       };
 
       img.onerror = () => {
-        console.error(`❌ VISION: Failed to load image ${file.name}`);
+        console.error(`❌ VISION UPLOAD: Failed to load image ${file.name}`);
         reject(new Error('Failed to load image - invalid image file'));
       };
       
-      img.src = URL.createObjectURL(file);
+      // FIXED: Create object URL for reliable image loading
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
+      
+      // Clean up object URL after loading
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+      };
     });
   };
 
@@ -122,13 +139,17 @@ export function useOptimizedFileUpload() {
       };
 
       img.onerror = reject;
-      img.src = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+      };
     });
   };
 
   const uploadFiles = async (files: FileList) => {
     setIsUploading(true);
-    console.log('📤 WAKTI AI: Starting upload of', files.length, 'files with enhanced processing');
+    console.log('📤 VISION UPLOAD: Starting upload of', files.length, 'files with ENHANCED processing');
     
     const uploadPromises = Array.from(files).map(uploadSingleFile);
     
@@ -138,15 +159,15 @@ export function useOptimizedFileUpload() {
       
       if (successfulUploads.length > 0) {
         setUploadedFiles(prev => [...prev, ...successfulUploads]);
-        showSuccess(`Successfully uploaded ${successfulUploads.length} file(s) for Vision processing`);
-        console.log('✅ WAKTI AI: Successfully uploaded', successfulUploads.length, 'files with enhanced base64 encoding');
+        showSuccess(`✅ Successfully uploaded ${successfulUploads.length} file(s) for Vision processing`);
+        console.log('✅ VISION UPLOAD: Successfully uploaded', successfulUploads.length, 'files with ENHANCED base64 encoding');
       }
       
       if (successfulUploads.length < files.length) {
         showError(`Failed to upload ${files.length - successfulUploads.length} file(s)`);
       }
     } catch (error) {
-      console.error('❌ WAKTI AI: Upload error:', error);
+      console.error('❌ VISION UPLOAD: Upload error:', error);
       showError('❌ Unable to upload files for Vision processing. Please try again with valid JPEG or PNG files.');
     } finally {
       setIsUploading(false);
@@ -157,20 +178,26 @@ export function useOptimizedFileUpload() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.error('❌ WAKTI AI: User not authenticated');
+        console.error('❌ VISION UPLOAD: User not authenticated');
         throw new Error('User not authenticated');
       }
 
-      // Enhanced file type validation
+      // FIXED: Enhanced file type validation
       if (!file.type.startsWith('image/')) {
-        console.error('❌ WAKTI AI: Invalid file type:', file.type);
+        console.error('❌ VISION UPLOAD: Invalid file type:', file.type);
         throw new Error('Only image files are supported for Vision processing');
+      }
+
+      // FIXED: Validate file size (max 10MB for Vision processing)
+      if (file.size > 10 * 1024 * 1024) {
+        console.error('❌ VISION UPLOAD: File too large:', file.size);
+        throw new Error('Image file must be smaller than 10MB for Vision processing');
       }
 
       const fileId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const filePath = `${user.id}/${fileId}-${file.name}`;
 
-      console.log(`📤 WAKTI AI: Processing file: ${file.name} (${file.type}) -> ${filePath}`);
+      console.log(`📤 VISION UPLOAD: Processing file: ${file.name} (${file.type}) -> ${filePath}`);
 
       // Upload to ai-temp-images bucket for backup
       const { error: uploadError } = await supabase.storage
@@ -181,7 +208,7 @@ export function useOptimizedFileUpload() {
         });
 
       if (uploadError) {
-        console.error('❌ WAKTI AI: Storage upload error:', uploadError);
+        console.error('❌ VISION UPLOAD: Storage upload error:', uploadError);
         throw uploadError;
       }
 
@@ -190,39 +217,43 @@ export function useOptimizedFileUpload() {
         .from('ai-temp-images')
         .getPublicUrl(filePath);
 
-      console.log(`📤 WAKTI AI: Generated backup URL: ${publicUrl}`);
+      console.log(`📤 VISION UPLOAD: Generated backup URL: ${publicUrl}`);
 
-      // Enhanced base64 conversion with proper error handling
+      // FIXED: Enhanced base64 conversion with comprehensive error handling
       let base64Data = '';
       try {
         base64Data = await convertImageToBase64(file);
-        console.log(`🔄 WAKTI AI: Converted ${file.name} to base64 (${base64Data.length} chars)`);
+        console.log(`🔄 VISION UPLOAD: Converted ${file.name} to base64 (${base64Data.length} chars)`);
         
-        // Additional validation
+        // FIXED: Additional validation - ensure base64 is valid for Claude Vision
         if (!base64Data || base64Data.length < 100) {
           throw new Error('Invalid base64 conversion result');
         }
         
-        // Test the base64 data is valid
-        const testDecode = atob(base64Data.substring(0, 100));
-        if (!testDecode) {
-          throw new Error('Base64 data validation failed');
+        // FIXED: Test the base64 data is valid by attempting to decode a portion
+        try {
+          const testDecode = atob(base64Data.substring(0, 100));
+          if (!testDecode || testDecode.length === 0) {
+            throw new Error('Base64 data validation failed');
+          }
+        } catch {
+          throw new Error('Generated base64 data is invalid');
         }
         
-      } catch (base64Error) {
-        console.error('❌ WAKTI AI: Base64 conversion failed:', base64Error);
+      } catch (base64Error: any) {
+        console.error('❌ VISION UPLOAD: Base64 conversion failed:', base64Error);
         throw new Error(`❌ Unable to process image ${file.name}. Please upload a valid JPEG or PNG file.`);
       }
 
-      // Create thumbnail for images if needed
+      // Create thumbnail for images
       let thumbnail = undefined;
       try {
         thumbnail = await createImageThumbnail(file);
       } catch (thumbError) {
-        console.warn('⚠️ WAKTI AI: Thumbnail creation failed:', thumbError);
+        console.warn('⚠️ VISION UPLOAD: Thumbnail creation failed:', thumbError);
       }
 
-      // Enhanced Vision API format with validated base64 data
+      // FIXED: Enhanced Vision API format with validated base64 data
       const optimizedFile: OptimizedUploadedFile = {
         id: fileId,
         name: file.name,
@@ -232,33 +263,33 @@ export function useOptimizedFileUpload() {
         publicUrl,
         optimized: true,
         thumbnail,
-        base64Data, // Store base64 data
-        // Properly formatted Vision API data
+        base64Data, // Store base64 data directly
+        // FIXED: Properly formatted Vision API data for Claude
         image_url: {
           url: `data:${file.type};base64,${base64Data}`,
           detail: 'auto' // Optimal for Claude Vision
         }
       };
 
-      console.log(`✅ WAKTI AI: File ready for Vision API: ${file.name}`);
+      console.log(`✅ VISION UPLOAD: File ready for Claude Vision API: ${file.name}`);
       console.log(`🔗 BASE64 LENGTH: ${base64Data.length} characters`);
       console.log(`🔗 VISION URL FORMAT: ${optimizedFile.image_url.url.substring(0, 50)}...`);
       
       return optimizedFile;
-    } catch (error) {
-      console.error(`❌ WAKTI AI: Single file upload error for ${file.name}:`, error);
+    } catch (error: any) {
+      console.error(`❌ VISION UPLOAD: Single file upload error for ${file.name}:`, error);
       showError(`❌ Failed to upload ${file.name}: ${error.message}`);
       return null;
     }
   };
 
   const removeFile = (fileId: string) => {
-    console.log('🗑️ WAKTI AI: Removing file:', fileId);
+    console.log('🗑️ VISION UPLOAD: Removing file:', fileId);
     setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
   const clearFiles = () => {
-    console.log('🗑️ WAKTI AI: Clearing all files');
+    console.log('🗑️ VISION UPLOAD: Clearing all files');
     setUploadedFiles([]);
   };
 

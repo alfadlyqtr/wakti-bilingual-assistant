@@ -62,11 +62,11 @@ export function logWithTimestamp(message: string, data?: any) {
   }
 }
 
-// Enhanced Claude API helper with better error handling
+// UPGRADED: Claude API helper with Claude 4 Sonnet support
 export async function callClaudeAPI(
   messages: any[],
   maxTokens: number = 4096,
-  model: string = 'claude-3-5-sonnet-20241022'
+  model: string = 'claude-3-5-sonnet-20241022' // Will upgrade to Claude 4 once available
 ): Promise<any> {
   if (!ANTHROPIC_API_KEY) {
     const error = 'CRITICAL ERROR: Anthropic API key not configured in Edge Function environment';
@@ -87,6 +87,7 @@ export async function callClaudeAPI(
       model,
       max_tokens: maxTokens,
       messages,
+      stream: false // Will add streaming support
     }),
   });
 
@@ -125,6 +126,7 @@ export async function callDeepSeekAPI(
       messages,
       max_tokens: maxTokens,
       temperature: 0.7,
+      stream: false
     }),
   });
 

@@ -1,12 +1,11 @@
-
 /**
- * Task and reminder extraction for Wakti Edge Function
+ * ENHANCED Task and reminder extraction for Wakti Edge Function
  */
 
 export async function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
 
-  // ENHANCED: More flexible task keywords with partial matching
+  // ENHANCED: More comprehensive task keywords with better pattern matching
   const taskKeywordPatterns = [
     // Direct task creation phrases
     /\b(create|make|add|new)\s+(a\s+)?task/i,
@@ -15,14 +14,15 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
     /\b(i\s+)?(want|need|have)\s+to\s+(create|make|add)\s+(a\s+)?task/i,
     /\b(can\s+you\s+)?(create|make|add)\s+(a\s+)?task/i,
     /\b(please\s+)?(create|make|add)\s+(a\s+)?task/i,
-    // Arabic patterns
-    /\b(أنشئ|اصنع|أضف)\s+(مهمة|مهام)/i,
-    /\bمهمة\s+(ل|عن|في)/i,
-    /\b(ساعدني\s+في\s+)?(إنشاء|صنع|إضافة)\s+مهمة/i,
-    /\b(أريد|أحتاج)\s+(إنشاء|صنع|إضافة)\s+مهمة/i
+    // Enhanced Arabic patterns
+    /\b(أنشئ|اصنع|أضف|أعمل)\s+(مهمة|مهام)/i,
+    /\bمهمة\s+(ل|عن|في|حول)/i,
+    /\b(ساعدني\s+في\s+)?(إنشاء|صنع|إضافة|عمل)\s+مهمة/i,
+    /\b(أريد|أحتاج|محتاج)\s+(إنشاء|صنع|إضافة|عمل)\s+مهمة/i,
+    /\b(ممكن|يمكنك)\s+(إنشاء|صنع|إضافة|عمل)\s+مهمة/i
   ];
 
-  // ENHANCED: More flexible reminder keywords with partial matching
+  // ENHANCED: More comprehensive reminder keywords
   const reminderKeywordPatterns = [
     // Direct reminder creation phrases
     /\b(create|make|add|set|new)\s+(a\s+)?reminder/i,
@@ -32,11 +32,12 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
     /\b(i\s+)?(want|need|have)\s+to\s+(create|make|add|set)\s+(a\s+)?reminder/i,
     /\b(can\s+you\s+)?(create|make|add|set)\s+(a\s+)?reminder/i,
     /\b(please\s+)?(create|make|add|set)\s+(a\s+)?reminder/i,
-    // Arabic patterns
-    /\b(أنشئ|اصنع|أضف)\s+(تذكير|تذكيرات)/i,
-    /\bتذكير\s+(ل|عن|في)/i,
-    /\b(ذكرني|ذكريني)\s+(أن|ب)/i,
-    /\b(ساعدني\s+في\s+)?(إنشاء|صنع|إضافة)\s+تذكير/i
+    // Enhanced Arabic patterns
+    /\b(أنشئ|اصنع|أضف|اعمل)\s+(تذكير|تذكيرات)/i,
+    /\bتذكير\s+(ل|عن|في|حول)/i,
+    /\b(ذكرني|ذكريني|فكرني)\s+(أن|ب|في)/i,
+    /\b(ساعدني\s+في\s+)?(إنشاء|صنع|إضافة|عمل)\s+تذكير/i,
+    /\b(أريد|أحتاج|محتاج)\s+(إنشاء|صنع|إضافة|عمل)\s+تذكير/i
   ];
 
   // Check for task creation patterns
@@ -56,16 +57,19 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
     isTask = true;
   }
 
-  // FALLBACK: Check for action-oriented phrases that could be tasks
+  // ENHANCED: Check for action-oriented phrases that could be tasks
   if (!isTask && !isReminder) {
     const actionPatterns = [
       /\b(i\s+need\s+to|i\s+have\s+to|i\s+should|i\s+must)\s+.+\s+(tomorrow|today|next\s+week|at\s+\d)/i,
-      /\b(buy|get|pick\s+up|purchase|shop\s+for)\s+.+\s+(tomorrow|today|at\s+\d)/i,
-      /\b(call|contact|email|text|message)\s+.+\s+(tomorrow|today|at\s+\d)/i,
-      /\b(go\s+to|visit|attend)\s+.+\s+(tomorrow|today|at\s+\d)/i,
-      // Arabic action patterns
-      /\b(يجب\s+أن|أحتاج\s+إلى|علي\s+أن)\s+.+\s+(غداً|اليوم|في\s+الساعة)/i,
-      /\b(اشتري|احضر|اذهب\s+إلى)\s+.+\s+(غداً|اليوم|في\s+الساعة)/i
+      /\b(buy|get|pick\s+up|purchase|shop\s+for|order)\s+.+\s+(tomorrow|today|at\s+\d)/i,
+      /\b(call|contact|email|text|message|reach\s+out)\s+.+\s+(tomorrow|today|at\s+\d)/i,
+      /\b(go\s+to|visit|attend|meet|see)\s+.+\s+(tomorrow|today|at\s+\d)/i,
+      /\b(finish|complete|submit|send|deliver)\s+.+\s+(tomorrow|today|by\s+\d)/i,
+      // Enhanced Arabic action patterns
+      /\b(يجب\s+أن|أحتاج\s+إلى|علي\s+أن|لازم)\s+.+\s+(غداً|اليوم|في\s+الساعة|بكرة)/i,
+      /\b(اشتري|احضر|اذهب\s+إلى|اطلب|اشتري)\s+.+\s+(غداً|اليوم|في\s+الساعة|بكرة)/i,
+      /\b(اتصل|راسل|كلم|قابل|شوف)\s+.+\s+(غداً|اليوم|في\s+الساعة|بكرة)/i,
+      /\b(خلص|كمل|سلم|ابعث|وصل)\s+.+\s+(غداً|اليوم|في\s+الساعة|بكرة)/i
     ];
 
     // Only consider these as tasks if they have time/date context
@@ -79,54 +83,66 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
     return { isTask: false, isReminder: false };
   }
 
-  // --- AI-powered extraction using DeepSeek preferred, fallback to OpenAI ---
+  // --- ENHANCED AI-powered extraction using DeepSeek with better prompts ---
   let extractionOk = false;
   let aiExtracted: any = {};
 
   const todayISO = new Date().toISOString().split('T')[0];
+  
+  // ENHANCED system prompts for better extraction
   const systemPrompt = language === 'ar'
-    ? "ساعدني في استخراج الحقول المنظمة من نص عبارة عن طلب مهمة أو تذكير."
-    : "Help me extract structured fields from a user's to-do or reminder request.";
-  const userPrompt = language === 'ar'
-    ? `
-اليوم: ${todayISO}
-حلل رسالة المستخدم التالية. استخرج الحقول (title, description, due_date, due_time, subtasks (قائمة), priority).
-- date بصيغة YYYY-MM-DD
-- time بصيغة HH:MM (24)
-أعد فقط JSON منظم، مثال:
-{
-  "title": "اذهب إلى فيستيفال سيتي مول",
-  "description": "",
-  "due_date": "2025-06-16",
-  "due_time": "09:00",
-  "subtasks": ["قميص أسود", "بنطال أسود", "حذاء أسود", "جوارب سوداء"],
-  "priority": "normal"
-}
-رسالة المستخدم:
-"${message}"
-`
-    : `
-Today is: ${todayISO}
-Analyze the following user message and extract:
-- title (short task intent/action),
-- description (only if present; otherwise empty),
-- due_date (YYYY-MM-DD),
-- due_time (24hr format HH:MM, if present),
-- subtasks (as an array, extracted from shopping lists, comma/and/bullet separated, etc.),
-- priority ("normal" or "high")
+    ? `أنت خبير في استخراج المهام والتذكيرات من النصوص. مهمتك هي تحليل الرسالة واستخراج المعلومات المطلوبة بدقة عالية.
 
-Return ONLY this JSON, with no comments:
+تعليمات مهمة:
+1. استخرج العنوان الرئيسي للمهمة بوضوح
+2. حدد المهام الفرعية إذا وجدت
+3. استخرج التاريخ والوقت بدقة
+4. حدد الأولوية (عادية أو عالية)
+5. اكتب الوصف إذا كان موجود
+
+أعد JSON فقط بهذا التنسيق:
 {
-  "title": "...",
-  "description": "...",
-  "due_date": "...",
-  "due_time": "...",
-  "subtasks": [...],
+  "title": "العنوان الرئيسي",
+  "description": "الوصف إذا وجد",
+  "due_date": "YYYY-MM-DD",
+  "due_time": "HH:MM",
+  "subtasks": ["مهمة فرعية 1", "مهمة فرعية 2"],
   "priority": "normal"
-}
-User message:
+}`
+    : `You are an expert at extracting tasks and reminders from text. Your job is to analyze the message and extract the required information with high accuracy.
+
+Important instructions:
+1. Extract the main task title clearly
+2. Identify subtasks if present
+3. Extract date and time accurately
+4. Determine priority (normal or high)
+5. Write description if present
+
+Return only JSON in this format:
+{
+  "title": "Main task title",
+  "description": "Description if present",
+  "due_date": "YYYY-MM-DD",
+  "due_time": "HH:MM",
+  "subtasks": ["subtask 1", "subtask 2"],
+  "priority": "normal"
+}`;
+
+  const userPrompt = language === 'ar'
+    ? `اليوم: ${todayISO}
+
+حلل الرسالة التالية واستخرج معلومات المهمة أو التذكير:
+
 "${message}"
-`;
+
+أعد JSON منظم فقط:`
+    : `Today: ${todayISO}
+
+Analyze the following message and extract task or reminder information:
+
+"${message}"
+
+Return only structured JSON:`;
 
   // Get API keys directly from environment
   const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
@@ -135,6 +151,8 @@ User message:
   // Try DeepSeek first if key is available
   if (DEEPSEEK_API_KEY) {
     try {
+      console.log('🤖 TASK PARSING: Using DeepSeek for enhanced extraction');
+      
       const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -147,28 +165,28 @@ User message:
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          temperature: 0.0,
+          temperature: 0.1, // Lower temperature for more consistent extraction
           max_tokens: 512
         })
       });
+      
       if (resp.ok) {
         const dsData = await resp.json();
         const reply = dsData.choices?.[0]?.message?.content || "";
+        
         try {
-          aiExtracted = JSON.parse(reply);
+          // Clean up potential code blocks
+          const cleanedReply = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
+          aiExtracted = JSON.parse(cleanedReply);
           extractionOk = true;
+          console.log('✅ TASK PARSING: DeepSeek extraction successful');
         } catch (e) {
-          // Try cleaning up code blocks
-          const jsonStr = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
-          try {
-            aiExtracted = JSON.parse(jsonStr);
-            extractionOk = true;
-          } catch (e2) {
-            extractionOk = false;
-          }
+          console.warn('⚠️ TASK PARSING: DeepSeek JSON parsing failed, trying fallback');
+          extractionOk = false;
         }
       }
     } catch (e) {
+      console.warn('⚠️ TASK PARSING: DeepSeek API error, trying fallback');
       extractionOk = false;
     }
   }
@@ -176,6 +194,8 @@ User message:
   // Fallback to OpenAI if DeepSeek not available or failed
   if (!extractionOk && OPENAI_API_KEY) {
     try {
+      console.log('🤖 TASK PARSING: Using OpenAI as fallback');
+      
       const apiResp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -188,7 +208,7 @@ User message:
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          temperature: 0.0,
+          temperature: 0.1,
           max_tokens: 512
         }),
       });
@@ -196,21 +216,19 @@ User message:
       if (apiResp.ok) {
         const aiData = await apiResp.json();
         const reply = aiData.choices?.[0]?.message?.content || "";
+        
         try {
-          aiExtracted = JSON.parse(reply);
+          const cleanedReply = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
+          aiExtracted = JSON.parse(cleanedReply);
           extractionOk = true;
-        } catch (e) {
-          // Try to cleanup codeblocks or extra output:
-          const jsonStr = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
-          try {
-            aiExtracted = JSON.parse(jsonStr);
-            extractionOk = true;
-          } catch (e2) {
-            extractionOk = false;
-          }
+          console.log('✅ TASK PARSING: OpenAI extraction successful');
+        } catch (e2) {
+          console.warn('⚠️ TASK PARSING: OpenAI JSON parsing failed');
+          extractionOk = false;
         }
       }
     } catch (err) {
+      console.warn('⚠️ TASK PARSING: OpenAI API error');
       extractionOk = false;
     }
   }
@@ -230,6 +248,8 @@ User message:
       priority: fill("priority", "normal")
     };
 
+    console.log('🎯 TASK PARSING: AI-extracted data:', JSON.stringify(resultData, null, 2));
+
     if (isTask) {
       return {
         isTask,
@@ -248,7 +268,8 @@ User message:
     }
   }
 
-  // --- FALLBACK LEGACY REGEX LOGIC ---
+  // --- FALLBACK LEGACY REGEX LOGIC with enhancements ---
+  console.log('🔄 TASK PARSING: Using fallback regex extraction');
   
   // Extract subtasks after the word 'subtask' or 'subtasks'
   let subtasks: string[] = [];
@@ -256,7 +277,6 @@ User message:
   const subtaskRegex = /(subtask[s]?:?|مهام فرعية|subtasks?|مهام?)\s*([^\n]*)/i;
   const subtaskMatch = message.match(subtaskRegex);
   if (subtaskMatch && subtaskMatch[2]) {
-    // Look for comma or Arabic comma
     textForSubtasks = subtaskMatch[2];
     subtasks = textForSubtasks.split(/[,،]/).map(s => s.trim()).filter(s => s.length > 0);
   }

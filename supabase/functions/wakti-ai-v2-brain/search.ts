@@ -1,101 +1,99 @@
 
-/**
- * Search utilities for Wakti Edge Function
- */
-import { TAVILY_API_KEY } from "./utils.ts";
+// WAKTI AI Search functionality with Tavily API
+import { TAVILY_API_KEY } from './utils.ts';
 
 export async function executeRegularSearch(query: string, language: string = 'en') {
   try {
+    console.log('🔍 SEARCH: Starting Tavily search for:', query);
+    
     if (!TAVILY_API_KEY) {
-      console.log("🔍 No Tavily API - using AI for search response");
-      
-      const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
+      console.error('❌ SEARCH: Tavily API key not configured');
       return {
-        success: true,
-        context: searchContext,
-        data: { 
-          sources: [],
-          enhanced: false,
-          note: "AI response without web search"
-        }
+        success: false,
+        error: 'Search service not configured',
+        data: null,
+        context: ''
       };
     }
-    
-    console.log("🔍 Executing regular Tavily search for query:", query);
-    
+
+    const searchPayload = {
+      api_key: TAVILY_API_KEY,
+      query: query,
+      search_depth: "basic",
+      include_answer: true,
+      include_raw_content: false,
+      max_results: 5,
+      include_domains: [],
+      exclude_domains: []
+    };
+
+    console.log('🔍 SEARCH: Calling Tavily API with payload:', JSON.stringify(searchPayload, null, 2));
+
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
-        query: query,
-        search_depth: "basic",
-        include_answer: true,
-        include_raw_content: false,
-        max_results: 10,
-        max_chunks: 5,
-        include_domains: [],
-        exclude_domains: []
-      })
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(searchPayload)
     });
-    
+
+    console.log('🔍 SEARCH: Tavily response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Tavily API error:", response.status, errorText);
-      
-      const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
+      console.error('❌ SEARCH: Tavily API error:', response.status, errorText);
       return {
-        success: true,
-        context: searchContext,
-        data: { 
-          sources: [],
-          enhanced: false,
-          fallback: true,
-          note: "AI response (Tavily fallback)"
-        }
+        success: false,
+        error: `Search API error: ${response.status}`,
+        data: null,
+        context: ''
       };
     }
+
+    const searchData = await response.json();
+    console.log('🔍 SEARCH: Tavily response received:', JSON.stringify(searchData, null, 2));
+
+    // Extract relevant information
+    const results = searchData.results || [];
+    const answer = searchData.answer || '';
     
-    const data = await response.json();
-    console.log("✅ Regular Tavily search successful");
-    
-    let searchContext = `Search results for: "${query}"\n\n`;
-    if (data.answer) {
-      searchContext += `Summary: ${data.answer}\n\n`;
+    // Build context from search results
+    let context = '';
+    if (answer) {
+      context += `Search Answer: ${answer}\n\n`;
     }
     
-    if (data.results && data.results.length > 0) {
-      searchContext += "Sources:\n";
-      data.results.forEach((result, index) => {
-        searchContext += `${index + 1}. ${result.title}\n`;
-        searchContext += `   ${result.content}\n`;
-        searchContext += `   Source: ${result.url}\n\n`;
+    if (results.length > 0) {
+      context += 'Search Results:\n';
+      results.forEach((result: any, index: number) => {
+        context += `${index + 1}. ${result.title}\n`;
+        context += `   ${result.content}\n`;
+        context += `   Source: ${result.url}\n\n`;
       });
     }
-    
+
+    console.log('✅ SEARCH: Successfully processed Tavily search results');
+    console.log('🔍 SEARCH: Context length:', context.length);
+
     return {
       success: true,
-      context: searchContext,
-      data: { 
-        sources: data.results || [],
-        enhanced: false,
-        searchDepth: "basic",
-        answer: data.answer
-      }
+      error: null,
+      data: {
+        answer,
+        results,
+        query,
+        total_results: results.length
+      },
+      context: context.trim()
     };
+
   } catch (error) {
-    console.error("Regular search execution error:", error);
-    
-    const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
+    console.error('❌ SEARCH: Critical error in executeRegularSearch:', error);
     return {
-      success: true,
-      context: searchContext,
-      data: { 
-        sources: [],
-        enhanced: false,
-        fallback: true,
-        note: "AI response (error fallback)"
-      }
+      success: false,
+      error: error.message || 'Search failed',
+      data: null,
+      context: ''
     };
   }
 }

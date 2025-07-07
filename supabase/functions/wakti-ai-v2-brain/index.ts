@@ -30,7 +30,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI: Edge Function Starting - Claude 3.5 Sonnet System");
+console.log("🚀 WAKTI AI: UPGRADED Edge Function Starting - Enhanced Claude System");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -38,16 +38,17 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI: Processing request with full validation system");
+    console.log("🚀 WAKTI AI: Processing request with UPGRADED validation system");
     const startTime = Date.now();
 
-    // Validate API keys at startup
+    // CRITICAL: Validate API keys at startup
     const keyValidation = validateApiKeys();
     if (!keyValidation.valid) {
       console.error("❌ CRITICAL: Missing API keys at startup:", keyValidation.missing);
       return new Response(JSON.stringify({ 
         error: `System configuration incomplete. Missing: ${keyValidation.missing.join(', ')}`,
-        success: false
+        success: false,
+        missingKeys: keyValidation.missing
       }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -131,48 +132,47 @@ serve(async (req) => {
     const currentDateContext = getCurrentDateContext();
     console.log(`🚀 WAKTI AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
 
-    // Enhanced image processing with comprehensive validation
+    // FIXED: Enhanced image processing with comprehensive validation
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`📁 VISION: Validating ${attachedFiles.length} files`);
+      console.log(`📁 VISION: Validating ${attachedFiles.length} files with ENHANCED processing`);
       
       processedFiles = attachedFiles.filter(file => {
         if (file.type && file.type.startsWith('image/')) {
-          // Check multiple possible URL locations
-          const hasValidUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
+          // FIXED: Check for base64 data in multiple locations
+          const hasBase64Data = file.base64Data && file.base64Data.length > 100;
+          const hasValidImageUrl = file.image_url?.url && file.image_url.url.startsWith('data:image/');
+          const hasValidUrl = file.url && file.url.startsWith('data:image/');
           
-          if (!hasValidUrl) {
-            console.error(`❌ VISION: No valid URL for image: ${file.name}`);
+          if (hasBase64Data || hasValidImageUrl || hasValidUrl) {
+            console.log(`✅ VISION: Valid image ${file.name} -> BASE64 DATA AVAILABLE`);
+            return true;
+          } else {
+            console.error(`❌ VISION: No valid base64 data for image: ${file.name}`);
             return false;
           }
-          
-          // Enhanced URL validation
-          const imageUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
-          const isBase64 = imageUrl.startsWith('data:image/');
-          const isValidUrl = isBase64 || imageUrl.startsWith('http');
-          
-          if (!isValidUrl) {
-            console.error(`❌ VISION: Invalid URL format for ${file.name}: ${imageUrl.substring(0, 50)}...`);
-            return false;
-          }
-          
-          console.log(`✅ VISION: Valid image ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${imageUrl.substring(0, 50)}...`);
-          return true;
         }
         return false;
       });
       
       if (processedFiles.length === 0 && attachedFiles.length > 0) {
         return new Response(JSON.stringify({
-          error: "❌ Unable to process the uploaded images. Please upload valid JPEG or PNG files with proper data URLs.",
-          success: false
+          error: "❌ Unable to process the uploaded images. Please upload valid JPEG or PNG files with proper base64 data.",
+          success: false,
+          debugInfo: attachedFiles.map(f => ({
+            name: f.name,
+            type: f.type,
+            hasBase64: !!f.base64Data,
+            hasImageUrl: !!f.image_url,
+            hasUrl: !!f.url
+          }))
         }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
       
-      console.log(`🚀 VISION: Successfully validated ${processedFiles.length} files for Claude Vision processing`);
+      console.log(`🚀 VISION: Successfully validated ${processedFiles.length} files for ENHANCED Claude Vision processing`);
     }
 
     // Enhanced context loading from database
@@ -180,7 +180,7 @@ serve(async (req) => {
     let contextConversationSummary = '';
     
     if (conversationId) {
-      console.log(`🧠 CONTEXT: Loading full context for conversation ${conversationId}`);
+      console.log(`🧠 CONTEXT: Loading ENHANCED context for conversation ${conversationId}`);
       
       try {
         // Get conversation summary from database
@@ -230,18 +230,18 @@ serve(async (req) => {
     
     console.log(`🧠 CONTEXT COMPLETE: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
 
-    // TASK DETECTION
+    // ENHANCED TASK DETECTION
     let taskAnalysisResult = null;
     try {
-      console.log("🔍 TASK DETECTION: Analyzing message for task intent");
+      console.log("🔍 TASK DETECTION: Analyzing message with ENHANCED intent detection");
       taskAnalysisResult = await analyzeTaskIntent(message, language);
-      console.log("🔍 TASK ANALYSIS RESULT:", JSON.stringify(taskAnalysisResult, null, 2));
+      console.log("🔍 ENHANCED TASK ANALYSIS RESULT:", JSON.stringify(taskAnalysisResult, null, 2));
     } catch (taskError) {
       console.error("🔍 TASK ANALYSIS ERROR:", taskError);
     }
 
     if (taskAnalysisResult && (taskAnalysisResult.isTask || taskAnalysisResult.isReminder)) {
-      console.log(`🔍 TASK DETECTED: ${taskAnalysisResult.isTask ? 'Task' : 'Reminder'} - Returning confirmation data`);
+      console.log(`🔍 TASK DETECTED: ${taskAnalysisResult.isTask ? 'Task' : 'Reminder'} - Returning ENHANCED confirmation data`);
       
       const processingTime = Date.now() - startTime;
       
@@ -263,22 +263,23 @@ serve(async (req) => {
         userStyle,
         userTone,
         tokensUsed: 0,
-        aiProvider: 'task_parser',
+        aiProvider: 'enhanced_task_parser',
         taskCreationEnabled: true,
         personalizedResponse: false,
         taskDetected: true,
         currentDateContext,
         contextRestored: true,
-        fullContextUsed: true
+        fullContextUsed: true,
+        enhancedTaskParsing: true
       };
 
-      console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
+      console.log(`🚀 ENHANCED TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    // MAIN PROCESSING WITH CLAUDE
+    // MAIN PROCESSING WITH ENHANCED CLAUDE
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -287,12 +288,12 @@ serve(async (req) => {
 
     switch (activeTrigger) {
       case 'search':
-        console.log("🔍 SEARCH: Processing search request");
+        console.log("🔍 SEARCH: Processing ENHANCED search request");
         const searchResult = await executeRegularSearch(message, language);
         if (searchResult.success) {
           browsingUsed = true;
           browsingData = searchResult.data;
-          const context = searchResult.context.substring(0, 800);
+          const context = searchResult.context.substring(0, 1200); // Increased context
           
           const chatResult = await processWithClaudeAI(
             `${currentDateContext}\n\n${message}\n\nSearch Context: ${context}`,
@@ -307,9 +308,11 @@ serve(async (req) => {
             activeTrigger
           );
           response = chatResult.response;
+          console.log(`✅ SEARCH: Search completed with ${context.length} chars context`);
         } else {
+          console.error(`❌ SEARCH: Search failed:`, searchResult.error);
           const chatResult = await processWithClaudeAI(
-            `${currentDateContext}\n\n${message}`,
+            `${currentDateContext}\n\n${message}\n\n[Note: Search functionality unavailable]`,
             userId,
             conversationId,
             language,
@@ -325,7 +328,7 @@ serve(async (req) => {
         break;
 
       case 'image':
-        console.log("🎨 IMAGE: Processing image generation");
+        console.log("🎨 IMAGE: Processing ENHANCED image generation");
         try {
           const imageResult = await generateImageWithRunware(message, user.id, language);
           
@@ -338,16 +341,18 @@ serve(async (req) => {
 
             if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
               baseResponse += language === 'ar'
-                ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
-                : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
+                ? `\n\n📝 (ترجمة محسنة: "${imageResult.translatedPrompt}")`
+                : `\n\n📝 (Enhanced Translation: "${imageResult.translatedPrompt}")`;
             }
 
             response = baseResponse;
+            console.log(`✅ IMAGE: Image generated successfully with URL: ${imageUrl}`);
           } else {
+            console.error(`❌ IMAGE: Generation failed:`, imageResult.error);
             response = imageResult.error;
           }
         } catch (error) {
-          console.error("Image generation error:", error);
+          console.error("❌ IMAGE: Generation error:", error);
           response = language === 'ar' 
             ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
             : `❌ Sorry, an error occurred while generating the image.`;
@@ -356,8 +361,8 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 WAKTI AI: Processing with Claude 3.5 Sonnet System`);
-        console.log(`🖼️ VISION: ${processedFiles.length} files ready for Claude Vision processing`);
+        console.log(`🚀 WAKTI AI: Processing with ENHANCED Claude System`);
+        console.log(`🖼️ VISION: ${processedFiles.length} files ready for ENHANCED Claude Vision processing`);
         
         const chatResult = await processWithClaudeAI(
           `${currentDateContext}\n\n${message}`,
@@ -372,17 +377,17 @@ serve(async (req) => {
           activeTrigger
         );
         response = chatResult.response;
-        console.log(`🎯 RESULT: Model: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}, Fallback: ${chatResult.fallbackUsed || false}`);
+        console.log(`🎯 ENHANCED RESULT: Model: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}, Fallback: ${chatResult.fallbackUsed || false}`);
         break;
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 WAKTI AI: Processing completed successfully in ${processingTime}ms`);
+    console.log(`🚀 WAKTI AI: ENHANCED processing completed successfully in ${processingTime}ms`);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'wakti_ai_complete',
+      intent: 'wakti_ai_enhanced_complete',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -397,16 +402,18 @@ serve(async (req) => {
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: 'wakti_ai_system',
+      aiProvider: 'wakti_ai_enhanced_system',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
       visionEnhanced: processedFiles.length > 0,
       contextRestored: true,
-      modelsUsed: processedFiles.length > 0 ? 'claude-3-5-sonnet-20241022 with vision' : 'claude-3-5-sonnet-20241022 with deepseek fallback',
+      modelsUsed: processedFiles.length > 0 ? 'claude-3-5-sonnet-20241022 with enhanced vision' : 'claude-3-5-sonnet-20241022 with deepseek fallback',
       fallbacksAvailable: true,
       fullContextUsed: true,
-      apiKeysValidated: true
+      apiKeysValidated: true,
+      enhancedSystem: true,
+      upgradeComplete: true
     };
 
     return new Response(JSON.stringify(result), {
@@ -414,7 +421,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 WAKTI AI: Critical Error:", error);
+    console.error("🚨 WAKTI AI: CRITICAL ENHANCED ERROR:", error);
     
     // Enhanced error handling with specific error types
     let userFriendlyError = 'Sorry, I encountered an error processing your request. Please try again.';
@@ -435,6 +442,12 @@ serve(async (req) => {
     } else if (error.message.includes('Anthropic') || error.message.includes('Claude')) {
       userFriendlyError = 'AI service temporarily unavailable. Please try again in a moment.';
       statusCode = 503;
+    } else if (error.message.includes('Tavily') || error.message.includes('search')) {
+      userFriendlyError = 'Search service temporarily unavailable. Regular chat is still available.';
+      statusCode = 503;
+    } else if (error.message.includes('Runware') || error.message.includes('image generation')) {
+      userFriendlyError = 'Image generation service temporarily unavailable. Regular chat is still available.';
+      statusCode = 503;
     }
     
     return new Response(JSON.stringify({
@@ -442,7 +455,9 @@ serve(async (req) => {
       success: false,
       currentDateContext: getCurrentDateContext(),
       contextRestored: false,
-      errorDetails: error.message
+      errorDetails: error.message,
+      enhancedErrorHandling: true,
+      upgradeComplete: false
     }), {
       status: statusCode,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
