@@ -158,8 +158,12 @@ export class UltraFastWaktiAIServiceClass {
         console.log('🆔 CONVERSATION: Updated ID to', tempConversationId.substring(0, 8) + '...');
       }
 
-      // Cache the conversation for ultra-fast access
-      this.memoryCache.cacheConversation(userId, tempConversationId, [userMessage, assistantMessage]);
+      // Cache the conversation context using the correct method
+      this.memoryCache.setConversationContext(userId, tempConversationId, {
+        messages: [userMessage, assistantMessage],
+        summary: '',
+        timestamp: Date.now()
+      });
       console.log('💾 CACHE: Conversation cached successfully');
 
       const totalTime = Date.now() - startTime;
@@ -238,7 +242,7 @@ export class UltraFastWaktiAIServiceClass {
 
   clearConversationUltraFast(userId: string, conversationId: string) {
     console.log('🗑️ CACHE: Clearing conversation cache');
-    this.memoryCache.clearConversation(userId, conversationId);
+    this.memoryCache.invalidateConversation(userId, conversationId);
   }
 }
 
