@@ -1,6 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { callClaudeAPI, callDeepSeekAPI, logWithTimestamp } from './utils.ts';
+import { callClaudeAPI, callDeepSeekAPI, logWithTimestamp, validateApiKeys } from './utils.ts';
 
 export async function processWithClaudeAI(
   message: string,
@@ -15,8 +15,15 @@ export async function processWithClaudeAI(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log('🚀 CLAUDE PROCESSING: Starting with COMPLETE CLAUDE MIGRATION');
-    console.log('🖼️ FILES:', processedFiles.length, 'files provided for Vision');
+    console.log('🚀 COMPREHENSIVE FIX: Starting Claude processing with full validation');
+    
+    // EMERGENCY FIX: Validate API keys at start
+    const keyValidation = validateApiKeys();
+    if (!keyValidation.valid) {
+      throw new Error(`Missing API keys: ${keyValidation.missing.join(', ')}`);
+    }
+    
+    console.log('🖼️ VISION FIX: Processing', processedFiles.length, 'files for Vision');
     
     // Check for task creation triggers 
     const taskTriggers = {
@@ -30,7 +37,7 @@ export async function processWithClaudeAI(
       message.toLowerCase().includes(trigger.toLowerCase())
     );
     
-    // MEMORY: Build FULL context from recent messages and summary
+    // MEMORY FIX: Build FULL context from recent messages and summary
     let contextMessages = [];
     
     // Add conversation summary as system context if available
@@ -39,7 +46,7 @@ export async function processWithClaudeAI(
         role: 'user',
         content: `Previous conversation context: ${conversationSummary}`
       });
-      console.log(`🧠 CONTEXT: Added conversation summary (${conversationSummary.length} chars)`);
+      console.log(`🧠 MEMORY FIX: Added conversation summary (${conversationSummary.length} chars)`);
     }
     
     // Add recent messages for immediate context (last 3-4 messages)
@@ -48,17 +55,17 @@ export async function processWithClaudeAI(
       content: msg.content
     }));
     contextMessages.push(...formattedRecentMessages);
-    console.log(`🧠 CONTEXT: Added ${formattedRecentMessages.length} recent messages`);
+    console.log(`🧠 MEMORY FIX: Added ${formattedRecentMessages.length} recent messages`);
     
-    // VISION: Check if this is an image processing request
+    // VISION FIX: Enhanced image processing with proper validation
     const hasImages = processedFiles && processedFiles.length > 0 && 
                      processedFiles.some(file => file.type && file.type.startsWith('image/'));
     
     let systemPrompt = '';
     
     if (hasImages) {
-      // VISION PROCESSING with Claude 3.5 Sonnet
-      console.log('🖼️ VISION: Processing with images using Claude 3.5 Sonnet');
+      // VISION PROCESSING with Claude 3.5 Sonnet - FIXED
+      console.log('🖼️ VISION FIX: Processing with images using Claude 3.5 Sonnet');
       
       // BILINGUAL VISION SYSTEM PROMPTS
       systemPrompt = language === 'ar' 
@@ -78,7 +85,7 @@ If the image is blurry, low resolution, or unclear — say that.
 Do not make up information. Be honest about what you can or cannot see.`;
     } else {
       // Regular text chat
-      console.log('💬 CHAT: Processing text-only using Claude 3.5 Sonnet');
+      console.log('💬 CHAT FIX: Processing text-only using Claude 3.5 Sonnet');
       
       // Regular chat prompt with personalization
       systemPrompt = `You are a helpful AI assistant. Respond naturally and conversationally to the user's questions and requests.`;
@@ -122,36 +129,48 @@ Do not make up information. Be honest about what you can or cannot see.`;
     }
 
     if (hasImages) {
-      console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Claude Vision');
+      console.log('🖼️ VISION FIX: Processing', processedFiles.length, 'files for Claude Vision');
       
       // Create content array with text and images for Vision
       const messageContent = [
         { type: 'text', text: message }
       ];
 
-      // Process each image file with base64 data
+      // EMERGENCY VISION FIX: Enhanced image processing with proper validation
       for (const file of processedFiles) {
         if (file.type && file.type.startsWith('image/')) {
-          console.log(`🖼️ VISION: Processing image: ${file.name}`);
+          console.log(`🖼️ VISION FIX: Processing image: ${file.name}`);
           
-          const imageUrl = file.image_url?.url;
-          console.log(`🔗 VISION URL: ${imageUrl ? imageUrl.substring(0, 50) + '...' : 'NOT FOUND'}`);
+          // CRITICAL FIX: Proper image URL handling
+          let imageUrl = file.image_url?.url;
+          
+          // Check multiple possible URL locations
+          if (!imageUrl) {
+            imageUrl = file.url || file.publicUrl || file.base64Data;
+          }
+          
+          console.log(`🔗 VISION URL CHECK: ${imageUrl ? imageUrl.substring(0, 50) + '...' : 'NO URL FOUND'}`);
           
           if (imageUrl && imageUrl.startsWith('data:image/')) {
             // Extract base64 data and media type
             const [mediaInfo, base64Data] = imageUrl.split(',');
             const mediaType = mediaInfo.split(':')[1].split(';')[0];
             
-            messageContent.push({
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: base64Data
-              }
-            });
+            if (base64Data && base64Data.length > 100) {
+              messageContent.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType,
+                  data: base64Data
+                }
+              });
+              console.log(`✅ VISION FIX: Successfully added image ${file.name} (${base64Data.length} chars)`);
+            } else {
+              console.error(`❌ VISION FIX: Invalid base64 data for ${file.name}`);
+            }
           } else {
-            console.error(`❌ VISION: No valid base64 URL found for image: ${file.name}`);
+            console.error(`❌ VISION FIX: No valid base64 URL found for image: ${file.name}`);
           }
         }
       }
@@ -160,7 +179,7 @@ Do not make up information. Be honest about what you can or cannot see.`;
         role: 'user', 
         content: messageContent 
       });
-      console.log(`🖼️ VISION: Message content prepared with ${messageContent.length - 1} images`);
+      console.log(`🖼️ VISION FIX: Message content prepared with ${messageContent.length - 1} images`);
     } else {
       // Simple text message for regular chat
       claudeMessages.push({ 
@@ -177,28 +196,28 @@ Do not make up information. Be honest about what you can or cannot see.`;
       });
     }
 
-    // RETRY LOGIC with Claude primary, DeepSeek fallback
+    // COMPREHENSIVE FIX: Enhanced retry logic with detailed error handling
     let lastError;
     const maxRetries = 2;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔄 ATTEMPT ${attempt + 1}: Calling Claude 3.5 Sonnet`);
+        console.log(`🔄 COMPREHENSIVE FIX - ATTEMPT ${attempt + 1}: Processing request`);
         
         if (attempt === 0) {
           // Primary: Claude 3.5 Sonnet
           const claudeResponse = await callClaudeAPI(claudeMessages, maxTokens);
           
-          console.log('📥 CLAUDE: Success with Claude 3.5 Sonnet');
+          console.log('📥 CLAUDE SUCCESS: Response received from Claude 3.5 Sonnet');
           
           if (!claudeResponse.content || !claudeResponse.content[0] || !claudeResponse.content[0].text) {
-            console.error('❌ CLAUDE: Invalid response structure:', claudeResponse);
+            console.error('❌ CLAUDE ERROR: Invalid response structure:', claudeResponse);
             throw new Error('Invalid Claude API response structure');
           }
 
           const aiResponse = claudeResponse.content[0].text;
-          console.log('✅ CLAUDE: Response generated successfully');
-          console.log('🎯 RESPONSE PREVIEW:', aiResponse.substring(0, 100) + '...');
+          console.log('✅ CLAUDE SUCCESS: Response generated successfully');
+          console.log('🎯 RESPONSE PREVIEW:', aiResponse.substring(0, 200) + '...');
           
           return {
             response: aiResponse,
@@ -213,11 +232,14 @@ Do not make up information. Be honest about what you can or cannot see.`;
             fallbackUsed: false,
             visionUsed: hasImages,
             fullContextRestored: true,
-            claudeMigrationComplete: true
+            comprehensiveFixApplied: true,
+            apiKeysValidated: true
           };
 
         } else {
           // Fallback: DeepSeek (chat only, no vision)
+          console.log('🔄 FALLBACK: Using DeepSeek chat fallback');
+          
           if (hasImages) {
             console.log('🔄 VISION FALLBACK: Converting to text-only for DeepSeek');
             const fallbackMessages = [
@@ -241,7 +263,8 @@ Do not make up information. Be honest about what you can or cannot see.`;
               fallbackUsed: true,
               visionUsed: false,
               fullContextRestored: true,
-              claudeMigrationComplete: true
+              comprehensiveFixApplied: true,
+              apiKeysValidated: true
             };
           } else {
             // Regular chat fallback
@@ -266,13 +289,14 @@ Do not make up information. Be honest about what you can or cannot see.`;
               fallbackUsed: true,
               visionUsed: false,
               fullContextRestored: true,
-              claudeMigrationComplete: true
+              comprehensiveFixApplied: true,
+              apiKeysValidated: true
             };
           }
         }
 
       } catch (error) {
-        console.error(`🚨 CLAUDE: Attempt ${attempt + 1} failed:`, error);
+        console.error(`🚨 COMPREHENSIVE FIX: Attempt ${attempt + 1} failed:`, error);
         lastError = error;
         
         if (attempt < maxRetries) {
@@ -283,16 +307,28 @@ Do not make up information. Be honest about what you can or cannot see.`;
     }
     
     // All retries failed - return meaningful error
-    console.error('🚨 CLAUDE: All retry attempts failed:', lastError);
+    console.error('🚨 COMPREHENSIVE FIX: All retry attempts failed:', lastError);
     throw lastError;
 
   } catch (error) {
-    console.error('🚨 CLAUDE: Critical processing error:', error);
+    console.error('🚨 COMPREHENSIVE FIX: Critical processing error:', error);
     
-    // MEANINGFUL ERRORS
-    const userFriendlyMessage = language === 'ar' 
-      ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى أو ارفع صورة جديدة.'
-      : '❌ Sorry, I encountered an error processing your request. Please try again or upload a new image.';
+    // ENHANCED ERROR HANDLING: More meaningful error messages
+    let userFriendlyMessage = '';
+    
+    if (error.message.includes('API key')) {
+      userFriendlyMessage = language === 'ar' 
+        ? '❌ خطأ في إعداد النظام. يرجى المحاولة مرة أخرى أو الاتصال بالدعم الفني.'
+        : '❌ System configuration error. Please try again or contact support.';
+    } else if (error.message.includes('image') || error.message.includes('vision')) {
+      userFriendlyMessage = language === 'ar' 
+        ? '❌ عذراً، حدث خطأ أثناء معالجة الصورة. حاول مرة أخرى أو ارفع صورة جديدة.'
+        : '❌ Sorry, I encountered an error processing your image. Please try again or upload a new image.';
+    } else {
+      userFriendlyMessage = language === 'ar' 
+        ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'
+        : '❌ Sorry, I encountered an error processing your request. Please try again.';
+    }
     
     return {
       response: userFriendlyMessage,
@@ -305,7 +341,8 @@ Do not make up information. Be honest about what you can or cannot see.`;
       userFriendlyError: userFriendlyMessage,
       visionUsed: false,
       fullContextRestored: false,
-      claudeMigrationComplete: false
+      comprehensiveFixApplied: false,
+      apiKeysValidated: false
     };
   }
 }

@@ -6,7 +6,7 @@ import { analyzeTaskIntent } from "./taskParsing.ts";
 import { processWithClaudeAI } from "./chatAnalysis.ts";
 import { generateImageWithRunware } from "./imageGeneration.ts";
 import { executeRegularSearch } from "./search.ts";
-import { generateConversationId, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY, supabase } from "./utils.ts";
+import { generateConversationId, validateApiKeys, logWithTimestamp, supabase } from "./utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +30,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI: CLAUDE 3.5 SONNET MIGRATION - Single Brain System with Full Claude Integration");
+console.log("🚀 COMPREHENSIVE FIX: WAKTI AI Edge Function Starting - Claude 3.5 Sonnet System");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -38,8 +38,22 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI: Processing request with CLAUDE 3.5 SONNET SYSTEM");
+    console.log("🚀 COMPREHENSIVE FIX: Processing request with full validation system");
     const startTime = Date.now();
+
+    // EMERGENCY FIX: Validate API keys at startup
+    const keyValidation = validateApiKeys();
+    if (!keyValidation.valid) {
+      console.error("❌ CRITICAL: Missing API keys at startup:", keyValidation.missing);
+      return new Response(JSON.stringify({ 
+        error: `System configuration incomplete. Missing: ${keyValidation.missing.join(', ')}`,
+        success: false,
+        comprehensiveFixApplied: false
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     const skipAuth = req.headers.get('x-skip-auth') === 'true';
     const authToken = req.headers.get('x-auth-token');
@@ -116,30 +130,34 @@ serve(async (req) => {
     }
 
     const currentDateContext = getCurrentDateContext();
-    console.log(`🚀 WAKTI AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
+    console.log(`🚀 COMPREHENSIVE FIX: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
 
-    // VISION & IMAGE PROCESSING - Validate and log image files
+    // VISION FIX: Enhanced image processing with comprehensive validation
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`📁 IMAGE PROCESSING: Validating ${attachedFiles.length} files`);
+      console.log(`📁 VISION FIX: Validating ${attachedFiles.length} files`);
       
       processedFiles = attachedFiles.filter(file => {
         if (file.type && file.type.startsWith('image/')) {
-          const hasValidUrl = file.image_url?.url;
+          // CRITICAL FIX: Check multiple possible URL locations
+          const hasValidUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
+          
           if (!hasValidUrl) {
-            console.error(`❌ IMAGE ERROR: No valid URL for image: ${file.name}`);
+            console.error(`❌ VISION FIX: No valid URL for image: ${file.name}`);
             return false;
           }
           
-          const isBase64 = file.image_url.url.startsWith('data:image/');
-          const isValidUrl = isBase64 || file.image_url.url.startsWith('http');
+          // Enhanced URL validation
+          const imageUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
+          const isBase64 = imageUrl.startsWith('data:image/');
+          const isValidUrl = isBase64 || imageUrl.startsWith('http');
           
           if (!isValidUrl) {
-            console.error(`❌ IMAGE ERROR: Invalid URL format for ${file.name}: ${file.image_url.url.substring(0, 50)}...`);
+            console.error(`❌ VISION FIX: Invalid URL format for ${file.name}: ${imageUrl.substring(0, 50)}...`);
             return false;
           }
           
-          console.log(`✅ IMAGE VALID: ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${file.image_url.url.substring(0, 50)}...`);
+          console.log(`✅ VISION FIX: Valid image ${file.name} -> ${isBase64 ? 'BASE64' : 'URL'}: ${imageUrl.substring(0, 50)}...`);
           return true;
         }
         return false;
@@ -147,23 +165,24 @@ serve(async (req) => {
       
       if (processedFiles.length === 0 && attachedFiles.length > 0) {
         return new Response(JSON.stringify({
-          error: "❌ Unable to process the uploaded images. Please upload valid JPEG or PNG files.",
-          success: false
+          error: "❌ Unable to process the uploaded images. Please upload valid JPEG or PNG files with proper data URLs.",
+          success: false,
+          comprehensiveFixApplied: true
         }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
       
-      console.log(`🚀 IMAGE PROCESSING: Successfully validated ${processedFiles.length} files for Claude Vision processing`);
+      console.log(`🚀 VISION FIX: Successfully validated ${processedFiles.length} files for Claude Vision processing`);
     }
 
-    // MEMORY & CONTEXT - Load FULL conversation context from database
+    // MEMORY FIX: Enhanced context loading from database
     let contextRecentMessages = [];
     let contextConversationSummary = '';
     
     if (conversationId) {
-      console.log(`🧠 CONTEXT LOADING: Fetching full context for conversation ${conversationId}`);
+      console.log(`🧠 MEMORY FIX: Loading full context for conversation ${conversationId}`);
       
       try {
         // Get conversation summary from database
@@ -176,7 +195,7 @@ serve(async (req) => {
 
         if (summaryData && !summaryError) {
           contextConversationSummary = summaryData.summary_text || '';
-          console.log(`🧠 CONTEXT: Loaded summary (${contextConversationSummary.length} chars, ${summaryData.message_count} messages)`);
+          console.log(`🧠 MEMORY FIX: Loaded summary (${contextConversationSummary.length} chars, ${summaryData.message_count} messages)`);
         }
 
         // Get recent messages from database
@@ -193,25 +212,25 @@ serve(async (req) => {
             role: msg.role,
             content: msg.content
           }));
-          console.log(`🧠 CONTEXT: Loaded ${contextRecentMessages.length} recent messages from database`);
+          console.log(`🧠 MEMORY FIX: Loaded ${contextRecentMessages.length} recent messages from database`);
         }
       } catch (contextError) {
-        console.error('🧠 CONTEXT ERROR:', contextError);
+        console.error('🧠 MEMORY FIX ERROR:', contextError);
       }
     }
     
     // Fallback to provided context if database load failed
     if (contextRecentMessages.length === 0 && recentMessages.length > 0) {
       contextRecentMessages = recentMessages.slice(-4);
-      console.log(`🧠 CONTEXT FALLBACK: Using provided messages (${contextRecentMessages.length})`);
+      console.log(`🧠 MEMORY FIX FALLBACK: Using provided messages (${contextRecentMessages.length})`);
     }
     
     if (!contextConversationSummary && conversationSummary) {
       contextConversationSummary = conversationSummary;
-      console.log(`🧠 CONTEXT FALLBACK: Using provided summary (${contextConversationSummary.length} chars)`);
+      console.log(`🧠 MEMORY FIX FALLBACK: Using provided summary (${contextConversationSummary.length} chars)`);
     }
     
-    console.log(`🧠 FINAL CONTEXT: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
+    console.log(`🧠 MEMORY FIX COMPLETE: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
 
     // TASK DETECTION
     let taskAnalysisResult = null;
@@ -253,7 +272,7 @@ serve(async (req) => {
         currentDateContext,
         contextRestored: true,
         fullContextUsed: true,
-        claudeMigrationComplete: true
+        comprehensiveFixApplied: true
       };
 
       console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
@@ -262,7 +281,7 @@ serve(async (req) => {
       });
     }
 
-    // MAIN PROCESSING WITH CLAUDE
+    // MAIN PROCESSING WITH CLAUDE - COMPREHENSIVE FIX
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -340,8 +359,8 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 CLAUDE AI CHAT: Processing with CLAUDE 3.5 SONNET SYSTEM`);
-        console.log(`🖼️ FILES: ${processedFiles.length} files ready for Claude Vision processing`);
+        console.log(`🚀 COMPREHENSIVE FIX: Processing with Claude 3.5 Sonnet System`);
+        console.log(`🖼️ VISION: ${processedFiles.length} files ready for Claude Vision processing`);
         
         const chatResult = await processWithClaudeAI(
           `${currentDateContext}\n\n${message}`,
@@ -356,17 +375,17 @@ serve(async (req) => {
           activeTrigger
         );
         response = chatResult.response;
-        console.log(`🎯 RESULT: Model used: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}, Fallback: ${chatResult.fallbackUsed || false}`);
+        console.log(`🎯 RESULT: Model: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}, Fallback: ${chatResult.fallbackUsed || false}`);
         break;
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 WAKTI AI: CLAUDE MIGRATION processing completed in ${processingTime}ms`);
+    console.log(`🚀 COMPREHENSIVE FIX: Processing completed successfully in ${processingTime}ms`);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'claude_migration_complete',
+      intent: 'comprehensive_fix_complete',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -381,7 +400,7 @@ serve(async (req) => {
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: 'wakti_ai_claude_migration',
+      aiProvider: 'wakti_ai_comprehensive_fix',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
@@ -389,8 +408,9 @@ serve(async (req) => {
       contextRestored: true,
       modelsUsed: processedFiles.length > 0 ? 'claude-3-5-sonnet-20241022 with vision' : 'claude-3-5-sonnet-20241022 with deepseek fallback',
       fallbacksAvailable: true,
-      claudeMigrationComplete: true,
-      fullContextUsed: true
+      comprehensiveFixApplied: true,
+      fullContextUsed: true,
+      apiKeysValidated: true
     };
 
     return new Response(JSON.stringify(result), {
@@ -398,19 +418,27 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 WAKTI AI: Critical Error:", error);
+    console.error("🚨 COMPREHENSIVE FIX: Critical Error:", error);
     
-    // ENHANCED ERROR HANDLING
+    // ENHANCED ERROR HANDLING with specific error types
     let userFriendlyError = 'Sorry, I encountered an error processing your request. Please try again.';
+    let statusCode = 500;
     
     if (error.message.includes('Authentication')) {
       userFriendlyError = 'Please log in to continue using WAKTI AI.';
+      statusCode = 401;
     } else if (error.message.includes('rate limit') || error.message.includes('429')) {
       userFriendlyError = 'Too many requests. Please wait a moment and try again.';
+      statusCode = 429;
     } else if (error.message.includes('image') || error.message.includes('vision')) {
-      userFriendlyError = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
-    } else if (error.message.includes('Anthropic')) {
+      userFriendlyError = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file with proper data.';
+      statusCode = 400;
+    } else if (error.message.includes('API key')) {
+      userFriendlyError = 'System configuration error. Please contact support.';
+      statusCode = 500;
+    } else if (error.message.includes('Anthropic') || error.message.includes('Claude')) {
       userFriendlyError = 'AI service temporarily unavailable. Please try again in a moment.';
+      statusCode = 503;
     }
     
     return new Response(JSON.stringify({
@@ -418,9 +446,11 @@ serve(async (req) => {
       success: false,
       currentDateContext: getCurrentDateContext(),
       contextRestored: false,
-      claudeMigrationComplete: false
+      comprehensiveFixApplied: false,
+      apiKeysValidated: false,
+      errorDetails: error.message
     }), {
-      status: 500,
+      status: statusCode,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }

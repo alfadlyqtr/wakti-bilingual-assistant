@@ -1,5 +1,4 @@
-
-// Ultra-Fast Wakti AI Service with CLAUDE 3.5 SONNET MIGRATION
+// COMPREHENSIVE FIX: Ultra-Fast Wakti AI Service with Enhanced Claude 3.5 Sonnet Integration
 import { supabase } from '@/integrations/supabase/client';
 import { UltraFastMemoryCache } from './UltraFastMemoryCache';
 import { StreamingResponseManager } from './StreamingResponseManager';
@@ -8,7 +7,7 @@ import { EnhancedTaskCreationService } from './EnhancedTaskCreationService';
 import { AIMessage } from './WaktiAIV2Service';
 
 class UltraFastWaktiAIServiceClass {
-  // CLAUDE MIGRATION: Send message with restored memory and Claude processing
+  // COMPREHENSIVE FIX: Enhanced message sending with full error handling and validation
   async sendMessageUltraFast(
     message: string,
     userId?: string,
@@ -31,13 +30,13 @@ class UltraFastWaktiAIServiceClass {
       // Generate or use existing conversation ID
       const actualConversationId = conversationId || `claude-${Date.now()}`;
       
-      console.log('🚀 CLAUDE MIGRATION: Processing message with FULL Claude 3.5 Sonnet integration');
+      console.log('🚀 COMPREHENSIVE FIX: Processing message with enhanced Claude 3.5 Sonnet integration');
       
       // ENHANCED: Check for task creation intent FIRST
       const taskIntent = EnhancedTaskCreationService.detectTaskCreationIntent(message);
       console.log('🎯 TASK INTENT:', taskIntent ? `${taskIntent.language} (${taskIntent.confidence})` : 'None');
       
-      // MEMORY - Get FULL context from database
+      // MEMORY FIX: Get enhanced context from database
       let contextData = await UltraFastMemoryCache.getConversationContext(userId, actualConversationId);
       
       // If no cache hit, queue background context loading
@@ -63,31 +62,41 @@ class UltraFastWaktiAIServiceClass {
       
       // Get FULL context for AI system prompt
       const fullContext = UltraFastMemoryCache.getFullContext(userId, actualConversationId);
-      console.log('🧠 CLAUDE CONTEXT RESTORED:', fullContext.recentMessages.length, 'messages,', fullContext.summary.length, 'chars summary');
+      console.log('🧠 COMPREHENSIVE FIX: Context loaded:', fullContext.recentMessages.length, 'messages,', fullContext.summary.length, 'chars summary');
       
-      console.log('🚀 CLAUDE MIGRATION: Sending to Claude 3.5 Sonnet with FULL RESTORED context + Vision support');
+      console.log('🚀 COMPREHENSIVE FIX: Sending to Claude 3.5 Sonnet with enhanced context + Vision support');
       
-      // Validate image files for Vision processing
+      // VISION FIX: Enhanced file validation with proper error handling
       let validatedFiles = [];
       if (attachedFiles && attachedFiles.length > 0) {
         validatedFiles = attachedFiles.filter(file => {
           if (file.type && file.type.startsWith('image/')) {
-            const hasValidUrl = file.image_url?.url;
+            // CRITICAL FIX: Check multiple possible URL locations
+            const hasValidUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
+            
             if (hasValidUrl) {
-              console.log(`✅ CLAUDE VISION FILE READY: ${file.name} -> ${file.image_url.url.substring(0, 50)}...`);
-              return true;
+              const imageUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
+              
+              // Enhanced validation for base64 format
+              if (imageUrl.startsWith('data:image/')) {
+                console.log(`✅ COMPREHENSIVE FIX: Valid Vision file: ${file.name} -> ${imageUrl.substring(0, 50)}...`);
+                return true;
+              } else {
+                console.error(`❌ COMPREHENSIVE FIX: Invalid URL format for ${file.name}: ${imageUrl.substring(0, 50)}...`);
+                return false;
+              }
             } else {
-              console.error(`❌ CLAUDE VISION FILE INVALID: ${file.name} - no valid URL`);
+              console.error(`❌ COMPREHENSIVE FIX: No valid URL for ${file.name}`);
               return false;
             }
           }
           return false;
         });
         
-        console.log(`🖼️ CLAUDE VISION PROCESSING: ${validatedFiles.length} of ${attachedFiles.length} files ready`);
+        console.log(`🖼️ COMPREHENSIVE FIX: Vision processing ready - ${validatedFiles.length} of ${attachedFiles.length} files validated`);
       }
       
-      // Call Claude brain service with FULL context, Vision support, and error handling
+      // COMPREHENSIVE FIX: Call enhanced Claude brain service with full error handling
       const aiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -105,16 +114,32 @@ class UltraFastWaktiAIServiceClass {
         }
       });
       
-      // Race between AI response and timeout (15 seconds for Vision processing)
+      // COMPREHENSIVE FIX: Enhanced timeout handling (20 seconds for Vision processing)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout - please try again')), 15000)
+        setTimeout(() => reject(new Error('Request timeout - please try again')), 20000)
       );
       
       const { data, error } = await Promise.race([aiPromise, timeoutPromise]) as any;
       
       if (error) {
-        console.error('❌ CLAUDE MIGRATION: AI Error:', error);
-        throw new Error(error.message || 'Claude AI processing failed');
+        console.error('❌ COMPREHENSIVE FIX: AI Error:', error);
+        
+        // ENHANCED ERROR HANDLING: More specific error messages
+        let errorMessage = 'AI processing failed';
+        
+        if (error.message.includes('API key')) {
+          errorMessage = 'System configuration error. Please contact support.';
+        } else if (error.message.includes('image') || error.message.includes('vision')) {
+          errorMessage = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (error.message.includes('Authentication')) {
+          errorMessage = 'Please log in to continue.';
+        } else if (error.message.includes('Claude') || error.message.includes('Anthropic')) {
+          errorMessage = 'AI service temporarily unavailable. Please try again in a moment.';
+        }
+        
+        throw new Error(errorMessage);
       }
       
       // Create message objects with enhanced metadata
@@ -180,7 +205,7 @@ class UltraFastWaktiAIServiceClass {
         StreamingResponseManager.completeStream(actualConversationId, assistantMessage.content);
       }
       
-      console.log('✅ CLAUDE MIGRATION: Completed with FULL CONTEXT + Vision + Error Handling');
+      console.log('✅ COMPREHENSIVE FIX: Completed with enhanced context + Vision + Error handling');
       
       return {
         ...data,
@@ -197,19 +222,19 @@ class UltraFastWaktiAIServiceClass {
         contextRestored: true, // ALWAYS true now
         fullContextUsed: true, // FULL context used
         visionEnabled: validatedFiles.length > 0,
-        claudeMigrationActive: true, // CLAUDE MIGRATION confirmation
+        comprehensiveFixApplied: true, // COMPREHENSIVE FIX confirmation
         claudeModel: 'claude-3-5-sonnet-20241022'
       };
       
     } catch (error: any) {
-      console.error('❌ CLAUDE MIGRATION: Service Error:', error);
+      console.error('❌ COMPREHENSIVE FIX: Service Error:', error);
       
       // Complete streaming on error
       if (onStreamUpdate && conversationId) {
         StreamingResponseManager.completeStream(conversationId);
       }
       
-      // Surface meaningful errors
+      // ENHANCED ERROR HANDLING: Surface meaningful errors
       let userFriendlyError = 'Sorry, I encountered an error processing your request.';
       
       if (error.message.includes('timeout')) {
@@ -218,6 +243,8 @@ class UltraFastWaktiAIServiceClass {
         userFriendlyError = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
       } else if (error.message.includes('Authentication')) {
         userFriendlyError = 'Please log in to continue.';
+      } else if (error.message.includes('API key') || error.message.includes('configuration')) {
+        userFriendlyError = 'System configuration error. Please contact support.';
       } else if (error.message.includes('Claude') || error.message.includes('Anthropic')) {
         userFriendlyError = 'AI service temporarily unavailable. Please try again in a moment.';
       }
@@ -272,7 +299,7 @@ class UltraFastWaktiAIServiceClass {
   
   clearConversationUltraFast(userId: string, conversationId: string): void {
     UltraFastMemoryCache.invalidateConversation(userId, conversationId);
-    console.log('🗑️ CLAUDE MIGRATION: Conversation cleared with FULL context');
+    console.log('🗑️ COMPREHENSIVE FIX: Conversation cleared with enhanced context');
   }
   
   getCacheStats(): any {
@@ -282,8 +309,8 @@ class UltraFastWaktiAIServiceClass {
       streamingActive: StreamingResponseManager.isStreaming('any'),
       taskCreationActive: true,
       contextRestored: true, // ALWAYS true
-      visionEnabled: true, // CLAUDE MIGRATION includes Vision
-      claudeMigrationActive: true, // CLAUDE MIGRATION confirmation
+      visionEnabled: true, // COMPREHENSIVE FIX includes Vision
+      comprehensiveFixApplied: true, // COMPREHENSIVE FIX confirmation
       claudeModel: 'claude-3-5-sonnet-20241022',
       timestamp: Date.now()
     };
