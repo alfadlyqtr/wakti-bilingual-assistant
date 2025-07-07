@@ -53,7 +53,7 @@ const WaktiAIV2 = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isClearingChat, setIsClearingChat] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(isClearingChat);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +152,19 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
+      // CRITICAL FIX: Load hybrid memory context BEFORE sending message
+      console.log('🧠 HYBRID MEMORY: Loading context before sending message');
+      const hybridContext = await HybridMemoryService.getHybridContext(
+        userProfile.id, 
+        currentConversationId
+      );
+      
+      console.log('✅ HYBRID MEMORY: Context loaded -', {
+        recentMessages: hybridContext.recentMessages.length,
+        conversationSummary: hybridContext.conversationSummary.length,
+        messageCount: hybridContext.messageCount
+      });
+
       // Add user message immediately to UI
       const tempUserMessage: AIMessage = {
         id: `user-temp-${Date.now()}`,
@@ -176,17 +189,17 @@ const WaktiAIV2 = () => {
       
       console.log('📡 CALLING: HAIKU-powered WaktiAIV2Service with HYBRID MEMORY');
       
-      // ENHANCED CALL with HYBRID MEMORY context
+      // ENHANCED CALL with HYBRID MEMORY context - PASS THE LOADED CONTEXT
       const aiResponse = await WaktiAIV2Service.sendMessage(
         messageContent,
         userProfile?.id,
         language,
         currentConversationId,
         inputType,
-        sessionMessages.slice(-5), // Recent messages for HYBRID MEMORY
-        false, // Use HYBRID MEMORY context loading
+        hybridContext.recentMessages, // Use loaded hybrid memory context
+        true, // Skip context load since we already loaded it
         activeTrigger,
-        '', // Let HYBRID MEMORY handle conversation summary
+        hybridContext.conversationSummary, // Pass loaded conversation summary
         attachedFiles || []
       );
       
@@ -223,12 +236,35 @@ const WaktiAIV2 = () => {
         newMessages[newMessages.length - 1] = assistantMessage;
         return newMessages;
       });
+
+      // CRITICAL: Add messages to hybrid memory after successful response
+      HybridMemoryService.addMessage(
+        userProfile.id, 
+        aiResponse.conversationId, 
+        {
+          id: tempUserMessage.id,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          intent: '',
+          attachedFiles: attachedFiles
+        },
+        {
+          id: assistantMessage.id,
+          role: 'assistant', 
+          content: assistantMessage.content,
+          timestamp: new Date(),
+          intent: assistantMessage.intent || '',
+          attachedFiles: []
+        }
+      );
       
       setCurrentConversationId(aiResponse.conversationId);
       setIsNewConversation(false);
       
       const totalTime = Date.now() - startTime;
       console.log(`✅ HAIKU SUCCESS: Ultra-fast processing completed in ${totalTime}ms`);
+      console.log('🧠 HYBRID MEMORY: Messages added to memory system');
       
       setProcessedFiles([]);
       checkQuotas();
@@ -237,7 +273,7 @@ const WaktiAIV2 = () => {
         fileInputRef.current.value = '';
       }
 
-      console.log('🎉 HYBRID MEMORY + HAIKU: 4x faster response delivered!');
+      console.log('🎉 HYBRID MEMORY + HAIKU: 4x faster response delivered with memory!');
 
     } catch (err: any) {
       const totalTime = Date.now() - startTime;
@@ -518,7 +554,7 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 overflow-y-auto pb-44" ref={scrollAreaRef}>
+        <div className="flex-1 overflow-y-auto pb-48" ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -538,8 +574,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* ENHANCED: Input positioning for mobile nav clearance */}
-        <div className="fixed bottom-24 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
+        {/* ADJUSTED: Input positioning - moved down slightly for better button visibility */}
+        <div className="fixed bottom-20 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto">
             <ChatInput
               message={message}

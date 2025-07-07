@@ -192,8 +192,8 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main Input Area */}
-        <div className="px-3 pb-3">
+        {/* Main Input Area - ADJUSTED POSITION */}
+        <div className="px-3 pb-3 pt-2">
           <div className="max-w-4xl mx-auto">
             <div
               className={`
@@ -260,7 +260,7 @@ export function ChatInput({
                 />
               </div>
               
-              {/* INPUT ROW: Textarea + Send */}
+              {/* INPUT ROW: Textarea + Send - IMPROVED DARK MODE VISIBILITY */}
               <div className="relative flex items-end gap-2 px-3 pb-3 pt-0.5">
                 <div className="flex-1 flex items-end">
                   <Textarea
@@ -269,13 +269,14 @@ export function ChatInput({
                     placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
                     className={`
                       flex-1 border-[2.5px]
-                      bg-white/95 dark:bg-black/50
+                      bg-white/95 dark:bg-gray-800/90
+                      text-gray-900 dark:text-gray-100
                       ${textareaHighlightClass}
                       shadow-inner shadow-primary/10
                       backdrop-blur-[3px] resize-none
                       focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
                       py-3 px-4 min-h-[42px] max-h-32 text-base leading-relaxed
-                      placeholder:text-foreground/50
+                      placeholder:text-gray-500 dark:placeholder:text-gray-400
                       rounded-xl
                       outline-none transition-all duration-200
                     `}
@@ -291,7 +292,7 @@ export function ChatInput({
                   />
                 </div>
                 
-                {/* FIXED: Send button with proper enabling logic */}
+                {/* Send button with proper enabling logic */}
                 {canSend && (
                   <TooltipProvider>
                     <Tooltip>
