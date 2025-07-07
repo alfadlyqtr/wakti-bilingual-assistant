@@ -1,4 +1,5 @@
-// Ultra-Fast Wakti AI Service with COMPLETE REPAIR SYSTEM
+
+// Ultra-Fast Wakti AI Service with CLAUDE 3.5 SONNET MIGRATION
 import { supabase } from '@/integrations/supabase/client';
 import { UltraFastMemoryCache } from './UltraFastMemoryCache';
 import { StreamingResponseManager } from './StreamingResponseManager';
@@ -7,7 +8,7 @@ import { EnhancedTaskCreationService } from './EnhancedTaskCreationService';
 import { AIMessage } from './WaktiAIV2Service';
 
 class UltraFastWaktiAIServiceClass {
-  // COMPLETE REPAIR: Send message with restored memory and proper Vision processing
+  // CLAUDE MIGRATION: Send message with restored memory and Claude processing
   async sendMessageUltraFast(
     message: string,
     userId?: string,
@@ -28,15 +29,15 @@ class UltraFastWaktiAIServiceClass {
       }
 
       // Generate or use existing conversation ID
-      const actualConversationId = conversationId || `repair-${Date.now()}`;
+      const actualConversationId = conversationId || `claude-${Date.now()}`;
       
-      console.log('🚀 COMPLETE REPAIR: Processing message with FULL context restoration');
+      console.log('🚀 CLAUDE MIGRATION: Processing message with FULL Claude 3.5 Sonnet integration');
       
       // ENHANCED: Check for task creation intent FIRST
       const taskIntent = EnhancedTaskCreationService.detectTaskCreationIntent(message);
       console.log('🎯 TASK INTENT:', taskIntent ? `${taskIntent.language} (${taskIntent.confidence})` : 'None');
       
-      // PHASE 2: MEMORY - Get FULL context from database
+      // MEMORY - Get FULL context from database
       let contextData = await UltraFastMemoryCache.getConversationContext(userId, actualConversationId);
       
       // If no cache hit, queue background context loading
@@ -55,38 +56,38 @@ class UltraFastWaktiAIServiceClass {
         };
       }
       
-      // PHASE 2: Start streaming if callback provided
+      // Start streaming if callback provided
       if (onStreamUpdate) {
         StreamingResponseManager.startStream(actualConversationId, onStreamUpdate);
       }
       
-      // PHASE 2: Get FULL context for AI system prompt - COMPLETE RESTORATION
+      // Get FULL context for AI system prompt
       const fullContext = UltraFastMemoryCache.getFullContext(userId, actualConversationId);
-      console.log('🧠 COMPLETE CONTEXT RESTORED:', fullContext.recentMessages.length, 'messages,', fullContext.summary.length, 'chars summary');
+      console.log('🧠 CLAUDE CONTEXT RESTORED:', fullContext.recentMessages.length, 'messages,', fullContext.summary.length, 'chars summary');
       
-      console.log('🚀 COMPLETE REPAIR: Sending to AI with FULL RESTORED context + Vision support');
+      console.log('🚀 CLAUDE MIGRATION: Sending to Claude 3.5 Sonnet with FULL RESTORED context + Vision support');
       
-      // PHASE 1: Validate image files for Vision processing
+      // Validate image files for Vision processing
       let validatedFiles = [];
       if (attachedFiles && attachedFiles.length > 0) {
         validatedFiles = attachedFiles.filter(file => {
           if (file.type && file.type.startsWith('image/')) {
             const hasValidUrl = file.image_url?.url;
             if (hasValidUrl) {
-              console.log(`✅ VISION FILE READY: ${file.name} -> ${file.image_url.url.substring(0, 50)}...`);
+              console.log(`✅ CLAUDE VISION FILE READY: ${file.name} -> ${file.image_url.url.substring(0, 50)}...`);
               return true;
             } else {
-              console.error(`❌ VISION FILE INVALID: ${file.name} - no valid URL`);
+              console.error(`❌ CLAUDE VISION FILE INVALID: ${file.name} - no valid URL`);
               return false;
             }
           }
           return false;
         });
         
-        console.log(`🖼️ VISION PROCESSING: ${validatedFiles.length} of ${attachedFiles.length} files ready`);
+        console.log(`🖼️ CLAUDE VISION PROCESSING: ${validatedFiles.length} of ${attachedFiles.length} files ready`);
       }
       
-      // PHASE 2 & 4: Call AI service with FULL context, Vision support, and error handling
+      // Call Claude brain service with FULL context, Vision support, and error handling
       const aiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -95,11 +96,10 @@ class UltraFastWaktiAIServiceClass {
           conversationId: actualConversationId,
           inputType,
           activeTrigger: taskIntent ? 'task_creation' : activeTrigger,
-          attachedFiles: validatedFiles, // Send validated files for Vision
+          attachedFiles: validatedFiles, // Send validated files for Claude Vision
           conversationSummary: fullContext.summary, // FULL summary
           recentMessages: fullContext.recentMessages, // Last 3-4 messages
           speedOptimized: true,
-          aggressiveOptimization: false, // PHASE 2: COMPLETELY DISABLED
           maxTokens: 4096,
           personalTouch: this.getPersonalTouch()
         }
@@ -113,8 +113,8 @@ class UltraFastWaktiAIServiceClass {
       const { data, error } = await Promise.race([aiPromise, timeoutPromise]) as any;
       
       if (error) {
-        console.error('❌ COMPLETE REPAIR: AI Error:', error);
-        throw new Error(error.message || 'AI processing failed');
+        console.error('❌ CLAUDE MIGRATION: AI Error:', error);
+        throw new Error(error.message || 'Claude AI processing failed');
       }
       
       // Create message objects with enhanced metadata
@@ -156,7 +156,7 @@ class UltraFastWaktiAIServiceClass {
         }
       }
       
-      // PHASE 2: Update cache immediately with FULL context
+      // Update cache immediately with FULL context
       const updatedContext = {
         messages: [...(contextData?.messages || []), userMessage, assistantMessage].slice(-10),
         summary: fullContext.summary, // Keep full summary
@@ -180,7 +180,7 @@ class UltraFastWaktiAIServiceClass {
         StreamingResponseManager.completeStream(actualConversationId, assistantMessage.content);
       }
       
-      console.log('✅ COMPLETE REPAIR: Completed with FULL CONTEXT + Vision + Error Handling');
+      console.log('✅ CLAUDE MIGRATION: Completed with FULL CONTEXT + Vision + Error Handling');
       
       return {
         ...data,
@@ -196,20 +196,20 @@ class UltraFastWaktiAIServiceClass {
         taskData: taskData,
         contextRestored: true, // ALWAYS true now
         fullContextUsed: true, // FULL context used
-        aggressiveOptimizationDisabled: true, // CONFIRMED disabled
         visionEnabled: validatedFiles.length > 0,
-        repairSystemActive: true // COMPLETE REPAIR confirmation
+        claudeMigrationActive: true, // CLAUDE MIGRATION confirmation
+        claudeModel: 'claude-3-5-sonnet-20241022'
       };
       
     } catch (error: any) {
-      console.error('❌ COMPLETE REPAIR: Service Error:', error);
+      console.error('❌ CLAUDE MIGRATION: Service Error:', error);
       
       // Complete streaming on error
       if (onStreamUpdate && conversationId) {
         StreamingResponseManager.completeStream(conversationId);
       }
       
-      // PHASE 4: Surface meaningful errors
+      // Surface meaningful errors
       let userFriendlyError = 'Sorry, I encountered an error processing your request.';
       
       if (error.message.includes('timeout')) {
@@ -218,6 +218,8 @@ class UltraFastWaktiAIServiceClass {
         userFriendlyError = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
       } else if (error.message.includes('Authentication')) {
         userFriendlyError = 'Please log in to continue.';
+      } else if (error.message.includes('Claude') || error.message.includes('Anthropic')) {
+        userFriendlyError = 'AI service temporarily unavailable. Please try again in a moment.';
       }
       
       throw new Error(userFriendlyError);
@@ -270,7 +272,7 @@ class UltraFastWaktiAIServiceClass {
   
   clearConversationUltraFast(userId: string, conversationId: string): void {
     UltraFastMemoryCache.invalidateConversation(userId, conversationId);
-    console.log('🗑️ COMPLETE REPAIR: Conversation cleared with FULL context');
+    console.log('🗑️ CLAUDE MIGRATION: Conversation cleared with FULL context');
   }
   
   getCacheStats(): any {
@@ -280,9 +282,9 @@ class UltraFastWaktiAIServiceClass {
       streamingActive: StreamingResponseManager.isStreaming('any'),
       taskCreationActive: true,
       contextRestored: true, // ALWAYS true
-      aggressiveOptimizationDisabled: true, // CONFIRMED
-      visionEnabled: true, // COMPLETE REPAIR includes Vision
-      repairSystemActive: true, // COMPLETE REPAIR confirmation
+      visionEnabled: true, // CLAUDE MIGRATION includes Vision
+      claudeMigrationActive: true, // CLAUDE MIGRATION confirmation
+      claudeModel: 'claude-3-5-sonnet-20241022',
       timestamp: Date.now()
     };
   }

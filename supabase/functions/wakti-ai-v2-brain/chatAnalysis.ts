@@ -1,10 +1,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { callClaudeAPI, callDeepSeekAPI, logWithTimestamp } from './utils.ts';
 
-const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-
-export async function processWithBuddyChatAI(
+export async function processWithClaudeAI(
   message: string,
   userId: string,
   conversationId: string | null,
@@ -17,7 +15,7 @@ export async function processWithBuddyChatAI(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log('🚀 CHAT PROCESSING: Starting with COMPLETE REPAIR SYSTEM');
+    console.log('🚀 CLAUDE PROCESSING: Starting with COMPLETE CLAUDE MIGRATION');
     console.log('🖼️ FILES:', processedFiles.length, 'files provided for Vision');
     
     // Check for task creation triggers 
@@ -32,13 +30,13 @@ export async function processWithBuddyChatAI(
       message.toLowerCase().includes(trigger.toLowerCase())
     );
     
-    // PHASE 2: MEMORY - Build FULL context from recent messages and summary
+    // MEMORY: Build FULL context from recent messages and summary
     let contextMessages = [];
     
     // Add conversation summary as system context if available
     if (conversationSummary && conversationSummary.trim()) {
       contextMessages.push({
-        role: 'system',
+        role: 'user',
         content: `Previous conversation context: ${conversationSummary}`
       });
       console.log(`🧠 CONTEXT: Added conversation summary (${conversationSummary.length} chars)`);
@@ -46,25 +44,23 @@ export async function processWithBuddyChatAI(
     
     // Add recent messages for immediate context (last 3-4 messages)
     const formattedRecentMessages = recentMessages.slice(-4).map(msg => ({
-      role: msg.role,
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
       content: msg.content
     }));
     contextMessages.push(...formattedRecentMessages);
     console.log(`🧠 CONTEXT: Added ${formattedRecentMessages.length} recent messages`);
     
-    // PHASE 1: VISION - Check if this is an image processing request
+    // VISION: Check if this is an image processing request
     const hasImages = processedFiles && processedFiles.length > 0 && 
                      processedFiles.some(file => file.type && file.type.startsWith('image/'));
     
     let systemPrompt = '';
-    let model = '';
     
     if (hasImages) {
-      // PHASE 1: VISION PROCESSING with gpt-4-vision-preview
-      console.log('🖼️ VISION: Processing with images using gpt-4-vision-preview');
-      model = 'gpt-4-vision-preview';
+      // VISION PROCESSING with Claude 3.5 Sonnet
+      console.log('🖼️ VISION: Processing with images using Claude 3.5 Sonnet');
       
-      // PHASE 3: BILINGUAL VISION SYSTEM PROMPTS
+      // BILINGUAL VISION SYSTEM PROMPTS
       systemPrompt = language === 'ar' 
         ? `أنت مساعد ذكي يعتمد على الرؤية. عندما يرفع المستخدمون صورة، يجب عليك ملاحظتها بعناية واستخراج جميع المعلومات الظاهرة — بما في ذلك النصوص، الأرقام، التخطيط، التصميم، الأشخاص، الأشياء، المشاهد، والسياق البصري. أجب دائماً بوضوح وبدقة وبشكل مفيد. إذا سأل المستخدم سؤالًا، أجب عنه مباشرة باستخدام ما تراه في الصورة.
 
@@ -81,9 +77,8 @@ Always start your reply with:
 If the image is blurry, low resolution, or unclear — say that.
 Do not make up information. Be honest about what you can or cannot see.`;
     } else {
-      // PHASE 1: Regular text chat with gpt-4o-mini
-      console.log('💬 CHAT: Processing text-only using gpt-4o-mini');
-      model = 'gpt-4o-mini';
+      // Regular text chat
+      console.log('💬 CHAT: Processing text-only using Claude 3.5 Sonnet');
       
       // Regular chat prompt with personalization
       systemPrompt = `You are a helpful AI assistant. Respond naturally and conversationally to the user's questions and requests.`;
@@ -116,16 +111,18 @@ Do not make up information. Be honest about what you can or cannot see.`;
       systemPrompt += ' Respond in Arabic.';
     }
 
-    console.log(`🎯 MODEL SELECTION: Using ${model} for ${hasImages ? 'Vision' : 'Chat'}`);
+    console.log(`🎯 MODEL SELECTION: Using Claude 3.5 Sonnet for ${hasImages ? 'Vision' : 'Chat'}`);
 
-    // Prepare messages for API
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...contextMessages
-    ];
+    // Prepare messages for Claude API
+    const claudeMessages = [];
+    
+    // Add context messages
+    if (contextMessages.length > 0) {
+      claudeMessages.push(...contextMessages);
+    }
 
     if (hasImages) {
-      console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Vision');
+      console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Claude Vision');
       
       // Create content array with text and images for Vision
       const messageContent = [
@@ -140,178 +137,162 @@ Do not make up information. Be honest about what you can or cannot see.`;
           const imageUrl = file.image_url?.url;
           console.log(`🔗 VISION URL: ${imageUrl ? imageUrl.substring(0, 50) + '...' : 'NOT FOUND'}`);
           
-          if (imageUrl) {
+          if (imageUrl && imageUrl.startsWith('data:image/')) {
+            // Extract base64 data and media type
+            const [mediaInfo, base64Data] = imageUrl.split(',');
+            const mediaType = mediaInfo.split(':')[1].split(';')[0];
+            
             messageContent.push({
-              type: 'image_url',
-              image_url: {
-                url: imageUrl,
-                detail: 'auto'
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: base64Data
               }
             });
           } else {
-            console.error(`❌ VISION: No valid URL found for image: ${file.name}`);
+            console.error(`❌ VISION: No valid base64 URL found for image: ${file.name}`);
           }
         }
       }
 
-      messages.push({ role: 'user', content: messageContent });
+      claudeMessages.push({ 
+        role: 'user', 
+        content: messageContent 
+      });
       console.log(`🖼️ VISION: Message content prepared with ${messageContent.length - 1} images`);
     } else {
       // Simple text message for regular chat
-      messages.push({ role: 'user', content: message });
+      claudeMessages.push({ 
+        role: 'user', 
+        content: message 
+      });
     }
 
-    if (!OPENAI_API_KEY) {
-      throw new Error('OpenAI API key not configured');
+    // Add system prompt as first message
+    if (systemPrompt) {
+      claudeMessages.unshift({ 
+        role: 'user', 
+        content: systemPrompt 
+      });
     }
 
-    // PHASE 5: RETRY LOGIC with proper fallbacks
+    // RETRY LOGIC with Claude primary, DeepSeek fallback
     let lastError;
     const maxRetries = 2;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        let currentModel = model;
-        let apiUrl = 'https://api.openai.com/v1/chat/completions';
-        let apiKey = OPENAI_API_KEY;
+        console.log(`🔄 ATTEMPT ${attempt + 1}: Calling Claude 3.5 Sonnet`);
         
-        // PHASE 5: RETRY LOGIC - Determine model and API based on attempt
-        if (attempt === 1) {
+        if (attempt === 0) {
+          // Primary: Claude 3.5 Sonnet
+          const claudeResponse = await callClaudeAPI(claudeMessages, maxTokens);
+          
+          console.log('📥 CLAUDE: Success with Claude 3.5 Sonnet');
+          
+          if (!claudeResponse.content || !claudeResponse.content[0] || !claudeResponse.content[0].text) {
+            console.error('❌ CLAUDE: Invalid response structure:', claudeResponse);
+            throw new Error('Invalid Claude API response structure');
+          }
+
+          const aiResponse = claudeResponse.content[0].text;
+          console.log('✅ CLAUDE: Response generated successfully');
+          console.log('🎯 RESPONSE PREVIEW:', aiResponse.substring(0, 100) + '...');
+          
+          return {
+            response: aiResponse,
+            model: 'claude-3-5-sonnet-20241022',
+            tokensUsed: claudeResponse.usage?.input_tokens + claudeResponse.usage?.output_tokens || 0,
+            contextUsed: contextMessages.length,
+            personalizedResponse: !!personalTouch,
+            taskCreationIntent: shouldCreateTask,
+            intent: shouldCreateTask ? 'task_creation' : 'chat',
+            confidence: shouldCreateTask ? 'high' : 'medium',
+            attempt: attempt + 1,
+            fallbackUsed: false,
+            visionUsed: hasImages,
+            fullContextRestored: true,
+            claudeMigrationComplete: true
+          };
+
+        } else {
+          // Fallback: DeepSeek (chat only, no vision)
           if (hasImages) {
-            // Vision fallback: retry with gpt-4o-mini (still has vision)
-            currentModel = 'gpt-4o-mini';
-            console.log(`🔄 VISION FALLBACK: Retrying with ${currentModel}`);
+            console.log('🔄 VISION FALLBACK: Converting to text-only for DeepSeek');
+            const fallbackMessages = [
+              { role: 'system', content: systemPrompt },
+              ...contextMessages,
+              { role: 'user', content: `${message} [Note: User uploaded ${processedFiles.length} image(s) but Vision processing failed]` }
+            ];
+            
+            const deepseekResponse = await callDeepSeekAPI(fallbackMessages, maxTokens);
+            
+            return {
+              response: deepseekResponse.choices[0].message.content,
+              model: 'deepseek-chat',
+              tokensUsed: deepseekResponse.usage?.total_tokens || 0,
+              contextUsed: contextMessages.length,
+              personalizedResponse: !!personalTouch,
+              taskCreationIntent: shouldCreateTask,
+              intent: shouldCreateTask ? 'task_creation' : 'chat',
+              confidence: shouldCreateTask ? 'high' : 'medium',
+              attempt: attempt + 1,
+              fallbackUsed: true,
+              visionUsed: false,
+              fullContextRestored: true,
+              claudeMigrationComplete: true
+            };
           } else {
-            // Chat fallback: switch to DeepSeek
-            currentModel = 'deepseek-chat';
-            apiUrl = 'https://api.deepseek.com/chat/completions';
-            apiKey = DEEPSEEK_API_KEY;
-            console.log(`🔄 CHAT FALLBACK: Retrying with ${currentModel}`);
+            // Regular chat fallback
+            const fallbackMessages = [
+              { role: 'system', content: systemPrompt },
+              ...contextMessages.map(msg => ({ role: msg.role, content: msg.content })),
+              { role: 'user', content: message }
+            ];
+            
+            const deepseekResponse = await callDeepSeekAPI(fallbackMessages, maxTokens);
+            
+            return {
+              response: deepseekResponse.choices[0].message.content,
+              model: 'deepseek-chat',
+              tokensUsed: deepseekResponse.usage?.total_tokens || 0,
+              contextUsed: contextMessages.length,
+              personalizedResponse: !!personalTouch,
+              taskCreationIntent: shouldCreateTask,
+              intent: shouldCreateTask ? 'task_creation' : 'chat',
+              confidence: shouldCreateTask ? 'high' : 'medium',
+              attempt: attempt + 1,
+              fallbackUsed: true,
+              visionUsed: false,
+              fullContextRestored: true,
+              claudeMigrationComplete: true
+            };
           }
-        } else if (attempt === 2) {
-          // Final fallback for Vision: convert to text-only with gpt-4o-mini
-          if (hasImages) {
-            currentModel = 'gpt-4o-mini';
-            console.log(`🔄 FINAL VISION FALLBACK: Converting to text-only with ${currentModel}`);
-          }
         }
-        
-        if (!apiKey) {
-          throw new Error(`${currentModel === 'deepseek-chat' ? 'DeepSeek' : 'OpenAI'} API key not configured`);
-        }
-        
-        console.log(`🔄 ATTEMPT ${attempt + 1}: Calling OpenAI with model: ${currentModel}`);
-        
-        // Adjust messages for fallback models
-        let finalMessages = messages;
-        if (attempt === 2 && hasImages) {
-          // For final Vision fallback, convert to text-only
-          finalMessages = [
-            { role: 'system', content: systemPrompt },
-            ...contextMessages,
-            { role: 'user', content: `${message} [Note: User uploaded ${processedFiles.length} image(s) but Vision processing failed]` }
-          ];
-        }
-
-        const requestPayload = {
-          model: currentModel,
-          messages: finalMessages,
-          max_tokens: maxTokens,
-          temperature: 0.7,
-          stream: false
-        };
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestPayload),
-        });
-
-        console.log(`📥 API RESPONSE: Status ${response.status} for ${currentModel}`);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            errorData = { error: { message: errorText } };
-          }
-          
-          // PHASE 4: MEANINGFUL ERROR MESSAGES
-          let userFriendlyError = 'Sorry, I encountered an error processing your request.';
-          
-          if (response.status === 429) {
-            userFriendlyError = language === 'ar' 
-              ? 'عذراً، تم تجاوز الحد المسموح للطلبات. يرجى المحاولة مرة أخرى بعد قليل.'
-              : 'Rate limit exceeded. Please try again in a moment.';
-          } else if (response.status === 401) {
-            userFriendlyError = language === 'ar'
-              ? 'خطأ في المصادقة. يرجى المحاولة مرة أخرى.'
-              : 'Authentication error. Please try again.';
-          } else if (response.status === 400) {
-            userFriendlyError = language === 'ar'
-              ? '❌ لم أتمكن من معالجة الصورة المرفوعة. يرجى رفع صورة صالحة بصيغة JPEG أو PNG.'
-              : '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
-          }
-          
-          const error = new Error(`${currentModel} API error (${response.status}): ${errorData.error?.message || errorText}`);
-          error.userFriendly = userFriendlyError;
-          throw error;
-        }
-
-        const data = await response.json();
-        console.log(`📥 API: Success with model ${currentModel}`);
-        
-        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-          console.error('❌ API: Invalid response structure:', data);
-          throw new Error('Invalid API response structure');
-        }
-
-        const aiResponse = data.choices[0].message.content;
-        console.log('✅ AI: Response generated successfully');
-        console.log('🎯 RESPONSE PREVIEW:', aiResponse.substring(0, 100) + '...');
-        
-        return {
-          response: aiResponse,
-          model: currentModel,
-          tokensUsed: data.usage?.total_tokens || 0,
-          contextUsed: contextMessages.length,
-          personalizedResponse: !!personalTouch,
-          taskCreationIntent: shouldCreateTask,
-          intent: shouldCreateTask ? 'task_creation' : 'chat',
-          confidence: shouldCreateTask ? 'high' : 'medium',
-          attempt: attempt + 1,
-          fallbackUsed: attempt > 0,
-          visionUsed: hasImages && (currentModel === 'gpt-4-vision-preview' || currentModel === 'gpt-4o-mini'),
-          fullContextRestored: true
-        };
 
       } catch (error) {
-        console.error(`🚨 AI: Attempt ${attempt + 1} failed:`, error);
+        console.error(`🚨 CLAUDE: Attempt ${attempt + 1} failed:`, error);
         lastError = error;
         
         if (attempt < maxRetries) {
-          console.log(`🔄 RETRY: Attempting fallback model (attempt ${attempt + 2})`);
+          console.log(`🔄 RETRY: Attempting DeepSeek fallback (attempt ${attempt + 2})`);
           continue;
         }
       }
     }
     
     // All retries failed - return meaningful error
-    console.error('🚨 AI: All retry attempts failed:', lastError);
+    console.error('🚨 CLAUDE: All retry attempts failed:', lastError);
     throw lastError;
 
   } catch (error) {
-    console.error('🚨 AI: Critical processing error:', error);
+    console.error('🚨 CLAUDE: Critical processing error:', error);
     
-    // PHASE 4: SURFACE MEANINGFUL ERRORS
-    const userFriendlyMessage = error.userFriendly || (language === 'ar' 
+    // MEANINGFUL ERRORS
+    const userFriendlyMessage = language === 'ar' 
       ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى أو ارفع صورة جديدة.'
-      : '❌ Sorry, I encountered an error processing your request. Please try again or upload a new image.');
+      : '❌ Sorry, I encountered an error processing your request. Please try again or upload a new image.';
     
     return {
       response: userFriendlyMessage,
@@ -323,7 +304,8 @@ Do not make up information. Be honest about what you can or cannot see.`;
       error: error.message,
       userFriendlyError: userFriendlyMessage,
       visionUsed: false,
-      fullContextRestored: false
+      fullContextRestored: false,
+      claudeMigrationComplete: false
     };
   }
 }

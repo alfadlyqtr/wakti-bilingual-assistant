@@ -3,10 +3,10 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { analyzeTaskIntent } from "./taskParsing.ts";
-import { processWithBuddyChatAI } from "./chatAnalysis.ts";
+import { processWithClaudeAI } from "./chatAnalysis.ts";
 import { generateImageWithRunware } from "./imageGeneration.ts";
 import { executeRegularSearch } from "./search.ts";
-import { generateConversationId, DEEPSEEK_API_KEY, OPENAI_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY, supabase } from "./utils.ts";
+import { generateConversationId, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY, supabase } from "./utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +30,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI: COMPLETE REPAIR - One Brain System with Full Vision + Context Restoration");
+console.log("🚀 WAKTI AI: CLAUDE 3.5 SONNET MIGRATION - Single Brain System with Full Claude Integration");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -38,7 +38,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI: Processing request with COMPLETE REPAIR SYSTEM");
+    console.log("🚀 WAKTI AI: Processing request with CLAUDE 3.5 SONNET SYSTEM");
     const startTime = Date.now();
 
     const skipAuth = req.headers.get('x-skip-auth') === 'true';
@@ -88,7 +88,6 @@ serve(async (req) => {
       userStyle = 'detailed',
       userTone = 'neutral',
       speedOptimized = true,
-      aggressiveOptimization = false, // PHASE 2: FIXED - Disabled aggressive optimization
       hasTaskIntent = false,
       personalityEnabled = true,
       enableTaskCreation = true,
@@ -119,7 +118,7 @@ serve(async (req) => {
     const currentDateContext = getCurrentDateContext();
     console.log(`🚀 WAKTI AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
 
-    // PHASE 1: VISION & IMAGE PROCESSING - Validate and log image files
+    // VISION & IMAGE PROCESSING - Validate and log image files
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
       console.log(`📁 IMAGE PROCESSING: Validating ${attachedFiles.length} files`);
@@ -156,10 +155,10 @@ serve(async (req) => {
         });
       }
       
-      console.log(`🚀 IMAGE PROCESSING: Successfully validated ${processedFiles.length} files for Vision processing`);
+      console.log(`🚀 IMAGE PROCESSING: Successfully validated ${processedFiles.length} files for Claude Vision processing`);
     }
 
-    // PHASE 2: MEMORY & CONTEXT - Load FULL conversation context from database
+    // MEMORY & CONTEXT - Load FULL conversation context from database
     let contextRecentMessages = [];
     let contextConversationSummary = '';
     
@@ -214,7 +213,7 @@ serve(async (req) => {
     
     console.log(`🧠 FINAL CONTEXT: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
 
-    // PHASE 3: TASK DETECTION
+    // TASK DETECTION
     let taskAnalysisResult = null;
     try {
       console.log("🔍 TASK DETECTION: Analyzing message for task intent");
@@ -244,7 +243,6 @@ serve(async (req) => {
         success: true,
         processingTime,
         speedOptimized: true,
-        aggressiveOptimization: false,
         userStyle,
         userTone,
         tokensUsed: 0,
@@ -254,7 +252,8 @@ serve(async (req) => {
         taskDetected: true,
         currentDateContext,
         contextRestored: true,
-        fullContextUsed: true
+        fullContextUsed: true,
+        claudeMigrationComplete: true
       };
 
       console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
@@ -263,7 +262,7 @@ serve(async (req) => {
       });
     }
 
-    // PHASE 4: MAIN PROCESSING
+    // MAIN PROCESSING WITH CLAUDE
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -279,7 +278,7 @@ serve(async (req) => {
           browsingData = searchResult.data;
           const context = searchResult.context.substring(0, 800);
           
-          const chatResult = await processWithBuddyChatAI(
+          const chatResult = await processWithClaudeAI(
             `${currentDateContext}\n\n${message}\n\nSearch Context: ${context}`,
             userId,
             conversationId,
@@ -293,7 +292,7 @@ serve(async (req) => {
           );
           response = chatResult.response;
         } else {
-          const chatResult = await processWithBuddyChatAI(
+          const chatResult = await processWithClaudeAI(
             `${currentDateContext}\n\n${message}`,
             userId,
             conversationId,
@@ -341,10 +340,10 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 AI CHAT: Processing with COMPLETE REPAIR SYSTEM`);
-        console.log(`🖼️ FILES: ${processedFiles.length} files ready for Vision processing`);
+        console.log(`🚀 CLAUDE AI CHAT: Processing with CLAUDE 3.5 SONNET SYSTEM`);
+        console.log(`🖼️ FILES: ${processedFiles.length} files ready for Claude Vision processing`);
         
-        const chatResult = await processWithBuddyChatAI(
+        const chatResult = await processWithClaudeAI(
           `${currentDateContext}\n\n${message}`,
           userId,
           conversationId,
@@ -362,12 +361,12 @@ serve(async (req) => {
     }
 
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 WAKTI AI: COMPLETE REPAIR processing completed in ${processingTime}ms`);
+    console.log(`🚀 WAKTI AI: CLAUDE MIGRATION processing completed in ${processingTime}ms`);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'complete_repair_system',
+      intent: 'claude_migration_complete',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -379,19 +378,18 @@ serve(async (req) => {
       success: true,
       processingTime,
       speedOptimized: true,
-      aggressiveOptimization: false, // PHASE 2: CONFIRMED DISABLED
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: 'wakti_ai_complete_repair',
+      aiProvider: 'wakti_ai_claude_migration',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
       visionEnhanced: processedFiles.length > 0,
       contextRestored: true,
-      modelsUsed: processedFiles.length > 0 ? 'gpt-4-vision-preview with fallbacks' : 'gpt-4o-mini with deepseek fallback',
+      modelsUsed: processedFiles.length > 0 ? 'claude-3-5-sonnet-20241022 with vision' : 'claude-3-5-sonnet-20241022 with deepseek fallback',
       fallbacksAvailable: true,
-      repairSystemActive: true,
+      claudeMigrationComplete: true,
       fullContextUsed: true
     };
 
@@ -402,7 +400,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("🚨 WAKTI AI: Critical Error:", error);
     
-    // PHASE 4: ENHANCED ERROR HANDLING
+    // ENHANCED ERROR HANDLING
     let userFriendlyError = 'Sorry, I encountered an error processing your request. Please try again.';
     
     if (error.message.includes('Authentication')) {
@@ -411,6 +409,8 @@ serve(async (req) => {
       userFriendlyError = 'Too many requests. Please wait a moment and try again.';
     } else if (error.message.includes('image') || error.message.includes('vision')) {
       userFriendlyError = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
+    } else if (error.message.includes('Anthropic')) {
+      userFriendlyError = 'AI service temporarily unavailable. Please try again in a moment.';
     }
     
     return new Response(JSON.stringify({
@@ -418,7 +418,7 @@ serve(async (req) => {
       success: false,
       currentDateContext: getCurrentDateContext(),
       contextRestored: false,
-      repairSystemActive: true
+      claudeMigrationComplete: false
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
