@@ -2,7 +2,6 @@
 /**
  * Task and reminder extraction for Wakti Edge Function
  */
-import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 
 export async function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
@@ -128,6 +127,10 @@ Return ONLY this JSON, with no comments:
 User message:
 "${message}"
 `;
+
+  // Get API keys directly from environment
+  const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
   // Try DeepSeek first if key is available
   if (DEEPSEEK_API_KEY) {
