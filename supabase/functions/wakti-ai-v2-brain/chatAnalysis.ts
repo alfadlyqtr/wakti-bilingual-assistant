@@ -1,4 +1,5 @@
 
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
 const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
@@ -32,19 +33,19 @@ export async function processWithBuddyChatAI(
       message.toLowerCase().includes(trigger.toLowerCase())
     );
     
-    // Build context from recent messages and summary
+    // Build context from recent messages and summary - FULL CONTEXT RESTORED
     let contextMessages = [];
     
     // Add conversation summary as system context if available
     if (conversationSummary && conversationSummary.trim()) {
       contextMessages.push({
         role: 'system',
-        content: `Previous conversation context: ${conversationSummary.substring(0, 300)}`
+        content: `Previous conversation context: ${conversationSummary}`
       });
     }
     
-    // Add recent messages for immediate context (last 3-5 messages)
-    const formattedRecentMessages = recentMessages.slice(-3).map(msg => ({
+    // Add recent messages for immediate context (last 3-4 messages as specified)
+    const formattedRecentMessages = recentMessages.slice(-4).map(msg => ({
       role: msg.role,
       content: msg.content
     }));
@@ -58,39 +59,56 @@ export async function processWithBuddyChatAI(
     let model = '';
     
     if (hasImages) {
-      // Vision processing with images
-      console.log('🖼️ VISION: Processing with images using gpt-4o');
-      model = 'gpt-4o';
-      systemPrompt = `ENGLISH: You are a precise, visual AI assistant. When users upload images, extract every visible detail — including text, layout, people, scenes, objects, and context. Always respond with a clear, structured summary and direct answers to the user's question. Start your reply with: "I can see..."
+      // FIXED: Vision processing with gpt-4-vision-preview instead of gpt-4o
+      console.log('🖼️ VISION: Processing with images using gpt-4-vision-preview');
+      model = 'gpt-4-vision-preview';
+      
+      // FIXED: Bilingual Vision system prompt as specified
+      systemPrompt = language === 'ar' 
+        ? `أنت مساعد ذكي يعتمد على الرؤية. عندما يرفع المستخدمون صورة، يجب عليك ملاحظتها بعناية واستخراج جميع المعلومات الظاهرة — بما في ذلك النصوص، الأرقام، التخطيط، التصميم، الأشخاص، الأشياء، المشاهد، والسياق البصري. أجب دائماً بوضوح وبدقة وبشكل مفيد. إذا سأل المستخدم سؤالًا، أجب عنه مباشرة باستخدام ما تراه في الصورة.
 
-ARABIC: أنت مساعد ذكي دقيق يعتمد على الرؤية. عند رفع المستخدمين للصور، استخرج جميع التفاصيل الظاهرة — بما في ذلك النصوص، التخطيط، الأشخاص، المشاهد، الأشياء، والسياق. أجب دائماً بملخص منظم وواضح، وابدأ ردك بعبارة: "أرى أن..."`;
+ابدأ ردك دائماً بعبارة:
+"أرى أن..."
+
+إذا كانت الصورة غير واضحة أو منخفضة الجودة — قل ذلك.
+لا تفترض معلومات غير موجودة. كن صادقاً بشأن ما يمكنك رؤيته أو لا يمكنك رؤيته.`
+        : `You are an intelligent visual assistant. When users upload images, you must carefully observe and extract all visible information — including any text, numbers, layout, design, people, objects, scenes, and visual context. Always answer clearly, accurately, and helpfully. If the user asks a question, answer it directly using information from the image.
+
+Always start your reply with:
+"I can see…"
+
+If the image is blurry, low resolution, or unclear — say that.
+Do not make up information. Be honest about what you can or cannot see.`;
     } else {
-      // Regular text chat
+      // Regular text chat with gpt-4o-mini
       console.log('💬 CHAT: Processing text-only using gpt-4o-mini');
       model = 'gpt-4o-mini';
+      
+      // FIXED: Natural chat prompt that incorporates personalization
       systemPrompt = `You are a helpful AI assistant. Respond naturally and conversationally to the user's questions and requests.`;
+      
+      // Add personalization if available
+      if (personalTouch) {
+        if (personalTouch.nickname) {
+          systemPrompt += ` Address the user as ${personalTouch.nickname}.`;
+        }
+        if (personalTouch.aiNickname) {
+          systemPrompt += ` You can be called ${personalTouch.aiNickname}.`;
+        }
+        if (personalTouch.tone && personalTouch.tone !== 'neutral') {
+          systemPrompt += ` Use a ${personalTouch.tone} tone.`;
+        }
+        if (personalTouch.style) {
+          systemPrompt += ` Provide ${personalTouch.style} responses.`;
+        }
+        if (personalTouch.instruction) {
+          systemPrompt += ` Additional instruction: ${personalTouch.instruction}`;
+        }
+      }
     }
     
     if (shouldCreateTask) {
       systemPrompt += ` The user wants to create a task or reminder. Acknowledge this and provide helpful suggestions about the task details.`;
-    }
-    
-    if (personalTouch) {
-      if (personalTouch.nickname) {
-        systemPrompt += ` Address the user as ${personalTouch.nickname}.`;
-      }
-      if (personalTouch.aiNickname) {
-        systemPrompt += ` You can be called ${personalTouch.aiNickname}.`;
-      }
-      if (personalTouch.tone && personalTouch.tone !== 'neutral') {
-        systemPrompt += ` Use a ${personalTouch.tone} tone.`;
-      }
-      if (personalTouch.style) {
-        systemPrompt += ` Provide ${personalTouch.style} responses.`;
-      }
-      if (personalTouch.instruction) {
-        systemPrompt += ` Additional instruction: ${personalTouch.instruction}`;
-      }
     }
     
     if (language === 'ar') {
@@ -146,96 +164,144 @@ ARABIC: أنت مساعد ذكي دقيق يعتمد على الرؤية. عند
 
     console.log(`🚀 AI: Using model ${model}`);
 
-    try {
-      const apiUrl = 'https://api.openai.com/v1/chat/completions';
-
-      const requestPayload = {
-        model,
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.7,
-        stream: false
-      };
-      
-      console.log('📤 API REQUEST:', JSON.stringify({
-        model: requestPayload.model,
-        messages: requestPayload.messages.map(msg => ({
-          role: msg.role,
-          content: typeof msg.content === 'string' ? msg.content.substring(0, 100) + '...' : 
-                   Array.isArray(msg.content) ? 
-                     msg.content.map(item => ({
-                       type: item.type,
-                       text: item.type === 'text' ? item.text?.substring(0, 50) + '...' : undefined,
-                       image_url: item.type === 'image_url' ? {
-                         url: item.image_url?.url?.substring(0, 50) + '...',
-                         detail: item.image_url?.detail
-                       } : undefined
-                     })) : 'unknown_content'
-        })),
-        temperature: requestPayload.temperature,
-        max_tokens: requestPayload.max_tokens
-      }, null, 2));
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestPayload),
-      });
-
-      console.log(`📥 API RESPONSE: Status ${response.status}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ API ERROR: Status ${response.status}`);
-        console.error(`❌ API ERROR BODY:`, errorText);
+    // FIXED: Retry logic implementation with fallbacks
+    let lastError;
+    const maxRetries = 2;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const currentModel = attempt === 0 ? model : (hasImages ? 'gpt-4o-mini' : 'deepseek-chat');
+        const apiUrl = currentModel === 'deepseek-chat' 
+          ? 'https://api.deepseek.com/chat/completions'
+          : 'https://api.openai.com/v1/chat/completions';
         
-        throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
+        const apiKey = currentModel === 'deepseek-chat' ? DEEPSEEK_API_KEY : OPENAI_API_KEY;
+        
+        if (!apiKey) {
+          throw new Error(`${currentModel === 'deepseek-chat' ? 'DeepSeek' : 'OpenAI'} API key not configured`);
+        }
+        
+        console.log(`🔄 ATTEMPT ${attempt + 1}: Using ${currentModel}`);
+        
+        // Adjust messages for fallback models
+        let finalMessages = messages;
+        if (attempt > 0 && hasImages) {
+          // For Vision fallback, convert to text-only
+          finalMessages = [
+            { role: 'system', content: systemPrompt },
+            ...contextMessages,
+            { role: 'user', content: `${message} [Note: User uploaded ${processedFiles.length} image(s) but Vision processing failed]` }
+          ];
+        }
+
+        const requestPayload = {
+          model: currentModel,
+          messages: finalMessages,
+          max_tokens: maxTokens,
+          temperature: 0.7,
+          stream: false
+        };
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestPayload),
+        });
+
+        console.log(`📥 API RESPONSE: Status ${response.status} for ${currentModel}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { error: { message: errorText } };
+          }
+          
+          // FIXED: Meaningful error messages instead of generic ones
+          let userFriendlyError = 'Sorry, I encountered an error processing your request.';
+          
+          if (response.status === 429) {
+            userFriendlyError = language === 'ar' 
+              ? 'عذراً، تم تجاوز الحد المسموح للطلبات. يرجى المحاولة مرة أخرى بعد قليل.'
+              : 'Rate limit exceeded. Please try again in a moment.';
+          } else if (response.status === 401) {
+            userFriendlyError = language === 'ar'
+              ? 'خطأ في المصادقة. يرجى المحاولة مرة أخرى.'
+              : 'Authentication error. Please try again.';
+          } else if (response.status === 400) {
+            userFriendlyError = language === 'ar'
+              ? 'طلب غير صحيح. يرجى تعديل رسالتك والمحاولة مرة أخرى.'
+              : 'Invalid request. Please modify your message and try again.';
+          }
+          
+          const error = new Error(`${currentModel} API error (${response.status}): ${errorData.error?.message || errorText}`);
+          error.userFriendly = userFriendlyError;
+          throw error;
+        }
+
+        const data = await response.json();
+        console.log(`📥 API: Success with model ${currentModel}`);
+        
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          console.error('❌ API: Invalid response structure:', data);
+          throw new Error('Invalid API response structure');
+        }
+
+        const aiResponse = data.choices[0].message.content;
+        console.log('✅ AI: Response generated successfully');
+        console.log('🎯 RESPONSE PREVIEW:', aiResponse.substring(0, 100) + '...');
+        
+        return {
+          response: aiResponse,
+          model: currentModel,
+          tokensUsed: data.usage?.total_tokens || 0,
+          contextUsed: contextMessages.length,
+          personalizedResponse: !!personalTouch,
+          taskCreationIntent: shouldCreateTask,
+          intent: shouldCreateTask ? 'task_creation' : 'chat',
+          confidence: shouldCreateTask ? 'high' : 'medium',
+          attempt: attempt + 1,
+          fallbackUsed: attempt > 0
+        };
+
+      } catch (error) {
+        console.error(`🚨 AI: Attempt ${attempt + 1} failed:`, error);
+        lastError = error;
+        
+        if (attempt < maxRetries) {
+          console.log(`🔄 RETRY: Attempting fallback model (attempt ${attempt + 2})`);
+          continue;
+        }
       }
-
-      const data = await response.json();
-      console.log(`📥 API: Success with model ${model}`);
-      
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        console.error('❌ API: Invalid response structure:', data);
-        throw new Error('Invalid API response structure');
-      }
-
-      const aiResponse = data.choices[0].message.content;
-      console.log('✅ AI: Response generated successfully');
-      console.log('🎯 RESPONSE PREVIEW:', aiResponse.substring(0, 100) + '...');
-      
-      return {
-        response: aiResponse,
-        model: model,
-        tokensUsed: data.usage?.total_tokens || 0,
-        contextUsed: contextMessages.length,
-        personalizedResponse: !!personalTouch,
-        taskCreationIntent: shouldCreateTask,
-        intent: shouldCreateTask ? 'task_creation' : 'chat',
-        confidence: shouldCreateTask ? 'high' : 'medium'
-      };
-
-    } catch (error) {
-      console.error(`🚨 AI: API error:`, error);
-      throw error;
     }
+    
+    // All retries failed - return meaningful error
+    console.error('🚨 AI: All retry attempts failed:', lastError);
+    throw lastError;
 
   } catch (error) {
     console.error('🚨 AI: Critical processing error:', error);
     
+    // FIXED: Return actual error information instead of masking it
+    const userFriendlyMessage = error.userFriendly || (language === 'ar' 
+      ? 'عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'
+      : 'Sorry, I encountered an error processing your request. Please try again.');
+    
     return {
-      response: language === 'ar' 
-        ? 'عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'
-        : 'Sorry, I encountered an error processing your request. Please try again.',
+      response: userFriendlyMessage,
       model: 'error',
       tokensUsed: 0,
       contextUsed: 0,
       personalizedResponse: false,
       taskCreationIntent: false,
-      error: error.message
+      error: error.message,
+      userFriendlyError: userFriendlyMessage
     };
   }
 }
+

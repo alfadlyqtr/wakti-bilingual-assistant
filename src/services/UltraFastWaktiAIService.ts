@@ -1,3 +1,4 @@
+
 // Ultra-Fast Wakti AI Service with enhanced memory, summaries, and task creation
 import { supabase } from '@/integrations/supabase/client';
 import { UltraFastMemoryCache } from './UltraFastMemoryCache';
@@ -30,7 +31,7 @@ class UltraFastWaktiAIServiceClass {
       // Generate or use existing conversation ID
       const actualConversationId = conversationId || `ultra-fast-${Date.now()}`;
       
-      console.log('🚀 ULTRA-FAST: Processing message with enhanced memory');
+      console.log('🚀 ULTRA-FAST: Processing message with RESTORED memory and context');
       
       // ENHANCED: Check for task creation intent FIRST
       const taskIntent = EnhancedTaskCreationService.detectTaskCreationIntent(message);
@@ -60,13 +61,13 @@ class UltraFastWaktiAIServiceClass {
         StreamingResponseManager.startStream(actualConversationId, onStreamUpdate);
       }
       
-      // ENHANCED: Get compressed context for AI system prompt
-      const compressedContext = UltraFastMemoryCache.getCompressedContext(userId, actualConversationId);
-      console.log('🧠 COMPRESSED CONTEXT:', compressedContext.tokens, 'tokens');
+      // FIXED: Get FULL context for AI system prompt - NO MORE AGGRESSIVE OPTIMIZATION
+      const fullContext = UltraFastMemoryCache.getFullContext(userId, actualConversationId);
+      console.log('🧠 FULL CONTEXT RESTORED:', fullContext.recentMessages.length, 'messages,', fullContext.summary.length, 'chars summary');
       
-      console.log('🚀 ULTRA-FAST: Sending to AI with enhanced context:', compressedContext.recentMessages.length, 'messages');
+      console.log('🚀 ULTRA-FAST: Sending to AI with FULL RESTORED context');
       
-      // STEP 4: Call AI service with enhanced context and task awareness
+      // STEP 4: Call AI service with FULL context and task awareness
       const aiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -76,11 +77,11 @@ class UltraFastWaktiAIServiceClass {
           inputType,
           activeTrigger: taskIntent ? 'task_creation' : activeTrigger,
           attachedFiles,
-          conversationSummary: compressedContext.summary,
-          recentMessages: compressedContext.recentMessages,
+          conversationSummary: fullContext.summary, // FIXED: Full summary
+          recentMessages: fullContext.recentMessages, // FIXED: Last 3-4 messages
           speedOptimized: true,
-          aggressiveOptimization: true,
-          maxTokens: 350,
+          aggressiveOptimization: false, // FIXED: Disabled aggressive optimization
+          maxTokens: 4096, // FIXED: Increased for better responses
           personalTouch: this.getPersonalTouch()
         }
       });
@@ -136,13 +137,13 @@ class UltraFastWaktiAIServiceClass {
         }
       }
       
-      // STEP 8: Update cache immediately with enhanced context
+      // STEP 8: Update cache immediately with FULL context
       const updatedContext = {
         messages: [...(contextData?.messages || []), userMessage, assistantMessage].slice(-10),
-        summary: compressedContext.summary,
+        summary: fullContext.summary, // FIXED: Keep full summary
         messageCount: (contextData?.messageCount || 0) + 2,
         conversationId: actualConversationId,
-        hasSummary: !!compressedContext.summary
+        hasSummary: !!fullContext.summary
       };
       
       UltraFastMemoryCache.setConversationContext(userId, actualConversationId, updatedContext);
@@ -160,7 +161,7 @@ class UltraFastWaktiAIServiceClass {
         StreamingResponseManager.completeStream(actualConversationId, assistantMessage.content);
       }
       
-      console.log('✅ ULTRA-FAST: Completed with superior memory + task detection');
+      console.log('✅ ULTRA-FAST: Completed with FULL CONTEXT RESTORATION + task detection');
       
       return {
         ...data,
@@ -174,7 +175,9 @@ class UltraFastWaktiAIServiceClass {
         taskCreated,
         taskIntent: taskIntent,
         taskData: taskData,
-        summaryTokens: compressedContext.tokens
+        contextRestored: true, // FIXED: Always true now
+        fullContextUsed: true, // FIXED: Full context used
+        aggressiveOptimizationDisabled: true // FIXED: Confirmed disabled
       };
       
     } catch (error: any) {
@@ -239,7 +242,7 @@ class UltraFastWaktiAIServiceClass {
   // Clear conversation with enhanced cache invalidation
   clearConversationUltraFast(userId: string, conversationId: string): void {
     UltraFastMemoryCache.invalidateConversation(userId, conversationId);
-    console.log('🗑️ ULTRA-FAST: Conversation cleared with summary');
+    console.log('🗑️ ULTRA-FAST: Conversation cleared with FULL context');
   }
   
   // Enhanced cache statistics
@@ -249,6 +252,8 @@ class UltraFastWaktiAIServiceClass {
       backgroundQueue: BackgroundProcessingQueue.getQueueStatus(),
       streamingActive: StreamingResponseManager.isStreaming('any'),
       taskCreationActive: true,
+      contextRestored: true, // FIXED: Always true
+      aggressiveOptimizationDisabled: true, // FIXED: Confirmed
       timestamp: Date.now()
     };
   }
@@ -270,3 +275,4 @@ class UltraFastWaktiAIServiceClass {
 }
 
 export const UltraFastWaktiAIService = new UltraFastWaktiAIServiceClass();
+

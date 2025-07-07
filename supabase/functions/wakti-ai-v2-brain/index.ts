@@ -1,4 +1,5 @@
 
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -30,7 +31,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI: Fixed AI system with proper model selection");
+console.log("🚀 WAKTI AI: Fixed AI system with proper model selection and context restoration");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -88,7 +89,7 @@ serve(async (req) => {
       userStyle = 'detailed',
       userTone = 'neutral',
       speedOptimized = true,
-      aggressiveOptimization = true,
+      aggressiveOptimization = false, // FIXED: Disabled aggressive optimization
       hasTaskIntent = false,
       personalityEnabled = true,
       enableTaskCreation = true,
@@ -141,10 +142,11 @@ serve(async (req) => {
       console.log(`🚀 AI: Prepared ${processedFiles.length} files for processing`);
     }
 
-    let minimalRecentMessages = aggressiveOptimization ? recentMessages.slice(-2) : recentMessages.slice(-3);
-    let minimalConversationSummary = aggressiveOptimization ? '' : conversationSummary.substring(0, 200);
+    // FIXED: Context loading optimization - load summary + last 3-4 messages only
+    let contextRecentMessages = recentMessages.slice(-4); // Last 4 messages as specified
+    let contextConversationSummary = conversationSummary; // Keep full summary
     
-    console.log(`🚀 CONTEXT: Messages: ${minimalRecentMessages.length}, Summary: ${minimalConversationSummary.length} chars`);
+    console.log(`🚀 CONTEXT RESTORED: Messages: ${contextRecentMessages.length}, Summary: ${contextConversationSummary.length} chars`);
 
     let taskAnalysisResult = null;
     try {
@@ -175,7 +177,7 @@ serve(async (req) => {
         success: true,
         processingTime,
         speedOptimized: true,
-        aggressiveOptimization,
+        aggressiveOptimization: false, // FIXED
         userStyle,
         userTone,
         tokensUsed: 0,
@@ -184,14 +186,7 @@ serve(async (req) => {
         personalizedResponse: false,
         taskDetected: true,
         currentDateContext,
-        ultraFastMode: {
-          speedOptimized,
-          aggressiveOptimization,
-          contextMessages: 0,
-          summaryLength: 0,
-          tokensLimit: 0,
-          personalTouch: false
-        }
+        contextRestored: true
       };
 
       console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
@@ -208,42 +203,26 @@ serve(async (req) => {
 
     switch (activeTrigger) {
       case 'search':
-        if (!aggressiveOptimization) {
-          console.log("🔍 SEARCH: Speed-optimized search");
-          const searchResult = await executeRegularSearch(message, language);
-          if (searchResult.success) {
-            browsingUsed = true;
-            browsingData = searchResult.data;
-            const context = searchResult.context.substring(0, aggressiveOptimization ? 300 : 800);
-            
-            const chatResult = await processWithBuddyChatAI(
-              `${currentDateContext}\n\n${message}\n\nSearch Context: ${context}`,
-              userId,
-              conversationId,
-              language,
-              processedFiles,
-              minimalRecentMessages,
-              minimalConversationSummary,
-              personalTouch,
-              Math.min(maxTokens, 300),
-              activeTrigger
-            );
-            response = chatResult.response;
-          } else {
-            const chatResult = await processWithBuddyChatAI(
-              `${currentDateContext}\n\n${message}`,
-              userId,
-              conversationId,
-              language,
-              processedFiles,
-              [],
-              '',
-              personalTouch,
-              Math.min(maxTokens, 200),
-              activeTrigger
-            );
-            response = chatResult.response;
-          }
+        console.log("🔍 SEARCH: Processing search request");
+        const searchResult = await executeRegularSearch(message, language);
+        if (searchResult.success) {
+          browsingUsed = true;
+          browsingData = searchResult.data;
+          const context = searchResult.context.substring(0, 800);
+          
+          const chatResult = await processWithBuddyChatAI(
+            `${currentDateContext}\n\n${message}\n\nSearch Context: ${context}`,
+            userId,
+            conversationId,
+            language,
+            processedFiles,
+            contextRecentMessages, // FIXED: Use proper context
+            contextConversationSummary, // FIXED: Use proper summary
+            personalTouch,
+            maxTokens,
+            activeTrigger
+          );
+          response = chatResult.response;
         } else {
           const chatResult = await processWithBuddyChatAI(
             `${currentDateContext}\n\n${message}`,
@@ -251,55 +230,49 @@ serve(async (req) => {
             conversationId,
             language,
             processedFiles,
-            [],
-            '',
+            contextRecentMessages, // FIXED: Use proper context
+            contextConversationSummary, // FIXED: Use proper summary
             personalTouch,
-            Math.min(maxTokens, 150),
-            'chat'
+            maxTokens,
+            activeTrigger
           );
           response = chatResult.response;
         }
         break;
 
       case 'image':
-        if (!aggressiveOptimization) {
-          console.log("🎨 IMAGE: Speed-optimized image generation");
-          try {
-            const imageResult = await generateImageWithRunware(message, user.id, language);
+        console.log("🎨 IMAGE: Processing image generation");
+        try {
+          const imageResult = await generateImageWithRunware(message, user.id, language);
+          
+          if (imageResult.success) {
+            imageUrl = imageResult.imageUrl;
             
-            if (imageResult.success) {
-              imageUrl = imageResult.imageUrl;
-              
-              let baseResponse = language === 'ar' 
-                ? `تم إنشاء الصورة بنجاح! 🎨✨`
-                : `Image generated successfully! 🎨✨`;
+            let baseResponse = language === 'ar' 
+              ? `تم إنشاء الصورة بنجاح! 🎨✨`
+              : `Image generated successfully! 🎨✨`;
 
-              if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
-                baseResponse += language === 'ar'
-                  ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
-                  : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
-              }
-
-              response = baseResponse;
-            } else {
-              response = imageResult.error;
+            if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
+              baseResponse += language === 'ar'
+                ? `\n\n📝 (ترجمة: "${imageResult.translatedPrompt}")`
+                : `\n\n📝 (Translated: "${imageResult.translatedPrompt}")`;
             }
-          } catch (error) {
-            console.error("Image generation error:", error);
-            response = language === 'ar' 
-              ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
-              : `❌ Sorry, an error occurred while generating the image.`;
+
+            response = baseResponse;
+          } else {
+            response = imageResult.error;
           }
-        } else {
+        } catch (error) {
+          console.error("Image generation error:", error);
           response = language === 'ar' 
-            ? `عذراً، إنشاء الصور غير متاح في الوضع السريع.`
-            : `Sorry, image generation not available in ultra-fast mode.`;
+            ? `❌ عذراً، حدث خطأ أثناء إنشاء الصورة.`
+            : `❌ Sorry, an error occurred while generating the image.`;
         }
         break;
 
       case 'chat':
       default:
-        console.log(`🚀 AI CHAT: Processing with fixed AI system`);
+        console.log(`🚀 AI CHAT: Processing with restored context and proper models`);
         console.log(`🖼️ FILES: ${processedFiles.length} files ready for processing`);
         
         const chatResult = await processWithBuddyChatAI(
@@ -308,14 +281,14 @@ serve(async (req) => {
           conversationId,
           language,
           processedFiles,
-          minimalRecentMessages,
-          minimalConversationSummary,
+          contextRecentMessages, // FIXED: Use proper context (last 3-4 messages)
+          contextConversationSummary, // FIXED: Use full conversation summary
           personalTouch,
           maxTokens,
           activeTrigger
         );
         response = chatResult.response;
-        console.log(`🎯 RESULT: Model used: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}`);
+        console.log(`🎯 RESULT: Model used: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}, Fallback: ${chatResult.fallbackUsed || false}`);
         break;
     }
 
@@ -325,7 +298,7 @@ serve(async (req) => {
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: aggressiveOptimization ? 'hyper_fast' : (speedOptimized ? 'ultra_fast' : 'fixed_ai'),
+      intent: 'fixed_ai_with_context',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -337,23 +310,18 @@ serve(async (req) => {
       success: true,
       processingTime,
       speedOptimized: true,
-      aggressiveOptimization,
+      aggressiveOptimization: false, // FIXED: Disabled
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: 'openai_fixed',
+      aiProvider: 'openai_fixed_with_fallbacks',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
       visionEnhanced: processedFiles.length > 0,
-      ultraFastMode: {
-        speedOptimized,
-        aggressiveOptimization,
-        contextMessages: minimalRecentMessages.length,
-        summaryLength: minimalConversationSummary.length,
-        tokensLimit: maxTokens,
-        personalTouch: !!personalTouch
-      }
+      contextRestored: true,
+      modelsUsed: processedFiles.length > 0 ? 'gpt-4-vision-preview' : 'gpt-4o-mini',
+      fallbacksAvailable: true
     };
 
     return new Response(JSON.stringify(result), {
@@ -366,10 +334,12 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       error: error.message || 'AI processing error',
       success: false,
-      currentDateContext: getCurrentDateContext()
+      currentDateContext: getCurrentDateContext(),
+      contextRestored: false
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });
+
