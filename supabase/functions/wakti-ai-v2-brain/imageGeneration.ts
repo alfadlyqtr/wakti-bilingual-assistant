@@ -1,22 +1,24 @@
 
-// FIXED: Image Generation with proper JSON parsing
-import { RUNWARE_API_KEY, DEEPSEEK_API_KEY } from './utils.ts';
+/**
+ * SIMPLIFIED: Image generation with robust error handling
+ */
 
 export async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
-  try {
-    console.log('🎨 IMAGE GEN: Starting generation for:', prompt);
-    
-    if (!RUNWARE_API_KEY) {
-      return {
-        success: false,
-        error: language === 'ar' 
-          ? 'خدمة إنشاء الصور غير متاحة' 
-          : 'Image generation service not configured',
-        imageUrl: null
-      };
-    }
+  const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
+  
+  console.log('🎨 IMAGE GEN: Starting generation for:', prompt.substring(0, 50));
+  
+  if (!RUNWARE_API_KEY) {
+    return {
+      success: false,
+      error: language === 'ar' 
+        ? 'خدمة إنشاء الصور غير متاحة' 
+        : 'Image generation service not configured',
+      imageUrl: null
+    };
+  }
 
-    // Generate unique task UUID
+  try {
     const taskUUID = crypto.randomUUID();
     
     const imageGenPayload = [
@@ -32,78 +34,57 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
         height: 1024,
         model: "runware:100@1",
         numberResults: 1,
-        outputFormat: "WEBP",
-        CFGScale: 1,
-        scheduler: "FlowMatchEulerDiscreteScheduler",
-        strength: 0.8
+        outputFormat: "WEBP"
       }
     ];
 
     const response = await fetch('https://api.runware.ai/v1', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(imageGenPayload)
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      return {
-        success: false,
-        error: language === 'ar' 
-          ? `خطأ في إنشاء الصورة: ${response.status}` 
-          : `Image generation error: ${response.status}`,
-        imageUrl: null
-      };
+      console.error('❌ IMAGE API ERROR:', response.status, errorText);
+      throw new Error(`Image generation API error: ${response.status}`);
     }
 
-    // Safe JSON parsing
+    // Safe JSON parsing with validation
     const responseText = await response.text();
     if (!responseText || responseText.trim() === '') {
-      return {
-        success: false,
-        error: language === 'ar' 
-          ? 'استجابة فارغة من خدمة إنشاء الصور' 
-          : 'Empty response from image generation service',
-        imageUrl: null
-      };
+      throw new Error('Empty response from image generation service');
     }
 
     let responseData;
     try {
       responseData = JSON.parse(responseText);
     } catch (jsonError) {
-      console.error('❌ IMAGE GEN JSON parsing error:', jsonError);
-      return {
-        success: false,
-        error: language === 'ar' 
-          ? 'خطأ في معالجة استجابة الخدمة' 
-          : 'Error processing service response',
-        imageUrl: null
-      };
+      console.error('❌ IMAGE JSON parsing error:', jsonError);
+      console.error('❌ Raw response:', responseText.substring(0, 200));
+      throw new Error('Invalid JSON response from image generation service');
     }
 
-    // Process the response
-    if (responseData.data && responseData.data.length > 0) {
+    // Process the response safely
+    if (responseData && responseData.data && Array.isArray(responseData.data)) {
       const imageResult = responseData.data.find((item: any) => item.taskType === 'imageInference');
       
       if (imageResult && imageResult.imageURL) {
+        console.log('✅ IMAGE GEN: Successfully generated image');
         return {
           success: true,
           error: null,
-          imageUrl: imageResult.imageURL,
-          seed: imageResult.seed,
-          cost: imageResult.cost
+          imageUrl: imageResult.imageURL
         };
       }
     }
 
+    console.warn('⚠️ IMAGE GEN: No valid image URL in response');
     return {
       success: false,
       error: language === 'ar' 
         ? 'لم يتم إنشاء الصورة بنجاح' 
-        : 'Image generation failed',
+        : 'Image generation failed - no image URL returned',
       imageUrl: null
     };
 
@@ -113,7 +94,8 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
     return {
       success: false,
       error: language === 'ar' ? 'خطأ في إنشاء الصورة' : 'Image generation failed',
-      imageUrl: null
+      imageUrl: null,
+      details: error.message
     };
   }
 }

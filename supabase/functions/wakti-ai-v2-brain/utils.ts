@@ -15,23 +15,10 @@ export function generateConversationId(): string {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Enhanced API key validation
+// Simplified API key validation
 export function validateApiKeys(): { valid: boolean; missing: string[] } {
-  const keys = {
-    ANTHROPIC_API_KEY,
-    DEEPSEEK_API_KEY,
-    TAVILY_API_KEY,
-    RUNWARE_API_KEY
-  };
-  
-  const missing = [];
-  
-  for (const [name, value] of Object.entries(keys)) {
-    if (!value) {
-      missing.push(name);
-    }
-  }
-  
+  const keys = { ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY };
+  const missing = Object.entries(keys).filter(([_, value]) => !value).map(([name]) => name);
   return { valid: missing.length === 0, missing };
 }
 
@@ -49,12 +36,11 @@ export function formatTimestamp(date: Date): string {
   return date.toISOString();
 }
 
-// FIXED: Claude 4 API with proper JSON parsing
+// SIMPLIFIED: Claude 4 API with robust JSON parsing
 export async function callClaudeAPI(
   messages: any[],
   maxTokens: number = 4096,
-  model: string = 'claude-3-5-sonnet-20241022',
-  enableStreaming: boolean = false
+  model: string = 'claude-3-5-sonnet-20241022'
 ): Promise<any> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('Anthropic API key not configured');
@@ -70,18 +56,13 @@ export async function callClaudeAPI(
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
-      messages,
-      stream: enableStreaming
+      messages
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Claude 4 API error (${response.status}): ${errorText}`);
-  }
-
-  if (enableStreaming) {
-    return response;
   }
 
   // Safe JSON parsing
@@ -91,15 +72,15 @@ export async function callClaudeAPI(
   }
 
   try {
-    const result = JSON.parse(responseText);
-    return result;
+    return JSON.parse(responseText);
   } catch (jsonError) {
     console.error('❌ Claude 4 JSON parsing error:', jsonError);
+    console.error('❌ Raw response:', responseText.substring(0, 200));
     throw new Error('Invalid JSON response from Claude 4 API');
   }
 }
 
-// FIXED: DeepSeek fallback with proper JSON parsing
+// SIMPLIFIED: DeepSeek fallback with robust JSON parsing
 export async function callDeepSeekAPI(
   messages: any[],
   maxTokens: number = 4096
@@ -118,8 +99,7 @@ export async function callDeepSeekAPI(
       model: 'deepseek-chat',
       messages,
       max_tokens: maxTokens,
-      temperature: 0.7,
-      stream: false
+      temperature: 0.7
     }),
   });
 
@@ -135,10 +115,10 @@ export async function callDeepSeekAPI(
   }
 
   try {
-    const result = JSON.parse(responseText);
-    return result;
+    return JSON.parse(responseText);
   } catch (jsonError) {
     console.error('❌ DeepSeek JSON parsing error:', jsonError);
+    console.error('❌ Raw response:', responseText.substring(0, 200));
     throw new Error('Invalid JSON response from DeepSeek API');
   }
 }
