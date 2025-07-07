@@ -1,13 +1,12 @@
 
-// WAKTI AI Image Generation with Runware API - Fixed with proper timeouts
+// FIXED: Image Generation with proper JSON parsing
 import { RUNWARE_API_KEY, DEEPSEEK_API_KEY } from './utils.ts';
 
 export async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
   try {
-    console.log('🎨 IMAGE GEN: Starting Runware image generation for:', prompt);
+    console.log('🎨 IMAGE GEN: Starting generation for:', prompt);
     
     if (!RUNWARE_API_KEY) {
-      console.error('❌ IMAGE GEN: Runware API key not configured');
       return {
         success: false,
         error: language === 'ar' 
@@ -15,59 +14,6 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
           : 'Image generation service not configured',
         imageUrl: null
       };
-    }
-
-    // Translate prompt if needed (Arabic to English for better generation)
-    let translatedPrompt = prompt;
-    let translation_status = 'not_needed';
-    
-    if (language === 'ar' && DEEPSEEK_API_KEY) {
-      try {
-        console.log('🌐 TRANSLATE: Translating Arabic prompt to English');
-        
-        // Enhanced timeout handling for translation - 10 seconds
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
-        const translateResponse = await fetch('https://api.deepseek.com/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [
-              {
-                role: 'system',
-                content: 'Translate the following Arabic text to English for image generation. Return only the translation, no additional text.'
-              },
-              {
-                role: 'user',
-                content: prompt
-              }
-            ],
-            max_tokens: 200,
-            temperature: 0.3
-          }),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (translateResponse.ok) {
-          const translateData = await translateResponse.json();
-          translatedPrompt = translateData.choices[0].message.content.trim();
-          translation_status = 'success';
-          console.log('✅ TRANSLATE: Successfully translated prompt:', translatedPrompt);
-        } else {
-          console.warn('⚠️ TRANSLATE: Translation failed, using original prompt');
-          translation_status = 'failed';
-        }
-      } catch (translateError) {
-        console.warn('⚠️ TRANSLATE: Translation error:', translateError);
-        translation_status = 'failed';
-      }
     }
 
     // Generate unique task UUID
@@ -81,7 +27,7 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
       {
         taskType: "imageInference",
         taskUUID: taskUUID,
-        positivePrompt: translatedPrompt,
+        positivePrompt: prompt,
         width: 1024,
         height: 1024,
         model: "runware:100@1",
@@ -93,96 +39,81 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
       }
     ];
 
-    console.log('🎨 IMAGE GEN: Calling Runware API with enhanced timeout handling');
-
-    // Enhanced timeout handling - 60 seconds for image generation
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
-
     const response = await fetch('https://api.runware.ai/v1', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(imageGenPayload),
-      signal: controller.signal
+      body: JSON.stringify(imageGenPayload)
     });
-
-    clearTimeout(timeoutId);
-    console.log('🎨 IMAGE GEN: Runware response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ IMAGE GEN: Runware API error:', response.status, errorText);
       return {
         success: false,
         error: language === 'ar' 
           ? `خطأ في إنشاء الصورة: ${response.status}` 
           : `Image generation error: ${response.status}`,
-        imageUrl: null,
-        translation_status
+        imageUrl: null
       };
     }
 
-    const responseData = await response.json();
-    console.log('🎨 IMAGE GEN: Runware response received successfully');
+    // Safe JSON parsing
+    const responseText = await response.text();
+    if (!responseText || responseText.trim() === '') {
+      return {
+        success: false,
+        error: language === 'ar' 
+          ? 'استجابة فارغة من خدمة إنشاء الصور' 
+          : 'Empty response from image generation service',
+        imageUrl: null
+      };
+    }
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (jsonError) {
+      console.error('❌ IMAGE GEN JSON parsing error:', jsonError);
+      return {
+        success: false,
+        error: language === 'ar' 
+          ? 'خطأ في معالجة استجابة الخدمة' 
+          : 'Error processing service response',
+        imageUrl: null
+      };
+    }
 
     // Process the response
     if (responseData.data && responseData.data.length > 0) {
-      // Find the image result
       const imageResult = responseData.data.find((item: any) => item.taskType === 'imageInference');
       
       if (imageResult && imageResult.imageURL) {
-        console.log('✅ IMAGE GEN: Successfully generated image:', imageResult.imageURL);
-        
         return {
           success: true,
           error: null,
           imageUrl: imageResult.imageURL,
-          translation_status,
-          translatedPrompt: translation_status === 'success' ? translatedPrompt : null,
           seed: imageResult.seed,
           cost: imageResult.cost
         };
-      } else {
-        console.error('❌ IMAGE GEN: No image URL in response');
-        return {
-          success: false,
-          error: language === 'ar' 
-            ? 'لم يتم إنشاء الصورة بنجاح' 
-            : 'Image generation failed - no image URL returned',
-          imageUrl: null,
-          translation_status
-        };
       }
-    } else {
-      console.error('❌ IMAGE GEN: Invalid response structure');
-      return {
-        success: false,
-        error: language === 'ar' 
-          ? 'استجابة غير صالحة من خدمة إنشاء الصور' 
-          : 'Invalid response from image generation service',
-        imageUrl: null,
-        translation_status
-      };
     }
 
+    return {
+      success: false,
+      error: language === 'ar' 
+        ? 'لم يتم إنشاء الصورة بنجاح' 
+        : 'Image generation failed',
+      imageUrl: null
+    };
+
   } catch (error) {
-    console.error('❌ IMAGE GEN: Critical error in generateImageWithRunware:', error);
-    
-    // Handle different error types
-    let errorMessage = language === 'ar' ? 'خطأ في إنشاء الصورة' : 'Image generation failed';
-    if (error.name === 'AbortError') {
-      errorMessage = language === 'ar' ? 'انتهت مهلة إنشاء الصورة' : 'Image generation timed out';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
+    console.error('❌ IMAGE GEN: Critical error:', error);
     
     return {
       success: false,
-      error: errorMessage,
-      imageUrl: null,
-      translation_status: 'failed'
+      error: language === 'ar' ? 'خطأ في إنشاء الصورة' : 'Image generation failed',
+      imageUrl: null
     };
   }
 }

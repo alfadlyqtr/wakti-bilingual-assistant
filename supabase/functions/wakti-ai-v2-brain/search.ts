@@ -1,13 +1,12 @@
 
-// WAKTI AI Search functionality with Tavily API - Fixed with proper timeouts
+// FIXED: Search functionality with proper JSON parsing
 import { TAVILY_API_KEY } from './utils.ts';
 
 export async function executeRegularSearch(query: string, language: string = 'en') {
   try {
-    console.log('🔍 SEARCH: Starting Tavily search for:', query);
+    console.log('🔍 SEARCH: Starting search for:', query);
     
     if (!TAVILY_API_KEY) {
-      console.error('❌ SEARCH: Tavily API key not configured');
       return {
         success: false,
         error: 'Search service not configured',
@@ -27,27 +26,16 @@ export async function executeRegularSearch(query: string, language: string = 'en
       exclude_domains: []
     };
 
-    console.log('🔍 SEARCH: Calling Tavily API with enhanced timeout handling');
-
-    // Enhanced timeout handling - 30 seconds for search
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(searchPayload),
-      signal: controller.signal
+      body: JSON.stringify(searchPayload)
     });
-
-    clearTimeout(timeoutId);
-    console.log('🔍 SEARCH: Tavily response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ SEARCH: Tavily API error:', response.status, errorText);
       return {
         success: false,
         error: `Search API error: ${response.status}`,
@@ -56,8 +44,29 @@ export async function executeRegularSearch(query: string, language: string = 'en
       };
     }
 
-    const searchData = await response.json();
-    console.log('🔍 SEARCH: Tavily response received successfully');
+    // Safe JSON parsing
+    const responseText = await response.text();
+    if (!responseText || responseText.trim() === '') {
+      return {
+        success: false,
+        error: 'Empty response from search service',
+        data: null,
+        context: ''
+      };
+    }
+
+    let searchData;
+    try {
+      searchData = JSON.parse(responseText);
+    } catch (jsonError) {
+      console.error('❌ SEARCH JSON parsing error:', jsonError);
+      return {
+        success: false,
+        error: 'Error processing search response',
+        data: null,
+        context: ''
+      };
+    }
 
     // Extract relevant information
     const results = searchData.results || [];
@@ -78,9 +87,6 @@ export async function executeRegularSearch(query: string, language: string = 'en
       });
     }
 
-    console.log('✅ SEARCH: Successfully processed Tavily search results');
-    console.log('🔍 SEARCH: Context length:', context.length);
-
     return {
       success: true,
       error: null,
@@ -94,19 +100,11 @@ export async function executeRegularSearch(query: string, language: string = 'en
     };
 
   } catch (error) {
-    console.error('❌ SEARCH: Critical error in executeRegularSearch:', error);
-    
-    // Handle different error types
-    let errorMessage = 'Search failed';
-    if (error.name === 'AbortError') {
-      errorMessage = 'Search request timed out';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
+    console.error('❌ SEARCH: Critical error:', error);
     
     return {
       success: false,
-      error: errorMessage,
+      error: 'Search failed',
       data: null,
       context: ''
     };
