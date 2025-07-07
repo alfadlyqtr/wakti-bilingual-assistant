@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -6,7 +5,7 @@ import { analyzeTaskIntent } from "./taskParsing.ts";
 import { processWithClaudeAI } from "./chatAnalysis.ts";
 import { generateImageWithRunware } from "./imageGeneration.ts";
 import { executeRegularSearch } from "./search.ts";
-import { generateConversationId, validateApiKeys, logWithTimestamp, supabase } from "./utils.ts";
+import { generateConversationId, validateApiKeys, logWithTimestamp, supabase, parseClaudeStreamChunk } from "./utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +29,7 @@ const getCurrentDateContext = () => {
   return `Current date and time: ${dateStr}, ${timeStr}`;
 };
 
-console.log("🚀 WAKTI AI: UPGRADED Edge Function Starting - Enhanced Claude System");
+console.log("🚀 WAKTI AI: CLAUDE 4 UPGRADED Edge Function Starting - Enhanced System with Streaming");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -38,7 +37,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI: Processing request with UPGRADED validation system");
+    console.log("🚀 WAKTI AI: Processing request with CLAUDE 4 UPGRADE system");
     const startTime = Date.now();
 
     // CRITICAL: Validate API keys at startup
@@ -106,7 +105,8 @@ serve(async (req) => {
       personalityEnabled = true,
       enableTaskCreation = true,
       enablePersonality = true,
-      personalTouch = null
+      personalTouch = null,
+      enableStreaming = false // New streaming parameter
     } = requestBody;
 
     if (userId !== user.id) {
@@ -130,22 +130,21 @@ serve(async (req) => {
     }
 
     const currentDateContext = getCurrentDateContext();
-    console.log(`🚀 WAKTI AI: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0}`);
+    console.log(`🚀 WAKTI AI CLAUDE 4: ${currentDateContext} | User ${user.id} | Files: ${attachedFiles?.length || 0} | Streaming: ${enableStreaming}`);
 
-    // FIXED: Enhanced image processing with comprehensive validation
+    // Enhanced image processing with comprehensive validation
     let processedFiles = [];
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`📁 VISION: Validating ${attachedFiles.length} files with ENHANCED processing`);
+      console.log(`📁 VISION: Validating ${attachedFiles.length} files for Claude 4 processing`);
       
       processedFiles = attachedFiles.filter(file => {
         if (file.type && file.type.startsWith('image/')) {
-          // FIXED: Check for base64 data in multiple locations
           const hasBase64Data = file.base64Data && file.base64Data.length > 100;
           const hasValidImageUrl = file.image_url?.url && file.image_url.url.startsWith('data:image/');
           const hasValidUrl = file.url && file.url.startsWith('data:image/');
           
           if (hasBase64Data || hasValidImageUrl || hasValidUrl) {
-            console.log(`✅ VISION: Valid image ${file.name} -> BASE64 DATA AVAILABLE`);
+            console.log(`✅ VISION: Valid image ${file.name} -> Ready for Claude 4`);
             return true;
           } else {
             console.error(`❌ VISION: No valid base64 data for image: ${file.name}`);
@@ -157,7 +156,7 @@ serve(async (req) => {
       
       if (processedFiles.length === 0 && attachedFiles.length > 0) {
         return new Response(JSON.stringify({
-          error: "❌ Unable to process the uploaded images. Please upload valid JPEG or PNG files with proper base64 data.",
+          error: "❌ Unable to process the uploaded images for Claude 4. Please upload valid JPEG or PNG files with proper base64 data.",
           success: false,
           debugInfo: attachedFiles.map(f => ({
             name: f.name,
@@ -172,7 +171,7 @@ serve(async (req) => {
         });
       }
       
-      console.log(`🚀 VISION: Successfully validated ${processedFiles.length} files for ENHANCED Claude Vision processing`);
+      console.log(`🚀 VISION: Successfully validated ${processedFiles.length} files for Claude 4 Vision processing`);
     }
 
     // Enhanced context loading from database
@@ -180,7 +179,7 @@ serve(async (req) => {
     let contextConversationSummary = '';
     
     if (conversationId) {
-      console.log(`🧠 CONTEXT: Loading ENHANCED context for conversation ${conversationId}`);
+      console.log(`🧠 CONTEXT: Loading context for conversation ${conversationId}`);
       
       try {
         // Get conversation summary from database
@@ -233,15 +232,15 @@ serve(async (req) => {
     // ENHANCED TASK DETECTION
     let taskAnalysisResult = null;
     try {
-      console.log("🔍 TASK DETECTION: Analyzing message with ENHANCED intent detection");
+      console.log("🔍 TASK DETECTION: Analyzing message with enhanced intent detection");
       taskAnalysisResult = await analyzeTaskIntent(message, language);
-      console.log("🔍 ENHANCED TASK ANALYSIS RESULT:", JSON.stringify(taskAnalysisResult, null, 2));
+      console.log("🔍 TASK ANALYSIS RESULT:", JSON.stringify(taskAnalysisResult, null, 2));
     } catch (taskError) {
       console.error("🔍 TASK ANALYSIS ERROR:", taskError);
     }
 
     if (taskAnalysisResult && (taskAnalysisResult.isTask || taskAnalysisResult.isReminder)) {
-      console.log(`🔍 TASK DETECTED: ${taskAnalysisResult.isTask ? 'Task' : 'Reminder'} - Returning ENHANCED confirmation data`);
+      console.log(`🔍 TASK DETECTED: ${taskAnalysisResult.isTask ? 'Task' : 'Reminder'} - Returning confirmation data`);
       
       const processingTime = Date.now() - startTime;
       
@@ -263,37 +262,39 @@ serve(async (req) => {
         userStyle,
         userTone,
         tokensUsed: 0,
-        aiProvider: 'enhanced_task_parser',
+        aiProvider: 'claude-4-task-parser',
         taskCreationEnabled: true,
         personalizedResponse: false,
         taskDetected: true,
         currentDateContext,
         contextRestored: true,
         fullContextUsed: true,
-        enhancedTaskParsing: true
+        claude4Upgrade: true,
+        streaming: false
       };
 
-      console.log(`🚀 ENHANCED TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
+      console.log(`🚀 TASK CONFIRMATION: Returning structured data in ${processingTime}ms`);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    // MAIN PROCESSING WITH ENHANCED CLAUDE
+    // MAIN PROCESSING WITH CLAUDE 4
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
     let browsingData = null;
     let actionTaken = null;
+    let streamingResponse = null;
 
     switch (activeTrigger) {
       case 'search':
-        console.log("🔍 SEARCH: Processing ENHANCED search request");
+        console.log("🔍 SEARCH: Processing search request with Claude 4");
         const searchResult = await executeRegularSearch(message, language);
         if (searchResult.success) {
           browsingUsed = true;
           browsingData = searchResult.data;
-          const context = searchResult.context.substring(0, 1200); // Increased context
+          const context = searchResult.context.substring(0, 1200);
           
           const chatResult = await processWithClaudeAI(
             `${currentDateContext}\n\n${message}\n\nSearch Context: ${context}`,
@@ -305,10 +306,16 @@ serve(async (req) => {
             contextConversationSummary,
             personalTouch,
             maxTokens,
-            activeTrigger
+            activeTrigger,
+            enableStreaming
           );
-          response = chatResult.response;
-          console.log(`✅ SEARCH: Search completed with ${context.length} chars context`);
+          
+          if (enableStreaming && chatResult.streamingResponse) {
+            streamingResponse = chatResult.streamingResponse;
+          } else {
+            response = chatResult.response;
+          }
+          console.log(`✅ SEARCH: Search completed with Claude 4 and ${context.length} chars context`);
         } else {
           console.error(`❌ SEARCH: Search failed:`, searchResult.error);
           const chatResult = await processWithClaudeAI(
@@ -321,14 +328,20 @@ serve(async (req) => {
             contextConversationSummary,
             personalTouch,
             maxTokens,
-            activeTrigger
+            activeTrigger,
+            enableStreaming
           );
-          response = chatResult.response;
+          
+          if (enableStreaming && chatResult.streamingResponse) {
+            streamingResponse = chatResult.streamingResponse;
+          } else {
+            response = chatResult.response;
+          }
         }
         break;
 
       case 'image':
-        console.log("🎨 IMAGE: Processing ENHANCED image generation");
+        console.log("🎨 IMAGE: Processing image generation with Claude 4");
         try {
           const imageResult = await generateImageWithRunware(message, user.id, language);
           
@@ -337,7 +350,7 @@ serve(async (req) => {
             
             let baseResponse = language === 'ar' 
               ? `تم إنشاء الصورة بنجاح! 🎨✨`
-              : `Image generated successfully! 🎨✨`;
+              : `Image generated successfully with Claude 4! 🎨✨`;
 
             if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
               baseResponse += language === 'ar'
@@ -361,8 +374,8 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        console.log(`🚀 WAKTI AI: Processing with ENHANCED Claude System`);
-        console.log(`🖼️ VISION: ${processedFiles.length} files ready for ENHANCED Claude Vision processing`);
+        console.log(`🚀 WAKTI AI: Processing with Claude 4 Sonnet (Streaming: ${enableStreaming})`);
+        console.log(`🖼️ VISION: ${processedFiles.length} files ready for Claude 4 Vision processing`);
         
         const chatResult = await processWithClaudeAI(
           `${currentDateContext}\n\n${message}`,
@@ -374,20 +387,76 @@ serve(async (req) => {
           contextConversationSummary,
           personalTouch,
           maxTokens,
-          activeTrigger
+          activeTrigger,
+          enableStreaming
         );
-        response = chatResult.response;
-        console.log(`🎯 ENHANCED RESULT: Model: ${chatResult.model}, Tokens: ${chatResult.tokensUsed}, Fallback: ${chatResult.fallbackUsed || false}`);
+        
+        if (enableStreaming && chatResult.streamingResponse) {
+          streamingResponse = chatResult.streamingResponse;
+        } else {
+          response = chatResult.response;
+        }
+        console.log(`🎯 CLAUDE 4 RESULT: Model: ${chatResult.model}, Fallback: ${chatResult.fallbackUsed || false}, Streaming: ${chatResult.streaming || false}`);
         break;
     }
 
+    // Handle streaming response
+    if (enableStreaming && streamingResponse) {
+      console.log(`🌊 STREAMING: Returning Claude 4 streaming response`);
+      
+      // Set up streaming headers
+      const headers = {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      };
+
+      // Create a ReadableStream for Server-Sent Events
+      const stream = new ReadableStream({
+        start(controller) {
+          const reader = streamingResponse.body.getReader();
+          const decoder = new TextDecoder();
+          
+          function pump() {
+            return reader.read().then(({ done, value }) => {
+              if (done) {
+                controller.enqueue(`data: [DONE]\n\n`);
+                controller.close();
+                return;
+              }
+              
+              const chunk = decoder.decode(value, { stream: true });
+              const parsed = parseClaudeStreamChunk(chunk);
+              
+              if (parsed.content) {
+                controller.enqueue(`data: ${JSON.stringify({ content: parsed.content, done: parsed.isComplete })}\n\n`);
+              }
+              
+              if (parsed.isComplete) {
+                controller.enqueue(`data: [DONE]\n\n`);
+                controller.close();
+                return;
+              }
+              
+              return pump();
+            });
+          }
+          
+          return pump();
+        }
+      });
+
+      return new Response(stream, { headers });
+    }
+
     const processingTime = Date.now() - startTime;
-    console.log(`🚀 WAKTI AI: ENHANCED processing completed successfully in ${processingTime}ms`);
+    console.log(`🚀 WAKTI AI: CLAUDE 4 processing completed successfully in ${processingTime}ms`);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'wakti_ai_enhanced_complete',
+      intent: 'wakti_ai_claude4_complete',
       confidence: 'high',
       actionTaken,
       imageUrl,
@@ -402,17 +471,18 @@ serve(async (req) => {
       userStyle,
       userTone,
       tokensUsed: maxTokens,
-      aiProvider: 'wakti_ai_enhanced_system',
+      aiProvider: 'claude-4-sonnet-system',
       taskCreationEnabled: enableTaskCreation,
       personalizedResponse: !!personalTouch,
       currentDateContext,
       visionEnhanced: processedFiles.length > 0,
       contextRestored: true,
-      modelsUsed: processedFiles.length > 0 ? 'claude-3-5-sonnet-20241022 with enhanced vision' : 'claude-3-5-sonnet-20241022 with deepseek fallback',
+      modelsUsed: processedFiles.length > 0 ? 'claude-sonnet-4-20250514 with enhanced vision' : 'claude-sonnet-4-20250514 with deepseek fallback',
       fallbacksAvailable: true,
       fullContextUsed: true,
       apiKeysValidated: true,
-      enhancedSystem: true,
+      claude4Upgrade: true,
+      streamingEnabled: enableStreaming,
       upgradeComplete: true
     };
 
@@ -421,9 +491,9 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 WAKTI AI: CRITICAL ENHANCED ERROR:", error);
+    console.error("🚨 WAKTI AI: CRITICAL CLAUDE 4 ERROR:", error);
     
-    // Enhanced error handling with specific error types
+    // Enhanced error handling for Claude 4
     let userFriendlyError = 'Sorry, I encountered an error processing your request. Please try again.';
     let statusCode = 500;
     
@@ -434,13 +504,13 @@ serve(async (req) => {
       userFriendlyError = 'Too many requests. Please wait a moment and try again.';
       statusCode = 429;
     } else if (error.message.includes('image') || error.message.includes('vision')) {
-      userFriendlyError = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file with proper data.';
+      userFriendlyError = '❌ Unable to process the uploaded image with Claude 4. Please upload a valid JPEG or PNG file.';
       statusCode = 400;
     } else if (error.message.includes('API key')) {
       userFriendlyError = 'System configuration error. Please contact support.';
       statusCode = 500;
     } else if (error.message.includes('Anthropic') || error.message.includes('Claude')) {
-      userFriendlyError = 'AI service temporarily unavailable. Please try again in a moment.';
+      userFriendlyError = 'Claude 4 AI service temporarily unavailable. Please try again in a moment.';
       statusCode = 503;
     } else if (error.message.includes('Tavily') || error.message.includes('search')) {
       userFriendlyError = 'Search service temporarily unavailable. Regular chat is still available.';
@@ -448,6 +518,9 @@ serve(async (req) => {
     } else if (error.message.includes('Runware') || error.message.includes('image generation')) {
       userFriendlyError = 'Image generation service temporarily unavailable. Regular chat is still available.';
       statusCode = 503;
+    } else if (error.message.includes('refusal')) {
+      userFriendlyError = 'Claude 4 cannot help with this request for safety reasons.';
+      statusCode = 400;
     }
     
     return new Response(JSON.stringify({
@@ -456,7 +529,7 @@ serve(async (req) => {
       currentDateContext: getCurrentDateContext(),
       contextRestored: false,
       errorDetails: error.message,
-      enhancedErrorHandling: true,
+      claude4ErrorHandling: true,
       upgradeComplete: false
     }), {
       status: statusCode,

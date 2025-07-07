@@ -1,5 +1,5 @@
 
-// WAKTI AI Image Generation with Runware API
+// WAKTI AI Image Generation with Runware API - Fixed with proper timeouts
 import { RUNWARE_API_KEY, DEEPSEEK_API_KEY } from './utils.ts';
 
 export async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
@@ -25,6 +25,10 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
       try {
         console.log('🌐 TRANSLATE: Translating Arabic prompt to English');
         
+        // Enhanced timeout handling for translation - 10 seconds
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
         const translateResponse = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: {
@@ -45,8 +49,11 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
             ],
             max_tokens: 200,
             temperature: 0.3
-          })
+          }),
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (translateResponse.ok) {
           const translateData = await translateResponse.json();
@@ -86,16 +93,22 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
       }
     ];
 
-    console.log('🎨 IMAGE GEN: Calling Runware API with payload:', JSON.stringify(imageGenPayload, null, 2));
+    console.log('🎨 IMAGE GEN: Calling Runware API with enhanced timeout handling');
+
+    // Enhanced timeout handling - 60 seconds for image generation
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     const response = await fetch('https://api.runware.ai/v1', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(imageGenPayload)
+      body: JSON.stringify(imageGenPayload),
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
     console.log('🎨 IMAGE GEN: Runware response status:', response.status);
 
     if (!response.ok) {
@@ -112,7 +125,7 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
     }
 
     const responseData = await response.json();
-    console.log('🎨 IMAGE GEN: Runware response received:', JSON.stringify(responseData, null, 2));
+    console.log('🎨 IMAGE GEN: Runware response received successfully');
 
     // Process the response
     if (responseData.data && responseData.data.length > 0) {
@@ -156,11 +169,18 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
 
   } catch (error) {
     console.error('❌ IMAGE GEN: Critical error in generateImageWithRunware:', error);
+    
+    // Handle different error types
+    let errorMessage = language === 'ar' ? 'خطأ في إنشاء الصورة' : 'Image generation failed';
+    if (error.name === 'AbortError') {
+      errorMessage = language === 'ar' ? 'انتهت مهلة إنشاء الصورة' : 'Image generation timed out';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     return {
       success: false,
-      error: language === 'ar' 
-        ? 'خطأ في إنشاء الصورة' 
-        : 'Image generation failed',
+      error: errorMessage,
       imageUrl: null,
       translation_status: 'failed'
     };

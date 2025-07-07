@@ -1,6 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { callClaudeAPI, callDeepSeekAPI, logWithTimestamp, validateApiKeys } from './utils.ts';
+import { callClaudeAPI, callDeepSeekAPI, logWithTimestamp, validateApiKeys, parseClaudeStreamChunk } from './utils.ts';
 
 export async function processWithClaudeAI(
   message: string,
@@ -12,10 +12,11 @@ export async function processWithClaudeAI(
   conversationSummary: string = '',
   personalTouch: any = null,
   maxTokens: number = 4096,
-  activeTrigger: string = 'chat'
+  activeTrigger: string = 'chat',
+  enableStreaming: boolean = false
 ) {
   try {
-    console.log('🚀 WAKTI AI: Starting Claude processing with UPGRADED system');
+    console.log('🚀 WAKTI AI: Starting Claude 4 processing with STREAMING support');
     
     // Validate API keys at start
     const keyValidation = validateApiKeys();
@@ -23,7 +24,7 @@ export async function processWithClaudeAI(
       throw new Error(`Missing API keys: ${keyValidation.missing.join(', ')}`);
     }
     
-    console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Vision');
+    console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Claude 4 Vision');
     
     // Check for task creation triggers 
     const taskTriggers = {
@@ -57,19 +58,19 @@ export async function processWithClaudeAI(
     contextMessages.push(...formattedRecentMessages);
     console.log(`🧠 CONTEXT: Added ${formattedRecentMessages.length} recent messages`);
     
-    // ENHANCED: Better image processing with proper validation
+    // Enhanced image processing with proper validation for Claude 4
     const hasImages = processedFiles && processedFiles.length > 0 && 
                      processedFiles.some(file => file.type && file.type.startsWith('image/'));
     
     let systemPrompt = '';
     
     if (hasImages) {
-      // VISION PROCESSING with Claude 3.5 Sonnet
-      console.log('🖼️ VISION: Processing with images using Claude 3.5 Sonnet');
+      // VISION PROCESSING with Claude 4 Sonnet
+      console.log('🖼️ VISION: Processing with images using Claude 4 Sonnet');
       
-      // ENHANCED BILINGUAL VISION SYSTEM PROMPTS
+      // Enhanced bilingual vision system prompts for Claude 4
       systemPrompt = language === 'ar' 
-        ? `أنت مساعد ذكي متخصص في تحليل الصور والرؤية الحاسوبية. عندما يرفع المستخدمون صورة، يجب عليك:
+        ? `أنت مساعد ذكي متخصص في تحليل الصور والرؤية الحاسوبية باستخدام Claude 4. عندما يرفع المستخدمون صورة، يجب عليك:
 
 1. **تحليل شامل للصورة**: فحص جميع العناصر المرئية بدقة عالية
 2. **استخراج النصوص**: قراءة وتحليل أي نصوص موجودة في الصورة
@@ -80,7 +81,7 @@ export async function processWithClaudeAI(
 ابدأ ردك دائماً بـ: "أستطيع أن أرى في هذه الصورة..."
 
 إذا كانت الصورة غير واضحة، اذكر ذلك بصراحة. لا تفترض معلومات غير موجودة.`
-        : `You are an advanced AI assistant with superior vision capabilities. When users upload images, you must:
+        : `You are an advanced AI assistant with superior vision capabilities powered by Claude 4. When users upload images, you must:
 
 1. **Comprehensive Image Analysis**: Examine all visual elements with high precision
 2. **Text Extraction**: Read and analyze any text present in the image
@@ -92,13 +93,13 @@ Always start your response with: "I can see in this image..."
 
 If the image is unclear or low quality, mention that honestly. Do not fabricate information.`;
     } else {
-      // Regular text chat with ENHANCED PERSONALIZATION
-      console.log('💬 CHAT: Processing text-only using Claude 3.5 Sonnet');
+      // Regular text chat with Claude 4 and enhanced personalization
+      console.log('💬 CHAT: Processing text-only using Claude 4 Sonnet');
       
-      // ENHANCED chat prompt with better personalization
+      // Enhanced chat prompt with better personalization for Claude 4
       systemPrompt = language === 'ar'
-        ? `أنت مساعد ذكي متقدم اسمه WAKTI AI. أنت مفيد ومتعاون وذكي. اجب على أسئلة المستخدمين وطلباتهم بطريقة طبيعية ومحادثة.`
-        : `You are WAKTI AI, an advanced intelligent assistant. You are helpful, collaborative, and smart. Respond naturally and conversationally to user questions and requests.`;
+        ? `أنت مساعد ذكي متقدم اسمه WAKTI AI مدعوم بـ Claude 4. أنت مفيد ومتعاون وذكي. اجب على أسئلة المستخدمين وطلباتهم بطريقة طبيعية ومحادثة.`
+        : `You are WAKTI AI, an advanced intelligent assistant powered by Claude 4. You are helpful, collaborative, and smart. Respond naturally and conversationally to user questions and requests.`;
       
       // Add enhanced personalization if available
       if (personalTouch) {
@@ -136,9 +137,9 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
         : ' The user wants to create a task or reminder. Acknowledge this and provide helpful suggestions about the task details.';
     }
 
-    console.log(`🎯 MODEL SELECTION: Using Claude 3.5 Sonnet for ${hasImages ? 'Vision' : 'Chat'}`);
+    console.log(`🎯 MODEL SELECTION: Using Claude 4 Sonnet for ${hasImages ? 'Vision' : 'Chat'} with streaming: ${enableStreaming}`);
 
-    // Prepare messages for Claude API
+    // Prepare messages for Claude 4 API
     const claudeMessages = [];
     
     // Add context messages
@@ -147,9 +148,9 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
     }
 
     if (hasImages) {
-      console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Claude Vision');
+      console.log('🖼️ VISION: Processing', processedFiles.length, 'files for Claude 4 Vision');
       
-      // FIXED: Enhanced image processing with proper validation
+      // Enhanced image processing for Claude 4
       const messageContent = [
         { type: 'text', text: message }
       ];
@@ -159,18 +160,15 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
         if (file.type && file.type.startsWith('image/')) {
           console.log(`🖼️ VISION: Processing image: ${file.name}`);
           
-          // FIXED: Better image URL handling
+          // Simplified image URL handling for Claude 4
           let imageUrl = null;
           
           // Check for base64 data first (most reliable)
           if (file.base64Data && file.base64Data.length > 100) {
-            // Ensure proper format
             const mediaType = file.type || 'image/jpeg';
             imageUrl = `data:${mediaType};base64,${file.base64Data}`;
           } else if (file.image_url?.url && file.image_url.url.startsWith('data:image/')) {
             imageUrl = file.image_url.url;
-          } else if (file.url && file.url.startsWith('data:image/')) {
-            imageUrl = file.url;
           }
           
           console.log(`🔗 VISION URL CHECK: ${imageUrl ? 'VALID BASE64 DATA FOUND' : 'NO VALID BASE64 DATA'}`);
@@ -189,12 +187,8 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
                   data: base64Data
                 }
               });
-              console.log(`✅ VISION: Successfully added image ${file.name} (${base64Data.length} chars)`);
-            } else {
-              console.error(`❌ VISION: Invalid base64 data for ${file.name}`);
+              console.log(`✅ VISION: Successfully added image ${file.name} for Claude 4`);
             }
-          } else {
-            console.error(`❌ VISION: No valid base64 URL found for image: ${file.name}`);
           }
         }
       }
@@ -203,7 +197,7 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
         role: 'user', 
         content: messageContent 
       });
-      console.log(`🖼️ VISION: Message content prepared with ${messageContent.length - 1} images`);
+      console.log(`🖼️ VISION: Message content prepared for Claude 4 with ${messageContent.length - 1} images`);
     } else {
       // Simple text message for regular chat
       claudeMessages.push({ 
@@ -220,32 +214,50 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
       });
     }
 
-    // Enhanced retry logic with detailed error handling
+    // Enhanced retry logic with Claude 4 and DeepSeek fallback
     let lastError;
     const maxRetries = 2;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔄 ATTEMPT ${attempt + 1}: Processing request`);
+        console.log(`🔄 ATTEMPT ${attempt + 1}: Processing request with Claude 4`);
         
         if (attempt === 0) {
-          // Primary: Claude 3.5 Sonnet
-          const claudeResponse = await callClaudeAPI(claudeMessages, maxTokens);
+          // Primary: Claude 4 Sonnet
+          const claudeResponse = await callClaudeAPI(claudeMessages, maxTokens, 'claude-sonnet-4-20250514', enableStreaming);
           
-          console.log('📥 CLAUDE SUCCESS: Response received from Claude 3.5 Sonnet');
+          if (enableStreaming) {
+            console.log('📥 CLAUDE 4 STREAMING: Returning streaming response');
+            return {
+              streamingResponse: claudeResponse,
+              model: 'claude-sonnet-4-20250514',
+              streaming: true,
+              contextUsed: contextMessages.length,
+              personalizedResponse: !!personalTouch,
+              taskCreationIntent: shouldCreateTask,
+              intent: shouldCreateTask ? 'task_creation' : 'chat',
+              confidence: shouldCreateTask ? 'high' : 'medium',
+              attempt: attempt + 1,
+              fallbackUsed: false,
+              visionUsed: hasImages,
+              fullContextRestored: true
+            };
+          }
+          
+          console.log('📥 CLAUDE 4 SUCCESS: Response received from Claude 4 Sonnet');
           
           if (!claudeResponse.content || !claudeResponse.content[0] || !claudeResponse.content[0].text) {
-            console.error('❌ CLAUDE ERROR: Invalid response structure:', claudeResponse);
-            throw new Error('Invalid Claude API response structure');
+            console.error('❌ CLAUDE 4 ERROR: Invalid response structure:', claudeResponse);
+            throw new Error('Invalid Claude 4 API response structure');
           }
 
           const aiResponse = claudeResponse.content[0].text;
-          console.log('✅ CLAUDE SUCCESS: Response generated successfully');
+          console.log('✅ CLAUDE 4 SUCCESS: Response generated successfully');
           console.log('🎯 RESPONSE PREVIEW:', aiResponse.substring(0, 200) + '...');
           
           return {
             response: aiResponse,
-            model: 'claude-3-5-sonnet-20241022',
+            model: 'claude-sonnet-4-20250514',
             tokensUsed: claudeResponse.usage?.input_tokens + claudeResponse.usage?.output_tokens || 0,
             contextUsed: contextMessages.length,
             personalizedResponse: !!personalTouch,
@@ -255,7 +267,8 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
             attempt: attempt + 1,
             fallbackUsed: false,
             visionUsed: hasImages,
-            fullContextRestored: true
+            fullContextRestored: true,
+            streaming: false
           };
 
         } else {
@@ -284,7 +297,8 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
               attempt: attempt + 1,
               fallbackUsed: true,
               visionUsed: false,
-              fullContextRestored: true
+              fullContextRestored: true,
+              streaming: false
             };
           } else {
             // Regular chat fallback
@@ -308,7 +322,8 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
               attempt: attempt + 1,
               fallbackUsed: true,
               visionUsed: false,
-              fullContextRestored: true
+              fullContextRestored: true,
+              streaming: false
             };
           }
         }
@@ -331,7 +346,7 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
   } catch (error) {
     console.error('🚨 Critical processing error:', error);
     
-    // Enhanced error handling: More meaningful error messages
+    // Enhanced error handling for Claude 4
     let userFriendlyMessage = '';
     
     if (error.message.includes('API key')) {
@@ -342,6 +357,10 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
       userFriendlyMessage = language === 'ar' 
         ? '❌ عذراً، حدث خطأ أثناء معالجة الصورة. حاول مرة أخرى أو ارفع صورة جديدة.'
         : '❌ Sorry, I encountered an error processing your image. Please try again or upload a new image.';
+    } else if (error.message.includes('refusal')) {
+      userFriendlyMessage = language === 'ar' 
+        ? '❌ عذراً، لا يمكنني المساعدة في هذا الطلب لأسباب تتعلق بالسلامة.'
+        : '❌ Sorry, I cannot help with this request for safety reasons.';
     } else {
       userFriendlyMessage = language === 'ar' 
         ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'
@@ -358,7 +377,8 @@ If the image is unclear or low quality, mention that honestly. Do not fabricate 
       error: error.message,
       userFriendlyError: userFriendlyMessage,
       visionUsed: false,
-      fullContextRestored: false
+      fullContextRestored: false,
+      streaming: false
     };
   }
 }

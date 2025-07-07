@@ -1,5 +1,5 @@
 
-// WAKTI AI Search functionality with Tavily API
+// WAKTI AI Search functionality with Tavily API - Fixed with proper timeouts
 import { TAVILY_API_KEY } from './utils.ts';
 
 export async function executeRegularSearch(query: string, language: string = 'en') {
@@ -27,16 +27,22 @@ export async function executeRegularSearch(query: string, language: string = 'en
       exclude_domains: []
     };
 
-    console.log('🔍 SEARCH: Calling Tavily API with payload:', JSON.stringify(searchPayload, null, 2));
+    console.log('🔍 SEARCH: Calling Tavily API with enhanced timeout handling');
+
+    // Enhanced timeout handling - 30 seconds for search
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(searchPayload)
+      body: JSON.stringify(searchPayload),
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
     console.log('🔍 SEARCH: Tavily response status:', response.status);
 
     if (!response.ok) {
@@ -51,7 +57,7 @@ export async function executeRegularSearch(query: string, language: string = 'en
     }
 
     const searchData = await response.json();
-    console.log('🔍 SEARCH: Tavily response received:', JSON.stringify(searchData, null, 2));
+    console.log('🔍 SEARCH: Tavily response received successfully');
 
     // Extract relevant information
     const results = searchData.results || [];
@@ -89,9 +95,18 @@ export async function executeRegularSearch(query: string, language: string = 'en
 
   } catch (error) {
     console.error('❌ SEARCH: Critical error in executeRegularSearch:', error);
+    
+    // Handle different error types
+    let errorMessage = 'Search failed';
+    if (error.name === 'AbortError') {
+      errorMessage = 'Search request timed out';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     return {
       success: false,
-      error: error.message || 'Search failed',
+      error: errorMessage,
       data: null,
       context: ''
     };
