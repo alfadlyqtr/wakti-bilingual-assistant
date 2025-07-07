@@ -1,8 +1,7 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
-import { UltraFastWaktiAIService } from '@/services/UltraFastWaktiAIService';
-import { UltraFastMemoryCache } from '@/services/UltraFastMemoryCache';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -121,7 +120,7 @@ const WaktiAIV2 = () => {
     setShowTaskConfirmation(true);
   };
 
-  // SIMPLE MESSAGE SENDING WITH CLAUDE 3.5
+  // SIMPLE MESSAGE SENDING - Direct to WaktiAIV2Service
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
@@ -139,7 +138,7 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    console.log('🚀 SEND MESSAGE: Starting with Claude 3.5 (No Streaming)');
+    console.log('🚀 SEND MESSAGE: Direct to WaktiAIV2Service - Simple Flow');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
@@ -175,37 +174,52 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
       
-      console.log('📡 CALLING: UltraFastWaktiAIService');
+      console.log('📡 CALLING: WaktiAIV2Service.sendMessage - Direct Flow');
       
-      const aiResponse = await UltraFastWaktiAIService.sendMessageUltraFast(
+      // SIMPLE DIRECT CALL to WaktiAIV2Service
+      const aiResponse = await WaktiAIV2Service.sendMessage(
         messageContent,
         userProfile?.id,
         language,
         currentConversationId,
         inputType,
+        sessionMessages.slice(-5), // Recent messages for context
+        false, // Don't skip context load
         activeTrigger,
-        attachedFiles,
-        undefined, // No streaming callback
-        handleTaskDetected
+        '', // No conversation summary needed
+        attachedFiles || []
       );
       
       console.log('📨 AI RESPONSE:', {
-        success: aiResponse.success,
-        responseTime: aiResponse.responseTime + 'ms',
-        hasContent: !!aiResponse.assistantMessage?.content,
-        claude35Enabled: !aiResponse.claude4Enabled
+        success: !aiResponse.error,
+        hasResponse: !!aiResponse.response,
+        conversationId: aiResponse.conversationId?.substring(0, 8) + '...'
       });
 
-      if (!aiResponse.success) {
-        throw new Error(aiResponse.error || 'AI response failed');
+      if (aiResponse.error) {
+        throw new Error(aiResponse.error);
       }
+      
+      // Create the response message
+      const assistantMessage: AIMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: aiResponse.response || 'Response received',
+        timestamp: new Date(),
+        intent: aiResponse.intent,
+        confidence: aiResponse.confidence as 'high' | 'medium' | 'low',
+        actionTaken: aiResponse.actionTaken,
+        imageUrl: aiResponse.imageUrl,
+        browsingUsed: aiResponse.browsingUsed,
+        browsingData: aiResponse.browsingData
+      };
       
       // Update session messages with final response
       setSessionMessages(prevMessages => {
         const newMessages = [...prevMessages];
         // Replace temp messages with real ones
-        newMessages[newMessages.length - 2] = aiResponse.userMessage;
-        newMessages[newMessages.length - 1] = aiResponse.assistantMessage;
+        newMessages[newMessages.length - 2] = tempUserMessage;
+        newMessages[newMessages.length - 1] = assistantMessage;
         return newMessages;
       });
       
@@ -222,8 +236,7 @@ const WaktiAIV2 = () => {
         fileInputRef.current.value = '';
       }
 
-      // Show success message for Claude 3.5
-      console.log('🎉 CLAUDE 3.5: Successfully powered by Claude 3.5 Sonnet');
+      console.log('🎉 SUCCESS: Simple flow worked perfectly!');
 
     } catch (err: any) {
       const totalTime = Date.now() - startTime;
@@ -281,12 +294,6 @@ const WaktiAIV2 = () => {
     setSessionMessages([]);
     setCurrentConversationId(null);
     setIsNewConversation(true);
-    
-    // Clear ultra-fast caches
-    if (userProfile?.id && currentConversationId) {
-      UltraFastWaktiAIService.clearConversationUltraFast(userProfile.id, currentConversationId);
-    }
-    
     setIsSidebarOpen(false);
   };
 
