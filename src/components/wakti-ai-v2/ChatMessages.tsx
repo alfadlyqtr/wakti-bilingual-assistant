@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -168,11 +169,11 @@ export const ChatMessages = ({
             </div>
           )}
 
-          {/* Task Confirmation */}
+          {/* Task Confirmation - Fixed prop name from taskData to data */}
           {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
             <EditableTaskConfirmationCard
-              taskData={pendingTaskData || pendingReminderData}
-              isReminder={!!pendingReminderData}
+              type={pendingReminderData ? 'reminder' : 'task'}
+              data={pendingTaskData || pendingReminderData}
               onConfirm={pendingTaskData ? onTaskConfirmation : onReminderConfirmation}
               onCancel={onCancelTaskConfirmation}
               isLoading={taskConfirmationLoading}
