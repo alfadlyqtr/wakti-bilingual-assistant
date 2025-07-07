@@ -16,7 +16,11 @@ const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 console.log("🚀 WAKTI AI V2: Simple Claude 3.5 Implementation");
 
 serve(async (req) => {
-  console.log("📨 REQUEST RECEIVED:", req.method);
+  console.log("📨 REQUEST RECEIVED:", {
+    method: req.method,
+    url: req.url,
+    headers: Object.fromEntries(req.headers.entries())
+  });
 
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -30,14 +34,16 @@ serve(async (req) => {
   }
 
   try {
-    // ROBUST REQUEST BODY PARSING
+    // EMERGENCY JSON PARSING FIX - Handle empty bodies properly
     let requestBody;
     const contentType = req.headers.get('content-type') || '';
+    
+    console.log("📋 CONTENT TYPE:", contentType);
     
     if (!contentType.includes('application/json')) {
       console.error("❌ INVALID CONTENT TYPE:", contentType);
       return new Response(JSON.stringify({
-        error: "Invalid content type. Expected application/json",
+        error: "Content-Type must be application/json",
         success: false
       }), {
         status: 400,
@@ -48,32 +54,56 @@ serve(async (req) => {
       });
     }
 
-    const rawBody = await req.text();
-    console.log("📝 RAW BODY LENGTH:", rawBody.length);
-    
-    if (!rawBody || rawBody.trim() === '') {
-      console.error("❌ EMPTY REQUEST BODY");
-      return new Response(JSON.stringify({
-        error: "Empty request body",
-        success: false
-      }), {
-        status: 400,
-        headers: { 
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    }
-
+    // Get the raw body text first
+    let rawBodyText;
     try {
-      requestBody = JSON.parse(rawBody);
+      rawBodyText = await req.text();
+      console.log("📝 RAW BODY LENGTH:", rawBodyText?.length || 0);
+      console.log("📝 RAW BODY PREVIEW:", rawBodyText?.substring(0, 200) || 'EMPTY');
+    } catch (textError) {
+      console.error("❌ FAILED TO READ REQUEST BODY:", textError);
+      return new Response(JSON.stringify({
+        error: "Failed to read request body",
+        success: false,
+        details: textError.message
+      }), {
+        status: 400,
+        headers: { 
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // Check if body is empty
+    if (!rawBodyText || rawBodyText.trim() === '') {
+      console.error("❌ EMPTY REQUEST BODY DETECTED");
+      return new Response(JSON.stringify({
+        error: "Request body is empty",
+        success: false,
+        help: "Please send a JSON payload with message and userId"
+      }), {
+        status: 400,
+        headers: { 
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // Parse JSON safely
+    try {
+      requestBody = JSON.parse(rawBodyText);
       console.log("✅ JSON PARSED SUCCESSFULLY");
+      console.log("📊 REQUEST BODY KEYS:", Object.keys(requestBody || {}));
     } catch (jsonError) {
       console.error("❌ JSON PARSING ERROR:", jsonError);
+      console.error("❌ PROBLEMATIC JSON:", rawBodyText.substring(0, 500));
       return new Response(JSON.stringify({
         error: "Invalid JSON format",
         success: false,
-        details: jsonError.message
+        details: jsonError.message,
+        receivedBody: rawBodyText.substring(0, 200)
       }), {
         status: 400,
         headers: { 
@@ -93,13 +123,21 @@ serve(async (req) => {
       activeTrigger = 'chat',
       attachedFiles = [],
       maxTokens = 4096
-    } = requestBody;
+    } = requestBody || {};
+
+    console.log("🎯 EXTRACTED PARAMS:", {
+      hasMessage: !!message,
+      hasUserId: !!userId,
+      language,
+      activeTrigger,
+      messageLength: message?.length || 0
+    });
 
     // Validate required parameters
     if (!message?.trim()) {
-      console.error("❌ MISSING MESSAGE");
+      console.error("❌ MISSING OR EMPTY MESSAGE");
       return new Response(JSON.stringify({
-        error: "Message is required",
+        error: "Message is required and cannot be empty",
         success: false
       }), {
         status: 400,
@@ -176,6 +214,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("🚨 CRITICAL ERROR:", error);
+    console.error("🚨 ERROR STACK:", error.stack);
 
     const errorResponse = {
       error: "Internal server error",
