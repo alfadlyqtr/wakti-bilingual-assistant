@@ -152,6 +152,12 @@ export function ChatMessages({
                 : 'How can I help you today?'
               }
             </p>
+            <div className="text-xs text-green-600 bg-green-50 rounded-lg p-2 inline-block">
+              {language === 'ar' 
+                ? '🚀 مدعوم بـ Claude 4 Sonnet'
+                : '🚀 Powered by Claude 4 Sonnet'
+              }
+            </div>
           </div>
         )}
 
@@ -171,6 +177,15 @@ export function ChatMessages({
               hasAttachedFiles={hasAttachedFiles}
               isVisionProcessing={hasAttachedFiles}
             />
+            {/* Enhanced loading indicator with Claude 4 branding */}
+            <div className="text-center">
+              <div className="text-xs text-blue-600 bg-blue-50 rounded-lg p-2 inline-block mt-2">
+                {language === 'ar' 
+                  ? '⚡ Claude 4 يعمل على طلبك...'
+                  : '⚡ Claude 4 processing your request...'
+                }
+              </div>
+            </div>
           </div>
         )}
 

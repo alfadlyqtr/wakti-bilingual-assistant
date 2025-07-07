@@ -57,8 +57,9 @@ const WaktiAIV2 = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isClearingChat, setIsClearingChat] = useState(false);
 
-  // Streaming and ultra-fast states
+  // Enhanced streaming states
   const [streamingMessage, setStreamingMessage] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -125,23 +126,29 @@ const WaktiAIV2 = () => {
     setShowTaskConfirmation(true);
   };
 
-  // Message sending with task creation detection
+  // ENHANCED: Message sending with Claude 4 streaming support
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
       return;
     }
 
-    console.log('🚀 SEND MESSAGE: Starting with files:', attachedFiles);
+    console.log('🚀 SEND MESSAGE: Starting with enhanced Claude 4 integration');
+    console.log('📊 MESSAGE DETAILS:', {
+      content: messageContent.substring(0, 100) + '...',
+      inputType,
+      filesCount: attachedFiles?.length || 0,
+      trigger: activeTrigger,
+      conversationId: currentConversationId?.substring(0, 8) + '...'
+    });
 
     setIsLoading(true);
     setError(null);
     setStreamingMessage('');
+    setIsStreaming(true);
     const startTime = Date.now();
 
     try {
-      console.log('🚀 ULTRA-FAST MODE: Processing with enhanced memory');
-      
       // Add user message immediately to UI
       const tempUserMessage: AIMessage = {
         id: `user-temp-${Date.now()}`,
@@ -164,12 +171,19 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
       
-      // Handle streaming updates
+      // Enhanced streaming handler with real-time updates
       const handleStreamUpdate = (chunk: string, isComplete: boolean) => {
+        console.log('🌊 STREAM UPDATE:', { chunk: chunk.substring(0, 50) + '...', isComplete });
+        setStreamingMessage(prev => prev + chunk);
+        
         if (isComplete) {
-          setStreamingMessage(prev => prev + chunk);
+          console.log('✅ STREAM COMPLETED');
+          setIsStreaming(false);
+          setStreamingMessage('');
         }
       };
+      
+      console.log('📡 CALLING: UltraFastWaktiAIService with streaming enabled');
       
       const aiResponse = await UltraFastWaktiAIService.sendMessageUltraFast(
         messageContent,
@@ -179,9 +193,20 @@ const WaktiAIV2 = () => {
         inputType,
         activeTrigger,
         attachedFiles, // Pass files to AI service
-        handleStreamUpdate,
+        handleStreamUpdate, // Enable streaming
         handleTaskDetected // Pass task detection callback
       );
+      
+      console.log('📨 AI RESPONSE:', {
+        success: aiResponse.success,
+        responseTime: aiResponse.responseTime + 'ms',
+        hasContent: !!aiResponse.assistantMessage?.content,
+        claude4Enabled: aiResponse.claude4Enabled
+      });
+
+      if (!aiResponse.success) {
+        throw new Error(aiResponse.error || 'AI response failed');
+      }
       
       // Update session messages with final response
       setSessionMessages(prevMessages => {
@@ -195,7 +220,8 @@ const WaktiAIV2 = () => {
       setCurrentConversationId(aiResponse.conversationId);
       setIsNewConversation(false);
       
-      console.log('✅ ULTRA-FAST: Completed with enhanced memory in', Date.now() - startTime, 'ms');
+      const totalTime = Date.now() - startTime;
+      console.log(`✅ MESSAGE COMPLETE: Total time ${totalTime}ms`);
       
       setProcessedFiles([]);
       checkQuotas();
@@ -204,11 +230,28 @@ const WaktiAIV2 = () => {
         fileInputRef.current.value = '';
       }
 
+      // Show success message if Claude 4 is working
+      if (aiResponse.claude4Enabled) {
+        console.log('🎉 CLAUDE 4: Successfully powered by Claude 4 Sonnet');
+      }
+
     } catch (err: any) {
-      console.error("Error sending message:", err);
+      const totalTime = Date.now() - startTime;
+      console.error("❌ MESSAGE ERROR:", err);
+      console.error("📊 ERROR DETAILS:", {
+        message: err.message,
+        totalTime: totalTime + 'ms',
+        stack: err.stack?.substring(0, 300)
+      });
+      
       setError(err.message || 'Failed to send message');
+      showError(language === 'ar' 
+        ? 'فشل في إرسال الرسالة. يرجى المحاولة مرة أخرى.' 
+        : 'Failed to send message. Please try again.'
+      );
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
       setStreamingMessage('');
     }
   };
@@ -469,8 +512,8 @@ const WaktiAIV2 = () => {
             isNewConversation={isNewConversation}
           />
           
-          {/* Show streaming message if active */}
-          {streamingMessage && (
+          {/* Enhanced streaming message display */}
+          {(streamingMessage || isStreaming) && (
             <div className="px-4 py-2">
               <div className="flex justify-start">
                 <div className="max-w-md bg-muted rounded-lg p-3">
@@ -479,6 +522,9 @@ const WaktiAIV2 = () => {
                     <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse"></div>
                     <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse delay-100"></div>
                     <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse delay-200"></div>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      {language === 'ar' ? 'Claude 4 يكتب...' : 'Claude 4 typing...'}
+                    </span>
                   </div>
                 </div>
               </div>

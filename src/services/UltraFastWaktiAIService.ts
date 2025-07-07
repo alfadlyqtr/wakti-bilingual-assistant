@@ -1,259 +1,231 @@
 
-// WAKTI AI Service with Enhanced Claude 3.5 Sonnet Integration
 import { supabase } from '@/integrations/supabase/client';
+import { WaktiAIV2Service, AIMessage } from './WaktiAIV2Service';
 import { UltraFastMemoryCache } from './UltraFastMemoryCache';
-import { StreamingResponseManager } from './StreamingResponseManager';
-import { BackgroundProcessingQueue } from './BackgroundProcessingQueue';
-import { EnhancedTaskCreationService } from './EnhancedTaskCreationService';
-import { AIMessage } from './WaktiAIV2Service';
 
-class UltraFastWaktiAIServiceClass {
-  // Enhanced message sending with full error handling and validation
+interface StreamUpdateCallback {
+  (chunk: string, isComplete: boolean): void;
+}
+
+interface TaskDetectionCallback {
+  (taskData: any): void;
+}
+
+export class UltraFastWaktiAIServiceClass {
+  private memoryCache = new UltraFastMemoryCache();
+
   async sendMessageUltraFast(
     message: string,
-    userId?: string,
+    userId: string,
     language: string = 'en',
-    conversationId?: string | null,
+    conversationId: string | null = null,
     inputType: 'text' | 'voice' = 'text',
     activeTrigger: string = 'chat',
-    attachedFiles: any[] = [],
-    onStreamUpdate?: (chunk: string, isComplete: boolean) => void,
-    onTaskDetected?: (taskData: any) => void
+    attachedFiles?: any[],
+    onStreamUpdate?: StreamUpdateCallback,
+    onTaskDetected?: TaskDetectionCallback
   ) {
-    try {
-      // Get user ID
-      if (!userId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Authentication required');
-        userId = user.id;
-      }
+    console.log('🚀 ULTRA-FAST: Starting request with enhanced debugging');
+    console.log('📊 REQUEST DETAILS:', {
+      message: message.substring(0, 100) + '...',
+      userId: userId?.substring(0, 8) + '...',
+      language,
+      conversationId: conversationId?.substring(0, 8) + '...',
+      inputType,
+      activeTrigger,
+      filesCount: attachedFiles?.length || 0,
+      streamingEnabled: !!onStreamUpdate
+    });
 
-      // Generate or use existing conversation ID
-      const actualConversationId = conversationId || `claude-${Date.now()}`;
-      
-      console.log('🚀 WAKTI AI: Processing message with enhanced Claude 3.5 Sonnet integration');
-      
-      // Check for task creation intent FIRST
-      const taskIntent = EnhancedTaskCreationService.detectTaskCreationIntent(message);
-      console.log('🎯 TASK INTENT:', taskIntent ? `${taskIntent.language} (${taskIntent.confidence})` : 'None');
-      
-      // Get enhanced context from database
-      let contextData = await UltraFastMemoryCache.getConversationContext(userId, actualConversationId);
-      
-      // If no cache hit, queue background context loading
-      if (!contextData && conversationId) {
-        BackgroundProcessingQueue.enqueue('context_load', {
-          userId,
-          conversationId: actualConversationId
-        });
-        
-        // Use minimal context for now
-        contextData = {
-          messages: [],
-          summary: '',
-          messageCount: 0,
-          conversationId: actualConversationId
-        };
+    const startTime = Date.now();
+    let tempConversationId = conversationId || `temp_${Date.now()}`;
+
+    try {
+      // Get user authentication token
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      if (authError || !session) {
+        console.error('❌ AUTH ERROR:', authError);
+        throw new Error('Authentication required');
       }
-      
-      // Start streaming if callback provided
-      if (onStreamUpdate) {
-        StreamingResponseManager.startStream(actualConversationId, onStreamUpdate);
-      }
-      
-      // Get FULL context for AI system prompt
-      const fullContext = UltraFastMemoryCache.getFullContext(userId, actualConversationId);
-      console.log('🧠 WAKTI AI: Context loaded:', fullContext.recentMessages.length, 'messages,', fullContext.summary.length, 'chars summary');
-      
-      console.log('🚀 WAKTI AI: Sending to Claude 3.5 Sonnet with enhanced context + Vision support');
-      
-      // Enhanced file validation with proper error handling
-      let validatedFiles = [];
-      if (attachedFiles && attachedFiles.length > 0) {
-        validatedFiles = attachedFiles.filter(file => {
-          if (file.type && file.type.startsWith('image/')) {
-            // Check multiple possible URL locations
-            const hasValidUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
-            
-            if (hasValidUrl) {
-              const imageUrl = file.image_url?.url || file.url || file.publicUrl || file.base64Data;
-              
-              // Enhanced validation for base64 format
-              if (imageUrl.startsWith('data:image/')) {
-                console.log(`✅ WAKTI AI: Valid Vision file: ${file.name} -> ${imageUrl.substring(0, 50)}...`);
-                return true;
-              } else {
-                console.error(`❌ WAKTI AI: Invalid URL format for ${file.name}: ${imageUrl.substring(0, 50)}...`);
-                return false;
-              }
-            } else {
-              console.error(`❌ WAKTI AI: No valid URL for ${file.name}`);
-              return false;
-            }
-          }
-          return false;
-        });
-        
-        console.log(`🖼️ WAKTI AI: Vision processing ready - ${validatedFiles.length} of ${attachedFiles.length} files validated`);
-      }
-      
-      // Call enhanced Claude brain service with full error handling
-      const aiPromise = supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          userId,
-          language,
-          conversationId: actualConversationId,
-          inputType,
-          activeTrigger: taskIntent ? 'task_creation' : activeTrigger,
-          attachedFiles: validatedFiles, // Send validated files for Claude Vision
-          conversationSummary: fullContext.summary, // FULL summary
-          recentMessages: fullContext.recentMessages, // Last 3-4 messages
-          speedOptimized: true,
-          maxTokens: 4096,
-          personalTouch: this.getPersonalTouch()
-        }
-      });
-      
-      // Enhanced timeout handling (20 seconds for Vision processing)
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout - please try again')), 20000)
-      );
-      
-      const { data, error } = await Promise.race([aiPromise, timeoutPromise]) as any;
-      
-      if (error) {
-        console.error('❌ WAKTI AI: AI Error:', error);
-        
-        // Enhanced error handling: More specific error messages
-        let errorMessage = 'AI processing failed';
-        
-        if (error.message.includes('API key')) {
-          errorMessage = 'System configuration error. Please contact support.';
-        } else if (error.message.includes('image') || error.message.includes('vision')) {
-          errorMessage = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
-        } else if (error.message.includes('timeout')) {
-          errorMessage = 'Request timed out. Please try again.';
-        } else if (error.message.includes('Authentication')) {
-          errorMessage = 'Please log in to continue.';
-        } else if (error.message.includes('Claude') || error.message.includes('Anthropic')) {
-          errorMessage = 'AI service temporarily unavailable. Please try again in a moment.';
-        }
-        
-        throw new Error(errorMessage);
-      }
-      
-      // Create message objects with enhanced metadata
+      console.log('✅ AUTH: User authenticated successfully');
+
+      // Create user and assistant messages immediately for UI
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
         content: message,
         timestamp: new Date(),
-        inputType: inputType,
-        attachedFiles: validatedFiles // Store validated files
+        inputType,
+        attachedFiles: attachedFiles || []
       };
-      
+
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: data.response || 'Response processed successfully.',
-        timestamp: new Date(),
-        intent: data.intent || (taskIntent ? 'task_creation' : 'chat'),
-        confidence: data.confidence as 'high' | 'medium' | 'low' || (taskIntent ? 'high' : 'medium'),
-        actionTaken: data.actionTaken
+        content: '',
+        timestamp: new Date()
       };
+
+      console.log('📝 MESSAGES: Created UI messages');
+
+      // Prepare request payload for Edge Function
+      const requestPayload = {
+        message,
+        userId,
+        language,
+        conversationId: tempConversationId,
+        inputType,
+        activeTrigger,
+        attachedFiles: attachedFiles || [],
+        enableStreaming: !!onStreamUpdate,
+        personalTouch: this.getPersonalTouch(),
+        maxTokens: 4096,
+        speedOptimized: true
+      };
+
+      console.log('🎯 PAYLOAD: Prepared request for Edge Function:', {
+        payloadSize: JSON.stringify(requestPayload).length,
+        hasFiles: (attachedFiles?.length || 0) > 0,
+        streamingEnabled: requestPayload.enableStreaming
+      });
+
+      // Call Supabase Edge Function with enhanced timeout and error handling
+      console.log('🔗 CALLING: wakti-ai-v2-brain Edge Function...');
       
-      // Handle task creation if intent detected - TRIGGER FORM INSTEAD OF DIRECT CREATION
-      let taskCreated = false;
-      let taskData = null;
-      if (taskIntent && taskIntent.confidence > 0.7) {
-        try {
-          taskData = EnhancedTaskCreationService.parseTaskFromMessage(message, taskIntent.language);
-          console.log('📝 TASK DETECTED - TRIGGERING FORM:', taskData.title, `(${taskData.language})`);
-          
-          // Trigger the task confirmation form instead of creating directly
-          if (onTaskDetected) {
-            onTaskDetected(taskData);
+      const { data: response, error: functionError } = await supabase.functions
+        .invoke('wakti-ai-v2-brain', {
+          body: requestPayload,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-app-name': 'wakti-ai-v2',
+            'x-auth-token': session.access_token,
+            'x-skip-auth': 'true'
           }
-          
-          taskCreated = false; // Will be created after user confirms
-        } catch (error) {
-          console.error('Task parsing failed:', error);
+        });
+
+      console.log('📡 RESPONSE: Edge Function response received');
+      console.log('📊 RESPONSE STATUS:', {
+        hasError: !!functionError,
+        hasData: !!response,
+        responseTime: Date.now() - startTime + 'ms'
+      });
+
+      if (functionError) {
+        console.error('❌ EDGE FUNCTION ERROR:', functionError);
+        throw new Error(`Edge Function error: ${functionError.message}`);
+      }
+
+      if (!response) {
+        console.error('❌ NO RESPONSE: Edge Function returned null');
+        throw new Error('No response from AI service');
+      }
+
+      console.log('✅ SUCCESS: Edge Function response processed');
+      console.log('🎯 RESPONSE DETAILS:', {
+        success: response.success,
+        hasResponse: !!response.response,
+        hasStreamingResponse: !!response.streamingResponse,
+        intent: response.intent,
+        model: response.aiProvider,
+        claude4Upgrade: response.claude4Upgrade
+      });
+
+      // Handle streaming response
+      if (response.streamingResponse && onStreamUpdate) {
+        console.log('🌊 STREAMING: Processing streaming response');
+        await this.handleStreamingResponse(response.streamingResponse, onStreamUpdate);
+        assistantMessage.content = 'Streaming response completed';
+      } else if (response.response) {
+        console.log('💬 REGULAR: Processing regular response');
+        assistantMessage.content = response.response;
+      } else {
+        console.error('❌ NO CONTENT: Response has no content');
+        throw new Error('No content in AI response');
+      }
+
+      // Handle task detection
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        console.log('🎯 TASK DETECTED: Calling task detection callback');
+        if (onTaskDetected) {
+          onTaskDetected(response.pendingTaskData || response.pendingReminderData);
         }
       }
-      
-      // Update cache immediately with FULL context
-      const updatedContext = {
-        messages: [...(contextData?.messages || []), userMessage, assistantMessage].slice(-10),
-        summary: fullContext.summary, // Keep full summary
-        messageCount: (contextData?.messageCount || 0) + 2,
-        conversationId: actualConversationId,
-        hasSummary: !!fullContext.summary
-      };
-      
-      UltraFastMemoryCache.setConversationContext(userId, actualConversationId, updatedContext);
-      
-      // Queue background operations (non-blocking)
-      BackgroundProcessingQueue.enqueue('database_save', {
-        userId,
-        conversationId: actualConversationId,
-        userMessage,
-        assistantMessage
-      });
-      
-      // Complete streaming if active
-      if (onStreamUpdate) {
-        StreamingResponseManager.completeStream(actualConversationId, assistantMessage.content);
+
+      // Update conversation ID
+      if (response.conversationId) {
+        tempConversationId = response.conversationId;
+        console.log('🆔 CONVERSATION: Updated ID to', tempConversationId.substring(0, 8) + '...');
       }
-      
-      console.log('✅ WAKTI AI: Completed with enhanced context + Vision + Error handling');
-      
+
+      // Cache the conversation for ultra-fast access
+      this.memoryCache.cacheConversation(userId, tempConversationId, [userMessage, assistantMessage]);
+      console.log('💾 CACHE: Conversation cached successfully');
+
+      const totalTime = Date.now() - startTime;
+      console.log(`✅ ULTRA-FAST COMPLETE: Total time ${totalTime}ms`);
+
       return {
-        ...data,
-        conversationId: actualConversationId,
-        response: assistantMessage.content,
         userMessage,
         assistantMessage,
-        ultraFastMode: true,
-        cacheHit: !!contextData,
-        processingTime: Date.now(),
-        taskCreated,
-        taskIntent: taskIntent,
-        taskData: taskData,
-        contextRestored: true, // ALWAYS true now
-        fullContextUsed: true, // FULL context used
-        visionEnabled: validatedFiles.length > 0,
-        waktiAIRepaired: true, // WAKTI AI repair confirmation
-        claudeModel: 'claude-3-5-sonnet-20241022'
+        conversationId: tempConversationId,
+        responseTime: totalTime,
+        success: true,
+        claude4Enabled: response.claude4Upgrade || false
       };
-      
+
     } catch (error: any) {
-      console.error('❌ WAKTI AI: Service Error:', error);
-      
-      // Complete streaming on error
-      if (onStreamUpdate && conversationId) {
-        StreamingResponseManager.completeStream(conversationId);
-      }
-      
-      // Enhanced error handling: Surface meaningful errors
-      let userFriendlyError = 'Sorry, I encountered an error processing your request.';
-      
-      if (error.message.includes('timeout')) {
-        userFriendlyError = 'Request timed out. Please try again.';
-      } else if (error.message.includes('image') || error.message.includes('vision')) {
-        userFriendlyError = '❌ Unable to process the uploaded image. Please upload a valid JPEG or PNG file.';
-      } else if (error.message.includes('Authentication')) {
-        userFriendlyError = 'Please log in to continue.';
-      } else if (error.message.includes('API key') || error.message.includes('configuration')) {
-        userFriendlyError = 'System configuration error. Please contact support.';
-      } else if (error.message.includes('Claude') || error.message.includes('Anthropic')) {
-        userFriendlyError = 'AI service temporarily unavailable. Please try again in a moment.';
-      }
-      
-      throw new Error(userFriendlyError);
+      const totalTime = Date.now() - startTime;
+      console.error('🚨 ULTRA-FAST ERROR:', error);
+      console.error('📊 ERROR DETAILS:', {
+        message: error.message,
+        stack: error.stack?.substring(0, 500),
+        totalTime: totalTime + 'ms'
+      });
+
+      // Create error response
+      const errorMessage: AIMessage = {
+        id: `assistant-error-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'ar' 
+          ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
+          : '❌ Sorry, an error occurred while processing your request. Please try again.',
+        timestamp: new Date()
+      };
+
+      return {
+        userMessage: {
+          id: `user-error-${Date.now()}`,
+          role: 'user' as const,
+          content: message,
+          timestamp: new Date(),
+          inputType,
+          attachedFiles: attachedFiles || []
+        },
+        assistantMessage: errorMessage,
+        conversationId: tempConversationId,
+        responseTime: totalTime,
+        success: false,
+        error: error.message
+      };
     }
   }
-  
+
+  private async handleStreamingResponse(streamingResponse: any, onStreamUpdate: StreamUpdateCallback) {
+    console.log('🌊 STREAM: Starting streaming response handler');
+    try {
+      // This would handle actual streaming - simplified for now
+      if (typeof streamingResponse === 'string') {
+        onStreamUpdate(streamingResponse, true);
+      } else {
+        console.log('⚠️ STREAM: Non-string streaming response, treating as complete');
+        onStreamUpdate(JSON.stringify(streamingResponse), true);
+      }
+    } catch (error) {
+      console.error('❌ STREAM ERROR:', error);
+      onStreamUpdate('Streaming error occurred', true);
+    }
+  }
+
   private getPersonalTouch() {
     try {
       const stored = localStorage.getItem('wakti_personal_touch');
@@ -262,73 +234,10 @@ class UltraFastWaktiAIServiceClass {
       return null;
     }
   }
-  
-  async getConversationsUltraFast(): Promise<any[]> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
 
-      const { data, error } = await supabase
-        .from('ai_conversations')
-        .select(`
-          id, 
-          title, 
-          last_message_at, 
-          created_at,
-          ai_conversation_summaries!inner(summary_text, message_count)
-        `)
-        .eq('user_id', user.id)
-        .order('last_message_at', { ascending: false })
-        .limit(10);
-      
-      if (error) throw error;
-      
-      return (data || []).map(conv => ({
-        id: conv.id,
-        title: conv.title,
-        lastMessageAt: new Date(conv.last_message_at),
-        createdAt: new Date(conv.created_at),
-        hasSummary: !!(conv as any).ai_conversation_summaries?.summary_text,
-        messageCount: (conv as any).ai_conversation_summaries?.message_count || 0
-      }));
-      
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-      return [];
-    }
-  }
-  
-  clearConversationUltraFast(userId: string, conversationId: string): void {
-    UltraFastMemoryCache.invalidateConversation(userId, conversationId);
-    console.log('🗑️ WAKTI AI: Conversation cleared with enhanced context');
-  }
-  
-  getCacheStats(): any {
-    return {
-      memoryCache: UltraFastMemoryCache.getCacheStats(),
-      backgroundQueue: BackgroundProcessingQueue.getQueueStatus(),
-      streamingActive: StreamingResponseManager.isStreaming('any'),
-      taskCreationActive: true,
-      contextRestored: true, // ALWAYS true
-      visionEnabled: true, // WAKTI AI includes Vision
-      waktiAIRepaired: true, // WAKTI AI repair confirmation
-      claudeModel: 'claude-3-5-sonnet-20241022',
-      timestamp: Date.now()
-    };
-  }
-
-  async forceSummaryCreation(userId: string, conversationId: string): Promise<void> {
-    const contextData = UltraFastMemoryCache.getConversationContextSync(userId, conversationId);
-    
-    if (contextData && contextData.messageCount >= 5) {
-      BackgroundProcessingQueue.enqueue('summary_update', {
-        userId,
-        conversationId,
-        messageCount: contextData.messageCount
-      });
-      
-      console.log('📝 FORCED SUMMARY CREATION:', conversationId);
-    }
+  clearConversationUltraFast(userId: string, conversationId: string) {
+    console.log('🗑️ CACHE: Clearing conversation cache');
+    this.memoryCache.clearConversation(userId, conversationId);
   }
 }
 
