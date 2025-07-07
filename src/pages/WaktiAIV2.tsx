@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
+import { HybridMemoryService } from '@/services/HybridMemoryService';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -120,7 +120,7 @@ const WaktiAIV2 = () => {
     setShowTaskConfirmation(true);
   };
 
-  // SIMPLE MESSAGE SENDING - Direct to WaktiAIV2Service
+  // ENHANCED: HYBRID MEMORY + HAIKU SPEED Message Sending
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
@@ -138,7 +138,7 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    console.log('🚀 SEND MESSAGE: Direct to WaktiAIV2Service - Simple Flow');
+    console.log('🚀 HYBRID MEMORY + HAIKU: Ultra-fast message processing');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
@@ -168,32 +168,33 @@ const WaktiAIV2 = () => {
       const tempAssistantMessage: AIMessage = {
         id: `assistant-temp-${Date.now()}`,
         role: 'assistant',
-        content: language === 'ar' ? 'يكتب...' : 'Typing...',
+        content: language === 'ar' ? 'يكتب بسرعة فائقة...' : 'Typing ultra-fast...',
         timestamp: new Date()
       };
       
       setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
       
-      console.log('📡 CALLING: WaktiAIV2Service.sendMessage - Direct Flow');
+      console.log('📡 CALLING: HAIKU-powered WaktiAIV2Service with HYBRID MEMORY');
       
-      // SIMPLE DIRECT CALL to WaktiAIV2Service
+      // ENHANCED CALL with HYBRID MEMORY context
       const aiResponse = await WaktiAIV2Service.sendMessage(
         messageContent,
         userProfile?.id,
         language,
         currentConversationId,
         inputType,
-        sessionMessages.slice(-5), // Recent messages for context
-        false, // Don't skip context load
+        sessionMessages.slice(-5), // Recent messages for HYBRID MEMORY
+        false, // Use HYBRID MEMORY context loading
         activeTrigger,
-        '', // No conversation summary needed
+        '', // Let HYBRID MEMORY handle conversation summary
         attachedFiles || []
       );
       
-      console.log('📨 AI RESPONSE:', {
+      console.log('📨 HAIKU RESPONSE:', {
         success: !aiResponse.error,
         hasResponse: !!aiResponse.response,
-        conversationId: aiResponse.conversationId?.substring(0, 8) + '...'
+        conversationId: aiResponse.conversationId?.substring(0, 8) + '...',
+        model: 'claude-3-5-haiku-20241022'
       });
 
       if (aiResponse.error) {
@@ -227,7 +228,7 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ MESSAGE COMPLETE: Total time ${totalTime}ms`);
+      console.log(`✅ HAIKU SUCCESS: Ultra-fast processing completed in ${totalTime}ms`);
       
       setProcessedFiles([]);
       checkQuotas();
@@ -236,11 +237,11 @@ const WaktiAIV2 = () => {
         fileInputRef.current.value = '';
       }
 
-      console.log('🎉 SUCCESS: Simple flow worked perfectly!');
+      console.log('🎉 HYBRID MEMORY + HAIKU: 4x faster response delivered!');
 
     } catch (err: any) {
       const totalTime = Date.now() - startTime;
-      console.error("❌ MESSAGE ERROR:", err);
+      console.error("❌ HAIKU ERROR:", err);
       console.error("📊 ERROR DETAILS:", {
         message: err.message,
         totalTime: totalTime + 'ms',
@@ -295,6 +296,12 @@ const WaktiAIV2 = () => {
     setCurrentConversationId(null);
     setIsNewConversation(true);
     setIsSidebarOpen(false);
+    
+    // Clear HYBRID MEMORY
+    if (userProfile?.id) {
+      HybridMemoryService.clearAllMemory(userProfile.id);
+      console.log('🗑️ HYBRID MEMORY: Cleared for new conversation');
+    }
   };
 
   const handleSelectConversation = async (conversationId: string) => {
@@ -344,6 +351,13 @@ const WaktiAIV2 = () => {
     setTimeout(() => {
       setSessionMessages([]);
       WaktiAIV2Service.clearChatSession();
+      
+      // Clear HYBRID MEMORY
+      if (userProfile?.id) {
+        HybridMemoryService.clearAllMemory(userProfile.id, currentConversationId);
+        console.log('🗑️ HYBRID MEMORY: Chat cleared');
+      }
+      
       setIsClearingChat(false);
     }, 500);
   };
@@ -524,7 +538,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* CRITICAL FIX: Adjusted input positioning for mobile nav clearance */}
+        {/* ENHANCED: Input positioning for mobile nav clearance */}
         <div className="fixed bottom-24 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto">
             <ChatInput

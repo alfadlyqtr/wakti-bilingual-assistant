@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMemoryService } from './ChatMemoryService';
+import { HybridMemoryService } from './HybridMemoryService';
 
 export interface AIMessage {
   id: string;
@@ -33,12 +34,14 @@ export interface ConversationContext {
 
 class WaktiAIV2ServiceClass {
   private memoryService: typeof ChatMemoryService;
+  private hybridMemoryService: typeof HybridMemoryService;
   private conversationCache = new Map<string, ConversationContext>();
   private saveQueue: Array<() => Promise<void>> = [];
   private processing = false;
 
   constructor() {
     this.memoryService = ChatMemoryService;
+    this.hybridMemoryService = HybridMemoryService;
     this.startBackgroundProcessor();
   }
 
@@ -102,49 +105,32 @@ class WaktiAIV2ServiceClass {
     }
   }
 
-  // ULTRA-FAST: Load conversation context with proper error handling
+  // HYBRID MEMORY: Enhanced context loading with 3-layer system
   private async loadConversationContext(userId: string, conversationId: string | null): Promise<ConversationContext> {
-    if (!conversationId || conversationId.startsWith('fallback-')) {
-      return {
-        recentMessages: [],
-        conversationSummary: '',
-        messageCount: 0,
-        conversationId: conversationId
-      };
-    }
-
-    // Check cache first
-    if (this.conversationCache.has(conversationId)) {
-      const cached = this.conversationCache.get(conversationId)!;
-      console.log('🚀 Memory: Context loaded from cache');
-      return cached;
-    }
-
     try {
-      // Load in parallel: recent messages and summary
-      const [messagesResult, summaryResult] = await Promise.allSettled([
-        this.loadRecentMessages(conversationId),
-        this.loadConversationSummary(userId, conversationId)
-      ]);
-
-      const recentMessages = messagesResult.status === 'fulfilled' ? messagesResult.value : [];
-      const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : '';
-
-      const context: ConversationContext = {
-        recentMessages,
-        conversationSummary: summary,
-        messageCount: recentMessages.length,
-        conversationId
+      console.log('🧠 HYBRID MEMORY: Loading context from 3-layer system');
+      
+      // Use HYBRID MEMORY for ultra-fast context loading
+      const hybridContext = await this.hybridMemoryService.getHybridContext(userId, conversationId);
+      
+      console.log(`✅ HYBRID MEMORY: Loaded context - ${hybridContext.recentMessages.length} messages, ${hybridContext.conversationSummary.length} summary chars`);
+      
+      return {
+        recentMessages: hybridContext.recentMessages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          intent: msg.intent,
+          attachedFiles: msg.attachedFiles
+        })),
+        conversationSummary: hybridContext.conversationSummary,
+        messageCount: hybridContext.messageCount,
+        conversationId: hybridContext.conversationId
       };
-
-      // Cache for 5 minutes
-      this.conversationCache.set(conversationId, context);
-      setTimeout(() => this.conversationCache.delete(conversationId), 5 * 60 * 1000);
-
-      console.log('✅ Memory: Context loaded from database:', recentMessages.length, 'messages');
-      return context;
+      
     } catch (error) {
-      console.warn('Context loading failed:', error);
+      console.warn('HYBRID MEMORY: Context loading failed, using fallback:', error);
       return {
         recentMessages: [],
         conversationSummary: '',
@@ -271,7 +257,7 @@ class WaktiAIV2ServiceClass {
     });
   }
 
-  // ENHANCED: Main send message with full memory integration and timeout protection
+  // ENHANCED: Main send message with HYBRID MEMORY integration and HAIKU speed
   async sendMessage(
     message: string,
     userId?: string,
@@ -292,9 +278,9 @@ class WaktiAIV2ServiceClass {
         userId = user.id;
       }
 
-      console.log('🚀 ULTRA-FAST: Processing message with memory integration');
+      console.log('🚀 HYBRID MEMORY + HAIKU: Processing ultra-fast message');
 
-      // ULTRA-FAST: Get/create conversation and load context in parallel
+      // HYBRID MEMORY: Get/create conversation and load context intelligently
       const [actualConversationId, contextPromise] = await Promise.all([
         this.getOrCreateConversation(userId, conversationId),
         skipContextLoad ? Promise.resolve(null) : this.loadConversationContext(userId, conversationId)
@@ -317,9 +303,9 @@ class WaktiAIV2ServiceClass {
         attachedFiles: attachedFiles
       };
 
-      console.log('🚀 Memory: Context loaded -', context.recentMessages.length, 'messages,', context.conversationSummary.length, 'summary chars');
+      console.log('🧠 HYBRID MEMORY: Context loaded -', context.recentMessages.length, 'messages,', context.conversationSummary.length, 'summary chars');
 
-      // ENHANCED: Call AI brain with full context and timeout protection
+      // ENHANCED: Call HAIKU-powered AI brain with full context and timeout protection
       const { data, error } = await Promise.race([
         supabase.functions.invoke('wakti-ai-v2-brain', {
           body: {
@@ -333,7 +319,7 @@ class WaktiAIV2ServiceClass {
             conversationSummary: context.conversationSummary,
             recentMessages: context.recentMessages,
             customSystemPrompt: '',
-            maxTokens: 400,
+            maxTokens: 4096,
             userStyle: 'detailed',
             userTone: 'neutral',
             speedOptimized: true,
@@ -351,7 +337,7 @@ class WaktiAIV2ServiceClass {
       ]) as any;
 
       if (error) {
-        console.error('❌ Memory: AI service error:', error);
+        console.error('❌ HAIKU: AI service error:', error);
         throw error;
       }
 
@@ -369,6 +355,9 @@ class WaktiAIV2ServiceClass {
         browsingData: data.browsingData
       };
 
+      // HYBRID MEMORY: Add to all memory layers
+      this.hybridMemoryService.addMessage(userId, actualConversationId, userMessage, assistantMessage);
+
       // ULTRA-FAST: Queue background save (fire-and-forget)
       this.queueMessageSave(userId, actualConversationId, userMessage, assistantMessage);
 
@@ -382,7 +371,7 @@ class WaktiAIV2ServiceClass {
         }
       });
 
-      console.log('✅ Memory: Message processed with full memory integration');
+      console.log('✅ HYBRID MEMORY + HAIKU: Ultra-fast message processed successfully');
 
       return {
         ...data,
@@ -391,7 +380,7 @@ class WaktiAIV2ServiceClass {
       };
 
     } catch (error: any) {
-      console.error('❌ Memory: AI Service Error:', error);
+      console.error('❌ HYBRID MEMORY: AI Service Error:', error);
       throw new Error(error.message || 'AI request failed');
     }
   }

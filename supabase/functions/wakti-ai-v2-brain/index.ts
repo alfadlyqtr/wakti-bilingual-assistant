@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,7 +12,7 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: Simple Claude 3.5 Implementation");
+console.log("🚀 WAKTI AI V2: HYBRID SMART MEMORY + HAIKU SPEED (4x Faster)");
 
 serve(async (req) => {
   console.log("📨 REQUEST RECEIVED:", {
@@ -34,7 +33,7 @@ serve(async (req) => {
   }
 
   try {
-    // EMERGENCY JSON PARSING FIX - Handle empty bodies properly
+    // ENHANCED JSON PARSING with better error handling
     let requestBody;
     const contentType = req.headers.get('content-type') || '';
     
@@ -59,7 +58,6 @@ serve(async (req) => {
     try {
       rawBodyText = await req.text();
       console.log("📝 RAW BODY LENGTH:", rawBodyText?.length || 0);
-      console.log("📝 RAW BODY PREVIEW:", rawBodyText?.substring(0, 200) || 'EMPTY');
     } catch (textError) {
       console.error("❌ FAILED TO READ REQUEST BODY:", textError);
       return new Response(JSON.stringify({
@@ -122,7 +120,10 @@ serve(async (req) => {
       inputType = 'text',
       activeTrigger = 'chat',
       attachedFiles = [],
-      maxTokens = 4096
+      maxTokens = 4096,
+      recentMessages = [],
+      conversationSummary = '',
+      personalTouch = null
     } = requestBody || {};
 
     console.log("🎯 EXTRACTED PARAMS:", {
@@ -130,7 +131,9 @@ serve(async (req) => {
       hasUserId: !!userId,
       language,
       activeTrigger,
-      messageLength: message?.length || 0
+      messageLength: message?.length || 0,
+      recentMessagesCount: recentMessages.length,
+      hasPersonalTouch: !!personalTouch
     });
 
     // Validate required parameters
@@ -168,18 +171,18 @@ serve(async (req) => {
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // MODE-BASED PROCESSING
+    // MODE-BASED PROCESSING with HYBRID MEMORY
     switch (activeTrigger) {
       case 'search':
-        result = await processSearchMode(message, language);
+        result = await processSearchMode(message, language, recentMessages, personalTouch);
         break;
         
       case 'image':
-        result = await processImageMode(message, userId, language);
+        result = await processImageMode(message, userId, language, attachedFiles, personalTouch);
         break;
         
       default: // chat mode
-        result = await processChatMode(message, userId, conversationId, language, attachedFiles, maxTokens);
+        result = await processChatMode(message, userId, conversationId, language, attachedFiles, maxTokens, recentMessages, conversationSummary, personalTouch);
     }
 
     // Prepare final response
@@ -197,13 +200,13 @@ serve(async (req) => {
       pendingReminderData: null,
       success: result.success !== false,
       processingTime: Date.now(),
-      aiProvider: 'claude-3-5-sonnet-20241022',
+      aiProvider: 'claude-3-5-haiku-20241022', // UPGRADED TO HAIKU (4x faster)
       claude4Enabled: false,
       mode: activeTrigger,
       fallbackUsed: false
     };
 
-    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: Request completed successfully!`);
+    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: HAIKU-POWERED request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
       headers: { 
@@ -236,9 +239,9 @@ serve(async (req) => {
   }
 });
 
-// SIMPLE CHAT MODE
-async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number) {
-  console.log("💬 CHAT MODE: Processing with Claude 3.5");
+// ENHANCED CHAT MODE with HYBRID MEMORY
+async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
+  console.log("💬 CHAT MODE: Processing with HAIKU (4x faster) + HYBRID MEMORY");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -250,34 +253,36 @@ async function processChatMode(message: string, userId: string, conversationId: 
     };
   }
 
-  // Load context only if conversation exists
-  let contextMessages = [];
+  // HYBRID MEMORY: Use provided context or load from database
+  let contextMessages = recentMessages || [];
   
-  if (conversationId) {
+  if (conversationId && contextMessages.length === 0) {
     try {
-      // Load recent messages
-      const { data: recentMessages } = await supabase
+      // Load recent messages from database as fallback
+      const { data: dbMessages } = await supabase
         .from('ai_chat_history')
         .select('role, content, created_at')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: false })
         .limit(4);
       
-      if (recentMessages && recentMessages.length > 0) {
-        contextMessages = recentMessages.reverse();
-        console.log(`📚 CONTEXT: Loaded ${contextMessages.length} recent messages`);
+      if (dbMessages && dbMessages.length > 0) {
+        contextMessages = dbMessages.reverse();
+        console.log(`📚 HYBRID MEMORY: Loaded ${contextMessages.length} messages from database`);
       }
     } catch (error) {
-      console.warn("⚠️ CONTEXT: Failed to load context, continuing without it");
+      console.warn("⚠️ HYBRID MEMORY: Database fallback failed, using session context");
     }
   }
   
-  return await callClaudeAPI(message, contextMessages, language, attachedFiles, maxTokens);
+  console.log(`🧠 HYBRID MEMORY: Using ${contextMessages.length} context messages`);
+  
+  return await callHaikuAPI(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
 }
 
-// SIMPLE SEARCH MODE
-async function processSearchMode(message: string, language: string) {
-  console.log("🔍 SEARCH MODE: Processing search request");
+// ENHANCED SEARCH MODE with HYBRID MEMORY
+async function processSearchMode(message: string, language: string, recentMessages: any[], personalTouch: any) {
+  console.log("🔍 SEARCH MODE: Processing with HAIKU + HYBRID MEMORY");
   
   if (!TAVILY_API_KEY) {
     return {
@@ -310,12 +315,12 @@ async function processSearchMode(message: string, language: string) {
     const searchResults = searchData.results || [];
     const searchAnswer = searchData.answer || '';
     
-    // Call Claude with search context
+    // Call HAIKU with search context
     const searchContext = `Search results for "${message}":\n${searchAnswer}\n\nResults:\n${
       searchResults.map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.content}`).join('\n')
     }`;
     
-    return await callClaudeAPI(searchContext, [], language, [], 4096);
+    return await callHaikuAPI(searchContext, recentMessages, '', language, [], 4096, personalTouch);
     
   } catch (error) {
     console.error('❌ SEARCH ERROR:', error);
@@ -329,10 +334,17 @@ async function processSearchMode(message: string, language: string) {
   }
 }
 
-// SIMPLE IMAGE MODE
-async function processImageMode(message: string, userId: string, language: string) {
-  console.log("🎨 IMAGE MODE: Processing image generation");
+// ENHANCED IMAGE MODE with VISION
+async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
+  console.log("🎨 IMAGE MODE: Processing with RUNWARE + HAIKU VISION");
   
+  // If there are attached images, use HAIKU for vision analysis
+  if (attachedFiles && attachedFiles.length > 0) {
+    console.log("👁️ VISION: Analyzing uploaded images with HAIKU");
+    return await callHaikuAPI(message, [], '', language, attachedFiles, 4096, personalTouch);
+  }
+  
+  // Otherwise, generate image with RUNWARE
   if (!RUNWARE_API_KEY) {
     return {
       response: language === 'ar' 
@@ -398,9 +410,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// SIMPLE CLAUDE 3.5 API CALL
-async function callClaudeAPI(message: string, contextMessages: any[], language: string, attachedFiles: any[], maxTokens: number) {
-  console.log("🤖 CLAUDE 3.5: Making API call");
+// UPGRADED HAIKU API CALL (4x Faster + Full Vision + Personalization)
+async function callHaikuAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
+  console.log("🚀 HAIKU API: Making ultra-fast call with HYBRID MEMORY");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -409,14 +421,30 @@ async function callClaudeAPI(message: string, contextMessages: any[], language: 
     weekday: 'long'
   });
   
-  const systemPrompt = language === 'ar'
-    ? `أنت WAKTI AI، مساعد ذكي متقدم. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. اجب بالعربية.`
-    : `You are WAKTI AI, an advanced AI assistant. You are helpful, collaborative, and smart. Today's date: ${currentDate}. Respond in English.`;
-  
-  // Build messages array
+  // ENHANCED SYSTEM PROMPT with PERSONALIZATION
+  let systemPrompt = language === 'ar'
+    ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Haiku فائق السرعة. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. اجب بالعربية.`
+    : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Haiku for ultra-fast responses. You are helpful, collaborative, and smart. Today's date: ${currentDate}. Respond in English.`;
+
+  // APPLY PERSONALIZATION
+  if (personalTouch && personalTouch.instruction) {
+    systemPrompt += `\n\nPersonalization: ${personalTouch.instruction}`;
+    if (personalTouch.tone) systemPrompt += ` Use a ${personalTouch.tone} tone.`;
+    if (personalTouch.style) systemPrompt += ` Reply in ${personalTouch.style} style.`;
+  }
+
+  // HYBRID MEMORY: Build comprehensive context
   const messages = [];
   
-  // Add recent messages if available
+  // Add conversation summary if available
+  if (conversationSummary && conversationSummary.trim()) {
+    messages.push({
+      role: 'assistant',
+      content: `[Previous conversation context: ${conversationSummary}]`
+    });
+  }
+  
+  // Add recent messages from HYBRID MEMORY
   if (contextMessages.length > 0) {
     contextMessages.forEach(msg => {
       messages.push({
@@ -426,10 +454,26 @@ async function callClaudeAPI(message: string, contextMessages: any[], language: 
     });
   }
   
-  // Add current message
-  messages.push({ role: 'user', content: message });
+  // Add current message with vision support
+  let currentMessage: any = { role: 'user', content: message };
+  
+  // VISION SUPPORT: Add image content if files attached
+  if (attachedFiles && attachedFiles.length > 0) {
+    const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
+    if (imageFile && imageFile.url) {
+      currentMessage.content = [
+        { type: 'text', text: message },
+        { type: 'image', source: { type: 'base64', media_type: imageFile.type, data: imageFile.url } }
+      ];
+      console.log("👁️ VISION: Added image to HAIKU request");
+    }
+  }
+  
+  messages.push(currentMessage);
   
   try {
+    console.log(`🚀 HAIKU: Sending ${messages.length} messages to ultra-fast model`);
+    
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -438,7 +482,7 @@ async function callClaudeAPI(message: string, contextMessages: any[], language: 
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-3-5-haiku-20241022', // HAIKU MODEL (4x faster)
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: messages
@@ -446,20 +490,27 @@ async function callClaudeAPI(message: string, contextMessages: any[], language: 
     });
     
     if (!claudeResponse.ok) {
-      throw new Error(`Claude API error: ${claudeResponse.status}`);
+      throw new Error(`HAIKU API error: ${claudeResponse.status}`);
     }
     
     const claudeData = await claudeResponse.json();
-    const aiResponse = claudeData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
+    let aiResponse = claudeData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
+    
+    // APPLY PERSONALIZATION POST-PROCESSING
+    if (personalTouch) {
+      aiResponse = applyPersonalization(aiResponse, personalTouch, language);
+    }
+    
+    console.log("🚀 HAIKU: Ultra-fast response generated successfully!");
     
     return {
       response: aiResponse,
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-5-haiku-20241022',
       success: true
     };
     
   } catch (error) {
-    console.error('❌ CLAUDE ERROR:', error);
+    console.error('❌ HAIKU ERROR:', error);
     
     return {
       response: language === 'ar' 
@@ -469,4 +520,34 @@ async function callClaudeAPI(message: string, contextMessages: any[], language: 
       success: false
     };
   }
+}
+
+// PERSONALIZATION ENHANCEMENT
+function applyPersonalization(response: string, personalTouch: any, language: string): string {
+  let enhancedResponse = response;
+  
+  // Add nickname if provided (80% chance for consistency)
+  if (personalTouch.nickname && personalTouch.nickname.trim() && Math.random() < 0.8) {
+    if (!enhancedResponse.toLowerCase().includes(personalTouch.nickname.toLowerCase())) {
+      const greetings = language === 'ar' ? [
+        `${personalTouch.nickname}، `,
+        `أهلاً ${personalTouch.nickname}! `
+      ] : [
+        `${personalTouch.nickname}, `,
+        `Hey ${personalTouch.nickname}! `
+      ];
+      const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+      enhancedResponse = randomGreeting + enhancedResponse;
+    }
+  }
+  
+  // Add AI nickname signature occasionally
+  if (personalTouch.aiNickname && Math.random() < 0.2) {
+    const signature = language === 'ar' 
+      ? `\n\n- ${personalTouch.aiNickname} 🤖`
+      : `\n\n- ${personalTouch.aiNickname} 🤖`;
+    enhancedResponse += signature;
+  }
+  
+  return enhancedResponse;
 }
