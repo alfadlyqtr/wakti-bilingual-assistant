@@ -12,7 +12,8 @@ interface TaskDetectionCallback {
 }
 
 export class UltraFastWaktiAIServiceClass {
-  private memoryCache = new UltraFastMemoryCache();
+  // Remove 'new' since UltraFastMemoryCache is already instantiated
+  private memoryCache = UltraFastMemoryCache;
 
   async sendMessageUltraFast(
     message: string,
