@@ -53,7 +53,7 @@ const WaktiAIV2 = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isClearingChat, setIsClearingChat] = useState(isClearingChat);
+  const [isClearingChat, setIsClearingChat] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
