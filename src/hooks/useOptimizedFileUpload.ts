@@ -25,6 +25,93 @@ export function useOptimizedFileUpload() {
   const [uploadedFiles, setUploadedFiles] = useState<OptimizedUploadedFile[]>([]);
   const { showError, showSuccess } = useToastHelper();
 
+  // PHASE 1: Convert image file to base64 with ENHANCED compression and validation
+  const convertImageToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          // PHASE 1: Calculate compressed size (max 1024px on longest side for Vision)
+          const maxSize = 1024;
+          let { width, height } = img;
+          
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw and convert to JPEG with quality 0.8 for Vision processing
+          ctx?.drawImage(img, 0, 0, width, height);
+          const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          // Extract base64 data (remove data:image/jpeg;base64, prefix)
+          const base64Data = jpegDataUrl.split(',')[1];
+          
+          // Validate base64 result
+          if (!base64Data || base64Data.length < 100) {
+            throw new Error('Base64 conversion produced invalid result');
+          }
+          
+          console.log(`🔄 BASE64 CONVERSION: ${file.name} -> ${width}x${height} -> ${base64Data.length} chars`);
+          resolve(base64Data);
+        } catch (conversionError) {
+          reject(new Error(`Image processing failed: ${conversionError.message}`));
+        }
+      };
+
+      img.onerror = () => reject(new Error('Failed to load image - invalid image file'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const createImageThumbnail = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        // Calculate thumbnail size (max 150px)
+        const maxSize = 150;
+        let { width, height } = img;
+        
+        if (width > height) {
+          if (width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const uploadFiles = async (files: FileList) => {
     setIsUploading(true);
     console.log('📤 VISION UPLOAD: Starting COMPLETE REPAIR upload of', files.length, 'files');
@@ -94,7 +181,7 @@ export function useOptimizedFileUpload() {
       // PHASE 1: Convert image to base64 for Vision API - ENHANCED with validation
       let base64Data = '';
       try {
-        base64Data = await this.convertImageToBase64(file);
+        base64Data = await convertImageToBase64(file);
         console.log(`🔄 VISION UPLOAD: Converted ${file.name} to base64 (${base64Data.length} chars) - COMPLETE REPAIR`);
         
         // Validate base64 data
@@ -109,7 +196,7 @@ export function useOptimizedFileUpload() {
       // Create thumbnail for images if needed
       let thumbnail = undefined;
       try {
-        thumbnail = await this.createImageThumbnail(file);
+        thumbnail = await createImageThumbnail(file);
       } catch (thumbError) {
         console.warn('⚠️ VISION UPLOAD: Thumbnail creation failed:', thumbError);
       }
@@ -142,93 +229,6 @@ export function useOptimizedFileUpload() {
       showError(`❌ Failed to upload ${file.name}: ${error.message}`);
       return null;
     }
-  };
-
-  // PHASE 1: Convert image file to base64 with ENHANCED compression and validation
-  private convertImageToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-
-      img.onload = () => {
-        try {
-          // PHASE 1: Calculate compressed size (max 1024px on longest side for Vision)
-          const maxSize = 1024;
-          let { width, height } = img;
-          
-          if (width > height) {
-            if (width > maxSize) {
-              height = (height * maxSize) / width;
-              width = maxSize;
-            }
-          } else {
-            if (height > maxSize) {
-              width = (width * maxSize) / height;
-              height = maxSize;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          
-          // Draw and convert to JPEG with quality 0.8 for Vision processing
-          ctx?.drawImage(img, 0, 0, width, height);
-          const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          
-          // Extract base64 data (remove data:image/jpeg;base64, prefix)
-          const base64Data = jpegDataUrl.split(',')[1];
-          
-          // Validate base64 result
-          if (!base64Data || base64Data.length < 100) {
-            throw new Error('Base64 conversion produced invalid result');
-          }
-          
-          console.log(`🔄 BASE64 CONVERSION: ${file.name} -> ${width}x${height} -> ${base64Data.length} chars`);
-          resolve(base64Data);
-        } catch (conversionError) {
-          reject(new Error(`Image processing failed: ${conversionError.message}`));
-        }
-      };
-
-      img.onerror = () => reject(new Error('Failed to load image - invalid image file'));
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
-  private createImageThumbnail = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-
-      img.onload = () => {
-        // Calculate thumbnail size (max 150px)
-        const maxSize = 150;
-        let { width, height } = img;
-        
-        if (width > height) {
-          if (width > maxSize) {
-            height = (height * maxSize) / width;
-            width = maxSize;
-          }
-        } else {
-          if (height > maxSize) {
-            width = (width * maxSize) / height;
-            height = maxSize;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      };
-
-      img.onerror = reject;
-      img.src = URL.createObjectURL(file);
-    });
   };
 
   const removeFile = (fileId: string) => {
