@@ -12,7 +12,6 @@ interface TaskDetectionCallback {
 }
 
 export class UltraFastWaktiAIServiceClass {
-  // Remove 'new' since UltraFastMemoryCache is already instantiated
   private memoryCache = UltraFastMemoryCache;
 
   async sendMessageUltraFast(
@@ -26,20 +25,19 @@ export class UltraFastWaktiAIServiceClass {
     onStreamUpdate?: StreamUpdateCallback,
     onTaskDetected?: TaskDetectionCallback
   ) {
-    console.log('🚀 ULTRA-FAST: Starting request with enhanced debugging');
+    console.log('🚀 EMERGENCY MODE: Starting ultra-fast request');
     console.log('📊 REQUEST DETAILS:', {
-      message: message.substring(0, 100) + '...',
+      message: message.substring(0, 50) + '...',
       userId: userId?.substring(0, 8) + '...',
       language,
       conversationId: conversationId?.substring(0, 8) + '...',
       inputType,
       activeTrigger,
-      filesCount: attachedFiles?.length || 0,
-      streamingEnabled: !!onStreamUpdate
+      filesCount: attachedFiles?.length || 0
     });
 
     const startTime = Date.now();
-    let tempConversationId = conversationId || `temp_${Date.now()}`;
+    let tempConversationId = conversationId || `emergency_${Date.now()}`;
 
     try {
       // Get user authentication token
@@ -69,7 +67,7 @@ export class UltraFastWaktiAIServiceClass {
 
       console.log('📝 MESSAGES: Created UI messages');
 
-      // Prepare request payload for Edge Function
+      // Prepare EMERGENCY MODE request payload
       const requestPayload = {
         message,
         userId,
@@ -78,33 +76,28 @@ export class UltraFastWaktiAIServiceClass {
         inputType,
         activeTrigger,
         attachedFiles: attachedFiles || [],
-        enableStreaming: !!onStreamUpdate,
-        personalTouch: this.getPersonalTouch(),
+        enableStreaming: false, // Disable streaming for emergency mode
         maxTokens: 4096,
-        speedOptimized: true
+        emergencyMode: true
       };
 
-      console.log('🎯 PAYLOAD: Prepared request for Edge Function:', {
-        payloadSize: JSON.stringify(requestPayload).length,
-        hasFiles: (attachedFiles?.length || 0) > 0,
-        streamingEnabled: requestPayload.enableStreaming
-      });
+      console.log('🎯 EMERGENCY PAYLOAD: Prepared for Edge Function');
 
-      // Call Supabase Edge Function with enhanced timeout and error handling
-      console.log('🔗 CALLING: wakti-ai-v2-brain Edge Function...');
+      // Call Supabase Edge Function with emergency timeout
+      console.log('🔗 CALLING: wakti-ai-v2-brain Edge Function (EMERGENCY MODE)...');
       
       const { data: response, error: functionError } = await supabase.functions
         .invoke('wakti-ai-v2-brain', {
           body: requestPayload,
           headers: {
             'Content-Type': 'application/json',
-            'x-app-name': 'wakti-ai-v2',
+            'x-app-name': 'wakti-ai-emergency',
             'x-auth-token': session.access_token,
             'x-skip-auth': 'true'
           }
         });
 
-      console.log('📡 RESPONSE: Edge Function response received');
+      console.log('📡 EMERGENCY RESPONSE: Edge Function response received');
       console.log('📊 RESPONSE STATUS:', {
         hasError: !!functionError,
         hasData: !!response,
@@ -125,32 +118,12 @@ export class UltraFastWaktiAIServiceClass {
       console.log('🎯 RESPONSE DETAILS:', {
         success: response.success,
         hasResponse: !!response.response,
-        hasStreamingResponse: !!response.streamingResponse,
-        intent: response.intent,
-        model: response.aiProvider,
-        claude4Upgrade: response.claude4Upgrade
+        emergencyMode: response.emergencyFix,
+        debugMode: response.debugMode
       });
 
-      // Handle streaming response
-      if (response.streamingResponse && onStreamUpdate) {
-        console.log('🌊 STREAMING: Processing streaming response');
-        await this.handleStreamingResponse(response.streamingResponse, onStreamUpdate);
-        assistantMessage.content = 'Streaming response completed';
-      } else if (response.response) {
-        console.log('💬 REGULAR: Processing regular response');
-        assistantMessage.content = response.response;
-      } else {
-        console.error('❌ NO CONTENT: Response has no content');
-        throw new Error('No content in AI response');
-      }
-
-      // Handle task detection
-      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
-        console.log('🎯 TASK DETECTED: Calling task detection callback');
-        if (onTaskDetected) {
-          onTaskDetected(response.pendingTaskData || response.pendingReminderData);
-        }
-      }
+      // Update assistant message with response
+      assistantMessage.content = response.response || 'Emergency mode response received';
 
       // Update conversation ID
       if (response.conversationId) {
@@ -167,7 +140,7 @@ export class UltraFastWaktiAIServiceClass {
       console.log('💾 CACHE: Conversation cached successfully');
 
       const totalTime = Date.now() - startTime;
-      console.log(`✅ ULTRA-FAST COMPLETE: Total time ${totalTime}ms`);
+      console.log(`✅ EMERGENCY COMPLETE: Total time ${totalTime}ms`);
 
       return {
         userMessage,
@@ -175,12 +148,13 @@ export class UltraFastWaktiAIServiceClass {
         conversationId: tempConversationId,
         responseTime: totalTime,
         success: true,
-        claude4Enabled: response.claude4Upgrade || false
+        claude4Enabled: response.claude4Upgrade || false,
+        emergencyMode: true
       };
 
     } catch (error: any) {
       const totalTime = Date.now() - startTime;
-      console.error('🚨 ULTRA-FAST ERROR:', error);
+      console.error('🚨 EMERGENCY ERROR:', error);
       console.error('📊 ERROR DETAILS:', {
         message: error.message,
         stack: error.stack?.substring(0, 500),
@@ -192,8 +166,8 @@ export class UltraFastWaktiAIServiceClass {
         id: `assistant-error-${Date.now()}`,
         role: 'assistant',
         content: language === 'ar' 
-          ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
-          : '❌ Sorry, an error occurred while processing your request. Please try again.',
+          ? '❌ نظام الطوارئ: حدث خطأ. يرجى المحاولة مرة أخرى.'
+          : '❌ Emergency mode: An error occurred. Please try again.',
         timestamp: new Date()
       };
 
@@ -210,38 +184,14 @@ export class UltraFastWaktiAIServiceClass {
         conversationId: tempConversationId,
         responseTime: totalTime,
         success: false,
-        error: error.message
+        error: error.message,
+        emergencyMode: true
       };
     }
   }
 
-  private async handleStreamingResponse(streamingResponse: any, onStreamUpdate: StreamUpdateCallback) {
-    console.log('🌊 STREAM: Starting streaming response handler');
-    try {
-      // This would handle actual streaming - simplified for now
-      if (typeof streamingResponse === 'string') {
-        onStreamUpdate(streamingResponse, true);
-      } else {
-        console.log('⚠️ STREAM: Non-string streaming response, treating as complete');
-        onStreamUpdate(JSON.stringify(streamingResponse), true);
-      }
-    } catch (error) {
-      console.error('❌ STREAM ERROR:', error);
-      onStreamUpdate('Streaming error occurred', true);
-    }
-  }
-
-  private getPersonalTouch() {
-    try {
-      const stored = localStorage.getItem('wakti_personal_touch');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  }
-
   clearConversationUltraFast(userId: string, conversationId: string) {
-    console.log('🗑️ CACHE: Clearing conversation cache');
+    console.log('🗑️ EMERGENCY CACHE: Clearing conversation cache');
     this.memoryCache.invalidateConversation(userId, conversationId);
   }
 }

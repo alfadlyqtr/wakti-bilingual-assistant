@@ -19,9 +19,9 @@ export class WaktiAIDebugger {
     console.log(logEntry);
   }
 
-  async testEdgeFunctionDirectly(testMessage: string = "what are the GCC countries?"): Promise<DebugTestResult> {
+  async testMinimalEdgeFunction(testMessage: string = "Hello, can you confirm WAKTI AI is working?"): Promise<DebugTestResult> {
     this.logs = [];
-    this.log('🧪 WAKTI AI DEBUG: Starting Edge Function test');
+    this.log('🧪 EMERGENCY DEBUG: Testing minimal Edge Function');
     
     const startTime = Date.now();
 
@@ -40,36 +40,39 @@ export class WaktiAIDebugger {
       }
       this.log(`✅ USER: ${user.email} (${user.id.substring(0, 8)}...)`);
 
-      // Prepare test payload
+      // Prepare minimal test payload
       const testPayload = {
         message: testMessage,
         userId: user.id,
         language: 'en',
-        conversationId: `debug_test_${Date.now()}`,
+        conversationId: `debug_minimal_${Date.now()}`,
         inputType: 'text',
         activeTrigger: 'chat',
         attachedFiles: [],
-        enableStreaming: false, // Disable streaming for test
-        personalTouch: null,
-        maxTokens: 1000,
-        speedOptimized: true
+        enableStreaming: false,
+        maxTokens: 1000
       };
 
-      this.log(`📨 PAYLOAD: Prepared test payload (${JSON.stringify(testPayload).length} bytes)`);
+      this.log(`📨 PAYLOAD: Prepared minimal test payload`);
 
-      // Call Edge Function
-      this.log('🔗 CALLING: wakti-ai-v2-brain Edge Function');
+      // Call Edge Function with timeout
+      this.log('🔗 CALLING: wakti-ai-v2-brain Edge Function (EMERGENCY MODE)');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const { data: response, error: functionError } = await supabase.functions
         .invoke('wakti-ai-v2-brain', {
           body: testPayload,
           headers: {
             'Content-Type': 'application/json',
-            'x-app-name': 'wakti-ai-debug-test',
+            'x-app-name': 'wakti-ai-emergency-debug',
             'x-auth-token': session.access_token,
             'x-skip-auth': 'true'
           }
         });
 
+      clearTimeout(timeoutId);
       const responseTime = Date.now() - startTime;
       this.log(`⏱️ RESPONSE TIME: ${responseTime}ms`);
 
@@ -87,11 +90,8 @@ export class WaktiAIDebugger {
       this.log(`📊 RESPONSE DETAILS: ${JSON.stringify({
         success: response.success,
         hasResponse: !!response.response,
-        intent: response.intent,
-        model: response.aiProvider,
-        claude4: response.claude4Upgrade,
-        contextRestored: response.contextRestored,
-        fallbackUsed: response.fallbackUsed
+        emergencyMode: response.emergencyFix,
+        debugMode: response.debugMode
       }, null, 2)}`);
 
       return {
@@ -115,81 +115,15 @@ export class WaktiAIDebugger {
     }
   }
 
-  async testClaude4Integration(): Promise<DebugTestResult> {
+  async quickHealthCheck(): Promise<DebugTestResult> {
     this.logs = [];
-    this.log('🤖 CLAUDE 4 TEST: Testing Claude 4 integration specifically');
+    this.log('🏥 HEALTH CHECK: Running quick diagnostic');
 
-    return await this.testEdgeFunctionDirectly("Test Claude 4 integration - respond with model name and capabilities");
-  }
-
-  async testVisionCapabilities(): Promise<DebugTestResult> {
-    this.logs = [];
-    this.log('👁️ VISION TEST: Testing vision capabilities');
-
-    // Create a test image data URL (simple red square)
-    const testImageDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
-
-    const testPayload = {
-      message: "What do you see in this image?",
-      userId: "test-user",
-      language: 'en',
-      conversationId: `vision_test_${Date.now()}`,
-      inputType: 'text',
-      activeTrigger: 'chat',
-      attachedFiles: [{
-        name: 'test-image.png',
-        type: 'image/png',
-        base64Data: testImageDataUrl.split(',')[1],
-        image_url: { url: testImageDataUrl }
-      }],
-      enableStreaming: false,
-      personalTouch: null,
-      maxTokens: 1000,
-      speedOptimized: true
-    };
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('No authentication session');
-
-      const startTime = Date.now();
-      const { data: response, error } = await supabase.functions
-        .invoke('wakti-ai-v2-brain', {
-          body: testPayload,
-          headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': session.access_token,
-            'x-skip-auth': 'true'
-          }
-        });
-
-      const responseTime = Date.now() - startTime;
-
-      if (error) throw new Error(error.message);
-
-      this.log(`✅ VISION TEST: Completed in ${responseTime}ms`);
-      this.log(`📊 VISION RESULT: ${response?.visionEnhanced ? 'Vision enabled' : 'Vision disabled'}`);
-
-      return {
-        success: true,
-        response,
-        responseTime,
-        logs: [...this.logs]
-      };
-
-    } catch (error: any) {
-      this.log(`❌ VISION TEST FAILED: ${error.message}`);
-      return {
-        success: false,
-        error: error.message,
-        responseTime: 0,
-        logs: [...this.logs]
-      };
-    }
+    return await this.testMinimalEdgeFunction("System check - respond with OK if you're working");
   }
 
   printLogs() {
-    console.log('📋 WAKTI AI DEBUG LOGS:');
+    console.log('📋 EMERGENCY DEBUG LOGS:');
     this.logs.forEach(log => console.log(log));
   }
 }
@@ -200,4 +134,5 @@ export const waktiAIDebugger = new WaktiAIDebugger();
 // Expose to window for console debugging
 if (typeof window !== 'undefined') {
   (window as any).waktiAIDebugger = waktiAIDebugger;
+  (window as any).testWaktiAI = () => waktiAIDebugger.quickHealthCheck();
 }
