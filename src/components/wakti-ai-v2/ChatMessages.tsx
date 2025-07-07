@@ -54,7 +54,7 @@ export const ChatMessages = ({
     endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [sessionMessages.length, isLoading]);
 
-  // HYBRID MEMORY: Get memory stats for display
+  // HYBRID MEMORY: Get memory stats for background functionality (kept but not displayed)
   const memoryStats = userProfile?.id ? HybridMemoryService.getMemoryStats(userProfile.id) : null;
 
   const getWelcomeMessage = () => {
@@ -71,43 +71,6 @@ export const ChatMessages = ({
 
   return (
     <div className="flex flex-col h-full">
-      {/* ENHANCED: Speed & Memory Status Bar */}
-      <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950/30 dark:to-green-950/30 border-b border-border/50 px-4 py-2">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-3">
-            <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">
-              <Zap className="w-3 h-3 mr-1" />
-              Haiku Speed (4x faster)
-            </Badge>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-              <Brain className="w-3 h-3 mr-1" />
-              Hybrid Memory
-            </Badge>
-          </div>
-          
-          {memoryStats && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              {memoryStats.layersActive?.browser && (
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span>Browser</span>
-                </div>
-              )}
-              {memoryStats.layersActive?.session && (
-                <div className="flex items-center gap-1">
-                  <HardDrive className="w-3 h-3 text-blue-500" />
-                  <span>Session ({memoryStats.sessionMessages})</span>
-                </div>
-              )}
-              <div className="flex items-center gap-1">
-                <Database className="w-3 h-3 text-purple-500" />
-                <span>Database</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
       <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
         <div className="max-w-4xl mx-auto space-y-4">
           {/* Welcome Message */}

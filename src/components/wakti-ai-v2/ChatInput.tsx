@@ -78,17 +78,26 @@ export function ChatInput({
     if (onOpenPlusDrawer) onOpenPlusDrawer();
   };
 
-  // New method: trigger camera input
+  // FIXED: Camera capture function
   const triggerCamera = () => {
+    console.log('📸 CAMERA: Triggering camera input');
     cameraInputRef.current?.click();
   };
+
+  // FIXED: File upload function
   const triggerUpload = () => {
+    console.log('📁 UPLOAD: Triggering file input');
     fileInputRef.current?.click();
   };
 
+  // FIXED: Send message function
   const handleSend = () => {
+    console.log('📤 SEND: Checking conditions');
+    console.log('Message:', message.trim().length > 0);
+    console.log('Files:', uploadedFiles.length);
+    
     if (message.trim() || uploadedFiles.length > 0) {
-      // CRITICAL FIX: Convert optimized files to format expected by AI service
+      // Convert optimized files to format expected by AI service
       const optimizedFiles = uploadedFiles.map(file => ({
         id: file.id,
         name: file.name,
@@ -96,43 +105,40 @@ export function ChatInput({
         size: file.size,
         url: file.url,
         publicUrl: file.publicUrl,
-        optimized: true // Flag to indicate this is an optimized upload
+        optimized: true
       }));
       
-      console.log('📤 SENDING FILES:', optimizedFiles);
+      console.log('📤 SENDING:', {
+        message: message.substring(0, 50) + '...',
+        filesCount: optimizedFiles.length
+      });
       
       onSendMessage(message, 'text', optimizedFiles.length > 0 ? optimizedFiles : undefined);
       setMessage('');
       clearFiles();
+    } else {
+      console.log('❌ SEND: No message or files to send');
     }
   };
 
-  const handleFileUpload = () => {
-    fileInputRef.current?.click();
-  };
-
+  // FIXED: File input change handler
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files) {
-      console.log('📁 FILE INPUT: Selected files:', files.length);
+    if (files && files.length > 0) {
+      console.log('📁 FILE INPUT: Selected', files.length, 'files');
       await uploadFiles(files);
     }
+    // Clear the input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  const handleFilesSelected = async (files: FileList) => {
-    console.log('📁 DRAG DROP: Selected files:', files.length);
-    await uploadFiles(files);
-  };
-
-  // ---- Camera Photo Upload (FIXED) ----
+  // FIXED: Camera input change handler
   const handleCameraChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
-      console.log('📸 CAMERA: Captured files:', files.length);
-      // Use the same optimized upload system as regular files
+      console.log('📸 CAMERA: Captured', files.length, 'files');
       await uploadFiles(files);
     }
     // Clear the input
@@ -141,14 +147,23 @@ export function ChatInput({
     }
   };
 
+  // FIXED: Drag and drop handler
+  const handleFilesSelected = async (files: FileList) => {
+    console.log('📁 DRAG DROP: Selected', files.length, 'files');
+    await uploadFiles(files);
+  };
+
   // Layout & Mode highlighting classes
   const containerHighlight = modeHighlightStyles(activeTrigger);
   const textareaHighlightClass = textareaHighlight(activeTrigger);
 
+  // FIXED: Determine if send button should be enabled
+  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading;
+
   return (
     <div className="w-full">
-      <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
-        {/* Uploaded Files Display - CRITICAL FIX: Enhanced display */}
+      <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading || isUploading}>
+        {/* Uploaded Files Display */}
         {uploadedFiles.length > 0 && (
           <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
             <div className="max-w-4xl mx-auto">
@@ -177,7 +192,7 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main Input Area - CRITICAL FIX: Improved spacing and padding */}
+        {/* Main Input Area */}
         <div className="px-3 pb-3">
           <div className="max-w-4xl mx-auto">
             <div
@@ -189,45 +204,44 @@ export function ChatInput({
                 shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
                 border-[2.5px] min-h-[70px] max-w-full
               `}
-              style={{ willChange: "box-shadow,border-color" }}
             >
               {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
               <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
                 <PlusMenu
                   onCamera={triggerCamera}
                   onUpload={triggerUpload}
-                  isLoading={isLoading}
+                  isLoading={isLoading || isUploading}
                 />
-                {/* CRITICAL FIX: Enhanced Extra button with proper event dispatch */}
+                
                 <button
                   onClick={handleOpenConversationsDrawer}
                   aria-label={language === "ar" ? "إضافي" : "Extra"}
                   className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
-                  disabled={isLoading}
+                  disabled={isLoading || isUploading}
                   type="button"
-                  tabIndex={0}
                 >
                   <span className="text-lg" role="img" aria-label="Extra">💬</span>
                   <span className="text-xs font-medium text-foreground/80">
                     {language === 'ar' ? 'إضافي' : 'Extra'}
                   </span>
                 </button>
-                {/* CRITICAL FIX: Enhanced Quick Actions button */}
+                
                 <button
                   onClick={handleOpenQuickActionsDrawer}
                   aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
                   className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
-                  disabled={isLoading}
+                  disabled={isLoading || isUploading}
                   type="button"
-                  tabIndex={0}
                 >
                   <span className="text-lg" role="img" aria-label="Quick Actions">⚡</span>
                   <span className="text-xs font-medium text-foreground/80">
                     {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
                   </span>
                 </button>
+                
                 <ActiveModeIndicator activeTrigger={activeTrigger} />
-                {/* Hidden file/camera inputs */}
+                
+                {/* Hidden file inputs */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -246,7 +260,7 @@ export function ChatInput({
                 />
               </div>
               
-              {/* INPUT ROW: Textarea + Send - CRITICAL FIX: Better spacing and height management */}
+              {/* INPUT ROW: Textarea + Send */}
               <div className="relative flex items-end gap-2 px-3 pb-3 pt-0.5">
                 <div className="flex-1 flex items-end">
                   <Textarea
@@ -268,20 +282,23 @@ export function ChatInput({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleSend();
+                        if (canSend) {
+                          handleSend();
+                        }
                       }
                     }}
-                    disabled={isLoading}
-                    aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
+                    disabled={isLoading || isUploading}
                   />
                 </div>
-                {(message.trim() || uploadedFiles.length > 0) && (
+                
+                {/* FIXED: Send button with proper enabling logic */}
+                {canSend && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           onClick={handleSend}
-                          disabled={isLoading || isUploading}
+                          disabled={!canSend}
                           className={`
                             h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
                             border-0 shadow-2xl backdrop-blur-md
@@ -289,9 +306,8 @@ export function ChatInput({
                             shadow-lg
                           `}
                           size="icon"
-                          aria-label={language === 'ar' ? 'إرسال' : 'Send'}
                         >
-                          {isLoading ? (
+                          {isLoading || isUploading ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
                           ) : (
                             <Send className="h-5 w-5" />
