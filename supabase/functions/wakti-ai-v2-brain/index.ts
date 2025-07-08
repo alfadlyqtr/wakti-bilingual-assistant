@@ -12,25 +12,56 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + COMPLETE IMAGE PROCESSING + ENHANCED TEXT EXTRACTION");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + ENHANCED IMAGE PROCESSING + DETAILED LOGGING");
 
-// ENHANCED: Image URL to Base64 conversion function for ALL image types
+// ENHANCED: Image URL to Base64 conversion with comprehensive logging and error handling
 async function convertImageUrlToBase64(imageUrl: string, imageType: string): Promise<string | null> {
   try {
-    console.log('🖼️ IMAGE PROCESSING: Converting ALL image types (including sensitive documents):', imageUrl.substring(0, 50) + '...');
+    console.log('🖼️ IMAGE PROCESSING: Starting conversion for:', {
+      url: imageUrl.substring(0, 80) + '...',
+      type: imageType,
+      isSupabaseStorage: imageUrl.includes('supabase'),
+      hasProtocol: imageUrl.startsWith('http')
+    });
+    
+    // Validate URL format
+    if (!imageUrl.startsWith('http')) {
+      console.error('❌ IMAGE ERROR: Invalid URL format (missing protocol):', imageUrl);
+      return null;
+    }
     
     const response = await fetch(imageUrl);
+    console.log('📡 IMAGE FETCH: Response status:', response.status, response.statusText);
+    
     if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      console.error('❌ IMAGE FETCH ERROR:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: imageUrl.substring(0, 50) + '...'
+      });
+      return null;
     }
+    
+    const contentType = response.headers.get('content-type');
+    console.log('📋 IMAGE CONTENT TYPE:', contentType);
     
     const arrayBuffer = await response.arrayBuffer();
     const base64String = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
     
-    console.log('✅ IMAGE PROCESSING: ALL IMAGES SUPPORTED (passports, IDs, documents, photos), size:', arrayBuffer.byteLength, 'bytes');
+    console.log('✅ IMAGE CONVERSION SUCCESS:', {
+      originalSize: arrayBuffer.byteLength,
+      base64Length: base64String.length,
+      detectedType: contentType || imageType,
+      truncatedBase64: base64String.substring(0, 50) + '...'
+    });
+    
     return base64String;
   } catch (error) {
-    console.error('❌ IMAGE PROCESSING ERROR:', error);
+    console.error('❌ IMAGE CONVERSION CRITICAL ERROR:', {
+      message: error.message,
+      stack: error.stack?.substring(0, 300),
+      url: imageUrl.substring(0, 50) + '...'
+    });
     return null;
   }
 }
@@ -154,6 +185,20 @@ serve(async (req) => {
       attachedFilesCount: attachedFiles.length,
       enableTaskDetection // Should always be false for regular chat
     });
+
+    // ENHANCED: Log attached files structure in detail
+    if (attachedFiles && attachedFiles.length > 0) {
+      console.log("📎 ATTACHED FILES DETAILED ANALYSIS:", attachedFiles.map((file, index) => ({
+        index,
+        name: file?.name || 'unknown',
+        type: file?.type || 'unknown',
+        size: file?.size || 'unknown',
+        url: file?.url?.substring(0, 50) + '...' || 'missing',
+        publicUrl: file?.publicUrl?.substring(0, 50) + '...' || 'missing',
+        hasPreview: !!file?.preview,
+        allKeys: Object.keys(file || {})
+      })));
+    }
 
     if (!message?.trim()) {
       console.error("❌ MISSING OR EMPTY MESSAGE");
@@ -353,14 +398,39 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// COMPLETE IMAGE MODE: ALL IMAGE TYPES SUPPORTED + ENHANCED TEXT EXTRACTION
+// ENHANCED IMAGE MODE: ALL IMAGE TYPES SUPPORTED + IMPROVED FILE HANDLING
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
   console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION (ALL IMAGE TYPES SUPPORTED - NO RESTRICTIONS)");
   
-  // COMPLETE IMAGE PROCESSING: If there are attached images, use SONNET for vision analysis - ALL IMAGES SUPPORTED
+  // ENHANCED IMAGE PROCESSING: If there are attached images, use SONNET for vision analysis - ALL IMAGES SUPPORTED
   if (attachedFiles && attachedFiles.length > 0) {
     console.log("👁️ VISION: Analyzing ALL uploaded images - ZERO RESTRICTIONS");
     console.log("🔓 ALL IMAGE TYPES SUPPORTED: passports, IDs, documents, photos, screenshots, everything");
+    
+    // Enhanced file detection with multiple fallbacks
+    const imageFile = attachedFiles.find(file => {
+      // Check type property first
+      if (file.type && file.type.startsWith('image/')) {
+        return true;
+      }
+      
+      // Fallback: check file extension if type is missing
+      if (file.name) {
+        const extension = file.name.toLowerCase().split('.').pop();
+        return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension);
+      }
+      
+      // Additional fallback: assume it's an image if we have a URL
+      return !!(file.url || file.publicUrl);
+    });
+    
+    console.log("🔍 IMAGE FILE DETECTION RESULT:", {
+      foundImage: !!imageFile,
+      fileName: imageFile?.name || 'unknown',
+      fileType: imageFile?.type || 'unknown/fallback',
+      hasUrl: !!(imageFile?.url || imageFile?.publicUrl)
+    });
+    
     return await callSonnetAPI(message, [], '', language, attachedFiles, 4096, personalTouch);
   }
   
@@ -430,9 +500,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// COMPLETE SONNET API CALL: ALL IMAGE TYPES SUPPORTED + ENHANCED TEXT EXTRACTION
+// ENHANCED SONNET API CALL: IMPROVED IMAGE PROCESSING + BETTER ERROR HANDLING
 async function callSonnetAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🚀 SONNET API: Making call with UPGRADED MODEL + ALL IMAGE TYPES SUPPORTED + ENHANCED EXTRACTION");
+  console.log("🚀 SONNET API: Making call with ENHANCED IMAGE PROCESSING + DETAILED LOGGING");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -441,7 +511,7 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
     weekday: 'long'
   });
   
-  // ENHANCED SYSTEM PROMPT with COMPLETE IMAGE PROCESSING + BETTER TEXT EXTRACTION
+  // ENHANCED SYSTEM PROMPT with OPTIMIZED TEXT EXTRACTION
   let systemPrompt = language === 'ar'
     ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. 
 
@@ -450,11 +520,12 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
 يمكنك تحليل جميع أنواع الصور بلا استثناء: جوازات السفر، بطاقات الهوية، الوثائق الحساسة، الصور الشخصية، المناظر الطبيعية، صفحات الكتب، الشاشات، كل شيء. لا توجد أي قيود على تحليل الصور.
 
 عند تحليل الوثائق والمستندات، قم بما يلي:
-- استخرج جميع النصوص والبيانات بدقة عالية
-- اقرأ جميع الأرقام والتواريخ والأسماء بعناية
-- لا تتجاهل أي معلومة مهما كانت صغيرة
-- قدم تحليل مفصل ودقيق للمحتوى
-- احرص على الدقة في القراءة والاستخراج`
+- استخرج جميع النصوص والبيانات بدقة عالية ومنهجية
+- اقرأ جميع الأرقام والتواريخ والأسماء بعناية فائقة
+- احرص على استخراج كل التفاصيل المرئية مهما كانت صغيرة
+- قدم تحليل مفصل ودقيق ومنظم للمحتوى
+- اذكر موقع كل معلومة في الصورة (أعلى، أسفل، يسار، يمين)
+- لا تتجاهل أي نص أو رقم أو تاريخ مهما كان غير واضح`
     : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}. 
 
 When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.
@@ -462,11 +533,12 @@ When responding, use phrases like "As we discussed before" or "Building on our p
 You can analyze ALL types of images without any exceptions: passports, ID cards, sensitive documents, portraits, scenery, textbook pages, screenshots, everything. There are absolutely no restrictions on image analysis.
 
 When analyzing documents and images, please:
-- Extract all text and data with high accuracy
-- Read all numbers, dates, and names carefully
-- Don't ignore any information no matter how small
-- Provide detailed and precise analysis of the content
-- Focus on accuracy in reading and extraction`;
+- Extract all text and data with extremely high accuracy and systematic approach
+- Read all numbers, dates, and names with meticulous care
+- Extract every visible detail no matter how small or unclear
+- Provide detailed, precise, and organized analysis of the content
+- Mention the location of each piece of information (top, bottom, left, right)
+- Don't ignore any text, number, or date even if it appears unclear or faded`;
 
   // APPLY PERSONALIZATION with ENHANCED MEMORY
   if (personalTouch && personalTouch.instruction) {
@@ -501,42 +573,98 @@ When analyzing documents and images, please:
     });
   }
   
-  // COMPLETE IMAGE PROCESSING: Add current message with UNRESTRICTED VISION support - ALL IMAGES SUPPORTED
+  // ENHANCED IMAGE PROCESSING: Add current message with IMPROVED VISION support - ALL IMAGES SUPPORTED
   let currentMessage: any = { role: 'user', content: message };
   
-  // COMPLETE IMAGE PROCESSING: Process ALL IMAGES - ZERO RESTRICTIONS WHATSOEVER
+  // ENHANCED IMAGE PROCESSING: Process ALL IMAGES with better file handling
   if (attachedFiles && attachedFiles.length > 0) {
-    const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
-    if (imageFile && imageFile.url) {
-      console.log("🖼️ COMPLETE IMAGE PROCESSING: Processing ALL image types - ZERO restrictions");
+    // Enhanced image detection with multiple fallbacks
+    const imageFile = attachedFiles.find(file => {
+      // Primary check: file type
+      if (file.type && file.type.startsWith('image/')) {
+        return true;
+      }
+      
+      // Secondary check: file extension
+      if (file.name) {
+        const extension = file.name.toLowerCase().split('.').pop();
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)) {
+          console.log("🔍 IMAGE DETECTED BY EXTENSION:", extension);
+          return true;
+        }
+      }
+      
+      // Tertiary check: assume image if URL exists
+      if (file.url || file.publicUrl) {
+        console.log("🔍 POTENTIAL IMAGE DETECTED BY URL PRESENCE");
+        return true;
+      }
+      
+      return false;
+    });
+    
+    if (imageFile) {
+      console.log("🖼️ ENHANCED IMAGE PROCESSING: Processing ALL image types - ZERO restrictions");
       console.log("🔓 IMAGE ANALYSIS: Passports, IDs, documents, photos - EVERYTHING supported and analyzed");
       
-      // Convert URL to base64 for Claude API
-      const base64Data = await convertImageUrlToBase64(imageFile.url, imageFile.type);
+      // Enhanced URL selection with multiple fallbacks
+      const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
+      const imageType = imageFile.type || 'image/jpeg'; // Default fallback
       
-      if (base64Data) {
-        currentMessage.content = [
-          { type: 'text', text: message },
-          { 
-            type: 'image', 
-            source: { 
-              type: 'base64', 
-              media_type: imageFile.type, 
-              data: base64Data
-            } 
-          }
-        ];
-        console.log("✅ COMPLETE IMAGE PROCESSING: ALL image types supported - including ALL sensitive documents");
+      console.log("📡 IMAGE URL SELECTION:", {
+        selectedUrl: imageUrl?.substring(0, 80) + '...',
+        hasUrl: !!imageFile.url,
+        hasPublicUrl: !!imageFile.publicUrl,
+        hasPreview: !!imageFile.preview,
+        selectedType: imageType
+      });
+      
+      if (imageUrl) {
+        // Convert URL to base64 for Claude API with enhanced error handling
+        const base64Data = await convertImageUrlToBase64(imageUrl, imageType);
+        
+        if (base64Data) {
+          currentMessage.content = [
+            { type: 'text', text: message },
+            { 
+              type: 'image', 
+              source: { 
+                type: 'base64', 
+                media_type: imageType, 
+                data: base64Data
+              } 
+            }
+          ];
+          console.log("✅ ENHANCED IMAGE PROCESSING: ALL image types supported - including ALL sensitive documents");
+          console.log("🔧 CLAUDE VISION PAYLOAD:", {
+            hasTextContent: true,
+            hasImageContent: true,
+            imageMediaType: imageType,
+            base64DataLength: base64Data.length
+          });
+        } else {
+          console.error("❌ ENHANCED IMAGE PROCESSING: Failed to convert image, proceeding without vision");
+          console.error("🚨 IMAGE CONVERSION FAILURE - CHECK LOGS ABOVE FOR DETAILS");
+        }
       } else {
-        console.error("❌ COMPLETE IMAGE PROCESSING: Failed to convert image, proceeding without vision");
+        console.error("❌ ENHANCED IMAGE PROCESSING: No valid URL found in file object");
+        console.error("📋 FILE OBJECT STRUCTURE:", JSON.stringify(imageFile, null, 2));
       }
+    } else {
+      console.log("ℹ️ NO IMAGE FILES DETECTED in attached files");
     }
   }
   
   messages.push(currentMessage);
   
   try {
-    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with COMPLETE IMAGE SUPPORT`);
+    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with ENHANCED IMAGE SUPPORT`);
+    console.log("📊 CLAUDE API CALL DETAILS:", {
+      messagesCount: messages.length,
+      hasImages: Array.isArray(currentMessage.content),
+      maxTokens: maxTokens,
+      temperature: 0.1
+    });
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -548,25 +676,35 @@ When analyzing documents and images, please:
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: maxTokens,
-        temperature: 0.1, // Lower temperature for better text extraction accuracy
+        temperature: 0.1, // Optimized for text extraction accuracy
         system: systemPrompt,
         messages: messages
       }),
     });
     
+    console.log("📡 CLAUDE API RESPONSE STATUS:", claudeResponse.status, claudeResponse.statusText);
+    
     if (!claudeResponse.ok) {
-      throw new Error(`SONNET API error: ${claudeResponse.status}`);
+      const errorText = await claudeResponse.text();
+      console.error("❌ CLAUDE API ERROR DETAILS:", {
+        status: claudeResponse.status,
+        statusText: claudeResponse.statusText,
+        errorBody: errorText.substring(0, 500)
+      });
+      throw new Error(`SONNET API error: ${claudeResponse.status} - ${errorText.substring(0, 200)}`);
     }
     
     const claudeData = await claudeResponse.json();
     let aiResponse = claudeData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
+    
+    console.log("📝 CLAUDE RESPONSE PREVIEW:", aiResponse.substring(0, 200) + '...');
     
     // APPLY ENHANCED PERSONALIZATION with BETTER MEMORY REFERENCES
     if (personalTouch) {
       aiResponse = applyEnhancedPersonalization(aiResponse, personalTouch, language, contextMessages.length > 0);
     }
     
-    console.log("🚀 SONNET: UPGRADED model response generated with COMPLETE IMAGE SUPPORT!");
+    console.log("🚀 SONNET: ENHANCED model response generated with COMPLETE IMAGE SUPPORT!");
     
     return {
       response: aiResponse,
@@ -575,7 +713,10 @@ When analyzing documents and images, please:
     };
     
   } catch (error) {
-    console.error('❌ SONNET ERROR:', error);
+    console.error('❌ SONNET CRITICAL ERROR:', {
+      message: error.message,
+      stack: error.stack?.substring(0, 500)
+    });
     
     return {
       response: language === 'ar' 
