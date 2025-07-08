@@ -12,7 +12,28 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: HYBRID SMART MEMORY + HAIKU SPEED (4x Faster)");
+console.log("🚀 WAKTI AI V2: UPGRADED TO CLAUDE 3.5 SONNET + FIXED IMAGE PROCESSING");
+
+// PHASE 1 FIX: Image URL to Base64 conversion function
+async function convertImageUrlToBase64(imageUrl: string, imageType: string): Promise<string | null> {
+  try {
+    console.log('🖼️ IMAGE PROCESSING: Converting URL to base64:', imageUrl.substring(0, 50) + '...');
+    
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const base64String = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    
+    console.log('✅ IMAGE PROCESSING: Successfully converted to base64, size:', arrayBuffer.byteLength, 'bytes');
+    return base64String;
+  } catch (error) {
+    console.error('❌ IMAGE PROCESSING ERROR:', error);
+    return null;
+  }
+}
 
 serve(async (req) => {
   console.log("📨 REQUEST RECEIVED:", {
@@ -133,7 +154,8 @@ serve(async (req) => {
       activeTrigger,
       messageLength: message?.length || 0,
       recentMessagesCount: recentMessages.length,
-      hasPersonalTouch: !!personalTouch
+      hasPersonalTouch: !!personalTouch,
+      attachedFilesCount: attachedFiles.length
     });
 
     // Validate required parameters
@@ -171,6 +193,14 @@ serve(async (req) => {
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    // PHASE 1 FIX: Enhanced task detection before processing
+    console.log('🎯 TASK DETECTION: Analyzing message for task creation intent');
+    const taskDetectionResult = await analyzeTaskIntent(message, language);
+    
+    if (taskDetectionResult.isTask || taskDetectionResult.isReminder) {
+      console.log('✅ TASK DETECTED:', taskDetectionResult);
+    }
+
     // MODE-BASED PROCESSING with HYBRID MEMORY
     switch (activeTrigger) {
       case 'search':
@@ -195,18 +225,18 @@ serve(async (req) => {
       imageUrl: result.imageUrl || null,
       browsingUsed: activeTrigger === 'search',
       browsingData: null,
-      needsConfirmation: false,
-      pendingTaskData: null,
-      pendingReminderData: null,
+      needsConfirmation: taskDetectionResult.isTask || taskDetectionResult.isReminder,
+      pendingTaskData: taskDetectionResult.taskData || null,
+      pendingReminderData: taskDetectionResult.reminderData || null,
       success: result.success !== false,
       processingTime: Date.now(),
-      aiProvider: 'claude-3-5-haiku-20241022', // UPGRADED TO HAIKU (4x faster)
+      aiProvider: 'claude-3-5-sonnet-20241022', // PHASE 1: UPGRADED MODEL
       claude4Enabled: false,
       mode: activeTrigger,
       fallbackUsed: false
     };
 
-    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: HAIKU-POWERED request completed successfully!`);
+    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: SONNET-POWERED request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
       headers: { 
@@ -239,9 +269,93 @@ serve(async (req) => {
   }
 });
 
-// ENHANCED CHAT MODE with HYBRID MEMORY
+// PHASE 1 FIX: Enhanced task detection with explicit command requirement
+async function analyzeTaskIntent(message: string, language: string = 'en') {
+  const lowerMessage = message.toLowerCase().trim();
+  
+  console.log('🎯 TASK ANALYSIS: Checking message:', lowerMessage.substring(0, 50) + '...');
+
+  // PHASE 1 FIX: Explicit command patterns (must be clear intent)
+  const explicitTaskPatterns = {
+    en: [
+      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{10,})/i,
+      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to)\s+(.{10,})/i,
+      /^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to)\s+(.{10,})/i
+    ],
+    ar: [
+      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{10,})/i,
+      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل)\s+(.{10,})/i,
+      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)\s+(لـ|حول|من\s+أجل)\s+(.{10,})/i
+    ]
+  };
+
+  const explicitReminderPatterns = {
+    en: [
+      /^(please\s+)?(create|make|add|set)\s+(a\s+)?reminder\s*:?\s*(.{10,})/i,
+      /^(remind\s+me\s+)(to\s+|about\s+)(.{10,})/i,
+      /^(can\s+you\s+)?(remind\s+me|set\s+a\s+reminder)\s+(to\s+|about\s+)(.{10,})/i
+    ],
+    ar: [
+      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|اضبط)\s+(تذكير)\s*:?\s*(.{10,})/i,
+      /^(ذكرني\s+)(أن\s+|بـ\s*)(.{10,})/i,
+      /^(هل\s+يمكنك\s+)?(تذكيري|ضبط\s+تذكير)\s+(أن\s+|بـ\s*)(.{10,})/i
+    ]
+  };
+
+  // Check for explicit task patterns
+  const taskPatterns = explicitTaskPatterns[language as 'en' | 'ar'] || explicitTaskPatterns.en;
+  for (const pattern of taskPatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      const taskContent = match[match.length - 1]?.trim();
+      console.log('✅ EXPLICIT TASK DETECTED:', taskContent);
+      
+      return {
+        isTask: true,
+        isReminder: false,
+        taskData: {
+          title: taskContent || (language === 'ar' ? 'مهمة جديدة' : 'New Task'),
+          description: '',
+          due_date: null,
+          due_time: null,
+          subtasks: [],
+          priority: "normal"
+        },
+        reminderData: null
+      };
+    }
+  }
+
+  // Check for explicit reminder patterns
+  const reminderPatterns = explicitReminderPatterns[language as 'en' | 'ar'] || explicitReminderPatterns.en;
+  for (const pattern of reminderPatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      const reminderContent = match[match.length - 1]?.trim();
+      console.log('✅ EXPLICIT REMINDER DETECTED:', reminderContent);
+      
+      return {
+        isTask: false,
+        isReminder: true,
+        taskData: null,
+        reminderData: {
+          title: reminderContent || (language === 'ar' ? 'تذكير جديد' : 'New Reminder'),
+          description: '',
+          due_date: null,
+          due_time: null,
+          priority: "normal"
+        }
+      };
+    }
+  }
+
+  console.log('❌ NO EXPLICIT TASK/REMINDER COMMAND DETECTED');
+  return { isTask: false, isReminder: false, taskData: null, reminderData: null };
+}
+
+// ENHANCED CHAT MODE with HYBRID MEMORY + UPGRADED MODEL
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 CHAT MODE: Processing with HAIKU (4x faster) + HYBRID MEMORY");
+  console.log("💬 CHAT MODE: Processing with SONNET (UPGRADED) + HYBRID MEMORY");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -277,12 +391,12 @@ async function processChatMode(message: string, userId: string, conversationId: 
   
   console.log(`🧠 HYBRID MEMORY: Using ${contextMessages.length} context messages`);
   
-  return await callHaikuAPI(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
+  return await callSonnetAPI(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
 }
 
 // ENHANCED SEARCH MODE with HYBRID MEMORY
 async function processSearchMode(message: string, language: string, recentMessages: any[], personalTouch: any) {
-  console.log("🔍 SEARCH MODE: Processing with HAIKU + HYBRID MEMORY");
+  console.log("🔍 SEARCH MODE: Processing with SONNET + HYBRID MEMORY");
   
   if (!TAVILY_API_KEY) {
     return {
@@ -315,12 +429,12 @@ async function processSearchMode(message: string, language: string, recentMessag
     const searchResults = searchData.results || [];
     const searchAnswer = searchData.answer || '';
     
-    // Call HAIKU with search context
+    // Call SONNET with search context
     const searchContext = `Search results for "${message}":\n${searchAnswer}\n\nResults:\n${
       searchResults.map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.content}`).join('\n')
     }`;
     
-    return await callHaikuAPI(searchContext, recentMessages, '', language, [], 4096, personalTouch);
+    return await callSonnetAPI(searchContext, recentMessages, '', language, [], 4096, personalTouch);
     
   } catch (error) {
     console.error('❌ SEARCH ERROR:', error);
@@ -334,14 +448,14 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// ENHANCED IMAGE MODE with VISION
+// ENHANCED IMAGE MODE with VISION + PHASE 1 FIX
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🎨 IMAGE MODE: Processing with RUNWARE + HAIKU VISION");
+  console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION");
   
-  // If there are attached images, use HAIKU for vision analysis
+  // PHASE 1 FIX: If there are attached images, use SONNET for vision analysis
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ VISION: Analyzing uploaded images with HAIKU");
-    return await callHaikuAPI(message, [], '', language, attachedFiles, 4096, personalTouch);
+    console.log("👁️ VISION: Analyzing uploaded images with SONNET (UPGRADED)");
+    return await callSonnetAPI(message, [], '', language, attachedFiles, 4096, personalTouch);
   }
   
   // Otherwise, generate image with RUNWARE
@@ -410,9 +524,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// UPGRADED HAIKU API CALL (4x Faster + Full Vision + Personalization)
-async function callHaikuAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🚀 HAIKU API: Making ultra-fast call with HYBRID MEMORY");
+// PHASE 1: UPGRADED SONNET API CALL + FIXED IMAGE PROCESSING
+async function callSonnetAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
+  console.log("🚀 SONNET API: Making call with UPGRADED MODEL + FIXED IMAGE PROCESSING");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -423,8 +537,8 @@ async function callHaikuAPI(message: string, contextMessages: any[], conversatio
   
   // ENHANCED SYSTEM PROMPT with PERSONALIZATION
   let systemPrompt = language === 'ar'
-    ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Haiku فائق السرعة. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. اجب بالعربية.`
-    : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Haiku for ultra-fast responses. You are helpful, collaborative, and smart. Today's date: ${currentDate}. Respond in English.`;
+    ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. اجب بالعربية.`
+    : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}. Respond in English.`;
 
   // APPLY PERSONALIZATION
   if (personalTouch && personalTouch.instruction) {
@@ -454,25 +568,41 @@ async function callHaikuAPI(message: string, contextMessages: any[], conversatio
     });
   }
   
-  // Add current message with vision support
+  // PHASE 1 FIX: Add current message with FIXED VISION support
   let currentMessage: any = { role: 'user', content: message };
   
-  // VISION SUPPORT: Add image content if files attached
+  // PHASE 1 FIX: CRITICAL IMAGE PROCESSING FIX
   if (attachedFiles && attachedFiles.length > 0) {
     const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
     if (imageFile && imageFile.url) {
-      currentMessage.content = [
-        { type: 'text', text: message },
-        { type: 'image', source: { type: 'base64', media_type: imageFile.type, data: imageFile.url } }
-      ];
-      console.log("👁️ VISION: Added image to HAIKU request");
+      console.log("🖼️ PHASE 1 FIX: Converting image URL to base64 for Claude API");
+      
+      // PHASE 1 FIX: Convert URL to base64 instead of sending URL directly
+      const base64Data = await convertImageUrlToBase64(imageFile.url, imageFile.type);
+      
+      if (base64Data) {
+        currentMessage.content = [
+          { type: 'text', text: message },
+          { 
+            type: 'image', 
+            source: { 
+              type: 'base64', 
+              media_type: imageFile.type, 
+              data: base64Data  // PHASE 1 FIX: Now sending actual base64 data
+            } 
+          }
+        ];
+        console.log("✅ PHASE 1 FIX: Image properly converted to base64 for SONNET vision");
+      } else {
+        console.error("❌ PHASE 1 FIX: Failed to convert image, proceeding without vision");
+      }
     }
   }
   
   messages.push(currentMessage);
   
   try {
-    console.log(`🚀 HAIKU: Sending ${messages.length} messages to ultra-fast model`);
+    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model`);
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -482,7 +612,7 @@ async function callHaikuAPI(message: string, contextMessages: any[], conversatio
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022', // HAIKU MODEL (4x faster)
+        model: 'claude-3-5-sonnet-20241022', // PHASE 1: UPGRADED MODEL
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: messages
@@ -490,7 +620,7 @@ async function callHaikuAPI(message: string, contextMessages: any[], conversatio
     });
     
     if (!claudeResponse.ok) {
-      throw new Error(`HAIKU API error: ${claudeResponse.status}`);
+      throw new Error(`SONNET API error: ${claudeResponse.status}`);
     }
     
     const claudeData = await claudeResponse.json();
@@ -501,16 +631,16 @@ async function callHaikuAPI(message: string, contextMessages: any[], conversatio
       aiResponse = applyPersonalization(aiResponse, personalTouch, language);
     }
     
-    console.log("🚀 HAIKU: Ultra-fast response generated successfully!");
+    console.log("🚀 SONNET: UPGRADED model response generated successfully!");
     
     return {
       response: aiResponse,
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-3-5-sonnet-20241022',
       success: true
     };
     
   } catch (error) {
-    console.error('❌ HAIKU ERROR:', error);
+    console.error('❌ SONNET ERROR:', error);
     
     return {
       response: language === 'ar' 
