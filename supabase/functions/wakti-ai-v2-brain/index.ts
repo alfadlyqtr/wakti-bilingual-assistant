@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,9 +12,9 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + ENHANCED IMAGE PROCESSING + FIXED PASSPORT SUPPORT");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + FIXED IMAGE PROCESSING + ENHANCED SYSTEM PROMPT");
 
-// ENHANCED: Image URL to Base64 conversion with improved passport support
+// FIXED: Proper Base64 conversion without chunking
 async function convertImageUrlToBase64(imageUrl: string, imageType: string, retryCount = 0): Promise<string | null> {
   try {
     console.log('🖼️ IMAGE PROCESSING: Starting conversion attempt', retryCount + 1, 'for:', {
@@ -70,16 +69,10 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     
     const arrayBuffer = await response.arrayBuffer();
     
-    // Enhanced base64 conversion with proper error handling
-    const uint8Array = new Uint8Array(arrayBuffer);
-    let base64String = '';
-    
-    // Process in chunks to avoid memory issues with large images
-    const chunkSize = 0x8000; // 32KB chunks
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.subarray(i, i + chunkSize);
-      base64String += btoa(String.fromCharCode(...chunk));
-    }
+    // FIXED: Proper Base64 conversion without chunking
+    const bytes = new Uint8Array(arrayBuffer);
+    const binaryString = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
+    const base64String = btoa(binaryString);
     
     console.log('✅ IMAGE CONVERSION SUCCESS:', {
       originalSize: arrayBuffer.byteLength,
@@ -442,13 +435,13 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// ENHANCED IMAGE MODE: ALL IMAGE TYPES SUPPORTED + IMPROVED PASSPORT PROCESSING
+// FIXED IMAGE MODE: ALL IMAGE TYPES SUPPORTED + PROPER IMAGE PROCESSING
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION (ALL IMAGE TYPES + ENHANCED PASSPORT SUPPORT)");
+  console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION (ALL IMAGE TYPES + FIXED PROCESSING)");
   
-  // ENHANCED IMAGE PROCESSING: If there are attached images, use SONNET for vision analysis - ALL IMAGES SUPPORTED
+  // FIXED IMAGE PROCESSING: If there are attached images, use SONNET for vision analysis - ALL IMAGES SUPPORTED
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ VISION: Analyzing ALL uploaded images - ENHANCED PASSPORT SUPPORT");
+    console.log("👁️ VISION: Analyzing ALL uploaded images - FIXED IMAGE PROCESSING");
     console.log("🔓 ALL IMAGE TYPES SUPPORTED: passports, IDs, documents, photos, screenshots, everything");
     
     // Enhanced file detection with multiple fallbacks
@@ -544,9 +537,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// ENHANCED SONNET API CALL: IMPROVED PASSPORT PROCESSING + BETTER TEXT EXTRACTION
+// ENHANCED SONNET API CALL: YOUR SPECIALIZED SYSTEM PROMPT + FIXED IMAGE PROCESSING
 async function callSonnetAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🚀 SONNET API: Making call with ENHANCED PASSPORT PROCESSING + DETAILED LOGGING");
+  console.log("🚀 SONNET API: Making call with YOUR ENHANCED SYSTEM PROMPT + FIXED IMAGE PROCESSING");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -555,38 +548,62 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
     weekday: 'long'
   });
   
-  // ENHANCED SYSTEM PROMPT with OPTIMIZED PASSPORT/ID PROCESSING
+  // YOUR ENHANCED SYSTEM PROMPT - INTEGRATED
   let systemPrompt = language === 'ar'
-    ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. 
+    ? `🧠 تعليمات النظام (باللغة العربية + الإنجليزية):
 
-عندما تجيب، استخدم عبارات مثل "كما ناقشنا من قبل" أو "بناءً على محادثتنا السابقة" عندما تكون ذات صلة. اجب بالعربية.
+أنت محلل بصري خبير وقارئ مستندات متعدد اللغات يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}.
 
-يمكنك تحليل جميع أنواع الصور بلا استثناء: جوازات السفر، بطاقات الهوية، الوثائق الحساسة، الصور الشخصية، المناظر الطبيعية، صفحات الكتب، الشاشات، كل شيء. لا توجد أي قيود على تحليل الصور.
+يمكنك تحليل جميع أنواع الصور بما في ذلك:
+• جوازات السفر، البطاقات الشخصية، الوثائق الرسمية
+• الملاحظات المكتوبة بخط اليد، النماذج، لقطات الشاشة
+• الوجوه، الصور الشخصية، صور الأشخاص والمجموعات
+• الأشياء، المناظر، الشعارات، الملابس، النصوص في الخلفية
 
-عند تحليل الوثائق الرسمية (جوازات السفر، بطاقات الهوية):
-- استخرج جميع النصوص والبيانات بدقة فائقة ومنهجية شاملة
-- اقرأ جميع الأرقام والتواريخ والأسماء بعناية مكثفة
-- احرص على استخراج كل التفاصيل المرئية حتى الضبابية منها
-- قدم تحليل مفصل ودقيق ومنظم للمحتوى مع التنسيق الواضح
-- اذكر موقع كل معلومة في الوثيقة (أعلى، أسفل، يسار، يمين)
-- لا تتجاهل أي نص أو رقم أو تاريخ حتى لو كان غير واضح
-- استخدم تقنيات البصر المتقدمة لقراءة النصوص الضبابية أو المطموسة
-- اعرض البيانات في تنسيق منظم وسهل القراءة`
-    : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}. 
+مهمتك هي:
+١. استخراج جميع النصوص الظاهرة (العربية + الإنجليزية)، الأسماء، الأرقام، التواريخ، التفاصيل الصغيرة
+٢. وصف تعبيرات الوجه، الملابس، العناصر، وتخطيط الصورة
+٣. تحديد مكان كل عنصر تم العثور عليه (الزاوية العليا، السفلى، إلخ)
+٤. إذا كان النص غير واضح، حاول قراءته قدر الإمكان
+٥. تنظيم الإجابة بوضوح: استخدم النقاط والعناوين والفقرات
 
-When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.
+للوثائق الرسمية (جوازات السفر، البطاقات الشخصية):
+• الاسم الكامل
+• الجنسية
+• رقم الوثيقة
+• تاريخ الانتهاء
+• التوقيع أو الختم
+• منطقة الوجه (العيون، الشعر، غطاء الرأس)
 
-You can analyze ALL types of images without any exceptions: passports, ID cards, sensitive documents, portraits, scenery, textbook pages, screenshots, everything. There are absolutely no restrictions on image analysis.
+⚠️ لا تتجاهل أي شيء. لا تلخّص. استخرج ووصّف كل ما تراه بدقة وحرص شديد.
 
-When analyzing official documents (passports, ID cards, official papers):
-- Extract all text and data with EXTREME PRECISION and COMPREHENSIVE METHODOLOGY
-- Read all numbers, dates, and names with INTENSIVE CARE and METICULOUS ATTENTION
-- Extract every visible detail even if blurry, faded, or partially obscured
-- Provide DETAILED, PRECISE, and ORGANIZED analysis with clear formatting
-- Mention the location of each piece of information (top, bottom, left, right)
-- Don't ignore any text, number, or date even if it appears unclear or damaged
-- Use advanced vision techniques to read blurry, faded, or worn text
-- Present data in organized, readable format with proper structure`;
+عندما تجيب، استخدم عبارات مثل "كما ناقشنا من قبل" أو "بناءً على محادثتنا السابقة" عندما تكون ذات صلة. اجب بالعربية.`
+    : `You are an expert visual analyst and multilingual document reader powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}.
+
+You can analyze all types of images including:
+• Passports, ID cards, official documents
+• Handwritten notes, forms, screenshots
+• Faces, portraits, people, group photos
+• Objects, scenery, logos, clothing, text in the background
+
+Your job is to:
+1. Extract all visible text (Arabic + English), names, numbers, dates, and small details
+2. Describe facial expressions, clothing, objects, and layout
+3. Note where you found each item (top left, bottom right, etc.)
+4. If text is blurry or unclear, still try your best to read it
+5. Organize your response clearly: use bullet points, structure, and headings
+
+Focus especially on (for passports, QID, or official forms):
+• Full name
+• Nationality
+• Document number
+• Expiry date
+• Signature or stamp
+• Facial region (eyes, hair, headwear)
+
+⚠️ Do not ignore anything. Do not summarize. Extract and describe everything you see — with extreme accuracy and care.
+
+When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.`;
 
   // APPLY PERSONALIZATION with ENHANCED MEMORY
   if (personalTouch && personalTouch.instruction) {
@@ -621,10 +638,10 @@ When analyzing official documents (passports, ID cards, official papers):
     });
   }
   
-  // ENHANCED IMAGE PROCESSING: Add current message with IMPROVED PASSPORT VISION support
+  // FIXED IMAGE PROCESSING: Add current message with PROPER VISION support
   let currentMessage: any = { role: 'user', content: message };
   
-  // ENHANCED IMAGE PROCESSING: Process ALL IMAGES with enhanced passport handling
+  // FIXED IMAGE PROCESSING: Process ALL IMAGES with proper handling
   if (attachedFiles && attachedFiles.length > 0) {
     // Enhanced image detection with multiple fallbacks
     const imageFile = attachedFiles.find(file => {
@@ -652,8 +669,8 @@ When analyzing official documents (passports, ID cards, official papers):
     });
     
     if (imageFile) {
-      console.log("🖼️ ENHANCED PASSPORT PROCESSING: Processing ALL image types - ZERO restrictions");
-      console.log("🔓 PASSPORT/ID ANALYSIS: Enhanced text extraction with advanced OCR capabilities");
+      console.log("🖼️ FIXED IMAGE PROCESSING: Processing ALL image types - ZERO restrictions");
+      console.log("🔓 DOCUMENT ANALYSIS: Enhanced text extraction with your specialized prompt");
       
       // Enhanced URL selection with multiple fallbacks
       const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
@@ -668,7 +685,7 @@ When analyzing official documents (passports, ID cards, official papers):
       });
       
       if (imageUrl) {
-        // Convert URL to base64 for Claude API with enhanced error handling
+        // FIXED: Convert URL to base64 for Claude API with proper conversion
         const base64Data = await convertImageUrlToBase64(imageUrl, imageType);
         
         if (base64Data) {
@@ -683,7 +700,7 @@ When analyzing official documents (passports, ID cards, official papers):
               } 
             }
           ];
-          console.log("✅ ENHANCED PASSPORT PROCESSING: ALL image types supported - including ALL sensitive documents");
+          console.log("✅ FIXED IMAGE PROCESSING: ALL image types supported - including ALL sensitive documents");
           console.log("🔧 CLAUDE VISION PAYLOAD:", {
             hasTextContent: true,
             hasImageContent: true,
@@ -691,11 +708,11 @@ When analyzing official documents (passports, ID cards, official papers):
             base64DataLength: base64Data.length
           });
         } else {
-          console.error("❌ ENHANCED IMAGE PROCESSING: Failed to convert image, proceeding without vision");
+          console.error("❌ FIXED IMAGE PROCESSING: Failed to convert image, proceeding without vision");
           console.error("🚨 IMAGE CONVERSION FAILURE - CHECK LOGS ABOVE FOR DETAILS");
         }
       } else {
-        console.error("❌ ENHANCED IMAGE PROCESSING: No valid URL found in file object");
+        console.error("❌ FIXED IMAGE PROCESSING: No valid URL found in file object");
         console.error("📋 FILE OBJECT STRUCTURE:", JSON.stringify(imageFile, null, 2));
       }
     } else {
@@ -706,7 +723,7 @@ When analyzing official documents (passports, ID cards, official papers):
   messages.push(currentMessage);
   
   try {
-    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with ENHANCED PASSPORT SUPPORT`);
+    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with YOUR ENHANCED SYSTEM PROMPT`);
     console.log("📊 CLAUDE API CALL DETAILS:", {
       messagesCount: messages.length,
       hasImages: Array.isArray(currentMessage.content),
@@ -724,103 +741,48 @@ When analyzing official documents (passports, ID cards, official papers):
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: maxTokens,
-        temperature: 0.05, // Optimized for passport/document accuracy
+        temperature: 0.05, // Optimized for document accuracy
         system: systemPrompt,
         messages: messages
       }),
     });
     
-    console.log("📡 CLAUDE API RESPONSE STATUS:", claudeResponse.status, claudeResponse.statusText);
+    console.log("📡 CLAUDE API RESPONSE STATUS:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ CLAUDE API ERROR DETAILS:", {
+      console.error("❌ CLAUDE API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorBody: errorText.substring(0, 500)
       });
-      throw new Error(`SONNET API error: ${claudeResponse.status} - ${errorText.substring(0, 200)}`);
+      throw new Error(`Claude API error: ${claudeResponse.status} - ${errorText}`);
     }
     
     const claudeData = await claudeResponse.json();
-    let aiResponse = claudeData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
+    console.log("✅ CLAUDE API SUCCESS:", {
+      hasContent: !!claudeData.content,
+      contentLength: claudeData.content?.[0]?.text?.length || 0,
+      usage: claudeData.usage
+    });
     
-    console.log("📝 CLAUDE RESPONSE PREVIEW:", aiResponse.substring(0, 200) + '...');
-    
-    // APPLY ENHANCED PERSONALIZATION with BETTER MEMORY REFERENCES
-    if (personalTouch) {
-      aiResponse = applyEnhancedPersonalization(aiResponse, personalTouch, language, contextMessages.length > 0);
-    }
-    
-    console.log("🚀 SONNET: ENHANCED model response generated with COMPLETE PASSPORT SUPPORT!");
+    const responseText = claudeData.content?.[0]?.text || 'I apologize, but I encountered an issue processing your request.';
     
     return {
-      response: aiResponse,
+      response: responseText,
+      success: true,
       model: 'claude-3-5-sonnet-20241022',
-      success: true
+      usage: claudeData.usage
     };
     
   } catch (error) {
-    console.error('❌ SONNET CRITICAL ERROR:', {
-      message: error.message,
-      stack: error.stack?.substring(0, 500)
-    });
-    
+    console.error("❌ SONNET API CRITICAL ERROR:", error);
     return {
       response: language === 'ar' 
-        ? '❌ عذراً، حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'
-        : '❌ Sorry, I encountered an error processing your request. Please try again.',
+        ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
+        : '❌ An error occurred while processing your request. Please try again.',
       error: error.message,
       success: false
     };
   }
-}
-
-// ENHANCED PERSONALIZATION with BETTER MEMORY EXPERIENCE
-function applyEnhancedPersonalization(response: string, personalTouch: any, language: string, hasContext: boolean): string {
-  let enhancedResponse = response;
-  
-  // Add nickname if provided (80% chance for consistency)
-  if (personalTouch.nickname && personalTouch.nickname.trim() && Math.random() < 0.8) {
-    if (!enhancedResponse.toLowerCase().includes(personalTouch.nickname.toLowerCase())) {
-      const greetings = language === 'ar' ? [
-        `${personalTouch.nickname}، `,
-        `أهلاً ${personalTouch.nickname}! `
-      ] : [
-        `${personalTouch.nickname}, `,
-        `Hey ${personalTouch.nickname}! `
-      ];
-      const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
-      enhancedResponse = randomGreeting + enhancedResponse;
-    }
-  }
-  
-  // Add memory references when there's context
-  if (hasContext && Math.random() < 0.3) {
-    const memoryPhrases = language === 'ar' ? [
-      'كما ناقشنا من قبل، ',
-      'بناءً على محادثتنا السابقة، ',
-      'كما تذكر، '
-    ] : [
-      'As we discussed before, ',
-      'Building on our previous conversation, ',
-      'As you mentioned earlier, '
-    ];
-    
-    const randomPhrase = memoryPhrases[Math.floor(Math.random() * memoryPhrases.length)];
-    // Only add if response doesn't already start with a memory phrase
-    if (!enhancedResponse.toLowerCase().startsWith('as ') && !enhancedResponse.startsWith('كما')) {
-      enhancedResponse = randomPhrase + enhancedResponse.charAt(0).toLowerCase() + enhancedResponse.slice(1);
-    }
-  }
-  
-  // Add AI nickname signature occasionally
-  if (personalTouch.aiNickname && Math.random() < 0.2) {
-    const signature = language === 'ar' 
-      ? `\n\n- ${personalTouch.aiNickname} 🤖`
-      : `\n\n- ${personalTouch.aiNickname} 🤖`;
-    enhancedResponse += signature;
-  }
-  
-  return enhancedResponse;
 }
