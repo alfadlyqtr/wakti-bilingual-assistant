@@ -12,12 +12,12 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + TASK CREATION FIX + FULL IMAGE PROCESSING");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + NO TASK DETECTION + FULL IMAGE PROCESSING");
 
-// PHASE 2 FIX: Image URL to Base64 conversion function
+// PHASE 3 FINAL FIX: Image URL to Base64 conversion function
 async function convertImageUrlToBase64(imageUrl: string, imageType: string): Promise<string | null> {
   try {
-    console.log('🖼️ IMAGE PROCESSING: Converting URL to base64:', imageUrl.substring(0, 50) + '...');
+    console.log('🖼️ IMAGE PROCESSING: Converting ALL image types:', imageUrl.substring(0, 50) + '...');
     
     const response = await fetch(imageUrl);
     if (!response.ok) {
@@ -27,33 +27,12 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string): Pro
     const arrayBuffer = await response.arrayBuffer();
     const base64String = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
     
-    console.log('✅ IMAGE PROCESSING: Successfully converted to base64, size:', arrayBuffer.byteLength, 'bytes');
+    console.log('✅ IMAGE PROCESSING: ALL IMAGES SUPPORTED, size:', arrayBuffer.byteLength, 'bytes');
     return base64String;
   } catch (error) {
     console.error('❌ IMAGE PROCESSING ERROR:', error);
     return null;
   }
-}
-
-// PHASE 2 FIX: Check for explicit task creation commands - SIMPLE AND DIRECT
-function isExplicitTaskCommand(message: string, language: string = 'en'): boolean {
-  const lowerMessage = message.toLowerCase().trim();
-  
-  // English task commands
-  const englishPatterns = [
-    'create task', 'create a task', 'add task', 'add a task', 'new task',
-    'make task', 'make a task', 'task:', 'create reminder', 'add reminder'
-  ];
-  
-  // Arabic task commands  
-  const arabicPatterns = [
-    'أنشئ مهمة', 'اعمل مهمة', 'أضف مهمة', 'مهمة جديدة', 'إنشاء مهمة',
-    'أنشئ تذكير', 'أضف تذكير', 'تذكير جديد'
-  ];
-  
-  const patterns = language === 'ar' ? arabicPatterns : englishPatterns;
-  
-  return patterns.some(pattern => lowerMessage.includes(pattern));
 }
 
 serve(async (req) => {
@@ -160,7 +139,8 @@ serve(async (req) => {
       maxTokens = 4096,
       recentMessages = [],
       conversationSummary = '',
-      personalTouch = null
+      personalTouch = null,
+      enableTaskDetection = false // PHASE 3 FIX: NO task detection in regular chat
     } = requestBody || {};
 
     console.log("🎯 EXTRACTED PARAMS:", {
@@ -171,7 +151,8 @@ serve(async (req) => {
       messageLength: message?.length || 0,
       recentMessagesCount: recentMessages.length,
       hasPersonalTouch: !!personalTouch,
-      attachedFilesCount: attachedFiles.length
+      attachedFilesCount: attachedFiles.length,
+      enableTaskDetection // Should always be false for regular chat
     });
 
     if (!message?.trim()) {
@@ -204,75 +185,13 @@ serve(async (req) => {
 
     console.log(`🎯 MODE: ${activeTrigger.toUpperCase()}`);
     console.log(`📝 MESSAGE: ${message.substring(0, 100)}...`);
+    console.log(`🚫 TASK DETECTION: DISABLED - No task detection in regular chat`);
 
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // PHASE 2 CRITICAL FIX: Check for explicit task creation commands FIRST AND ONLY
-    if (isExplicitTaskCommand(message, language)) {
-      console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to DeepSeek parser');
-      
-      try {
-        const taskResponse = await supabase.functions.invoke('process-ai-intent', {
-          body: {
-            text: message,
-            mode: 'assistant',
-            userId: userId,
-            conversationHistory: recentMessages
-          }
-        });
-
-        if (taskResponse.error) {
-          console.error('❌ TASK PROCESSING ERROR:', taskResponse.error);
-          throw new Error(`Task processing failed: ${taskResponse.error.message}`);
-        }
-
-        const taskData = taskResponse.data;
-        console.log('✅ TASK PROCESSING SUCCESS:', taskData);
-
-        return new Response(JSON.stringify({
-          response: taskData.response || 'Task processing completed',
-          conversationId: finalConversationId,
-          intent: taskData.intent || 'parse_task',
-          confidence: 'high',
-          actionTaken: null,
-          imageUrl: null,
-          browsingUsed: false,
-          browsingData: null,
-          needsConfirmation: taskData.intent === 'parse_task',
-          pendingTaskData: taskData.intentData?.pendingTask || null,
-          pendingReminderData: taskData.intentData?.pendingReminder || null,
-          success: true,
-          processingTime: Date.now(),
-          aiProvider: 'deepseek-chat',
-          claude4Enabled: false,
-          mode: activeTrigger,
-          fallbackUsed: false
-        }), {
-          headers: { 
-            "Content-Type": "application/json",
-            'Access-Control-Allow-Origin': '*'
-          }
-        });
-
-      } catch (error) {
-        console.error('❌ TASK PROCESSING ERROR:', error);
-        return new Response(JSON.stringify({
-          response: language === 'ar' 
-            ? 'عذراً، حدث خطأ أثناء معالجة المهمة. حاول مرة أخرى.'
-            : 'Sorry, an error occurred while processing the task. Please try again.',
-          conversationId: finalConversationId,
-          success: false,
-          error: error.message
-        }), {
-          status: 500,
-          headers: { 
-            "Content-Type": "application/json",
-            'Access-Control-Allow-Origin': '*'
-          }
-        });
-      }
-    }
+    // PHASE 3 CRITICAL FIX: NO TASK DETECTION AT ALL IN REGULAR CHAT
+    console.log('💬 REGULAR CHAT: Processing without any task detection');
 
     // MODE-BASED PROCESSING with HYBRID MEMORY (NO TASK DETECTION HERE)
     switch (activeTrigger) {
@@ -298,9 +217,9 @@ serve(async (req) => {
       imageUrl: result.imageUrl || null,
       browsingUsed: activeTrigger === 'search',
       browsingData: null,
-      needsConfirmation: false,
-      pendingTaskData: null,
-      pendingReminderData: null,
+      needsConfirmation: false, // NEVER true for regular chat
+      pendingTaskData: null, // NEVER present for regular chat
+      pendingReminderData: null, // NEVER present for regular chat
       success: result.success !== false,
       processingTime: Date.now(),
       aiProvider: 'claude-3-5-sonnet-20241022',
@@ -342,9 +261,9 @@ serve(async (req) => {
   }
 });
 
-// ENHANCED CHAT MODE with HYBRID MEMORY + UPGRADED MODEL
+// ENHANCED CHAT MODE with HYBRID MEMORY + UPGRADED MODEL (NO TASK DETECTION)
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 CHAT MODE: Processing with SONNET (UPGRADED) + HYBRID MEMORY");
+  console.log("💬 CHAT MODE: Processing with SONNET (NO TASK DETECTION) + HYBRID MEMORY");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -434,13 +353,14 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// ENHANCED IMAGE MODE with VISION + FULL PROCESSING (NO RESTRICTIONS)
+// PHASE 3 FINAL FIX: ENHANCED IMAGE MODE with VISION + FULL PROCESSING (ALL IMAGE TYPES)
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION");
+  console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION (ALL IMAGE TYPES ALLOWED)");
   
-  // PHASE 2 FIX: If there are attached images, use SONNET for vision analysis - ALL IMAGES ALLOWED
+  // PHASE 3 FINAL FIX: If there are attached images, use SONNET for vision analysis - ALL IMAGES ALLOWED
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ VISION: Analyzing uploaded images with SONNET - ALL IMAGE TYPES SUPPORTED");
+    console.log("👁️ VISION: Analyzing ALL uploaded images - NO RESTRICTIONS");
+    console.log("🔓 ALL IMAGE TYPES SUPPORTED: passports, IDs, documents, photos, everything");
     return await callSonnetAPI(message, [], '', language, attachedFiles, 4096, personalTouch);
   }
   
@@ -510,9 +430,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// PHASE 2 FIX: UPGRADED SONNET API CALL + ENHANCED MEMORY EXPERIENCE
+// PHASE 3 FINAL FIX: UPGRADED SONNET API CALL + ALL IMAGE TYPES SUPPORTED
 async function callSonnetAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🚀 SONNET API: Making call with UPGRADED MODEL + ENHANCED MEMORY");
+  console.log("🚀 SONNET API: Making call with UPGRADED MODEL + ALL IMAGE TYPES SUPPORTED");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -521,18 +441,18 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
     weekday: 'long'
   });
   
-  // ENHANCED SYSTEM PROMPT with BETTER MEMORY REFERENCES
+  // ENHANCED SYSTEM PROMPT with ALL IMAGE PROCESSING
   let systemPrompt = language === 'ar'
     ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. 
 
 عندما تجيب، استخدم عبارات مثل "كما ناقشنا من قبل" أو "بناءً على محادثتنا السابقة" عندما تكون ذات صلة. اجب بالعربية.
 
-يمكنك تحليل جميع أنواع الصور بما في ذلك جوازات السفر ووثائق الهوية والصور الشخصية والمناظر الطبيعية وصفحات الكتب - لا توجد قيود على نوع الصورة.`
+يمكنك تحليل جميع أنواع الصور بلا استثناء: جوازات السفر، بطاقات الهوية، الوثائق الحساسة، الصور الشخصية، المناظر الطبيعية، صفحات الكتب، الشاشات، كل شيء. لا توجد أي قيود على تحليل الصور.`
     : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}. 
 
 When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.
 
-You can analyze ALL types of images including passports, ID cards, portraits, scenery, textbook pages - there are no restrictions on image types.`;
+You can analyze ALL types of images without any exceptions: passports, ID cards, sensitive documents, portraits, scenery, textbook pages, screenshots, everything. There are absolutely no restrictions on image analysis.`;
 
   // APPLY PERSONALIZATION with ENHANCED MEMORY
   if (personalTouch && personalTouch.instruction) {
@@ -567,16 +487,17 @@ You can analyze ALL types of images including passports, ID cards, portraits, sc
     });
   }
   
-  // PHASE 2 FIX: Add current message with FIXED VISION support - ALL IMAGES SUPPORTED
+  // PHASE 3 FINAL FIX: Add current message with UNRESTRICTED VISION support - ALL IMAGES SUPPORTED
   let currentMessage: any = { role: 'user', content: message };
   
-  // PHASE 2 FIX: PROCESS ALL IMAGES - NO RESTRICTIONS
+  // PHASE 3 FINAL FIX: Process ALL IMAGES - NO RESTRICTIONS WHATSOEVER
   if (attachedFiles && attachedFiles.length > 0) {
     const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
     if (imageFile && imageFile.url) {
-      console.log("🖼️ PHASE 2 FIX: Processing ALL image types - no restrictions");
+      console.log("🖼️ PHASE 3 FINAL FIX: Processing ALL image types - ZERO restrictions");
+      console.log("🔓 IMAGE ANALYSIS: Passports, IDs, documents, photos - EVERYTHING allowed");
       
-      // PHASE 2 FIX: Convert URL to base64 for Claude API
+      // PHASE 3 FINAL FIX: Convert URL to base64 for Claude API
       const base64Data = await convertImageUrlToBase64(imageFile.url, imageFile.type);
       
       if (base64Data) {
@@ -591,9 +512,9 @@ You can analyze ALL types of images including passports, ID cards, portraits, sc
             } 
           }
         ];
-        console.log("✅ PHASE 2 FIX: All image types supported - including sensitive documents");
+        console.log("✅ PHASE 3 FINAL FIX: ALL image types supported - including ALL sensitive documents");
       } else {
-        console.error("❌ PHASE 2 FIX: Failed to convert image, proceeding without vision");
+        console.error("❌ PHASE 3 FINAL FIX: Failed to convert image, proceeding without vision");
       }
     }
   }
@@ -601,7 +522,7 @@ You can analyze ALL types of images including passports, ID cards, portraits, sc
   messages.push(currentMessage);
   
   try {
-    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with ENHANCED MEMORY`);
+    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with ALL IMAGE SUPPORT`);
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -630,7 +551,7 @@ You can analyze ALL types of images including passports, ID cards, portraits, sc
       aiResponse = applyEnhancedPersonalization(aiResponse, personalTouch, language, contextMessages.length > 0);
     }
     
-    console.log("🚀 SONNET: UPGRADED model response generated with ENHANCED MEMORY!");
+    console.log("🚀 SONNET: UPGRADED model response generated with ALL IMAGE SUPPORT!");
     
     return {
       response: aiResponse,
@@ -651,7 +572,7 @@ You can analyze ALL types of images including passports, ID cards, portraits, sc
   }
 }
 
-// PHASE 2 FIX: ENHANCED PERSONALIZATION with BETTER MEMORY EXPERIENCE
+// PHASE 3 FINAL FIX: ENHANCED PERSONALIZATION with BETTER MEMORY EXPERIENCE
 function applyEnhancedPersonalization(response: string, personalTouch: any, language: string, hasContext: boolean): string {
   let enhancedResponse = response;
   

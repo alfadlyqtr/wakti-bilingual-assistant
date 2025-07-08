@@ -51,7 +51,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     }
   };
 
-  // Speak message content using browser's native TTS
+  // ENHANCED: Speak message content with improved Arabic support
   const handleSpeak = async () => {
     try {
       if (!message.content || !window.speechSynthesis) {
@@ -73,20 +73,61 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
       const utterance = new SpeechSynthesisUtterance(message.content);
       
-      // Detect Arabic text and set appropriate language
-      const isArabic = /[\u0600-\u06FF]/.test(message.content);
-      utterance.lang = isArabic ? "ar-SA" : "en-US";
+      // FIXED: Better Arabic detection and voice selection
+      const isArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message.content);
+      
+      // Wait for voices to load
+      const getVoices = () => new Promise<SpeechSynthesisVoice[]>((resolve) => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length) {
+          resolve(voices);
+        } else {
+          window.speechSynthesis.onvoiceschanged = () => {
+            resolve(window.speechSynthesis.getVoices());
+          };
+        }
+      });
+
+      const voices = await getVoices();
+      
+      if (isArabic) {
+        // Find Arabic voice
+        const arabicVoice = voices.find(voice => 
+          voice.lang.startsWith('ar') || 
+          voice.name.toLowerCase().includes('arabic') ||
+          voice.name.toLowerCase().includes('عربي')
+        );
+        
+        if (arabicVoice) {
+          utterance.voice = arabicVoice;
+        }
+        utterance.lang = "ar-SA";
+        utterance.rate = 0.8; // Slower for Arabic
+      } else {
+        // Find English voice
+        const englishVoice = voices.find(voice => 
+          voice.lang.startsWith('en') && 
+          (voice.name.toLowerCase().includes('female') || voice.name.toLowerCase().includes('male'))
+        );
+        
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+        utterance.lang = "en-US";
+        utterance.rate = 0.9;
+      }
       
       // Set voice properties
-      utterance.rate = 0.9;
       utterance.pitch = 1.0;
+      utterance.volume = 1.0;
       
       // Handle speech events
       utterance.onend = () => {
         setIsSpeaking(false);
       };
       
-      utterance.onerror = () => {
+      utterance.onerror = (event) => {
+        console.error('Speech synthesis error:', event);
         setIsSpeaking(false);
         toast.error(language === 'ar' ? 'خطأ' : 'Error', {
           description: language === 'ar' ? 'فشل في قراءة الرسالة' : 'Failed to speak message',
@@ -96,7 +137,9 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       window.speechSynthesis.speak(utterance);
       
       toast.success(language === 'ar' ? 'جاري القراءة...' : 'Speaking...', {
-        description: language === 'ar' ? 'يتم قراءة الرسالة' : 'Reading message aloud',
+        description: isArabic 
+          ? 'يتم قراءة الرسالة بالعربية' 
+          : 'Reading message aloud',
       });
 
     } catch (error) {
@@ -177,7 +220,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
         </div>
 
         <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-          {/* Message bubble */}
+          {/* Message bubble with FIXED alignment */}
           <Card className={`
             p-3 max-w-full
             ${isUser 
@@ -201,7 +244,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
               )}
 
-              {/* Message content with proper alignment */}
+              {/* FIXED: Message content with proper alignment */}
               <div 
                 className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
                 dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
@@ -273,28 +316,32 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
               )}
 
-              {/* Mini action buttons for AI messages */}
-              {!isUser && (
-                <div className="flex items-center gap-1 mt-2 pt-1 border-t border-border/30">
-                  {/* Mini Copy Button */}
-                  <button
-                    onClick={handleCopy}
-                    className="p-1 rounded-md hover:bg-muted/60 transition-colors"
-                    title={language === 'ar' ? 'نسخ' : 'Copy'}
-                  >
-                    <Copy className="w-3 h-3 text-muted-foreground" />
-                  </button>
-                  
-                  {/* Mini Speak Button */}
-                  <button
-                    onClick={handleSpeak}
-                    className={`p-1 rounded-md hover:bg-muted/60 transition-colors ${isSpeaking ? 'bg-primary/20' : ''}`}
-                    title={language === 'ar' ? 'تحدث' : 'Speak'}
-                  >
-                    <Speaker className={`w-3 h-3 ${isSpeaking ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </button>
-                </div>
-              )}
+              {/* RESTORED: Mini action buttons for ALL messages (user and AI) */}
+              <div className="flex items-center gap-1 mt-2 pt-1 border-t border-border/30">
+                {/* Mini Copy Button */}
+                <button
+                  onClick={handleCopy}
+                  className="p-1 rounded-md hover:bg-muted/60 transition-colors"
+                  title={language === 'ar' ? 'نسخ' : 'Copy'}
+                >
+                  <Copy className={`w-3 h-3 ${isUser ? 'text-white/70 hover:text-white' : 'text-muted-foreground'}`} />
+                </button>
+                
+                {/* RESTORED: Mini Speak Button for ALL messages */}
+                <button
+                  onClick={handleSpeak}
+                  className={`p-1 rounded-md hover:bg-muted/60 transition-colors ${isSpeaking ? 'bg-primary/20' : ''}`}
+                  title={language === 'ar' ? 'تحدث' : 'Speak'}
+                >
+                  <Speaker className={`w-3 h-3 ${
+                    isSpeaking 
+                      ? 'text-primary' 
+                      : isUser 
+                        ? 'text-white/70 hover:text-white' 
+                        : 'text-muted-foreground'
+                  }`} />
+                </button>
+              </div>
 
               {/* Enhanced buddy-chat features */}
               {!isUser && message.buddyChat && (

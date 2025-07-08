@@ -81,7 +81,9 @@ const WaktiAIV2 = () => {
   const loadChatSession = () => {
     const session = WaktiAIV2Service.loadChatSession();
     if (session) {
-      setSessionMessages(session.messages);
+      // Limit to 25 messages maximum for conversation display
+      const limitedMessages = session.messages.slice(-25);
+      setSessionMessages(limitedMessages);
       setCurrentConversationId(session.conversationId || null);
       setIsNewConversation(!session.conversationId);
     }
@@ -112,10 +114,34 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  const handleTaskDetected = (taskData: any) => {
-    console.log('🎯 TASK DETECTED - SHOWING CONFIRMATION FORM:', taskData);
-    setPendingTaskData(taskData);
-    setShowTaskConfirmation(true);
+  const isExplicitTaskCommand = (messageContent: string): boolean => {
+    const lowerMessage = messageContent.toLowerCase().trim();
+    
+    // English explicit task patterns
+    const englishTaskPatterns = [
+      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task/i,
+      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task/i,
+      /^(i\s+need\s+)?(a\s+)?(new\s+)?task/i,
+      /^task\s*:/i,
+      /^add\s+task/i,
+      /create\s+task/i,
+      /make\s+task/i
+    ];
+    
+    // Arabic explicit task patterns
+    const arabicTaskPatterns = [
+      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*مهمة/i,
+      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+مهمة/i,
+      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)/i,
+      /^مهمة\s*:/i,
+      /^أضف\s+مهمة/i,
+      /أنشئ\s+مهمة/i,
+      /اعمل\s+مهمة/i
+    ];
+
+    // Check both English and Arabic patterns
+    const allPatterns = [...englishTaskPatterns, ...arabicTaskPatterns];
+    return allPatterns.some(pattern => pattern.test(messageContent));
   };
 
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
@@ -134,13 +160,13 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    console.log('🚀 ENHANCED MESSAGE PROCESSING: Ultra-fast with task detection');
+    console.log('🚀 MESSAGE PROCESSING: Starting with task detection');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
       filesCount: attachedFiles?.length || 0,
       trigger: activeTrigger,
-      conversationId: currentConversationId?.substring(0, 8) + '...'
+      isExplicitTask: isExplicitTaskCommand(messageContent)
     });
 
     setIsLoading(true);
@@ -148,6 +174,59 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
+      // FIXED: Route explicit task commands to DeepSeek ONLY
+      if (isExplicitTaskCommand(messageContent)) {
+        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to DeepSeek parser ONLY');
+        
+        const taskResponse = await supabase.functions.invoke('process-ai-intent', {
+          body: {
+            text: messageContent,
+            mode: 'assistant',
+            userId: userProfile.id,
+            conversationHistory: sessionMessages.slice(-10)
+          }
+        });
+
+        if (taskResponse.error) {
+          console.error('❌ TASK PROCESSING ERROR:', taskResponse.error);
+          throw new Error(`Task processing failed: ${taskResponse.error.message}`);
+        }
+
+        const taskData = taskResponse.data;
+        console.log('✅ TASK PROCESSING SUCCESS:', taskData);
+
+        // Add user message first
+        const tempUserMessage: AIMessage = {
+          id: `user-temp-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: inputType,
+          attachedFiles: attachedFiles
+        };
+
+        // Add task response message
+        const taskMessage: AIMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: taskData.response || 'Task processing completed',
+          timestamp: new Date()
+        };
+
+        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
+
+        // Show task confirmation if needed
+        if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
+          console.log('🎯 SHOWING TASK CONFIRMATION:', taskData.intentData.pendingTask);
+          setPendingTaskData(taskData.intentData.pendingTask);
+          setShowTaskConfirmation(true);
+        }
+
+        setIsLoading(false);
+        return; // Exit early for task commands
+      }
+
+      // CONTINUE with regular chat processing for non-task messages
       const hybridContext = await HybridMemoryService.getHybridContext(
         userProfile.id, 
         currentConversationId
@@ -170,7 +249,7 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
       
-      console.log('📡 CALLING: Enhanced WaktiAIV2Service with task detection');
+      console.log('📡 CALLING: WaktiAIV2Service for regular chat (NO task detection)');
       
       const aiResponse = await WaktiAIV2Service.sendMessage(
         messageContent,
@@ -179,18 +258,16 @@ const WaktiAIV2 = () => {
         currentConversationId,
         inputType,
         hybridContext.recentMessages,
-        true,
+        false, // NO task detection in regular chat
         activeTrigger,
         hybridContext.conversationSummary,
         attachedFiles || []
       );
       
-      console.log('📨 ENHANCED RESPONSE:', {
+      console.log('📨 AI RESPONSE:', {
         success: !aiResponse.error,
         hasResponse: !!aiResponse.response,
-        conversationId: aiResponse.conversationId?.substring(0, 8) + '...',
-        needsConfirmation: aiResponse.needsConfirmation,
-        hasPendingTask: !!aiResponse.pendingTaskData
+        conversationId: aiResponse.conversationId?.substring(0, 8) + '...'
       });
 
       if (aiResponse.error) {
@@ -216,12 +293,7 @@ const WaktiAIV2 = () => {
         return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
       });
 
-      if (aiResponse.needsConfirmation && aiResponse.pendingTaskData) {
-        console.log('🎯 TASK CONFIRMATION NEEDED:', aiResponse.pendingTaskData);
-        setPendingTaskData(aiResponse.pendingTaskData);
-        setShowTaskConfirmation(true);
-      }
-
+      // Store in hybrid memory
       HybridMemoryService.addMessage(
         userProfile.id, 
         aiResponse.conversationId, 
@@ -247,8 +319,7 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ ENHANCED SUCCESS: Ultra-fast processing completed in ${totalTime}ms`);
-      console.log('🧠 HYBRID MEMORY: Messages added to memory system');
+      console.log(`✅ SUCCESS: Processing completed in ${totalTime}ms`);
       
       setProcessedFiles([]);
       checkQuotas();
@@ -257,11 +328,9 @@ const WaktiAIV2 = () => {
         fileInputRef.current.value = '';
       }
 
-      console.log('🎉 ENHANCED MESSAGE PROCESSING: Faster response with task detection!');
-
     } catch (err: any) {
       const totalTime = Date.now() - startTime;
-      console.error("❌ ENHANCED ERROR:", err);
+      console.error("❌ ERROR:", err);
       console.error("📊 ERROR DETAILS:", {
         message: err.message,
         totalTime: totalTime + 'ms',
@@ -382,7 +451,8 @@ const WaktiAIV2 = () => {
   const handleSelectConversation = async (conversationId: string) => {
     try {
       const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
-      setSessionMessages(messages.map(msg => ({
+      // Limit to 25 messages for display
+      const limitedMessages = messages.slice(-25).map(msg => ({
         id: msg.id,
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
@@ -393,12 +463,14 @@ const WaktiAIV2 = () => {
         inputType: msg.input_type as 'text' | 'voice',
         browsingUsed: msg.browsing_used,
         browsingData: msg.browsing_data
-      })));
+      }));
+      
+      setSessionMessages(limitedMessages);
       setCurrentConversationId(conversationId);
       setIsNewConversation(false);
       setIsSidebarOpen(false);
 
-      WaktiAIV2Service.saveChatSession(sessionMessages, conversationId);
+      WaktiAIV2Service.saveChatSession(limitedMessages, conversationId);
 
     } catch (error) {
       console.error("Error fetching conversation messages:", error);
@@ -490,7 +562,9 @@ const WaktiAIV2 = () => {
   };
 
   const debouncedSaveSession = useDebounceCallback(() => {
-    WaktiAIV2Service.saveChatSession(sessionMessages, currentConversationId);
+    // Save only the last 25 messages to keep sessions manageable
+    const limitedMessages = sessionMessages.slice(-25);
+    WaktiAIV2Service.saveChatSession(limitedMessages, currentConversationId);
   }, 500);
 
   useEffect(() => {
