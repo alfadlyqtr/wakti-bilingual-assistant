@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Calendar, Clock, CheckCircle, X } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, X, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { formatDateForDisplay, isValidDate } from '@/lib/utils';
@@ -28,8 +28,25 @@ export function TaskConfirmationCard({
     return formatDateForDisplay(dateString);
   };
 
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'urgent': return 'text-red-600 bg-red-50';
+      case 'high': return 'text-orange-600 bg-orange-50';
+      case 'normal': return 'text-blue-600 bg-blue-50';
+      default: return 'text-gray-600 bg-gray-50';
+    }
+  };
+
+  const getPriorityLabel = (priority: string) => {
+    const labels = {
+      en: { normal: 'Normal', high: 'High', urgent: 'Urgent' },
+      ar: { normal: 'عادي', high: 'عالي', urgent: 'عاجل' }
+    };
+    return labels[language as 'en' | 'ar']?.[priority as keyof typeof labels.en] || priority;
+  };
+
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm max-w-md mx-auto">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <CheckCircle className="h-4 w-4 text-green-600" />
@@ -54,64 +71,71 @@ export function TaskConfirmationCard({
       <div className="space-y-3">
         {/* Title */}
         <div>
-          <h3 className="font-medium text-gray-900 mb-1">{data.title}</h3>
+          <h3 className="font-medium text-gray-900 mb-1 text-sm">{data.title}</h3>
           {data.description && (
-            <p className="text-sm text-gray-600">{data.description}</p>
+            <p className="text-xs text-gray-600 line-clamp-2">{data.description}</p>
           )}
         </div>
+
+        {/* Priority Badge */}
+        {data.priority && (
+          <div className="flex items-center gap-2">
+            <Tag className="h-3 w-3 text-gray-500" />
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(data.priority)}`}>
+              {getPriorityLabel(data.priority)}
+            </span>
+          </div>
+        )}
 
         {/* Subtasks */}
         {data.subtasks && data.subtasks.length > 0 && (
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">
+            <p className="text-xs font-medium text-gray-700 mb-2">
               {language === 'ar' ? 'المهام الفرعية:' : 'Subtasks:'}
             </p>
-            <ul className="space-y-1">
-              {data.subtasks.map((subtask: string, index: number) => (
-                <li key={index} className="text-sm text-gray-600 flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
-                  {subtask}
-                </li>
+            <div className="space-y-1 max-h-16 overflow-y-auto">
+              {data.subtasks.slice(0, 3).map((subtask: string, index: number) => (
+                <div key={index} className="text-xs text-gray-600 flex items-center gap-2">
+                  <div className="w-1 h-1 bg-gray-400 rounded-full flex-shrink-0" />
+                  <span className="truncate">{subtask}</span>
+                </div>
               ))}
-            </ul>
+              {data.subtasks.length > 3 && (
+                <div className="text-xs text-gray-500 font-medium">
+                  +{data.subtasks.length - 3} {language === 'ar' ? 'أخرى' : 'more'}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Basic Details */}
-        <div className="space-y-2">
-          {/* Due Date */}
+        {/* Date and Time */}
+        <div className="flex flex-wrap gap-3 text-xs">
           {data.due_date && (
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="h-4 w-4 text-gray-500" />
+            <div className="flex items-center gap-1">
+              <Calendar className="h-3 w-3 text-gray-500" />
               <span className="text-gray-600">
-                {language === 'ar' ? 'التاريخ:' : 'Date:'}
-              </span>
-              <span className="text-gray-900">
                 {formatDate(data.due_date)}
               </span>
             </div>
           )}
 
-          {/* Due Time */}
           {data.due_time && (
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="h-4 w-4 text-gray-500" />
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3 text-gray-500" />
               <span className="text-gray-600">
-                {language === 'ar' ? 'الوقت:' : 'Time:'}
-              </span>
-              <span className="text-gray-900">
                 {data.due_time}
               </span>
             </div>
           )}
         </div>
 
-        {/* Simple Action Buttons */}
+        {/* Action Buttons */}
         <div className="flex gap-2 pt-2">
           <Button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1"
+            className="flex-1 h-8 text-xs"
             size="sm"
           >
             {isLoading ? (
@@ -128,6 +152,7 @@ export function TaskConfirmationCard({
             onClick={onCancel}
             disabled={isLoading}
             size="sm"
+            className="h-8 text-xs"
           >
             {language === 'ar' ? 'إلغاء' : 'Cancel'}
           </Button>

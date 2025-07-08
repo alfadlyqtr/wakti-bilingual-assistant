@@ -12,7 +12,7 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + FIXED IMAGE PROCESSING + CLEAN ROUTING");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + RESTORED TASK CREATION + FIXED IMAGE PROCESSING");
 
 // PHASE 2 FIX: Image URL to Base64 conversion function
 async function convertImageUrlToBase64(imageUrl: string, imageType: string): Promise<string | null> {
@@ -35,7 +35,7 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string): Pro
   }
 }
 
-// PHASE 2 FIX: Detect sensitive document types
+// PHASE 2 FIX: Detect sensitive document types - INTEGRATED INTO MAIN FLOW
 function detectSensitiveDocument(message: string, hasImages: boolean): boolean {
   if (!hasImages) return false;
   
@@ -47,6 +47,32 @@ function detectSensitiveDocument(message: string, hasImages: boolean): boolean {
   
   const lowerMessage = message.toLowerCase();
   return sensitiveKeywords.some(keyword => lowerMessage.includes(keyword));
+}
+
+// PHASE 2 FIX: Check for explicit task creation commands
+function isExplicitTaskCommand(message: string, language: string = 'en'): boolean {
+  const lowerMessage = message.toLowerCase().trim();
+  
+  const explicitTaskPatterns = {
+    en: [
+      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{10,})/i,
+      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to|that)\s+(.{10,})/i,
+      /^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to|that)\s+(.{10,})/i,
+      /^task\s*:\s*(.{10,})/i,
+      /^add\s+task\s*:?\s*(.{10,})/i,
+    ],
+    ar: [
+      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{10,})/i,
+      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{10,})/i,
+      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{10,})/i,
+      /^مهمة\s*:\s*(.{10,})/i,
+      /^أضف\s+مهمة\s*:?\s*(.{10,})/i,
+    ]
+  };
+
+  const taskPatterns = explicitTaskPatterns[language as 'en' | 'ar'] || explicitTaskPatterns.en;
+  
+  return taskPatterns.some(pattern => pattern.test(message));
 }
 
 serve(async (req) => {
@@ -68,7 +94,6 @@ serve(async (req) => {
   }
 
   try {
-    // ENHANCED JSON PARSING with better error handling
     let requestBody;
     const contentType = req.headers.get('content-type') || '';
     
@@ -88,7 +113,6 @@ serve(async (req) => {
       });
     }
 
-    // Get the raw body text first
     let rawBodyText;
     try {
       rawBodyText = await req.text();
@@ -108,7 +132,6 @@ serve(async (req) => {
       });
     }
 
-    // Check if body is empty
     if (!rawBodyText || rawBodyText.trim() === '') {
       console.error("❌ EMPTY REQUEST BODY DETECTED");
       return new Response(JSON.stringify({
@@ -124,7 +147,6 @@ serve(async (req) => {
       });
     }
 
-    // Parse JSON safely
     try {
       requestBody = JSON.parse(rawBodyText);
       console.log("✅ JSON PARSED SUCCESSFULLY");
@@ -146,7 +168,6 @@ serve(async (req) => {
       });
     }
 
-    // Extract and validate required parameters
     const {
       message,
       userId,
@@ -172,7 +193,6 @@ serve(async (req) => {
       attachedFilesCount: attachedFiles.length
     });
 
-    // Validate required parameters
     if (!message?.trim()) {
       console.error("❌ MISSING OR EMPTY MESSAGE");
       return new Response(JSON.stringify({
@@ -207,9 +227,58 @@ serve(async (req) => {
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // PHASE 2 FIX: REMOVED TASK DETECTION FROM MAIN BRAIN
-    // Task creation is now handled by process-ai-intent function only
-    console.log('🎯 CLEAN ROUTING: No task detection in main AI brain - pure chat/image processing');
+    // PHASE 2 CRITICAL FIX: Check for explicit task creation commands BEFORE other processing
+    if (isExplicitTaskCommand(message, language)) {
+      console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to process-ai-intent');
+      
+      try {
+        const taskResponse = await supabase.functions.invoke('process-ai-intent', {
+          body: {
+            text: message,
+            mode: 'assistant',
+            userId: userId,
+            conversationHistory: recentMessages
+          }
+        });
+
+        if (taskResponse.error) {
+          console.error('❌ TASK PROCESSING ERROR:', taskResponse.error);
+          throw new Error(`Task processing failed: ${taskResponse.error.message}`);
+        }
+
+        const taskData = taskResponse.data;
+        console.log('✅ TASK PROCESSING SUCCESS:', taskData);
+
+        return new Response(JSON.stringify({
+          response: taskData.response || 'Task processing completed',
+          conversationId: finalConversationId,
+          intent: taskData.intent || 'parse_task',
+          confidence: 'high',
+          actionTaken: null,
+          imageUrl: null,
+          browsingUsed: false,
+          browsingData: null,
+          needsConfirmation: taskData.intent === 'parse_task',
+          pendingTaskData: taskData.intentData?.pendingTask || null,
+          pendingReminderData: taskData.intentData?.pendingReminder || null,
+          success: true,
+          processingTime: Date.now(),
+          aiProvider: 'deepseek-chat',
+          claude4Enabled: false,
+          mode: activeTrigger,
+          fallbackUsed: false
+        }), {
+          headers: { 
+            "Content-Type": "application/json",
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+
+      } catch (error) {
+        console.error('❌ TASK PROCESSING FALLBACK:', error);
+        // Fall through to normal processing if task processing fails
+      }
+    }
 
     // MODE-BASED PROCESSING with HYBRID MEMORY
     switch (activeTrigger) {
@@ -235,12 +304,12 @@ serve(async (req) => {
       imageUrl: result.imageUrl || null,
       browsingUsed: activeTrigger === 'search',
       browsingData: null,
-      needsConfirmation: false, // PHASE 2 FIX: No task confirmation from main brain
-      pendingTaskData: null,    // PHASE 2 FIX: No task data from main brain
-      pendingReminderData: null, // PHASE 2 FIX: No reminder data from main brain
+      needsConfirmation: false,
+      pendingTaskData: null,
+      pendingReminderData: null,
       success: result.success !== false,
       processingTime: Date.now(),
-      aiProvider: 'claude-3-5-sonnet-20241022', // PHASE 1: UPGRADED MODEL
+      aiProvider: 'claude-3-5-sonnet-20241022',
       claude4Enabled: false,
       mode: activeTrigger,
       fallbackUsed: false
@@ -293,12 +362,10 @@ async function processChatMode(message: string, userId: string, conversationId: 
     };
   }
 
-  // HYBRID MEMORY: Use provided context or load from database
   let contextMessages = recentMessages || [];
   
   if (conversationId && contextMessages.length === 0) {
     try {
-      // Load recent messages from database as fallback
       const { data: dbMessages } = await supabase
         .from('ai_chat_history')
         .select('role, content, created_at')
@@ -355,7 +422,6 @@ async function processSearchMode(message: string, language: string, recentMessag
     const searchResults = searchData.results || [];
     const searchAnswer = searchData.answer || '';
     
-    // Call SONNET with search context
     const searchContext = `Search results for "${message}":\n${searchAnswer}\n\nResults:\n${
       searchResults.map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.content}`).join('\n')
     }`;
@@ -382,7 +448,7 @@ async function processImageMode(message: string, userId: string, language: strin
   if (attachedFiles && attachedFiles.length > 0) {
     console.log("👁️ VISION: Analyzing uploaded images with SONNET (UPGRADED)");
     
-    // PHASE 2 FIX: Check for sensitive documents
+    // PHASE 2 CRITICAL FIX: Check for sensitive documents - NOW INTEGRATED
     const isSensitiveDoc = detectSensitiveDocument(message, true);
     if (isSensitiveDoc) {
       console.log("🔒 SENSITIVE DOCUMENT DETECTED: Privacy protection activated");
@@ -464,9 +530,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// PHASE 1: UPGRADED SONNET API CALL + PHASE 2 FIXED IMAGE PROCESSING
+// PHASE 2 FIX: UPGRADED SONNET API CALL + ENHANCED MEMORY EXPERIENCE
 async function callSonnetAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🚀 SONNET API: Making call with UPGRADED MODEL + FIXED IMAGE PROCESSING");
+  console.log("🚀 SONNET API: Making call with UPGRADED MODEL + ENHANCED MEMORY");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -475,31 +541,40 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
     weekday: 'long'
   });
   
-  // ENHANCED SYSTEM PROMPT with PERSONALIZATION
+  // ENHANCED SYSTEM PROMPT with BETTER MEMORY REFERENCES
   let systemPrompt = language === 'ar'
-    ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. اجب بالعربية.`
-    : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}. Respond in English.`;
+    ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. 
 
-  // APPLY PERSONALIZATION
+عندما تجيب، استخدم عبارات مثل "كما ناقشنا من قبل" أو "بناءً على محادثتنا السابقة" عندما تكون ذات صلة. اجب بالعربية.`
+    : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}. 
+
+When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.`;
+
+  // APPLY PERSONALIZATION with ENHANCED MEMORY
   if (personalTouch && personalTouch.instruction) {
     systemPrompt += `\n\nPersonalization: ${personalTouch.instruction}`;
     if (personalTouch.tone) systemPrompt += ` Use a ${personalTouch.tone} tone.`;
     if (personalTouch.style) systemPrompt += ` Reply in ${personalTouch.style} style.`;
   }
 
-  // HYBRID MEMORY: Build comprehensive context
   const messages = [];
   
-  // Add conversation summary if available
+  // Add conversation summary with explicit memory reference
   if (conversationSummary && conversationSummary.trim()) {
     messages.push({
       role: 'assistant',
-      content: `[Previous conversation context: ${conversationSummary}]`
+      content: `[Context from our previous conversations: ${conversationSummary}]`
     });
   }
   
-  // Add recent messages from HYBRID MEMORY
+  // Add recent messages from HYBRID MEMORY with better context
   if (contextMessages.length > 0) {
+    // Add a memory indicator
+    messages.push({
+      role: 'assistant',
+      content: `[Continuing from our recent conversation...]`
+    });
+    
     contextMessages.forEach(msg => {
       messages.push({
         role: msg.role === 'assistant' ? 'assistant' : 'user',
@@ -511,7 +586,7 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
   // PHASE 2 FIX: Add current message with FIXED VISION support
   let currentMessage: any = { role: 'user', content: message };
   
-  // PHASE 2 FIX: CRITICAL IMAGE PROCESSING FIX
+  // PHASE 2 FIX: CRITICAL IMAGE PROCESSING FIX - ALL IMAGES PROCESSED EXCEPT SENSITIVE
   if (attachedFiles && attachedFiles.length > 0) {
     const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
     if (imageFile && imageFile.url) {
@@ -528,7 +603,7 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
             source: { 
               type: 'base64', 
               media_type: imageFile.type, 
-              data: base64Data  // PHASE 2 FIX: Now sending actual base64 data
+              data: base64Data
             } 
           }
         ];
@@ -542,7 +617,7 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
   messages.push(currentMessage);
   
   try {
-    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model`);
+    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with ENHANCED MEMORY`);
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -552,7 +627,7 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022', // PHASE 1: UPGRADED MODEL
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: messages
@@ -566,12 +641,12 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
     const claudeData = await claudeResponse.json();
     let aiResponse = claudeData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
     
-    // APPLY PERSONALIZATION POST-PROCESSING
+    // APPLY ENHANCED PERSONALIZATION with BETTER MEMORY REFERENCES
     if (personalTouch) {
-      aiResponse = applyPersonalization(aiResponse, personalTouch, language);
+      aiResponse = applyEnhancedPersonalization(aiResponse, personalTouch, language, contextMessages.length > 0);
     }
     
-    console.log("🚀 SONNET: UPGRADED model response generated successfully!");
+    console.log("🚀 SONNET: UPGRADED model response generated with ENHANCED MEMORY!");
     
     return {
       response: aiResponse,
@@ -592,8 +667,8 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
   }
 }
 
-// PERSONALIZATION ENHANCEMENT
-function applyPersonalization(response: string, personalTouch: any, language: string): string {
+// PHASE 2 FIX: ENHANCED PERSONALIZATION with BETTER MEMORY EXPERIENCE
+function applyEnhancedPersonalization(response: string, personalTouch: any, language: string, hasContext: boolean): string {
   let enhancedResponse = response;
   
   // Add nickname if provided (80% chance for consistency)
@@ -608,6 +683,25 @@ function applyPersonalization(response: string, personalTouch: any, language: st
       ];
       const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
       enhancedResponse = randomGreeting + enhancedResponse;
+    }
+  }
+  
+  // Add memory references when there's context
+  if (hasContext && Math.random() < 0.3) {
+    const memoryPhrases = language === 'ar' ? [
+      'كما ناقشنا من قبل، ',
+      'بناءً على محادثتنا السابقة، ',
+      'كما تذكر، '
+    ] : [
+      'As we discussed before, ',
+      'Building on our previous conversation, ',
+      'As you mentioned earlier, '
+    ];
+    
+    const randomPhrase = memoryPhrases[Math.floor(Math.random() * memoryPhrases.length)];
+    // Only add if response doesn't already start with a memory phrase
+    if (!enhancedResponse.toLowerCase().startsWith('as ') && !enhancedResponse.startsWith('كما')) {
+      enhancedResponse = randomPhrase + enhancedResponse.charAt(0).toLowerCase() + enhancedResponse.slice(1);
     }
   }
   

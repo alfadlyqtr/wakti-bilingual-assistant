@@ -11,6 +11,7 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
+import { TRService } from '@/services/trService';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -86,14 +87,12 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // CRITICAL FIX: Add event listener for conversations drawer
   useEffect(() => {
     const handleOpenConversationsDrawer = () => {
       console.log('💬 EXTRA BUTTON: Opening conversations drawer');
       setShowConversations(true);
     };
 
-    // Listen for the custom event dispatched by ChatInput
     window.addEventListener("open-wakti-conversations", handleOpenConversationsDrawer);
 
     return () => {
@@ -113,21 +112,18 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  // Handle task detection from AI response
   const handleTaskDetected = (taskData: any) => {
-    console.log('🎯 TASK DETECTED - SHOWING FORM:', taskData);
+    console.log('🎯 TASK DETECTED - SHOWING CONFIRMATION FORM:', taskData);
     setPendingTaskData(taskData);
     setShowTaskConfirmation(true);
   };
 
-  // ENHANCED: HYBRID MEMORY + HAIKU SPEED Message Sending
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
       return;
     }
 
-    // VALIDATE INPUT BEFORE SENDING
     if (!messageContent || !messageContent.trim()) {
       showError(language === 'ar' ? 'يرجى كتابة رسالة' : 'Please enter a message');
       return;
@@ -138,7 +134,7 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    console.log('🚀 HYBRID MEMORY + HAIKU: Ultra-fast message processing');
+    console.log('🚀 ENHANCED MESSAGE PROCESSING: Ultra-fast with task detection');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
@@ -152,8 +148,6 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
-      // CRITICAL FIX: Load hybrid memory context BEFORE sending message
-      console.log('🧠 HYBRID MEMORY: Loading context before sending message');
       const hybridContext = await HybridMemoryService.getHybridContext(
         userProfile.id, 
         currentConversationId
@@ -165,7 +159,6 @@ const WaktiAIV2 = () => {
         messageCount: hybridContext.messageCount
       });
 
-      // Add user message immediately to UI
       const tempUserMessage: AIMessage = {
         id: `user-temp-${Date.now()}`,
         role: 'user',
@@ -177,7 +170,6 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
       
-      // Start loading placeholder
       const tempAssistantMessage: AIMessage = {
         id: `assistant-temp-${Date.now()}`,
         role: 'assistant',
@@ -187,34 +179,33 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
       
-      console.log('📡 CALLING: HAIKU-powered WaktiAIV2Service with HYBRID MEMORY');
+      console.log('📡 CALLING: Enhanced WaktiAIV2Service with task detection');
       
-      // ENHANCED CALL with HYBRID MEMORY context - PASS THE LOADED CONTEXT
       const aiResponse = await WaktiAIV2Service.sendMessage(
         messageContent,
         userProfile?.id,
         language,
         currentConversationId,
         inputType,
-        hybridContext.recentMessages, // Use loaded hybrid memory context
-        true, // Skip context load since we already loaded it
+        hybridContext.recentMessages,
+        true,
         activeTrigger,
-        hybridContext.conversationSummary, // Pass loaded conversation summary
+        hybridContext.conversationSummary,
         attachedFiles || []
       );
       
-      console.log('📨 HAIKU RESPONSE:', {
+      console.log('📨 ENHANCED RESPONSE:', {
         success: !aiResponse.error,
         hasResponse: !!aiResponse.response,
         conversationId: aiResponse.conversationId?.substring(0, 8) + '...',
-        model: 'claude-3-5-haiku-20241022'
+        needsConfirmation: aiResponse.needsConfirmation,
+        hasPendingTask: !!aiResponse.pendingTaskData
       });
 
       if (aiResponse.error) {
         throw new Error(aiResponse.error);
       }
       
-      // Create the response message
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -228,16 +219,19 @@ const WaktiAIV2 = () => {
         browsingData: aiResponse.browsingData
       };
       
-      // Update session messages with final response
       setSessionMessages(prevMessages => {
         const newMessages = [...prevMessages];
-        // Replace temp messages with real ones
         newMessages[newMessages.length - 2] = tempUserMessage;
         newMessages[newMessages.length - 1] = assistantMessage;
         return newMessages;
       });
 
-      // CRITICAL: Add messages to hybrid memory after successful response
+      if (aiResponse.needsConfirmation && aiResponse.pendingTaskData) {
+        console.log('🎯 TASK CONFIRMATION NEEDED:', aiResponse.pendingTaskData);
+        setPendingTaskData(aiResponse.pendingTaskData);
+        setShowTaskConfirmation(true);
+      }
+
       HybridMemoryService.addMessage(
         userProfile.id, 
         aiResponse.conversationId, 
@@ -263,7 +257,7 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ HAIKU SUCCESS: Ultra-fast processing completed in ${totalTime}ms`);
+      console.log(`✅ ENHANCED SUCCESS: Ultra-fast processing completed in ${totalTime}ms`);
       console.log('🧠 HYBRID MEMORY: Messages added to memory system');
       
       setProcessedFiles([]);
@@ -273,23 +267,20 @@ const WaktiAIV2 = () => {
         fileInputRef.current.value = '';
       }
 
-      console.log('🎉 HYBRID MEMORY + HAIKU: 4x faster response delivered with memory!');
+      console.log('🎉 ENHANCED MESSAGE PROCESSING: Faster response with task detection!');
 
     } catch (err: any) {
       const totalTime = Date.now() - startTime;
-      console.error("❌ HAIKU ERROR:", err);
+      console.error("❌ ENHANCED ERROR:", err);
       console.error("📊 ERROR DETAILS:", {
         message: err.message,
         totalTime: totalTime + 'ms',
         stack: err.stack?.substring(0, 300)
       });
       
-      // Remove loading message and show error
       setSessionMessages(prevMessages => {
         const newMessages = [...prevMessages];
-        // Remove the loading message
         newMessages.pop();
-        // Add error message
         newMessages.push({
           id: `assistant-error-${Date.now()}`,
           role: 'assistant',
@@ -318,8 +309,7 @@ const WaktiAIV2 = () => {
     const extendedQuotaExceeded = !canUseVoice;
     setIsExtendedQuotaExceeded(extendedQuotaExceeded);
 
-    // Simple AI quota check based on quota existence
-    const aiQuotaExceeded = false; // Simplified for now
+    const aiQuotaExceeded = false;
     setIsAIQuotaExceeded(aiQuotaExceeded);
   };
 
@@ -327,13 +317,72 @@ const WaktiAIV2 = () => {
     checkQuotas();
   }, [canTranslate, canUseVoice]);
 
+  const handleTaskConfirmation = async (taskData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      console.log('🎯 CREATING TASK:', taskData);
+      
+      const createdTask = await TRService.createTask({
+        title: taskData.title,
+        description: taskData.description || '',
+        due_date: taskData.due_date || undefined,
+        due_time: taskData.due_time || undefined,
+        priority: taskData.priority || 'normal',
+        task_type: 'one-time',
+        is_shared: false
+      });
+
+      console.log('✅ TASK CREATED:', createdTask);
+
+      if (taskData.subtasks && taskData.subtasks.length > 0) {
+        console.log('🎯 CREATING SUBTASKS:', taskData.subtasks);
+        for (let i = 0; i < taskData.subtasks.length; i++) {
+          await TRService.createSubtask({
+            task_id: createdTask.id,
+            title: taskData.subtasks[i],
+            completed: false,
+            order_index: i,
+          });
+        }
+      }
+
+      showSuccess(language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!');
+    } catch (error) {
+      console.error('❌ TASK CREATION ERROR:', error);
+      showError(language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task');
+    } finally {
+      setTaskConfirmationLoading(false);
+      setShowTaskConfirmation(false);
+      setPendingTaskData(null);
+    }
+  };
+
+  const handleReminderConfirmation = async (reminderData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
+    } catch (error) {
+      showError(language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder');
+    } finally {
+      setTaskConfirmationLoading(false);
+      setShowTaskConfirmation(false);
+      setPendingReminderData(null);
+    }
+  };
+
+  const handleCancelTaskConfirmation = () => {
+    setShowTaskConfirmation(false);
+    setPendingTaskData(null);
+    setPendingReminderData(null);
+  };
+
   const handleNewConversation = () => {
     setSessionMessages([]);
     setCurrentConversationId(null);
     setIsNewConversation(true);
     setIsSidebarOpen(false);
     
-    // Clear HYBRID MEMORY
     if (userProfile?.id) {
       HybridMemoryService.clearAllMemory(userProfile.id);
       console.log('🗑️ HYBRID MEMORY: Cleared for new conversation');
@@ -359,7 +408,6 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
       setIsSidebarOpen(false);
 
-      // Save chat session
       WaktiAIV2Service.saveChatSession(sessionMessages, conversationId);
 
     } catch (error) {
@@ -388,7 +436,6 @@ const WaktiAIV2 = () => {
       setSessionMessages([]);
       WaktiAIV2Service.clearChatSession();
       
-      // Clear HYBRID MEMORY
       if (userProfile?.id) {
         HybridMemoryService.clearAllMemory(userProfile.id, currentConversationId);
         console.log('🗑️ HYBRID MEMORY: Chat cleared');
@@ -452,42 +499,6 @@ const WaktiAIV2 = () => {
     }
   };
 
-  const handleTaskConfirmation = async (taskData: any) => {
-    setTaskConfirmationLoading(true);
-    try {
-      // Simulate task creation
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      showSuccess(language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!');
-    } catch (error) {
-      showError(language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task');
-    } finally {
-      setTaskConfirmationLoading(false);
-      setShowTaskConfirmation(false);
-      setPendingTaskData(null);
-    }
-  };
-
-  const handleReminderConfirmation = async (reminderData: any) => {
-    setTaskConfirmationLoading(true);
-    try {
-      // Simulate reminder creation
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
-    } catch (error) {
-      showError(language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder');
-    } finally {
-      setTaskConfirmationLoading(false);
-      setShowTaskConfirmation(false);
-      setPendingReminderData(null);
-    }
-  };
-
-  const handleCancelTaskConfirmation = () => {
-    setShowTaskConfirmation(false);
-    setPendingTaskData(null);
-    setPendingReminderData(null);
-  };
-
   const debouncedSaveSession = useDebounceCallback(() => {
     WaktiAIV2Service.saveChatSession(sessionMessages, currentConversationId);
   }, 500);
@@ -505,7 +516,6 @@ const WaktiAIV2 = () => {
   };
 
   const handleRefreshConversations = async () => {
-    // Force refresh by refetching conversations
     try {
       const conversations = await WaktiAIV2Service.getConversations();
       setConversations(conversations);
@@ -574,7 +584,6 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* ADJUSTED: Input positioning - moved down slightly for better button visibility */}
         <div className="fixed bottom-20 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto">
             <ChatInput

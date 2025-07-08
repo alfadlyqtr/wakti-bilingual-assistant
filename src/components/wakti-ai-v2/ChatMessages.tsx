@@ -1,18 +1,12 @@
-
 import React, { useEffect, useRef } from 'react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChatBubble } from './ChatBubble';
-import { TypingIndicator } from './TypingIndicator';
+import { AIMessage } from '@/services/WaktiAIV2Service';
+import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
-import { SimpleTaskRedirect } from './SimpleTaskRedirect';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Brain, Zap, Database, HardDrive } from 'lucide-react';
-import { HybridMemoryService } from '@/services/HybridMemoryService';
 
 interface ChatMessagesProps {
-  sessionMessages: any[];
+  sessionMessages: AIMessage[];
   isLoading: boolean;
   activeTrigger: string;
   scrollAreaRef: React.RefObject<HTMLDivElement>;
@@ -29,7 +23,7 @@ interface ChatMessagesProps {
   isNewConversation: boolean;
 }
 
-export const ChatMessages = ({
+export function ChatMessages({
   sessionMessages,
   isLoading,
   activeTrigger,
@@ -45,107 +39,174 @@ export const ChatMessages = ({
   onCancelTaskConfirmation,
   conversationId,
   isNewConversation
-}: ChatMessagesProps) => {
+}: ChatMessagesProps) {
   const { language } = useTheme();
-  const endOfMessagesRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [sessionMessages.length, isLoading]);
-
-  // HYBRID MEMORY: Get memory stats for background functionality (kept but not displayed)
-  const memoryStats = userProfile?.id ? HybridMemoryService.getMemoryStats(userProfile.id) : null;
-
-  const getWelcomeMessage = () => {
-    if (language === 'ar') {
-      return personalTouch?.nickname 
-        ? `مرحباً ${personalTouch.nickname}! أنا WAKTI AI، مساعدك الذكي المدعوم بنموذج Claude 3.5 Haiku فائق السرعة. كيف يمكنني مساعدتك اليوم؟`
-        : 'مرحباً! أنا WAKTI AI، مساعدك الذكي المدعوم بنموذج Claude 3.5 Haiku فائق السرعة. كيف يمكنني مساعدتك اليوم؟';
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
+  }, [sessionMessages, showTaskConfirmation]);
+
+  const formatTime = (timestamp: Date) => {
+    return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const renderMessage = (message: AIMessage, index: number) => {
+    const isUser = message.role === 'user';
     
-    return personalTouch?.nickname 
-      ? `Hey ${personalTouch.nickname}! I'm WAKTI AI, your intelligent assistant powered by ultra-fast Claude 3.5 Haiku. How can I help you today?`
-      : 'Hello! I\'m WAKTI AI, your intelligent assistant powered by ultra-fast Claude 3.5 Haiku. How can I help you today?';
+    return (
+      <div key={message.id} className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+        {!isUser && (
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <Bot className="w-4 h-4 text-blue-600" />
+            </div>
+          </div>
+        )}
+        
+        <div className={`max-w-[80%] ${isUser ? 'order-first' : ''}`}>
+          <div className={`rounded-lg px-4 py-2 ${
+            isUser 
+              ? 'bg-blue-600 text-white ml-auto' 
+              : 'bg-gray-100 text-gray-900'
+          }`}>
+            {/* Attached Files Display */}
+            {message.attachedFiles && message.attachedFiles.length > 0 && (
+              <div className="mb-2">
+                {message.attachedFiles.map((file, fileIndex) => (
+                  <div key={fileIndex} className="flex items-center gap-2 text-sm opacity-75">
+                    {file.type?.startsWith('image/') && (
+                      <img 
+                        src={file.url} 
+                        alt={file.name}
+                        className="max-w-48 max-h-32 rounded border object-cover"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Message Content */}
+            <div className="whitespace-pre-wrap text-sm leading-relaxed">
+              {message.content}
+            </div>
+            
+            {/* Image Display */}
+            {message.imageUrl && (
+              <div className="mt-2">
+                <img 
+                  src={message.imageUrl} 
+                  alt="Generated image"
+                  className="max-w-full rounded border"
+                />
+              </div>
+            )}
+            
+            {/* Message Metadata */}
+            <div className={`text-xs mt-1 opacity-75 ${isUser ? 'text-blue-100' : 'text-gray-500'}`}>
+              {formatTime(message.timestamp)}
+              {message.intent && (
+                <span className="ml-2">• {message.intent}</span>
+              )}
+              {message.confidence && (
+                <span className="ml-2">• {message.confidence}</span>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {isUser && (
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <User className="w-4 h-4 text-white" />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // PHASE 2 CRITICAL FIX: Show welcome message for new conversations
+  const renderWelcomeMessage = () => {
+    if (!isNewConversation || sessionMessages.length > 0) return null;
+
+    const userName = personalTouch?.nickname || userProfile?.display_name || (language === 'ar' ? 'صديقي' : 'friend');
+    
+    return (
+      <div className="flex gap-3 justify-start mb-6">
+        <div className="flex-shrink-0">
+          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+            <Bot className="w-4 h-4 text-blue-600" />
+          </div>
+        </div>
+        <div className="max-w-[80%]">
+          <div className="rounded-lg px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border">
+            <div className="text-sm leading-relaxed">
+              {language === 'ar' 
+                ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
+                : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-        <div className="max-w-4xl mx-auto space-y-4">
-          {/* Welcome Message */}
-          {isNewConversation && sessionMessages.length === 0 && (
-            <div className="text-center py-8">
-              <div className="max-w-2xl mx-auto">
-                <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 border border-border/50">
-                  <div className="flex items-center justify-center mb-4">
-                    <div className="relative">
-                      <Brain className="w-12 h-12 text-blue-600 dark:text-blue-400" />
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full animate-pulse" />
-                    </div>
-                  </div>
-                  <h2 className="text-xl font-semibold mb-2 text-foreground">
-                    {language === 'ar' ? 'WAKTI AI - فائق السرعة' : 'WAKTI AI - Ultra Fast'}
-                  </h2>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    {getWelcomeMessage()}
-                  </p>
-                  
-                  {/* Speed & Memory Features */}
-                  <div className="grid grid-cols-2 gap-3 mt-4 text-xs">
-                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                      <Zap className="w-4 h-4" />
-                      <span>{language === 'ar' ? '4x أسرع' : '4x Faster'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                      <Brain className="w-4 h-4" />
-                      <span>{language === 'ar' ? 'ذاكرة ذكية' : 'Smart Memory'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-                      <Database className="w-4 h-4" />
-                      <span>{language === 'ar' ? 'سياق دائم' : 'Permanent Context'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
-                      <HardDrive className="w-4 h-4" />
-                      <span>{language === 'ar' ? 'يعمل بلا اتصال' : 'Works Offline'}</span>
-                    </div>
-                  </div>
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Welcome Message */}
+        {renderWelcomeMessage()}
+        
+        {/* Chat Messages */}
+        {sessionMessages.map((message, index) => renderMessage(message, index))}
+        
+        {/* Loading Indicator */}
+        {isLoading && (
+          <div className="flex gap-3 justify-start mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <Bot className="w-4 h-4 text-blue-600" />
+              </div>
+            </div>
+            <div className="max-w-[80%]">
+              <div className="rounded-lg px-4 py-2 bg-gray-100 text-gray-900">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">
+                    {language === 'ar' ? 'يكتب...' : 'Typing...'}
+                  </span>
                 </div>
               </div>
             </div>
-          )}
-
-          {/* Messages */}
-          {sessionMessages.map((message) => (
-            <ChatBubble
-              key={message.id}
-              message={message}
-              activeTrigger={activeTrigger}
-              userProfile={userProfile}
-            />
-          ))}
-
-          {/* Loading indicator */}
-          {isLoading && (
-            <div className="flex justify-start">
-              <TypingIndicator />
-            </div>
-          )}
-
-          {/* Task Confirmation - Fixed prop name from taskData to data */}
-          {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
-            <EditableTaskConfirmationCard
-              type={pendingReminderData ? 'reminder' : 'task'}
+          </div>
+        )}
+        
+        {/* PHASE 2 CRITICAL FIX: Task Confirmation Display */}
+        {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
+          <div className="flex justify-center mb-4">
+            <TaskConfirmationCard
+              type={pendingTaskData ? 'task' : 'reminder'}
               data={pendingTaskData || pendingReminderData}
-              onConfirm={pendingTaskData ? onTaskConfirmation : onReminderConfirmation}
+              onConfirm={() => {
+                if (pendingTaskData) {
+                  onTaskConfirmation(pendingTaskData);
+                } else {
+                  onReminderConfirmation(pendingReminderData);
+                }
+              }}
               onCancel={onCancelTaskConfirmation}
               isLoading={taskConfirmationLoading}
             />
-          )}
-
-          <div ref={endOfMessagesRef} />
-        </div>
-      </ScrollArea>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
     </div>
   );
-};
+}
