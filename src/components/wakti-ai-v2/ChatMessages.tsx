@@ -46,13 +46,24 @@ export function ChatMessages({
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // ENHANCED: Debug task confirmation state
+  useEffect(() => {
+    console.log('🔍 CHAT MESSAGES: Task confirmation state update', {
+      showTaskConfirmation,
+      hasPendingTaskData: !!pendingTaskData,
+      hasPendingReminderData: !!pendingReminderData,
+      taskConfirmationLoading,
+      pendingTaskDetails: pendingTaskData
+    });
+  }, [showTaskConfirmation, pendingTaskData, pendingReminderData, taskConfirmationLoading]);
+
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [sessionMessages, showTaskConfirmation]);
 
-  // PHASE 2 CRITICAL FIX: Show welcome message for new conversations
+  // Enhanced welcome message
   const renderWelcomeMessage = () => {
     if (!isNewConversation || sessionMessages.length > 0) return null;
 
@@ -69,8 +80,8 @@ export function ChatMessages({
           <div className="rounded-lg px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border">
             <div className="text-sm leading-relaxed">
               {language === 'ar' 
-                ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
-                : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
+                ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور والوثائق** - ارفع أي صورة وسأصفها لك بدقة فائقة\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
+                : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images & Documents** - Upload any image and I'll describe it with extreme accuracy\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
               }
             </div>
           </div>
@@ -85,7 +96,7 @@ export function ChatMessages({
         {/* Welcome Message */}
         {renderWelcomeMessage()}
         
-        {/* Chat Messages using ChatBubble component */}
+        {/* Chat Messages using enhanced ChatBubble component */}
         {sessionMessages.map((message, index) => (
           <ChatBubble 
             key={message.id} 
@@ -95,25 +106,49 @@ export function ChatMessages({
           />
         ))}
         
-        {/* Loading Indicator with proper TypingIndicator */}
+        {/* Enhanced Loading Indicator */}
         {isLoading && <TypingIndicator />}
         
-        {/* PHASE 2 CRITICAL FIX: Task Confirmation Display */}
+        {/* ENHANCED: Task Confirmation Display with better debugging and conditional rendering */}
         {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
           <div className="flex justify-center mb-4">
-            <TaskConfirmationCard
-              type={pendingTaskData ? 'task' : 'reminder'}
-              data={pendingTaskData || pendingReminderData}
-              onConfirm={() => {
-                if (pendingTaskData) {
-                  onTaskConfirmation(pendingTaskData);
-                } else {
-                  onReminderConfirmation(pendingReminderData);
-                }
-              }}
-              onCancel={onCancelTaskConfirmation}
-              isLoading={taskConfirmationLoading}
-            />
+            <div className="w-full max-w-md">
+              {/* ENHANCED DEBUG INFO (Remove in production) */}
+              <div className="text-xs text-muted-foreground mb-2 p-2 bg-yellow-50 rounded border">
+                🔍 DEBUG: Task Confirmation Active
+                <br />Show: {showTaskConfirmation ? 'true' : 'false'}
+                <br />Task Data: {pendingTaskData ? 'present' : 'missing'}
+                <br />Reminder Data: {pendingReminderData ? 'present' : 'missing'}
+                <br />Loading: {taskConfirmationLoading ? 'true' : 'false'}
+              </div>
+              
+              <TaskConfirmationCard
+                type={pendingTaskData ? 'task' : 'reminder'}
+                data={pendingTaskData || pendingReminderData}
+                onConfirm={() => {
+                  console.log('🎯 TASK CONFIRMATION: User confirmed creation');
+                  if (pendingTaskData) {
+                    onTaskConfirmation(pendingTaskData);
+                  } else {
+                    onReminderConfirmation(pendingReminderData);
+                  }
+                }}
+                onCancel={() => {
+                  console.log('🎯 TASK CONFIRMATION: User cancelled creation');
+                  onCancelTaskConfirmation();
+                }}
+                isLoading={taskConfirmationLoading}
+              />
+            </div>
+          </div>
+        )}
+        
+        {/* ENHANCED DEBUG: Show when task confirmation should appear but doesn't */}
+        {showTaskConfirmation && !pendingTaskData && !pendingReminderData && (
+          <div className="flex justify-center mb-4">
+            <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              ⚠️ DEBUG: Task confirmation is true but no pending data found
+            </div>
           </div>
         )}
         

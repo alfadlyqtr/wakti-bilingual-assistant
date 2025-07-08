@@ -1,40 +1,18 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useOptimizedFileUpload } from '@/hooks/useOptimizedFileUpload';
-import { FilePreview } from './FilePreview';
-import { DragDropUpload } from './DragDropUpload';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { PlusMenu } from './PlusMenu';
-import { ActiveModeIndicator } from './ActiveModeIndicator';
-
-// Returns border/outline classes per mode for main container & textarea
-const modeHighlightStyles = (activeTrigger: string) => {
-  switch (activeTrigger) {
-    case 'chat': return 'border-blue-400 ring-2 ring-blue-200/70 shadow-blue-200/10';
-    case 'search': return 'border-green-400 ring-2 ring-green-200/70 shadow-green-100/10';
-    case 'image': return 'border-orange-400 ring-2 ring-orange-200/70 shadow-orange-100/15';
-    default: return 'border-primary/40';
-  }
-};
-const textareaHighlight = (activeTrigger: string) => {
-  switch (activeTrigger) {
-    case 'chat': return 'border-blue-300 shadow-[inset_0_2px_12px_0_rgba(96,165,250,0.10)]';
-    case 'search': return 'border-green-300 shadow-[inset_0_2px_12px_0_rgba(74,222,128,0.10)]';
-    case 'image': return 'border-orange-300 shadow-[inset_0_2px_12px_0_rgba(251,191,36,0.08)]';
-    default: return 'border-primary/20';
-  }
-};
+import { Mic, Send, Plus, Paperclip, Trash2, MicOff } from 'lucide-react';
+import { useVoiceRecording } from '@/hooks/useVoiceRecording';
+import { toast } from 'sonner';
 
 interface ChatInputProps {
   message: string;
   setMessage: (message: string) => void;
   isLoading: boolean;
   sessionMessages: any[];
-  onSendMessage: (message: string, inputType?: 'text' | 'voice', files?: any[]) => void;
+  onSendMessage: (message: string, inputType?: 'text' | 'voice', attachedFiles?: any[]) => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
   activeTrigger: string;
@@ -51,281 +29,290 @@ export function ChatInput({
   activeTrigger
 }: ChatInputProps) {
   const { language } = useTheme();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
-  // Use optimized file upload hook
   const {
-    isUploading,
-    uploadedFiles,
-    uploadFiles,
-    removeFile,
-    clearFiles
-  } = useOptimizedFileUpload();
+    isRecording,
+    startRecording,
+    stopRecording,
+    audioBlob,
+    isProcessing,
+    transcription,
+    error: recordingError
+  } = useVoiceRecording();
 
-  // CRITICAL FIX: Handler to open Conversations Drawer (💬)
-  const handleOpenConversationsDrawer = () => {
-    console.log('💬 EXTRA BUTTON: Dispatching custom event');
-    if (typeof window !== "undefined") {
-      const nativeEvent = new CustomEvent("open-wakti-conversations");
-      window.dispatchEvent(nativeEvent);
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
     }
-  };
-  
-  // Handler to open Quick Actions Drawer (⚡)
-  const handleOpenQuickActionsDrawer = () => {
-    console.log('⚡ QUICK ACTIONS: Opening drawer');
-    if (onOpenPlusDrawer) onOpenPlusDrawer();
-  };
+  }, [message]);
 
-  // FIXED: Camera capture function
-  const triggerCamera = () => {
-    console.log('📸 CAMERA: Triggering camera input');
-    cameraInputRef.current?.click();
-  };
+  // Handle voice recording results
+  useEffect(() => {
+    if (transcription && !isProcessing) {
+      setMessage(transcription);
+    }
+  }, [transcription, isProcessing, setMessage]);
 
-  // FIXED: File upload function
-  const triggerUpload = () => {
-    console.log('📁 UPLOAD: Triggering file input');
-    fileInputRef.current?.click();
-  };
-
-  // FIXED: Send message function
-  const handleSend = () => {
-    console.log('📤 SEND: Checking conditions');
-    console.log('Message:', message.trim().length > 0);
-    console.log('Files:', uploadedFiles.length);
-    
-    if (message.trim() || uploadedFiles.length > 0) {
-      // Convert optimized files to format expected by AI service
-      const optimizedFiles = uploadedFiles.map(file => ({
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        url: file.url,
-        publicUrl: file.publicUrl,
-        optimized: true
-      }));
-      
-      console.log('📤 SENDING:', {
-        message: message.substring(0, 50) + '...',
-        filesCount: optimizedFiles.length
+  useEffect(() => {
+    if (recordingError) {
+      toast.error(language === 'ar' ? 'خطأ في التسجيل' : 'Recording error', {
+        description: recordingError
       });
-      
-      onSendMessage(message, 'text', optimizedFiles.length > 0 ? optimizedFiles : undefined);
-      setMessage('');
-      clearFiles();
+    }
+  }, [recordingError, language]);
+
+  const handleSend = () => {
+    if (!message.trim() && attachedFiles.length === 0) return;
+    
+    const inputType = transcription ? 'voice' : 'text';
+    onSendMessage(message.trim(), inputType, attachedFiles);
+    setMessage('');
+    setAttachedFiles([]);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+    
+    files.forEach(file => {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(language === 'ar' ? 'حجم الملف كبير جداً' : 'File too large', {
+          description: language === 'ar' ? 'يجب أن يكون حجم الملف أقل من 5 ميغابايت' : 'File size must be less than 5MB'
+        });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const newFile = {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          preview: e.target?.result as string,
+          file: file
+        };
+        
+        setAttachedFiles(prev => [...prev, newFile]);
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Reset file input
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleVoiceToggle = async () => {
+    if (isRecording) {
+      await stopRecording();
     } else {
-      console.log('❌ SEND: No message or files to send');
+      await startRecording();
     }
   };
 
-  // FIXED: File input change handler
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      console.log('📁 FILE INPUT: Selected', files.length, 'files');
-      await uploadFiles(files);
-    }
-    // Clear the input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const getModeLabel = () => {
+    switch (activeTrigger) {
+      case 'search':
+        return language === 'ar' ? 'البحث' : 'Search';
+      case 'image':
+        return language === 'ar' ? 'الصور' : 'Images';
+      default:
+        return language === 'ar' ? 'المحادثة' : 'Chat';
     }
   };
 
-  // FIXED: Camera input change handler
-  const handleCameraChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      console.log('📸 CAMERA: Captured', files.length, 'files');
-      await uploadFiles(files);
+  const getPlaceholder = () => {
+    const baseText = language === 'ar' 
+      ? 'اكتب رسالتك هنا...' 
+      : 'Type your message here...';
+    
+    if (activeTrigger === 'search') {
+      return language === 'ar' 
+        ? 'ابحث عن أي شيء...' 
+        : 'Search for anything...';
+    } else if (activeTrigger === 'image') {
+      return language === 'ar' 
+        ? 'صف الصورة التي تريد إنشاءها أو ارفع صورة للتحليل...' 
+        : 'Describe the image you want to create or upload an image to analyze...';
     }
-    // Clear the input
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = '';
-    }
+    
+    return baseText;
   };
-
-  // FIXED: Drag and drop handler
-  const handleFilesSelected = async (files: FileList) => {
-    console.log('📁 DRAG DROP: Selected', files.length, 'files');
-    await uploadFiles(files);
-  };
-
-  // Layout & Mode highlighting classes
-  const containerHighlight = modeHighlightStyles(activeTrigger);
-  const textareaHighlightClass = textareaHighlight(activeTrigger);
-
-  // FIXED: Determine if send button should be enabled
-  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading;
 
   return (
-    <div className="w-full">
-      <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading || isUploading}>
-        {/* Uploaded Files Display */}
-        {uploadedFiles.length > 0 && (
-          <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium text-foreground/70">
-                  {language === 'ar' ? 'ملفات:' : 'Files:'}
-                </span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                  {uploadedFiles.length}
-                </span>
-                <span className="text-xs text-green-500">⚡ Ready for AI</span>
-              </div>
-              <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
-                {uploadedFiles.map((file, index) => (
-                  <div key={file.id} className="relative">
-                    <FilePreview
-                      file={file}
-                      index={index}
-                      onRemove={() => removeFile(file.id)}
-                      size="sm"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+    <div className="w-full space-y-3">
+      {/* Mode Indicator */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+          {getModeLabel()}
+        </span>
+        {sessionMessages.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearChat}
+            className="text-xs h-6 px-2"
+          >
+            <Trash2 className="w-3 h-3 mr-1" />
+            {language === 'ar' ? 'مسح' : 'Clear'}
+          </Button>
         )}
+      </div>
 
-        {/* Main Input Area - ADJUSTED POSITION */}
-        <div className="px-3 pb-3 pt-2">
-          <div className="max-w-4xl mx-auto">
-            <div
-              className={`
-                relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
-                ${containerHighlight}
-                shadow-xl rounded-2xl backdrop-blur-2xl
-                p-0 transition-all duration-300
-                shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
-                border-[2.5px] min-h-[70px] max-w-full
-              `}
-            >
-              {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
-              <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
-                <PlusMenu
-                  onCamera={triggerCamera}
-                  onUpload={triggerUpload}
-                  isLoading={isLoading || isUploading}
-                />
-                
-                <button
-                  onClick={handleOpenConversationsDrawer}
-                  aria-label={language === "ar" ? "إضافي" : "Extra"}
-                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
-                  disabled={isLoading || isUploading}
-                  type="button"
-                >
-                  <span className="text-lg" role="img" aria-label="Extra">💬</span>
-                  <span className="text-xs font-medium text-foreground/80">
-                    {language === 'ar' ? 'إضافي' : 'Extra'}
-                  </span>
-                </button>
-                
-                <button
-                  onClick={handleOpenQuickActionsDrawer}
-                  aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
-                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
-                  disabled={isLoading || isUploading}
-                  type="button"
-                >
-                  <span className="text-lg" role="img" aria-label="Quick Actions">⚡</span>
-                  <span className="text-xs font-medium text-foreground/80">
-                    {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
-                  </span>
-                </button>
-                
-                <ActiveModeIndicator activeTrigger={activeTrigger} />
-                
-                {/* Hidden file inputs */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,.txt"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleCameraChange}
-                  className="hidden"
-                />
-              </div>
-              
-              {/* INPUT ROW: Textarea + Send - IMPROVED DARK MODE VISIBILITY */}
-              <div className="relative flex items-end gap-2 px-3 pb-3 pt-0.5">
-                <div className="flex-1 flex items-end">
-                  <Textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
-                    className={`
-                      flex-1 border-[2.5px]
-                      bg-white/95 dark:bg-gray-800/90
-                      text-gray-900 dark:text-gray-100
-                      ${textareaHighlightClass}
-                      shadow-inner shadow-primary/10
-                      backdrop-blur-[3px] resize-none
-                      focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
-                      py-3 px-4 min-h-[42px] max-h-32 text-base leading-relaxed
-                      placeholder:text-gray-500 dark:placeholder:text-gray-400
-                      rounded-xl
-                      outline-none transition-all duration-200
-                    `}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (canSend) {
-                          handleSend();
-                        }
-                      }
-                    }}
-                    disabled={isLoading || isUploading}
+      {/* Attached Files Preview */}
+      {attachedFiles.length > 0 && (
+        <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-lg">
+          {attachedFiles.map((file, index) => (
+            <div key={index} className="relative group">
+              {file.type.startsWith('image/') ? (
+                <div className="relative">
+                  <img
+                    src={file.preview}
+                    alt={file.name}
+                    className="w-16 h-16 object-cover rounded border"
                   />
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    ×
+                  </button>
                 </div>
-                
-                {/* Send button with proper enabling logic */}
-                {canSend && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={handleSend}
-                          disabled={!canSend}
-                          className={`
-                            h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
-                            border-0 shadow-2xl backdrop-blur-md
-                            transition-all duration-200 hover:scale-110 hover:shadow-2xl
-                            shadow-lg
-                          `}
-                          size="icon"
-                        >
-                          {isLoading || isUploading ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                          ) : (
-                            <Send className="h-5 w-5" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                        {language === 'ar' ? 'إرسال' : 'Send'}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
+              ) : (
+                <div className="flex items-center gap-2 p-2 bg-background rounded border group-hover:bg-muted/50 transition-colors">
+                  <Paperclip className="w-4 h-4" />
+                  <span className="text-xs truncate max-w-20">{file.name}</span>
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="text-red-500 hover:text-red-700 text-xs"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          ))}
         </div>
-      </DragDropUpload>
+      )}
+
+      {/* Input Area */}
+      <div className="flex items-end gap-2">
+        {/* Plus Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpenPlusDrawer}
+          className="flex-shrink-0 h-10 w-10 p-0"
+          disabled={isLoading}
+        >
+          <Plus className="w-4 h-4" />
+        </Button>
+
+        {/* Main Input Container */}
+        <div className="flex-1 relative">
+          <Textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={getPlaceholder()}
+            disabled={isLoading || isProcessing}
+            className="min-h-[40px] max-h-[120px] resize-none pr-20 text-sm"
+            rows={1}
+          />
+          
+          {/* File Upload Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            className="absolute right-12 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
+            disabled={isLoading || isUploading}
+          >
+            <Paperclip className="w-4 h-4" />
+          </Button>
+
+          {/* Voice Recording Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleVoiceToggle}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 ${
+              isRecording ? 'text-red-500 animate-pulse' : ''
+            }`}
+            disabled={isLoading}
+          >
+            {isProcessing ? (
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : isRecording ? (
+              <MicOff className="w-4 h-4" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+
+        {/* Send Button */}
+        <Button
+          onClick={handleSend}
+          disabled={isLoading || (!message.trim() && attachedFiles.length === 0) || isProcessing}
+          className="flex-shrink-0 h-10 w-10 p-0"
+        >
+          {isLoading ? (
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
+
+      {/* Hidden File Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
+
+      {/* Recording Status */}
+      {isRecording && (
+        <div className="flex items-center gap-2 text-sm text-red-600 animate-pulse">
+          <div className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
+          {language === 'ar' ? 'جاري التسجيل...' : 'Recording...'}
+        </div>
+      )}
+
+      {/* Processing Status */}
+      {isProcessing && (
+        <div className="flex items-center gap-2 text-sm text-blue-600">
+          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          {language === 'ar' ? 'جاري المعالجة...' : 'Processing...'}
+        </div>
+      )}
     </div>
   );
 }

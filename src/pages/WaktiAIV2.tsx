@@ -81,7 +81,6 @@ const WaktiAIV2 = () => {
   const loadChatSession = () => {
     const session = WaktiAIV2Service.loadChatSession();
     if (session) {
-      // Limit to 25 messages maximum for conversation display
       const limitedMessages = session.messages.slice(-25);
       setSessionMessages(limitedMessages);
       setCurrentConversationId(session.conversationId || null);
@@ -114,11 +113,10 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  // ENHANCED: Stronger explicit task command detection
+  // ENHANCED: Stronger explicit task command detection with better debugging
   const isExplicitTaskCommand = (messageContent: string): boolean => {
     const lowerMessage = messageContent.toLowerCase().trim();
     
-    // More precise English explicit task patterns
     const englishTaskPatterns = [
       /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{5,})/i,
       /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to|that)\s+(.{5,})/i,
@@ -129,7 +127,6 @@ const WaktiAIV2 = () => {
       /^make\s+task\s*:?\s*(.{5,})/i
     ];
     
-    // More precise Arabic explicit task patterns
     const arabicTaskPatterns = [
       /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{5,})/i,
       /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{5,})/i,
@@ -140,9 +137,17 @@ const WaktiAIV2 = () => {
       /^اعمل\s+مهمة\s*:?\s*(.{5,})/i
     ];
 
-    // Check both English and Arabic patterns
     const allPatterns = [...englishTaskPatterns, ...arabicTaskPatterns];
-    return allPatterns.some(pattern => pattern.test(messageContent));
+    const isTask = allPatterns.some(pattern => pattern.test(messageContent));
+    
+    // ENHANCED DEBUGGING
+    console.log('🔍 TASK DETECTION DEBUG:', {
+      message: messageContent.substring(0, 50) + '...',
+      isExplicitTask: isTask,
+      matchedPatterns: allPatterns.filter(pattern => pattern.test(messageContent)).length
+    });
+    
+    return isTask;
   };
 
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
@@ -161,7 +166,7 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    console.log('🚀 MESSAGE PROCESSING: Starting with enhanced task detection');
+    console.log('🚀 MESSAGE PROCESSING: Starting with enhanced task detection and debugging');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
@@ -175,9 +180,9 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
-      // ENHANCED: Route explicit task commands ONLY to DeepSeek
+      // ENHANCED: Task command detection with better state management debugging
       if (isExplicitTaskCommand(messageContent)) {
-        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to DeepSeek parser ONLY');
+        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to DeepSeek with enhanced debugging');
         
         const taskResponse = await supabase.functions.invoke('process-ai-intent', {
           body: {
@@ -188,12 +193,13 @@ const WaktiAIV2 = () => {
           }
         });
 
-        console.log('📨 TASK RESPONSE RECEIVED:', {
+        console.log('📨 TASK RESPONSE RECEIVED WITH ENHANCED DEBUGGING:', {
           error: !!taskResponse.error,
           data: taskResponse.data,
           intent: taskResponse.data?.intent,
           hasIntentData: !!taskResponse.data?.intentData,
-          hasPendingTask: !!taskResponse.data?.intentData?.pendingTask
+          hasPendingTask: !!taskResponse.data?.intentData?.pendingTask,
+          pendingTaskDetails: taskResponse.data?.intentData?.pendingTask
         });
 
         if (taskResponse.error) {
@@ -202,7 +208,7 @@ const WaktiAIV2 = () => {
         }
 
         const taskData = taskResponse.data;
-        console.log('✅ TASK PROCESSING SUCCESS:', taskData);
+        console.log('✅ TASK PROCESSING SUCCESS WITH FULL DATA:', taskData);
 
         // Add user message first
         const tempUserMessage: AIMessage = {
@@ -214,7 +220,6 @@ const WaktiAIV2 = () => {
           attachedFiles: attachedFiles
         };
 
-        // Add task response message
         const taskMessage: AIMessage = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
@@ -224,36 +229,53 @@ const WaktiAIV2 = () => {
 
         setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
 
-        // ENHANCED: Show task confirmation if needed with better debugging
+        // ENHANCED: Task confirmation with detailed debugging and state management
         if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
-          console.log('🎯 SHOWING TASK CONFIRMATION:', {
+          console.log('🎯 ENHANCED TASK CONFIRMATION SETUP:', {
             intentData: taskData.intentData,
             pendingTask: taskData.intentData.pendingTask,
             taskTitle: taskData.intentData.pendingTask.title,
             taskDescription: taskData.intentData.pendingTask.description,
-            subtasks: taskData.intentData.pendingTask.subtasks
+            subtasks: taskData.intentData.pendingTask.subtasks,
+            currentShowTaskState: showTaskConfirmation,
+            currentPendingTaskData: pendingTaskData
           });
           
+          // ENHANCED STATE MANAGEMENT: Force state updates with debugging
+          console.log('🔧 SETTING TASK CONFIRMATION STATE...');
           setPendingTaskData(taskData.intentData.pendingTask);
-          setShowTaskConfirmation(true);
           
-          console.log('✅ TASK CONFIRMATION STATE SET:', {
-            showTaskConfirmation: true,
-            pendingTaskDataSet: !!taskData.intentData.pendingTask
-          });
+          // Use setTimeout to ensure state updates are processed
+          setTimeout(() => {
+            console.log('🔧 SHOWING TASK CONFIRMATION AFTER STATE UPDATE...');
+            setShowTaskConfirmation(true);
+            
+            // Additional debugging
+            setTimeout(() => {
+              console.log('🔍 TASK CONFIRMATION STATE CHECK:', {
+                showTaskConfirmation: true, // Should be true now
+                pendingTaskData: taskData.intentData.pendingTask,
+                stateUpdated: true
+              });
+            }, 100);
+          }, 50);
+          
+          console.log('✅ ENHANCED TASK CONFIRMATION STATE SET WITH DEBUGGING');
         } else {
-          console.log('⚠️ NO TASK CONFIRMATION NEEDED:', {
+          console.log('⚠️ NO TASK CONFIRMATION NEEDED - DETAILED ANALYSIS:', {
             intent: taskData.intent,
             hasIntentData: !!taskData.intentData,
-            hasPendingTask: !!taskData.intentData?.pendingTask
+            hasPendingTask: !!taskData.intentData?.pendingTask,
+            intentDataKeys: taskData.intentData ? Object.keys(taskData.intentData) : [],
+            fullIntentData: taskData.intentData
           });
         }
 
         setIsLoading(false);
-        return; // Exit early for task commands
+        return;
       }
 
-      // CONTINUE with regular chat processing for non-task messages
+      // Continue with regular chat processing for non-task messages
       const hybridContext = await HybridMemoryService.getHybridContext(
         userProfile.id, 
         currentConversationId
@@ -276,7 +298,7 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
       
-      console.log('📡 CALLING: WaktiAIV2Service for regular chat (NO task detection)');
+      console.log('📡 CALLING: Enhanced WaktiAIV2Service for regular chat');
       
       const aiResponse = await WaktiAIV2Service.sendMessage(
         messageContent,
@@ -285,13 +307,13 @@ const WaktiAIV2 = () => {
         currentConversationId,
         inputType,
         hybridContext.recentMessages,
-        false, // NO task detection in regular chat
+        false,
         activeTrigger,
         hybridContext.conversationSummary,
         attachedFiles || []
       );
       
-      console.log('📨 AI RESPONSE:', {
+      console.log('📨 ENHANCED AI RESPONSE:', {
         success: !aiResponse.error,
         hasResponse: !!aiResponse.response,
         conversationId: aiResponse.conversationId?.substring(0, 8) + '...'
@@ -346,7 +368,7 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ SUCCESS: Processing completed in ${totalTime}ms`);
+      console.log(`✅ ENHANCED SUCCESS: Processing completed in ${totalTime}ms`);
       
       setProcessedFiles([]);
       checkQuotas();
@@ -357,8 +379,8 @@ const WaktiAIV2 = () => {
 
     } catch (err: any) {
       const totalTime = Date.now() - startTime;
-      console.error("❌ ERROR:", err);
-      console.error("📊 ERROR DETAILS:", {
+      console.error("❌ ENHANCED ERROR:", err);
+      console.error("📊 ENHANCED ERROR DETAILS:", {
         message: err.message,
         totalTime: totalTime + 'ms',
         stack: err.stack?.substring(0, 300)
@@ -403,10 +425,13 @@ const WaktiAIV2 = () => {
     checkQuotas();
   }, [canTranslate, canUseVoice]);
 
+  // ENHANCED: Task confirmation handler with better debugging and error handling
   const handleTaskConfirmation = async (taskData: any) => {
+    console.log('🎯 ENHANCED TASK CONFIRMATION: Starting creation process', taskData);
     setTaskConfirmationLoading(true);
+    
     try {
-      console.log('🎯 CREATING TASK:', taskData);
+      console.log('🔧 CREATING TASK WITH ENHANCED DATA:', taskData);
       
       const createdTask = await TRService.createTask({
         title: taskData.title,
@@ -418,10 +443,10 @@ const WaktiAIV2 = () => {
         is_shared: false
       });
 
-      console.log('✅ TASK CREATED:', createdTask);
+      console.log('✅ ENHANCED TASK CREATED:', createdTask);
 
       if (taskData.subtasks && taskData.subtasks.length > 0) {
-        console.log('🎯 CREATING SUBTASKS:', taskData.subtasks);
+        console.log('🔧 CREATING ENHANCED SUBTASKS:', taskData.subtasks);
         for (let i = 0; i < taskData.subtasks.length; i++) {
           await TRService.createSubtask({
             task_id: createdTask.id,
@@ -430,16 +455,19 @@ const WaktiAIV2 = () => {
             order_index: i,
           });
         }
+        console.log('✅ ENHANCED SUBTASKS CREATED');
       }
 
       showSuccess(language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!');
+      
     } catch (error) {
-      console.error('❌ TASK CREATION ERROR:', error);
+      console.error('❌ ENHANCED TASK CREATION ERROR:', error);
       showError(language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task');
     } finally {
       setTaskConfirmationLoading(false);
       setShowTaskConfirmation(false);
       setPendingTaskData(null);
+      console.log('🔧 ENHANCED TASK CONFIRMATION: Cleanup completed');
     }
   };
 
@@ -458,6 +486,7 @@ const WaktiAIV2 = () => {
   };
 
   const handleCancelTaskConfirmation = () => {
+    console.log('🔧 ENHANCED TASK CONFIRMATION: Cancelled by user');
     setShowTaskConfirmation(false);
     setPendingTaskData(null);
     setPendingReminderData(null);
@@ -478,7 +507,6 @@ const WaktiAIV2 = () => {
   const handleSelectConversation = async (conversationId: string) => {
     try {
       const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
-      // Limit to 25 messages for display
       const limitedMessages = messages.slice(-25).map(msg => ({
         id: msg.id,
         role: msg.role as 'user' | 'assistant',
@@ -589,7 +617,6 @@ const WaktiAIV2 = () => {
   };
 
   const debouncedSaveSession = useDebounceCallback(() => {
-    // Save only the last 25 messages to keep sessions manageable
     const limitedMessages = sessionMessages.slice(-25);
     WaktiAIV2Service.saveChatSession(limitedMessages, currentConversationId);
   }, 500);
@@ -632,6 +659,15 @@ const WaktiAIV2 = () => {
     setShowQuickActions(true);
   };
 
+  // ENHANCED DEBUG: Log task confirmation state changes
+  useEffect(() => {
+    console.log('🔍 TASK CONFIRMATION STATE CHANGE:', {
+      showTaskConfirmation,
+      hasPendingTaskData: !!pendingTaskData,
+      pendingTaskDataDetails: pendingTaskData
+    });
+  }, [showTaskConfirmation, pendingTaskData]);
+
   return (
     <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -657,7 +693,7 @@ const WaktiAIV2 = () => {
       <div className="flex flex-col h-full w-full relative">
         <div className="flex-1 overflow-y-auto pb-32" ref={scrollAreaRef}>
           <ChatMessages
-            sessionMessages={sessionMessages.slice(-25)} // Limit to 25 messages
+            sessionMessages={sessionMessages.slice(-25)}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}
@@ -676,7 +712,7 @@ const WaktiAIV2 = () => {
         </div>
 
         <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto px-4 py-3">
             <ChatInput
               message={message}
               setMessage={setMessage}
