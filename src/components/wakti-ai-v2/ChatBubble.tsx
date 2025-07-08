@@ -201,9 +201,9 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
               )}
 
-              {/* Message content */}
+              {/* Message content with proper alignment */}
               <div 
-                className="text-sm whitespace-pre-wrap"
+                className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
                 dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
               />
 
@@ -273,6 +273,29 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
               )}
 
+              {/* Mini action buttons for AI messages */}
+              {!isUser && (
+                <div className="flex items-center gap-1 mt-2 pt-1 border-t border-border/30">
+                  {/* Mini Copy Button */}
+                  <button
+                    onClick={handleCopy}
+                    className="p-1 rounded-md hover:bg-muted/60 transition-colors"
+                    title={language === 'ar' ? 'نسخ' : 'Copy'}
+                  >
+                    <Copy className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                  
+                  {/* Mini Speak Button */}
+                  <button
+                    onClick={handleSpeak}
+                    className={`p-1 rounded-md hover:bg-muted/60 transition-colors ${isSpeaking ? 'bg-primary/20' : ''}`}
+                    title={language === 'ar' ? 'تحدث' : 'Speak'}
+                  >
+                    <Speaker className={`w-3 h-3 ${isSpeaking ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </button>
+                </div>
+              )}
+
               {/* Enhanced buddy-chat features */}
               {!isUser && message.buddyChat && (
                 <div className="mt-3 space-y-2">
@@ -290,90 +313,56 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
                   {/* Follow-up question */}
                   {message.buddyChat.followUpQuestion && (
-                    <div className="text-xs text-muted-foreground italic">
-                      {message.buddyChat.followUpQuestion}
-                    </div>
-                  )}
-
-                  {/* Search follow-up */}
-                  {message.buddyChat.searchFollowUp && (
-                    <div className="text-xs bg-green-50 dark:bg-green-900/20 p-2 rounded">
+                    <div className="text-xs bg-green-50 dark:bg-green-900/20 p-2 rounded border-l-2 border-green-400">
                       <span className="text-green-600 dark:text-green-400">
-                        🔍 {language === 'ar' 
-                          ? 'هل تريد المزيد من المعلومات حول هذا الموضوع؟'
-                          : 'Want to dive deeper into this topic?'
-                        }
+                        🤔 {message.buddyChat.followUpQuestion}
                       </span>
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* Browsing indicator */}
-              {message.browsingUsed && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-                  <Search className="w-3 h-3" />
-                  <span>
-                    {language === 'ar' ? 'تم البحث في الويب' : 'Web search used'}
-                  </span>
-                </div>
-              )}
+                  {/* Quick actions */}
+                  {message.buddyChat.quickActions && message.buddyChat.quickActions.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {message.buddyChat.quickActions.map((action: string, index: number) => (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-6 px-2"
+                          onClick={() => {
+                            // Handle quick action click - could dispatch to parent component
+                            console.log('Quick action clicked:', action);
+                          }}
+                        >
+                          {action}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
 
-              {/* Action taken indicator */}
-              {message.actionTaken && (
-                <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mt-2">
-                  <span>✅</span>
-                  <span>
-                    {language === 'ar' ? 'تم تنفيذ إجراء' : 'Action completed'}
-                  </span>
+                  {/* Related topics */}
+                  {message.buddyChat.relatedTopics && message.buddyChat.relatedTopics.length > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium">
+                        {language === 'ar' ? 'مواضيع ذات صلة:' : 'Related topics:'} 
+                      </span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {message.buddyChat.relatedTopics.map((topic: string, index: number) => (
+                          <Link
+                            key={index}
+                            to={`/search?q=${encodeURIComponent(topic)}`}
+                            className="text-primary hover:underline"
+                          >
+                            #{topic}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </Card>
-
-          {/* Action buttons for ALL messages - INCREASED MARGIN */}
-          <div className="flex items-center gap-1 mt-3">
-            {/* Copy button for all messages */}
-            <Button
-              onClick={handleCopy}
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Copy className="w-3 h-3 mr-1" />
-              {language === 'ar' ? 'نسخ' : 'Copy'}
-            </Button>
-
-            {/* Speak button - only for messages with content */}
-            {message.content && (
-              <Button
-                onClick={handleSpeak}
-                variant="ghost"
-                size="sm"
-                className={`h-6 px-2 text-xs transition-colors ${
-                  isSpeaking 
-                    ? 'text-blue-600 hover:text-blue-700' 
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-                title={language === 'ar' ? 'قراءة الرسالة' : 'Speak message'}
-              >
-                <Speaker className={`w-3 h-3 mr-1 ${isSpeaking ? 'animate-pulse' : ''}`} />
-                {language === 'ar' ? 'استمع' : 'Speak'}
-              </Button>
-            )}
-          </div>
-
-          {/* Message timestamp */}
-          <div className="text-xs text-muted-foreground mt-1 px-1">
-            {message.timestamp && new Date(message.timestamp).toLocaleTimeString(
-              language === 'ar' ? 'ar-SA' : 'en-US',
-              { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: language !== 'ar'
-              }
-            )}
-          </div>
         </div>
       </div>
     </div>

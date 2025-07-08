@@ -170,15 +170,6 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
       
-      const tempAssistantMessage: AIMessage = {
-        id: `assistant-temp-${Date.now()}`,
-        role: 'assistant',
-        content: language === 'ar' ? 'يكتب بسرعة فائقة...' : 'Typing ultra-fast...',
-        timestamp: new Date()
-      };
-      
-      setSessionMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
-      
       console.log('📡 CALLING: Enhanced WaktiAIV2Service with task detection');
       
       const aiResponse = await WaktiAIV2Service.sendMessage(
@@ -221,9 +212,8 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => {
         const newMessages = [...prevMessages];
-        newMessages[newMessages.length - 2] = tempUserMessage;
         newMessages[newMessages.length - 1] = assistantMessage;
-        return newMessages;
+        return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
       });
 
       if (aiResponse.needsConfirmation && aiResponse.pendingTaskData) {

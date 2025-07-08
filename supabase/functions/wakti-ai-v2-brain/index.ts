@@ -12,7 +12,7 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + RESTORED TASK CREATION + FIXED IMAGE PROCESSING");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + TASK CREATION FIX + FULL IMAGE PROCESSING");
 
 // PHASE 2 FIX: Image URL to Base64 conversion function
 async function convertImageUrlToBase64(imageUrl: string, imageType: string): Promise<string | null> {
@@ -35,44 +35,25 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string): Pro
   }
 }
 
-// PHASE 2 FIX: Detect sensitive document types - INTEGRATED INTO MAIN FLOW
-function detectSensitiveDocument(message: string, hasImages: boolean): boolean {
-  if (!hasImages) return false;
-  
-  const sensitiveKeywords = [
-    'passport', 'id card', 'driver license', 'social security', 'birth certificate',
-    'visa', 'immigration', 'identity document', 'official document',
-    'جواز سفر', 'هوية', 'رخصة قيادة', 'وثيقة رسمية'
-  ];
-  
-  const lowerMessage = message.toLowerCase();
-  return sensitiveKeywords.some(keyword => lowerMessage.includes(keyword));
-}
-
-// PHASE 2 FIX: Check for explicit task creation commands
+// PHASE 2 FIX: Check for explicit task creation commands - SIMPLE AND DIRECT
 function isExplicitTaskCommand(message: string, language: string = 'en'): boolean {
   const lowerMessage = message.toLowerCase().trim();
   
-  const explicitTaskPatterns = {
-    en: [
-      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{10,})/i,
-      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to|that)\s+(.{10,})/i,
-      /^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to|that)\s+(.{10,})/i,
-      /^task\s*:\s*(.{10,})/i,
-      /^add\s+task\s*:?\s*(.{10,})/i,
-    ],
-    ar: [
-      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{10,})/i,
-      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{10,})/i,
-      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{10,})/i,
-      /^مهمة\s*:\s*(.{10,})/i,
-      /^أضف\s+مهمة\s*:?\s*(.{10,})/i,
-    ]
-  };
-
-  const taskPatterns = explicitTaskPatterns[language as 'en' | 'ar'] || explicitTaskPatterns.en;
+  // English task commands
+  const englishPatterns = [
+    'create task', 'create a task', 'add task', 'add a task', 'new task',
+    'make task', 'make a task', 'task:', 'create reminder', 'add reminder'
+  ];
   
-  return taskPatterns.some(pattern => pattern.test(message));
+  // Arabic task commands  
+  const arabicPatterns = [
+    'أنشئ مهمة', 'اعمل مهمة', 'أضف مهمة', 'مهمة جديدة', 'إنشاء مهمة',
+    'أنشئ تذكير', 'أضف تذكير', 'تذكير جديد'
+  ];
+  
+  const patterns = language === 'ar' ? arabicPatterns : englishPatterns;
+  
+  return patterns.some(pattern => lowerMessage.includes(pattern));
 }
 
 serve(async (req) => {
@@ -227,9 +208,9 @@ serve(async (req) => {
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // PHASE 2 CRITICAL FIX: Check for explicit task creation commands BEFORE other processing
+    // PHASE 2 CRITICAL FIX: Check for explicit task creation commands FIRST AND ONLY
     if (isExplicitTaskCommand(message, language)) {
-      console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to process-ai-intent');
+      console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to DeepSeek parser');
       
       try {
         const taskResponse = await supabase.functions.invoke('process-ai-intent', {
@@ -275,12 +256,25 @@ serve(async (req) => {
         });
 
       } catch (error) {
-        console.error('❌ TASK PROCESSING FALLBACK:', error);
-        // Fall through to normal processing if task processing fails
+        console.error('❌ TASK PROCESSING ERROR:', error);
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? 'عذراً، حدث خطأ أثناء معالجة المهمة. حاول مرة أخرى.'
+            : 'Sorry, an error occurred while processing the task. Please try again.',
+          conversationId: finalConversationId,
+          success: false,
+          error: error.message
+        }), {
+          status: 500,
+          headers: { 
+            "Content-Type": "application/json",
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
       }
     }
 
-    // MODE-BASED PROCESSING with HYBRID MEMORY
+    // MODE-BASED PROCESSING with HYBRID MEMORY (NO TASK DETECTION HERE)
     switch (activeTrigger) {
       case 'search':
         result = await processSearchMode(message, language, recentMessages, personalTouch);
@@ -440,27 +434,13 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// ENHANCED IMAGE MODE with VISION + PHASE 2 FIXES
+// ENHANCED IMAGE MODE with VISION + FULL PROCESSING (NO RESTRICTIONS)
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
   console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION");
   
-  // PHASE 2 FIX: If there are attached images, use SONNET for vision analysis
+  // PHASE 2 FIX: If there are attached images, use SONNET for vision analysis - ALL IMAGES ALLOWED
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ VISION: Analyzing uploaded images with SONNET (UPGRADED)");
-    
-    // PHASE 2 CRITICAL FIX: Check for sensitive documents - NOW INTEGRATED
-    const isSensitiveDoc = detectSensitiveDocument(message, true);
-    if (isSensitiveDoc) {
-      console.log("🔒 SENSITIVE DOCUMENT DETECTED: Privacy protection activated");
-      return {
-        response: language === 'ar' 
-          ? '🔒 تم اكتشاف وثيقة حساسة. لحماية خصوصيتك، لا يمكنني تحليل جوازات السفر أو وثائق الهوية الرسمية. هل يمكنك مشاركة نوع آخر من الصور؟'
-          : '🔒 Sensitive document detected. For your privacy protection, I cannot analyze passports, ID cards, or other official identity documents. Could you please share a different type of image?',
-        success: true,
-        sensitiveContentDetected: true
-      };
-    }
-    
+    console.log("👁️ VISION: Analyzing uploaded images with SONNET - ALL IMAGE TYPES SUPPORTED");
     return await callSonnetAPI(message, [], '', language, attachedFiles, 4096, personalTouch);
   }
   
@@ -545,10 +525,14 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
   let systemPrompt = language === 'ar'
     ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. 
 
-عندما تجيب، استخدم عبارات مثل "كما ناقشنا من قبل" أو "بناءً على محادثتنا السابقة" عندما تكون ذات صلة. اجب بالعربية.`
+عندما تجيب، استخدم عبارات مثل "كما ناقشنا من قبل" أو "بناءً على محادثتنا السابقة" عندما تكون ذات صلة. اجب بالعربية.
+
+يمكنك تحليل جميع أنواع الصور بما في ذلك جوازات السفر ووثائق الهوية والصور الشخصية والمناظر الطبيعية وصفحات الكتب - لا توجد قيود على نوع الصورة.`
     : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}. 
 
-When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.`;
+When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.
+
+You can analyze ALL types of images including passports, ID cards, portraits, scenery, textbook pages - there are no restrictions on image types.`;
 
   // APPLY PERSONALIZATION with ENHANCED MEMORY
   if (personalTouch && personalTouch.instruction) {
@@ -583,16 +567,16 @@ When responding, use phrases like "As we discussed before" or "Building on our p
     });
   }
   
-  // PHASE 2 FIX: Add current message with FIXED VISION support
+  // PHASE 2 FIX: Add current message with FIXED VISION support - ALL IMAGES SUPPORTED
   let currentMessage: any = { role: 'user', content: message };
   
-  // PHASE 2 FIX: CRITICAL IMAGE PROCESSING FIX - ALL IMAGES PROCESSED EXCEPT SENSITIVE
+  // PHASE 2 FIX: PROCESS ALL IMAGES - NO RESTRICTIONS
   if (attachedFiles && attachedFiles.length > 0) {
     const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
     if (imageFile && imageFile.url) {
-      console.log("🖼️ PHASE 2 FIX: Converting image URL to base64 for Claude API");
+      console.log("🖼️ PHASE 2 FIX: Processing ALL image types - no restrictions");
       
-      // PHASE 2 FIX: Convert URL to base64 instead of sending URL directly
+      // PHASE 2 FIX: Convert URL to base64 for Claude API
       const base64Data = await convertImageUrlToBase64(imageFile.url, imageFile.type);
       
       if (base64Data) {
@@ -607,7 +591,7 @@ When responding, use phrases like "As we discussed before" or "Building on our p
             } 
           }
         ];
-        console.log("✅ PHASE 2 FIX: Image properly converted to base64 for SONNET vision");
+        console.log("✅ PHASE 2 FIX: All image types supported - including sensitive documents");
       } else {
         console.error("❌ PHASE 2 FIX: Failed to convert image, proceeding without vision");
       }
