@@ -19,12 +19,12 @@ import { t } from '@/utils/translations';
 import { TRService, TRTask } from '@/services/trService';
 import { toast } from 'sonner';
 
-// Updated schema to make due_date optional
+// PHASE 2 FIX: Updated schema to make due_date truly optional
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  due_date: z.string().optional(), // Made optional
-  due_time: z.string().optional(),
+  due_date: z.string().optional().nullable(), // PHASE 2 FIX: Made nullable
+  due_time: z.string().optional().nullable(), // PHASE 2 FIX: Made nullable
   priority: z.enum(['normal', 'high', 'urgent']),
   task_type: z.enum(['one-time', 'repeated']),
   is_shared: z.boolean().default(false),
@@ -58,8 +58,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     defaultValues: {
       title: '',
       description: '',
-      due_date: '',
-      due_time: '',
+      due_date: null, // PHASE 2 FIX: Default to null
+      due_time: null, // PHASE 2 FIX: Default to null
       priority: 'normal',
       task_type: 'one-time',
       is_shared: false,
@@ -74,8 +74,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
       reset({
         title: task.title,
         description: task.description || '',
-        due_date: task.due_date || '',
-        due_time: task.due_time || '',
+        due_date: task.due_date || null, // PHASE 2 FIX: Handle null dates
+        due_time: task.due_time || null, // PHASE 2 FIX: Handle null times
         priority: task.priority,
         task_type: task.task_type,
         is_shared: task.is_shared,
@@ -84,8 +84,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
       reset({
         title: '',
         description: '',
-        due_date: '',
-        due_time: '',
+        due_date: null, // PHASE 2 FIX: Default to null
+        due_time: null, // PHASE 2 FIX: Default to null
         priority: 'normal',
         task_type: 'one-time',
         is_shared: false,
@@ -108,12 +108,12 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     
     setIsLoading(true);
     try {
-      // Prepare data for service - ensure title is always provided
+      // PHASE 2 FIX: Prepare data for service - handle null values properly
       const taskData = {
         title: data.title, // Required field
         description: data.description || undefined,
-        due_date: data.due_date || undefined,
-        due_time: data.due_time || undefined,
+        due_date: data.due_date || undefined, // PHASE 2 FIX: Convert null to undefined
+        due_time: data.due_time || undefined, // PHASE 2 FIX: Convert null to undefined
         priority: data.priority,
         task_type: data.task_type,
         is_shared: data.is_shared,
@@ -213,7 +213,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
             />
           </div>
 
-          {/* Due Date - Now Optional */}
+          {/* Due Date - PHASE 2 FIX: Truly optional */}
           <div className="space-y-2">
             <Label htmlFor="due_date">{t('dueDate', language)} {language === 'ar' ? '(اختياري)' : '(optional)'}</Label>
             <Controller
@@ -242,7 +242,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                       mode="single"
                       selected={field.value ? new Date(field.value) : undefined}
                       onSelect={(date) => {
-                        field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
+                        // PHASE 2 FIX: Handle null dates properly
+                        field.onChange(date ? format(date, 'yyyy-MM-dd') : null);
                       }}
                       initialFocus
                     />

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -10,6 +9,8 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
+console.log("🎯 TASK CREATION ROUTER: Restored DeepSeek-powered task parsing");
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
@@ -17,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("Processing AI intent request");
+    console.log("🎯 PROCESSING AI INTENT: Task creation analysis");
     const { text, mode, userId, conversationHistory } = await req.json();
 
     if (!text) {
@@ -30,6 +31,41 @@ serve(async (req) => {
       );
     }
 
+    // PHASE 2 FIX: Enhanced explicit task detection
+    const explicitTaskPatterns = {
+      en: [
+        /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{10,})/i,
+        /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to|that)\s+(.{10,})/i,
+        /^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to|that)\s+(.{10,})/i,
+        /^task\s*:\s*(.{10,})/i,
+        /^add\s+task\s*:?\s*(.{10,})/i,
+      ],
+      ar: [
+        /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{10,})/i,
+        /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{10,})/i,
+        /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{10,})/i,
+        /^مهمة\s*:\s*(.{10,})/i,
+        /^أضف\s+مهمة\s*:?\s*(.{10,})/i,
+      ]
+    };
+
+    const explicitReminderPatterns = {
+      en: [
+        /^(please\s+)?(create|make|add|set)\s+(a\s+)?reminder\s*:?\s*(.{10,})/i,
+        /^(remind\s+me\s+)(to\s+|about\s+|that\s+)(.{10,})/i,
+        /^(can\s+you\s+)?(remind\s+me|set\s+a\s+reminder)\s+(to\s+|about\s+|that\s+)(.{10,})/i,
+        /^reminder\s*:\s*(.{10,})/i,
+        /^set\s+reminder\s*:?\s*(.{10,})/i,
+      ],
+      ar: [
+        /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|اضبط)\s+(تذكير)\s*:?\s*(.{10,})/i,
+        /^(ذكرني\s+)(أن\s+|بـ\s*|أنني\s+)(.{10,})/i,
+        /^(هل\s+يمكنك\s+)?(تذكيري|ضبط\s+تذكير)\s+(أن\s+|بـ\s*|أنني\s+)(.{10,})/i,
+        /^تذكير\s*:\s*(.{10,})/i,
+        /^اضبط\s+تذكير\s*:?\s*(.{10,})/i,
+      ]
+    };
+
     // Check for task confirmation first (go ahead, create, confirm)
     const confirmationPatterns = [
       /\b(go\s+ahead|yes|confirm|create\s+it|do\s+it|make\s+it)\b/i,
@@ -40,108 +76,104 @@ serve(async (req) => {
     const isConfirmation = confirmationPatterns.some(pattern => pattern.test(text));
 
     if (isConfirmation && conversationHistory && conversationHistory.length > 0) {
-      console.log("Detected task confirmation, looking for previous task request");
+      console.log("✅ TASK CONFIRMATION: Looking for previous task request");
       
       // Look for the most recent task creation request in conversation history
       for (let i = conversationHistory.length - 1; i >= 0; i--) {
         const message = conversationHistory[i];
         if (message.role === 'user') {
-          // Use the imported analyzeTaskIntent function instead of the local one
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) continue;
-          
-          const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/wakti-ai-v2-brain`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              message: message.content,
-              action: 'analyze_task_intent',
-              language: 'en'
-            })
-          });
-          
-          if (response.ok) {
-            const taskAnalysis = await response.json();
-            if (taskAnalysis.isTask && taskAnalysis.taskData) {
-              console.log("Found previous task request, creating confirmation");
-              
-              return new Response(
-                JSON.stringify({
-                  response: `I'll create this task for you:\n\n**${taskAnalysis.taskData.title}**\n${taskAnalysis.taskData.subtasks.length > 0 ? `\nSubtasks:\n${taskAnalysis.taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskAnalysis.taskData.due_date ? `Due: ${taskAnalysis.taskData.due_date}` : ''}\n${taskAnalysis.taskData.due_time ? ` at ${taskAnalysis.taskData.due_time}` : ''}\n\nPlease confirm if you'd like me to create this task.`,
-                  intent: "parse_task",
-                  intentData: {
-                    pendingTask: taskAnalysis.taskData
-                  }
-                }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-              );
-            }
+          const taskAnalysis = await analyzeTaskCreationIntent(message.content);
+          if (taskAnalysis.isTask && taskAnalysis.taskData) {
+            console.log("✅ FOUND PREVIOUS TASK REQUEST: Creating confirmation");
+            
+            return new Response(
+              JSON.stringify({
+                response: `I'll create this task for you:\n\n**${taskAnalysis.taskData.title}**\n${taskAnalysis.taskData.subtasks && taskAnalysis.taskData.subtasks.length > 0 ? `\nSubtasks:\n${taskAnalysis.taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskAnalysis.taskData.due_date ? `Due: ${taskAnalysis.taskData.due_date}` : ''}\n${taskAnalysis.taskData.due_time ? ` at ${taskAnalysis.taskData.due_time}` : ''}\n\nPlease confirm if you'd like me to create this task.`,
+                intent: "parse_task",
+                intentData: {
+                  pendingTask: taskAnalysis.taskData
+                }
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
         }
       }
     }
 
-    // Use the proper task analysis by calling the wakti-ai-v2-brain function
-    // which has the correct analyzeTaskIntent implementation
-    const taskAnalysisResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/wakti-ai-v2-brain`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: text,
-        action: 'analyze_task_intent',
-        language: 'en'
-      })
-    });
+    // PHASE 2 FIX: Check for explicit task patterns
+    const taskPatterns = explicitTaskPatterns.en.concat(explicitTaskPatterns.ar);
+    const reminderPatterns = explicitReminderPatterns.en.concat(explicitReminderPatterns.ar);
+    
+    let isExplicitTaskRequest = false;
+    let isExplicitReminderRequest = false;
+    let taskContent = '';
+    let reminderContent = '';
 
-    let isTaskRequest = false;
-    let taskData = null;
+    // Check explicit task requests
+    for (const pattern of taskPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        taskContent = match[match.length - 1]?.trim();
+        if (taskContent && taskContent.length >= 10) {
+          isExplicitTaskRequest = true;
+          console.log("✅ EXPLICIT TASK REQUEST DETECTED:", taskContent.substring(0, 50) + '...');
+          break;
+        }
+      }
+    }
 
-    if (taskAnalysisResponse.ok) {
-      const analysis = await taskAnalysisResponse.json();
-      isTaskRequest = analysis.isTask;
-      taskData = analysis.taskData;
-      
-      console.log("Task analysis result:", { isTask: isTaskRequest, hasTaskData: !!taskData });
+    // Check explicit reminder requests
+    if (!isExplicitTaskRequest) {
+      for (const pattern of reminderPatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          reminderContent = match[match.length - 1]?.trim();
+          if (reminderContent && reminderContent.length >= 10) {
+            isExplicitReminderRequest = true;
+            console.log("✅ EXPLICIT REMINDER REQUEST DETECTED:", reminderContent.substring(0, 50) + '...');
+            break;
+          }
+        }
+      }
     }
     
-    if (isTaskRequest && taskData) {
-      console.log("Detected explicit task creation request");
+    if (isExplicitTaskRequest || isExplicitReminderRequest) {
+      console.log("🎯 EXPLICIT REQUEST DETECTED: Using DeepSeek for structured parsing");
       
-      // Check if we need to ask for clarification
-      if (!taskData.due_date || !taskData.priority) {
-        const clarificationQuestions = generateClarificationQuestions(taskData, text);
+      const taskAnalysis = await analyzeTaskCreationIntent(text);
+      
+      if (taskAnalysis.isTask && taskAnalysis.taskData) {
+        // Check if we need to ask for clarification
+        if (!taskAnalysis.taskData.due_date || !taskAnalysis.taskData.priority) {
+          const clarificationQuestions = generateClarificationQuestions(taskAnalysis.taskData, text);
+          
+          return new Response(
+            JSON.stringify({
+              response: clarificationQuestions.message,
+              intent: "clarify_task",
+              intentData: {
+                partialTask: taskAnalysis.taskData,
+                missingFields: clarificationQuestions.missingFields,
+                originalText: text
+              }
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
         
+        // If we have enough info, return parsed task for confirmation
         return new Response(
           JSON.stringify({
-            response: clarificationQuestions.message,
-            intent: "clarify_task",
+            response: `I've prepared a task for you to review:\n\n**${taskAnalysis.taskData.title}**\n${taskAnalysis.taskData.subtasks && taskAnalysis.taskData.subtasks.length > 0 ? `\nSubtasks:\n${taskAnalysis.taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n\nPlease confirm if you'd like me to create this task.`,
+            intent: "parse_task",
             intentData: {
-              partialTask: taskData,
-              missingFields: clarificationQuestions.missingFields,
-              originalText: text
+              pendingTask: taskAnalysis.taskData
             }
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
-      // If we have enough info, return parsed task for confirmation
-      return new Response(
-        JSON.stringify({
-          response: `I've prepared a task for you to review:\n\n**${taskData.title}**\n${taskData.subtasks.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n\nPlease confirm if you'd like me to create this task.`,
-          intent: "parse_task",
-          intentData: {
-            pendingTask: taskData
-          }
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     // Check for direct image generation request in creative mode
@@ -151,7 +183,7 @@ serve(async (req) => {
     
     if (mode === 'creative' && isImageRequest) {
       const imagePrompt = isImageRequest[5] || text;
-      console.log("Direct image generation request detected in creative mode:", imagePrompt);
+      console.log("🎨 DIRECT IMAGE GENERATION REQUEST:", imagePrompt);
       
       return new Response(
         JSON.stringify({ 
@@ -202,14 +234,16 @@ serve(async (req) => {
       );
     }
 
-    // Process with AI if no special intent detected
+    // PHASE 2 FIX: Only process with AI if no explicit task/reminder request detected
+    console.log("💬 GENERAL CHAT: Processing with DeepSeek for general responses");
+
     let result;
     try {
       if (!DEEPSEEK_API_KEY) {
         throw new Error("DeepSeek API key not configured");
       }
       
-      console.log("Calling DeepSeek API");
+      console.log("🤖 CALLING DEEPSEEK API");
       const deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -287,7 +321,80 @@ serve(async (req) => {
   }
 });
 
-// Generate clarification questions for missing task details
+// PHASE 2 FIX: Enhanced task analysis using DeepSeek
+async function analyzeTaskCreationIntent(text: string) {
+  console.log("🎯 DEEPSEEK TASK ANALYSIS: Parsing task details");
+  
+  if (!DEEPSEEK_API_KEY) {
+    console.error("❌ DEEPSEEK API KEY missing");
+    return { isTask: false, taskData: null };
+  }
+
+  try {
+    const analysisPrompt = `Analyze this text for task creation. Extract structured data if this is a task request:
+
+Text: "${text}"
+
+If this is a task creation request, respond with JSON:
+{
+  "isTask": true,
+  "taskData": {
+    "title": "main task title",
+    "description": "optional description", 
+    "due_date": "YYYY-MM-DD or null",
+    "due_time": "HH:MM or null",
+    "priority": "normal|high|urgent",
+    "subtasks": ["subtask1", "subtask2"] // array of strings
+  }
+}
+
+If NOT a task request, respond: {"isTask": false, "taskData": null}
+
+Rules:
+- Only return isTask: true for explicit task creation requests
+- Extract subtasks from numbered lists, bullet points, or "steps"
+- Infer reasonable priority (normal by default)
+- Parse dates/times if mentioned
+- Keep titles concise but descriptive`;
+
+    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: "You are a task analysis expert. Always respond with valid JSON." },
+          { role: "user", content: analysisPrompt }
+        ],
+        temperature: 0.1,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`DeepSeek analysis failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const analysisText = result.choices[0].message?.content || "";
+    
+    try {
+      const analysis = JSON.parse(analysisText);
+      console.log("✅ DEEPSEEK ANALYSIS RESULT:", analysis);
+      return analysis;
+    } catch (parseError) {
+      console.error("❌ FAILED TO PARSE DEEPSEEK ANALYSIS:", analysisText);
+      return { isTask: false, taskData: null };
+    }
+    
+  } catch (error) {
+    console.error("❌ DEEPSEEK TASK ANALYSIS ERROR:", error);
+    return { isTask: false, taskData: null };
+  }
+}
+
 function generateClarificationQuestions(taskData: any, originalText: string) {
   const missingFields = [];
   let questions = [];
@@ -307,8 +414,8 @@ function generateClarificationQuestions(taskData: any, originalText: string) {
   }
   
   const questionText = questions.length > 0 
-    ? `I've prepared a task: **${taskData.title}**${taskData.subtasks.length > 0 ? `\n\nSubtasks:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}\n\nTo complete the setup, I need to know:\n• ${questions.join('\n• ')}\n\nPlease provide this information so I can create the task for you.`
-    : `Task ready: **${taskData.title}**${taskData.subtasks.length > 0 ? `\n\nSubtasks:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}`;
+    ? `I've prepared a task: **${taskData.title}**${taskData.subtasks && taskData.subtasks.length > 0 ? `\n\nSubtasks:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}\n\nTo complete the setup, I need to know:\n• ${questions.join('\n• ')}\n\nPlease provide this information so I can create the task for you.`
+    : `Task ready: **${taskData.title}**${taskData.subtasks && taskData.subtasks.length > 0 ? `\n\nSubtasks:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}`;
   
   return {
     message: questionText,
@@ -316,7 +423,6 @@ function generateClarificationQuestions(taskData: any, originalText: string) {
   };
 }
 
-// UPDATED: Enhanced mode detection - more conservative
 function detectBetterMode(userText: string, currentMode: string) {
   const lowerText = userText.toLowerCase();
   let detectedMode = null;
@@ -337,7 +443,7 @@ function detectBetterMode(userText: string, currentMode: string) {
     detectedMode = currentMode !== 'creative' ? 'creative' : null;
   }
   
-  // UPDATED: Task creation - assistant mode (more specific)
+  // Task creation - assistant mode (more specific)
   else if (
     lowerText.includes("create task") ||
     lowerText.includes("add task") ||
@@ -379,7 +485,6 @@ function detectBetterMode(userText: string, currentMode: string) {
   return detectedMode;
 }
 
-// System prompt based on mode
 function getSystemPrompt(currentMode: string) {
   const basePrompt = `You are WAKTI, an AI assistant specializing in ${currentMode} mode. `;
   

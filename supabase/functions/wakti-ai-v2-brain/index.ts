@@ -12,9 +12,9 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: UPGRADED TO CLAUDE 3.5 SONNET + FIXED IMAGE PROCESSING");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + FIXED IMAGE PROCESSING + CLEAN ROUTING");
 
-// PHASE 1 FIX: Image URL to Base64 conversion function
+// PHASE 2 FIX: Image URL to Base64 conversion function
 async function convertImageUrlToBase64(imageUrl: string, imageType: string): Promise<string | null> {
   try {
     console.log('🖼️ IMAGE PROCESSING: Converting URL to base64:', imageUrl.substring(0, 50) + '...');
@@ -33,6 +33,20 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string): Pro
     console.error('❌ IMAGE PROCESSING ERROR:', error);
     return null;
   }
+}
+
+// PHASE 2 FIX: Detect sensitive document types
+function detectSensitiveDocument(message: string, hasImages: boolean): boolean {
+  if (!hasImages) return false;
+  
+  const sensitiveKeywords = [
+    'passport', 'id card', 'driver license', 'social security', 'birth certificate',
+    'visa', 'immigration', 'identity document', 'official document',
+    'جواز سفر', 'هوية', 'رخصة قيادة', 'وثيقة رسمية'
+  ];
+  
+  const lowerMessage = message.toLowerCase();
+  return sensitiveKeywords.some(keyword => lowerMessage.includes(keyword));
 }
 
 serve(async (req) => {
@@ -193,13 +207,9 @@ serve(async (req) => {
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // PHASE 1 FIX: Enhanced task detection before processing
-    console.log('🎯 TASK DETECTION: Analyzing message for task creation intent');
-    const taskDetectionResult = await analyzeTaskIntent(message, language);
-    
-    if (taskDetectionResult.isTask || taskDetectionResult.isReminder) {
-      console.log('✅ TASK DETECTED:', taskDetectionResult);
-    }
+    // PHASE 2 FIX: REMOVED TASK DETECTION FROM MAIN BRAIN
+    // Task creation is now handled by process-ai-intent function only
+    console.log('🎯 CLEAN ROUTING: No task detection in main AI brain - pure chat/image processing');
 
     // MODE-BASED PROCESSING with HYBRID MEMORY
     switch (activeTrigger) {
@@ -225,9 +235,9 @@ serve(async (req) => {
       imageUrl: result.imageUrl || null,
       browsingUsed: activeTrigger === 'search',
       browsingData: null,
-      needsConfirmation: taskDetectionResult.isTask || taskDetectionResult.isReminder,
-      pendingTaskData: taskDetectionResult.taskData || null,
-      pendingReminderData: taskDetectionResult.reminderData || null,
+      needsConfirmation: false, // PHASE 2 FIX: No task confirmation from main brain
+      pendingTaskData: null,    // PHASE 2 FIX: No task data from main brain
+      pendingReminderData: null, // PHASE 2 FIX: No reminder data from main brain
       success: result.success !== false,
       processingTime: Date.now(),
       aiProvider: 'claude-3-5-sonnet-20241022', // PHASE 1: UPGRADED MODEL
@@ -268,90 +278,6 @@ serve(async (req) => {
     });
   }
 });
-
-// PHASE 1 FIX: Enhanced task detection with explicit command requirement
-async function analyzeTaskIntent(message: string, language: string = 'en') {
-  const lowerMessage = message.toLowerCase().trim();
-  
-  console.log('🎯 TASK ANALYSIS: Checking message:', lowerMessage.substring(0, 50) + '...');
-
-  // PHASE 1 FIX: Explicit command patterns (must be clear intent)
-  const explicitTaskPatterns = {
-    en: [
-      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{10,})/i,
-      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to)\s+(.{10,})/i,
-      /^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to)\s+(.{10,})/i
-    ],
-    ar: [
-      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{10,})/i,
-      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل)\s+(.{10,})/i,
-      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)\s+(لـ|حول|من\s+أجل)\s+(.{10,})/i
-    ]
-  };
-
-  const explicitReminderPatterns = {
-    en: [
-      /^(please\s+)?(create|make|add|set)\s+(a\s+)?reminder\s*:?\s*(.{10,})/i,
-      /^(remind\s+me\s+)(to\s+|about\s+)(.{10,})/i,
-      /^(can\s+you\s+)?(remind\s+me|set\s+a\s+reminder)\s+(to\s+|about\s+)(.{10,})/i
-    ],
-    ar: [
-      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|اضبط)\s+(تذكير)\s*:?\s*(.{10,})/i,
-      /^(ذكرني\s+)(أن\s+|بـ\s*)(.{10,})/i,
-      /^(هل\s+يمكنك\s+)?(تذكيري|ضبط\s+تذكير)\s+(أن\s+|بـ\s*)(.{10,})/i
-    ]
-  };
-
-  // Check for explicit task patterns
-  const taskPatterns = explicitTaskPatterns[language as 'en' | 'ar'] || explicitTaskPatterns.en;
-  for (const pattern of taskPatterns) {
-    const match = message.match(pattern);
-    if (match) {
-      const taskContent = match[match.length - 1]?.trim();
-      console.log('✅ EXPLICIT TASK DETECTED:', taskContent);
-      
-      return {
-        isTask: true,
-        isReminder: false,
-        taskData: {
-          title: taskContent || (language === 'ar' ? 'مهمة جديدة' : 'New Task'),
-          description: '',
-          due_date: null,
-          due_time: null,
-          subtasks: [],
-          priority: "normal"
-        },
-        reminderData: null
-      };
-    }
-  }
-
-  // Check for explicit reminder patterns
-  const reminderPatterns = explicitReminderPatterns[language as 'en' | 'ar'] || explicitReminderPatterns.en;
-  for (const pattern of reminderPatterns) {
-    const match = message.match(pattern);
-    if (match) {
-      const reminderContent = match[match.length - 1]?.trim();
-      console.log('✅ EXPLICIT REMINDER DETECTED:', reminderContent);
-      
-      return {
-        isTask: false,
-        isReminder: true,
-        taskData: null,
-        reminderData: {
-          title: reminderContent || (language === 'ar' ? 'تذكير جديد' : 'New Reminder'),
-          description: '',
-          due_date: null,
-          due_time: null,
-          priority: "normal"
-        }
-      };
-    }
-  }
-
-  console.log('❌ NO EXPLICIT TASK/REMINDER COMMAND DETECTED');
-  return { isTask: false, isReminder: false, taskData: null, reminderData: null };
-}
 
 // ENHANCED CHAT MODE with HYBRID MEMORY + UPGRADED MODEL
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
@@ -448,13 +374,27 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// ENHANCED IMAGE MODE with VISION + PHASE 1 FIX
+// ENHANCED IMAGE MODE with VISION + PHASE 2 FIXES
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
   console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION");
   
-  // PHASE 1 FIX: If there are attached images, use SONNET for vision analysis
+  // PHASE 2 FIX: If there are attached images, use SONNET for vision analysis
   if (attachedFiles && attachedFiles.length > 0) {
     console.log("👁️ VISION: Analyzing uploaded images with SONNET (UPGRADED)");
+    
+    // PHASE 2 FIX: Check for sensitive documents
+    const isSensitiveDoc = detectSensitiveDocument(message, true);
+    if (isSensitiveDoc) {
+      console.log("🔒 SENSITIVE DOCUMENT DETECTED: Privacy protection activated");
+      return {
+        response: language === 'ar' 
+          ? '🔒 تم اكتشاف وثيقة حساسة. لحماية خصوصيتك، لا يمكنني تحليل جوازات السفر أو وثائق الهوية الرسمية. هل يمكنك مشاركة نوع آخر من الصور؟'
+          : '🔒 Sensitive document detected. For your privacy protection, I cannot analyze passports, ID cards, or other official identity documents. Could you please share a different type of image?',
+        success: true,
+        sensitiveContentDetected: true
+      };
+    }
+    
     return await callSonnetAPI(message, [], '', language, attachedFiles, 4096, personalTouch);
   }
   
@@ -524,7 +464,7 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// PHASE 1: UPGRADED SONNET API CALL + FIXED IMAGE PROCESSING
+// PHASE 1: UPGRADED SONNET API CALL + PHASE 2 FIXED IMAGE PROCESSING
 async function callSonnetAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
   console.log("🚀 SONNET API: Making call with UPGRADED MODEL + FIXED IMAGE PROCESSING");
   
@@ -568,16 +508,16 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
     });
   }
   
-  // PHASE 1 FIX: Add current message with FIXED VISION support
+  // PHASE 2 FIX: Add current message with FIXED VISION support
   let currentMessage: any = { role: 'user', content: message };
   
-  // PHASE 1 FIX: CRITICAL IMAGE PROCESSING FIX
+  // PHASE 2 FIX: CRITICAL IMAGE PROCESSING FIX
   if (attachedFiles && attachedFiles.length > 0) {
     const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
     if (imageFile && imageFile.url) {
-      console.log("🖼️ PHASE 1 FIX: Converting image URL to base64 for Claude API");
+      console.log("🖼️ PHASE 2 FIX: Converting image URL to base64 for Claude API");
       
-      // PHASE 1 FIX: Convert URL to base64 instead of sending URL directly
+      // PHASE 2 FIX: Convert URL to base64 instead of sending URL directly
       const base64Data = await convertImageUrlToBase64(imageFile.url, imageFile.type);
       
       if (base64Data) {
@@ -588,13 +528,13 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
             source: { 
               type: 'base64', 
               media_type: imageFile.type, 
-              data: base64Data  // PHASE 1 FIX: Now sending actual base64 data
+              data: base64Data  // PHASE 2 FIX: Now sending actual base64 data
             } 
           }
         ];
-        console.log("✅ PHASE 1 FIX: Image properly converted to base64 for SONNET vision");
+        console.log("✅ PHASE 2 FIX: Image properly converted to base64 for SONNET vision");
       } else {
-        console.error("❌ PHASE 1 FIX: Failed to convert image, proceeding without vision");
+        console.error("❌ PHASE 2 FIX: Failed to convert image, proceeding without vision");
       }
     }
   }
