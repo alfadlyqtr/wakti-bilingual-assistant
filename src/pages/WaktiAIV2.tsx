@@ -188,6 +188,14 @@ const WaktiAIV2 = () => {
           }
         });
 
+        console.log('📨 TASK RESPONSE RECEIVED:', {
+          error: !!taskResponse.error,
+          data: taskResponse.data,
+          intent: taskResponse.data?.intent,
+          hasIntentData: !!taskResponse.data?.intentData,
+          hasPendingTask: !!taskResponse.data?.intentData?.pendingTask
+        });
+
         if (taskResponse.error) {
           console.error('❌ TASK PROCESSING ERROR:', taskResponse.error);
           throw new Error(`Task processing failed: ${taskResponse.error.message}`);
@@ -216,11 +224,29 @@ const WaktiAIV2 = () => {
 
         setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
 
-        // Show task confirmation if needed
+        // ENHANCED: Show task confirmation if needed with better debugging
         if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
-          console.log('🎯 SHOWING TASK CONFIRMATION:', taskData.intentData.pendingTask);
+          console.log('🎯 SHOWING TASK CONFIRMATION:', {
+            intentData: taskData.intentData,
+            pendingTask: taskData.intentData.pendingTask,
+            taskTitle: taskData.intentData.pendingTask.title,
+            taskDescription: taskData.intentData.pendingTask.description,
+            subtasks: taskData.intentData.pendingTask.subtasks
+          });
+          
           setPendingTaskData(taskData.intentData.pendingTask);
           setShowTaskConfirmation(true);
+          
+          console.log('✅ TASK CONFIRMATION STATE SET:', {
+            showTaskConfirmation: true,
+            pendingTaskDataSet: !!taskData.intentData.pendingTask
+          });
+        } else {
+          console.log('⚠️ NO TASK CONFIRMATION NEEDED:', {
+            intent: taskData.intent,
+            hasIntentData: !!taskData.intentData,
+            hasPendingTask: !!taskData.intentData?.pendingTask
+          });
         }
 
         setIsLoading(false);
@@ -629,7 +655,7 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 overflow-y-auto pb-48" ref={scrollAreaRef}>
+        <div className="flex-1 overflow-y-auto pb-32" ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages.slice(-25)} // Limit to 25 messages
             isLoading={isLoading}
@@ -649,7 +675,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="fixed bottom-20 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
+        <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto">
             <ChatInput
               message={message}

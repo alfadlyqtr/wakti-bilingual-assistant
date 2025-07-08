@@ -278,11 +278,26 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             <div className="space-y-2">
               {/* FIXED: Mode indicator for assistant messages only - shows correct mode */}
               {!isUser && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-                  {getModeIcon()}
-                  <span className="capitalize">
-                    {getModeName()}
-                  </span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    {getModeIcon()}
+                    <span className="capitalize">
+                      {getModeName()}
+                    </span>
+                  </div>
+                  {/* ADDED: Timestamp for assistant messages */}
+                  <div className="text-xs text-muted-foreground">
+                    {formatTimestamp(message.timestamp)}
+                  </div>
+                </div>
+              )}
+
+              {/* User message mode indicator and timestamp */}
+              {isUser && (
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs text-white/60">
+                    {formatTimestamp(message.timestamp)}
+                  </div>
                 </div>
               )}
 
@@ -358,38 +373,31 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
               )}
 
-              {/* ENHANCED: Mini action buttons with timestamp for ALL messages */}
-              <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-border/30">
-                <div className="flex items-center gap-1">
-                  {/* Mini Copy Button */}
-                  <button
-                    onClick={handleCopy}
-                    className="p-1 rounded-md hover:bg-muted/60 transition-colors"
-                    title={language === 'ar' ? 'نسخ' : 'Copy'}
-                  >
-                    <Copy className={`w-3 h-3 ${isUser ? 'text-white/70 hover:text-white' : 'text-muted-foreground'}`} />
-                  </button>
-                  
-                  {/* ENHANCED: Mini Speak Button for ALL messages with Arabic support */}
-                  <button
-                    onClick={handleSpeak}
-                    className={`p-1 rounded-md hover:bg-muted/60 transition-colors ${isSpeaking ? 'bg-primary/20' : ''}`}
-                    title={language === 'ar' ? 'تحدث' : 'Speak'}
-                  >
-                    <Speaker className={`w-3 h-3 ${
-                      isSpeaking 
-                        ? 'text-primary' 
-                        : isUser 
-                          ? 'text-white/70 hover:text-white' 
-                          : 'text-muted-foreground'
-                    }`} />
-                  </button>
-                </div>
-
-                {/* ADDED: Timestamp */}
-                <div className={`text-xs ${isUser ? 'text-white/60' : 'text-muted-foreground'}`}>
-                  {formatTimestamp(message.timestamp)}
-                </div>
+              {/* ENHANCED: Mini action buttons for ALL messages */}
+              <div className="flex items-center gap-2 mt-2 pt-1 border-t border-border/30">
+                {/* Mini Copy Button */}
+                <button
+                  onClick={handleCopy}
+                  className="p-1 rounded-md hover:bg-muted/60 transition-colors"
+                  title={language === 'ar' ? 'نسخ' : 'Copy'}
+                >
+                  <Copy className={`w-3 h-3 ${isUser ? 'text-white/70 hover:text-white' : 'text-muted-foreground'}`} />
+                </button>
+                
+                {/* ENHANCED: Mini Speak Button for ALL messages with Arabic support */}
+                <button
+                  onClick={handleSpeak}
+                  className={`p-1 rounded-md hover:bg-muted/60 transition-colors ${isSpeaking ? 'bg-primary/20' : ''}`}
+                  title={language === 'ar' ? 'تحدث' : 'Speak'}
+                >
+                  <Speaker className={`w-3 h-3 ${
+                    isSpeaking 
+                      ? 'text-primary' 
+                      : isUser 
+                        ? 'text-white/70 hover:text-white' 
+                        : 'text-muted-foreground'
+                  }`} />
+                </button>
               </div>
 
               {/* Enhanced buddy-chat features */}
