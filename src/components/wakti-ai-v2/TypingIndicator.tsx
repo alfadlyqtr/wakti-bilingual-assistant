@@ -18,7 +18,7 @@ export function TypingIndicator() {
         <div className="rounded-lg px-4 py-3 bg-card border-border border">
           <div className="flex items-center gap-2">
             <span className="text-sm text-foreground">
-              {language === 'ar' ? 'WAKTI يكتب' : 'WAKTI is typing'}
+              {language === 'ar' ? 'WAKTI يكتب...' : 'WAKTI is typing...'}
             </span>
             <div className="flex space-x-1">
               <div 

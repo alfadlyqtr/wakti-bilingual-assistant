@@ -114,29 +114,30 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
+  // ENHANCED: Stronger explicit task command detection
   const isExplicitTaskCommand = (messageContent: string): boolean => {
     const lowerMessage = messageContent.toLowerCase().trim();
     
-    // English explicit task patterns
+    // More precise English explicit task patterns
     const englishTaskPatterns = [
-      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task/i,
-      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task/i,
-      /^(i\s+need\s+)?(a\s+)?(new\s+)?task/i,
-      /^task\s*:/i,
-      /^add\s+task/i,
-      /create\s+task/i,
-      /make\s+task/i
+      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{5,})/i,
+      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to|that)\s+(.{5,})/i,
+      /^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to|that)\s+(.{5,})/i,
+      /^task\s*:\s*(.{5,})/i,
+      /^add\s+task\s*:?\s*(.{5,})/i,
+      /^create\s+task\s*:?\s*(.{5,})/i,
+      /^make\s+task\s*:?\s*(.{5,})/i
     ];
     
-    // Arabic explicit task patterns
+    // More precise Arabic explicit task patterns
     const arabicTaskPatterns = [
-      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*مهمة/i,
-      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+مهمة/i,
-      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)/i,
-      /^مهمة\s*:/i,
-      /^أضف\s+مهمة/i,
-      /أنشئ\s+مهمة/i,
-      /اعمل\s+مهمة/i
+      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{5,})/i,
+      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{5,})/i,
+      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{5,})/i,
+      /^مهمة\s*:\s*(.{5,})/i,
+      /^أضف\s+مهمة\s*:?\s*(.{5,})/i,
+      /^أنشئ\s+مهمة\s*:?\s*(.{5,})/i,
+      /^اعمل\s+مهمة\s*:?\s*(.{5,})/i
     ];
 
     // Check both English and Arabic patterns
@@ -160,7 +161,7 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    console.log('🚀 MESSAGE PROCESSING: Starting with task detection');
+    console.log('🚀 MESSAGE PROCESSING: Starting with enhanced task detection');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
@@ -174,7 +175,7 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
-      // FIXED: Route explicit task commands to DeepSeek ONLY
+      // ENHANCED: Route explicit task commands ONLY to DeepSeek
       if (isExplicitTaskCommand(messageContent)) {
         console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to DeepSeek parser ONLY');
         
@@ -630,7 +631,7 @@ const WaktiAIV2 = () => {
       <div className="flex flex-col h-full w-full relative">
         <div className="flex-1 overflow-y-auto pb-48" ref={scrollAreaRef}>
           <ChatMessages
-            sessionMessages={sessionMessages}
+            sessionMessages={sessionMessages.slice(-25)} // Limit to 25 messages
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}

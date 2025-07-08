@@ -73,7 +73,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
       const utterance = new SpeechSynthesisUtterance(message.content);
       
-      // FIXED: Better Arabic detection and voice selection
+      // ENHANCED: Better Arabic detection and voice selection
       const isArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message.content);
       
       // Wait for voices to load
@@ -91,18 +91,24 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       const voices = await getVoices();
       
       if (isArabic) {
-        // Find Arabic voice
+        // Find Arabic voice with better patterns
         const arabicVoice = voices.find(voice => 
           voice.lang.startsWith('ar') || 
           voice.name.toLowerCase().includes('arabic') ||
-          voice.name.toLowerCase().includes('عربي')
+          voice.name.toLowerCase().includes('عربي') ||
+          voice.lang.includes('SA') ||
+          voice.lang.includes('AE') ||
+          voice.lang.includes('EG')
         );
         
         if (arabicVoice) {
           utterance.voice = arabicVoice;
+          console.log('🎙️ ARABIC VOICE FOUND:', arabicVoice.name);
+        } else {
+          console.log('⚠️ NO ARABIC VOICE FOUND, using default');
         }
         utterance.lang = "ar-SA";
-        utterance.rate = 0.8; // Slower for Arabic
+        utterance.rate = 0.7; // Slower for Arabic
       } else {
         // Find English voice
         const englishVoice = voices.find(voice => 
@@ -151,16 +157,57 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     }
   };
 
-  // Get mode indicator icon
+  // FIXED: Get correct mode indicator icon based on actual message context
   const getModeIcon = () => {
-    switch (activeTrigger) {
-      case 'search':
-        return <Search className="w-3 h-3" />;
-      case 'image':
-        return <ImageIcon className="w-3 h-3" />;
-      case 'chat':
-      default:
-        return <MessageSquare className="w-3 h-3" />;
+    // Check if message has browsing data (search mode)
+    if (message.browsingUsed || message.browsingData) {
+      return <Search className="w-3 h-3" />;
+    }
+    
+    // Check if message has image (image mode)
+    if (message.imageUrl || (message.attachedFiles && message.attachedFiles.some((f: any) => f.type?.startsWith('image/')))) {
+      return <ImageIcon className="w-3 h-3" />;
+    }
+    
+    // Default to chat mode
+    return <MessageSquare className="w-3 h-3" />;
+  };
+
+  // FIXED: Get correct mode name based on actual message context
+  const getModeName = () => {
+    // Check if message has browsing data (search mode)
+    if (message.browsingUsed || message.browsingData) {
+      return language === 'ar' ? 'بحث' : 'Search';
+    }
+    
+    // Check if message has image (image mode)
+    if (message.imageUrl || (message.attachedFiles && message.attachedFiles.some((f: any) => f.type?.startsWith('image/')))) {
+      return language === 'ar' ? 'صورة' : 'Image';
+    }
+    
+    // Default to chat mode
+    return language === 'ar' ? 'محادثة' : 'Chat';
+  };
+
+  // ADDED: Format timestamp
+  const formatTimestamp = (timestamp: Date) => {
+    const now = new Date();
+    const msgTime = new Date(timestamp);
+    const diffInHours = (now.getTime() - msgTime.getTime()) / (1000 * 60 * 60);
+    
+    if (diffInHours < 24) {
+      return msgTime.toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } else if (diffInHours < 48) {
+      return language === 'ar' ? 'أمس' : 'Yesterday';
+    } else {
+      return msgTime.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
     }
   };
 
@@ -229,17 +276,12 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             }
           `}>
             <div className="space-y-2">
-              {/* Mode indicator for assistant messages */}
-              {!isUser && activeTrigger && (
+              {/* FIXED: Mode indicator for assistant messages only - shows correct mode */}
+              {!isUser && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
                   {getModeIcon()}
                   <span className="capitalize">
-                    {activeTrigger === 'chat' 
-                      ? (language === 'ar' ? 'محادثة' : 'Chat')
-                      : activeTrigger === 'search'
-                      ? (language === 'ar' ? 'بحث' : 'Search') 
-                      : language === 'ar' ? 'صورة' : 'Image'
-                    }
+                    {getModeName()}
                   </span>
                 </div>
               )}
@@ -316,31 +358,38 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
               )}
 
-              {/* RESTORED: Mini action buttons for ALL messages (user and AI) */}
-              <div className="flex items-center gap-1 mt-2 pt-1 border-t border-border/30">
-                {/* Mini Copy Button */}
-                <button
-                  onClick={handleCopy}
-                  className="p-1 rounded-md hover:bg-muted/60 transition-colors"
-                  title={language === 'ar' ? 'نسخ' : 'Copy'}
-                >
-                  <Copy className={`w-3 h-3 ${isUser ? 'text-white/70 hover:text-white' : 'text-muted-foreground'}`} />
-                </button>
-                
-                {/* RESTORED: Mini Speak Button for ALL messages */}
-                <button
-                  onClick={handleSpeak}
-                  className={`p-1 rounded-md hover:bg-muted/60 transition-colors ${isSpeaking ? 'bg-primary/20' : ''}`}
-                  title={language === 'ar' ? 'تحدث' : 'Speak'}
-                >
-                  <Speaker className={`w-3 h-3 ${
-                    isSpeaking 
-                      ? 'text-primary' 
-                      : isUser 
-                        ? 'text-white/70 hover:text-white' 
-                        : 'text-muted-foreground'
-                  }`} />
-                </button>
+              {/* ENHANCED: Mini action buttons with timestamp for ALL messages */}
+              <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-border/30">
+                <div className="flex items-center gap-1">
+                  {/* Mini Copy Button */}
+                  <button
+                    onClick={handleCopy}
+                    className="p-1 rounded-md hover:bg-muted/60 transition-colors"
+                    title={language === 'ar' ? 'نسخ' : 'Copy'}
+                  >
+                    <Copy className={`w-3 h-3 ${isUser ? 'text-white/70 hover:text-white' : 'text-muted-foreground'}`} />
+                  </button>
+                  
+                  {/* ENHANCED: Mini Speak Button for ALL messages with Arabic support */}
+                  <button
+                    onClick={handleSpeak}
+                    className={`p-1 rounded-md hover:bg-muted/60 transition-colors ${isSpeaking ? 'bg-primary/20' : ''}`}
+                    title={language === 'ar' ? 'تحدث' : 'Speak'}
+                  >
+                    <Speaker className={`w-3 h-3 ${
+                      isSpeaking 
+                        ? 'text-primary' 
+                        : isUser 
+                          ? 'text-white/70 hover:text-white' 
+                          : 'text-muted-foreground'
+                    }`} />
+                  </button>
+                </div>
+
+                {/* ADDED: Timestamp */}
+                <div className={`text-xs ${isUser ? 'text-white/60' : 'text-muted-foreground'}`}>
+                  {formatTimestamp(message.timestamp)}
+                </div>
               </div>
 
               {/* Enhanced buddy-chat features */}

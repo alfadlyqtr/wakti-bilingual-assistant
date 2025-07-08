@@ -12,12 +12,12 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + NO TASK DETECTION + FULL IMAGE PROCESSING");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + COMPLETE IMAGE PROCESSING + ENHANCED TEXT EXTRACTION");
 
-// PHASE 3 FINAL FIX: Image URL to Base64 conversion function
+// ENHANCED: Image URL to Base64 conversion function for ALL image types
 async function convertImageUrlToBase64(imageUrl: string, imageType: string): Promise<string | null> {
   try {
-    console.log('🖼️ IMAGE PROCESSING: Converting ALL image types:', imageUrl.substring(0, 50) + '...');
+    console.log('🖼️ IMAGE PROCESSING: Converting ALL image types (including sensitive documents):', imageUrl.substring(0, 50) + '...');
     
     const response = await fetch(imageUrl);
     if (!response.ok) {
@@ -27,7 +27,7 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string): Pro
     const arrayBuffer = await response.arrayBuffer();
     const base64String = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
     
-    console.log('✅ IMAGE PROCESSING: ALL IMAGES SUPPORTED, size:', arrayBuffer.byteLength, 'bytes');
+    console.log('✅ IMAGE PROCESSING: ALL IMAGES SUPPORTED (passports, IDs, documents, photos), size:', arrayBuffer.byteLength, 'bytes');
     return base64String;
   } catch (error) {
     console.error('❌ IMAGE PROCESSING ERROR:', error);
@@ -140,7 +140,7 @@ serve(async (req) => {
       recentMessages = [],
       conversationSummary = '',
       personalTouch = null,
-      enableTaskDetection = false // PHASE 3 FIX: NO task detection in regular chat
+      enableTaskDetection = false // NO task detection in regular chat
     } = requestBody || {};
 
     console.log("🎯 EXTRACTED PARAMS:", {
@@ -190,7 +190,7 @@ serve(async (req) => {
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // PHASE 3 CRITICAL FIX: NO TASK DETECTION AT ALL IN REGULAR CHAT
+    // NO TASK DETECTION AT ALL IN REGULAR CHAT
     console.log('💬 REGULAR CHAT: Processing without any task detection');
 
     // MODE-BASED PROCESSING with HYBRID MEMORY (NO TASK DETECTION HERE)
@@ -353,14 +353,14 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// PHASE 3 FINAL FIX: ENHANCED IMAGE MODE with VISION + FULL PROCESSING (ALL IMAGE TYPES)
+// COMPLETE IMAGE MODE: ALL IMAGE TYPES SUPPORTED + ENHANCED TEXT EXTRACTION
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION (ALL IMAGE TYPES ALLOWED)");
+  console.log("🎨 IMAGE MODE: Processing with RUNWARE + SONNET VISION (ALL IMAGE TYPES SUPPORTED - NO RESTRICTIONS)");
   
-  // PHASE 3 FINAL FIX: If there are attached images, use SONNET for vision analysis - ALL IMAGES ALLOWED
+  // COMPLETE IMAGE PROCESSING: If there are attached images, use SONNET for vision analysis - ALL IMAGES SUPPORTED
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ VISION: Analyzing ALL uploaded images - NO RESTRICTIONS");
-    console.log("🔓 ALL IMAGE TYPES SUPPORTED: passports, IDs, documents, photos, everything");
+    console.log("👁️ VISION: Analyzing ALL uploaded images - ZERO RESTRICTIONS");
+    console.log("🔓 ALL IMAGE TYPES SUPPORTED: passports, IDs, documents, photos, screenshots, everything");
     return await callSonnetAPI(message, [], '', language, attachedFiles, 4096, personalTouch);
   }
   
@@ -430,9 +430,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// PHASE 3 FINAL FIX: UPGRADED SONNET API CALL + ALL IMAGE TYPES SUPPORTED
+// COMPLETE SONNET API CALL: ALL IMAGE TYPES SUPPORTED + ENHANCED TEXT EXTRACTION
 async function callSonnetAPI(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🚀 SONNET API: Making call with UPGRADED MODEL + ALL IMAGE TYPES SUPPORTED");
+  console.log("🚀 SONNET API: Making call with UPGRADED MODEL + ALL IMAGE TYPES SUPPORTED + ENHANCED EXTRACTION");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -441,18 +441,32 @@ async function callSonnetAPI(message: string, contextMessages: any[], conversati
     weekday: 'long'
   });
   
-  // ENHANCED SYSTEM PROMPT with ALL IMAGE PROCESSING
+  // ENHANCED SYSTEM PROMPT with COMPLETE IMAGE PROCESSING + BETTER TEXT EXTRACTION
   let systemPrompt = language === 'ar'
     ? `أنت WAKTI AI، مساعد ذكي متقدم يعمل بنموذج Claude 3.5 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}. 
 
 عندما تجيب، استخدم عبارات مثل "كما ناقشنا من قبل" أو "بناءً على محادثتنا السابقة" عندما تكون ذات صلة. اجب بالعربية.
 
-يمكنك تحليل جميع أنواع الصور بلا استثناء: جوازات السفر، بطاقات الهوية، الوثائق الحساسة، الصور الشخصية، المناظر الطبيعية، صفحات الكتب، الشاشات، كل شيء. لا توجد أي قيود على تحليل الصور.`
+يمكنك تحليل جميع أنواع الصور بلا استثناء: جوازات السفر، بطاقات الهوية، الوثائق الحساسة، الصور الشخصية، المناظر الطبيعية، صفحات الكتب، الشاشات، كل شيء. لا توجد أي قيود على تحليل الصور.
+
+عند تحليل الوثائق والمستندات، قم بما يلي:
+- استخرج جميع النصوص والبيانات بدقة عالية
+- اقرأ جميع الأرقام والتواريخ والأسماء بعناية
+- لا تتجاهل أي معلومة مهما كانت صغيرة
+- قدم تحليل مفصل ودقيق للمحتوى
+- احرص على الدقة في القراءة والاستخراج`
     : `You are WAKTI AI, an advanced AI assistant powered by Claude 3.5 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}. 
 
 When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.
 
-You can analyze ALL types of images without any exceptions: passports, ID cards, sensitive documents, portraits, scenery, textbook pages, screenshots, everything. There are absolutely no restrictions on image analysis.`;
+You can analyze ALL types of images without any exceptions: passports, ID cards, sensitive documents, portraits, scenery, textbook pages, screenshots, everything. There are absolutely no restrictions on image analysis.
+
+When analyzing documents and images, please:
+- Extract all text and data with high accuracy
+- Read all numbers, dates, and names carefully
+- Don't ignore any information no matter how small
+- Provide detailed and precise analysis of the content
+- Focus on accuracy in reading and extraction`;
 
   // APPLY PERSONALIZATION with ENHANCED MEMORY
   if (personalTouch && personalTouch.instruction) {
@@ -487,17 +501,17 @@ You can analyze ALL types of images without any exceptions: passports, ID cards,
     });
   }
   
-  // PHASE 3 FINAL FIX: Add current message with UNRESTRICTED VISION support - ALL IMAGES SUPPORTED
+  // COMPLETE IMAGE PROCESSING: Add current message with UNRESTRICTED VISION support - ALL IMAGES SUPPORTED
   let currentMessage: any = { role: 'user', content: message };
   
-  // PHASE 3 FINAL FIX: Process ALL IMAGES - NO RESTRICTIONS WHATSOEVER
+  // COMPLETE IMAGE PROCESSING: Process ALL IMAGES - ZERO RESTRICTIONS WHATSOEVER
   if (attachedFiles && attachedFiles.length > 0) {
     const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
     if (imageFile && imageFile.url) {
-      console.log("🖼️ PHASE 3 FINAL FIX: Processing ALL image types - ZERO restrictions");
-      console.log("🔓 IMAGE ANALYSIS: Passports, IDs, documents, photos - EVERYTHING allowed");
+      console.log("🖼️ COMPLETE IMAGE PROCESSING: Processing ALL image types - ZERO restrictions");
+      console.log("🔓 IMAGE ANALYSIS: Passports, IDs, documents, photos - EVERYTHING supported and analyzed");
       
-      // PHASE 3 FINAL FIX: Convert URL to base64 for Claude API
+      // Convert URL to base64 for Claude API
       const base64Data = await convertImageUrlToBase64(imageFile.url, imageFile.type);
       
       if (base64Data) {
@@ -512,9 +526,9 @@ You can analyze ALL types of images without any exceptions: passports, ID cards,
             } 
           }
         ];
-        console.log("✅ PHASE 3 FINAL FIX: ALL image types supported - including ALL sensitive documents");
+        console.log("✅ COMPLETE IMAGE PROCESSING: ALL image types supported - including ALL sensitive documents");
       } else {
-        console.error("❌ PHASE 3 FINAL FIX: Failed to convert image, proceeding without vision");
+        console.error("❌ COMPLETE IMAGE PROCESSING: Failed to convert image, proceeding without vision");
       }
     }
   }
@@ -522,7 +536,7 @@ You can analyze ALL types of images without any exceptions: passports, ID cards,
   messages.push(currentMessage);
   
   try {
-    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with ALL IMAGE SUPPORT`);
+    console.log(`🚀 SONNET: Sending ${messages.length} messages to UPGRADED model with COMPLETE IMAGE SUPPORT`);
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -534,6 +548,7 @@ You can analyze ALL types of images without any exceptions: passports, ID cards,
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: maxTokens,
+        temperature: 0.1, // Lower temperature for better text extraction accuracy
         system: systemPrompt,
         messages: messages
       }),
@@ -551,7 +566,7 @@ You can analyze ALL types of images without any exceptions: passports, ID cards,
       aiResponse = applyEnhancedPersonalization(aiResponse, personalTouch, language, contextMessages.length > 0);
     }
     
-    console.log("🚀 SONNET: UPGRADED model response generated with ALL IMAGE SUPPORT!");
+    console.log("🚀 SONNET: UPGRADED model response generated with COMPLETE IMAGE SUPPORT!");
     
     return {
       response: aiResponse,
@@ -572,7 +587,7 @@ You can analyze ALL types of images without any exceptions: passports, ID cards,
   }
 }
 
-// PHASE 3 FINAL FIX: ENHANCED PERSONALIZATION with BETTER MEMORY EXPERIENCE
+// ENHANCED PERSONALIZATION with BETTER MEMORY EXPERIENCE
 function applyEnhancedPersonalization(response: string, personalTouch: any, language: string, hasContext: boolean): string {
   let enhancedResponse = response;
   
