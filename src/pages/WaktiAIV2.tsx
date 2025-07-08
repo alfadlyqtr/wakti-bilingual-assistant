@@ -11,7 +11,7 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
-import { TRService } from '@/services/trService';
+import { TRService } from '@/services/TRService';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -55,6 +55,14 @@ const WaktiAIV2 = () => {
   const [isUploading, setIsUploading] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isClearingChat, setIsClearingChat] = useState(false);
+  
+  // ENHANCED: Add debugging state for task confirmation
+  const [taskConfirmationDebug, setTaskConfirmationDebug] = useState({
+    showConfirmation: false,
+    hasPendingData: false,
+    dataKeys: [],
+    lastUpdated: null
+  });
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,7 +122,27 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  // ENHANCED: Stronger explicit task command detection
+  // ENHANCED: Add useEffect to monitor task confirmation state changes
+  useEffect(() => {
+    console.log('🎯 TASK CONFIRMATION STATE MONITOR:', {
+      showTaskConfirmation,
+      hasPendingTaskData: !!pendingTaskData,
+      hasPendingReminderData: !!pendingReminderData,
+      pendingTaskKeys: pendingTaskData ? Object.keys(pendingTaskData) : [],
+      pendingReminderKeys: pendingReminderData ? Object.keys(pendingReminderData) : [],
+      timestamp: new Date().toISOString()
+    });
+    
+    // Update debug state
+    setTaskConfirmationDebug({
+      showConfirmation: showTaskConfirmation,
+      hasPendingData: !!(pendingTaskData || pendingReminderData),
+      dataKeys: pendingTaskData ? Object.keys(pendingTaskData) : (pendingReminderData ? Object.keys(pendingReminderData) : []),
+      lastUpdated: new Date().toISOString()
+    });
+  }, [showTaskConfirmation, pendingTaskData, pendingReminderData]);
+
+  // ENHANCED: Stronger task command detection with better logging
   const isExplicitTaskCommand = (messageContent: string): boolean => {
     const lowerMessage = messageContent.toLowerCase().trim();
     
@@ -142,7 +170,15 @@ const WaktiAIV2 = () => {
 
     // Check both English and Arabic patterns
     const allPatterns = [...englishTaskPatterns, ...arabicTaskPatterns];
-    return allPatterns.some(pattern => pattern.test(messageContent));
+    const isExplicit = allPatterns.some(pattern => pattern.test(messageContent));
+    
+    console.log('🔍 TASK COMMAND DETECTION:', {
+      message: messageContent.substring(0, 100) + '...',
+      isExplicit,
+      matchedPatterns: allPatterns.filter(pattern => pattern.test(messageContent)).length
+    });
+    
+    return isExplicit;
   };
 
   const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
@@ -175,9 +211,15 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
-      // ENHANCED: Route explicit task commands ONLY to DeepSeek
+      // ENHANCED: Route explicit task commands ONLY to DeepSeek with better state management
       if (isExplicitTaskCommand(messageContent)) {
         console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to DeepSeek parser ONLY');
+        
+        // ENHANCED: Clear any previous task confirmation state
+        console.log('🔄 CLEARING PREVIOUS TASK STATE');
+        setShowTaskConfirmation(false);
+        setPendingTaskData(null);
+        setPendingReminderData(null);
         
         const taskResponse = await supabase.functions.invoke('process-ai-intent', {
           body: {
@@ -224,9 +266,9 @@ const WaktiAIV2 = () => {
 
         setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
 
-        // ENHANCED: Show task confirmation if needed with better debugging
+        // ENHANCED: Show task confirmation with improved state management
         if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
-          console.log('🎯 SHOWING TASK CONFIRMATION:', {
+          console.log('🎯 PREPARING TO SHOW TASK CONFIRMATION:', {
             intentData: taskData.intentData,
             pendingTask: taskData.intentData.pendingTask,
             taskTitle: taskData.intentData.pendingTask.title,
@@ -234,13 +276,27 @@ const WaktiAIV2 = () => {
             subtasks: taskData.intentData.pendingTask.subtasks
           });
           
-          setPendingTaskData(taskData.intentData.pendingTask);
-          setShowTaskConfirmation(true);
+          // ENHANCED: Use setTimeout to ensure state propagation
+          setTimeout(() => {
+            console.log('🔄 SETTING TASK CONFIRMATION STATE');
+            setPendingTaskData(taskData.intentData.pendingTask);
+            
+            // Additional setTimeout to ensure pendingTaskData is set first
+            setTimeout(() => {
+              console.log('✅ ENABLING TASK CONFIRMATION DISPLAY');
+              setShowTaskConfirmation(true);
+              
+              // Triple-check the state was set correctly
+              setTimeout(() => {
+                console.log('🔍 TASK CONFIRMATION STATE VERIFICATION:', {
+                  showTaskConfirmation: true,
+                  pendingTaskDataSet: !!taskData.intentData.pendingTask,
+                  actualData: taskData.intentData.pendingTask
+                });
+              }, 100);
+            }, 50);
+          }, 100);
           
-          console.log('✅ TASK CONFIRMATION STATE SET:', {
-            showTaskConfirmation: true,
-            pendingTaskDataSet: !!taskData.intentData.pendingTask
-          });
         } else {
           console.log('⚠️ NO TASK CONFIRMATION NEEDED:', {
             intent: taskData.intent,
@@ -634,6 +690,17 @@ const WaktiAIV2 = () => {
 
   return (
     <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
+      {/* ENHANCED: Add debug panel in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-16 right-4 z-50 bg-black/80 text-white p-3 rounded-lg text-xs max-w-xs">
+          <div className="font-bold mb-2">Task Confirmation Debug</div>
+          <div>Show: {taskConfirmationDebug.showConfirmation ? '✅' : '❌'}</div>
+          <div>Data: {taskConfirmationDebug.hasPendingData ? '✅' : '❌'}</div>
+          <div>Keys: {taskConfirmationDebug.dataKeys.join(', ')}</div>
+          <div>Updated: {taskConfirmationDebug.lastUpdated?.substring(11, 19)}</div>
+        </div>
+      )}
+      
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
@@ -657,7 +724,7 @@ const WaktiAIV2 = () => {
       <div className="flex flex-col h-full w-full relative">
         <div className="flex-1 overflow-y-auto pb-32" ref={scrollAreaRef}>
           <ChatMessages
-            sessionMessages={sessionMessages.slice(-25)} // Limit to 25 messages
+            sessionMessages={sessionMessages.slice(-25)}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}

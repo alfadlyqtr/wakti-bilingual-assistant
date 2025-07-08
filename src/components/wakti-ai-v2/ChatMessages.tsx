@@ -52,7 +52,28 @@ export function ChatMessages({
     }
   }, [sessionMessages, showTaskConfirmation]);
 
-  // PHASE 2 CRITICAL FIX: Show welcome message for new conversations
+  // ENHANCED: Add comprehensive task confirmation logging
+  useEffect(() => {
+    console.log('📋 CHAT MESSAGES: Task confirmation state changed:', {
+      showTaskConfirmation,
+      hasPendingTaskData: !!pendingTaskData,
+      hasPendingReminderData: !!pendingReminderData,
+      pendingTaskData: pendingTaskData ? {
+        title: pendingTaskData.title,
+        description: pendingTaskData.description,
+        hasSubtasks: !!pendingTaskData.subtasks,
+        subtaskCount: pendingTaskData.subtasks?.length || 0
+      } : null,
+      pendingReminderData: pendingReminderData ? {
+        title: pendingReminderData.title,
+        description: pendingReminderData.description
+      } : null,
+      shouldRenderConfirmation: showTaskConfirmation && (pendingTaskData || pendingReminderData),
+      timestamp: new Date().toISOString()
+    });
+  }, [showTaskConfirmation, pendingTaskData, pendingReminderData]);
+
+  // Show welcome message for new conversations
   const renderWelcomeMessage = () => {
     if (!isNewConversation || sessionMessages.length > 0) return null;
 
@@ -79,6 +100,56 @@ export function ChatMessages({
     );
   };
 
+  // ENHANCED: Task confirmation rendering with better debugging
+  const renderTaskConfirmation = () => {
+    const shouldShow = showTaskConfirmation && (pendingTaskData || pendingReminderData);
+    
+    console.log('🎯 RENDER TASK CONFIRMATION CHECK:', {
+      showTaskConfirmation,
+      hasPendingTaskData: !!pendingTaskData,
+      hasPendingReminderData: !!pendingReminderData,
+      shouldShow,
+      pendingTaskTitle: pendingTaskData?.title,
+      pendingReminderTitle: pendingReminderData?.title
+    });
+    
+    if (!shouldShow) {
+      console.log('❌ TASK CONFIRMATION NOT RENDERED - Missing conditions');
+      return null;
+    }
+
+    console.log('✅ RENDERING TASK CONFIRMATION CARD');
+    
+    return (
+      <div className="flex justify-center mb-4">
+        <TaskConfirmationCard
+          type={pendingTaskData ? 'task' : 'reminder'}
+          data={pendingTaskData || pendingReminderData}
+          onConfirm={() => {
+            console.log('🔄 TASK CONFIRMATION BUTTON CLICKED');
+            if (pendingTaskData) {
+              onTaskConfirmation(pendingTaskData);
+            } else {
+              onReminderConfirmation(pendingReminderData);
+            }
+          }}
+          onCancel={() => {
+            console.log('❌ TASK CONFIRMATION CANCELLED');
+            onCancelTaskConfirmation();
+          }}
+          isLoading={taskConfirmationLoading}
+        />
+      </div>
+    );
+  };
+
+  console.log('🖼️ CHAT MESSAGES: Rendering with', {
+    messagesCount: sessionMessages.length,
+    isLoading,
+    showTaskConfirmation,
+    hasPendingData: !!(pendingTaskData || pendingReminderData)
+  });
+
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       <div className="max-w-4xl mx-auto">
@@ -98,22 +169,17 @@ export function ChatMessages({
         {/* Loading Indicator with proper TypingIndicator */}
         {isLoading && <TypingIndicator />}
         
-        {/* PHASE 2 CRITICAL FIX: Task Confirmation Display */}
-        {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
-          <div className="flex justify-center mb-4">
-            <TaskConfirmationCard
-              type={pendingTaskData ? 'task' : 'reminder'}
-              data={pendingTaskData || pendingReminderData}
-              onConfirm={() => {
-                if (pendingTaskData) {
-                  onTaskConfirmation(pendingTaskData);
-                } else {
-                  onReminderConfirmation(pendingReminderData);
-                }
-              }}
-              onCancel={onCancelTaskConfirmation}
-              isLoading={taskConfirmationLoading}
-            />
+        {/* ENHANCED: Task Confirmation Display with debugging */}
+        {renderTaskConfirmation()}
+        
+        {/* Development debug info */}
+        {process.env.NODE_ENV === 'development' && (showTaskConfirmation || pendingTaskData || pendingReminderData) && (
+          <div className="bg-yellow-100 border border-yellow-300 rounded p-3 text-xs">
+            <div className="font-bold text-yellow-800 mb-2">Task Confirmation Debug Info</div>
+            <div>Show Confirmation: {showTaskConfirmation ? '✅' : '❌'}</div>
+            <div>Pending Task: {pendingTaskData ? '✅' : '❌'} {pendingTaskData?.title || 'N/A'}</div>
+            <div>Pending Reminder: {pendingReminderData ? '✅' : '❌'} {pendingReminderData?.title || 'N/A'}</div>
+            <div>Should Render: {(showTaskConfirmation && (pendingTaskData || pendingReminderData)) ? '✅' : '❌'}</div>
           </div>
         )}
         
