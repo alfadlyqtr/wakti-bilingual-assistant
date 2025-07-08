@@ -192,7 +192,7 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main Input Area - ADJUSTED POSITION */}
+        {/* Main Input Area - FIXED SPACING */}
         <div className="px-3 pb-3 pt-2">
           <div className="max-w-4xl mx-auto">
             <div
@@ -203,6 +203,7 @@ export function ChatInput({
                 p-0 transition-all duration-300
                 shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
                 border-[2.5px] min-h-[70px] max-w-full
+                mb-3
               `}
             >
               {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
