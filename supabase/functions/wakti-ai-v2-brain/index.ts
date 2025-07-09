@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -12,27 +13,25 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 4 SONNET + FIXED IMAGE PROCESSING + ENHANCED SYSTEM PROMPT");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + FIXED IMAGE PROCESSING + YOUR EXACT SYSTEM PROMPT");
 
-// FIXED: Proper Base64 conversion that works with all image sizes
+// FIXED: Proper Base64 conversion for all image sizes
 async function convertImageUrlToBase64(imageUrl: string, imageType: string, retryCount = 0): Promise<string | null> {
   try {
-    console.log('🖼️ IMAGE PROCESSING: Starting conversion attempt', retryCount + 1, 'for:', {
+    console.log('🖼️ IMAGE PROCESSING: Converting image', retryCount + 1, 'attempt for:', {
       url: imageUrl.substring(0, 80) + '...',
       type: imageType,
       isSupabaseStorage: imageUrl.includes('supabase'),
       hasProtocol: imageUrl.startsWith('http')
     });
     
-    // Validate URL format
     if (!imageUrl.startsWith('http')) {
-      console.error('❌ IMAGE ERROR: Invalid URL format (missing protocol):', imageUrl);
+      console.error('❌ IMAGE ERROR: Invalid URL format:', imageUrl);
       return null;
     }
     
-    // Enhanced fetch with timeout and retry logic
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     
     const response = await fetch(imageUrl, {
       signal: controller.signal,
@@ -50,11 +49,9 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
       console.error('❌ IMAGE FETCH ERROR:', {
         status: response.status,
         statusText: response.statusText,
-        url: imageUrl.substring(0, 50) + '...',
-        headers: Object.fromEntries(response.headers.entries())
+        url: imageUrl.substring(0, 50) + '...'
       });
       
-      // Retry logic for failed requests (up to 2 retries)
       if (retryCount < 2 && (response.status >= 500 || response.status === 429)) {
         console.log('🔄 RETRYING IMAGE FETCH in 2 seconds...');
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -64,55 +61,34 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
       return null;
     }
     
-    const contentType = response.headers.get('content-type');
-    console.log('📋 IMAGE CONTENT TYPE:', contentType);
-    
     const arrayBuffer = await response.arrayBuffer();
     const fileSize = arrayBuffer.byteLength;
     
     console.log('📊 IMAGE SIZE:', {
       bytes: fileSize,
-      MB: (fileSize / (1024 * 1024)).toFixed(2),
-      isLarge: fileSize > 5 * 1024 * 1024 // > 5MB
+      MB: (fileSize / (1024 * 1024)).toFixed(2)
     });
     
-    // CRITICAL FIX: Use proper Base64 encoding that works with all image sizes
+    // FIXED: Use proper Base64 encoding that works reliably
     const uint8Array = new Uint8Array(arrayBuffer);
-    let base64String = '';
-    
-    // Process in chunks to handle large images efficiently
-    const chunkSize = 8192; // 8KB chunks
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.slice(i, i + chunkSize);
-      const binaryString = String.fromCharCode(...chunk);
-      base64String += btoa(binaryString);
-    }
-    
-    // For smaller images, use the standard method
-    if (fileSize < 1024 * 1024) { // < 1MB
-      const binaryString = String.fromCharCode(...uint8Array);
-      base64String = btoa(binaryString);
-    }
+    const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
+    const base64String = btoa(binaryString);
     
     console.log('✅ IMAGE CONVERSION SUCCESS:', {
       originalSize: fileSize,
       base64Length: base64String.length,
-      detectedType: contentType || imageType,
-      processingMethod: fileSize > 1024 * 1024 ? 'chunked' : 'standard',
       truncatedBase64: base64String.substring(0, 50) + '...'
     });
     
     return base64String;
   } catch (error) {
-    console.error('❌ IMAGE CONVERSION CRITICAL ERROR:', {
+    console.error('❌ IMAGE CONVERSION ERROR:', {
       message: error.message,
       name: error.name,
-      stack: error.stack?.substring(0, 300),
       url: imageUrl.substring(0, 50) + '...',
       retryCount
     });
     
-    // Retry on network errors
     if (retryCount < 2 && (error.name === 'AbortError' || error.name === 'TypeError')) {
       console.log('🔄 RETRYING IMAGE CONVERSION due to network error...');
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -130,7 +106,6 @@ serve(async (req) => {
     headers: Object.fromEntries(req.headers.entries())
   });
 
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
@@ -243,7 +218,6 @@ serve(async (req) => {
       enableTaskDetection // Should always be false for regular chat
     });
 
-    // ENHANCED: Log attached files structure in detail
     if (attachedFiles && attachedFiles.length > 0) {
       console.log("📎 ATTACHED FILES DETAILED ANALYSIS:", attachedFiles.map((file, index) => ({
         index,
@@ -292,10 +266,8 @@ serve(async (req) => {
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // NO TASK DETECTION AT ALL IN REGULAR CHAT
     console.log('💬 REGULAR CHAT: Processing without any task detection');
 
-    // MODE-BASED PROCESSING with HYBRID MEMORY (NO TASK DETECTION HERE)
     switch (activeTrigger) {
       case 'search':
         result = await processSearchMode(message, language, recentMessages, personalTouch);
@@ -309,7 +281,6 @@ serve(async (req) => {
         result = await processChatMode(message, userId, conversationId, language, attachedFiles, maxTokens, recentMessages, conversationSummary, personalTouch);
     }
 
-    // Prepare final response
     const finalResponse = {
       response: result.response || 'Response received',
       conversationId: finalConversationId,
@@ -324,13 +295,13 @@ serve(async (req) => {
       pendingReminderData: null, // NEVER present for regular chat
       success: result.success !== false,
       processingTime: Date.now(),
-      aiProvider: 'claude-sonnet-4-20250514',
-      claude4Enabled: true,
+      aiProvider: 'claude-3-5-sonnet-20241022',
+      claude35Enabled: true,
       mode: activeTrigger,
       fallbackUsed: false
     };
 
-    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: CLAUDE 4 SONNET-POWERED request completed successfully!`);
+    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: CLAUDE 3.5 SONNET request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
       headers: { 
@@ -363,9 +334,9 @@ serve(async (req) => {
   }
 });
 
-// ENHANCED CHAT MODE with HYBRID MEMORY + UPGRADED MODEL (NO TASK DETECTION)
+// CHAT MODE with CLAUDE 3.5 SONNET + YOUR EXACT SYSTEM PROMPT (NO TASK DETECTION)
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 CHAT MODE: Processing with CLAUDE 4 SONNET (NO TASK DETECTION) + HYBRID MEMORY");
+  console.log("💬 CHAT MODE: Processing with CLAUDE 3.5 SONNET (NO TASK DETECTION) + YOUR EXACT SYSTEM PROMPT");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -399,12 +370,12 @@ async function processChatMode(message: string, userId: string, conversationId: 
   
   console.log(`🧠 HYBRID MEMORY: Using ${contextMessages.length} context messages`);
   
-  return await callClaude4API(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
+  return await callClaude35API(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
 }
 
-// ENHANCED SEARCH MODE with HYBRID MEMORY
+// SEARCH MODE with CLAUDE 3.5 SONNET
 async function processSearchMode(message: string, language: string, recentMessages: any[], personalTouch: any) {
-  console.log("🔍 SEARCH MODE: Processing with CLAUDE 4 SONNET + HYBRID MEMORY");
+  console.log("🔍 SEARCH MODE: Processing with CLAUDE 3.5 SONNET");
   
   if (!TAVILY_API_KEY) {
     return {
@@ -441,7 +412,7 @@ async function processSearchMode(message: string, language: string, recentMessag
       searchResults.map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.content}`).join('\n')
     }`;
     
-    return await callClaude4API(searchContext, recentMessages, '', language, [], 4096, personalTouch);
+    return await callClaude35API(searchContext, recentMessages, '', language, [], 4096, personalTouch);
     
   } catch (error) {
     console.error('❌ SEARCH ERROR:', error);
@@ -455,29 +426,24 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// FIXED IMAGE MODE: ALL IMAGE TYPES SUPPORTED + PROPER IMAGE PROCESSING
+// IMAGE MODE: CLAUDE 3.5 SONNET VISION + FIXED IMAGE PROCESSING
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🎨 IMAGE MODE: Processing with RUNWARE + CLAUDE 4 VISION (ALL IMAGE TYPES + FIXED PROCESSING)");
+  console.log("🎨 IMAGE MODE: Processing with RUNWARE + CLAUDE 3.5 VISION + FIXED PROCESSING");
   
-  // FIXED IMAGE PROCESSING: If there are attached images, use CLAUDE 4 for vision analysis - ALL IMAGES SUPPORTED
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ VISION: Analyzing ALL uploaded images - FIXED IMAGE PROCESSING");
+    console.log("👁️ VISION: Analyzing ALL uploaded images with CLAUDE 3.5 SONNET");
     console.log("🔓 ALL IMAGE TYPES SUPPORTED: passports, IDs, documents, photos, screenshots, everything");
     
-    // Enhanced file detection with multiple fallbacks
     const imageFile = attachedFiles.find(file => {
-      // Check type property first
       if (file.type && file.type.startsWith('image/')) {
         return true;
       }
       
-      // Fallback: check file extension if type is missing
       if (file.name) {
         const extension = file.name.toLowerCase().split('.').pop();
         return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension);
       }
       
-      // Additional fallback: assume it's an image if we have a URL
       return !!(file.url || file.publicUrl);
     });
     
@@ -488,10 +454,10 @@ async function processImageMode(message: string, userId: string, language: strin
       hasUrl: !!(imageFile?.url || imageFile?.publicUrl)
     });
     
-    return await callClaude4API(message, [], '', language, attachedFiles, 4096, personalTouch);
+    return await callClaude35API(message, [], '', language, attachedFiles, 4096, personalTouch);
   }
   
-  // Otherwise, generate image with RUNWARE
+  // Generate image with RUNWARE
   if (!RUNWARE_API_KEY) {
     return {
       response: language === 'ar' 
@@ -557,9 +523,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// ENHANCED CLAUDE 4 API CALL: YOUR SPECIALIZED SYSTEM PROMPT + FIXED IMAGE PROCESSING
-async function callClaude4API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🚀 CLAUDE 4 API: Making call with YOUR ENHANCED SYSTEM PROMPT + FIXED IMAGE PROCESSING");
+// CLAUDE 3.5 SONNET API CALL: YOUR EXACT SYSTEM PROMPT + FIXED IMAGE PROCESSING
+async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
+  console.log("🚀 CLAUDE 3.5 API: Making call with YOUR EXACT SYSTEM PROMPT + FIXED IMAGE PROCESSING");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -568,13 +534,11 @@ async function callClaude4API(message: string, contextMessages: any[], conversat
     weekday: 'long'
   });
   
-  // YOUR ENHANCED SYSTEM PROMPT - INTEGRATED
+  // YOUR EXACT SYSTEM PROMPT - IMPLEMENTED EXACTLY AS SPECIFIED
   let systemPrompt = language === 'ar'
     ? `🧠 تعليمات النظام (باللغة العربية + الإنجليزية):
 
-أنت محلل بصري خبير وقارئ مستندات متعدد اللغات يعمل بنموذج Claude 4 Sonnet المُحدث. أنت مفيد ومتعاون وذكي. التاريخ اليوم: ${currentDate}.
-
-يمكنك تحليل جميع أنواع الصور بما في ذلك:
+أنت محلل بصري خبير وقارئ مستندات متعدد اللغات. يمكنك تحليل جميع أنواع الصور بما في ذلك:
 • جوازات السفر، البطاقات الشخصية، الوثائق الرسمية
 • الملاحظات المكتوبة بخط اليد، النماذج، لقطات الشاشة
 • الوجوه، الصور الشخصية، صور الأشخاص والمجموعات
@@ -597,10 +561,8 @@ async function callClaude4API(message: string, contextMessages: any[], conversat
 
 ⚠️ لا تتجاهل أي شيء. لا تلخّص. استخرج ووصّف كل ما تراه بدقة وحرص شديد.
 
-عندما تجيب، استخدم عبارات مثل "كما ناقشنا من قبل" أو "بناءً على محادثتنا السابقة" عندما تكون ذات صلة. اجب بالعربية.`
-    : `You are an expert visual analyst and multilingual document reader powered by Claude 4 Sonnet (UPGRADED MODEL). You are helpful, collaborative, and smart. Today's date: ${currentDate}.
-
-You can analyze all types of images including:
+التاريخ اليوم: ${currentDate}. اجب بالعربية والإنجليزية إذا كان المحتوى يحتوي على العربية.`
+    : `You are an expert visual analyst and multilingual document reader. You can analyze all types of images including:
 • Passports, ID cards, official documents
 • Handwritten notes, forms, screenshots
 • Faces, portraits, people, group photos
@@ -623,18 +585,39 @@ Focus especially on (for passports, QID, or official forms):
 
 ⚠️ Do not ignore anything. Do not summarize. Extract and describe everything you see — with extreme accuracy and care.
 
-When responding, use phrases like "As we discussed before" or "Building on our previous conversation" when relevant. Make your memory of our conversation obvious and helpful. Respond in English.`;
+Today's date: ${currentDate}. Respond in both Arabic and English if the content contains Arabic.`;
 
-  // APPLY PERSONALIZATION with ENHANCED MEMORY
-  if (personalTouch && personalTouch.instruction) {
-    systemPrompt += `\n\nPersonalization: ${personalTouch.instruction}`;
-    if (personalTouch.tone) systemPrompt += ` Use a ${personalTouch.tone} tone.`;
-    if (personalTouch.style) systemPrompt += ` Reply in ${personalTouch.style} style.`;
+  // INJECT USER PERSONALIZATION VARIABLES DYNAMICALLY
+  if (personalTouch) {
+    if (personalTouch.nickname) {
+      systemPrompt += language === 'ar' 
+        ? ` خاطب المستخدم باسم ${personalTouch.nickname}.`
+        : ` Address the user as ${personalTouch.nickname}.`;
+    }
+    if (personalTouch.aiNickname) {
+      systemPrompt += language === 'ar'
+        ? ` يمكن مناداتك باسم ${personalTouch.aiNickname}.`
+        : ` You can be called ${personalTouch.aiNickname}.`;
+    }
+    if (personalTouch.tone && personalTouch.tone !== 'neutral') {
+      systemPrompt += language === 'ar'
+        ? ` استخدم نبرة ${personalTouch.tone}.`
+        : ` Use a ${personalTouch.tone} tone.`;
+    }
+    if (personalTouch.style) {
+      systemPrompt += language === 'ar'
+        ? ` قدم إجابات ${personalTouch.style}.`
+        : ` Provide ${personalTouch.style} responses.`;
+    }
+    if (personalTouch.instruction) {
+      systemPrompt += language === 'ar'
+        ? ` تعليمات إضافية: ${personalTouch.instruction}`
+        : ` Additional instruction: ${personalTouch.instruction}`;
+    }
   }
 
   const messages = [];
   
-  // Add conversation summary with explicit memory reference
   if (conversationSummary && conversationSummary.trim()) {
     messages.push({
       role: 'assistant',
@@ -642,9 +625,7 @@ When responding, use phrases like "As we discussed before" or "Building on our p
     });
   }
   
-  // Add recent messages from HYBRID MEMORY with better context
   if (contextMessages.length > 0) {
-    // Add a memory indicator
     messages.push({
       role: 'assistant',
       content: `[Continuing from our recent conversation...]`
@@ -661,16 +642,12 @@ When responding, use phrases like "As we discussed before" or "Building on our p
   // FIXED IMAGE PROCESSING: Add current message with PROPER VISION support
   let currentMessage: any = { role: 'user', content: message };
   
-  // FIXED IMAGE PROCESSING: Process ALL IMAGES with proper handling
   if (attachedFiles && attachedFiles.length > 0) {
-    // Enhanced image detection with multiple fallbacks
     const imageFile = attachedFiles.find(file => {
-      // Primary check: file type
       if (file.type && file.type.startsWith('image/')) {
         return true;
       }
       
-      // Secondary check: file extension
       if (file.name) {
         const extension = file.name.toLowerCase().split('.').pop();
         if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)) {
@@ -679,7 +656,6 @@ When responding, use phrases like "As we discussed before" or "Building on our p
         }
       }
       
-      // Tertiary check: assume image if URL exists
       if (file.url || file.publicUrl) {
         console.log("🔍 POTENTIAL IMAGE DETECTED BY URL PRESENCE");
         return true;
@@ -689,12 +665,11 @@ When responding, use phrases like "As we discussed before" or "Building on our p
     });
     
     if (imageFile) {
-      console.log("🖼️ FIXED IMAGE PROCESSING: Processing ALL image types - ZERO restrictions");
-      console.log("🔓 DOCUMENT ANALYSIS: Enhanced text extraction with your specialized prompt");
+      console.log("🖼️ FIXED IMAGE PROCESSING: Processing ALL image types with CLAUDE 3.5 SONNET");
+      console.log("🔓 DOCUMENT ANALYSIS: Enhanced text extraction with your exact system prompt");
       
-      // Enhanced URL selection with multiple fallbacks
       const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
-      const imageType = imageFile.type || 'image/jpeg'; // Default fallback
+      const imageType = imageFile.type || 'image/jpeg';
       
       console.log("📡 IMAGE URL SELECTION:", {
         selectedUrl: imageUrl?.substring(0, 80) + '...',
@@ -705,7 +680,6 @@ When responding, use phrases like "As we discussed before" or "Building on our p
       });
       
       if (imageUrl) {
-        // FIXED: Convert URL to base64 for Claude API with proper conversion
         const base64Data = await convertImageUrlToBase64(imageUrl, imageType);
         
         if (base64Data) {
@@ -720,8 +694,8 @@ When responding, use phrases like "As we discussed before" or "Building on our p
               } 
             }
           ];
-          console.log("✅ FIXED IMAGE PROCESSING: ALL image types supported - including ALL sensitive documents");
-          console.log("🔧 CLAUDE 4 VISION PAYLOAD:", {
+          console.log("✅ FIXED IMAGE PROCESSING: ALL image types supported with CLAUDE 3.5 SONNET");
+          console.log("🔧 CLAUDE 3.5 VISION PAYLOAD:", {
             hasTextContent: true,
             hasImageContent: true,
             imageMediaType: imageType,
@@ -729,11 +703,9 @@ When responding, use phrases like "As we discussed before" or "Building on our p
           });
         } else {
           console.error("❌ FIXED IMAGE PROCESSING: Failed to convert image, proceeding without vision");
-          console.error("🚨 IMAGE CONVERSION FAILURE - CHECK LOGS ABOVE FOR DETAILS");
         }
       } else {
         console.error("❌ FIXED IMAGE PROCESSING: No valid URL found in file object");
-        console.error("📋 FILE OBJECT STRUCTURE:", JSON.stringify(imageFile, null, 2));
       }
     } else {
       console.log("ℹ️ NO IMAGE FILES DETECTED in attached files");
@@ -743,12 +715,12 @@ When responding, use phrases like "As we discussed before" or "Building on our p
   messages.push(currentMessage);
   
   try {
-    console.log(`🚀 CLAUDE 4: Sending ${messages.length} messages to UPGRADED model with YOUR ENHANCED SYSTEM PROMPT`);
-    console.log("📊 CLAUDE 4 API CALL DETAILS:", {
+    console.log(`🚀 CLAUDE 3.5: Sending ${messages.length} messages to CLAUDE 3.5 SONNET with YOUR EXACT SYSTEM PROMPT`);
+    console.log("📊 CLAUDE 3.5 API CALL DETAILS:", {
       messagesCount: messages.length,
       hasImages: Array.isArray(currentMessage.content),
       maxTokens: maxTokens,
-      temperature: 0.05 // Ultra-low temperature for maximum text extraction accuracy
+      temperature: 0.05
     });
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -759,25 +731,24 @@ When responding, use phrases like "As we discussed before" or "Building on our p
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022', // Using the current available model
+        model: 'claude-3-5-sonnet-20241022', // EXACTLY AS SPECIFIED
         max_tokens: maxTokens,
-        temperature: 0.05, // Optimized for document accuracy
+        temperature: 0.05,
         system: systemPrompt,
         messages: messages
       }),
     });
     
-    console.log("📡 CLAUDE 4 API RESPONSE STATUS:", claudeResponse.status);
+    console.log("📡 CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ CLAUDE 4 API ERROR:", {
+      console.error("❌ CLAUDE 3.5 API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorBody: errorText.substring(0, 500)
       });
       
-      // Enhanced error handling with specific messages
       let userFriendlyError = 'I encountered an issue processing your request.';
       
       if (claudeResponse.status === 400) {
@@ -796,7 +767,7 @@ When responding, use phrases like "As we discussed before" or "Building on our p
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ CLAUDE 4 API SUCCESS:", {
+    console.log("✅ CLAUDE 3.5 API SUCCESS:", {
       hasContent: !!claudeData.content,
       contentLength: claudeData.content?.[0]?.text?.length || 0,
       usage: claudeData.usage
@@ -812,7 +783,7 @@ When responding, use phrases like "As we discussed before" or "Building on our p
     };
     
   } catch (error) {
-    console.error("❌ CLAUDE 4 API CRITICAL ERROR:", error);
+    console.error("❌ CLAUDE 3.5 API CRITICAL ERROR:", error);
     return {
       response: language === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'

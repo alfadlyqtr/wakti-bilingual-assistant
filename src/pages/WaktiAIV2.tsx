@@ -114,7 +114,6 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  // ENHANCED: Stronger explicit task command detection
   const isExplicitTaskCommand = (messageContent: string): boolean => {
     const lowerMessage = messageContent.toLowerCase().trim();
     
@@ -140,7 +139,6 @@ const WaktiAIV2 = () => {
       /^اعمل\s+مهمة\s*:?\s*(.{5,})/i
     ];
 
-    // Check both English and Arabic patterns
     const allPatterns = [...englishTaskPatterns, ...arabicTaskPatterns];
     return allPatterns.some(pattern => pattern.test(messageContent));
   };
@@ -161,7 +159,7 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    console.log('🚀 MESSAGE PROCESSING: Starting with enhanced task detection');
+    console.log('🚀 MESSAGE PROCESSING: Starting with restored task detection');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
@@ -175,9 +173,8 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
-      // ENHANCED: Route explicit task commands ONLY to DeepSeek
       if (isExplicitTaskCommand(messageContent)) {
-        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to DeepSeek parser ONLY');
+        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to task parser ONLY');
         
         const taskResponse = await supabase.functions.invoke('process-ai-intent', {
           body: {
@@ -204,7 +201,6 @@ const WaktiAIV2 = () => {
         const taskData = taskResponse.data;
         console.log('✅ TASK PROCESSING SUCCESS:', taskData);
 
-        // Add user message first
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
           role: 'user',
@@ -214,7 +210,6 @@ const WaktiAIV2 = () => {
           attachedFiles: attachedFiles
         };
 
-        // Add task response message
         const taskMessage: AIMessage = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
@@ -224,9 +219,8 @@ const WaktiAIV2 = () => {
 
         setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
 
-        // ENHANCED: Show task confirmation if needed with better debugging
         if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
-          console.log('🎯 SHOWING TASK CONFIRMATION:', {
+          console.log('🎯 SHOWING TASK CONFIRMATION with existing UI:', {
             intentData: taskData.intentData,
             pendingTask: taskData.intentData.pendingTask,
             taskTitle: taskData.intentData.pendingTask.title,
@@ -237,7 +231,7 @@ const WaktiAIV2 = () => {
           setPendingTaskData(taskData.intentData.pendingTask);
           setShowTaskConfirmation(true);
           
-          console.log('✅ TASK CONFIRMATION STATE SET:', {
+          console.log('✅ TASK CONFIRMATION STATE SET with existing components:', {
             showTaskConfirmation: true,
             pendingTaskDataSet: !!taskData.intentData.pendingTask
           });
@@ -253,7 +247,6 @@ const WaktiAIV2 = () => {
         return; // Exit early for task commands
       }
 
-      // CONTINUE with regular chat processing for non-task messages
       const hybridContext = await HybridMemoryService.getHybridContext(
         userProfile.id, 
         currentConversationId
@@ -276,7 +269,7 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
       
-      console.log('📡 CALLING: WaktiAIV2Service for regular chat (NO task detection)');
+      console.log('📡 CALLING: WaktiAIV2Service for regular chat with CLAUDE 3.5 SONNET (NO task detection)');
       
       const aiResponse = await WaktiAIV2Service.sendMessage(
         messageContent,
@@ -320,7 +313,6 @@ const WaktiAIV2 = () => {
         return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
       });
 
-      // Store in hybrid memory
       HybridMemoryService.addMessage(
         userProfile.id, 
         aiResponse.conversationId, 
@@ -346,7 +338,7 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ SUCCESS: Processing completed in ${totalTime}ms`);
+      console.log(`✅ SUCCESS: Processing completed in ${totalTime}ms with CLAUDE 3.5 SONNET`);
       
       setProcessedFiles([]);
       checkQuotas();
@@ -478,7 +470,6 @@ const WaktiAIV2 = () => {
   const handleSelectConversation = async (conversationId: string) => {
     try {
       const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
-      // Limit to 25 messages for display
       const limitedMessages = messages.slice(-25).map(msg => ({
         id: msg.id,
         role: msg.role as 'user' | 'assistant',
@@ -589,7 +580,6 @@ const WaktiAIV2 = () => {
   };
 
   const debouncedSaveSession = useDebounceCallback(() => {
-    // Save only the last 25 messages to keep sessions manageable
     const limitedMessages = sessionMessages.slice(-25);
     WaktiAIV2Service.saveChatSession(limitedMessages, currentConversationId);
   }, 500);
@@ -655,9 +645,9 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 overflow-y-auto pb-32" ref={scrollAreaRef}>
+        <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
           <ChatMessages
-            sessionMessages={sessionMessages.slice(-25)} // Limit to 25 messages
+            sessionMessages={sessionMessages.slice(-25)}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}

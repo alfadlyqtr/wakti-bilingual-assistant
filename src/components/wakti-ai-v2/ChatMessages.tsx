@@ -52,7 +52,7 @@ export function ChatMessages({
     }
   }, [sessionMessages, showTaskConfirmation]);
 
-  // PHASE 2 CRITICAL FIX: Show welcome message for new conversations
+  // FIXED: Show welcome message for new conversations
   const renderWelcomeMessage = () => {
     if (!isNewConversation || sessionMessages.length > 0) return null;
 
@@ -80,7 +80,7 @@ export function ChatMessages({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-6">
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
       <div className="max-w-4xl mx-auto">
         {/* Welcome Message */}
         {renderWelcomeMessage()}
@@ -98,7 +98,7 @@ export function ChatMessages({
         {/* Loading Indicator with proper TypingIndicator */}
         {isLoading && <TypingIndicator />}
         
-        {/* PHASE 2 CRITICAL FIX: Task Confirmation Display */}
+        {/* RESTORED: Task Confirmation Display */}
         {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
           <div className="flex justify-center mb-4">
             <TaskConfirmationCard
