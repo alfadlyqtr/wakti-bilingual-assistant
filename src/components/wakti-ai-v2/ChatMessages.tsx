@@ -80,7 +80,7 @@ export function ChatMessages({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-48">
       <div className="max-w-4xl mx-auto">
         {/* Welcome Message */}
         {renderWelcomeMessage()}
@@ -98,25 +98,31 @@ export function ChatMessages({
         {/* Loading Indicator with proper TypingIndicator */}
         {isLoading && <TypingIndicator />}
         
-        {/* RESTORED: Task Confirmation Display */}
+        {/* ENHANCED TASK CONFIRMATION DISPLAY WITH DEBUG LOGGING */}
         {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
-          <div className="flex justify-center mb-4">
+          <div className="flex justify-center mb-8 mt-6">
             <TaskConfirmationCard
               type={pendingTaskData ? 'task' : 'reminder'}
               data={pendingTaskData || pendingReminderData}
               onConfirm={() => {
+                console.log('🎯 TASK CONFIRMATION: User confirmed', pendingTaskData || pendingReminderData);
                 if (pendingTaskData) {
                   onTaskConfirmation(pendingTaskData);
                 } else {
                   onReminderConfirmation(pendingReminderData);
                 }
               }}
-              onCancel={onCancelTaskConfirmation}
+              onCancel={() => {
+                console.log('❌ TASK CONFIRMATION: User cancelled');
+                onCancelTaskConfirmation();
+              }}
               isLoading={taskConfirmationLoading}
             />
           </div>
         )}
         
+        {/* Extra spacing before end to ensure visibility */}
+        <div className="h-24" />
         <div ref={messagesEndRef} />
       </div>
     </div>

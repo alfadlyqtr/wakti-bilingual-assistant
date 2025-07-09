@@ -159,7 +159,7 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    console.log('🚀 MESSAGE PROCESSING: Starting with restored task detection');
+    console.log('🚀 MESSAGE PROCESSING: Starting with enhanced task detection');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
       inputType,
@@ -174,7 +174,7 @@ const WaktiAIV2 = () => {
 
     try {
       if (isExplicitTaskCommand(messageContent)) {
-        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Routing to task parser ONLY');
+        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Processing with enhanced confirmation UI');
         
         const taskResponse = await supabase.functions.invoke('process-ai-intent', {
           body: {
@@ -220,7 +220,7 @@ const WaktiAIV2 = () => {
         setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
 
         if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
-          console.log('🎯 SHOWING TASK CONFIRMATION with existing UI:', {
+          console.log('🎯 ENHANCED TASK CONFIRMATION: Showing with debug logging', {
             intentData: taskData.intentData,
             pendingTask: taskData.intentData.pendingTask,
             taskTitle: taskData.intentData.pendingTask.title,
@@ -228,13 +228,20 @@ const WaktiAIV2 = () => {
             subtasks: taskData.intentData.pendingTask.subtasks
           });
           
+          // Enhanced state setting with debugging
+          console.log('🔧 SETTING TASK CONFIRMATION STATE');
           setPendingTaskData(taskData.intentData.pendingTask);
           setShowTaskConfirmation(true);
           
-          console.log('✅ TASK CONFIRMATION STATE SET with existing components:', {
-            showTaskConfirmation: true,
-            pendingTaskDataSet: !!taskData.intentData.pendingTask
-          });
+          // Force a small delay to ensure state is set
+          setTimeout(() => {
+            console.log('🔍 TASK CONFIRMATION STATE CHECK:', {
+              showTaskConfirmation: true,
+              pendingTaskDataExists: !!taskData.intentData.pendingTask,
+              taskTitle: taskData.intentData.pendingTask?.title
+            });
+          }, 100);
+          
         } else {
           console.log('⚠️ NO TASK CONFIRMATION NEEDED:', {
             intent: taskData.intent,

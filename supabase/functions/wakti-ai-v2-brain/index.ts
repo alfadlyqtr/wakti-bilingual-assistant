@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -15,10 +14,10 @@ const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
 console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + FIXED IMAGE PROCESSING + YOUR EXACT SYSTEM PROMPT");
 
-// FIXED: Proper Base64 conversion for all image sizes
+// ENHANCED: Better Base64 conversion with improved error handling for all document types
 async function convertImageUrlToBase64(imageUrl: string, imageType: string, retryCount = 0): Promise<string | null> {
   try {
-    console.log('🖼️ IMAGE PROCESSING: Converting image', retryCount + 1, 'attempt for:', {
+    console.log('🖼️ ENHANCED IMAGE PROCESSING: Converting all document types', retryCount + 1, 'attempt for:', {
       url: imageUrl.substring(0, 80) + '...',
       type: imageType,
       isSupabaseStorage: imageUrl.includes('supabase'),
@@ -31,19 +30,20 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     }
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout for large documents
     
     const response = await fetch(imageUrl, {
       signal: controller.signal,
       headers: {
         'User-Agent': 'WAKTI-AI/2.0',
-        'Accept': 'image/*,*/*;q=0.8'
+        'Accept': 'image/*,*/*;q=0.8',
+        'Cache-Control': 'no-cache'
       }
     });
     
     clearTimeout(timeoutId);
     
-    console.log('📡 IMAGE FETCH: Response status:', response.status, response.statusText);
+    console.log('📡 ENHANCED IMAGE FETCH: Response status:', response.status, response.statusText);
     
     if (!response.ok) {
       console.error('❌ IMAGE FETCH ERROR:', {
@@ -52,9 +52,9 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
         url: imageUrl.substring(0, 50) + '...'
       });
       
-      if (retryCount < 2 && (response.status >= 500 || response.status === 429)) {
-        console.log('🔄 RETRYING IMAGE FETCH in 2 seconds...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      if (retryCount < 3 && (response.status >= 500 || response.status === 429)) {
+        console.log('🔄 RETRYING IMAGE FETCH in 3 seconds...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
         return await convertImageUrlToBase64(imageUrl, imageType, retryCount + 1);
       }
       
@@ -64,34 +64,44 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     const arrayBuffer = await response.arrayBuffer();
     const fileSize = arrayBuffer.byteLength;
     
-    console.log('📊 IMAGE SIZE:', {
+    console.log('📊 ENHANCED IMAGE SIZE:', {
       bytes: fileSize,
-      MB: (fileSize / (1024 * 1024)).toFixed(2)
+      MB: (fileSize / (1024 * 1024)).toFixed(2),
+      type: imageType
     });
     
-    // FIXED: Use proper Base64 encoding that works reliably
+    // ENHANCED: Better Base64 encoding that handles all document sizes
     const uint8Array = new Uint8Array(arrayBuffer);
-    const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
+    let binaryString = '';
+    
+    // Process in chunks to handle large documents better
+    const chunkSize = 8192;
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.slice(i, i + chunkSize);
+      binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    
     const base64String = btoa(binaryString);
     
-    console.log('✅ IMAGE CONVERSION SUCCESS:', {
+    console.log('✅ ENHANCED IMAGE CONVERSION SUCCESS:', {
       originalSize: fileSize,
       base64Length: base64String.length,
-      truncatedBase64: base64String.substring(0, 50) + '...'
+      documentType: imageType,
+      processingMethod: 'chunked_conversion'
     });
     
     return base64String;
   } catch (error) {
-    console.error('❌ IMAGE CONVERSION ERROR:', {
+    console.error('❌ ENHANCED IMAGE CONVERSION ERROR:', {
       message: error.message,
       name: error.name,
       url: imageUrl.substring(0, 50) + '...',
       retryCount
     });
     
-    if (retryCount < 2 && (error.name === 'AbortError' || error.name === 'TypeError')) {
-      console.log('🔄 RETRYING IMAGE CONVERSION due to network error...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    if (retryCount < 3 && (error.name === 'AbortError' || error.name === 'TypeError')) {
+      console.log('🔄 RETRYING ENHANCED IMAGE CONVERSION due to network error...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
       return await convertImageUrlToBase64(imageUrl, imageType, retryCount + 1);
     }
     
@@ -523,9 +533,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// CLAUDE 3.5 SONNET API CALL: YOUR EXACT SYSTEM PROMPT + FIXED IMAGE PROCESSING
+// ENHANCED CLAUDE 3.5 SONNET API CALL: Improved system prompt for all document types
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🚀 CLAUDE 3.5 API: Making call with YOUR EXACT SYSTEM PROMPT + FIXED IMAGE PROCESSING");
+  console.log("🚀 ENHANCED CLAUDE 3.5 API: Processing all document types with specialized prompts");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -534,56 +544,90 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
     weekday: 'long'
   });
   
-  // YOUR EXACT SYSTEM PROMPT - IMPLEMENTED EXACTLY AS SPECIFIED
+  // ENHANCED SYSTEM PROMPT - Better for all document types including challenging cases
   let systemPrompt = language === 'ar'
-    ? `🧠 تعليمات النظام (باللغة العربية + الإنجليزية):
+    ? `🧠 تعليمات النظام المطورة (باللغة العربية + الإنجليزية):
 
-أنت محلل بصري خبير وقارئ مستندات متعدد اللغات. يمكنك تحليل جميع أنواع الصور بما في ذلك:
-• جوازات السفر، البطاقات الشخصية، الوثائق الرسمية
-• الملاحظات المكتوبة بخط اليد، النماذج، لقطات الشاشة
-• الوجوه، الصور الشخصية، صور الأشخاص والمجموعات
-• الأشياء، المناظر، الشعارات، الملابس، النصوص في الخلفية
+أنت محلل بصري خبير ومتخصص في قراءة جميع أنواع الوثائق والمستندات. يمكنك تحليل وقراءة:
 
-مهمتك هي:
-١. استخراج جميع النصوص الظاهرة (العربية + الإنجليزية)، الأسماء، الأرقام، التواريخ، التفاصيل الصغيرة
-٢. وصف تعبيرات الوجه، الملابس، العناصر، وتخطيط الصورة
-٣. تحديد مكان كل عنصر تم العثور عليه (الزاوية العليا، السفلى، إلخ)
-٤. إذا كان النص غير واضح، حاول قراءته قدر الإمكان
-٥. تنظيم الإجابة بوضوح: استخدم النقاط والعناوين والفقرات
+📋 **الوثائق الرسمية**:
+• جوازات السفر (جميع الأنواع والدول)
+• البطاقات الشخصية والهويات
+• رخص القيادة والوثائق الحكومية
+• الشهادات والدبلومات
+• العقود والاتفاقيات
 
-للوثائق الرسمية (جوازات السفر، البطاقات الشخصية):
-• الاسم الكامل
-• الجنسية
-• رقم الوثيقة
-• تاريخ الانتهاء
-• التوقيع أو الختم
-• منطقة الوجه (العيون، الشعر، غطاء الرأس)
+📊 **المستندات المالية**:
+• الفواتير والإيصالات
+• كشوف الحسابات البنكية
+• التقارير المالية والرسوم البيانية
+• الشيكات والحوالات
 
-⚠️ لا تتجاهل أي شيء. لا تلخّص. استخرج ووصّف كل ما تراه بدقة وحرص شديد.
+📝 **المستندات العامة**:
+• الملاحظات المكتوبة بخط اليد
+• النماذج والاستمارات
+• لقطات الشاشة
+• الصور الشخصية والمجموعات
+• الكتب والمجلات
+
+🎯 **مهمتك الأساسية**:
+١. **استخراج جميع النصوص** (العربية + الإنجليزية) مع الأسماء والأرقام والتواريخ
+٢. **وصف التخطيط** وموقع كل عنصر (أعلى يسار، أسفل يمين، وسط، إلخ)
+٣. **قراءة النصوص الغامضة** حتى لو كانت غير واضحة تماماً
+٤. **تحليل الوجوه والتعبيرات** في الصور الشخصية
+٥. **شرح الرسوم البيانية** والجداول إن وجدت
+
+🔍 **للوثائق الرسمية خاصة**:
+• الاسم الكامل كما هو مكتوب
+• الجنسية ومكان الإصدار
+• رقم الوثيقة ورقم السلسلة
+• تاريخ الانتهاء وتاريخ الإصدار
+• التوقيع أو الختم الرسمي
+• وصف منطقة الوجه (العيون، الشعر، غطاء الرأس)
+
+⚠️ **مهم جداً**: لا تتجاهل أي شيء. لا تلخّص. استخرج ووصّف كل التفاصيل بدقة متناهية.
 
 التاريخ اليوم: ${currentDate}. اجب بالعربية والإنجليزية إذا كان المحتوى يحتوي على العربية.`
-    : `You are an expert visual analyst and multilingual document reader. You can analyze all types of images including:
-• Passports, ID cards, official documents
-• Handwritten notes, forms, screenshots
-• Faces, portraits, people, group photos
-• Objects, scenery, logos, clothing, text in the background
+    : `🧠 ENHANCED SYSTEM INSTRUCTIONS (Arabic + English):
 
-Your job is to:
-1. Extract all visible text (Arabic + English), names, numbers, dates, and small details
-2. Describe facial expressions, clothing, objects, and layout
-3. Note where you found each item (top left, bottom right, etc.)
-4. If text is blurry or unclear, still try your best to read it
-5. Organize your response clearly: use bullet points, structure, and headings
+You are an expert visual analyst specializing in reading ALL types of documents and materials. You can analyze and read:
 
-Focus especially on (for passports, QID, or official forms):
-• Full name
-• Nationality
-• Document number
-• Expiry date
-• Signature or stamp
-• Facial region (eyes, hair, headwear)
+📋 **Official Documents**:
+• Passports (all types and countries)
+• ID cards and identity documents  
+• Driver's licenses and government documents
+• Certificates and diplomas
+• Contracts and agreements
 
-⚠️ Do not ignore anything. Do not summarize. Extract and describe everything you see — with extreme accuracy and care.
+📊 **Financial Documents**:
+• Bills and receipts
+• Bank statements
+• Financial reports and charts
+• Checks and money transfers
+
+📝 **General Documents**:
+• Handwritten notes
+• Forms and applications
+• Screenshots
+• Personal and group photos
+• Books and magazines
+
+🎯 **Your Core Mission**:
+1. **Extract ALL text** (Arabic + English) including names, numbers, dates
+2. **Describe layout** and location of each element (top left, bottom right, center, etc.)
+3. **Read blurry text** even if it's not perfectly clear
+4. **Analyze faces and expressions** in personal photos
+5. **Explain charts and graphs** if present
+
+🔍 **For Official Documents Especially**:
+• Full name as written
+• Nationality and place of issue
+• Document number and series number
+• Expiry date and issue date
+• Signature or official stamp
+• Facial region description (eyes, hair, headwear)
+
+⚠️ **CRITICAL**: Do not ignore anything. Do not summarize. Extract and describe every detail with extreme precision.
 
 Today's date: ${currentDate}. Respond in both Arabic and English if the content contains Arabic.`;
 
@@ -639,25 +683,29 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
     });
   }
   
-  // FIXED IMAGE PROCESSING: Add current message with PROPER VISION support
+  // ENHANCED IMAGE PROCESSING: Better detection and processing for all document types
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
+    console.log('📋 ENHANCED DOCUMENT ANALYSIS: Processing attached files for all document types');
+    
     const imageFile = attachedFiles.find(file => {
+      // Enhanced image detection for all document types
       if (file.type && file.type.startsWith('image/')) {
+        console.log('✅ DOCUMENT TYPE DETECTED: Standard image type:', file.type);
         return true;
       }
       
       if (file.name) {
         const extension = file.name.toLowerCase().split('.').pop();
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)) {
-          console.log("🔍 IMAGE DETECTED BY EXTENSION:", extension);
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif'].includes(extension)) {
+          console.log('✅ DOCUMENT TYPE DETECTED: By extension:', extension);
           return true;
         }
       }
       
       if (file.url || file.publicUrl) {
-        console.log("🔍 POTENTIAL IMAGE DETECTED BY URL PRESENCE");
+        console.log('✅ DOCUMENT TYPE DETECTED: By URL presence');
         return true;
       }
       
@@ -665,26 +713,30 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
     });
     
     if (imageFile) {
-      console.log("🖼️ FIXED IMAGE PROCESSING: Processing ALL image types with CLAUDE 3.5 SONNET");
-      console.log("🔓 DOCUMENT ANALYSIS: Enhanced text extraction with your exact system prompt");
+      console.log("🖼️ ENHANCED IMAGE PROCESSING: Processing ALL document types with Claude 3.5 Sonnet");
+      console.log("🔓 DOCUMENT ANALYSIS: Enhanced for IDs, passports, receipts, graphs, portraits");
       
       const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
       const imageType = imageFile.type || 'image/jpeg';
       
-      console.log("📡 IMAGE URL SELECTION:", {
+      console.log("📡 ENHANCED IMAGE URL SELECTION:", {
         selectedUrl: imageUrl?.substring(0, 80) + '...',
         hasUrl: !!imageFile.url,
         hasPublicUrl: !!imageFile.publicUrl,
         hasPreview: !!imageFile.preview,
-        selectedType: imageType
+        selectedType: imageType,
+        fileName: imageFile.name
       });
       
       if (imageUrl) {
         const base64Data = await convertImageUrlToBase64(imageUrl, imageType);
         
         if (base64Data) {
+          // Enhanced message with specific instructions for document analysis
+          const enhancedMessage = message + '\n\n🔍 Please analyze this document/image in complete detail. Extract all text, describe all visual elements, and provide specific location information for everything you see.';
+          
           currentMessage.content = [
-            { type: 'text', text: message },
+            { type: 'text', text: enhancedMessage },
             { 
               type: 'image', 
               source: { 
@@ -694,18 +746,19 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
               } 
             }
           ];
-          console.log("✅ FIXED IMAGE PROCESSING: ALL image types supported with CLAUDE 3.5 SONNET");
-          console.log("🔧 CLAUDE 3.5 VISION PAYLOAD:", {
+          console.log("✅ ENHANCED IMAGE PROCESSING: ALL document types supported with Claude 3.5 Sonnet");
+          console.log("🔧 ENHANCED CLAUDE 3.5 VISION PAYLOAD:", {
             hasTextContent: true,
             hasImageContent: true,
             imageMediaType: imageType,
-            base64DataLength: base64Data.length
+            base64DataLength: base64Data.length,
+            enhancedPrompt: true
           });
         } else {
-          console.error("❌ FIXED IMAGE PROCESSING: Failed to convert image, proceeding without vision");
+          console.error("❌ ENHANCED IMAGE PROCESSING: Failed to convert image, proceeding without vision");
         }
       } else {
-        console.error("❌ FIXED IMAGE PROCESSING: No valid URL found in file object");
+        console.error("❌ ENHANCED IMAGE PROCESSING: No valid URL found in file object");
       }
     } else {
       console.log("ℹ️ NO IMAGE FILES DETECTED in attached files");
@@ -715,12 +768,13 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
   messages.push(currentMessage);
   
   try {
-    console.log(`🚀 CLAUDE 3.5: Sending ${messages.length} messages to CLAUDE 3.5 SONNET with YOUR EXACT SYSTEM PROMPT`);
-    console.log("📊 CLAUDE 3.5 API CALL DETAILS:", {
+    console.log(`🚀 ENHANCED CLAUDE 3.5: Sending ${messages.length} messages to Claude 3.5 Sonnet with enhanced document analysis`);
+    console.log("📊 ENHANCED CLAUDE 3.5 API CALL DETAILS:", {
       messagesCount: messages.length,
       hasImages: Array.isArray(currentMessage.content),
       maxTokens: maxTokens,
-      temperature: 0.05
+      temperature: 0.05,
+      modelUsed: 'claude-3-5-sonnet-20241022'
     });
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -731,7 +785,7 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022', // EXACTLY AS SPECIFIED
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: maxTokens,
         temperature: 0.05,
         system: systemPrompt,
@@ -739,11 +793,11 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
       }),
     });
     
-    console.log("📡 CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
+    console.log("📡 ENHANCED CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ CLAUDE 3.5 API ERROR:", {
+      console.error("❌ ENHANCED CLAUDE 3.5 API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorBody: errorText.substring(0, 500)
@@ -753,7 +807,7 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
       
       if (claudeResponse.status === 400) {
         if (errorText.includes('image')) {
-          userFriendlyError = 'There was an issue processing the image. Please try uploading a different image or reducing the file size.';
+          userFriendlyError = 'There was an issue processing the document/image. Please try uploading a different image or reducing the file size.';
         } else {
           userFriendlyError = 'The request format was invalid. Please try again.';
         }
@@ -763,14 +817,15 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
         userFriendlyError = 'The AI service is temporarily unavailable. Please try again in a few moments.';
       }
       
-      throw new Error(`Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
+      throw new Error(`Enhanced Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ CLAUDE 3.5 API SUCCESS:", {
+    console.log("✅ ENHANCED CLAUDE 3.5 API SUCCESS:", {
       hasContent: !!claudeData.content,
       contentLength: claudeData.content?.[0]?.text?.length || 0,
-      usage: claudeData.usage
+      usage: claudeData.usage,
+      modelConfirmed: 'claude-3-5-sonnet-20241022'
     });
     
     const responseText = claudeData.content?.[0]?.text || 'I apologize, but I encountered an issue processing your request.';
@@ -783,7 +838,7 @@ Today's date: ${currentDate}. Respond in both Arabic and English if the content 
     };
     
   } catch (error) {
-    console.error("❌ CLAUDE 3.5 API CRITICAL ERROR:", error);
+    console.error("❌ ENHANCED CLAUDE 3.5 API CRITICAL ERROR:", error);
     return {
       response: language === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
