@@ -174,7 +174,7 @@ const WaktiAIV2 = () => {
 
     try {
       if (isExplicitTaskCommand(messageContent)) {
-        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Processing with enhanced confirmation UI');
+        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Processing with ENHANCED confirmation UI');
         
         const taskResponse = await supabase.functions.invoke('process-ai-intent', {
           body: {
@@ -220,7 +220,7 @@ const WaktiAIV2 = () => {
         setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
 
         if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
-          console.log('🎯 ENHANCED TASK CONFIRMATION: Showing with debug logging', {
+          console.log('🎯 ENHANCED TASK CONFIRMATION: FORCING UI display with debug logging', {
             intentData: taskData.intentData,
             pendingTask: taskData.intentData.pendingTask,
             taskTitle: taskData.intentData.pendingTask.title,
@@ -228,19 +228,30 @@ const WaktiAIV2 = () => {
             subtasks: taskData.intentData.pendingTask.subtasks
           });
           
-          // Enhanced state setting with debugging
-          console.log('🔧 SETTING TASK CONFIRMATION STATE');
+          // FORCE task confirmation state with multiple updates
+          console.log('🔧 FORCING TASK CONFIRMATION STATE - CRITICAL UPDATE');
           setPendingTaskData(taskData.intentData.pendingTask);
-          setShowTaskConfirmation(true);
           
-          // Force a small delay to ensure state is set
+          // Force immediate state update using timeout
           setTimeout(() => {
-            console.log('🔍 TASK CONFIRMATION STATE CHECK:', {
-              showTaskConfirmation: true,
-              pendingTaskDataExists: !!taskData.intentData.pendingTask,
-              taskTitle: taskData.intentData.pendingTask?.title
-            });
-          }, 100);
+            console.log('🔧 SECOND FORCE: Setting showTaskConfirmation to TRUE');
+            setShowTaskConfirmation(true);
+            
+            // Triple confirmation - force another update
+            setTimeout(() => {
+              console.log('🔧 TRIPLE FORCE: Final confirmation state update');
+              setShowTaskConfirmation(true);
+              setPendingTaskData(taskData.intentData.pendingTask);
+              
+              // Debug current state
+              console.log('🔍 FINAL TASK CONFIRMATION STATE CHECK:', {
+                showTaskConfirmation: true,
+                pendingTaskDataExists: !!taskData.intentData.pendingTask,
+                taskTitle: taskData.intentData.pendingTask?.title,
+                taskDataStructure: Object.keys(taskData.intentData.pendingTask || {})
+              });
+            }, 100);
+          }, 50);
           
         } else {
           console.log('⚠️ NO TASK CONFIRMATION NEEDED:', {
@@ -673,7 +684,7 @@ const WaktiAIV2 = () => {
         </div>
 
         <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto p-4">
             <ChatInput
               message={message}
               setMessage={setMessage}
