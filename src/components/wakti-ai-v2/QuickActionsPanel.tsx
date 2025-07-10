@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -86,9 +85,9 @@ export function QuickActionsPanel({
     description: language === 'ar' ? 'إنشاء فيديوهات من الصور باستخدام الذكاء الاصطناعي' : 'Create videos from images with AI templates',
     action: () => {
       setShowVideoGenerator(true);
-      // Close drawer immediately for video generator
+      // Delay drawer close to allow modal to fully open first
       if (onClose) {
-        onClose();
+        setTimeout(() => onClose(), 200);
       }
     },
     color: 'bg-indigo-500'
@@ -121,6 +120,11 @@ export function QuickActionsPanel({
     console.log('🔧 Quick Actions: Tool opened');
   };
 
+  // Custom close handler for video generator that doesn't reset parent state immediately
+  const handleVideoGeneratorClose = () => {
+    setShowVideoGenerator(false);
+  };
+
   // Render modals using React Portal to ensure they appear above everything
   const renderModals = () => {
     if (typeof document === 'undefined') return null;
@@ -140,7 +144,7 @@ export function QuickActionsPanel({
 
         <VideoGeneratorModal 
           isOpen={showVideoGenerator} 
-          onClose={() => setShowVideoGenerator(false)} 
+          onClose={handleVideoGeneratorClose} 
         />
 
         <GameModeModal 
