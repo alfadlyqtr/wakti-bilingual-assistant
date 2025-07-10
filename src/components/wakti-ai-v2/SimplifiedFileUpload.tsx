@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
@@ -70,7 +71,7 @@ export function SimplifiedFileUpload({
         throw new Error('Authentication required');
       }
 
-      console.log('📁 Starting upload for', files.length, 'files');
+      console.log('📁 UPLOAD AUDIT - Starting upload for', files.length, 'files');
 
       const uploadPromises = Array.from(files).map(async (file) => {
         try {
@@ -86,34 +87,54 @@ export function SimplifiedFileUpload({
           // Generate preview
           const preview = await generatePreview(file);
           
-          // Create unique filename
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+          // ENHANCED: Create consistent filename with timestamp and user ID
+          const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+          const timestamp = Date.now();
+          const randomId = Math.random().toString(36).substring(2, 8);
+          const fileName = `${user.id}/${timestamp}_${randomId}.${fileExt}`;
 
-          console.log('⬆️ Uploading file:', file.name, 'Size:', file.size);
+          console.log('⬆️ UPLOAD AUDIT - Uploading file:', {
+            originalName: file.name,
+            newFileName: fileName,
+            size: file.size,
+            type: file.type
+          });
 
-          // Upload to Supabase storage
+          // FIXED: Upload to wakti-ai-v2 bucket consistently
           const { data, error } = await supabase.storage
             .from('wakti-ai-v2')
             .upload(fileName, file, {
               cacheControl: '3600',
-              upsert: false
+              upsert: false,
+              contentType: file.type
             });
 
           if (error) {
-            console.error('Upload error for', file.name, ':', error);
+            console.error('❌ UPLOAD ERROR:', error);
             throw new Error(`Upload failed for ${file.name}: ${error.message}`);
           }
 
-          // Get public URL
+          // ENHANCED: Get public URL with validation
           const { data: { publicUrl } } = supabase.storage
             .from('wakti-ai-v2')
             .getPublicUrl(fileName);
 
-          console.log('✅ Upload successful:', file.name, 'URL:', publicUrl);
+          // Validate the generated URL
+          if (!publicUrl || !publicUrl.includes('wakti-ai-v2')) {
+            console.error('❌ INVALID URL GENERATED:', publicUrl);
+            throw new Error(`Invalid URL generated for ${file.name}`);
+          }
+
+          console.log('✅ UPLOAD SUCCESS:', {
+            fileName: file.name,
+            storagePath: fileName,
+            publicUrl: publicUrl,
+            urlValid: publicUrl.startsWith('http'),
+            bucketCorrect: publicUrl.includes('wakti-ai-v2')
+          });
 
           const uploadedFile: SimplifiedUploadedFile = {
-            id: `file_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+            id: `file_${timestamp}_${randomId}`,
             name: file.name,
             url: publicUrl,
             publicUrl: publicUrl,
@@ -124,7 +145,7 @@ export function SimplifiedFileUpload({
 
           return uploadedFile;
         } catch (error) {
-          console.error('Individual file upload failed:', error);
+          console.error('❌ Individual file upload failed:', error);
           showError(`Failed to upload ${file.name}: ${error.message}`);
           return null;
         }
@@ -138,9 +159,18 @@ export function SimplifiedFileUpload({
         .map(result => result.value);
 
       if (successfulUploads.length > 0) {
+        console.log('🎉 UPLOAD AUDIT COMPLETE:', {
+          totalFiles: files.length,
+          successfulUploads: successfulUploads.length,
+          uploadedFiles: successfulUploads.map(f => ({
+            name: f.name,
+            url: f.url,
+            urlValid: f.url.startsWith('http')
+          }))
+        });
+        
         onFilesUploaded(successfulUploads);
         showSuccess(`Successfully uploaded ${successfulUploads.length} file(s)`);
-        console.log('🎉 All uploads completed. Total files:', successfulUploads.length);
       }
 
       const failedUploads = results.filter(result => result.status === 'rejected').length;
@@ -155,6 +185,14 @@ export function SimplifiedFileUpload({
   }, [generatePreview, showError, showSuccess, onFilesUploaded]);
 
   const updateFileImageType = (fileId: string, imageType: ImageTypeOption) => {
+    console.log('🏷️ TYPE ASSIGNMENT AUDIT:', {
+      fileId: fileId,
+      imageTypeName: imageType.name,
+      imageTypeId: imageType.id,
+      hasContext: !!imageType.context,
+      contextLength: imageType.context?.length || 0
+    });
+    
     const updatedFiles = uploadedFiles.map(file => 
       file.id === fileId ? { ...file, imageType } : file
     );
@@ -237,7 +275,7 @@ export function SimplifiedFileUpload({
                       {file.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatFileSize(file.size)}
+                      {formatFileSize(file.size)} • URL: {file.url ? '✅ Valid' : '❌ Invalid'}
                     </p>
                   </div>
                   

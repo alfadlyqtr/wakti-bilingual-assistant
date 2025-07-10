@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,77 +12,161 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: ENHANCED IMAGE PROCESSING WITH CONTEXT-AWARE PROMPTS");
+console.log("🚀 WAKTI AI V2: ENHANCED DEBUGGING & IMAGE PROCESSING AUDIT");
 
-// ENHANCED: Reliable image processing with better error handling and logging
+// ENHANCED: Advanced image processing with comprehensive debugging and URL validation
 async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promise<string | null> {
   try {
-    console.log(`🔄 Processing image (attempt ${retryCount + 1}):`, imageUrl.substring(0, 50) + '...');
+    console.log(`🔍 DETAILED AUDIT - Processing image (attempt ${retryCount + 1}):`);
+    console.log(`📋 Full URL: ${imageUrl}`);
+    console.log(`📏 URL Length: ${imageUrl.length}`);
+    console.log(`🔗 URL Structure Analysis:`, {
+      startsWithHttp: imageUrl.startsWith('http'),
+      includesSupabase: imageUrl.includes('supabase'),
+      includesBucket: imageUrl.includes('wakti-ai-v2'),
+      urlParts: imageUrl.split('/').slice(0, 6) // First 6 parts for security
+    });
     
     if (!imageUrl.startsWith('http')) {
-      console.error('❌ Invalid URL format:', imageUrl);
+      console.error('❌ AUDIT FAILURE: Invalid URL format - does not start with http/https');
       return null;
     }
     
-    // ENHANCED: 70 second timeout with better error handling
-    const timeout = 70000;
+    // Enhanced URL validation
+    const urlPattern = /^https:\/\/[a-zA-Z0-9.-]+\.supabase\.co\/storage\/v1\/object\/public\/[a-zA-Z0-9_-]+\//;
+    if (!urlPattern.test(imageUrl)) {
+      console.error('❌ AUDIT FAILURE: URL does not match expected Supabase storage pattern');
+      console.error('Expected pattern: https://xxx.supabase.co/storage/v1/object/public/bucket-name/...');
+      return null;
+    }
+    
+    // ENHANCED: 90 second timeout with detailed progress tracking
+    const timeout = 90000;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const timeoutId = setTimeout(() => {
+      console.error('⏰ AUDIT FAILURE: Request timeout after 90 seconds');
+      controller.abort();
+    }, timeout);
+    
+    console.log('🌐 Starting HTTP request...');
+    const startTime = Date.now();
     
     const response = await fetch(imageUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'WAKTI-AI/2.0',
+        'User-Agent': 'WAKTI-AI-AUDIT/2.0',
         'Accept': 'image/*',
         'Cache-Control': 'no-cache'
       }
     });
     
+    const fetchDuration = Date.now() - startTime;
     clearTimeout(timeoutId);
     
+    console.log(`📊 HTTP Response Analysis:`, {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      contentType: response.headers.get('Content-Type'),
+      contentLength: response.headers.get('Content-Length'),
+      fetchTime: `${fetchDuration}ms`,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+    
     if (!response.ok) {
-      console.error('❌ Fetch failed:', response.status, response.statusText);
+      console.error('❌ AUDIT FAILURE: HTTP request failed');
+      console.error('Response details:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: imageUrl,
+        attempt: retryCount + 1
+      });
       
-      // ENHANCED: Retry on more error types, max 3 retries
-      if (retryCount < 3 && (response.status >= 500 || response.status === 429 || response.status === 408)) {
-        console.log('🔄 Retrying in 3 seconds...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
+      // Try to get error body
+      try {
+        const errorBody = await response.text();
+        console.error('Error response body:', errorBody);
+      } catch (e) {
+        console.error('Could not read error response body');
+      }
+      
+      // ENHANCED: Retry logic with exponential backoff
+      if (retryCount < 3 && (response.status >= 500 || response.status === 429 || response.status === 408 || response.status === 502 || response.status === 503)) {
+        const retryDelay = Math.pow(2, retryCount) * 2000; // 2s, 4s, 8s
+        console.log(`🔄 Retrying in ${retryDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
         return await convertImageUrlToBase64(imageUrl, retryCount + 1);
       }
       
       return null;
     }
     
+    console.log('📥 Starting arrayBuffer conversion...');
     const arrayBuffer = await response.arrayBuffer();
     const fileSize = arrayBuffer.byteLength;
     
-    console.log('📊 Image size:', (fileSize / (1024 * 1024)).toFixed(2), 'MB');
+    console.log('📊 File Analysis:', {
+      sizeBytes: fileSize,
+      sizeMB: (fileSize / (1024 * 1024)).toFixed(2),
+      isEmpty: fileSize === 0,
+      isTooLarge: fileSize > 20 * 1024 * 1024
+    });
     
-    if (fileSize === 0 || fileSize > 20 * 1024 * 1024) {
-      console.error('❌ Invalid file size:', fileSize);
+    if (fileSize === 0) {
+      console.error('❌ AUDIT FAILURE: Empty file (0 bytes)');
       return null;
     }
     
-    // ENHANCED: Direct Base64 conversion with validation
+    if (fileSize > 20 * 1024 * 1024) {
+      console.error('❌ AUDIT FAILURE: File too large (>20MB)');
+      return null;
+    }
+    
+    // Enhanced Base64 conversion with validation
+    console.log('🔄 Converting to base64...');
     const uint8Array = new Uint8Array(arrayBuffer);
+    
+    // Validate that we have actual image data
+    const firstBytes = Array.from(uint8Array.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+    console.log('🔍 File signature (first 8 bytes):', firstBytes);
+    
     const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
     const base64String = btoa(binaryString);
     
     if (!base64String || base64String.length < 100) {
-      console.error('❌ Invalid base64 conversion');
+      console.error('❌ AUDIT FAILURE: Invalid base64 conversion');
       return null;
     }
     
-    console.log('✅ Image converted successfully:', base64String.length, 'chars');
+    console.log('✅ AUDIT SUCCESS: Image converted successfully');
+    console.log('📊 Conversion Results:', {
+      base64Length: base64String.length,
+      conversionTime: `${Date.now() - startTime}ms`,
+      preview: base64String.substring(0, 50) + '...'
+    });
+    
     return base64String;
     
   } catch (error) {
-    console.error('❌ Image processing error:', error.message);
+    console.error('❌ AUDIT FAILURE: Exception during image processing');
+    console.error('Exception details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+      url: imageUrl,
+      attempt: retryCount + 1
+    });
     
-    // ENHANCED: Retry on network/timeout errors, max 3 retries
-    if (retryCount < 3 && (error.name === 'AbortError' || error.message.includes('network') || error.message.includes('timeout'))) {
-      console.log('🔄 Retrying in 3 seconds...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+    // Enhanced retry logic for network/timeout errors
+    if (retryCount < 3 && (
+      error.name === 'AbortError' || 
+      error.message.includes('network') || 
+      error.message.includes('timeout') ||
+      error.message.includes('fetch')
+    )) {
+      const retryDelay = Math.pow(2, retryCount) * 3000; // 3s, 6s, 12s
+      console.log(`🔄 Retrying due to network error in ${retryDelay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
       return await convertImageUrlToBase64(imageUrl, retryCount + 1);
     }
     
@@ -120,19 +203,32 @@ serve(async (req) => {
       personalTouch = null,
     } = requestBody || {};
 
-    console.log("🎯 Processing:", activeTrigger, "- Files:", attachedFiles.length);
+    console.log("🎯 AUDIT - Processing request:", {
+      trigger: activeTrigger,
+      language: language,
+      messageLength: message?.length || 0,
+      hasFiles: attachedFiles.length > 0,
+      fileCount: attachedFiles.length
+    });
     
-    // ENHANCED: Log image types and context for better debugging
+    // ENHANCED: Detailed file debugging
     if (attachedFiles.length > 0) {
-      console.log("🖼️ Files received:", attachedFiles.map(f => ({
-        name: f.name,
-        type: f.type,
-        hasUrl: !!f.url,
-        hasPublicUrl: !!f.publicUrl,
-        imageTypeName: f.imageType?.name || 'none',
-        imageTypeId: f.imageType?.id || 'none',
-        hasContext: !!f.context
-      })));
+      console.log("🖼️ DETAILED FILE AUDIT:");
+      attachedFiles.forEach((file, index) => {
+        console.log(`File ${index + 1}:`, {
+          name: file.name,
+          type: file.type,
+          hasUrl: !!file.url,
+          hasPublicUrl: !!file.publicUrl,
+          actualUrl: file.url || file.publicUrl || 'NO_URL',
+          urlLength: (file.url || file.publicUrl || '').length,
+          imageTypeName: file.imageType?.name || 'NO_TYPE',
+          imageTypeId: file.imageType?.id || 'NO_ID',
+          hasContext: !!file.context,
+          contextLength: file.context?.length || 0,
+          contextPreview: file.context ? file.context.substring(0, 100) + '...' : 'NO_CONTEXT'
+        });
+      });
     }
 
     if (!message?.trim() && !attachedFiles?.length) {
@@ -211,9 +307,15 @@ serve(async (req) => {
   }
 });
 
-// ENHANCED: Chat mode with context-aware image processing
+// ENHANCED: Chat mode with comprehensive image debugging
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 Enhanced chat mode with", attachedFiles.length, "files");
+  console.log("💬 AUDIT - Enhanced chat mode processing");
+  console.log("🔍 Chat mode file analysis:", {
+    fileCount: attachedFiles.length,
+    hasFiles: attachedFiles.length > 0,
+    userLanguage: language,
+    messagePreview: message.substring(0, 100)
+  });
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -376,9 +478,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// ENHANCED: Claude API with context-aware image processing
+// ENHANCED: Claude API with comprehensive debugging and language-aware processing
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 Enhanced Claude 3.5 API call with context-aware processing");
+  console.log("🧠 AUDIT - Enhanced Claude 3.5 API call with comprehensive debugging");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -387,85 +489,79 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
     weekday: 'long'
   });
   
-  // ENHANCED: Language detection
+  // ENHANCED: Improved language detection that considers user preference
   const isArabicMessage = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
-  const detectedLanguage = isArabicMessage ? 'ar' : 'en';
+  const userPreferredLanguage = language || 'en';
+  const responseLanguage = userPreferredLanguage; // Always use user's preferred language
   
-  // ENHANCED: Context-aware system prompt based on image types
-  let systemPrompt = detectedLanguage === 'ar'
-    ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور والمحسن.
+  console.log("🌍 LANGUAGE AUDIT:", {
+    userPreferredLanguage: userPreferredLanguage,
+    messageContainsArabic: isArabicMessage,
+    finalResponseLanguage: responseLanguage,
+    messagePreview: message.substring(0, 50)
+  });
+  
+  // FIXED: Language-aware system prompt - responds in user's preferred language
+  let systemPrompt = responseLanguage === 'ar'
+    ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور.
 
 ## قدراتك الأساسية:
-أنت مساعد ذكي يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية، مع قدرات محسنة لتحليل الصور.
+أنت مساعد ذكي يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية، مع قدرات متقدمة لتحليل الصور.
 
-## تحليل الصور المحسن والمتخصص:
+## تحليل الصور المتقدم:
 ### أنواع الصور المدعومة:
-- **الوثائق الرسمية** 📄: جوازات السفر، الهويات، رخص القيادة، الشهادات، الفواتير
-- **الفواتير والإيصالات** 💰: الفواتير المالية، الإيصالات، المستندات المالية
-- **الأشخاص** 👤: وصف المظهر، الملابس، التعبيرات، الأنشطة
-- **الأماكن والمباني** 🏢: المناظر الطبيعية، المباني، الشوارع، المعالم
-- **التقارير والمخططات** 📊: تصورات البيانات، التقارير، الرسوم البيانية
-- **النصوص في الصور** 🔤: لقطات الشاشة، اللافتات، النصوص المكتوبة
-- **تحليل عام** ❓: وصف تفصيلي وتحليل شامل
+- **الوثائق الرسمية** 📄: جوازات السفر، الهويات، رخص القيادة، الشهادات
+- **الفواتير والإيصالات** 💰: المستندات المالية والإيصالات
+- **الأشخاص** 👤: الصور الشخصية ووصف المظهر
+- **الأماكن والمباني** 🏢: المناظر والمعالم
+- **التقارير والمخططات** 📊: البيانات والتحليلات
+- **النصوص في الصور** 🔤: استخراج وقراءة النصوص
+- **تحليل عام** ❓: وصف تفصيلي شامل
 
-### التحليل الذكي المحسن للتواريخ:
-- **مقارنة دقيقة لتواريخ الانتهاء مع التاريخ الحالي (${currentDate})**
-- **إذا كانت الوثيقة منتهية الصلاحية: اكتب تحذير واضح وعاجل بخط عريض**
-- **تقديم المشورة المفيدة**: البلدان بدون تأشيرة، إرشادات التجديد، متطلبات السفر
-
-## أسلوب التعامل المحسن:
-- **اكتب دائماً باللغة العربية فقط**
-- استخدم لغة طبيعية وودودة ومهنية
-- قدم إجابات مفصلة ومنظمة ودقيقة
-- **للوثائق المنتهية الصلاحية: استخدم تحذيرات عاجلة بخط عريض**
-- **كن دقيقاً في استخراج المعلومات وتحليل البيانات**
+### استخراج النصوص الذكي:
+- **استخرج النصوص بلغتها الأصلية** (عربية أو إنجليزية)
+- **رد دائماً باللغة العربية** حتى لو كان النص المستخرج بالإنجليزية
+- **قدم ترجمة إذا لزم الأمر**
 
 التاريخ اليوم: ${currentDate}
-**تجيب باللغة العربية فقط دائماً وبدقة عالية.**`
-    : `🤖 You are WAKTI AI, an advanced and enhanced intelligent assistant.
+**تجيب باللغة العربية فقط دائماً.**`
+    : `🤖 You are WAKTI AI, an advanced intelligent assistant.
 
 ## Core Capabilities:
-You are an intelligent assistant that can handle all types of requests naturally and smartly, with enhanced image analysis capabilities.
+You are an intelligent assistant that can handle all types of requests naturally and smartly, with advanced image analysis capabilities.
 
-## Enhanced & Specialized Image Analysis:
+## Advanced Image Analysis:
 ### Supported Image Types:
-- **Official Documents** 📄: Passports, IDs, driver's licenses, certificates, licenses
-- **Bills & Receipts** 💰: Financial documents, invoices, receipts, billing statements
-- **People** 👤: Appearance, clothing, expressions, activities, portraits
-- **Places & Buildings** 🏢: Landscapes, buildings, streets, landmarks, locations
-- **Reports & Charts** 📊: Data visualizations, reports, graphs, analytics
-- **Text in Images** 🔤: Screenshots, signs, written text, handwriting
-- **General Analysis** ❓: Detailed description and comprehensive analysis
+- **Official Documents** 📄: Passports, IDs, driver's licenses, certificates
+- **Bills & Receipts** 💰: Financial documents, invoices, receipts
+- **People** 👤: Personal photos, appearance descriptions
+- **Places & Buildings** 🏢: Landscapes, buildings, landmarks
+- **Reports & Charts** 📊: Data visualizations, analytics
+- **Text in Images** 🔤: Text extraction and reading
+- **General Analysis** ❓: Detailed comprehensive description
 
-### Enhanced Smart Date Analysis:
-- **Precise comparison of expiration dates with current date (${currentDate})**
-- **If document is expired: Write clear, urgent warning in bold text**
-- **Provide helpful advice**: visa-free countries, renewal guidance, travel requirements
-
-## Enhanced Communication Style:
-- **Always respond in English only**
-- Use natural, friendly, and professional language
-- Provide detailed, well-organized, and accurate answers
-- **For expired documents: Use urgent warnings in bold text**
-- **Be precise in information extraction and data analysis**
+### Smart Text Extraction:
+- **Extract text in its original language** (Arabic or English)
+- **Always respond in English** even if extracted text is in Arabic
+- **Provide translation when needed**
 
 Today's date: ${currentDate}
-**Always respond in English only with high precision.**`;
+**Always respond in English only.**`;
 
   // Add personalization if available
   if (personalTouch) {
     if (personalTouch.nickname) {
-      systemPrompt += detectedLanguage === 'ar' 
+      systemPrompt += responseLanguage === 'ar' 
         ? ` خاطب المستخدم باسم ${personalTouch.nickname}.`
         : ` Address the user as ${personalTouch.nickname}.`;
     }
     if (personalTouch.aiNickname) {
-      systemPrompt += detectedLanguage === 'ar'
+      systemPrompt += responseLanguage === 'ar'
         ? ` يمكن مناداتك باسم ${personalTouch.aiNickname}.`
         : ` You can be called ${personalTouch.aiNickname}.`;
     }
     if (personalTouch.tone && personalTouch.tone !== 'neutral') {
-      systemPrompt += detectedLanguage === 'ar'
+      systemPrompt += responseLanguage === 'ar'
         ? ` استخدم نبرة ${personalTouch.tone}.`
         : ` Use a ${personalTouch.tone} tone.`;
     }
@@ -489,55 +585,62 @@ Today's date: ${currentDate}
     });
   }
   
-  // ENHANCED: Advanced debugging for image processing issues
+  // ENHANCED: Advanced image processing with comprehensive URL debugging
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ Processing', attachedFiles.length, 'context-aware images');
-    console.log('📋 DEBUG - Full attachedFiles:', JSON.stringify(attachedFiles, null, 2));
+    console.log('🖼️ AUDIT - Processing attached files with comprehensive debugging');
     
-    // FIXED: Better image detection logic
-    const imageFile = attachedFiles.find(file => 
-      file.url || file.publicUrl || file.type?.startsWith('image/')
-    );
+    // Enhanced image file detection
+    const imageFile = attachedFiles.find(file => {
+      const hasUrl = !!(file.url || file.publicUrl);
+      const isImageType = file.type?.startsWith('image/');
+      console.log(`🔍 File check: ${file.name}`, {
+        hasUrl,
+        isImageType,
+        url: file.url || file.publicUrl || 'NO_URL',
+        type: file.type || 'NO_TYPE'
+      });
+      return hasUrl || isImageType;
+    });
     
     if (imageFile) {
       const imageUrl = imageFile.url || imageFile.publicUrl;
       const imageType = imageFile.type || 'image/jpeg';
       
-      console.log('🎯 DETAILED DEBUG - Processing image:', {
-        imageTypeName: imageFile.imageType?.name || 'unknown',
-        imageTypeId: imageFile.imageType?.id || 'unknown',
+      console.log('🎯 COMPREHENSIVE FILE AUDIT:', {
+        fileName: imageFile.name,
+        imageUrl: imageUrl,
+        urlValid: !!imageUrl,
+        urlLength: imageUrl?.length || 0,
+        imageType: imageType,
+        hasImageType: !!imageFile.imageType,
+        imageTypeName: imageFile.imageType?.name || 'NONE',
+        imageTypeId: imageFile.imageType?.id || 'NONE',
         hasContext: !!imageFile.context,
         contextLength: imageFile.context?.length || 0,
-        imageUrl: imageUrl?.substring(0, 50) + '...',
-        imageFileType: imageType,
-        fullImageFile: JSON.stringify(imageFile, null, 2)
+        contextPreview: imageFile.context ? imageFile.context.substring(0, 200) : 'NO_CONTEXT'
       });
       
       if (imageUrl) {
-        console.log('🔄 Starting base64 conversion for image type:', imageFile.imageType?.id);
+        console.log('🔄 Starting comprehensive base64 conversion audit...');
         const base64Data = await convertImageUrlToBase64(imageUrl);
         
         if (base64Data) {
-          console.log('✅ Base64 conversion successful, length:', base64Data.length);
+          console.log('✅ Base64 conversion successful');
           
-          // ENHANCED: More detailed context handling with debug logs
+          // ENHANCED: Simplified and language-aware context handling
           let contextualMessage = message;
           
-          // Add image type context if available
           if (imageFile.context) {
-            contextualMessage = `${imageFile.context}\n\nUser message: ${message}`;
-            console.log('✅ CONTEXT ADDED - Type:', imageFile.imageType?.id);
-            console.log('📝 CONTEXT TEXT:', imageFile.context);
-            console.log('💬 FINAL MESSAGE:', contextualMessage.substring(0, 200) + '...');
+            // Simple context integration without language conflicts
+            contextualMessage = `${imageFile.context}\n\nUser request: ${message}`;
+            console.log('✅ Context integrated successfully');
           } else if (imageFile.imageType?.name) {
-            // Fallback context based on image type name
-            const fallbackContext = `This is a ${imageFile.imageType.name} image. Please analyze it accordingly.`;
-            contextualMessage = `${fallbackContext}\n\nUser message: ${message}`;
-            console.log('⚠️ FALLBACK CONTEXT USED:', fallbackContext);
-          } else {
-            console.log('❌ NO CONTEXT OR IMAGE TYPE FOUND!');
+            // Minimal fallback context
+            const fallbackContext = `Analyze this ${imageFile.imageType.name}.`;
+            contextualMessage = `${fallbackContext}\n\nUser request: ${message}`;
+            console.log('⚠️ Using minimal fallback context');
           }
           
           currentMessage.content = [
@@ -552,29 +655,22 @@ Today's date: ${currentDate}
             }
           ];
           
-          console.log('📤 SENDING TO CLAUDE - Message structure:', {
-            hasTextContent: !!currentMessage.content[0]?.text,
-            textLength: currentMessage.content[0]?.text?.length || 0,
-            hasImageContent: !!currentMessage.content[1]?.source?.data,
-            imageDataLength: currentMessage.content[1]?.source?.data?.length || 0,
-            mediaType: currentMessage.content[1]?.source?.media_type
-          });
+          console.log('📤 Message prepared for Claude API');
           
-          console.log("✅ Context-aware image added to message successfully");
         } else {
-          console.error("❌ Image processing failed during base64 conversion");
+          console.error("❌ AUDIT CONCLUSION: Image processing failed at base64 conversion stage");
           return {
-            response: detectedLanguage === 'ar' 
-              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى المحاولة مرة أخرى أو جرب صورة أوضح.'
-              : '❌ Sorry, I encountered difficulty processing this image. Please try again or try a clearer image.',
-            error: 'Image processing failed',
+            response: responseLanguage === 'ar' 
+              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى التأكد من أن الصورة قابلة للوصول ومحاولة رفعها مرة أخرى.'
+              : '❌ Sorry, I encountered difficulty processing this image. Please ensure the image is accessible and try uploading it again.',
+            error: 'Image processing failed at base64 conversion',
             success: false
           };
         }
       } else {
-        console.error("❌ No valid image URL found");
+        console.error("❌ AUDIT CONCLUSION: No valid image URL found");
         return {
-          response: detectedLanguage === 'ar' 
+          response: responseLanguage === 'ar' 
             ? '❌ لم يتم العثور على رابط صحيح للصورة.'
             : '❌ No valid image URL found.',
           error: 'No valid image URL',
@@ -582,9 +678,9 @@ Today's date: ${currentDate}
         };
       }
     } else {
-      console.error("❌ No valid image file found in attachedFiles");
+      console.error("❌ AUDIT CONCLUSION: No valid image file found in attachedFiles");
       return {
-        response: detectedLanguage === 'ar' 
+        response: responseLanguage === 'ar' 
           ? '❌ لم يتم العثور على ملف صورة صحيح.'
           : '❌ No valid image file found.',
         error: 'No valid image file',
@@ -596,16 +692,8 @@ Today's date: ${currentDate}
   messages.push(currentMessage);
   
   try {
-    console.log(`🧠 Sending ${messages.length} messages to Enhanced Claude`);
+    console.log(`🧠 Sending request to Claude API with comprehensive debugging`);
     
-    console.log('🧠 FINAL REQUEST TO CLAUDE - Debug info:', {
-      messageCount: messages.length,
-      systemPromptLength: systemPrompt.length,
-      hasImageInLastMessage: !!(messages[messages.length - 1]?.content?.find?.(c => c.type === 'image')),
-      maxTokens: maxTokens,
-      model: 'claude-3-5-sonnet-20241022'
-    });
-
     const requestBody = {
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: maxTokens,
@@ -614,12 +702,14 @@ Today's date: ${currentDate}
       messages: messages
     };
 
-    console.log('📤 REQUEST BODY STRUCTURE:', {
+    console.log('📤 FINAL CLAUDE REQUEST AUDIT:', {
       model: requestBody.model,
       maxTokens: requestBody.max_tokens,
-      systemPromptPreview: requestBody.system.substring(0, 100) + '...',
+      systemPromptLanguage: responseLanguage,
+      systemPromptLength: requestBody.system.length,
       messageCount: requestBody.messages.length,
-      lastMessageType: typeof requestBody.messages[requestBody.messages.length - 1]?.content
+      hasImageContent: !!(messages[messages.length - 1]?.content?.find?.(c => c.type === 'image')),
+      userLanguage: responseLanguage
     });
 
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -632,45 +722,46 @@ Today's date: ${currentDate}
       body: JSON.stringify(requestBody),
     });
     
-    console.log("📡 Enhanced Claude API response status:", claudeResponse.status);
-    console.log("📡 Response headers:", Object.fromEntries(claudeResponse.headers.entries()));
+    console.log("📡 Claude API response received:", {
+      status: claudeResponse.status,
+      ok: claudeResponse.ok,
+      statusText: claudeResponse.statusText
+    });
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ DETAILED Claude API error:", {
+      console.error("❌ CLAUDE API ERROR DETAILS:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorText: errorText,
-        headers: Object.fromEntries(claudeResponse.headers.entries())
+        requestLanguage: responseLanguage
       });
       
-      let userFriendlyError = detectedLanguage === 'ar' 
+      let userFriendlyError = responseLanguage === 'ar' 
         ? 'واجهت مشكلة في معالجة طلبك.'
         : 'I encountered an issue processing your request.';
       
       if (claudeResponse.status === 400 && errorText.includes('image')) {
-        userFriendlyError = detectedLanguage === 'ar' 
-          ? 'كانت هناك مشكلة في معالجة الصورة. يرجى تجربة صورة أوضح أو نوع مختلف.'
-          : 'There was an issue processing the image. Please try a clearer image or different type.';
+        userFriendlyError = responseLanguage === 'ar' 
+          ? 'كانت هناك مشكلة في معالجة الصورة. يرجى تجربة صورة أوضح.'
+          : 'There was an issue processing the image. Please try a clearer image.';
       } else if (claudeResponse.status === 429) {
-        userFriendlyError = detectedLanguage === 'ar' 
+        userFriendlyError = responseLanguage === 'ar' 
           ? 'عدد كبير من الطلبات. يرجى الانتظار قليلاً.'
           : 'Too many requests. Please wait a moment.';
-      } else if (claudeResponse.status >= 500) {
-        userFriendlyError = detectedLanguage === 'ar' 
-          ? 'خدمة الذكاء الاصطناعي غير متاحة مؤقتاً.'
-          : 'AI service temporarily unavailable.';
       }
       
       throw new Error(userFriendlyError);
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ Enhanced Claude API success");
+    console.log("✅ Claude API success - response received");
     
-    const responseText = claudeData.content?.[0]?.text || (detectedLanguage === 'ar' 
+    const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' 
       ? 'أعتذر، واجهت مشكلة في معالجة طلبك.'
       : 'I apologize, but I encountered an issue processing your request.');
+    
+    console.log("🎉 AUDIT COMPLETE - Successfully processed request");
     
     return {
       response: responseText,
@@ -680,9 +771,9 @@ Today's date: ${currentDate}
     };
     
   } catch (error) {
-    console.error("❌ Enhanced Claude API critical error:", error);
+    console.error("❌ CLAUDE API CRITICAL ERROR:", error);
     return {
-      response: detectedLanguage === 'ar' 
+      response: responseLanguage === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
         : '❌ An error occurred while processing your request. Please try again.',
       error: error.message,

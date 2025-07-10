@@ -7,151 +7,126 @@ export interface ImageTypeOption {
   id: string;
   name: string;
   icon: string;
-  description: string;
   hint: string;
-  examples: string[];
-  examplePrompt: string;
+  context: string;
+  examplePrompt?: string;
 }
-
-const IMAGE_TYPES: ImageTypeOption[] = [
-  {
-    id: 'passport',
-    name: 'Passport',
-    icon: '🛂',
-    description: 'Passport documents for travel',
-    hint: 'Extract passport info, check expiry, provide travel advice',
-    examples: ['Check passport expiry', 'Extract passport details'],
-    examplePrompt: 'This is a PASSPORT - extract personal information, passport number, issue/expiry dates, check if expired, and provide renewal advice if needed'
-  },
-  {
-    id: 'id_card',
-    name: 'ID Card',
-    icon: '🆔',
-    description: 'National ID cards, residency permits',
-    hint: 'Extract ID details, check validity dates',
-    examples: ['Extract ID info', 'Check ID expiry'],
-    examplePrompt: 'This is an ID CARD - extract personal details, ID number, validity dates, check expiry status and warn if expired'
-  },
-  {
-    id: 'certificate',
-    name: 'Certificate/Document',
-    icon: '📄',
-    description: 'Certificates, licenses, official documents',
-    hint: 'Extract document info, dates, qualifications',
-    examples: ['Read certificate', 'Extract document details'],
-    examplePrompt: 'This is a CERTIFICATE/DOCUMENT - extract institution, dates, qualifications, validity period, and any important details'
-  },
-  {
-    id: 'financial',
-    name: 'Bills/Receipts',
-    icon: '💰',
-    description: 'Bills, receipts, invoices, bank statements',
-    hint: 'Extract amounts, dates, calculate totals',
-    examples: ['Split restaurant bill', 'Extract invoice details'],
-    examplePrompt: 'This is a BILL/RECEIPT - extract amounts, dates, items, calculate totals, and provide financial breakdown'
-  },
-  {
-    id: 'person',
-    name: 'Person/Photo',
-    icon: '👤',
-    description: 'Photos of people, portraits, group photos',
-    hint: 'Describe people, appearance, activities',
-    examples: ['Describe person', 'Analyze group photo'],
-    examplePrompt: 'This is a PHOTO of a person/people - describe appearance, clothing, setting, activities, and any notable details'
-  },
-  {
-    id: 'place',
-    name: 'Place/Building',
-    icon: '🏢',
-    description: 'Buildings, locations, landmarks, scenery',
-    hint: 'Describe location, architecture, features',
-    examples: ['Identify building', 'Describe location'],
-    examplePrompt: 'This is a PLACE/BUILDING - describe the location, architecture, notable features, and any identifying details'
-  },
-  {
-    id: 'screenshots',
-    name: 'Screenshot',
-    icon: '📱',
-    description: 'App screens, website captures, UI elements',
-    hint: 'Read and explain interface elements',
-    examples: ['Explain app interface', 'Read screen content'],
-    examplePrompt: 'This is a SCREENSHOT - describe the interface, buttons, text, functionality, and explain what is shown on screen'
-  },
-  {
-    id: 'text_image',
-    name: 'Text Extraction',
-    icon: '📝',
-    description: 'Signs, handwritten notes, text in images',
-    hint: 'Extract and transcribe all visible text',
-    examples: ['Extract text', 'Transcribe handwriting'],
-    examplePrompt: 'This is TEXT EXTRACTION - extract and transcribe all visible text accurately, including handwritten content if present'
-  },
-  {
-    id: 'food',
-    name: 'Food',
-    icon: '🍕',
-    description: 'Food, meals, dishes, ingredients',
-    hint: 'Identify ingredients, nutrition, cooking methods',
-    examples: ['Identify dish', 'Analyze nutrition'],
-    examplePrompt: 'This is FOOD - identify the dish, ingredients, cooking method, provide nutritional information and recipe suggestions if possible'
-  },
-  {
-    id: 'object',
-    name: 'Object/Item',
-    icon: '📦',
-    description: 'General objects, items, products',
-    hint: 'Identify object, describe function and purpose',
-    examples: ['Identify item', 'Describe object'],
-    examplePrompt: 'This is an OBJECT/ITEM - identify what it is, describe its function, materials, purpose, and provide relevant information'
-  },
-  {
-    id: 'other',
-    name: 'Other',
-    icon: '🔍',
-    description: 'General analysis for any image type',
-    hint: 'Describe what you want analyzed in the text box',
-    examples: ['Custom analysis', 'Describe specific needs'],
-    examplePrompt: 'Please provide a comprehensive analysis of this image. IMPORTANT: When selecting "Other", describe your specific analysis needs in the text box below.'
-  }
-];
 
 interface ImageTypeSelectorProps {
   selectedType: string | null;
   onTypeSelect: (type: ImageTypeOption) => void;
-  className?: string;
   compact?: boolean;
 }
 
-export function ImageTypeSelector({ selectedType, onTypeSelect, className = '', compact = false }: ImageTypeSelectorProps) {
+export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false }: ImageTypeSelectorProps) {
   const { language } = useTheme();
 
-  const selectedImageType = IMAGE_TYPES.find(type => type.id === selectedType);
+  // FIXED: Simplified image types with working contexts
+  const imageTypes: ImageTypeOption[] = [
+    {
+      id: 'passport',
+      name: language === 'ar' ? 'جواز السفر' : 'Passport',
+      icon: '📄',
+      hint: language === 'ar' ? 'لاستخراج بيانات جواز السفر' : 'For passport data extraction',
+      context: language === 'ar' 
+        ? 'هذه صورة جواز سفر. استخرج البيانات الشخصية، تواريخ الصلاحية، ورقم الجواز. تحقق من صلاحية الجواز.'
+        : 'This is a passport image. Extract personal details, expiration dates, and passport number. Check passport validity.',
+      examplePrompt: language === 'ar' ? 'استخرج بيانات جواز السفر' : 'Extract passport information'
+    },
+    {
+      id: 'id_card',
+      name: language === 'ar' ? 'بطاقة الهوية' : 'ID Card',
+      icon: '🆔',
+      hint: language === 'ar' ? 'لاستخراج بيانات بطاقة الهوية' : 'For ID card data extraction',
+      context: language === 'ar'
+        ? 'هذه صورة بطاقة هوية. استخرج الاسم، الرقم، تاريخ الانتهاء، والمعلومات الشخصية.'
+        : 'This is an ID card image. Extract name, ID number, expiration date, and personal information.',
+      examplePrompt: language === 'ar' ? 'استخرج بيانات بطاقة الهوية' : 'Extract ID card details'
+    },
+    {
+      id: 'certificate',
+      name: language === 'ar' ? 'شهادة' : 'Certificate',
+      icon: '🏆',
+      hint: language === 'ar' ? 'لتحليل الشهادات والدبلومات' : 'For analyzing certificates and diplomas',
+      context: language === 'ar'
+        ? 'هذه صورة شهادة. استخرج اسم الحاصل عليها، نوع الشهادة، الجهة المانحة، والتاريخ.'
+        : 'This is a certificate image. Extract recipient name, certificate type, issuing authority, and date.',
+      examplePrompt: language === 'ar' ? 'حلل هذه الشهادة' : 'Analyze this certificate'
+    },
+    {
+      id: 'receipt',
+      name: language === 'ar' ? 'فاتورة' : 'Receipt',
+      icon: '🧾',
+      hint: language === 'ar' ? 'لاستخراج بيانات الفواتير' : 'For receipt data extraction',
+      context: language === 'ar'
+        ? 'هذه صورة فاتورة. استخرج المبلغ الإجمالي، العناصر، التاريخ، واسم المتجر.'
+        : 'This is a receipt image. Extract total amount, items, date, and store name.',
+      examplePrompt: language === 'ar' ? 'استخرج بيانات الفاتورة' : 'Extract receipt details'
+    },
+    {
+      id: 'person',
+      name: language === 'ar' ? 'صورة شخصية' : 'Person Photo',
+      icon: '👤',
+      hint: language === 'ar' ? 'لوصف الأشخاص في الصور' : 'For describing people in photos',
+      context: language === 'ar'
+        ? 'هذه صورة شخص. صف المظهر، الملابس، والأنشطة المرئية في الصورة.'
+        : 'This is a person photo. Describe appearance, clothing, and visible activities.',
+      examplePrompt: language === 'ar' ? 'صف الشخص في الصورة' : 'Describe the person in the image'
+    },
+    {
+      id: 'document',
+      name: language === 'ar' ? 'مستند' : 'Document',
+      icon: '📋',
+      hint: language === 'ar' ? 'لقراءة المستندات والنصوص' : 'For reading documents and text',
+      context: language === 'ar'
+        ? 'هذا مستند يحتوي على نص. اقرأ واستخرج المحتوى النصي الموجود.'
+        : 'This is a document with text. Read and extract the textual content.',
+      examplePrompt: language === 'ar' ? 'اقرأ المستند' : 'Read the document'
+    },
+    {
+      id: 'general',
+      name: language === 'ar' ? 'تحليل عام' : 'General Analysis',
+      icon: '🔍',
+      hint: language === 'ar' ? 'لتحليل أي نوع من الصور' : 'For analyzing any type of image',
+      context: language === 'ar'
+        ? 'حلل هذه الصورة وصف ما تراه بالتفصيل.'
+        : 'Analyze this image and describe what you see in detail.',
+      examplePrompt: language === 'ar' ? 'حلل هذه الصورة' : 'Analyze this image'
+    }
+  ];
+
+  const selectedTypeData = imageTypes.find(type => type.id === selectedType);
 
   return (
-    <Select
-      value={selectedType || ''}
-      onValueChange={(value) => {
-        const imageType = IMAGE_TYPES.find(type => type.id === value);
-        if (imageType) onTypeSelect(imageType);
-      }}
-    >
-      <SelectTrigger className="h-8 w-32 bg-white/95 dark:bg-gray-800/90 border border-primary/20 hover:border-primary/40 rounded-lg text-xs">
-        <SelectValue placeholder={language === 'ar' ? 'نوع' : 'Type'} />
-      </SelectTrigger>
-      <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-xl shadow-2xl z-50 max-h-80 overflow-y-auto">
-        {IMAGE_TYPES.map((type) => (
-          <SelectItem 
-            key={type.id} 
-            value={type.id}
-            className="flex items-center gap-2 p-2 hover:bg-primary/10 focus:bg-primary/10 rounded-lg cursor-pointer transition-colors text-xs"
-          >
-            <span className="text-sm">{type.icon}</span>
-            <span className="font-medium">{type.name}</span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className={compact ? "w-full" : "w-full max-w-xs"}>
+      <Select value={selectedType || ''} onValueChange={(value) => {
+        const typeData = imageTypes.find(type => type.id === value);
+        if (typeData) {
+          onTypeSelect(typeData);
+        }
+      }}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder={
+            language === 'ar' ? 'اختر نوع الصورة' : 'Select image type'
+          } />
+        </SelectTrigger>
+        <SelectContent>
+          {imageTypes.map((type) => (
+            <SelectItem key={type.id} value={type.id}>
+              <div className="flex items-center gap-2">
+                <span>{type.icon}</span>
+                <span>{type.name}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
+      {selectedTypeData && !compact && (
+        <p className="text-xs text-muted-foreground mt-2">
+          {selectedTypeData.hint}
+        </p>
+      )}
+    </div>
   );
 }
-
-export { IMAGE_TYPES };
