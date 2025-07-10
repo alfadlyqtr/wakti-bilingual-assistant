@@ -167,7 +167,7 @@ export function SimplifiedFileUpload({
 
   // Handle file selection from PlusMenu
   React.useEffect(() => {
-    const handleFileInput = (event: CustomEvent) => {
+    const handleFileInput = (event: CustomEvent<{ files: FileList }>) => {
       if (event.detail?.files) {
         const fileArray = Array.from(event.detail.files).filter((file: File) => 
           file.type.startsWith('image/') || file.type === 'text/plain'
