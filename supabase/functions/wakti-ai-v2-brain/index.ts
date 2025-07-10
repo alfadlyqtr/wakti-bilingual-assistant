@@ -13,7 +13,7 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: SIMPLIFIED IMAGE PROCESSING");
+console.log("🚀 WAKTI AI V2: TYPE-SPECIFIC IMAGE PROCESSING");
 
 // SIMPLIFIED: Fast and reliable image processing
 async function convertImageUrlToBase64(imageUrl: string): Promise<string | null> {
@@ -142,7 +142,7 @@ serve(async (req) => {
     
     // Simple file logging
     if (attachedFiles.length > 0) {
-      console.log("🖼️ Files:", attachedFiles.map(f => ({ name: f.name, hasUrl: !!f.url })));
+      console.log("🖼️ Files:", attachedFiles.map(f => ({ name: f.name, hasUrl: !!f.url, imageType: f.imageType?.id })));
     }
 
     if (!message?.trim() && !attachedFiles?.length) {
@@ -386,9 +386,97 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// SIMPLIFIED: Claude API with reliable image processing
+// TYPE-SPECIFIC IMAGE PROCESSING: Use dropdown selection to determine processing
+function getImageProcessingPrompt(imageType: string, userMessage: string, language: string) {
+  console.log(`🎯 PROCESSING IMAGE TYPE: ${imageType}`);
+  
+  const responseLanguage = language || 'en';
+  
+  switch (imageType) {
+    case 'passport':
+      return responseLanguage === 'ar'
+        ? `هذه صورة جواز سفر. استخرج جميع النصوص المرئية تماماً كما هي مكتوبة في الجواز، بما في ذلك:
+- الأسماء الكاملة
+- أرقام جواز السفر
+- التواريخ (الإصدار والانتهاء)
+- مكان الولادة
+- الجنسية
+- أي نصوص أخرى مرئية
+
+قم بإستخراج النص فقط بدون تحليل أو تعليق. طلب المستخدم: ${userMessage}`
+        : `This is a passport image. Extract ALL visible text exactly as written in the passport, including:
+- Full names
+- Passport numbers
+- Dates (issue and expiry)
+- Place of birth
+- Nationality
+- Any other visible text
+
+Extract text only without analysis or commentary. User request: ${userMessage}`;
+
+    case 'id_card':
+      return responseLanguage === 'ar'
+        ? `هذه صورة بطاقة هوية. استخرج جميع النصوص المرئية تماماً كما هي مكتوبة في البطاقة، بما في ذلك:
+- الأسماء الكاملة
+- أرقام الهوية
+- التواريخ
+- العناوين
+- أي نصوص أخرى مرئية
+
+قم بإستخراج النص فقط بدون تحليل أو تعليق. طلب المستخدم: ${userMessage}`
+        : `This is an ID card image. Extract ALL visible text exactly as written on the card, including:
+- Full names
+- ID numbers
+- Dates
+- Addresses
+- Any other visible text
+
+Extract text only without analysis or commentary. User request: ${userMessage}`;
+
+    case 'certificate':
+    case 'receipt':
+    case 'document':
+    case 'report':
+      return responseLanguage === 'ar'
+        ? `هذه صورة وثيقة. استخرج جميع النصوص المرئية من الوثيقة كما هي مكتوبة. طلب المستخدم: ${userMessage}`
+        : `This is a document image. Extract ALL visible text from the document as written. User request: ${userMessage}`;
+
+    case 'people':
+      return responseLanguage === 'ar'
+        ? `هذه صورة تحتوي على أشخاص. صف الأشخاص في الصورة، عددهم، ملابسهم، وما يفعلونه. لا تحاول قراءة نصوص. طلب المستخدم: ${userMessage}`
+        : `This is a photo containing people. Describe the people in the image, their number, clothing, and what they are doing. Do not try to read text. User request: ${userMessage}`;
+
+    case 'person':
+      return responseLanguage === 'ar'
+        ? `هذه صورة شخص واحد. صف الشخص، مظهره، ملابسه، وما يفعله. لا تحاول قراءة نصوص. طلب المستخدم: ${userMessage}`
+        : `This is a photo of one person. Describe the person, their appearance, clothing, and what they are doing. Do not try to read text. User request: ${userMessage}`;
+
+    case 'food':
+      return responseLanguage === 'ar'
+        ? `هذه صورة طعام. صف نوع الطعام، مكوناته المرئية، طريقة تقديمه، وشكله. لا تحاول قراءة نصوص. طلب المستخدم: ${userMessage}`
+        : `This is a food image. Describe the type of food, visible ingredients, presentation, and appearance. Do not try to read text. User request: ${userMessage}`;
+
+    case 'object':
+      return responseLanguage === 'ar'
+        ? `هذه صورة تحتوي على كائن أو أشياء. صف الكائن، شكله، لونه، ووظيفته المحتملة. لا تحاول قراءة نصوص إلا إذا كانت جزء من الكائن. طلب المستخدم: ${userMessage}`
+        : `This is an image containing an object or items. Describe the object, its shape, color, and potential function. Do not try to read text unless it's part of the object. User request: ${userMessage}`;
+
+    case 'scenery':
+      return responseLanguage === 'ar'
+        ? `هذه صورة منظر طبيعي. صف المنظر، العناصر الطبيعية، الألوان، والجو العام. لا تحاول قراءة نصوص. طلب المستخدم: ${userMessage}`
+        : `This is a scenery image. Describe the landscape, natural elements, colors, and overall atmosphere. Do not try to read text. User request: ${userMessage}`;
+
+    case 'general':
+    default:
+      return responseLanguage === 'ar'
+        ? `حلل هذه الصورة وصف ما تراه بالتفصيل. طلب المستخدم: ${userMessage}`
+        : `Analyze this image and describe what you see in detail. User request: ${userMessage}`;
+  }
+}
+
+// FIXED: Claude API with TYPE-SPECIFIC image processing
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 CLAUDE API PROCESSING");
+  console.log("🧠 CLAUDE API PROCESSING WITH TYPE-SPECIFIC LOGIC");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -411,20 +499,19 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
 ## قدراتك الأساسية:
 أنت مساعد ذكي يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية، مع قدرات متقدمة لتحليل الصور.
 
-## تحليل الصور المتقدم:
-### أنواع الصور المدعومة:
-- **الوثائق الرسمية** 📄: جوازات السفر، الهويات، رخص القيادة، الشهادات
-- **الفواتير والإيصالات** 💰: المستندات المالية والإيصالات
-- **الأشخاص** 👤: الصور الشخصية ووصف المظهر
-- **الأماكن والمباني** 🏢: المناظر والمعالم
-- **التقارير والمخططات** 📊: البيانات والتحليلات
-- **النصوص في الصور** 🔤: استخراج وقراءة النصوص
-- **تحليل عام** ❓: وصف تفصيلي شامل
+## تحليل الصور حسب النوع:
+عندما يرسل المستخدم صورة مع نوع محدد، اتبع هذه القواعد:
 
-### استخراج النصوص الذكي:
-- **استخرج النصوص بلغتها الأصلية** (عربية أو إنجليزية)
-- **رد دائماً باللغة العربية** حتى لو كان النص المستخرج بالإنجليزية
-- **قدم ترجمة إذا لزم الأمر**
+### الوثائق (جوازات السفر، الهويات، الشهادات، الفواتير):
+- **استخرج النص فقط** - لا تحلل صحة الوثيقة
+- اقرأ جميع النصوص المرئية كما هي مكتوبة
+- لا تعلق على صحة الوثيقة أو انتهاء الصلاحية
+- ركز على استخراج المعلومات النصية
+
+### الأشخاص والطعام والمناظر والكائنات:
+- **صف المحتوى فقط** - لا تحاول قراءة النصوص
+- ركز على الوصف البصري
+- لا تبحث عن نصوص في هذه الصور
 
 التاريخ اليوم: ${currentDate}
 **تجيب باللغة العربية فقط دائماً.**`
@@ -433,20 +520,19 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
 ## Core Capabilities:
 You are an intelligent assistant that can handle all types of requests naturally and smartly, with advanced image analysis capabilities.
 
-## Advanced Image Analysis:
-### Supported Image Types:
-- **Official Documents** 📄: Passports, IDs, driver's licenses, certificates
-- **Bills & Receipts** 💰: Financial documents, invoices, receipts
-- **People** 👤: Personal photos, appearance descriptions
-- **Places & Buildings** 🏢: Landscapes, buildings, landmarks
-- **Reports & Charts** 📊: Data visualizations, analytics
-- **Text in Images** 🔤: Text extraction and reading
-- **General Analysis** ❓: Detailed comprehensive description
+## Type-Specific Image Analysis:
+When a user sends an image with a specific type, follow these rules:
 
-### Smart Text Extraction:
-- **Extract text in its original language** (Arabic or English)
-- **Always respond in English** even if extracted text is in Arabic
-- **Provide translation when needed**
+### Documents (Passports, IDs, Certificates, Receipts):
+- **Extract text only** - do not analyze document validity
+- Read all visible text exactly as written
+- Do not comment on document validity or expiration
+- Focus on text extraction
+
+### People, Food, Scenery, Objects:
+- **Describe content only** - do not try to read text
+- Focus on visual description
+- Do not look for text in these images
 
 Today's date: ${currentDate}
 **Always respond in English only.**`;
@@ -488,11 +574,11 @@ Today's date: ${currentDate}
     });
   }
   
-  // SIMPLIFIED: Fast image processing
+  // TYPE-SPECIFIC: Process images based on selected type
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ Processing files...');
+    console.log('🖼️ Processing files with type-specific logic...');
     
     const imageFile = attachedFiles.find(file => {
       const hasUrl = !!(file.url || file.publicUrl);
@@ -503,8 +589,13 @@ Today's date: ${currentDate}
     if (imageFile) {
       const imageUrl = imageFile.url || imageFile.publicUrl;
       const imageType = imageFile.type || 'image/jpeg';
+      const selectedImageType = imageFile.imageType?.id || 'general';
       
-      console.log('🎯 Processing:', imageFile.name);
+      console.log('🎯 Processing:', {
+        fileName: imageFile.name,
+        selectedType: selectedImageType,
+        hasImageType: !!imageFile.imageType
+      });
       
       if (imageUrl) {
         const base64Data = await convertImageUrlToBase64(imageUrl);
@@ -512,15 +603,11 @@ Today's date: ${currentDate}
         if (base64Data) {
           console.log('✅ Image converted successfully');
           
-          let contextualMessage = message;
-          if (imageFile.context) {
-            contextualMessage = `${imageFile.context}\n\nUser request: ${message}`;
-          } else if (imageFile.imageType?.name) {
-            contextualMessage = `Analyze this ${imageFile.imageType.name}.\n\nUser request: ${message}`;
-          }
+          // Use type-specific processing prompt
+          const typeSpecificPrompt = getImageProcessingPrompt(selectedImageType, message, responseLanguage);
           
           currentMessage.content = [
-            { type: 'text', text: contextualMessage },
+            { type: 'text', text: typeSpecificPrompt },
             { 
               type: 'image', 
               source: { 
