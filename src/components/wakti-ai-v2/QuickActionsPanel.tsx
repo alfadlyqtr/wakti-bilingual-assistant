@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -56,50 +57,50 @@ export function QuickActionsPanel({
     description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
   }];
 
-  const handleVideoGeneratorOpen = useCallback((event: React.MouseEvent) => {
-    console.log('🎬 VIDEO GENERATOR: Button clicked - preventing event propagation');
-    event.preventDefault();
-    event.stopPropagation();
-    
-    // Close drawer first with a small delay
+  // Simple action handlers without event parameter conflicts
+  const handleTextGenOpen = useCallback(() => {
+    console.log('🎨 TEXT GENERATOR: Opening modal');
+    setShowTextGen(true);
     if (onClose) {
-      console.log('🎬 VIDEO GENERATOR: Closing drawer first');
-      onClose();
+      setTimeout(() => onClose(), 200);
     }
-    
-    // Add delay to prevent state conflicts
-    setTimeout(() => {
-      console.log('🎬 VIDEO GENERATOR: Opening modal after delay');
-      setShowVideoGenerator(true);
-    }, 150);
   }, [onClose]);
 
-  const handleVideoGeneratorClose = useCallback((open: boolean) => {
-    console.log('🎬 VIDEO GENERATOR: Modal state changing to:', open);
-    setShowVideoGenerator(open);
-  }, []);
+  const handleVoiceCloneOpen = useCallback(() => {
+    console.log('🎤 VOICE CLONE: Opening modal');
+    setShowVoiceClone(true);
+    if (onClose) {
+      setTimeout(() => onClose(), 200);
+    }
+  }, [onClose]);
+
+  const handleGameModeOpen = useCallback(() => {
+    console.log('🎮 GAME MODE: Opening modal');
+    setShowGameMode(true);
+    if (onClose) {
+      setTimeout(() => onClose(), 200);
+    }
+  }, [onClose]);
+
+  const handleVideoGeneratorOpen = useCallback(() => {
+    console.log('🎬 VIDEO GENERATOR: Opening modal');
+    setShowVideoGenerator(true);
+    if (onClose) {
+      setTimeout(() => onClose(), 200);
+    }
+  }, [onClose]);
   
   const quickActions = [{
     icon: <PenTool className="h-5 w-5" />,
     label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
     description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
-    action: () => {
-      setShowTextGen(true);
-      if (onClose) {
-        setTimeout(() => onClose(), 300);
-      }
-    },
+    action: handleTextGenOpen,
     color: 'bg-purple-500'
   }, {
     icon: <Mic className="h-5 w-5" />,
     label: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
     description: language === 'ar' ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة' : 'Clone your voice, translate and speak in different languages',
-    action: () => {
-      setShowVoiceClone(true);
-      if (onClose) {
-        setTimeout(() => onClose(), 300);
-      }
-    },
+    action: handleVoiceCloneOpen,
     color: 'bg-pink-500'
   }, {
     icon: <Video className="h-5 w-5" />,
@@ -111,12 +112,7 @@ export function QuickActionsPanel({
     icon: <Gamepad2 className="h-5 w-5" />,
     label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
     description: language === 'ar' ? 'العب ألعاب ذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
-    action: () => {
-      setShowGameMode(true);
-      if (onClose) {
-        setTimeout(() => onClose(), 300);
-      }
-    },
+    action: handleGameModeOpen,
     color: 'bg-red-500'
   }];
   
@@ -130,22 +126,15 @@ export function QuickActionsPanel({
     }
   };
 
-  const handleToolAction = (action: () => void) => {
-    console.log('🔧 Quick Actions: Tool action triggered');
-    if (typeof action === 'function') {
-      action();
-    }
-  };
-
-  // Render modals using React Portal to ensure they appear above everything
+  // Render modals using React Portal
   const renderModals = () => {
     if (typeof document === 'undefined') return null;
     
     return createPortal(
       <>
         <TextGeneratorPopup 
-          isOpen={showTextGen} 
-          onClose={() => setShowTextGen(false)} 
+          open={showTextGen} 
+          onOpenChange={setShowTextGen} 
           onTextGenerated={onTextGenerated} 
         />
 
@@ -156,7 +145,7 @@ export function QuickActionsPanel({
 
         <VideoGeneratorModal 
           open={showVideoGenerator} 
-          onOpenChange={handleVideoGeneratorClose}
+          onOpenChange={setShowVideoGenerator}
         />
 
         <GameModeModal 
@@ -223,7 +212,7 @@ export function QuickActionsPanel({
                 <Card 
                   key={index} 
                   className="cursor-pointer hover:shadow-md transition-all duration-300 bg-white/20 dark:bg-black/20 hover:bg-white/30 dark:hover:bg-black/30 border-white/30 dark:border-white/20 hover:border-white/40 dark:hover:border-white/30" 
-                  onClick={(event) => handleToolAction(() => action.action(event))}
+                  onClick={action.action}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3">
@@ -243,7 +232,7 @@ export function QuickActionsPanel({
         </div>
       </div>
 
-      {/* Render modals via portal to ensure proper positioning */}
+      {/* Render modals via portal */}
       {renderModals()}
     </>
   );
