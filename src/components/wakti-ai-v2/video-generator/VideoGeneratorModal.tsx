@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { X, Video, Upload, Trash2, Play, Download } from 'lucide-react';
+import { Video, Upload, Trash2, Play, Download } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ImageUploader } from './ImageUploader';
 import { TemplateSelector, templates } from './TemplateSelector';
 import { VideoPreview } from './VideoPreview';
@@ -8,13 +9,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface VideoGeneratorModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({
-  isOpen,
-  onClose,
+  open,
+  onOpenChange,
 }) => {
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
@@ -25,8 +26,6 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({
   const [resolution, setResolution] = useState('720p');
   const [movementAmplitude, setMovementAmplitude] = useState('auto');
   const [bgm, setBgm] = useState(false);
-
-  if (!isOpen) return null;
 
   const handleImageUpload = (files: File[]) => {
     setUploadedImages(files);
@@ -142,41 +141,36 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({
     }
   };
 
-  const handleClose = () => {
-    if (isGenerating) return; // Prevent closing during generation
+  const handleClose = (open: boolean) => {
+    if (!open && isGenerating) return; // Prevent closing during generation
     
-    setUploadedImages([]);
-    setSelectedTemplate('');
-    setPrompt('');
-    setGeneratedVideo(null);
-    setIsGenerating(false);
-    onClose();
+    if (!open) {
+      setUploadedImages([]);
+      setSelectedTemplate('');
+      setPrompt('');
+      setGeneratedVideo(null);
+      setIsGenerating(false);
+    }
+    onOpenChange(open);
   };
 
   const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
-      <div className="bg-background border border-border rounded-2xl w-full max-w-6xl h-[95vh] flex flex-col shadow-2xl">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0" hideCloseButton={isGenerating}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border bg-background rounded-t-2xl">
+        <DialogHeader className="p-6 border-b border-border bg-background rounded-t-2xl">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-500 rounded-lg text-white">
               <Video className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-foreground">AI Video Generator</h2>
+              <DialogTitle className="text-xl font-semibold text-foreground">AI Video Generator</DialogTitle>
               <p className="text-sm text-muted-foreground">Create professional videos from images with AI</p>
             </div>
           </div>
-          <button
-            onClick={handleClose}
-            disabled={isGenerating}
-            className="p-2 hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </div>
+        </DialogHeader>
 
         {/* Content */}
         <div className="flex-1 overflow-auto">
@@ -352,7 +346,7 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({
             </p>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };

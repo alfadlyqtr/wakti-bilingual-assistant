@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -120,9 +121,13 @@ export function QuickActionsPanel({
     console.log('🔧 Quick Actions: Tool opened');
   };
 
-  // Custom close handler for video generator that doesn't reset parent state immediately
-  const handleVideoGeneratorClose = () => {
-    setShowVideoGenerator(false);
+  // Handle video generator with proper state management
+  const handleVideoGeneratorOpenChange = (open: boolean) => {
+    setShowVideoGenerator(open);
+    // Close drawer when video generator opens
+    if (open && onClose) {
+      setTimeout(() => onClose(), 200);
+    }
   };
 
   // Render modals using React Portal to ensure they appear above everything
@@ -143,8 +148,8 @@ export function QuickActionsPanel({
         />
 
         <VideoGeneratorModal 
-          isOpen={showVideoGenerator} 
-          onClose={handleVideoGeneratorClose} 
+          open={showVideoGenerator} 
+          onOpenChange={handleVideoGeneratorOpenChange} 
         />
 
         <GameModeModal 
