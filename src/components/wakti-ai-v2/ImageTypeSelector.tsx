@@ -177,16 +177,14 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false 
         </SelectTrigger>
         <SelectContent>
           {imageTypes.map((type) => (
-            <SelectItem key={type.id} value={type.id}>
-              <div className="flex items-center gap-2">
-                <span>{type.icon}</span>
-                <div className="flex flex-col">
+            <SelectItem key={type.id} value={type.id} className="py-3">
+              <div className="flex flex-col w-full">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">{type.icon}</span>
                   <span className="font-medium">{type.name[currentLanguage]}</span>
-                  {!compact && (
-                    <span className="text-xs text-muted-foreground">
-                      {type.description[currentLanguage]}
-                    </span>
-                  )}
+                </div>
+                <div className="text-xs text-muted-foreground ml-6">
+                  {type.description[currentLanguage]}
                 </div>
               </div>
             </SelectItem>
