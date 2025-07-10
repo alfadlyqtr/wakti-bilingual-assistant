@@ -85,6 +85,33 @@ const IMAGE_TYPES: ImageTypeOption[] = [
     hint: 'Extract and transcribe all visible text',
     examples: ['Extract text', 'Transcribe handwriting'],
     examplePrompt: 'This is TEXT EXTRACTION - extract and transcribe all visible text accurately, including handwritten content if present'
+  },
+  {
+    id: 'food',
+    name: 'Food',
+    icon: '🍕',
+    description: 'Food, meals, dishes, ingredients',
+    hint: 'Identify ingredients, nutrition, cooking methods',
+    examples: ['Identify dish', 'Analyze nutrition'],
+    examplePrompt: 'This is FOOD - identify the dish, ingredients, cooking method, provide nutritional information and recipe suggestions if possible'
+  },
+  {
+    id: 'object',
+    name: 'Object/Item',
+    icon: '📦',
+    description: 'General objects, items, products',
+    hint: 'Identify object, describe function and purpose',
+    examples: ['Identify item', 'Describe object'],
+    examplePrompt: 'This is an OBJECT/ITEM - identify what it is, describe its function, materials, purpose, and provide relevant information'
+  },
+  {
+    id: 'other',
+    name: 'Other',
+    icon: '🔍',
+    description: 'General analysis for any image type',
+    hint: 'Describe what you want analyzed in the text box',
+    examples: ['Custom analysis', 'Describe specific needs'],
+    examplePrompt: 'Please provide a comprehensive analysis of this image. IMPORTANT: When selecting "Other", describe your specific analysis needs in the text box below.'
   }
 ];
 

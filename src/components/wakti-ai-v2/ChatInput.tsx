@@ -141,6 +141,15 @@ export function ChatInput({
             case 'text_image':
               context = 'This is TEXT EXTRACTION - extract and transcribe all visible text accurately, including handwritten content if present.';
               break;
+            case 'food':
+              context = 'This is FOOD - identify the dish, ingredients, cooking method, provide nutritional information and recipe suggestions if possible.';
+              break;
+            case 'object':
+              context = 'This is an OBJECT/ITEM - identify what it is, describe its function, materials, purpose, and provide relevant information.';
+              break;
+            case 'other':
+              context = 'Please provide a comprehensive analysis of this image. IMPORTANT: When selecting "Other", describe your specific analysis needs in the text box below.';
+              break;
             default:
               context = 'Provide detailed description and analysis of this image.';
           }

@@ -489,11 +489,12 @@ Today's date: ${currentDate}
     });
   }
   
-  // FIXED: Enhanced image processing with proper context handling
+  // ENHANCED: Advanced debugging for image processing issues
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
     console.log('🖼️ Processing', attachedFiles.length, 'context-aware images');
+    console.log('📋 DEBUG - Full attachedFiles:', JSON.stringify(attachedFiles, null, 2));
     
     // FIXED: Better image detection logic
     const imageFile = attachedFiles.find(file => 
@@ -504,29 +505,39 @@ Today's date: ${currentDate}
       const imageUrl = imageFile.url || imageFile.publicUrl;
       const imageType = imageFile.type || 'image/jpeg';
       
-      console.log('🎯 Processing image with context:', {
+      console.log('🎯 DETAILED DEBUG - Processing image:', {
         imageTypeName: imageFile.imageType?.name || 'unknown',
         imageTypeId: imageFile.imageType?.id || 'unknown',
         hasContext: !!imageFile.context,
-        contextLength: imageFile.context?.length || 0
+        contextLength: imageFile.context?.length || 0,
+        imageUrl: imageUrl?.substring(0, 50) + '...',
+        imageFileType: imageType,
+        fullImageFile: JSON.stringify(imageFile, null, 2)
       });
       
       if (imageUrl) {
+        console.log('🔄 Starting base64 conversion for image type:', imageFile.imageType?.id);
         const base64Data = await convertImageUrlToBase64(imageUrl);
         
         if (base64Data) {
-          // FIXED: Properly add context-specific instructions to message
+          console.log('✅ Base64 conversion successful, length:', base64Data.length);
+          
+          // ENHANCED: More detailed context handling with debug logs
           let contextualMessage = message;
           
           // Add image type context if available
           if (imageFile.context) {
             contextualMessage = `${imageFile.context}\n\nUser message: ${message}`;
-            console.log('✅ Added image context to message:', imageFile.context.substring(0, 100) + '...');
+            console.log('✅ CONTEXT ADDED - Type:', imageFile.imageType?.id);
+            console.log('📝 CONTEXT TEXT:', imageFile.context);
+            console.log('💬 FINAL MESSAGE:', contextualMessage.substring(0, 200) + '...');
           } else if (imageFile.imageType?.name) {
             // Fallback context based on image type name
             const fallbackContext = `This is a ${imageFile.imageType.name} image. Please analyze it accordingly.`;
             contextualMessage = `${fallbackContext}\n\nUser message: ${message}`;
-            console.log('✅ Added fallback context:', fallbackContext);
+            console.log('⚠️ FALLBACK CONTEXT USED:', fallbackContext);
+          } else {
+            console.log('❌ NO CONTEXT OR IMAGE TYPE FOUND!');
           }
           
           currentMessage.content = [
@@ -540,9 +551,18 @@ Today's date: ${currentDate}
               } 
             }
           ];
+          
+          console.log('📤 SENDING TO CLAUDE - Message structure:', {
+            hasTextContent: !!currentMessage.content[0]?.text,
+            textLength: currentMessage.content[0]?.text?.length || 0,
+            hasImageContent: !!currentMessage.content[1]?.source?.data,
+            imageDataLength: currentMessage.content[1]?.source?.data?.length || 0,
+            mediaType: currentMessage.content[1]?.source?.media_type
+          });
+          
           console.log("✅ Context-aware image added to message successfully");
         } else {
-          console.error("❌ Image processing failed");
+          console.error("❌ Image processing failed during base64 conversion");
           return {
             response: detectedLanguage === 'ar' 
               ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى المحاولة مرة أخرى أو جرب صورة أوضح.'
@@ -578,6 +598,30 @@ Today's date: ${currentDate}
   try {
     console.log(`🧠 Sending ${messages.length} messages to Enhanced Claude`);
     
+    console.log('🧠 FINAL REQUEST TO CLAUDE - Debug info:', {
+      messageCount: messages.length,
+      systemPromptLength: systemPrompt.length,
+      hasImageInLastMessage: !!(messages[messages.length - 1]?.content?.find?.(c => c.type === 'image')),
+      maxTokens: maxTokens,
+      model: 'claude-3-5-sonnet-20241022'
+    });
+
+    const requestBody = {
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: maxTokens,
+      temperature: 0.3,
+      system: systemPrompt,
+      messages: messages
+    };
+
+    console.log('📤 REQUEST BODY STRUCTURE:', {
+      model: requestBody.model,
+      maxTokens: requestBody.max_tokens,
+      systemPromptPreview: requestBody.system.substring(0, 100) + '...',
+      messageCount: requestBody.messages.length,
+      lastMessageType: typeof requestBody.messages[requestBody.messages.length - 1]?.content
+    });
+
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -585,20 +629,20 @@ Today's date: ${currentDate}
         'Content-Type': 'application/json',
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: maxTokens,
-        temperature: 0.3,
-        system: systemPrompt,
-        messages: messages
-      }),
+      body: JSON.stringify(requestBody),
     });
     
     console.log("📡 Enhanced Claude API response status:", claudeResponse.status);
+    console.log("📡 Response headers:", Object.fromEntries(claudeResponse.headers.entries()));
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ Enhanced Claude API error:", claudeResponse.status, errorText);
+      console.error("❌ DETAILED Claude API error:", {
+        status: claudeResponse.status,
+        statusText: claudeResponse.statusText,
+        errorText: errorText,
+        headers: Object.fromEntries(claudeResponse.headers.entries())
+      });
       
       let userFriendlyError = detectedLanguage === 'ar' 
         ? 'واجهت مشكلة في معالجة طلبك.'
