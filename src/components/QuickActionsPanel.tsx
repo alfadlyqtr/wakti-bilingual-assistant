@@ -151,8 +151,8 @@ export const QuickActionsPanel = () => {
 
       {/* Modals */}
       <GameModeModal 
-        isOpen={selectedAction === 'game-mode'} 
-        onClose={closeModal} 
+        open={selectedAction === 'game-mode'} 
+        onOpenChange={(open) => !open && closeModal()} 
       />
       
       <ScreenshotUpload 

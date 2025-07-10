@@ -1,30 +1,30 @@
 
 import React from 'react';
-import { X, Gamepad2 } from 'lucide-react';
+import { X, Camera } from 'lucide-react';
 
-interface GameModeModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+interface ScreenshotUploadProps {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export const GameModeModal: React.FC<GameModeModalProps> = ({
-  open,
-  onOpenChange,
+export const ScreenshotUpload: React.FC<ScreenshotUploadProps> = ({
+  isOpen,
+  onClose,
 }) => {
-  if (!open) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-background border border-border rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-500 rounded-lg text-white">
-              <Gamepad2 className="w-5 h-5" />
+            <div className="p-2 bg-blue-500 rounded-lg text-white">
+              <Camera className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Game Mode</h2>
+            <h2 className="text-xl font-semibold text-foreground">Screenshot AI</h2>
           </div>
           <button
-            onClick={() => onOpenChange(false)}
+            onClick={onClose}
             className="p-2 hover:bg-muted rounded-lg transition-colors"
           >
             <X className="w-5 h-5 text-muted-foreground" />
@@ -33,7 +33,7 @@ export const GameModeModal: React.FC<GameModeModalProps> = ({
         
         <div className="p-6">
           <p className="text-muted-foreground text-center">
-            Game Mode feature coming soon...
+            Screenshot AI feature coming soon...
           </p>
         </div>
       </div>
