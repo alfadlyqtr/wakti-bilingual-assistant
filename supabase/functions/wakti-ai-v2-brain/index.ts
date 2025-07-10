@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,7 +12,7 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: ENHANCED CDN-AWARE IMAGE PROCESSING");
+console.log("🚀 WAKTI AI V2: MEGA-MERGED UNIFIED SYSTEM - VISION + CONVERSATION");
 
 // ENHANCED: CDN-aware image processing with timing-based retry mechanism
 async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promise<string | null> {
@@ -235,12 +234,14 @@ serve(async (req) => {
       personalTouch = null,
     } = requestBody || {};
 
-    console.log("🎯 REQUEST PROCESSING:", {
+    console.log("🎯 MEGA-SYSTEM REQUEST PROCESSING:", {
       trigger: activeTrigger,
       language: language,
       messageLength: message?.length || 0,
       hasFiles: attachedFiles.length > 0,
-      fileCount: attachedFiles.length
+      fileCount: attachedFiles.length,
+      hasConversationMemory: !!conversationSummary,
+      hasPersonalization: !!personalTouch
     });
     
     // ENHANCED: Detailed file debugging with CDN awareness
@@ -278,7 +279,7 @@ serve(async (req) => {
         break;
         
       case 'image':
-        result = await processImageMode(message, userId, language, attachedFiles, personalTouch);
+        result = await processImageMode(message, userId, language, attachedFiles, personalTouch, conversationSummary, recentMessages);
         break;
         
       default:
@@ -305,7 +306,7 @@ serve(async (req) => {
       fallbackUsed: false
     };
 
-    console.log(`✅ ${activeTrigger.toUpperCase()} request completed successfully!`);
+    console.log(`✅ MEGA-SYSTEM: ${activeTrigger.toUpperCase()} request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
       headers: { 
@@ -315,7 +316,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 Critical error:", error);
+    console.error("🚨 MEGA-SYSTEM Critical error:", error);
 
     const errorResponse = {
       error: "Internal server error",
@@ -337,14 +338,16 @@ serve(async (req) => {
   }
 });
 
-// ENHANCED: Chat mode with CDN-aware image processing
+// ENHANCED: Chat mode with mega-merged memory and personalization
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 CDN-AWARE CHAT MODE PROCESSING");
-  console.log("🔍 Chat analysis:", {
+  console.log("💬 MEGA-SYSTEM CHAT MODE PROCESSING");
+  console.log("🔍 Enhanced chat analysis:", {
     fileCount: attachedFiles.length,
     hasFiles: attachedFiles.length > 0,
     userLanguage: language,
-    messagePreview: message.substring(0, 100)
+    messagePreview: message.substring(0, 100),
+    hasMemory: !!conversationSummary,
+    hasPersonalization: !!personalTouch
   });
   
   if (!ANTHROPIC_API_KEY) {
@@ -370,10 +373,10 @@ async function processChatMode(message: string, userId: string, conversationId: 
       
       if (dbMessages && dbMessages.length > 0) {
         contextMessages = dbMessages.reverse();
-        console.log(`📚 Loaded ${contextMessages.length} messages from database`);
+        console.log(`📚 MEGA-SYSTEM: Loaded ${contextMessages.length} messages from database`);
       }
     } catch (error) {
-      console.warn("⚠️ Database fallback failed, using session context");
+      console.warn("⚠️ MEGA-SYSTEM: Database fallback failed, using session context");
     }
   }
   
@@ -433,13 +436,13 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// IMAGE MODE: Simple image generation with Runware
-async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🖼️ Image mode processing");
+// ENHANCED: Image mode with mega-merged capabilities
+async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any, conversationSummary: string = '', recentMessages: any[] = []) {
+  console.log("🖼️ MEGA-SYSTEM IMAGE MODE PROCESSING");
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ Vision analysis with", attachedFiles.length, "files");
-    return await callClaude35API(message, [], '', language, attachedFiles, 4096, personalTouch);
+    console.log("👁️ MEGA-SYSTEM: Vision analysis with", attachedFiles.length, "files");
+    return await callClaude35API(message, recentMessages, conversationSummary, language, attachedFiles, 4096, personalTouch);
   }
   
   // Generate image with RUNWARE
@@ -508,235 +511,301 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// ENHANCED: Claude API with CDN-aware image processing
+// MEGA-MERGED: Claude API with all enhanced capabilities
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 CDN-AWARE CLAUDE API PROCESSING");
+  console.log("🧠 MEGA-SYSTEM: Claude API processing with all enhancements");
   
-  const currentDate = new Date().toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric',
-    weekday: 'long'
-  });
-  
-  // Language detection and system prompt setup
-  const isArabicMessage = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
-  const userPreferredLanguage = language || 'en';
-  const responseLanguage = userPreferredLanguage;
-  
-  console.log("🌍 LANGUAGE PROCESSING:", {
-    userPreferredLanguage: userPreferredLanguage,
-    messageContainsArabic: isArabicMessage,
-    finalResponseLanguage: responseLanguage,
-    messagePreview: message.substring(0, 50)
-  });
-  
-  // Language-aware system prompt
-  let systemPrompt = responseLanguage === 'ar'
-    ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور.
+  try {
+    console.log(`🎯 MEGA-SYSTEM: Processing with claude-3-5-sonnet-20241022 model`);
+    console.log(`🧠 MEGA-SYSTEM: Memory context: ${conversationSummary ? 'Yes' : 'No'}`);
+    console.log(`🎭 MEGA-SYSTEM: Personalization: ${JSON.stringify(personalTouch)}`);
+    
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      weekday: 'long'
+    });
+    
+    // Language detection and system prompt setup
+    const isArabicMessage = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
+    const userPreferredLanguage = language || 'en';
+    const responseLanguage = userPreferredLanguage;
+    
+    console.log("🌍 MEGA-SYSTEM LANGUAGE PROCESSING:", {
+      userPreferredLanguage: userPreferredLanguage,
+      messageContainsArabic: isArabicMessage,
+      finalResponseLanguage: responseLanguage,
+      messagePreview: message.substring(0, 50)
+    });
+    
+    // MEGA-MERGED SYSTEM PROMPT - ALL CAPABILITIES COMBINED
+    let systemPrompt = responseLanguage === 'ar' ? `
+🤖 أنت WAKTI AI، المساعد الذكي المتطور والمتخصص في تحليل الصور والمحادثات الذكية.
 
 ## قدراتك الأساسية:
-أنت مساعد ذكي يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية، مع قدرات متقدمة لتحليل الصور.
+أنت مساعد ذكي متقدم يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية، مع قدرات متقدمة لتحليل الصور والمحادثات الممتعة.
 
 ## تحليل الصور المتقدم:
 ### أنواع الصور المدعومة:
 - **الوثائق الرسمية** 📄: جوازات السفر، الهويات، رخص القيادة، الشهادات
-- **الفواتير والإيصالات** 💰: المستندات المالية والإيصالات
+- **الفواتير والإيصالات** 💰: المستندات المالية والإيصالات  
 - **الأشخاص** 👤: الصور الشخصية ووصف المظهر
 - **الأماكن والمباني** 🏢: المناظر والمعالم
 - **التقارير والمخططات** 📊: البيانات والتحليلات
 - **النصوص في الصور** 🔤: استخراج وقراءة النصوص
 - **تحليل عام** ❓: وصف تفصيلي شامل
 
+### منهجية التحليل المتقدمة (5 خطوات):
+عند تحليل أي صورة، اتبع هذه الخطوات بدقة:
+1. **التحليل الشامل للصورة**: فحص جميع العناصر المرئية بدقة عالية
+2. **استخراج النصوص**: قراءة وتحليل أي نصوص موجودة في الصورة  
+3. **فهم السياق**: تحديد الغرض والمعنى من الصورة
+4. **الوصف المفصل**: تقديم وصف شامل وواضح بالعربية
+5. **الإجابة على الأسئلة**: الرد على استفسارات المستخدم حول الصورة
+
 ### استخراج النصوص الذكي:
 - **استخرج النصوص بلغتها الأصلية** (عربية أو إنجليزية)
 - **رد دائماً باللغة العربية** حتى لو كان النص المستخرج بالإنجليزية
 - **قدم ترجمة إذا لزم الأمر**
 
+## قدرات المحادثة المتقدمة:
+- **أنت رفيق ذكي ومحادث ماهر** - تستطيع إجراء محادثات طبيعية وممتعة
+- **تذكر المحادثات السابقة** - استخدم المعلومات من الرسائل السابقة والسياق
+- **حافظ على السياق** - اربط بين الرسائل والمواضيع السابقة في المحادثة
+- **كن ودوداً ومفيداً** - تفاعل مع المستخدم كصديق ذكي وداعم
+- **تكيف مع أسلوب المحادثة** - اتبع نبرة ومزاج المستخدم
+- **استمر في المحادثة بطبيعية** - لا تنهي المحادثة بشكل مفاجئ
+
+### قواعد الاستجابة:
+- **للصور**: ابدأ بـ "أستطيع أن أرى في هذه الصورة..."
+- **للمحادثات العادية**: تفاعل بطبيعية دون بداية محددة
+- إذا كانت الصورة غير واضحة، اذكر ذلك بصراحة
+- لا تفترض معلومات غير موجودة
+- استخدم الذاكرة والسياق السابق في ردودك
+
 التاريخ اليوم: ${currentDate}
-**تجيب باللغة العربية فقط دائماً.**`
-    : `🤖 You are WAKTI AI, an advanced intelligent assistant.
+**تجيب باللغة العربية فقط دائماً.**
+` : `
+🤖 You are WAKTI AI, an advanced intelligent assistant specialized in comprehensive image analysis and engaging conversations.
 
 ## Core Capabilities:
-You are an intelligent assistant that can handle all types of requests naturally and smartly, with advanced image analysis capabilities.
+You are an advanced intelligent assistant that can handle all types of requests naturally and smartly, with cutting-edge image analysis capabilities and engaging conversation skills.
 
 ## Advanced Image Analysis:
 ### Supported Image Types:
 - **Official Documents** 📄: Passports, IDs, driver's licenses, certificates
 - **Bills & Receipts** 💰: Financial documents, invoices, receipts
-- **People** 👤: Personal photos, appearance descriptions
+- **People** 👤: Personal photos, appearance descriptions  
 - **Places & Buildings** 🏢: Landscapes, buildings, landmarks
 - **Reports & Charts** 📊: Data visualizations, analytics
 - **Text in Images** 🔤: Text extraction and reading
 - **General Analysis** ❓: Detailed comprehensive description
+
+### Advanced Analysis Methodology (5 Steps):
+When analyzing any image, follow these steps precisely:
+1. **Comprehensive Image Analysis**: Examine all visual elements with high precision
+2. **Text Extraction**: Read and analyze any text present in the image
+3. **Context Understanding**: Determine the purpose and meaning of the image  
+4. **Detailed Description**: Provide thorough and clear descriptions
+5. **Question Answering**: Respond to user queries about the image content
 
 ### Smart Text Extraction:
 - **Extract text in its original language** (Arabic or English)
 - **Always respond in English** even if extracted text is in Arabic
 - **Provide translation when needed**
 
+## Advanced Conversation Capabilities:
+- **You are a smart buddy and skilled conversationalist** - engage in natural, enjoyable conversations
+- **Remember past conversations** - use information from previous messages and context
+- **Maintain context** - connect current messages with previous topics in the conversation
+- **Be friendly and helpful** - interact with users like an intelligent, supportive friend
+- **Adapt to conversation style** - follow the user's tone and mood
+- **Continue conversations naturally** - don't end conversations abruptly
+
+### Response Rules:
+- **For images**: Start with "I can see in this image..."
+- **For regular conversations**: Engage naturally without a fixed starter
+- If the image is unclear or low quality, mention that honestly
+- Do not fabricate information that isn't visible
+- Use memory and previous context in your responses
+
 Today's date: ${currentDate}
-**Always respond in English only.**`;
+**Always respond in English only.**
+`;
 
-  // Add personalization if available
-  if (personalTouch) {
-    if (personalTouch.nickname) {
-      systemPrompt += responseLanguage === 'ar' 
-        ? ` خاطب المستخدم باسم ${personalTouch.nickname}.`
-        : ` Address the user as ${personalTouch.nickname}.`;
-    }
-    if (personalTouch.aiNickname) {
-      systemPrompt += responseLanguage === 'ar'
-        ? ` يمكن مناداتك باسم ${personalTouch.aiNickname}.`
-        : ` You can be called ${personalTouch.aiNickname}.`;
-    }
-    if (personalTouch.tone && personalTouch.tone !== 'neutral') {
-      systemPrompt += responseLanguage === 'ar'
-        ? ` استخدم نبرة ${personalTouch.tone}.`
-        : ` Use a ${personalTouch.tone} tone.`;
-    }
-  }
-
-  const messages = [];
-  
-  if (conversationSummary && conversationSummary.trim()) {
-    messages.push({
-      role: 'assistant',
-      content: `[Context: ${conversationSummary}]`
-    });
-  }
-  
-  if (contextMessages.length > 0) {
-    contextMessages.forEach(msg => {
+    // MERGED CONVERSATION MEMORY SYSTEM
+    const messages = [];
+    
+    if (conversationSummary && conversationSummary.trim()) {
       messages.push({
+        role: 'user',
+        content: `Previous conversation context: ${conversationSummary}`
+      });
+      console.log(`🧠 MEGA-SYSTEM MEMORY: Added conversation summary (${conversationSummary.length} chars)`);
+    }
+    
+    // Add recent messages for immediate context
+    if (contextMessages.length > 0) {
+      const formattedRecentMessages = contextMessages.slice(-4).map(msg => ({
         role: msg.role === 'assistant' ? 'assistant' : 'user',
         content: msg.content
-      });
-    });
-  }
-  
-  // ENHANCED: CDN-aware image processing with comprehensive error handling
-  let currentMessage: any = { role: 'user', content: message };
-  
-  if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ CDN-AWARE FILE PROCESSING');
-    
-    // Enhanced image file detection
-    const imageFile = attachedFiles.find(file => {
-      const hasUrl = !!(file.url || file.publicUrl);
-      const isImageType = file.type?.startsWith('image/');
-      console.log(`🔍 File analysis: ${file.name}`, {
-        hasUrl,
-        isImageType,
-        url: file.url || file.publicUrl || 'NO_URL',
-        type: file.type || 'NO_TYPE'
-      });
-      return hasUrl || isImageType;
-    });
-    
-    if (imageFile) {
-      const imageUrl = imageFile.url || imageFile.publicUrl;
-      const imageType = imageFile.type || 'image/jpeg';
+      }));
+      messages.push(...formattedRecentMessages);
+      console.log(`🧠 MEGA-SYSTEM MEMORY: Added ${formattedRecentMessages.length} recent messages`);
+    }
+
+    // ENHANCED PERSONALIZATION - MERGED FROM CHAT ANALYSIS
+    if (personalTouch) {
+      if (personalTouch.nickname) {
+        systemPrompt += responseLanguage === 'ar' 
+          ? ` خاطب المستخدم باسم ${personalTouch.nickname}.`
+          : ` Address the user as ${personalTouch.nickname}.`;
+      }
+      if (personalTouch.aiNickname) {
+        systemPrompt += responseLanguage === 'ar'
+          ? ` يمكن مناداتك باسم ${personalTouch.aiNickname}.`
+          : ` You can be called ${personalTouch.aiNickname}.`;
+      }
+      if (personalTouch.tone && personalTouch.tone !== 'neutral') {
+        systemPrompt += responseLanguage === 'ar'
+          ? ` استخدم نبرة ${personalTouch.tone}.`
+          : ` Use a ${personalTouch.tone} tone.`;
+      }
+      if (personalTouch.style) {
+        systemPrompt += responseLanguage === 'ar'
+          ? ` قدم إجابات ${personalTouch.style}.`
+          : ` Provide ${personalTouch.style} responses.`;
+      }
+      if (personalTouch.instruction) {
+        systemPrompt += responseLanguage === 'ar'
+          ? ` تعليمات إضافية: ${personalTouch.instruction}`
+          : ` Additional instruction: ${personalTouch.instruction}`;
+      }
       
-      console.log('🎯 CDN FILE PROCESSING:', {
-        fileName: imageFile.name,
-        imageUrl: imageUrl,
-        urlValid: !!imageUrl,
-        urlLength: imageUrl?.length || 0,
-        imageType: imageType,
-        hasImageType: !!imageFile.imageType,
-        imageTypeName: imageFile.imageType?.name || 'NONE',
-        imageTypeId: imageFile.imageType?.id || 'NONE',
-        hasContext: !!imageFile.context,
-        contextLength: imageFile.context?.length || 0
+      console.log(`🎭 MEGA-SYSTEM PERSONALIZATION: Applied full personalization profile`);
+    }
+    
+    let currentMessage: any = { role: 'user', content: message };
+    
+    if (attachedFiles && attachedFiles.length > 0) {
+      console.log('🖼️ MEGA-SYSTEM: CDN-aware file processing');
+      
+      // Enhanced image file detection
+      const imageFile = attachedFiles.find(file => {
+        const hasUrl = !!(file.url || file.publicUrl);
+        const isImageType = file.type?.startsWith('image/');
+        console.log(`🔍 File analysis: ${file.name}`, {
+          hasUrl,
+          isImageType,
+          url: file.url || file.publicUrl || 'NO_URL',
+          type: file.type || 'NO_TYPE'
+        });
+        return hasUrl || isImageType;
       });
       
-      if (imageUrl) {
-        console.log('🔄 Starting CDN-aware base64 conversion...');
-        const base64Data = await convertImageUrlToBase64(imageUrl);
+      if (imageFile) {
+        const imageUrl = imageFile.url || imageFile.publicUrl;
+        const imageType = imageFile.type || 'image/jpeg';
         
-        if (base64Data) {
-          console.log('✅ CDN conversion successful');
+        console.log('🎯 CDN FILE PROCESSING:', {
+          fileName: imageFile.name,
+          imageUrl: imageUrl,
+          urlValid: !!imageUrl,
+          urlLength: imageUrl?.length || 0,
+          imageType: imageType,
+          hasImageType: !!imageFile.imageType,
+          imageTypeName: imageFile.imageType?.name || 'NONE',
+          imageTypeId: imageFile.imageType?.id || 'NONE',
+          hasContext: !!imageFile.context,
+          contextLength: imageFile.context?.length || 0
+        });
+        
+        if (imageUrl) {
+          console.log('🔄 Starting CDN-aware base64 conversion...');
+          const base64Data = await convertImageUrlToBase64(imageUrl);
           
-          // Context integration
-          let contextualMessage = message;
-          
-          if (imageFile.context) {
-            contextualMessage = `${imageFile.context}\n\nUser request: ${message}`;
-            console.log('✅ Context integrated successfully');
-          } else if (imageFile.imageType?.name) {
-            const fallbackContext = `Analyze this ${imageFile.imageType.name}.`;
-            contextualMessage = `${fallbackContext}\n\nUser request: ${message}`;
-            console.log('⚠️ Using minimal fallback context');
-          }
-          
-          currentMessage.content = [
-            { type: 'text', text: contextualMessage },
-            { 
-              type: 'image', 
-              source: { 
-                type: 'base64', 
-                media_type: imageType, 
-                data: base64Data
-              } 
+          if (base64Data) {
+            console.log('✅ CDN conversion successful');
+            
+            // Context integration
+            let contextualMessage = message;
+            
+            if (imageFile.context) {
+              contextualMessage = `${imageFile.context}\n\nUser request: ${message}`;
+              console.log('✅ Context integrated successfully');
+            } else if (imageFile.imageType?.name) {
+              const fallbackContext = `Analyze this ${imageFile.imageType.name}.`;
+              contextualMessage = `${fallbackContext}\n\nUser request: ${message}`;
+              console.log('⚠️ Using minimal fallback context');
             }
-          ];
-          
-          console.log('📤 Message prepared for Claude API');
-          
+            
+            currentMessage.content = [
+              { type: 'text', text: contextualMessage },
+              { 
+                type: 'image', 
+                source: { 
+                  type: 'base64', 
+                  media_type: imageType, 
+                  data: base64Data
+                } 
+              }
+            ];
+            
+            console.log('📤 Message prepared for Claude API');
+            
+          } else {
+            console.error("❌ CDN PROCESSING FAILED: Could not convert image to base64");
+            return {
+              response: responseLanguage === 'ar' 
+                ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. قد تكون الصورة غير متاحة مؤقتاً بسبب تحديث الخادم. يرجى المحاولة مرة أخرى خلال دقيقة.'
+                : '❌ Sorry, I encountered difficulty processing this image. The image may be temporarily unavailable due to server updates. Please try again in a moment.',
+              error: 'CDN image processing failed after multiple attempts',
+              success: false
+            };
+          }
         } else {
-          console.error("❌ CDN PROCESSING FAILED: Could not convert image to base64");
+          console.error("❌ NO VALID IMAGE URL");
           return {
             response: responseLanguage === 'ar' 
-              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. قد تكون الصورة غير متاحة مؤقتاً بسبب تحديث الخادم. يرجى المحاولة مرة أخرى خلال دقيقة.'
-              : '❌ Sorry, I encountered difficulty processing this image. The image may be temporarily unavailable due to server updates. Please try again in a moment.',
-            error: 'CDN image processing failed after multiple attempts',
+              ? '❌ لم يتم العثور على رابط صحيح للصورة.'
+              : '❌ No valid image URL found.',
+            error: 'No valid image URL',
             success: false
           };
         }
       } else {
-        console.error("❌ NO VALID IMAGE URL");
+        console.error("❌ NO VALID IMAGE FILE");
         return {
           response: responseLanguage === 'ar' 
-            ? '❌ لم يتم العثور على رابط صحيح للصورة.'
-            : '❌ No valid image URL found.',
-          error: 'No valid image URL',
+            ? '❌ لم يتم العثور على ملف صورة صحيح.'
+            : '❌ No valid image file found.',
+          error: 'No valid image file',
           success: false
         };
       }
-    } else {
-      console.error("❌ NO VALID IMAGE FILE");
-      return {
-        response: responseLanguage === 'ar' 
-          ? '❌ لم يتم العثور على ملف صورة صحيح.'
-          : '❌ No valid image file found.',
-        error: 'No valid image file',
-        success: false
-      };
     }
-  }
-  
-  messages.push(currentMessage);
-  
-  try {
-    console.log(`🧠 Sending request to Claude API`);
+    
+    messages.push(currentMessage);
     
     const requestBody = {
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-5-sonnet-20241022', // FIXED MODEL REFERENCE
       max_tokens: maxTokens,
       temperature: 0.3,
       system: systemPrompt,
       messages: messages
     };
 
-    console.log('📤 CLAUDE REQUEST SUMMARY:', {
+    console.log('📤 MEGA-SYSTEM CLAUDE REQUEST SUMMARY:', {
       model: requestBody.model,
       maxTokens: requestBody.max_tokens,
       systemPromptLanguage: responseLanguage,
       systemPromptLength: requestBody.system.length,
       messageCount: requestBody.messages.length,
       hasImageContent: !!(messages[messages.length - 1]?.content?.find?.(c => c.type === 'image')),
-      userLanguage: responseLanguage
+      userLanguage: responseLanguage,
+      hasMemory: !!conversationSummary,
+      hasPersonalization: !!personalTouch
     });
 
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -749,7 +818,7 @@ Today's date: ${currentDate}
       body: JSON.stringify(requestBody),
     });
     
-    console.log("📡 Claude API response:", {
+    console.log("📡 MEGA-SYSTEM Claude API response:", {
       status: claudeResponse.status,
       ok: claudeResponse.ok,
       statusText: claudeResponse.statusText
@@ -757,7 +826,7 @@ Today's date: ${currentDate}
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ CLAUDE API ERROR:", {
+      console.error("❌ MEGA-SYSTEM CLAUDE API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorText: errorText,
@@ -782,13 +851,13 @@ Today's date: ${currentDate}
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ Claude API success");
+    console.log("✅ MEGA-SYSTEM Claude API success");
     
     const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' 
       ? 'أعتذر، واجهت مشكلة في معالجة طلبك.'
       : 'I apologize, but I encountered an issue processing your request.');
     
-    console.log("🎉 PROCESSING COMPLETE");
+    console.log("🎉 MEGA-SYSTEM PROCESSING COMPLETE");
     
     return {
       response: responseText,
@@ -798,9 +867,9 @@ Today's date: ${currentDate}
     };
     
   } catch (error) {
-    console.error("❌ CLAUDE API CRITICAL ERROR:", error);
+    console.error("❌ MEGA-SYSTEM CRITICAL ERROR:", error);
     return {
-      response: responseLanguage === 'ar' 
+      response: language === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
         : '❌ An error occurred while processing your request. Please try again.',
       error: error.message,
