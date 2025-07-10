@@ -13,88 +13,41 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + UNIVERSAL IMAGE PROCESSING + SMART LANGUAGE HANDLING");
+console.log("🚀 WAKTI AI V2: SIMPLE & RELIABLE IMAGE PROCESSING");
 
-// UNIVERSAL: Safe-first image processing with generous timeouts for ALL images
+// SIMPLE: Reliable image processing for ALL image types
 async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promise<string | null> {
   try {
-    console.log('🔄 UNIVERSAL IMAGE PROCESSING: Safe-first approach', retryCount + 1, 'attempt for:', {
-      url: imageUrl.substring(0, 50) + '...',
-      retryAttempt: retryCount,
-      universalTimeout: true
-    });
+    console.log(`🔄 Processing image (attempt ${retryCount + 1}):`, imageUrl.substring(0, 50) + '...');
     
     if (!imageUrl.startsWith('http')) {
-      console.error('❌ IMAGE ERROR: Invalid URL format:', imageUrl);
+      console.error('❌ Invalid URL format:', imageUrl);
       return null;
     }
     
-    // UNIVERSAL: Progressive timeout for all images - no detection needed
-    const baseTimeout = 45000; // 45 seconds base for ALL images
-    const maxTimeout = 80000;   // 80 seconds maximum
-    
-    // Progressive timeout: 33% increase per retry attempt
-    const timeoutMultiplier = 1 + (retryCount * 0.33);
-    const calculatedTimeout = Math.min(baseTimeout * timeoutMultiplier, maxTimeout);
-    const timeout = Math.round(calculatedTimeout);
-    
-    console.log('⏱️ UNIVERSAL TIMEOUT STRATEGY:', {
-      baseTimeout: baseTimeout / 1000 + 's',
-      maxTimeout: maxTimeout / 1000 + 's',
-      retryCount,
-      timeoutMultiplier,
-      finalTimeout: timeout / 1000 + 's',
-      approach: 'safe-first-universal'
-    });
-    
+    // SIMPLE: 50 second timeout for ALL images
+    const timeout = 50000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     const response = await fetch(imageUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'WAKTI-AI/2.0-UNIVERSAL',
-        'Accept': '*/*',
-        'Cache-Control': 'no-cache'
+        'User-Agent': 'WAKTI-AI/2.0',
+        'Accept': 'image/*',
       }
     });
     
     clearTimeout(timeoutId);
     
-    console.log('📡 UNIVERSAL FETCH: Response status:', response.status, {
-      contentType: response.headers.get('content-type'),
-      contentLength: response.headers.get('content-length'),
-      timeoutUsed: timeout / 1000 + 's',
-      universalProcessing: true
-    });
-    
     if (!response.ok) {
-      console.error('❌ UNIVERSAL FETCH ERROR:', {
-        status: response.status,
-        url: imageUrl.substring(0, 50) + '...',
-        timeout: timeout / 1000 + 's'
-      });
+      console.error('❌ Fetch failed:', response.status);
       
-      // SMART RETRY: Based on error type with progressive delays
-      if (retryCount < 3) {
-        const shouldRetry = response.status >= 500 || 
-                           response.status === 429 || 
-                           response.status === 408 ||
-                           response.status === 502 ||
-                           response.status === 503 ||
-                           response.status === 504;
-        
-        if (shouldRetry) {
-          const retryDelay = 2000 + (retryCount * 1000); // 2s, 3s, 4s delays
-          console.log('🔄 UNIVERSAL RETRY in', retryDelay / 1000, 'seconds...', { 
-            retryCount, 
-            status: response.status,
-            nextTimeout: Math.min(baseTimeout * (1 + ((retryCount + 1) * 0.33)), maxTimeout) / 1000 + 's',
-            reason: 'server-error-retry'
-          });
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          return await convertImageUrlToBase64(imageUrl, retryCount + 1);
-        }
+      // SIMPLE: Only retry on server errors, max 2 retries
+      if (retryCount < 2 && response.status >= 500) {
+        console.log('🔄 Retrying in 3 seconds...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        return await convertImageUrlToBase64(imageUrl, retryCount + 1);
       }
       
       return null;
@@ -103,66 +56,34 @@ async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promis
     const arrayBuffer = await response.arrayBuffer();
     const fileSize = arrayBuffer.byteLength;
     
-    console.log('📊 UNIVERSAL IMAGE SIZE:', {
-      bytes: fileSize,
-      MB: (fileSize / (1024 * 1024)).toFixed(2),
-      processingTime: timeout / 1000 + 's timeout',
-      universalApproach: true
-    });
+    console.log('📊 Image size:', (fileSize / (1024 * 1024)).toFixed(2), 'MB');
     
     if (fileSize === 0 || fileSize > 20 * 1024 * 1024) {
-      console.error('❌ UNIVERSAL ERROR: Invalid file size:', fileSize);
+      console.error('❌ Invalid file size:', fileSize);
       return null;
     }
     
-    // EFFICIENT: Base64 encoding
+    // SIMPLE: Direct Base64 conversion
     const uint8Array = new Uint8Array(arrayBuffer);
     const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
     const base64String = btoa(binaryString);
     
     if (!base64String || base64String.length < 100) {
-      console.error('❌ UNIVERSAL BASE64 ERROR: Invalid base64 string');
+      console.error('❌ Invalid base64 conversion');
       return null;
     }
     
-    console.log('✅ UNIVERSAL CONVERSION SUCCESS:', {
-      originalSize: fileSize,
-      base64Length: base64String.length,
-      finalTimeout: timeout / 1000 + 's',
-      retryCount,
-      success: true,
-      approach: 'safe-first-universal'
-    });
-    
+    console.log('✅ Image converted successfully');
     return base64String;
-  } catch (error) {
-    console.error('❌ UNIVERSAL CONVERSION ERROR:', {
-      message: error.message,
-      url: imageUrl.substring(0, 50) + '...',
-      retryCount,
-      errorType: error.name
-    });
     
-    // SMART RETRY: Network and timeout errors with progressive delays
-    if (retryCount < 3) {
-      const shouldRetry = error.name === 'AbortError' || 
-                         error.name === 'NetworkError' || 
-                         error.name === 'TimeoutError' ||
-                         error.message.includes('fetch') ||
-                         error.message.includes('network') ||
-                         error.message.includes('timeout');
-      
-      if (shouldRetry) {
-        const retryDelay = 2000 + (retryCount * 1000); // 2s, 3s, 4s delays
-        console.log('🔄 UNIVERSAL RETRY due to network/timeout error...', { 
-          retryCount, 
-          delay: retryDelay / 1000 + 's',
-          errorType: error.name,
-          reason: 'network-timeout-retry'
-        });
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        return await convertImageUrlToBase64(imageUrl, retryCount + 1);
-      }
+  } catch (error) {
+    console.error('❌ Image processing error:', error.message);
+    
+    // SIMPLE: Only retry on network/timeout errors, max 2 retries
+    if (retryCount < 2 && (error.name === 'AbortError' || error.message.includes('network'))) {
+      console.log('🔄 Retrying in 3 seconds...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      return await convertImageUrlToBase64(imageUrl, retryCount + 1);
     }
     
     return null;
@@ -170,10 +91,7 @@ async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promis
 }
 
 serve(async (req) => {
-  console.log("📨 UNIVERSAL REQUEST RECEIVED:", {
-    method: req.method,
-    url: req.url
-  });
+  console.log("📨 Request received:", req.method, req.url);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -186,76 +104,7 @@ serve(async (req) => {
   }
 
   try {
-    let requestBody;
-    const contentType = req.headers.get('content-type') || '';
-    
-    if (!contentType.includes('application/json')) {
-      console.error("❌ INVALID CONTENT TYPE:", contentType);
-      return new Response(JSON.stringify({
-        error: "Content-Type must be application/json",
-        success: false
-      }), {
-        status: 400,
-        headers: { 
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    }
-
-    let rawBodyText;
-    try {
-      rawBodyText = await req.text();
-      console.log("📝 RAW BODY LENGTH:", rawBodyText?.length || 0);
-    } catch (textError) {
-      console.error("❌ FAILED TO READ REQUEST BODY:", textError);
-      return new Response(JSON.stringify({
-        error: "Failed to read request body",
-        success: false,
-        details: textError.message
-      }), {
-        status: 400,
-        headers: { 
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    }
-
-    if (!rawBodyText || rawBodyText.trim() === '') {
-      console.error("❌ EMPTY REQUEST BODY DETECTED");
-      return new Response(JSON.stringify({
-        error: "Request body is empty",
-        success: false,
-        help: "Please send a JSON payload with message and userId"
-      }), {
-        status: 400,
-        headers: { 
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    }
-
-    try {
-      requestBody = JSON.parse(rawBodyText);
-      console.log("✅ JSON PARSED SUCCESSFULLY");
-    } catch (jsonError) {
-      console.error("❌ JSON PARSING ERROR:", jsonError);
-      return new Response(JSON.stringify({
-        error: "Invalid JSON format",
-        success: false,
-        details: jsonError.message,
-        receivedBody: rawBodyText.substring(0, 200)
-      }), {
-        status: 400,
-        headers: { 
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    }
-
+    const requestBody = await req.json();
     const {
       message,
       userId,
@@ -268,63 +117,20 @@ serve(async (req) => {
       recentMessages = [],
       conversationSummary = '',
       personalTouch = null,
-      enableTaskDetection = false
     } = requestBody || {};
 
-    console.log("🎯 UNIVERSAL EXTRACTED PARAMS:", {
-      hasMessage: !!message,
-      hasUserId: !!userId,
-      language,
-      activeTrigger,
-      messageLength: message?.length || 0,
-      attachedFilesCount: attachedFiles.length
-    });
+    console.log("🎯 Processing:", activeTrigger, "- Files:", attachedFiles.length);
 
-    if (attachedFiles && attachedFiles.length > 0) {
-      console.log("🖼️ UNIVERSAL IMAGE FILES ANALYSIS:", attachedFiles.map((file, index) => ({
-        index,
-        name: file?.name || 'unknown',
-        type: file?.type || 'unknown',
-        size: file?.size || 'unknown',
-        universalProcessing: true
-      })));
-    }
-
-    if (!message?.trim()) {
-      console.error("❌ MISSING OR EMPTY MESSAGE");
-      return new Response(JSON.stringify({
-        error: "Message is required and cannot be empty",
-        success: false
-      }), {
-        status: 400,
-        headers: { 
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
+    if (!message?.trim() && !attachedFiles?.length) {
+      throw new Error("Message or attachment required");
     }
 
     if (!userId) {
-      console.error("❌ MISSING USER ID");
-      return new Response(JSON.stringify({
-        error: "User ID is required",
-        success: false
-      }), {
-        status: 400,
-        headers: { 
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
+      throw new Error("User ID is required");
     }
-
-    console.log(`🎯 UNIVERSAL MODE: ${activeTrigger.toUpperCase()}`);
-    console.log(`📝 MESSAGE: ${message.substring(0, 100)}...`);
 
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    console.log('💬 UNIVERSAL CHAT: Processing with SMART LANGUAGE HANDLING');
 
     switch (activeTrigger) {
       case 'search':
@@ -335,7 +141,7 @@ serve(async (req) => {
         result = await processImageMode(message, userId, language, attachedFiles, personalTouch);
         break;
         
-      default: // chat mode
+      default:
         result = await processChatMode(message, userId, conversationId, language, attachedFiles, maxTokens, recentMessages, conversationSummary, personalTouch);
     }
 
@@ -359,7 +165,7 @@ serve(async (req) => {
       fallbackUsed: false
     };
 
-    console.log(`✅ UNIVERSAL ${activeTrigger.toUpperCase()} MODE: CLAUDE 3.5 SONNET request completed successfully!`);
+    console.log(`✅ ${activeTrigger.toUpperCase()} request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
       headers: { 
@@ -369,7 +175,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 UNIVERSAL CRITICAL ERROR:", error);
+    console.error("🚨 Critical error:", error);
 
     const errorResponse = {
       error: "Internal server error",
@@ -391,9 +197,9 @@ serve(async (req) => {
   }
 });
 
-// CHAT MODE with UNIVERSAL CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING
+// CHAT MODE: Simple and reliable
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 UNIVERSAL CHAT MODE: Processing with CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING");
+  console.log("💬 Chat mode with", attachedFiles.length, "files");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -418,21 +224,19 @@ async function processChatMode(message: string, userId: string, conversationId: 
       
       if (dbMessages && dbMessages.length > 0) {
         contextMessages = dbMessages.reverse();
-        console.log(`📚 UNIVERSAL MEMORY: Loaded ${contextMessages.length} messages from database`);
+        console.log(`📚 Loaded ${contextMessages.length} messages from database`);
       }
     } catch (error) {
-      console.warn("⚠️ UNIVERSAL MEMORY: Database fallback failed, using session context");
+      console.warn("⚠️ Database fallback failed, using session context");
     }
   }
-  
-  console.log(`🧠 UNIVERSAL MEMORY: Using ${contextMessages.length} context messages`);
   
   return await callClaude35API(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
 }
 
-// SEARCH MODE with UNIVERSAL CLAUDE 3.5 SONNET
+// SEARCH MODE: Simple search with Tavily
 async function processSearchMode(message: string, language: string, recentMessages: any[], personalTouch: any) {
-  console.log("🔍 UNIVERSAL SEARCH MODE: Processing with CLAUDE 3.5 SONNET");
+  console.log("🔍 Search mode processing");
   
   if (!TAVILY_API_KEY) {
     return {
@@ -469,10 +273,10 @@ async function processSearchMode(message: string, language: string, recentMessag
       searchResults.map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.content}`).join('\n')
     }`;
     
-    return await callClaude35API(searchContext, recentMessages, '', language, [], 4096, personalTouch);
+    return await callClaude35API(searchContext, [], '', language, [], 4096, personalTouch);
     
   } catch (error) {
-    console.error('❌ UNIVERSAL SEARCH ERROR:', error);
+    console.error('❌ Search error:', error);
     return {
       response: language === 'ar' 
         ? '❌ حدث خطأ أثناء البحث. حاول مرة أخرى.'
@@ -483,34 +287,12 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// IMAGE MODE: UNIVERSAL CLAUDE 3.5 SONNET VISION + ENHANCED DOCUMENT ANALYSIS
+// IMAGE MODE: Simple image generation with Runware
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🖼️ UNIVERSAL IMAGE MODE: Processing with ENHANCED DOCUMENT ANALYSIS + CLAUDE 3.5 VISION");
+  console.log("🖼️ Image mode processing");
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ UNIVERSAL VISION ANALYSIS: Analyzing with ENHANCED processing for all image types");
-    
-    const imageFile = attachedFiles.find(file => {
-      if (file.type && file.type.startsWith('image/')) {
-        return true;
-      }
-      
-      if (file.name) {
-        const extension = file.name.toLowerCase().split('.').pop();
-        return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'tiff', 'tif'].includes(extension);
-      }
-      
-      return !!(file.url || file.publicUrl);
-    });
-    
-    console.log("🔍 UNIVERSAL IMAGE FILE DETECTION:", {
-      foundImage: !!imageFile,
-      fileName: imageFile?.name || 'unknown',
-      fileType: imageFile?.type || 'unknown/fallback',
-      hasUrl: !!(imageFile?.url || imageFile?.publicUrl),
-      universalProcessing: true
-    });
-    
+    console.log("👁️ Vision analysis with", attachedFiles.length, "files");
     return await callClaude35API(message, [], '', language, attachedFiles, 4096, personalTouch);
   }
   
@@ -569,7 +351,7 @@ async function processImageMode(message: string, userId: string, language: strin
     }
     
   } catch (error) {
-    console.error('❌ UNIVERSAL IMAGE ERROR:', error);
+    console.error('❌ Image error:', error);
     return {
       response: language === 'ar' 
         ? '❌ فشل في إنشاء الصورة. حاول مرة أخرى.'
@@ -580,9 +362,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// UNIVERSAL CLAUDE 3.5 SONNET API CALL WITH SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS
+// SIMPLE CLAUDE API: Clean and reliable
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 UNIVERSAL CLAUDE 3.5 API: SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS");
+  console.log("🧠 Claude 3.5 API call");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -591,89 +373,68 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
     weekday: 'long'
   });
   
-  // DETECT USER'S LANGUAGE FROM MESSAGE
+  // SIMPLE: Language detection
   const isArabicMessage = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
   const detectedLanguage = isArabicMessage ? 'ar' : 'en';
   
-  console.log("🌐 UNIVERSAL LANGUAGE DETECTION:", {
-    originalLanguage: language,
-    detectedFromMessage: detectedLanguage,
-    isArabicMessage,
-    messagePreview: message.substring(0, 50)
-  });
-  
-  // UNIVERSAL SMART SYSTEM PROMPT WITH ENHANCED DOCUMENT ANALYSIS
+  // SIMPLE: Clean system prompt (120 lines balanced)
   let systemPrompt = detectedLanguage === 'ar'
-    ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور والشامل.
+    ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور.
 
 ## قدراتك الأساسية:
-أنت مساعد ذكي متعدد المهارات يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية. تتميز بالسرعة والدقة والشخصية الودودة.
+أنت مساعد ذكي يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية.
 
-## تحليل الوثائق المحسن:
-### الوثائق الرسمية:
-- جوازات السفر والهويات الوطنية (جميع البلدان)
-- رخص القيادة وبطاقات الإقامة
-- الفواتير والإيصالات والعقود
-- الشهادات الجامعية والمهنية
+## تحليل الصور:
+### جميع أنواع الصور:
+- الوثائق الرسمية: جوازات السفر، الهويات، رخص القيادة، الفواتير
+- الأشخاص: وصف المظهر، الملابس، التعبيرات
+- الأماكن: المناظر الطبيعية، المباني، الشوارع
+- الشعارات والعلامات التجارية
+- المنتجات والأطعمة
+- النصوص في الصور
 
 ### تحليل التواريخ الذكي:
 - **مقارنة تواريخ الانتهاء بالتاريخ الحالي (${currentDate})**
 - **إذا كانت الوثيقة منتهية الصلاحية: اكتب تحذير واضح بخط عريض**
-- **مثال: "ملاحظة مهمة: جواز السفر هذا منتهي الصلاحية منذ يونيو 2024، يجب تجديده فوراً"**
-- قدم نصائح مفيدة مثل: البلدان التي يمكن زيارتها، متطلبات التأشيرة، إرشادات التجديد
-
-### الصور العامة:
-- الأشخاص: وصف المظهر، الملابس، التعبيرات، الأنشطة
-- الأماكن: المناظر الطبيعية، المباني، الشوارع، المعالم
-- الشعارات والعلامات التجارية: تحديد الشركات والمنتجات
-- المنتجات والأطعمة: وصف تفصيلي وتقييم
-- النصوص في الصور: قراءة وترجمة وتفسير
+- قدم نصائح مفيدة: البلدان، متطلبات التأشيرة، إرشادات التجديد
 
 ## أسلوب التعامل:
 - **اكتب دائماً باللغة العربية فقط**
 - استخدم لغة طبيعية وودودة
-- قدم إجابات مفصلة لكن منظمة
+- قدم إجابات مفصلة ومنظمة
 - **للوثائق المنتهية الصلاحية: استخدم خط عريض للتحذيرات**
-- قدم اقتراحات مفيدة ومتابعة ذكية
 
 التاريخ اليوم: ${currentDate}
 **تجيب باللغة العربية فقط دائماً.**`
-    : `🤖 You are WAKTI AI, the advanced and comprehensive intelligent assistant.
+    : `🤖 You are WAKTI AI, an advanced intelligent assistant.
 
 ## Core Capabilities:
-You are a multi-skilled AI assistant capable of handling all types of requests naturally and intelligently. You excel in speed, accuracy, and maintaining a friendly personality.
+You are an intelligent assistant that can handle all types of requests naturally and smartly.
 
-## Enhanced Document Analysis:
-### Official Documents:
-- Passports & National IDs (all countries)
-- Driver's licenses & residence permits  
-- Bills, invoices & receipts
-- University & professional certificates
-
-### Smart Date Analysis:
-- **Compare expiration dates with current date (${currentDate})**
-- **If document is expired: Write clear warning in bold text**
-- **Example: "**Note: This passport is currently EXPIRED since June 2024, consider renewing it immediately**"**
-- Provide helpful follow-ups like: visa-free countries, renewal guidance, travel requirements
-
-### General Images:
-- People: describe appearance, clothing, expressions, activities
+## Image Analysis:
+### All Image Types:
+- Official documents: passports, IDs, driver's licenses, bills
+- People: appearance, clothing, expressions, activities
 - Places: landscapes, buildings, streets, landmarks
 - Logos & brands: identify companies and products
 - Products & food: detailed descriptions and assessments
 - Text in images: read, translate, and interpret
+
+### Smart Date Analysis:
+- **Compare expiration dates with current date (${currentDate})**
+- **If document is expired: Write clear warning in bold text**
+- Provide helpful follow-ups: visa-free countries, renewal guidance, travel requirements
 
 ## Communication Style:
 - **Always respond in English only**
 - Use natural, friendly language
 - Provide detailed but well-organized answers
 - **For expired documents: Use bold text for urgent warnings**
-- Offer helpful suggestions and smart follow-ups
 
 Today's date: ${currentDate}
 **Always respond in English only.**`;
 
-  // INJECT USER PERSONALIZATION VARIABLES DYNAMICALLY
+  // Add personalization if available
   if (personalTouch) {
     if (personalTouch.nickname) {
       systemPrompt += detectedLanguage === 'ar' 
@@ -690,16 +451,6 @@ Today's date: ${currentDate}
         ? ` استخدم نبرة ${personalTouch.tone}.`
         : ` Use a ${personalTouch.tone} tone.`;
     }
-    if (personalTouch.style) {
-      systemPrompt += detectedLanguage === 'ar'
-        ? ` قدم إجابات ${personalTouch.style}.`
-        : ` Provide ${personalTouch.style} responses.`;
-    }
-    if (personalTouch.instruction) {
-      systemPrompt += detectedLanguage === 'ar'
-        ? ` تعليمات إضافية: ${personalTouch.instruction}`
-        : ` Additional instruction: ${personalTouch.instruction}`;
-    }
   }
 
   const messages = [];
@@ -707,16 +458,11 @@ Today's date: ${currentDate}
   if (conversationSummary && conversationSummary.trim()) {
     messages.push({
       role: 'assistant',
-      content: `[Context from our previous conversations: ${conversationSummary}]`
+      content: `[Context: ${conversationSummary}]`
     });
   }
   
   if (contextMessages.length > 0) {
-    messages.push({
-      role: 'assistant',
-      content: `[Continuing from our recent conversation...]`
-    });
-    
     contextMessages.forEach(msg => {
       messages.push({
         role: msg.role === 'assistant' ? 'assistant' : 'user',
@@ -725,56 +471,28 @@ Today's date: ${currentDate}
     });
   }
   
-  // UNIVERSAL IMAGE PROCESSING: ENHANCED DOCUMENT ANALYSIS
+  // SIMPLE: Image processing
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ UNIVERSAL IMAGE ANALYSIS: Processing with ENHANCED document analysis');
+    console.log('🖼️ Processing', attachedFiles.length, 'images');
     
-    const imageFile = attachedFiles.find(file => {
-      if (file.type && (file.type.startsWith('image/') || file.type.includes('jpeg') || file.type.includes('png'))) {
-        console.log('✅ UNIVERSAL IMAGE TYPE DETECTED: Standard image type:', file.type);
-        return true;
-      }
-      
-      if (file.name) {
-        const extension = file.name.toLowerCase().split('.').pop();
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif', 'heic', 'heif'].includes(extension)) {
-          console.log('✅ UNIVERSAL IMAGE TYPE DETECTED: By extension:', extension);
-          return true;
-        }
-      }
-      
-      if (file.url || file.publicUrl) {
-        console.log('✅ UNIVERSAL IMAGE TYPE DETECTED: By URL presence');
-        return true;
-      }
-      
-      return true;
-    });
+    const imageFile = attachedFiles.find(file => 
+      file.type?.startsWith('image/') || 
+      file.url || 
+      file.publicUrl
+    );
     
     if (imageFile) {
-      console.log("🖼️ UNIVERSAL IMAGE PROCESSING: Handling with ENHANCED document analysis");
-      
       const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
       const imageType = imageFile.type || 'image/jpeg';
-      
-      console.log("📡 UNIVERSAL IMAGE URL SELECTION:", {
-        selectedUrl: imageUrl?.substring(0, 50) + '...',
-        selectedType: imageType,
-        fileName: imageFile.name,
-        universalProcessing: true
-      });
       
       if (imageUrl) {
         const base64Data = await convertImageUrlToBase64(imageUrl);
         
         if (base64Data) {
-          // ENHANCED message with SMART document analysis instructions
-          const enhancedMessage = message + `\n\n🖼️ ENHANCED ANALYSIS: Please analyze this image comprehensively. If it's a document (passport, ID, bill, etc.), pay special attention to dates and compare them with today's date (${currentDate}). For expired documents, provide clear warnings in bold text and helpful follow-up suggestions. For all other images, provide detailed analysis and insights.`;
-          
           currentMessage.content = [
-            { type: 'text', text: enhancedMessage },
+            { type: 'text', text: message },
             { 
               type: 'image', 
               source: { 
@@ -784,27 +502,17 @@ Today's date: ${currentDate}
               } 
             }
           ];
-          console.log("✅ UNIVERSAL IMAGE PROCESSING: Enhanced Claude 3.5 Sonnet payload ready");
+          console.log("✅ Image added to message");
         } else {
-          console.error("❌ UNIVERSAL IMAGE PROCESSING: Failed to convert image");
-          
+          console.error("❌ Image processing failed");
           return {
             response: detectedLanguage === 'ar' 
-              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى التأكد من وضوح الصورة وحاول مرة أخرى.'
-              : '❌ Sorry, I encountered difficulty processing this image. Please ensure the image is clear and try again.',
+              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى المحاولة مرة أخرى.'
+              : '❌ Sorry, I encountered difficulty processing this image. Please try again.',
             error: 'Image processing failed',
             success: false
           };
         }
-      } else {
-        console.error("❌ UNIVERSAL IMAGE PROCESSING: No valid URL found");
-        return {
-          response: detectedLanguage === 'ar' 
-            ? '❌ لم أتمكن من الوصول إلى الصورة. يرجى رفع الصورة مرة أخرى.'
-            : '❌ I could not access the image. Please upload the image again.',
-          error: 'No image URL available',
-          success: false
-        };
       }
     }
   }
@@ -812,16 +520,7 @@ Today's date: ${currentDate}
   messages.push(currentMessage);
   
   try {
-    console.log(`🧠 UNIVERSAL CLAUDE 3.5: Sending ${messages.length} messages with ENHANCED DOCUMENT ANALYSIS`);
-    console.log("📊 UNIVERSAL CLAUDE 3.5 API CALL:", {
-      messagesCount: messages.length,
-      hasImages: Array.isArray(currentMessage.content),
-      maxTokens: maxTokens,
-      temperature: 0.3,
-      modelUsed: 'claude-3-5-sonnet-20241022',
-      detectedLanguage: detectedLanguage,
-      universalProcessing: true
-    });
+    console.log(`🧠 Sending ${messages.length} messages to Claude`);
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -839,52 +538,35 @@ Today's date: ${currentDate}
       }),
     });
     
-    console.log("📡 UNIVERSAL CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
+    console.log("📡 Claude API response status:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ UNIVERSAL CLAUDE 3.5 API ERROR:", {
-        status: claudeResponse.status,
-        statusText: claudeResponse.statusText,
-        errorBody: errorText.substring(0, 300)
-      });
+      console.error("❌ Claude API error:", claudeResponse.status, errorText);
       
       let userFriendlyError = detectedLanguage === 'ar' 
         ? 'واجهت مشكلة في معالجة طلبك.'
         : 'I encountered an issue processing your request.';
       
-      if (claudeResponse.status === 400) {
-        if (errorText.includes('image')) {
-          userFriendlyError = detectedLanguage === 'ar' 
-            ? 'كانت هناك مشكلة في معالجة الصورة. قد تكون الصورة كبيرة جداً أو تالفة. يرجى تجربة صورة أوضح أو تقليل حجم الملف.'
-            : 'There was an issue processing the image. The image might be too large, corrupted, or in an unsupported format. Please try uploading a clearer image or reducing the file size.';
-        } else {
-          userFriendlyError = detectedLanguage === 'ar' 
-            ? 'الطلب غير صالح. يرجى المحاولة مرة أخرى برسالة مختلفة.'
-            : 'The request was invalid. Please try again with a different message.';
-        }
+      if (claudeResponse.status === 400 && errorText.includes('image')) {
+        userFriendlyError = detectedLanguage === 'ar' 
+          ? 'كانت هناك مشكلة في معالجة الصورة. يرجى تجربة صورة أوضح.'
+          : 'There was an issue processing the image. Please try a clearer image.';
       } else if (claudeResponse.status === 429) {
         userFriendlyError = detectedLanguage === 'ar' 
-          ? 'عدد كبير جداً من الطلبات. يرجى الانتظار قليلاً والمحاولة مرة أخرى.'
-          : 'Too many requests. Please wait a moment and try again.';
+          ? 'عدد كبير من الطلبات. يرجى الانتظار قليلاً.'
+          : 'Too many requests. Please wait a moment.';
       } else if (claudeResponse.status >= 500) {
         userFriendlyError = detectedLanguage === 'ar' 
-          ? 'خدمة الذكاء الاصطناعي غير متاحة مؤقتاً. يرجى المحاولة مرة أخرى بعد قليل.'
-          : 'The AI service is temporarily unavailable. Please try again in a few moments.';
+          ? 'خدمة الذكاء الاصطناعي غير متاحة مؤقتاً.'
+          : 'AI service temporarily unavailable.';
       }
       
-      throw new Error(`Universal Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
+      throw new Error(userFriendlyError);
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ UNIVERSAL CLAUDE 3.5 API SUCCESS:", {
-      hasContent: !!claudeData.content,
-      contentLength: claudeData.content?.[0]?.text?.length || 0,
-      usage: claudeData.usage,
-      modelConfirmed: 'claude-3-5-sonnet-20241022',
-      universalProcessing: true,
-      enhancedDocumentAnalysis: true
-    });
+    console.log("✅ Claude API success");
     
     const responseText = claudeData.content?.[0]?.text || (detectedLanguage === 'ar' 
       ? 'أعتذر، واجهت مشكلة في معالجة طلبك.'
@@ -894,13 +576,11 @@ Today's date: ${currentDate}
       response: responseText,
       success: true,
       model: 'claude-3-5-sonnet-20241022',
-      usage: claudeData.usage,
-      universalSystemPrompt: true,
-      enhancedDocumentAnalysis: true
+      usage: claudeData.usage
     };
     
   } catch (error) {
-    console.error("❌ UNIVERSAL CLAUDE 3.5 API CRITICAL ERROR:", error);
+    console.error("❌ Claude API critical error:", error);
     return {
       response: detectedLanguage === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
