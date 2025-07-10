@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -76,6 +75,11 @@ export function ChatInput({
     if (onOpenPlusDrawer) onOpenPlusDrawer();
   };
 
+  // Handle example prompt selection
+  const handleExamplePromptSelect = (prompt: string) => {
+    setMessage(prompt);
+  };
+
   // Placeholder functions for PlusMenu (handled by SimplifiedFileUpload now)
   const triggerCamera = () => {
     console.log('📸 CAMERA: Handled by PlusMenu');
@@ -135,7 +139,14 @@ export function ChatInput({
         return 'This is a report or chart. Analyze the data, summarize key findings, explain trends, and provide insights.';
       case 'text_image':
         return 'This image contains text. Extract and transcribe all visible text accurately, including handwriting if present.';
-      case 'other':
+      case 'medical':
+        return 'This is a medical document. Extract medical information, explain results, and provide clear interpretations.';
+      case 'educational':
+        return 'This is educational content. Help explain concepts, solve problems, and provide detailed educational guidance.';
+      case 'food_menu':
+        return 'This is a food/menu image. Read menu items, identify dishes, provide recommendations and detailed descriptions.';
+      case 'vehicle_transport':
+        return 'This is a vehicle or transport document. Extract all relevant information, dates, and validity details.';
       default:
         return 'Provide detailed description and analysis of this image.';
     }
@@ -150,13 +161,14 @@ export function ChatInput({
 
   return (
     <div className="w-full space-y-4">
-      {/* Simplified File Upload Component */}
+      {/* Simplified File Upload Component with example prompt handling */}
       <SimplifiedFileUpload
         onFilesUploaded={handleFilesUploaded}
         uploadedFiles={uploadedFiles}
         onRemoveFile={removeFile}
         isUploading={isUploading}
         disabled={isLoading}
+        onExamplePromptSelect={handleExamplePromptSelect}
       />
 
       {/* Main Input Area */}

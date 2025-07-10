@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
@@ -24,6 +23,7 @@ interface SimplifiedFileUploadProps {
   onRemoveFile: (fileId: string) => void;
   isUploading: boolean;
   disabled?: boolean;
+  onExamplePromptSelect?: (prompt: string) => void;
 }
 
 export function SimplifiedFileUpload({
@@ -31,7 +31,8 @@ export function SimplifiedFileUpload({
   uploadedFiles,
   onRemoveFile,
   isUploading,
-  disabled = false
+  disabled = false,
+  onExamplePromptSelect
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
@@ -185,6 +186,11 @@ export function SimplifiedFileUpload({
     );
     onFilesUploaded(updatedFiles.filter(f => f.id !== fileId));
     onFilesUploaded([updatedFiles.find(f => f.id === fileId)!]);
+    
+    // Send example prompt to parent
+    if (onExamplePromptSelect && imageType.examplePrompt) {
+      onExamplePromptSelect(imageType.examplePrompt);
+    }
   };
 
   // Expose file selection for PlusMenu
@@ -238,57 +244,56 @@ export function SimplifiedFileUpload({
         </div>
       )}
 
-      {/* Uploaded Files Display */}
+      {/* Uploaded Files Display with proper thumbnails */}
       {uploadedFiles.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <h3 className="text-sm font-medium text-foreground">
             {language === 'ar' ? 'الملفات المرفوعة' : 'Uploaded Files'}
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {uploadedFiles.map((file) => (
               <div
                 key={file.id}
-                className="flex items-center gap-2 p-2 rounded-lg bg-white/10 dark:bg-white/5 border border-white/20"
+                className="flex items-center gap-3 p-3 rounded-lg bg-white/10 dark:bg-white/5 border border-white/20"
               >
+                {/* Proper sized thumbnail */}
                 {file.preview && (
                   <img 
                     src={file.preview} 
                     alt={file.name}
-                    className="w-8 h-8 rounded object-cover flex-shrink-0"
+                    className="w-20 h-20 rounded-lg object-cover flex-shrink-0 border border-white/20"
                   />
                 )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">
-                    {file.name}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    {file.imageType ? (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        {file.imageType.icon} {file.imageType.name}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-orange-500">
-                        {language === 'ar' ? 'حدد النوع' : 'Select type'}
-                      </span>
-                    )}
+                
+                {/* File info and inline dropdown */}
+                <div className="flex-1 min-w-0 flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {file.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {(file.size / 1024 / 1024).toFixed(1)}MB
+                    </p>
+                  </div>
+                  
+                  {/* Inline Type Selector */}
+                  <div className="flex items-center gap-2 ml-4">
+                    <ImageTypeSelector
+                      selectedType={file.imageType?.id || null}
+                      onTypeSelect={(type) => updateFileImageType(file.id, type)}
+                      compact={true}
+                    />
+                    
+                    <Button
+                      onClick={() => onRemoveFile(file.id)}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 hover:bg-white/10 flex-shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                
-                {/* Inline Type Selector */}
-                <ImageTypeSelector
-                  selectedType={file.imageType?.id || null}
-                  onTypeSelect={(type) => updateFileImageType(file.id, type)}
-                  compact={true}
-                />
-                
-                <Button
-                  onClick={() => onRemoveFile(file.id)}
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 hover:bg-white/10 flex-shrink-0"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
               </div>
             ))}
           </div>
