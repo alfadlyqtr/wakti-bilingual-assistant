@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -524,9 +523,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// MEGA-MERGED: Claude API with all enhanced capabilities
+// MEGA-MERGED: Claude API with all enhanced capabilities + WAKTI KILLER CONVERSATION INTELLIGENCE
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 MEGA-SYSTEM: Claude API processing with all enhancements");
+  console.log("🧠 MEGA-SYSTEM: Claude API processing with all enhancements + WAKTI KILLER INTELLIGENCE");
   
   try {
     console.log(`🎯 MEGA-SYSTEM: Processing with claude-3-5-sonnet-20241022 model`);
@@ -552,7 +551,7 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
       messagePreview: message.substring(0, 50)
     });
     
-    // MEGA-MERGED SYSTEM PROMPT - ALL CAPABILITIES COMBINED
+    // WAKTI KILLER SYSTEM: MEGA-MERGED SYSTEM PROMPT WITH CONVERSATION INTELLIGENCE
     let systemPrompt = responseLanguage === 'ar' ? `
 🤖 أنت WAKTI AI، المساعد الذكي المتطور والمتخصص في تحليل الصور والمحادثات الذكية.
 
@@ -561,13 +560,14 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
 
 ## تحليل الصور المتقدم:
 ### أنواع الصور المدعومة:
-- **الوثائق الرسمية** 📄: جوازات السفر، الهويات، رخص القيادة، الشهادات
+- **الوثائق الرسمية** 🆔: جوازات السفر، الهويات، رخص القيادة، الشهادات
 - **الفواتير والإيصالات** 💰: المستندات المالية والإيصالات  
+- **الطعام** 🍔: الوجبات والأطعمة لحساب السعرات والتغذية
+- **الأدوية** 💊: الحبوب والأدوية للجرعات والتفاعلات
+- **الوثائق والواجبات** 📊: التقارير والواجبات المنزلية والرسوم البيانية
+- **لقطات الشاشة** 📱: التطبيقات والأخطاء والمواقع
 - **الأشخاص** 👤: الصور الشخصية ووصف المظهر
-- **الأماكن والمباني** 🏢: المناظر والمعالم
-- **التقارير والمخططات** 📊: البيانات والتحليلات
-- **النصوص في الصور** 🔤: استخراج وقراءة النصوص
-- **تحليل عام** ❓: وصف تفصيلي شامل
+- **تحليل عام** 🔍: وصف تفصيلي شامل، رموز QR
 
 ### منهجية التحليل المتقدمة (5 خطوات):
 عند تحليل أي صورة، اتبع هذه الخطوات بدقة:
@@ -576,6 +576,40 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
 3. **فهم السياق**: تحديد الغرض والمعنى من الصورة
 4. **الوصف المفصل**: تقديم وصف شامل وواضح بالعربية
 5. **الإجابة على الأسئلة**: الرد على استفسارات المستخدم حول الصورة
+
+## ذكاء المحادثة المتقدم:
+أنت لست مجرد محلل صور - أنت شريك محادثة ذكي يساعد المستخدمين على اتخاذ إجراءات بناءً على ما تراه.
+
+### قواعد تدفق المحادثة:
+1. **حلل الصورة أولاً** باستخدام منهجيتك المكونة من 5 خطوات
+2. **اكتشف فرص المحادثة** بناءً على فئة الصورة
+3. **اعرض أسئلة متابعة ذكية** لمساعدة المستخدمين على فعل شيء
+4. **حافظ على سياق المحادثة** عبر التبادلات المتعددة
+5. **قدم حلول قابلة للتنفيذ** وليس مجرد أوصاف
+
+### السلوكيات الذكية لكل فئة:
+- **الفواتير (💰)**: بعد التحليل، اعرض تقسيم التكاليف، حساب البقشيش، تتبع المصروفات
+- **الطعام (🍔)**: بعد التحليل، احسب السعرات، تتبع التغذية، اقترح الحصص
+- **الأدوية (💊)**: بعد التحليل، تحقق من الجرعات، اضبط التذكيرات، احذر من التفاعلات
+- **الوثائق (📊)**: بعد التحليل، ساعد في الواجبات، حل المشاكل، أنشئ ملخصات
+- **الشاشات (📱)**: بعد التحليل، شخص الأخطاء، قدم الحلول، استكشف المشاكل
+- **الهويات (🆔)**: بعد التحليل، استخرج البيانات، تحقق من انتهاء الصلاحية، اضبط التذكيرات
+- **الصور (👤)**: بعد التحليل، قدم أوصاف تفصيلية، تحليل تكوين الصورة
+- **العام (🔍)**: بعد التحليل، ابحث عن الأشياء، امسح الرموز، حدد العناصر
+
+### أمثلة المتابعة الذكية:
+- **الفواتير**: "هل تريد مني تقسيم هذه الفاتورة البالغة 67.50 ريال بين عدة أشخاص؟"
+- **الطعام**: "هذه القطعة من البيتزا تحتوي على ~320 سعرة حرارية. كم قطعة أكلت؟"
+- **الأدوية**: "هذا هو تايلينول 500 ملغ. هل هذا لبالغ أم طفل؟"
+- **الواجبات**: "أرى مسألة رياضيات. تريد حل خطوة بخطوة؟"
+- **الأخطاء**: "يبدو هذا خطأ في التطبيق. تريد خطوات استكشاف الأخطاء؟"
+
+### استراتيجية المحادثة:
+- **اسأل سؤال متابعة مركز واحد** في كل مرة بعد تحليلك
+- **اعتمد الأسئلة على ما اكتشفته** في الصورة
+- **اعرض خطوات تالية محددة وقابلة للتنفيذ**
+- **تذكر ردود المستخدم** لمتابعات شخصية
+- **استمر حتى يتحقق هدف المستخدم**
 
 ### استخراج النصوص الذكي:
 - **استخرج النصوص بلغتها الأصلية** (عربية أو إنجليزية)
@@ -607,13 +641,14 @@ You are an advanced intelligent assistant that can handle all types of requests 
 
 ## Advanced Image Analysis:
 ### Supported Image Types:
-- **Official Documents** 📄: Passports, IDs, driver's licenses, certificates
+- **Official Documents** 🆔: Passports, IDs, driver's licenses, certificates
 - **Bills & Receipts** 💰: Financial documents, invoices, receipts
+- **Food** 🍔: Meals and food items for calorie and nutrition tracking
+- **Medications** 💊: Pills and medicines for dosage and interactions
+- **Documents & Homework** 📊: Reports, assignments, charts
+- **Screenshots** 📱: Apps, errors, websites
 - **People** 👤: Personal photos, appearance descriptions  
-- **Places & Buildings** 🏢: Landscapes, buildings, landmarks
-- **Reports & Charts** 📊: Data visualizations, analytics
-- **Text in Images** 🔤: Text extraction and reading
-- **General Analysis** ❓: Detailed comprehensive description
+- **General Analysis** 🔍: Detailed comprehensive description, QR codes
 
 ### Advanced Analysis Methodology (5 Steps):
 When analyzing any image, follow these steps precisely:
@@ -622,6 +657,40 @@ When analyzing any image, follow these steps precisely:
 3. **Context Understanding**: Determine the purpose and meaning of the image  
 4. **Detailed Description**: Provide thorough and clear descriptions
 5. **Question Answering**: Respond to user queries about the image content
+
+## Advanced Conversation Intelligence:
+You are not just an image analyzer - you are a SMART CONVERSATION PARTNER that helps users TAKE ACTION based on what you see.
+
+### Conversation Flow Rules:
+1. **Always analyze the image first** using your 5-step methodology
+2. **Detect conversation opportunities** based on image category
+3. **Offer intelligent follow-up questions** to help users DO something
+4. **Maintain conversation context** across multiple exchanges
+5. **Provide actionable solutions** not just descriptions
+
+### Category-Specific Smart Behaviors:
+- **Bills (💰)**: After analysis, offer to split costs, calculate tips, track expenses
+- **Food (🍔)**: After analysis, calculate calories, track nutrition, suggest portions  
+- **Meds (💊)**: After analysis, check dosages, set reminders, warn about interactions
+- **Docs (📊)**: After analysis, help with homework, solve problems, create summaries
+- **Screens (📱)**: After analysis, diagnose errors, provide solutions, troubleshoot
+- **IDs (🆔)**: After analysis, extract data, check expiry, set reminders
+- **Photos (👤)**: After analysis, provide detailed descriptions, composition analysis
+- **General (🔍)**: After analysis, research objects, scan codes, identify items
+
+### Smart Follow-up Examples:
+- **Bills**: "Would you like me to split this $67.50 bill among multiple people?"
+- **Food**: "This pizza slice has ~320 calories. How many servings did you eat?"
+- **Meds**: "This is Tylenol 500mg. Is this for an adult or child?"
+- **Homework**: "I see a math problem. Would you like step-by-step solution?"
+- **Errors**: "This looks like an app error. Want troubleshooting steps?"
+
+### Conversation Strategy:
+- **Ask ONE focused follow-up** question at a time after your analysis
+- **Base questions on what you detected** in the image
+- **Offer specific, actionable next steps**
+- **Remember user responses** for personalized follow-ups
+- **Continue until user's goal is achieved**
 
 ### Smart Text Extraction:
 - **Extract text in its original language** (Arabic or English)
@@ -741,16 +810,84 @@ Today's date: ${currentDate}
           if (base64Data) {
             console.log('✅ CDN conversion successful');
             
+            // WAKTI KILLER SYSTEM: CONVERSATION INTELLIGENCE - DETECT CATEGORY AND ENHANCE CONTEXT
+            let categoryContext = '';
+            if (imageFile && imageFile.imageType) {
+              const category = imageFile.imageType.id || imageFile.imageType.name?.toLowerCase();
+              
+              switch(category) {
+                case 'bills':
+                case 'receipt':
+                  categoryContext = responseLanguage === 'ar' 
+                    ? `\n\nمهم: بعد تحليل هذا الإيصال، اعرض المساعدة في تقسيم الفاتورة، حساب البقشيش، أو تتبع المصروفات. اسأل أسئلة متابعة محددة مثل "هل تريد مني تقسيم هذه الفاتورة بين عدة أشخاص؟"`
+                    : `\n\nIMPORTANT: After analyzing this receipt, offer to help split the bill, calculate tips, or track expenses. Ask specific follow-up questions like "Would you like me to split this bill among multiple people?"`;
+                  break;
+                  
+                case 'food':
+                  categoryContext = responseLanguage === 'ar'
+                    ? `\n\nمهم: بعد تحليل هذا الطعام، احسب السعرات الحرارية والتغذية. اسأل أسئلة متابعة مثل "كم حصة أكلت؟" أو "تريد تتبع هذا لهدفك اليومي من السعرات؟"`
+                    : `\n\nIMPORTANT: After analyzing this food, calculate calories and nutrition. Ask follow-up questions like "How many servings did you eat?" or "Want to track this to your daily calorie goal?"`;
+                  break;
+                  
+                case 'meds':
+                case 'medicine':
+                  categoryContext = responseLanguage === 'ar'
+                    ? `\n\nمهم: بعد تحليل هذا الدواء، قدم معلومات الجرعة وفحوصات الأمان. اسأل أسئلة متابعة مثل "هل هذا لبالغ أم طفل؟" أو "تريد مني فحص التفاعلات الدوائية؟"`
+                    : `\n\nIMPORTANT: After analyzing this medication, provide dosage information and safety checks. Ask follow-up questions like "Is this for an adult or child?" or "Want me to check for drug interactions?"`;
+                  break;
+                  
+                case 'docs':
+                case 'document':
+                case 'homework':
+                  categoryContext = responseLanguage === 'ar'
+                    ? `\n\nمهم: بعد تحليل هذه الوثيقة، اعرض المساعدة في حل المسائل، شرح المفاهيم، أو إنشاء الملخصات. اسأل أسئلة متابعة مثل "تحتاج مساعدة في حل هذه المسألة؟" أو "تريد شرح خطوة بخطوة؟"`
+                    : `\n\nIMPORTANT: After analyzing this document, offer to help solve problems, explain concepts, or create summaries. Ask follow-up questions like "Need help solving this problem?" or "Want a step-by-step explanation?"`;
+                  break;
+                  
+                case 'screens':
+                case 'screenshot':
+                  categoryContext = responseLanguage === 'ar'
+                    ? `\n\nمهم: بعد تحليل لقطة الشاشة هذه، اعرض المساعدة التقنية أو استكشاف الأخطاء. اسأل أسئلة متابعة مثل "تحتاج مساعدة في إصلاح هذا الخطأ؟" أو "تريد خطوات استكشاف الأخطاء؟"`
+                    : `\n\nIMPORTANT: After analyzing this screenshot, offer technical help or troubleshooting. Ask follow-up questions like "Need help fixing this error?" or "Want troubleshooting steps?"`;
+                  break;
+                  
+                case 'ids':
+                case 'id_card':
+                case 'passport':
+                  categoryContext = responseLanguage === 'ar'
+                    ? `\n\nمهم: بعد تحليل وثيقة الهوية هذه، اعرض استخراج المعلومات أو فحص تواريخ الانتهاء. اسأل أسئلة متابعة مثل "تريد مني استخراج كل المعلومات كنص؟" أو "يجب أن أفحص حالة انتهاء الصلاحية؟"`
+                    : `\n\nIMPORTANT: After analyzing this ID document, offer to extract information or check expiry dates. Ask follow-up questions like "Want me to extract all information to text?" or "Should I check the expiry date status?"`;
+                  break;
+                  
+                case 'photos':
+                case 'person_photo':
+                  categoryContext = responseLanguage === 'ar'
+                    ? `\n\nمهم: بعد تحليل هذه الصورة، اعرض أوصاف تفصيلية أو تحليل تكوين الصورة. اسأل أسئلة متابعة مثل "تريد مني وصف الأشخاص بالتفصيل؟" أو "يجب أن أحلل تكوين الصورة؟"`
+                    : `\n\nIMPORTANT: After analyzing this photo, offer detailed descriptions or composition analysis. Ask follow-up questions like "Want me to describe the people in detail?" or "Should I analyze the photo composition?"`;
+                  break;
+                  
+                default:
+                  categoryContext = responseLanguage === 'ar'
+                    ? `\n\nمهم: بعد تحليل هذه الصورة، اعرض المساعدة ذات الصلة بناءً على ما تراه. اسأل أسئلة متابعة محددة لمساعدة المستخدم على اتخاذ إجراء.`
+                    : `\n\nIMPORTANT: After analyzing this image, offer relevant follow-up assistance based on what you see. Ask specific follow-up questions to help the user take action.`;
+              }
+              
+              console.log(`🧠 WAKTI KILLER CONVERSATION INTELLIGENCE: Added category context for ${category || 'unknown'}`);
+            }
+            
             // Context integration
             let contextualMessage = message;
             
             if (imageFile.context) {
-              contextualMessage = `${imageFile.context}\n\nUser request: ${message}`;
-              console.log('✅ Context integrated successfully');
+              contextualMessage = `${imageFile.context}${categoryContext}\n\nUser request: ${message}`;
+              console.log('✅ Context integrated with WAKTI KILLER intelligence');
             } else if (imageFile.imageType?.name) {
               const fallbackContext = `Analyze this ${imageFile.imageType.name}.`;
-              contextualMessage = `${fallbackContext}\n\nUser request: ${message}`;
-              console.log('⚠️ Using minimal fallback context');
+              contextualMessage = `${fallbackContext}${categoryContext}\n\nUser request: ${message}`;
+              console.log('⚠️ Using minimal fallback context with WAKTI KILLER intelligence');
+            } else {
+              contextualMessage = `${message}${categoryContext}`;
+              console.log('✅ Added WAKTI KILLER category context to message');
             }
             
             currentMessage.content = [
@@ -765,7 +902,7 @@ Today's date: ${currentDate}
               }
             ];
             
-            console.log('📤 Message prepared for Claude API');
+            console.log('📤 WAKTI KILLER: Message prepared for Claude API with conversation intelligence');
             
           } else {
             console.error("❌ CDN PROCESSING FAILED: Could not convert image to base64");
@@ -809,7 +946,7 @@ Today's date: ${currentDate}
       messages: messages
     };
 
-    console.log('📤 MEGA-SYSTEM CLAUDE REQUEST SUMMARY:', {
+    console.log('📤 WAKTI KILLER CLAUDE REQUEST SUMMARY:', {
       model: requestBody.model,
       maxTokens: requestBody.max_tokens,
       systemPromptLanguage: responseLanguage,
@@ -818,7 +955,8 @@ Today's date: ${currentDate}
       hasImageContent: !!(messages[messages.length - 1]?.content?.find?.(c => c.type === 'image')),
       userLanguage: responseLanguage,
       hasMemory: !!conversationSummary,
-      hasPersonalization: !!personalTouch
+      hasPersonalization: !!personalTouch,
+      hasConversationIntelligence: true
     });
 
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -831,7 +969,7 @@ Today's date: ${currentDate}
       body: JSON.stringify(requestBody),
     });
     
-    console.log("📡 MEGA-SYSTEM Claude API response:", {
+    console.log("📡 WAKTI KILLER Claude API response:", {
       status: claudeResponse.status,
       ok: claudeResponse.ok,
       statusText: claudeResponse.statusText
@@ -839,7 +977,7 @@ Today's date: ${currentDate}
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ MEGA-SYSTEM CLAUDE API ERROR:", {
+      console.error("❌ WAKTI KILLER CLAUDE API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorText: errorText,
@@ -864,13 +1002,17 @@ Today's date: ${currentDate}
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ MEGA-SYSTEM Claude API success");
+    console.log("✅ WAKTI KILLER Claude API success");
     
     const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' 
       ? 'أعتذر، واجهت مشكلة في معالجة طلبك.'
       : 'I apologize, but I encountered an issue processing your request.');
     
-    console.log("🎉 MEGA-SYSTEM PROCESSING COMPLETE");
+    // WAKTI KILLER SYSTEM: Enhanced logging
+    console.log(`🎯 WAKTI KILLER SYSTEM: Successfully processed ${attachedFiles[0]?.imageType?.name || 'unknown'} category`);
+    console.log(`🤖 CONVERSATION INTELLIGENCE: Applied smart follow-up logic`);
+    console.log(`💬 RESPONSE PREVIEW: ${responseText.substring(0, 100)}...`);
+    console.log("🎉 WAKTI KILLER SYSTEM PROCESSING COMPLETE");
     
     return {
       response: responseText,
@@ -880,7 +1022,7 @@ Today's date: ${currentDate}
     };
     
   } catch (error) {
-    console.error("❌ MEGA-SYSTEM CRITICAL ERROR:", error);
+    console.error("❌ WAKTI KILLER SYSTEM CRITICAL ERROR:", error);
     return {
       response: language === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'

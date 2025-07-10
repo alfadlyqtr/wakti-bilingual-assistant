@@ -5,9 +5,15 @@ import { useTheme } from '@/providers/ThemeProvider';
 
 export interface ImageTypeOption {
   id: string;
-  name: string;
+  name: {
+    en: string;
+    ar: string;
+  };
   icon: string;
-  hint: string;
+  description: {
+    en: string;
+    ar: string;
+  };
   context: string;
   examplePrompt?: string;
 }
@@ -20,78 +26,137 @@ interface ImageTypeSelectorProps {
 
 export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false }: ImageTypeSelectorProps) {
   const { language } = useTheme();
+  const currentLanguage = language || 'en';
 
-  // FIXED: Simplified image types with working contexts
+  // WAKTI KILLER SYSTEM: 8 Mobile-Optimized Bilingual Categories
   const imageTypes: ImageTypeOption[] = [
     {
-      id: 'passport',
-      name: language === 'ar' ? 'جواز السفر' : 'Passport',
-      icon: '📄',
-      hint: language === 'ar' ? 'لاستخراج بيانات جواز السفر' : 'For passport data extraction',
-      context: language === 'ar' 
-        ? 'هذه صورة جواز سفر. استخرج البيانات الشخصية، تواريخ الصلاحية، ورقم الجواز. تحقق من صلاحية الجواز.'
-        : 'This is a passport image. Extract personal details, expiration dates, and passport number. Check passport validity.',
-      examplePrompt: language === 'ar' ? 'استخرج بيانات جواز السفر' : 'Extract passport information'
-    },
-    {
-      id: 'id_card',
-      name: language === 'ar' ? 'بطاقة الهوية' : 'ID Card',
+      id: 'ids',
+      name: {
+        en: 'IDs',
+        ar: 'هويات'
+      },
       icon: '🆔',
-      hint: language === 'ar' ? 'لاستخراج بيانات بطاقة الهوية' : 'For ID card data extraction',
-      context: language === 'ar'
-        ? 'هذه صورة بطاقة هوية. استخرج الاسم، الرقم، تاريخ الانتهاء، والمعلومات الشخصية.'
-        : 'This is an ID card image. Extract name, ID number, expiration date, and personal information.',
-      examplePrompt: language === 'ar' ? 'استخرج بيانات بطاقة الهوية' : 'Extract ID card details'
+      description: {
+        en: 'Passports, licenses, certificates',
+        ar: 'جوازات، رخص، شهادات'
+      },
+      context: currentLanguage === 'ar' 
+        ? 'هذه صورة وثيقة هوية. استخرج البيانات الشخصية، تواريخ الصلاحية، والمعلومات المهمة. تحقق من صلاحية الوثيقة وقدم معلومات مفيدة.'
+        : 'This is an ID document image. Extract personal details, expiration dates, and important information. Check document validity and provide useful insights.',
+      examplePrompt: currentLanguage === 'ar' ? 'استخرج بيانات هذه الوثيقة' : 'Extract information from this document'
     },
     {
-      id: 'certificate',
-      name: language === 'ar' ? 'شهادة' : 'Certificate',
-      icon: '🏆',
-      hint: language === 'ar' ? 'لتحليل الشهادات والدبلومات' : 'For analyzing certificates and diplomas',
-      context: language === 'ar'
-        ? 'هذه صورة شهادة. استخرج اسم الحاصل عليها، نوع الشهادة، الجهة المانحة، والتاريخ.'
-        : 'This is a certificate image. Extract recipient name, certificate type, issuing authority, and date.',
-      examplePrompt: language === 'ar' ? 'حلل هذه الشهادة' : 'Analyze this certificate'
+      id: 'bills',
+      name: {
+        en: 'Bills',
+        ar: 'فواتير'
+      },
+      icon: '💰',
+      description: {
+        en: 'Receipts, invoices, splitting',
+        ar: 'إيصالات، فواتير، تقسيم'
+      },
+      context: currentLanguage === 'ar'
+        ? 'هذه صورة فاتورة أو إيصال. استخرج المبلغ الإجمالي، العناصر، التاريخ، واسم المتجر. بعد التحليل، اعرض المساعدة في تقسيم التكلفة، حساب البقشيش، أو تتبع المصروفات.'
+        : 'This is a bill or receipt image. Extract total amount, items, date, and store name. After analysis, offer help with splitting costs, calculating tips, or tracking expenses.',
+      examplePrompt: currentLanguage === 'ar' ? 'حلل هذه الفاتورة واعرض تقسيمها' : 'Analyze this bill and offer to split it'
     },
     {
-      id: 'receipt',
-      name: language === 'ar' ? 'فاتورة' : 'Receipt',
-      icon: '🧾',
-      hint: language === 'ar' ? 'لاستخراج بيانات الفواتير' : 'For receipt data extraction',
-      context: language === 'ar'
-        ? 'هذه صورة فاتورة. استخرج المبلغ الإجمالي، العناصر، التاريخ، واسم المتجر.'
-        : 'This is a receipt image. Extract total amount, items, date, and store name.',
-      examplePrompt: language === 'ar' ? 'استخرج بيانات الفاتورة' : 'Extract receipt details'
+      id: 'food',
+      name: {
+        en: 'Food',
+        ar: 'طعام'
+      },
+      icon: '🍔',
+      description: {
+        en: 'Calories, nutrition, ingredients',
+        ar: 'سعرات، تغذية، مكونات'
+      },
+      context: currentLanguage === 'ar'
+        ? 'هذه صورة طعام. حدد نوع الطعام، احسب السعرات الحرارية التقريبية، وقدم معلومات غذائية. بعد التحليل، اسأل عن عدد الحصص المتناولة واعرض تتبع السعرات الحرارية.'
+        : 'This is a food image. Identify the food type, calculate approximate calories, and provide nutritional information. After analysis, ask about serving size and offer calorie tracking.',
+      examplePrompt: currentLanguage === 'ar' ? 'احسب سعرات هذا الطعام' : 'Calculate calories in this food'
     },
     {
-      id: 'person',
-      name: language === 'ar' ? 'صورة شخصية' : 'Person Photo',
+      id: 'meds',
+      name: {
+        en: 'Meds',
+        ar: 'أدوية'
+      },
+      icon: '💊',
+      description: {
+        en: 'Pills, dosage, interactions',
+        ar: 'حبوب، جرعات، تفاعلات'
+      },
+      context: currentLanguage === 'ar'
+        ? 'هذه صورة دواء. حدد نوع الدواء، الجرعة، وتعليمات الاستخدام. بعد التحليل، اسأل عن العمر (بالغ أو طفل) واعرض فحص التفاعلات الدوائية أو تذكيرات الجرعات.'
+        : 'This is a medication image. Identify the medication type, dosage, and usage instructions. After analysis, ask about age (adult or child) and offer drug interaction checks or dosage reminders.',
+      examplePrompt: currentLanguage === 'ar' ? 'تحقق من هذا الدواء وجرعته' : 'Check this medication and its dosage'
+    },
+    {
+      id: 'docs',
+      name: {
+        en: 'Docs',
+        ar: 'وثائق'
+      },
+      icon: '📊',
+      description: {
+        en: 'Reports, homework, charts',
+        ar: 'تقارير، واجبات، رسوم'
+      },
+      context: currentLanguage === 'ar'
+        ? 'هذه صورة وثيقة أو واجب منزلي. اقرأ المحتوى، حدد المسائل أو الأسئلة الموجودة. بعد التحليل، اعرض المساعدة في حل المسائل، شرح المفاهيم، أو تلخيص المحتوى.'
+        : 'This is a document or homework image. Read the content, identify problems or questions present. After analysis, offer help solving problems, explaining concepts, or summarizing content.',
+      examplePrompt: currentLanguage === 'ar' ? 'ساعدني في حل هذا الواجب' : 'Help me solve this homework'
+    },
+    {
+      id: 'screens',
+      name: {
+        en: 'Screens',
+        ar: 'شاشات'
+      },
+      icon: '📱',
+      description: {
+        en: 'Apps, errors, websites',
+        ar: 'تطبيقات، أخطاء، مواقع'
+      },
+      context: currentLanguage === 'ar'
+        ? 'هذه صورة شاشة أو لقطة شاشة. حدد التطبيق، الخطأ، أو المشكلة المعروضة. بعد التحليل، اعرض خطوات استكشاف الأخطاء وإصلاحها أو حلول تقنية.'
+        : 'This is a screenshot or screen capture. Identify the app, error, or issue displayed. After analysis, offer troubleshooting steps or technical solutions.',
+      examplePrompt: currentLanguage === 'ar' ? 'ساعدني في إصلاح هذا الخطأ' : 'Help me fix this error'
+    },
+    {
+      id: 'photos',
+      name: {
+        en: 'Photos',
+        ar: 'صور'
+      },
       icon: '👤',
-      hint: language === 'ar' ? 'لوصف الأشخاص في الصور' : 'For describing people in photos',
-      context: language === 'ar'
-        ? 'هذه صورة شخص. صف المظهر، الملابس، والأنشطة المرئية في الصورة.'
-        : 'This is a person photo. Describe appearance, clothing, and visible activities.',
-      examplePrompt: language === 'ar' ? 'صف الشخص في الصورة' : 'Describe the person in the image'
-    },
-    {
-      id: 'document',
-      name: language === 'ar' ? 'مستند' : 'Document',
-      icon: '📋',
-      hint: language === 'ar' ? 'لقراءة المستندات والنصوص' : 'For reading documents and text',
-      context: language === 'ar'
-        ? 'هذا مستند يحتوي على نص. اقرأ واستخرج المحتوى النصي الموجود.'
-        : 'This is a document with text. Read and extract the textual content.',
-      examplePrompt: language === 'ar' ? 'اقرأ المستند' : 'Read the document'
+      description: {
+        en: 'People, selfies, portraits',
+        ar: 'أشخاص، سيلفي، صور شخصية'
+      },
+      context: currentLanguage === 'ar'
+        ? 'هذه صورة شخصية أو صورة لأشخاص. صف المظهر، الملابس، والأنشطة المرئية. بعد التحليل، اعرض وصف تفصيلي للأشخاص أو تحليل تكوين الصورة.'
+        : 'This is a personal photo or image of people. Describe appearance, clothing, and visible activities. After analysis, offer detailed person descriptions or photo composition analysis.',
+      examplePrompt: currentLanguage === 'ar' ? 'صف الأشخاص في هذه الصورة' : 'Describe the people in this photo'
     },
     {
       id: 'general',
-      name: language === 'ar' ? 'تحليل عام' : 'General Analysis',
+      name: {
+        en: 'General',
+        ar: 'عام'
+      },
       icon: '🔍',
-      hint: language === 'ar' ? 'لتحليل أي نوع من الصور' : 'For analyzing any type of image',
-      context: language === 'ar'
-        ? 'حلل هذه الصورة وصف ما تراه بالتفصيل.'
-        : 'Analyze this image and describe what you see in detail.',
-      examplePrompt: language === 'ar' ? 'حلل هذه الصورة' : 'Analyze this image'
+      description: {
+        en: 'Everything else, QR codes',
+        ar: 'كل شيء آخر، رموز QR'
+      },
+      context: currentLanguage === 'ar'
+        ? 'حلل هذه الصورة وصف ما تراه بالتفصيل. إذا كان هناك رمز QR، فاقرأه. بعد التحليل، اعرض مساعدة ذات صلة بناءً على ما تراه.'
+        : 'Analyze this image and describe what you see in detail. If there are QR codes, read them. After analysis, offer relevant assistance based on what you see.',
+      examplePrompt: currentLanguage === 'ar' ? 'حلل هذه الصورة' : 'Analyze this image'
     }
   ];
 
@@ -107,7 +172,7 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false 
       }}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder={
-            language === 'ar' ? 'اختر نوع الصورة' : 'Select image type'
+            currentLanguage === 'ar' ? 'اختر نوع الصورة' : 'Select image type'
           } />
         </SelectTrigger>
         <SelectContent>
@@ -115,7 +180,14 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false 
             <SelectItem key={type.id} value={type.id}>
               <div className="flex items-center gap-2">
                 <span>{type.icon}</span>
-                <span>{type.name}</span>
+                <div className="flex flex-col">
+                  <span className="font-medium">{type.name[currentLanguage]}</span>
+                  {!compact && (
+                    <span className="text-xs text-muted-foreground">
+                      {type.description[currentLanguage]}
+                    </span>
+                  )}
+                </div>
               </div>
             </SelectItem>
           ))}
@@ -124,7 +196,7 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false 
       
       {selectedTypeData && !compact && (
         <p className="text-xs text-muted-foreground mt-2">
-          {selectedTypeData.hint}
+          {selectedTypeData.description[currentLanguage]}
         </p>
       )}
     </div>
