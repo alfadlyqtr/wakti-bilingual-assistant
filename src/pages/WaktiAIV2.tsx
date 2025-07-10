@@ -324,6 +324,19 @@ const WaktiAIV2 = () => {
         browsingUsed: aiResponse.browsingUsed,
         browsingData: aiResponse.browsingData
       };
+
+      // PROCESS TASK & REMINDER RESPONSE FIELDS
+      if (aiResponse.showTaskForm && aiResponse.taskData) {
+        console.log('📋 TASK FORM DETECTED:', aiResponse.taskData);
+        setPendingTaskData(aiResponse.taskData);
+        setShowTaskConfirmation(true);
+      }
+
+      if (aiResponse.reminderCreated && aiResponse.reminderData) {
+        console.log('⏰ REMINDER CREATED:', aiResponse.reminderData);
+        showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
+        console.log('✅ Reminder created successfully!');
+      }
       
       setSessionMessages(prevMessages => {
         const newMessages = [...prevMessages];
