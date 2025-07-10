@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
@@ -36,7 +37,6 @@ export function SimplifiedFileUpload({
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const generatePreview = useCallback((file: File): Promise<string | undefined> => {
     return new Promise((resolve) => {
@@ -60,7 +60,7 @@ export function SimplifiedFileUpload({
     });
   }, []);
 
-  const uploadFiles = useCallback(async (files: File[], imageType: ImageTypeOption) => {
+  const uploadFiles = useCallback(async (files: File[]) => {
     if (!files || files.length === 0) return;
 
     try {
@@ -69,7 +69,7 @@ export function SimplifiedFileUpload({
         throw new Error('Authentication required');
       }
 
-      console.log('📁 Starting simplified upload for', files.length, 'files with type:', imageType.name);
+      console.log('📁 Starting upload for', files.length, 'files');
 
       const uploadPromises = Array.from(files).map(async (file) => {
         try {
@@ -89,7 +89,7 @@ export function SimplifiedFileUpload({
           const fileExt = file.name.split('.').pop();
           const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
 
-          console.log('⬆️ Uploading file:', file.name, 'Size:', file.size, 'Type:', imageType.name);
+          console.log('⬆️ Uploading file:', file.name, 'Size:', file.size);
 
           // Upload to Supabase storage
           const { data, error } = await supabase.storage
@@ -118,8 +118,7 @@ export function SimplifiedFileUpload({
             publicUrl: publicUrl,
             type: file.type,
             size: file.size,
-            preview: preview,
-            imageType: imageType
+            preview: preview
           };
 
           return uploadedFile;
@@ -139,11 +138,8 @@ export function SimplifiedFileUpload({
 
       if (successfulUploads.length > 0) {
         onFilesUploaded(successfulUploads);
-        showSuccess(`Successfully uploaded ${successfulUploads.length} file(s) as ${imageType.name}`);
+        showSuccess(`Successfully uploaded ${successfulUploads.length} file(s)`);
         console.log('🎉 All uploads completed. Total files:', successfulUploads.length);
-        
-        // Clear pending files
-        setPendingFiles([]);
       }
 
       const failedUploads = results.filter(result => result.status === 'rejected').length;
@@ -157,35 +153,11 @@ export function SimplifiedFileUpload({
     }
   }, [generatePreview, showError, showSuccess, onFilesUploaded]);
 
-  const handleFileSelect = (files: FileList) => {
-    const fileArray = Array.from(files).filter(file => 
-      file.type.startsWith('image/') || file.type === 'text/plain'
-    );
-    
-    if (fileArray.length === 0) {
-      showError('Please select valid image or text files');
-      return;
-    }
-
-    setPendingFiles(fileArray);
-  };
-
-  const handleTypeSelect = (imageType: ImageTypeOption) => {
-    if (pendingFiles.length > 0) {
-      uploadFiles(pendingFiles, imageType);
-    }
-  };
-
-  const handleCancel = () => {
-    setPendingFiles([]);
-  };
-
   const updateFileImageType = (fileId: string, imageType: ImageTypeOption) => {
     const updatedFiles = uploadedFiles.map(file => 
       file.id === fileId ? { ...file, imageType } : file
     );
-    onFilesUploaded(updatedFiles.filter(f => f.id !== fileId));
-    onFilesUploaded([updatedFiles.find(f => f.id === fileId)!]);
+    onFilesUploaded(updatedFiles);
     
     // Send example prompt to parent
     if (onExamplePromptSelect && imageType.examplePrompt) {
@@ -193,58 +165,38 @@ export function SimplifiedFileUpload({
     }
   };
 
-  // Expose file selection for PlusMenu
+  // Handle file selection from PlusMenu
   React.useEffect(() => {
     const handleFileInput = (event: CustomEvent) => {
       if (event.detail?.files) {
-        handleFileSelect(event.detail.files);
+        const fileArray = Array.from(event.detail.files).filter((file: File) => 
+          file.type.startsWith('image/') || file.type === 'text/plain'
+        );
+        
+        if (fileArray.length === 0) {
+          showError('Please select valid image or text files');
+          return;
+        }
+
+        uploadFiles(fileArray);
       }
     };
 
     window.addEventListener('wakti-file-selected', handleFileInput as EventListener);
     return () => window.removeEventListener('wakti-file-selected', handleFileInput as EventListener);
-  }, []);
+  }, [uploadFiles, showError]);
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
 
   return (
     <div className="space-y-4">
-      {/* Pending Files & Type Selection */}
-      {pendingFiles.length > 0 && (
-        <div className="p-4 rounded-xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-foreground">
-              {language === 'ar' ? 'اختر نوع الصورة' : 'Select Image Type'}
-            </h3>
-            <Button
-              onClick={handleCancel}
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 hover:bg-white/10"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {pendingFiles.map((file, index) => (
-              <div key={index} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 dark:bg-white/5 border border-white/20">
-                <span className="text-xs font-medium text-foreground truncate max-w-24">
-                  {file.name}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  ({(file.size / 1024 / 1024).toFixed(1)}MB)
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <ImageTypeSelector
-            selectedType={null}
-            onTypeSelect={handleTypeSelect}
-          />
-        </div>
-      )}
-
-      {/* Uploaded Files Display with proper thumbnails */}
+      {/* Uploaded Files Display */}
       {uploadedFiles.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-foreground">
@@ -254,45 +206,55 @@ export function SimplifiedFileUpload({
             {uploadedFiles.map((file) => (
               <div
                 key={file.id}
-                className="flex items-center gap-3 p-3 rounded-lg bg-white/10 dark:bg-white/5 border border-white/20"
+                className="flex items-start gap-3 p-3 rounded-lg bg-white/10 dark:bg-white/5 border border-white/20"
               >
-                {/* Proper sized thumbnail */}
+                {/* 80x80 Thumbnail */}
                 {file.preview && (
-                  <img 
-                    src={file.preview} 
-                    alt={file.name}
-                    className="w-20 h-20 rounded-lg object-cover flex-shrink-0 border border-white/20"
-                  />
+                  <div className="relative">
+                    <img 
+                      src={file.preview} 
+                      alt={file.name}
+                      className="w-20 h-20 rounded-lg object-cover flex-shrink-0 border border-white/20"
+                    />
+                    {/* Delete button on thumbnail */}
+                    <Button
+                      onClick={() => onRemoveFile(file.id)}
+                      variant="ghost"
+                      size="sm"
+                      className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-500 text-white hover:bg-red-600"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
                 )}
                 
-                {/* File info and inline dropdown */}
-                <div className="flex-1 min-w-0 flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
+                {/* File info and controls */}
+                <div className="flex-1 min-w-0 space-y-2">
+                  {/* File name and size */}
+                  <div>
                     <p className="text-sm font-medium text-foreground truncate">
                       {file.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {(file.size / 1024 / 1024).toFixed(1)}MB
+                      {formatFileSize(file.size)}
                     </p>
                   </div>
                   
-                  {/* Inline Type Selector */}
-                  <div className="flex items-center gap-2 ml-4">
+                  {/* Type selector and description */}
+                  <div className="flex items-start gap-2">
                     <ImageTypeSelector
                       selectedType={file.imageType?.id || null}
                       onTypeSelect={(type) => updateFileImageType(file.id, type)}
                       compact={true}
                     />
-                    
-                    <Button
-                      onClick={() => onRemoveFile(file.id)}
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 hover:bg-white/10 flex-shrink-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
                   </div>
+                  
+                  {/* Show description when type is selected */}
+                  {file.imageType && (
+                    <div className="text-xs text-muted-foreground bg-primary/5 px-2 py-1 rounded border border-primary/20">
+                      <span className="text-primary font-medium">{file.imageType.icon} {file.imageType.name}:</span> {file.imageType.hint}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

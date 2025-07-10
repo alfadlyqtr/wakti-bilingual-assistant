@@ -60,6 +60,16 @@ export function ChatInput({
     startUploading
   } = useSimplifiedFileUpload();
 
+  // Handle example prompt selection
+  const handleExamplePromptSelect = (prompt: string) => {
+    // If there's already text, append with a space, otherwise replace
+    if (message.trim()) {
+      setMessage(message + ' ' + prompt);
+    } else {
+      setMessage(prompt);
+    }
+  };
+
   // Handler to open Conversations Drawer (💬)
   const handleOpenConversationsDrawer = () => {
     console.log('💬 EXTRA BUTTON: Dispatching custom event');
@@ -73,11 +83,6 @@ export function ChatInput({
   const handleOpenQuickActionsDrawer = () => {
     console.log('⚡ QUICK ACTIONS: Opening drawer');
     if (onOpenPlusDrawer) onOpenPlusDrawer();
-  };
-
-  // Handle example prompt selection
-  const handleExamplePromptSelect = (prompt: string) => {
-    setMessage(prompt);
   };
 
   // Placeholder functions for PlusMenu (handled by SimplifiedFileUpload now)
@@ -128,25 +133,21 @@ export function ChatInput({
   const getImageTypeContext = (imageTypeId: string): string => {
     switch (imageTypeId) {
       case 'document':
-        return 'This is a document (ID, Passport, Certificate, License). Extract information, check expiry dates, and validate details. Compare expiry dates with current date and warn if expired.';
-      case 'bill_receipt':
-        return 'This is a bill or receipt. Extract amounts, dates, items, and financial details. Calculate totals and provide breakdown if requested.';
-      case 'person':
-        return 'This is a photo of a person. Describe appearance, clothing, expressions, and activities in detail.';
-      case 'place_building':
-        return 'This is a photo of a place or building. Describe the location, architecture, surroundings, and any notable features.';
-      case 'report_chart':
-        return 'This is a report or chart. Analyze the data, summarize key findings, explain trends, and provide insights.';
+        return 'This is an ID/Document. Extract information, check expiry dates, and validate details. Compare expiry dates with current date and warn if expired.';
+      case 'business_docs':
+        return 'This is a business document. Analyze content, extract key terms, dates, and important business information.';
+      case 'financial':
+        return 'This is a financial document. Extract amounts, dates, items, and financial details. Calculate totals and provide breakdown if requested.';
+      case 'screenshots':
+        return 'This is a screenshot. Describe the interface, buttons, text, and functionality shown in the image.';
       case 'text_image':
         return 'This image contains text. Extract and transcribe all visible text accurately, including handwriting if present.';
+      case 'academic':
+        return 'This is academic content. Help explain concepts, solve problems, and provide detailed educational guidance.';
       case 'medical':
         return 'This is a medical document. Extract medical information, explain results, and provide clear interpretations.';
-      case 'educational':
-        return 'This is educational content. Help explain concepts, solve problems, and provide detailed educational guidance.';
-      case 'food_menu':
-        return 'This is a food/menu image. Read menu items, identify dishes, provide recommendations and detailed descriptions.';
-      case 'vehicle_transport':
-        return 'This is a vehicle or transport document. Extract all relevant information, dates, and validity details.';
+      case 'technical':
+        return 'This is a technical diagram/chart. Analyze the data, components, and provide detailed technical explanations.';
       default:
         return 'Provide detailed description and analysis of this image.';
     }
