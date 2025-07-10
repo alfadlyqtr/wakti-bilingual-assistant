@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,7 +12,7 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + ENHANCED ID/PASSPORT PROCESSING");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + SMART BALANCED SYSTEM PROMPT");
 
 // ENHANCED: Better Base64 conversion with SPECIFIC handling for IDs/passports
 async function convertImageUrlToBase64(imageUrl: string, imageType: string, retryCount = 0): Promise<string | null> {
@@ -265,7 +264,7 @@ serve(async (req) => {
     });
 
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("🆔 ID/PASSPORT FILES DETAILED ANALYSIS:", attachedFiles.map((file, index) => ({
+      console.log("🖼️ IMAGE FILES DETAILED ANALYSIS:", attachedFiles.map((file, index) => ({
         index,
         name: file?.name || 'unknown',
         type: file?.type || 'unknown',
@@ -274,7 +273,7 @@ serve(async (req) => {
         publicUrl: file?.publicUrl?.substring(0, 50) + '...' || 'missing',
         hasPreview: !!file?.preview,
         allKeys: Object.keys(file || {}),
-        isLikelyID: (file?.name || '').toLowerCase().includes('id') || (file?.name || '').toLowerCase().includes('passport')
+        isLikelyDocument: (file?.name || '').toLowerCase().includes('id') || (file?.name || '').toLowerCase().includes('passport') || (file?.name || '').toLowerCase().includes('bill') || (file?.name || '').toLowerCase().includes('invoice')
       })));
     }
 
@@ -313,7 +312,7 @@ serve(async (req) => {
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    console.log('💬 REGULAR CHAT: Processing without any task detection');
+    console.log('💬 REGULAR CHAT: Processing with NEW BALANCED SYSTEM PROMPT');
 
     switch (activeTrigger) {
       case 'search':
@@ -381,9 +380,9 @@ serve(async (req) => {
   }
 });
 
-// CHAT MODE with CLAUDE 3.5 SONNET + YOUR EXACT SYSTEM PROMPT (NO TASK DETECTION)
+// CHAT MODE with CLAUDE 3.5 SONNET + NEW BALANCED SYSTEM PROMPT
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 CHAT MODE: Processing with CLAUDE 3.5 SONNET (NO TASK DETECTION) + ENHANCED ID/PASSPORT SUPPORT");
+  console.log("💬 CHAT MODE: Processing with CLAUDE 3.5 SONNET + NEW BALANCED SYSTEM PROMPT");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -473,13 +472,13 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// IMAGE MODE: CLAUDE 3.5 SONNET VISION + ENHANCED ID/PASSPORT PROCESSING
+// IMAGE MODE: CLAUDE 3.5 SONNET VISION + COMPREHENSIVE IMAGE ANALYSIS
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🆔 IMAGE MODE: Processing with ENHANCED ID/PASSPORT + CLAUDE 3.5 VISION");
+  console.log("🖼️ IMAGE MODE: Processing with COMPREHENSIVE IMAGE ANALYSIS + CLAUDE 3.5 VISION");
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ ID/PASSPORT VISION: Analyzing with ENHANCED processing for challenging documents");
-    console.log("🔓 ALL DOCUMENT TYPES SUPPORTED: IDs, passports, driver's licenses, receipts, reports, everything");
+    console.log("👁️ VISION ANALYSIS: Analyzing with COMPREHENSIVE processing for all image types");
+    console.log("🔓 ALL IMAGE TYPES SUPPORTED: IDs, passports, bills, invoices, people, logos, parks, documents, everything");
     
     const imageFile = attachedFiles.find(file => {
       if (file.type && file.type.startsWith('image/')) {
@@ -494,12 +493,12 @@ async function processImageMode(message: string, userId: string, language: strin
       return !!(file.url || file.publicUrl);
     });
     
-    console.log("🔍 ID/PASSPORT FILE DETECTION RESULT:", {
+    console.log("🔍 IMAGE FILE DETECTION RESULT:", {
       foundImage: !!imageFile,
       fileName: imageFile?.name || 'unknown',
       fileType: imageFile?.type || 'unknown/fallback',
       hasUrl: !!(imageFile?.url || imageFile?.publicUrl),
-      isLikelyID: (imageFile?.name || '').toLowerCase().includes('id') || (imageFile?.name || '').toLowerCase().includes('passport')
+      isDocument: (imageFile?.name || '').toLowerCase().includes('id') || (imageFile?.name || '').toLowerCase().includes('passport') || (imageFile?.name || '').toLowerCase().includes('bill')
     });
     
     return await callClaude35API(message, [], '', language, attachedFiles, 4096, personalTouch);
@@ -571,9 +570,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// ENHANCED CLAUDE 3.5 SONNET API CALL: SPECIALIZED for ID/passport processing
+// NEW BALANCED CLAUDE 3.5 SONNET API CALL WITH SMART 120-LINE SYSTEM PROMPT
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🆔 ENHANCED CLAUDE 3.5 API: SPECIALIZED for ID/passport + document processing");
+  console.log("🧠 NEW BALANCED CLAUDE 3.5 API: SMART 120-LINE SYSTEM PROMPT FOR ALL CAPABILITIES");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -582,102 +581,104 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
     weekday: 'long'
   });
   
-  // ULTRA-ENHANCED SYSTEM PROMPT - SPECIALIZED for IDs/passports
+  // NEW BALANCED 120-LINE SYSTEM PROMPT - COMPREHENSIVE BUT FOCUSED
   let systemPrompt = language === 'ar'
-    ? `🆔 تعليمات النظام المطورة للهويات وجوازات السفر (باللغة العربية + الإنجليزية):
+    ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور والشامل.
 
-أنت خبير محترف في قراءة وتحليل جميع أنواع الوثائق الرسمية، وخاصة بطاقات الهوية وجوازات السفر. مهارتك تشمل:
+## قدراتك الأساسية:
+أنت مساعد ذكي متعدد المهارات يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية. تتميز بالسرعة والدقة والشخصية الودودة.
 
-🔍 **الوثائق الرسمية المتخصصة**:
-• جوازات السفر (جميع الدول والأنواع - حديثة وقديمة)
-• بطاقات الهوية الوطنية (الإمارات، السعودية، قطر، الكويت، البحرين، عمان، الأردن، مصر، لبنان، العراق، المغرب، تونس، الجزائر، السودان، اليمن)
-• رخص القيادة من جميع البلدان
-• بطاقات الإقامة والتأشيرات
-• الشهادات الجامعية والمهنية
-• العقود والاتفاقيات الرسمية
+## تحليل الصور الشامل:
+### الوثائق الرسمية:
+- جوازات السفر والهويات الوطنية (جميع البلدان)
+- رخص القيادة وبطاقات الإقامة
+- الفواتير والإيصالات والعقود
+- الشهادات الجامعية والمهنية
+- استخرج: الأسماء، التواريخ، الأرقام، العناوين، المبالغ، التفاصيل المهمة
 
-📊 **التحديات الخاصة**:
-• الصور غير الواضحة أو المائلة
-• الإضاءة السيئة أو الظلال
-• النصوص المكتوبة بخط اليد
-• الختم والتوقيعات
-• الخطوط العربية المختلفة
-• المعلومات المطبوعة بأحجام صغيرة
+### الصور العامة:
+- الأشخاص: وصف المظهر، الملابس، التعبيرات، الأنشطة
+- الأماكن: المناظر الطبيعية، المباني، الشوارع، المعالم
+- الشعارات والعلامات التجارية: تحديد الشركات والمنتجات
+- المنتجات والأطعمة: وصف تفصيلي وتقييم
+- النصوص في الصور: قراءة وترجمة وتفسير
+- الرسوم البيانية والجداول: تحليل البيانات وتلخيصها
+- اللقطات الشاشة: شرح المحتوى وتقديم المساعدة
 
-🎯 **مهمتك الرئيسية للهويات وجوازات السفر**:
-١. **استخراج المعلومات الشخصية**:
-   - الاسم الكامل (باللغتين العربية والإنجليزية)
-   - تاريخ الميلاد ومكان الميلاد
-   - الجنسية والديانة (إن وجدت)
-   - رقم الهوية/جواز السفر
-   - تاريخ الإصدار وتاريخ الانتهاء
-   - مكان الإصدار والسلطة المصدرة
+## أسلوب التعامل:
+- استخدم لغة طبيعية وودودة
+- قدم إجابات مفصلة لكن منظمة
+- اطرح أسئلة توضيحية عند الحاجة
+- قدم نصائح واقتراحات مفيدة
+- تذكر السياق من المحادثات السابقة
 
-٢. **وصف التفاصيل المرئية**:
-   - وصف الشخص في الصورة (الوجه، الشعر، العيون، أي ملامح مميزة)
-   - ألوان البطاقة والتصميم
-   - الأختام والتوقيعات الرسمية
-   - أي رموز أو شعارات حكومية
+## المحادثات الذكية:
+- حافظ على السياق والتسلسل الطبيعي
+- اربط بين المواضيع المختلفة بذكاء
+- استخدم الذاكرة للمعلومات المهمة
+- قدم متابعة منطقية للمواضيع
 
-٣. **معالجة التحديات الخاصة**:
-   - قراءة النصوص غير الواضحة بأفضل تخمين ممكن
-   - تفسير الأرقام والتواريخ حتى لو كانت مشوهة قليلاً
-   - وصف موقع كل معلومة على البطاقة (أعلى يمين، وسط يسار، إلخ)
+## التعامل مع التحديات:
+- إذا كانت الصورة غير واضحة، قدم أفضل تحليل ممكن
+- للوثائق المعقدة، ركز على المعلومات المهمة
+- للأسئلة الغامضة، اطلب توضيحات
+- قدم بدائل واقتراحات عملية
 
-⚠️ **مهم جداً للهويات وجوازات السفر**:
-- لا تقل "لا أستطيع رؤية الصورة" أو "الصورة غير واضحة"
-- حاول دائماً استخراج أي معلومات مرئية، حتى لو كانت جزئية
-- اذكر إذا كانت بعض المعلومات غير واضحة ولكن قدم أفضل تخمين
-- صف كل شيء تراه، حتى الأجزاء الصغيرة والرموز
+## التخصيص الشخصي:
+- تكيف مع أسلوب المستخدم المفضل
+- استخدم المعلومات الشخصية المتاحة بحكمة
+- حافظ على الطابع المهني مع اللمسة الشخصية
 
-التاريخ اليوم: ${currentDate}. اجب بالعربية والإنجليزية للمحتوى العربي.`
-    : `🆔 ULTRA-ENHANCED SYSTEM INSTRUCTIONS for IDs & PASSPORTS (Arabic + English):
+التاريخ اليوم: ${currentDate}
+تجيب باللغة العربية للمحتوى العربي وبالإنجليزية للمحتوى الإنجليزي حسب السياق.`
+    : `🤖 You are WAKTI AI, the advanced and comprehensive intelligent assistant.
 
-You are a professional expert in reading and analyzing ALL types of official documents, especially identity cards and passports. Your expertise includes:
+## Core Capabilities:
+You are a multi-skilled AI assistant capable of handling all types of requests naturally and intelligently. You excel in speed, accuracy, and maintaining a friendly personality.
 
-🔍 **Specialized Official Documents**:
-• Passports (all countries and types - modern and old)
-• National ID cards (UAE, Saudi Arabia, Qatar, Kuwait, Bahrain, Oman, Jordan, Egypt, Lebanon, Iraq, Morocco, Tunisia, Algeria, Sudan, Yemen)
-• Driver's licenses from all countries
-• Residence permits and visas
-• University and professional certificates
-• Official contracts and agreements
+## Comprehensive Image Analysis:
+### Official Documents:
+- Passports & National IDs (all countries)
+- Driver's licenses & residence permits  
+- Bills, invoices & receipts
+- University & professional certificates
+- Extract: names, dates, numbers, addresses, amounts, important details
 
-📊 **Special Challenges**:
-• Blurry or tilted images
-• Poor lighting or shadows
-• Handwritten text
-• Stamps and signatures
-• Different Arabic fonts
-• Small printed information
+### General Images:
+- People: describe appearance, clothing, expressions, activities
+- Places: landscapes, buildings, streets, landmarks
+- Logos & brands: identify companies and products
+- Products & food: detailed descriptions and assessments
+- Text in images: read, translate, and interpret
+- Charts & tables: analyze data and summarize
+- Screenshots: explain content and provide assistance
 
-🎯 **Your PRIMARY MISSION for IDs & PASSPORTS**:
-1. **Extract Personal Information**:
-   - Full name (in Arabic and English)
-   - Date of birth and place of birth
-   - Nationality and religion (if present)
-   - ID/passport number
-   - Issue date and expiry date
-   - Place of issue and issuing authority
+## Communication Style:
+- Use natural, friendly language
+- Provide detailed but well-organized answers
+- Ask clarifying questions when needed
+- Offer helpful tips and suggestions
+- Remember context from previous conversations
 
-2. **Describe Visual Details**:
-   - Describe the person in the photo (face, hair, eyes, any distinctive features)
-   - Card colors and design
-   - Official stamps and signatures
-   - Any symbols or government logos
+## Smart Conversations:
+- Maintain context and natural flow
+- Connect different topics intelligently
+- Use memory for important information
+- Provide logical follow-ups to discussions
 
-3. **Handle Special Challenges**:
-   - Read unclear text with best possible guess
-   - Interpret numbers and dates even if slightly distorted
-   - Describe location of each piece of information on the card (top right, center left, etc.)
+## Handling Challenges:
+- For unclear images, provide best possible analysis
+- For complex documents, focus on important information
+- For ambiguous questions, ask clarifications
+- Offer practical alternatives and suggestions
 
-⚠️ **CRITICAL for IDs & PASSPORTS**:
-- NEVER say "I can't see the image" or "image is unclear"
-- ALWAYS try to extract any visible information, even if partial
-- Mention if some information is unclear but provide best guess
-- Describe everything you see, even small parts and symbols
+## Personal Customization:
+- Adapt to user's preferred style
+- Use available personal information wisely
+- Maintain professional tone with personal touch
 
-Today's date: ${currentDate}. Respond in both Arabic and English for Arabic content.`;
+Today's date: ${currentDate}
+Respond in the language that matches the user's input and context.`;
 
   // INJECT USER PERSONALIZATION VARIABLES DYNAMICALLY
   if (personalTouch) {
@@ -731,60 +732,59 @@ Today's date: ${currentDate}. Respond in both Arabic and English for Arabic cont
     });
   }
   
-  // ULTRA-ENHANCED IMAGE PROCESSING: SPECIALIZED for IDs/passports
+  // COMPREHENSIVE IMAGE PROCESSING: ALL IMAGE TYPES SUPPORTED
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🆔 ULTRA-ENHANCED ID/PASSPORT ANALYSIS: Processing with specialized handling');
+    console.log('🖼️ COMPREHENSIVE IMAGE ANALYSIS: Processing with balanced handling for all image types');
     
     const imageFile = attachedFiles.find(file => {
-      // Ultra-enhanced image detection specifically for IDs/passports
+      // Comprehensive image detection for all types
       if (file.type && (file.type.startsWith('image/') || file.type.includes('jpeg') || file.type.includes('png'))) {
-        console.log('✅ ID/PASSPORT TYPE DETECTED: Standard image type:', file.type);
+        console.log('✅ IMAGE TYPE DETECTED: Standard image type:', file.type);
         return true;
       }
       
       if (file.name) {
         const extension = file.name.toLowerCase().split('.').pop();
         if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif', 'heic', 'heif'].includes(extension)) {
-          console.log('✅ ID/PASSPORT TYPE DETECTED: By extension:', extension);
+          console.log('✅ IMAGE TYPE DETECTED: By extension:', extension);
           return true;
         }
       }
       
       if (file.url || file.publicUrl) {
-        console.log('✅ ID/PASSPORT TYPE DETECTED: By URL presence (forced processing)');
+        console.log('✅ IMAGE TYPE DETECTED: By URL presence (forced processing)');
         return true;
       }
       
-      // Force processing for any file that might be an ID/passport
-      console.log('🔍 ID/PASSPORT: Attempting to process unknown file type as potential document');
+      console.log('🔍 IMAGE: Attempting to process unknown file type as potential image');
       return true;
     });
     
     if (imageFile) {
-      console.log("🆔 ULTRA-ENHANCED ID/PASSPORT PROCESSING: Handling challenging documents with Claude 3.5 Sonnet");
-      console.log("🔓 SPECIALIZED DOCUMENT ANALYSIS: Enhanced for IDs, passports, licenses, certificates, contracts");
+      console.log("🖼️ COMPREHENSIVE IMAGE PROCESSING: Handling all image types with Claude 3.5 Sonnet");
+      console.log("🔓 BALANCED IMAGE ANALYSIS: Optimized for documents, people, places, logos, bills, everything");
       
       const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
       const imageType = imageFile.type || 'image/jpeg';
       
-      console.log("📡 ID/PASSPORT URL SELECTION:", {
+      console.log("📡 IMAGE URL SELECTION:", {
         selectedUrl: imageUrl?.substring(0, 80) + '...',
         hasUrl: !!imageFile.url,
         hasPublicUrl: !!imageFile.publicUrl,
         hasPreview: !!imageFile.preview,
         selectedType: imageType,
         fileName: imageFile.name,
-        isLikelyIDDocument: (imageFile.name || '').toLowerCase().includes('id') || (imageFile.name || '').toLowerCase().includes('passport')
+        isDocument: (imageFile.name || '').toLowerCase().includes('id') || (imageFile.name || '').toLowerCase().includes('passport') || (imageFile.name || '').toLowerCase().includes('bill')
       });
       
       if (imageUrl) {
         const base64Data = await convertImageUrlToBase64(imageUrl, imageType);
         
         if (base64Data) {
-          // Ultra-enhanced message with SPECIFIC instructions for ID/passport analysis
-          const enhancedMessage = message + '\n\n🆔 CRITICAL: This appears to be an official document (ID, passport, license, etc.). Please analyze it with MAXIMUM detail and precision. Extract ALL visible text, numbers, dates, and describe every element you can see. Do not say you cannot see the image - provide your best analysis of any visible content.';
+          // Balanced message with COMPREHENSIVE instructions for all image types
+          const enhancedMessage = message + '\n\n🖼️ ANALYZE: Please analyze this image comprehensively. Whether it\'s a document, person, place, logo, bill, or any other type of image, provide detailed and helpful analysis. Extract any visible text, describe what you see, and offer relevant insights or assistance.';
           
           currentMessage.content = [
             { type: 'text', text: enhancedMessage },
@@ -797,30 +797,28 @@ Today's date: ${currentDate}. Respond in both Arabic and English for Arabic cont
               } 
             }
           ];
-          console.log("✅ ULTRA-ENHANCED ID/PASSPORT PROCESSING: Specialized Claude 3.5 Sonnet payload ready");
-          console.log("🔧 ID/PASSPORT CLAUDE 3.5 VISION PAYLOAD:", {
+          console.log("✅ COMPREHENSIVE IMAGE PROCESSING: Balanced Claude 3.5 Sonnet payload ready");
+          console.log("🔧 CLAUDE 3.5 VISION PAYLOAD:", {
             hasTextContent: true,
             hasImageContent: true,
             imageMediaType: imageType,
             base64DataLength: base64Data.length,
-            specializedPrompt: true,
+            balancedPrompt: true,
             base64Sample: base64Data.substring(0, 50) + '...'
           });
         } else {
-          console.error("❌ ULTRA-ENHANCED ID/PASSPORT PROCESSING: Failed to convert image - this should not happen for IDs/passports!");
-          console.error("🚨 ID/PASSPORT CRITICAL ERROR: Base64 conversion failed completely");
+          console.error("❌ COMPREHENSIVE IMAGE PROCESSING: Failed to convert image");
           
-          // Return specific error for ID/passport processing failure
           return {
             response: language === 'ar' 
-              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الوثيقة. يرجى التأكد من وضوح الصورة وحاول مرة أخرى. إذا استمرت المشكلة، جرب تصوير الوثيقة بإضاءة أفضل.'
-              : '❌ Sorry, I encountered difficulty processing this document. Please ensure the image is clear and try again. If the problem persists, try photographing the document with better lighting.',
-            error: 'ID/Passport processing failed',
+              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى التأكد من وضوح الصورة وحاول مرة أخرى.'
+              : '❌ Sorry, I encountered difficulty processing this image. Please ensure the image is clear and try again.',
+            error: 'Image processing failed',
             success: false
           };
         }
       } else {
-        console.error("❌ ULTRA-ENHANCED ID/PASSPORT PROCESSING: No valid URL found in file object");
+        console.error("❌ COMPREHENSIVE IMAGE PROCESSING: No valid URL found in file object");
         return {
           response: language === 'ar' 
             ? '❌ لم أتمكن من الوصول إلى الصورة. يرجى رفع الصورة مرة أخرى.'
@@ -830,21 +828,22 @@ Today's date: ${currentDate}. Respond in both Arabic and English for Arabic cont
         };
       }
     } else {
-      console.log("ℹ️ NO ID/PASSPORT IMAGE FILES DETECTED in attached files - this is unusual");
+      console.log("ℹ️ NO IMAGE FILES DETECTED in attached files");
     }
   }
   
   messages.push(currentMessage);
   
   try {
-    console.log(`🆔 ULTRA-ENHANCED CLAUDE 3.5: Sending ${messages.length} messages with SPECIALIZED ID/passport analysis`);
-    console.log("📊 ID/PASSPORT CLAUDE 3.5 API CALL DETAILS:", {
+    console.log(`🧠 BALANCED CLAUDE 3.5: Sending ${messages.length} messages with NEW SMART SYSTEM PROMPT`);
+    console.log("📊 CLAUDE 3.5 API CALL DETAILS:", {
       messagesCount: messages.length,
       hasImages: Array.isArray(currentMessage.content),
       maxTokens: maxTokens,
-      temperature: 0.01, // Ultra-low temperature for precise document reading
+      temperature: 0.3, // Balanced temperature for natural responses
       modelUsed: 'claude-3-5-sonnet-20241022',
-      specializedForIDs: true
+      balancedPrompt: true,
+      promptApproximateLength: systemPrompt.length
     });
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -857,64 +856,64 @@ Today's date: ${currentDate}. Respond in both Arabic and English for Arabic cont
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: maxTokens,
-        temperature: 0.01, // Ultra-precise for document reading
+        temperature: 0.3, // Balanced for natural conversation
         system: systemPrompt,
         messages: messages
       }),
     });
     
-    console.log("📡 ID/PASSPORT CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
+    console.log("📡 BALANCED CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ ID/PASSPORT CLAUDE 3.5 API ERROR:", {
+      console.error("❌ BALANCED CLAUDE 3.5 API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorBody: errorText.substring(0, 500)
       });
       
-      let userFriendlyError = 'I encountered an issue processing your document.';
+      let userFriendlyError = 'I encountered an issue processing your request.';
       
       if (claudeResponse.status === 400) {
         if (errorText.includes('image')) {
-          userFriendlyError = 'There was an issue processing the ID/passport image. The image might be too large, corrupted, or in an unsupported format. Please try uploading a clearer image or reducing the file size.';
+          userFriendlyError = 'There was an issue processing the image. The image might be too large, corrupted, or in an unsupported format. Please try uploading a clearer image or reducing the file size.';
         } else {
-          userFriendlyError = 'The document processing request was invalid. Please try again with a different image.';
+          userFriendlyError = 'The request was invalid. Please try again with a different message.';
         }
       } else if (claudeResponse.status === 429) {
-        userFriendlyError = 'Too many document processing requests. Please wait a moment and try again.';
+        userFriendlyError = 'Too many requests. Please wait a moment and try again.';
       } else if (claudeResponse.status >= 500) {
-        userFriendlyError = 'The document processing service is temporarily unavailable. Please try again in a few moments.';
+        userFriendlyError = 'The AI service is temporarily unavailable. Please try again in a few moments.';
       }
       
-      throw new Error(`ID/Passport Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
+      throw new Error(`Balanced Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ ID/PASSPORT CLAUDE 3.5 API SUCCESS:", {
+    console.log("✅ BALANCED CLAUDE 3.5 API SUCCESS:", {
       hasContent: !!claudeData.content,
       contentLength: claudeData.content?.[0]?.text?.length || 0,
       usage: claudeData.usage,
       modelConfirmed: 'claude-3-5-sonnet-20241022',
-      specializedProcessing: true
+      balancedProcessing: true
     });
     
-    const responseText = claudeData.content?.[0]?.text || 'I apologize, but I encountered an issue processing your document.';
+    const responseText = claudeData.content?.[0]?.text || 'I apologize, but I encountered an issue processing your request.';
     
     return {
       response: responseText,
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      specializedForDocuments: true
+      balancedSystemPrompt: true
     };
     
   } catch (error) {
-    console.error("❌ ID/PASSPORT CLAUDE 3.5 API CRITICAL ERROR:", error);
+    console.error("❌ BALANCED CLAUDE 3.5 API CRITICAL ERROR:", error);
     return {
       response: language === 'ar' 
-        ? '❌ حدث خطأ أثناء معالجة الوثيقة. يرجى المحاولة مرة أخرى مع صورة أوضح.'
-        : '❌ An error occurred while processing the document. Please try again with a clearer image.',
+        ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
+        : '❌ An error occurred while processing your request. Please try again.',
       error: error.message,
       success: false
     };
