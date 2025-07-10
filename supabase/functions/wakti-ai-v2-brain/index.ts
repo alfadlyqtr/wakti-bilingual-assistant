@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -12,16 +13,15 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + BALANCED PERFORMANCE + SMART LANGUAGE HANDLING");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + UNIVERSAL IMAGE PROCESSING + SMART LANGUAGE HANDLING");
 
-// BALANCED: Smart timeout and retry logic for reliable image processing
-async function convertImageUrlToBase64(imageUrl: string, imageType: string, retryCount = 0): Promise<string | null> {
+// UNIVERSAL: Safe-first image processing with generous timeouts for ALL images
+async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promise<string | null> {
   try {
-    console.log('🆔 BALANCED IMAGE PROCESSING: Converting with smart timeout handling', retryCount + 1, 'attempt for:', {
+    console.log('🔄 UNIVERSAL IMAGE PROCESSING: Safe-first approach', retryCount + 1, 'attempt for:', {
       url: imageUrl.substring(0, 50) + '...',
-      type: imageType,
-      isDocument: imageType.includes('id') || imageType.includes('passport') || imageType.includes('bill'),
-      retryAttempt: retryCount
+      retryAttempt: retryCount,
+      universalTimeout: true
     });
     
     if (!imageUrl.startsWith('http')) {
@@ -29,31 +29,22 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
       return null;
     }
     
-    // BALANCED: Smart timeout ranges based on image type and retry attempt
-    const isDocument = imageType.includes('id') || imageType.includes('passport') || imageType.includes('bill');
-    let baseTimeout: number;
-    let maxTimeout: number;
+    // UNIVERSAL: Progressive timeout for all images - no detection needed
+    const baseTimeout = 45000; // 45 seconds base for ALL images
+    const maxTimeout = 80000;   // 80 seconds maximum
     
-    if (isDocument) {
-      baseTimeout = 20000; // 20s base for documents
-      maxTimeout = 65000;   // 65s max for documents
-    } else {
-      baseTimeout = 20000; // 20s base for regular images
-      maxTimeout = 55000;   // 55s max for regular images
-    }
-    
-    // Progressive timeout: increase with retry attempts
-    const timeoutMultiplier = 1 + (retryCount * 0.3); // 30% increase per retry
+    // Progressive timeout: 33% increase per retry attempt
+    const timeoutMultiplier = 1 + (retryCount * 0.33);
     const calculatedTimeout = Math.min(baseTimeout * timeoutMultiplier, maxTimeout);
     const timeout = Math.round(calculatedTimeout);
     
-    console.log('⏱️ BALANCED TIMEOUT CALCULATION:', {
-      isDocument,
+    console.log('⏱️ UNIVERSAL TIMEOUT STRATEGY:', {
       baseTimeout: baseTimeout / 1000 + 's',
       maxTimeout: maxTimeout / 1000 + 's',
       retryCount,
       timeoutMultiplier,
-      finalTimeout: timeout / 1000 + 's'
+      finalTimeout: timeout / 1000 + 's',
+      approach: 'safe-first-universal'
     });
     
     const controller = new AbortController();
@@ -62,7 +53,7 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     const response = await fetch(imageUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'WAKTI-AI/2.0-BALANCED',
+        'User-Agent': 'WAKTI-AI/2.0-UNIVERSAL',
         'Accept': '*/*',
         'Cache-Control': 'no-cache'
       }
@@ -70,29 +61,40 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     
     clearTimeout(timeoutId);
     
-    console.log('📡 BALANCED FETCH: Response status:', response.status, {
+    console.log('📡 UNIVERSAL FETCH: Response status:', response.status, {
       contentType: response.headers.get('content-type'),
       contentLength: response.headers.get('content-length'),
-      timeoutUsed: timeout / 1000 + 's'
+      timeoutUsed: timeout / 1000 + 's',
+      universalProcessing: true
     });
     
     if (!response.ok) {
-      console.error('❌ BALANCED FETCH ERROR:', {
+      console.error('❌ UNIVERSAL FETCH ERROR:', {
         status: response.status,
         url: imageUrl.substring(0, 50) + '...',
         timeout: timeout / 1000 + 's'
       });
       
-      // BALANCED: Smart retry logic - max 3 retries with progressive delays
-      if (retryCount < 3 && (response.status >= 500 || response.status === 429 || response.status === 408)) {
-        const retryDelay = 1000 + (retryCount * 1000); // 1s, 2s, 3s delays
-        console.log('🔄 BALANCED RETRY in', retryDelay / 1000, 'seconds...', { 
-          retryCount, 
-          status: response.status,
-          nextTimeout: Math.min(baseTimeout * (1 + ((retryCount + 1) * 0.3)), maxTimeout) / 1000 + 's'
-        });
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        return await convertImageUrlToBase64(imageUrl, imageType, retryCount + 1);
+      // SMART RETRY: Based on error type with progressive delays
+      if (retryCount < 3) {
+        const shouldRetry = response.status >= 500 || 
+                           response.status === 429 || 
+                           response.status === 408 ||
+                           response.status === 502 ||
+                           response.status === 503 ||
+                           response.status === 504;
+        
+        if (shouldRetry) {
+          const retryDelay = 2000 + (retryCount * 1000); // 2s, 3s, 4s delays
+          console.log('🔄 UNIVERSAL RETRY in', retryDelay / 1000, 'seconds...', { 
+            retryCount, 
+            status: response.status,
+            nextTimeout: Math.min(baseTimeout * (1 + ((retryCount + 1) * 0.33)), maxTimeout) / 1000 + 's',
+            reason: 'server-error-retry'
+          });
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          return await convertImageUrlToBase64(imageUrl, retryCount + 1);
+        }
       }
       
       return null;
@@ -101,55 +103,66 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     const arrayBuffer = await response.arrayBuffer();
     const fileSize = arrayBuffer.byteLength;
     
-    console.log('📊 BALANCED IMAGE SIZE:', {
+    console.log('📊 UNIVERSAL IMAGE SIZE:', {
       bytes: fileSize,
       MB: (fileSize / (1024 * 1024)).toFixed(2),
-      type: imageType,
-      processingTime: timeout / 1000 + 's timeout'
+      processingTime: timeout / 1000 + 's timeout',
+      universalApproach: true
     });
     
     if (fileSize === 0 || fileSize > 20 * 1024 * 1024) {
-      console.error('❌ BALANCED ERROR: Invalid file size:', fileSize);
+      console.error('❌ UNIVERSAL ERROR: Invalid file size:', fileSize);
       return null;
     }
     
-    // BALANCED: Efficient Base64 encoding
+    // EFFICIENT: Base64 encoding
     const uint8Array = new Uint8Array(arrayBuffer);
     const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
     const base64String = btoa(binaryString);
     
     if (!base64String || base64String.length < 100) {
-      console.error('❌ BALANCED BASE64 ERROR: Invalid base64 string');
+      console.error('❌ UNIVERSAL BASE64 ERROR: Invalid base64 string');
       return null;
     }
     
-    console.log('✅ BALANCED CONVERSION SUCCESS:', {
+    console.log('✅ UNIVERSAL CONVERSION SUCCESS:', {
       originalSize: fileSize,
       base64Length: base64String.length,
       finalTimeout: timeout / 1000 + 's',
       retryCount,
-      success: true
+      success: true,
+      approach: 'safe-first-universal'
     });
     
     return base64String;
   } catch (error) {
-    console.error('❌ BALANCED CONVERSION ERROR:', {
+    console.error('❌ UNIVERSAL CONVERSION ERROR:', {
       message: error.message,
       url: imageUrl.substring(0, 50) + '...',
       retryCount,
       errorType: error.name
     });
     
-    // BALANCED: Intelligent retry on network errors
-    if (retryCount < 3 && (error.name === 'AbortError' || error.name === 'NetworkError' || error.message.includes('fetch'))) {
-      const retryDelay = 1000 + (retryCount * 1000); // 1s, 2s, 3s delays
-      console.log('🔄 BALANCED RETRY due to network error...', { 
-        retryCount, 
-        delay: retryDelay / 1000 + 's',
-        errorType: error.name 
-      });
-      await new Promise(resolve => setTimeout(resolve, retryDelay));
-      return await convertImageUrlToBase64(imageUrl, imageType, retryCount + 1);
+    // SMART RETRY: Network and timeout errors with progressive delays
+    if (retryCount < 3) {
+      const shouldRetry = error.name === 'AbortError' || 
+                         error.name === 'NetworkError' || 
+                         error.name === 'TimeoutError' ||
+                         error.message.includes('fetch') ||
+                         error.message.includes('network') ||
+                         error.message.includes('timeout');
+      
+      if (shouldRetry) {
+        const retryDelay = 2000 + (retryCount * 1000); // 2s, 3s, 4s delays
+        console.log('🔄 UNIVERSAL RETRY due to network/timeout error...', { 
+          retryCount, 
+          delay: retryDelay / 1000 + 's',
+          errorType: error.name,
+          reason: 'network-timeout-retry'
+        });
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        return await convertImageUrlToBase64(imageUrl, retryCount + 1);
+      }
     }
     
     return null;
@@ -157,7 +170,7 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
 }
 
 serve(async (req) => {
-  console.log("📨 BALANCED REQUEST RECEIVED:", {
+  console.log("📨 UNIVERSAL REQUEST RECEIVED:", {
     method: req.method,
     url: req.url
   });
@@ -258,7 +271,7 @@ serve(async (req) => {
       enableTaskDetection = false
     } = requestBody || {};
 
-    console.log("🎯 BALANCED EXTRACTED PARAMS:", {
+    console.log("🎯 UNIVERSAL EXTRACTED PARAMS:", {
       hasMessage: !!message,
       hasUserId: !!userId,
       language,
@@ -268,14 +281,12 @@ serve(async (req) => {
     });
 
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("🖼️ BALANCED IMAGE FILES ANALYSIS:", attachedFiles.map((file, index) => ({
+      console.log("🖼️ UNIVERSAL IMAGE FILES ANALYSIS:", attachedFiles.map((file, index) => ({
         index,
         name: file?.name || 'unknown',
         type: file?.type || 'unknown',
         size: file?.size || 'unknown',
-        isDocument: (file?.name || '').toLowerCase().includes('id') || 
-                   (file?.name || '').toLowerCase().includes('passport') || 
-                   (file?.name || '').toLowerCase().includes('bill')
+        universalProcessing: true
       })));
     }
 
@@ -307,13 +318,13 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🎯 BALANCED MODE: ${activeTrigger.toUpperCase()}`);
+    console.log(`🎯 UNIVERSAL MODE: ${activeTrigger.toUpperCase()}`);
     console.log(`📝 MESSAGE: ${message.substring(0, 100)}...`);
 
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    console.log('💬 BALANCED CHAT: Processing with SMART LANGUAGE HANDLING');
+    console.log('💬 UNIVERSAL CHAT: Processing with SMART LANGUAGE HANDLING');
 
     switch (activeTrigger) {
       case 'search':
@@ -348,7 +359,7 @@ serve(async (req) => {
       fallbackUsed: false
     };
 
-    console.log(`✅ BALANCED ${activeTrigger.toUpperCase()} MODE: CLAUDE 3.5 SONNET request completed successfully!`);
+    console.log(`✅ UNIVERSAL ${activeTrigger.toUpperCase()} MODE: CLAUDE 3.5 SONNET request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
       headers: { 
@@ -358,7 +369,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 BALANCED CRITICAL ERROR:", error);
+    console.error("🚨 UNIVERSAL CRITICAL ERROR:", error);
 
     const errorResponse = {
       error: "Internal server error",
@@ -380,9 +391,9 @@ serve(async (req) => {
   }
 });
 
-// CHAT MODE with BALANCED CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING
+// CHAT MODE with UNIVERSAL CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 BALANCED CHAT MODE: Processing with CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING");
+  console.log("💬 UNIVERSAL CHAT MODE: Processing with CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -407,21 +418,21 @@ async function processChatMode(message: string, userId: string, conversationId: 
       
       if (dbMessages && dbMessages.length > 0) {
         contextMessages = dbMessages.reverse();
-        console.log(`📚 BALANCED MEMORY: Loaded ${contextMessages.length} messages from database`);
+        console.log(`📚 UNIVERSAL MEMORY: Loaded ${contextMessages.length} messages from database`);
       }
     } catch (error) {
-      console.warn("⚠️ BALANCED MEMORY: Database fallback failed, using session context");
+      console.warn("⚠️ UNIVERSAL MEMORY: Database fallback failed, using session context");
     }
   }
   
-  console.log(`🧠 BALANCED MEMORY: Using ${contextMessages.length} context messages`);
+  console.log(`🧠 UNIVERSAL MEMORY: Using ${contextMessages.length} context messages`);
   
   return await callClaude35API(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
 }
 
-// SEARCH MODE with BALANCED CLAUDE 3.5 SONNET
+// SEARCH MODE with UNIVERSAL CLAUDE 3.5 SONNET
 async function processSearchMode(message: string, language: string, recentMessages: any[], personalTouch: any) {
-  console.log("🔍 BALANCED SEARCH MODE: Processing with CLAUDE 3.5 SONNET");
+  console.log("🔍 UNIVERSAL SEARCH MODE: Processing with CLAUDE 3.5 SONNET");
   
   if (!TAVILY_API_KEY) {
     return {
@@ -461,7 +472,7 @@ async function processSearchMode(message: string, language: string, recentMessag
     return await callClaude35API(searchContext, recentMessages, '', language, [], 4096, personalTouch);
     
   } catch (error) {
-    console.error('❌ BALANCED SEARCH ERROR:', error);
+    console.error('❌ UNIVERSAL SEARCH ERROR:', error);
     return {
       response: language === 'ar' 
         ? '❌ حدث خطأ أثناء البحث. حاول مرة أخرى.'
@@ -472,12 +483,12 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// IMAGE MODE: BALANCED CLAUDE 3.5 SONNET VISION + ENHANCED DOCUMENT ANALYSIS
+// IMAGE MODE: UNIVERSAL CLAUDE 3.5 SONNET VISION + ENHANCED DOCUMENT ANALYSIS
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🖼️ BALANCED IMAGE MODE: Processing with ENHANCED DOCUMENT ANALYSIS + CLAUDE 3.5 VISION");
+  console.log("🖼️ UNIVERSAL IMAGE MODE: Processing with ENHANCED DOCUMENT ANALYSIS + CLAUDE 3.5 VISION");
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ BALANCED VISION ANALYSIS: Analyzing with ENHANCED processing for all image types");
+    console.log("👁️ UNIVERSAL VISION ANALYSIS: Analyzing with ENHANCED processing for all image types");
     
     const imageFile = attachedFiles.find(file => {
       if (file.type && file.type.startsWith('image/')) {
@@ -492,14 +503,12 @@ async function processImageMode(message: string, userId: string, language: strin
       return !!(file.url || file.publicUrl);
     });
     
-    console.log("🔍 BALANCED IMAGE FILE DETECTION:", {
+    console.log("🔍 UNIVERSAL IMAGE FILE DETECTION:", {
       foundImage: !!imageFile,
       fileName: imageFile?.name || 'unknown',
       fileType: imageFile?.type || 'unknown/fallback',
       hasUrl: !!(imageFile?.url || imageFile?.publicUrl),
-      isDocument: (imageFile?.name || '').toLowerCase().includes('id') || 
-                 (imageFile?.name || '').toLowerCase().includes('passport') || 
-                 (imageFile?.name || '').toLowerCase().includes('bill')
+      universalProcessing: true
     });
     
     return await callClaude35API(message, [], '', language, attachedFiles, 4096, personalTouch);
@@ -560,7 +569,7 @@ async function processImageMode(message: string, userId: string, language: strin
     }
     
   } catch (error) {
-    console.error('❌ BALANCED IMAGE ERROR:', error);
+    console.error('❌ UNIVERSAL IMAGE ERROR:', error);
     return {
       response: language === 'ar' 
         ? '❌ فشل في إنشاء الصورة. حاول مرة أخرى.'
@@ -571,9 +580,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// BALANCED CLAUDE 3.5 SONNET API CALL WITH SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS
+// UNIVERSAL CLAUDE 3.5 SONNET API CALL WITH SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 BALANCED CLAUDE 3.5 API: SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS");
+  console.log("🧠 UNIVERSAL CLAUDE 3.5 API: SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -586,14 +595,14 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
   const isArabicMessage = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
   const detectedLanguage = isArabicMessage ? 'ar' : 'en';
   
-  console.log("🌐 BALANCED LANGUAGE DETECTION:", {
+  console.log("🌐 UNIVERSAL LANGUAGE DETECTION:", {
     originalLanguage: language,
     detectedFromMessage: detectedLanguage,
     isArabicMessage,
     messagePreview: message.substring(0, 50)
   });
   
-  // BALANCED SMART SYSTEM PROMPT WITH ENHANCED DOCUMENT ANALYSIS
+  // UNIVERSAL SMART SYSTEM PROMPT WITH ENHANCED DOCUMENT ANALYSIS
   let systemPrompt = detectedLanguage === 'ar'
     ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور والشامل.
 
@@ -716,28 +725,28 @@ Today's date: ${currentDate}
     });
   }
   
-  // BALANCED IMAGE PROCESSING: ENHANCED DOCUMENT ANALYSIS
+  // UNIVERSAL IMAGE PROCESSING: ENHANCED DOCUMENT ANALYSIS
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ BALANCED IMAGE ANALYSIS: Processing with ENHANCED document analysis');
+    console.log('🖼️ UNIVERSAL IMAGE ANALYSIS: Processing with ENHANCED document analysis');
     
     const imageFile = attachedFiles.find(file => {
       if (file.type && (file.type.startsWith('image/') || file.type.includes('jpeg') || file.type.includes('png'))) {
-        console.log('✅ BALANCED IMAGE TYPE DETECTED: Standard image type:', file.type);
+        console.log('✅ UNIVERSAL IMAGE TYPE DETECTED: Standard image type:', file.type);
         return true;
       }
       
       if (file.name) {
         const extension = file.name.toLowerCase().split('.').pop();
         if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif', 'heic', 'heif'].includes(extension)) {
-          console.log('✅ BALANCED IMAGE TYPE DETECTED: By extension:', extension);
+          console.log('✅ UNIVERSAL IMAGE TYPE DETECTED: By extension:', extension);
           return true;
         }
       }
       
       if (file.url || file.publicUrl) {
-        console.log('✅ BALANCED IMAGE TYPE DETECTED: By URL presence');
+        console.log('✅ UNIVERSAL IMAGE TYPE DETECTED: By URL presence');
         return true;
       }
       
@@ -745,22 +754,20 @@ Today's date: ${currentDate}
     });
     
     if (imageFile) {
-      console.log("🖼️ BALANCED IMAGE PROCESSING: Handling with ENHANCED document analysis");
+      console.log("🖼️ UNIVERSAL IMAGE PROCESSING: Handling with ENHANCED document analysis");
       
       const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
       const imageType = imageFile.type || 'image/jpeg';
       
-      console.log("📡 BALANCED IMAGE URL SELECTION:", {
+      console.log("📡 UNIVERSAL IMAGE URL SELECTION:", {
         selectedUrl: imageUrl?.substring(0, 50) + '...',
         selectedType: imageType,
         fileName: imageFile.name,
-        isDocument: (imageFile.name || '').toLowerCase().includes('id') || 
-                   (imageFile.name || '').toLowerCase().includes('passport') || 
-                   (imageFile.name || '').toLowerCase().includes('bill')
+        universalProcessing: true
       });
       
       if (imageUrl) {
-        const base64Data = await convertImageUrlToBase64(imageUrl, imageType);
+        const base64Data = await convertImageUrlToBase64(imageUrl);
         
         if (base64Data) {
           // ENHANCED message with SMART document analysis instructions
@@ -777,9 +784,9 @@ Today's date: ${currentDate}
               } 
             }
           ];
-          console.log("✅ BALANCED IMAGE PROCESSING: Enhanced Claude 3.5 Sonnet payload ready");
+          console.log("✅ UNIVERSAL IMAGE PROCESSING: Enhanced Claude 3.5 Sonnet payload ready");
         } else {
-          console.error("❌ BALANCED IMAGE PROCESSING: Failed to convert image");
+          console.error("❌ UNIVERSAL IMAGE PROCESSING: Failed to convert image");
           
           return {
             response: detectedLanguage === 'ar' 
@@ -790,7 +797,7 @@ Today's date: ${currentDate}
           };
         }
       } else {
-        console.error("❌ BALANCED IMAGE PROCESSING: No valid URL found");
+        console.error("❌ UNIVERSAL IMAGE PROCESSING: No valid URL found");
         return {
           response: detectedLanguage === 'ar' 
             ? '❌ لم أتمكن من الوصول إلى الصورة. يرجى رفع الصورة مرة أخرى.'
@@ -805,15 +812,15 @@ Today's date: ${currentDate}
   messages.push(currentMessage);
   
   try {
-    console.log(`🧠 BALANCED CLAUDE 3.5: Sending ${messages.length} messages with ENHANCED DOCUMENT ANALYSIS`);
-    console.log("📊 BALANCED CLAUDE 3.5 API CALL:", {
+    console.log(`🧠 UNIVERSAL CLAUDE 3.5: Sending ${messages.length} messages with ENHANCED DOCUMENT ANALYSIS`);
+    console.log("📊 UNIVERSAL CLAUDE 3.5 API CALL:", {
       messagesCount: messages.length,
       hasImages: Array.isArray(currentMessage.content),
       maxTokens: maxTokens,
       temperature: 0.3,
       modelUsed: 'claude-3-5-sonnet-20241022',
       detectedLanguage: detectedLanguage,
-      balancedProcessing: true
+      universalProcessing: true
     });
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -832,11 +839,11 @@ Today's date: ${currentDate}
       }),
     });
     
-    console.log("📡 BALANCED CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
+    console.log("📡 UNIVERSAL CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ BALANCED CLAUDE 3.5 API ERROR:", {
+      console.error("❌ UNIVERSAL CLAUDE 3.5 API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorBody: errorText.substring(0, 300)
@@ -866,16 +873,16 @@ Today's date: ${currentDate}
           : 'The AI service is temporarily unavailable. Please try again in a few moments.';
       }
       
-      throw new Error(`Balanced Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
+      throw new Error(`Universal Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ BALANCED CLAUDE 3.5 API SUCCESS:", {
+    console.log("✅ UNIVERSAL CLAUDE 3.5 API SUCCESS:", {
       hasContent: !!claudeData.content,
       contentLength: claudeData.content?.[0]?.text?.length || 0,
       usage: claudeData.usage,
       modelConfirmed: 'claude-3-5-sonnet-20241022',
-      balancedProcessing: true,
+      universalProcessing: true,
       enhancedDocumentAnalysis: true
     });
     
@@ -888,12 +895,12 @@ Today's date: ${currentDate}
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      balancedSystemPrompt: true,
+      universalSystemPrompt: true,
       enhancedDocumentAnalysis: true
     };
     
   } catch (error) {
-    console.error("❌ BALANCED CLAUDE 3.5 API CRITICAL ERROR:", error);
+    console.error("❌ UNIVERSAL CLAUDE 3.5 API CRITICAL ERROR:", error);
     return {
       response: detectedLanguage === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
