@@ -35,7 +35,7 @@ const quickActions: QuickAction[] = [
   {
     id: 'video-generator',
     title: 'AI Video Generator',
-    description: 'Create videos from images with AI templates',
+    description: 'Create professional videos from images with 28+ templates',
     icon: Video,
     color: 'bg-indigo-500',
   },
@@ -149,7 +149,7 @@ export const QuickActionsPanel = () => {
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Standalone Modals */}
       <GameModeModal 
         open={selectedAction === 'game-mode'} 
         onOpenChange={(open) => !open && closeModal()} 
