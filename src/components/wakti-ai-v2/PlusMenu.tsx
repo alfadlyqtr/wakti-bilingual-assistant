@@ -34,13 +34,18 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
     setIsOpen(false);
   };
 
-  const handleFileSelect = (files: FileList | null) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
     if (files && files.length > 0) {
       // Dispatch custom event to SimplifiedFileUpload
-      const event = new CustomEvent('wakti-file-selected', { 
+      const customEvent = new CustomEvent('wakti-file-selected', { 
         detail: { files } 
       });
-      window.dispatchEvent(event);
+      window.dispatchEvent(customEvent);
+    }
+    // Reset the input value so the same file can be selected again
+    if (event.target) {
+      event.target.value = '';
     }
   };
 
@@ -128,7 +133,7 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
         type="file"
         multiple
         accept="image/*,.txt"
-        onChange={(e) => handleFileSelect(e.target.files)}
+        onChange={handleFileSelect}
         className="hidden"
       />
       <input
@@ -136,7 +141,7 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
         type="file"
         accept="image/*"
         capture="environment"
-        onChange={(e) => handleFileSelect(e.target.files)}
+        onChange={handleFileSelect}
         className="hidden"
       />
     </div>
