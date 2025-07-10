@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -56,6 +55,29 @@ export function QuickActionsPanel({
     borderColor: 'border-orange-500',
     description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
   }];
+
+  const handleVideoGeneratorOpen = useCallback((event: React.MouseEvent) => {
+    console.log('🎬 VIDEO GENERATOR: Button clicked - preventing event propagation');
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Close drawer first with a small delay
+    if (onClose) {
+      console.log('🎬 VIDEO GENERATOR: Closing drawer first');
+      onClose();
+    }
+    
+    // Add delay to prevent state conflicts
+    setTimeout(() => {
+      console.log('🎬 VIDEO GENERATOR: Opening modal after delay');
+      setShowVideoGenerator(true);
+    }, 150);
+  }, [onClose]);
+
+  const handleVideoGeneratorClose = useCallback((open: boolean) => {
+    console.log('🎬 VIDEO GENERATOR: Modal state changing to:', open);
+    setShowVideoGenerator(open);
+  }, []);
   
   const quickActions = [{
     icon: <PenTool className="h-5 w-5" />,
@@ -63,7 +85,6 @@ export function QuickActionsPanel({
     description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
     action: () => {
       setShowTextGen(true);
-      // Close drawer after opening modal for better UX
       if (onClose) {
         setTimeout(() => onClose(), 300);
       }
@@ -84,13 +105,7 @@ export function QuickActionsPanel({
     icon: <Video className="h-5 w-5" />,
     label: language === 'ar' ? 'مولد الفيديو' : 'AI Video Generator',
     description: language === 'ar' ? 'إنشاء فيديوهات من الصور باستخدام الذكاء الاصطناعي' : 'Create videos from images with AI templates',
-    action: () => {
-      setShowVideoGenerator(true);
-      // Delay drawer close to allow modal to fully open first
-      if (onClose) {
-        setTimeout(() => onClose(), 200);
-      }
-    },
+    action: handleVideoGeneratorOpen,
     color: 'bg-indigo-500'
   }, {
     icon: <Gamepad2 className="h-5 w-5" />,
@@ -108,7 +123,6 @@ export function QuickActionsPanel({
   const handleTriggerSelect = (triggerId: string) => {
     onTriggerChange(triggerId);
     console.log('✨ Quick Actions: Trigger changed to:', triggerId);
-    // Auto-close drawer after mode selection
     if (onClose) {
       setTimeout(() => {
         onClose();
@@ -117,16 +131,9 @@ export function QuickActionsPanel({
   };
 
   const handleToolAction = (action: () => void) => {
-    action();
-    console.log('🔧 Quick Actions: Tool opened');
-  };
-
-  // Handle video generator with proper state management
-  const handleVideoGeneratorOpenChange = (open: boolean) => {
-    setShowVideoGenerator(open);
-    // Close drawer when video generator opens
-    if (open && onClose) {
-      setTimeout(() => onClose(), 200);
+    console.log('🔧 Quick Actions: Tool action triggered');
+    if (typeof action === 'function') {
+      action();
     }
   };
 
@@ -149,7 +156,7 @@ export function QuickActionsPanel({
 
         <VideoGeneratorModal 
           open={showVideoGenerator} 
-          onOpenChange={handleVideoGeneratorOpenChange} 
+          onOpenChange={handleVideoGeneratorClose}
         />
 
         <GameModeModal 
@@ -216,7 +223,7 @@ export function QuickActionsPanel({
                 <Card 
                   key={index} 
                   className="cursor-pointer hover:shadow-md transition-all duration-300 bg-white/20 dark:bg-black/20 hover:bg-white/30 dark:hover:bg-black/30 border-white/30 dark:border-white/20 hover:border-white/40 dark:hover:border-white/30" 
-                  onClick={() => handleToolAction(action.action)}
+                  onClick={(event) => handleToolAction(() => action.action(event))}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3">

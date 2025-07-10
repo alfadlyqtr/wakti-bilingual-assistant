@@ -27,6 +27,11 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({
   const [movementAmplitude, setMovementAmplitude] = useState('auto');
   const [bgm, setBgm] = useState(false);
 
+  // Debug logging for modal state changes
+  React.useEffect(() => {
+    console.log('🎬 VIDEO GENERATOR MODAL: State changed - open:', open);
+  }, [open]);
+
   const handleImageUpload = (files: File[]) => {
     setUploadedImages(files);
   };
@@ -135,22 +140,30 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({
         throw new Error(data?.error || 'Failed to generate video');
       }
     } catch (error: any) {
-      console.error('Video generation error:', error);
+      console.error('❌ TASK CREATION ERROR:', error);
       toast.error(error.message || 'Failed to generate video');
       setIsGenerating(false);
     }
   };
 
   const handleClose = (open: boolean) => {
-    if (!open && isGenerating) return; // Prevent closing during generation
+    console.log('🎬 VIDEO GENERATOR MODAL: Close handler called with:', open);
+    
+    // Prevent closing during generation
+    if (!open && isGenerating) {
+      console.log('🎬 VIDEO GENERATOR MODAL: Preventing close during generation');
+      return;
+    }
     
     if (!open) {
+      console.log('🎬 VIDEO GENERATOR MODAL: Resetting state and closing');
       setUploadedImages([]);
       setSelectedTemplate('');
       setPrompt('');
       setGeneratedVideo(null);
       setIsGenerating(false);
     }
+    
     onOpenChange(open);
   };
 
@@ -158,7 +171,22 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0" hideCloseButton={isGenerating}>
+      <DialogContent 
+        className="max-w-6xl h-[95vh] flex flex-col p-0 z-[100000]" 
+        hideCloseButton={isGenerating}
+        onPointerDownOutside={(e) => {
+          // Prevent closing when clicking outside during generation
+          if (isGenerating) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevent closing with Escape during generation
+          if (isGenerating) {
+            e.preventDefault();
+          }
+        }}
+      >
         {/* Header */}
         <DialogHeader className="p-6 border-b border-border bg-background rounded-t-2xl">
           <div className="flex items-center gap-3">
