@@ -95,31 +95,77 @@ export function ChatInput({
     console.log('📁 UPLOAD: Handled by PlusMenu');
   };
 
-  // Send message function with image type context
+  // Enhanced send message function with proper context handling
   const handleSend = () => {
     console.log('📤 SEND: Checking conditions');
     console.log('Message:', message.trim().length > 0);
     console.log('Files:', uploadedFiles.length);
     
     if (message.trim() || uploadedFiles.length > 0) {
-      // Convert simplified files to format expected by AI service with image type context
-      const enhancedFiles = uploadedFiles.map(file => ({
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        url: file.url,
-        publicUrl: file.publicUrl,
-        optimized: true,
-        imageType: file.imageType,
-        // Add context instructions based on image type
-        context: file.imageType ? getImageTypeContext(file.imageType.id) : undefined
-      }));
+      // Properly format files with context for the backend
+      const enhancedFiles = uploadedFiles.map(file => {
+        console.log('🔧 Processing file for send:', {
+          name: file.name,
+          type: file.type,
+          hasImageType: !!file.imageType,
+          imageTypeName: file.imageType?.name,
+          imageTypeId: file.imageType?.id
+        });
+
+        // Create context instruction based on image type
+        let context = '';
+        if (file.imageType?.id) {
+          switch (file.imageType.id) {
+            case 'document':
+              context = 'This is an ID/Document image. Extract all information including names, dates, expiry dates, and validate if still valid. Compare expiry dates with current date and warn if expired.';
+              break;
+            case 'business_docs':
+              context = 'This is a business document. Analyze content, extract key terms, dates, and important business information.';
+              break;
+            case 'financial':
+              context = 'This is a financial document (bill/receipt). Extract amounts, dates, items, and financial details. Calculate totals and provide breakdown if requested.';
+              break;
+            case 'screenshots':
+              context = 'This is a screenshot. Describe the interface, buttons, text, and functionality shown in the image.';
+              break;
+            case 'text_image':
+              context = 'This image contains text. Extract and transcribe all visible text accurately, including handwriting if present.';
+              break;
+            case 'academic':
+              context = 'This is academic content. Help explain concepts, solve problems, and provide detailed educational guidance.';
+              break;
+            case 'medical':
+              context = 'This is a medical document. Extract medical information, explain results, and provide clear interpretations.';
+              break;
+            case 'technical':
+              context = 'This is a technical diagram/chart. Analyze the data, components, and provide detailed technical explanations.';
+              break;
+            default:
+              context = 'Provide detailed description and analysis of this image.';
+          }
+        }
+
+        return {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          url: file.url,
+          publicUrl: file.publicUrl,
+          optimized: true,
+          imageType: file.imageType,
+          context: context // This is the key fix - adding context to the file object
+        };
+      });
       
-      console.log('📤 SENDING:', {
+      console.log('📤 SENDING with enhanced context:', {
         message: message.substring(0, 50) + '...',
         filesCount: enhancedFiles.length,
-        imageTypes: enhancedFiles.map(f => f.imageType?.name).filter(Boolean)
+        fileContexts: enhancedFiles.map(f => ({
+          name: f.name,
+          imageType: f.imageType?.name,
+          contextLength: f.context?.length || 0
+        }))
       });
       
       onSendMessage(message, 'text', enhancedFiles.length > 0 ? enhancedFiles : undefined);
@@ -127,30 +173,6 @@ export function ChatInput({
       clearFiles();
     } else {
       console.log('❌ SEND: No message or files to send');
-    }
-  };
-
-  // Get context instructions based on image type
-  const getImageTypeContext = (imageTypeId: string): string => {
-    switch (imageTypeId) {
-      case 'document':
-        return 'This is an ID/Document. Extract information, check expiry dates, and validate details. Compare expiry dates with current date and warn if expired.';
-      case 'business_docs':
-        return 'This is a business document. Analyze content, extract key terms, dates, and important business information.';
-      case 'financial':
-        return 'This is a financial document. Extract amounts, dates, items, and financial details. Calculate totals and provide breakdown if requested.';
-      case 'screenshots':
-        return 'This is a screenshot. Describe the interface, buttons, text, and functionality shown in the image.';
-      case 'text_image':
-        return 'This image contains text. Extract and transcribe all visible text accurately, including handwriting if present.';
-      case 'academic':
-        return 'This is academic content. Help explain concepts, solve problems, and provide detailed educational guidance.';
-      case 'medical':
-        return 'This is a medical document. Extract medical information, explain results, and provide clear interpretations.';
-      case 'technical':
-        return 'This is a technical diagram/chart. Analyze the data, components, and provide detailed technical explanations.';
-      default:
-        return 'Provide detailed description and analysis of this image.';
     }
   };
 
@@ -180,7 +202,7 @@ export function ChatInput({
           <div
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
-              ${containerHighlight}
+              ${modeHighlightStyles(activeTrigger)}
               shadow-xl rounded-2xl backdrop-blur-2xl
               p-0 transition-all duration-300
               shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]

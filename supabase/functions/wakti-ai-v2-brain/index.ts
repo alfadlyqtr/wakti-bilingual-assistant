@@ -122,9 +122,17 @@ serve(async (req) => {
 
     console.log("🎯 Processing:", activeTrigger, "- Files:", attachedFiles.length);
     
-    // ENHANCED: Log image types for better debugging
+    // ENHANCED: Log image types and context for better debugging
     if (attachedFiles.length > 0) {
-      console.log("🖼️ Image types:", attachedFiles.map(f => f.imageType?.name || 'unknown').join(', '));
+      console.log("🖼️ Files received:", attachedFiles.map(f => ({
+        name: f.name,
+        type: f.type,
+        hasUrl: !!f.url,
+        hasPublicUrl: !!f.publicUrl,
+        imageTypeName: f.imageType?.name || 'none',
+        imageTypeId: f.imageType?.id || 'none',
+        hasContext: !!f.context
+      })));
     }
 
     if (!message?.trim() && !attachedFiles?.length) {
@@ -444,47 +452,6 @@ You are an intelligent assistant that can handle all types of requests naturally
 Today's date: ${currentDate}
 **Always respond in English only with high precision.**`;
 
-  // ENHANCED: Add specific context based on image types
-  if (attachedFiles && attachedFiles.length > 0) {
-    const imageTypes = attachedFiles.map(f => f.imageType?.id).filter(Boolean);
-    const uniqueTypes = [...new Set(imageTypes)];
-    
-    if (uniqueTypes.length > 0) {
-      const contextInstructions = uniqueTypes.map(type => {
-        switch (type) {
-          case 'document':
-            return detectedLanguage === 'ar' 
-              ? '\n**تعليمات خاصة للوثائق**: استخرج جميع المعلومات، تحقق من تواريخ الانتهاء، قارن مع التاريخ الحالي، حذر إذا انتهت الصلاحية.'
-              : '\n**Document Instructions**: Extract all information, check expiry dates, compare with current date, warn if expired.';
-          case 'bill_receipt':
-            return detectedLanguage === 'ar' 
-              ? '\n**تعليمات الفواتير**: استخرج المبالغ، التواريخ، العناصر، احسب المجاميع، قدم تفاصيل مالية.'
-              : '\n**Bill/Receipt Instructions**: Extract amounts, dates, items, calculate totals, provide financial breakdown.';
-          case 'person':
-            return detectedLanguage === 'ar' 
-              ? '\n**تعليمات الأشخاص**: صف المظهر، الملابس، التعبيرات، الأنشطة بتفصيل.'
-              : '\n**Person Instructions**: Describe appearance, clothing, expressions, activities in detail.';
-          case 'place_building':
-            return detectedLanguage === 'ar' 
-              ? '\n**تعليمات الأماكن**: صف الموقع، العمارة، المحيط، الميزات البارزة.'
-              : '\n**Place/Building Instructions**: Describe location, architecture, surroundings, notable features.';
-          case 'report_chart':
-            return detectedLanguage === 'ar' 
-              ? '\n**تعليمات التقارير**: حلل البيانات، لخص النتائج، اشرح الاتجاهات، قدم رؤى.'
-              : '\n**Report/Chart Instructions**: Analyze data, summarize findings, explain trends, provide insights.';
-          case 'text_image':
-            return detectedLanguage === 'ar' 
-              ? '\n**تعليمات النصوص**: استخرج جميع النصوص المرئية بدقة، اقرأ الخط اليدوي.'
-              : '\n**Text Image Instructions**: Extract all visible text accurately, read handwriting if present.';
-          default:
-            return '';
-        }
-      }).join('');
-      
-      systemPrompt += contextInstructions;
-    }
-  }
-
   // Add personalization if available
   if (personalTouch) {
     if (personalTouch.nickname) {
@@ -522,32 +489,44 @@ Today's date: ${currentDate}
     });
   }
   
-  // ENHANCED: Image processing with context awareness
+  // FIXED: Enhanced image processing with proper context handling
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
     console.log('🖼️ Processing', attachedFiles.length, 'context-aware images');
     
+    // FIXED: Better image detection logic
     const imageFile = attachedFiles.find(file => 
-      file.type?.startsWith('image/') || 
-      file.url || 
-      file.publicUrl
+      file.url || file.publicUrl || file.type?.startsWith('image/')
     );
     
     if (imageFile) {
-      const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
+      const imageUrl = imageFile.url || imageFile.publicUrl;
       const imageType = imageFile.type || 'image/jpeg';
       
+      console.log('🎯 Processing image with context:', {
+        imageTypeName: imageFile.imageType?.name || 'unknown',
+        imageTypeId: imageFile.imageType?.id || 'unknown',
+        hasContext: !!imageFile.context,
+        contextLength: imageFile.context?.length || 0
+      });
+      
       if (imageUrl) {
-        console.log('🎯 Processing image with type context:', imageFile.imageType?.name || 'unknown');
-        
         const base64Data = await convertImageUrlToBase64(imageUrl);
         
         if (base64Data) {
-          // ENHANCED: Add context-specific instructions to message
+          // FIXED: Properly add context-specific instructions to message
           let contextualMessage = message;
+          
+          // Add image type context if available
           if (imageFile.context) {
             contextualMessage = `${imageFile.context}\n\nUser message: ${message}`;
+            console.log('✅ Added image context to message:', imageFile.context.substring(0, 100) + '...');
+          } else if (imageFile.imageType?.name) {
+            // Fallback context based on image type name
+            const fallbackContext = `This is a ${imageFile.imageType.name} image. Please analyze it accordingly.`;
+            contextualMessage = `${fallbackContext}\n\nUser message: ${message}`;
+            console.log('✅ Added fallback context:', fallbackContext);
           }
           
           currentMessage.content = [
@@ -561,7 +540,7 @@ Today's date: ${currentDate}
               } 
             }
           ];
-          console.log("✅ Context-aware image added to message");
+          console.log("✅ Context-aware image added to message successfully");
         } else {
           console.error("❌ Image processing failed");
           return {
@@ -572,7 +551,25 @@ Today's date: ${currentDate}
             success: false
           };
         }
+      } else {
+        console.error("❌ No valid image URL found");
+        return {
+          response: detectedLanguage === 'ar' 
+            ? '❌ لم يتم العثور على رابط صحيح للصورة.'
+            : '❌ No valid image URL found.',
+          error: 'No valid image URL',
+          success: false
+        };
       }
+    } else {
+      console.error("❌ No valid image file found in attachedFiles");
+      return {
+        response: detectedLanguage === 'ar' 
+          ? '❌ لم يتم العثور على ملف صورة صحيح.'
+          : '❌ No valid image file found.',
+        error: 'No valid image file',
+        success: false
+      };
     }
   }
   
