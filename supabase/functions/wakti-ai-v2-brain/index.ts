@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,6 +14,19 @@ const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
 console.log("🚀 WAKTI AI V2: MEGA-MERGED UNIFIED SYSTEM - VISION + CONVERSATION");
+
+// MEMORY-EFFICIENT BASE64 CONVERSION - HANDLES LARGE IMAGES
+function uint8ArrayToBase64(uint8Array: Uint8Array): string {
+  const chunkSize = 8192; // Process in 8KB chunks to avoid memory overflow
+  let binaryString = '';
+  
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.slice(i, i + chunkSize);
+    binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  
+  return btoa(binaryString);
+}
 
 // ENHANCED: CDN-aware image processing with timing-based retry mechanism
 async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promise<string | null> {
@@ -150,15 +164,14 @@ async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promis
     }
     
     // Enhanced Base64 conversion with validation
-    console.log('🔄 Converting CDN data to base64...');
+    console.log('🔄 Converting CDN data to base64 with memory optimization...');
     const uint8Array = new Uint8Array(arrayBuffer);
     
     // Validate file signature
     const firstBytes = Array.from(uint8Array.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
     console.log('🔍 File signature validation:', firstBytes);
     
-    const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
-    const base64String = btoa(binaryString);
+    const base64String = uint8ArrayToBase64(uint8Array);
     
     if (!base64String || base64String.length < 100) {
       console.error('❌ INVALID BASE64: Conversion failed or too short');
