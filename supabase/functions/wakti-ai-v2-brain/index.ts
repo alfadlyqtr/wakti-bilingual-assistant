@@ -13,197 +13,94 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: ENHANCED CDN-AWARE IMAGE PROCESSING");
+console.log("🚀 WAKTI AI V2: SIMPLIFIED IMAGE PROCESSING");
 
-// ENHANCED: CDN-aware image processing with timing-based retry mechanism
-async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promise<string | null> {
-  const maxRetries = 4; // Total of 5 attempts (0-4)
-  const baseDelay = 2000; // Start with 2 seconds
+// SIMPLIFIED: Fast and reliable image processing
+async function convertImageUrlToBase64(imageUrl: string): Promise<string | null> {
+  const maxAttempts = 2; // Simple: only 1 retry
   
-  try {
-    console.log(`🔍 CDN-AWARE PROCESSING - Attempt ${retryCount + 1}/${maxRetries + 1}:`);
-    console.log(`📋 URL: ${imageUrl}`);
-    console.log(`⏱️ Retry count: ${retryCount}`);
-    
-    // ENHANCED: Pre-fetch delay for fresh uploads (first attempt only)
-    if (retryCount === 0) {
-      console.log('⏳ INITIAL DELAY: Waiting 3 seconds for CDN propagation...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
-    }
-    
-    if (!imageUrl.startsWith('http')) {
-      console.error('❌ INVALID URL: Does not start with http/https');
-      return null;
-    }
-    
-    // Enhanced URL validation
-    const urlPattern = /^https:\/\/[a-zA-Z0-9.-]+\.supabase\.co\/storage\/v1\/object\/public\/[a-zA-Z0-9_-]+\//;
-    if (!urlPattern.test(imageUrl)) {
-      console.error('❌ INVALID URL PATTERN: Not a valid Supabase storage URL');
-      return null;
-    }
-    
-    // ENHANCED: CDN cache busting with timestamp
-    const cacheBustUrl = `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}cb=${Date.now()}&retry=${retryCount}`;
-    console.log('🔄 Using cache-busted URL for CDN freshness');
-    
-    // Extended timeout for CDN operations
-    const timeout = 45000; // 45 seconds
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.error('⏰ TIMEOUT: Request exceeded 45 seconds');
-      controller.abort();
-    }, timeout);
-    
-    console.log('🌐 Starting CDN-aware HTTP request...');
-    const startTime = Date.now();
-    
-    const response = await fetch(cacheBustUrl, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'WAKTI-AI-CDN-AWARE/2.0',
-        'Accept': 'image/*',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`🔍 Processing attempt ${attempt}/${maxAttempts}: ${imageUrl}`);
+      
+      if (!imageUrl.startsWith('http')) {
+        console.error('❌ Invalid URL: Does not start with http/https');
+        return null;
       }
-    });
-    
-    const fetchDuration = Date.now() - startTime;
-    clearTimeout(timeoutId);
-    
-    console.log(`📊 CDN Response Analysis:`, {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      contentType: response.headers.get('Content-Type'),
-      contentLength: response.headers.get('Content-Length'),
-      fetchTime: `${fetchDuration}ms`,
-      cacheControl: response.headers.get('Cache-Control'),
-      etag: response.headers.get('ETag'),
-      attempt: retryCount + 1
-    });
-    
-    if (!response.ok) {
-      console.error('❌ CDN FETCH FAILED:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: imageUrl,
-        attempt: retryCount + 1,
-        isRetryableError: [400, 403, 404, 500, 502, 503, 429].includes(response.status)
+      
+      // Simple timeout - 15 seconds is enough
+      const timeout = 15000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      const response = await fetch(imageUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'WAKTI-AI/2.0',
+          'Accept': 'image/*'
+        }
       });
       
-      // Get error details
-      try {
-        const errorBody = await response.text();
-        console.error('Error response body:', errorBody);
-      } catch (e) {
-        console.error('Could not read error response body');
-      }
+      clearTimeout(timeoutId);
       
-      // ENHANCED: Specific retry logic for CDN propagation issues
-      if (retryCount < maxRetries) {
-        const shouldRetry = [400, 403, 404, 500, 502, 503, 429].includes(response.status);
-        
-        if (shouldRetry) {
-          // Exponential backoff with longer delays for CDN issues
-          const retryDelay = Math.min(baseDelay * Math.pow(2, retryCount), 15000); // Cap at 15 seconds
-          console.log(`🔄 CDN RETRY: Waiting ${retryDelay}ms for CDN propagation (attempt ${retryCount + 2}/${maxRetries + 1})`);
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          return await convertImageUrlToBase64(imageUrl, retryCount + 1);
+      if (!response.ok) {
+        console.error(`❌ HTTP ${response.status} on attempt ${attempt}`);
+        if (attempt < maxAttempts) {
+          console.log('⏳ Waiting 2 seconds before retry...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
         }
+        return null;
       }
       
-      console.error(`❌ CDN FAILURE: All ${maxRetries + 1} attempts failed`);
-      return null;
-    }
-    
-    console.log('📥 Starting CDN data conversion...');
-    const arrayBuffer = await response.arrayBuffer();
-    const fileSize = arrayBuffer.byteLength;
-    
-    console.log('📊 CDN File Analysis:', {
-      sizeBytes: fileSize,
-      sizeMB: (fileSize / (1024 * 1024)).toFixed(2),
-      isEmpty: fileSize === 0,
-      isTooLarge: fileSize > 20 * 1024 * 1024,
-      successfulAttempt: retryCount + 1,
-      totalTime: `${Date.now() - startTime}ms`
-    });
-    
-    if (fileSize === 0) {
-      console.error('❌ EMPTY FILE: CDN returned 0 bytes');
+      const arrayBuffer = await response.arrayBuffer();
+      const fileSize = arrayBuffer.byteLength;
       
-      // Retry for empty files (CDN might not be ready)
-      if (retryCount < maxRetries) {
-        const retryDelay = baseDelay * (retryCount + 1);
-        console.log(`🔄 EMPTY FILE RETRY: Waiting ${retryDelay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        return await convertImageUrlToBase64(imageUrl, retryCount + 1);
+      if (fileSize === 0) {
+        console.error(`❌ Empty file on attempt ${attempt}`);
+        if (attempt < maxAttempts) {
+          console.log('⏳ Waiting 2 seconds before retry...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+        return null;
       }
       
-      return null;
+      if (fileSize > 20 * 1024 * 1024) {
+        console.error('❌ File too large: Exceeds 20MB limit');
+        return null;
+      }
+      
+      // Convert to base64
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
+      const base64String = btoa(binaryString);
+      
+      if (!base64String || base64String.length < 100) {
+        console.error(`❌ Invalid base64 conversion on attempt ${attempt}`);
+        if (attempt < maxAttempts) {
+          console.log('⏳ Waiting 2 seconds before retry...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+        return null;
+      }
+      
+      console.log(`✅ Success on attempt ${attempt} - Size: ${(fileSize / 1024).toFixed(1)}KB`);
+      return base64String;
+      
+    } catch (error) {
+      console.error(`❌ Error on attempt ${attempt}:`, error.message);
+      if (attempt < maxAttempts) {
+        console.log('⏳ Waiting 2 seconds before retry...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
     }
-    
-    if (fileSize > 20 * 1024 * 1024) {
-      console.error('❌ FILE TOO LARGE: Exceeds 20MB limit');
-      return null;
-    }
-    
-    // Enhanced Base64 conversion with validation
-    console.log('🔄 Converting CDN data to base64...');
-    const uint8Array = new Uint8Array(arrayBuffer);
-    
-    // Validate file signature
-    const firstBytes = Array.from(uint8Array.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-    console.log('🔍 File signature validation:', firstBytes);
-    
-    const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
-    const base64String = btoa(binaryString);
-    
-    if (!base64String || base64String.length < 100) {
-      console.error('❌ INVALID BASE64: Conversion failed or too short');
-      return null;
-    }
-    
-    console.log('✅ CDN SUCCESS: Image converted successfully');
-    console.log('📊 Final Results:', {
-      base64Length: base64String.length,
-      totalProcessingTime: `${Date.now() - startTime}ms`,
-      successfulAttempt: retryCount + 1,
-      preview: base64String.substring(0, 50) + '...'
-    });
-    
-    return base64String;
-    
-  } catch (error) {
-    console.error('❌ CDN EXCEPTION:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack?.split('\n').slice(0, 5).join('\n'),
-      url: imageUrl,
-      attempt: retryCount + 1
-    });
-    
-    // Enhanced retry for network/timeout errors with CDN considerations
-    if (retryCount < maxRetries && (
-      error.name === 'AbortError' || 
-      error.message.includes('network') || 
-      error.message.includes('timeout') ||
-      error.message.includes('fetch') ||
-      error.message.includes('CDN') ||
-      error.message.includes('connection')
-    )) {
-      // Longer delays for network issues that might be CDN-related
-      const retryDelay = Math.min(baseDelay * Math.pow(2, retryCount) + 1000, 20000); // Cap at 20 seconds
-      console.log(`🔄 NETWORK RETRY: Waiting ${retryDelay}ms for CDN recovery (attempt ${retryCount + 2}/${maxRetries + 1})`);
-      await new Promise(resolve => setTimeout(resolve, retryDelay));
-      return await convertImageUrlToBase64(imageUrl, retryCount + 1);
-    }
-    
-    console.error(`❌ FINAL FAILURE: All retry attempts exhausted after ${retryCount + 1} tries`);
-    return null;
   }
+  
+  console.error(`❌ All ${maxAttempts} attempts failed`);
+  return null;
 }
 
 serve(async (req) => {
@@ -235,7 +132,7 @@ serve(async (req) => {
       personalTouch = null,
     } = requestBody || {};
 
-    console.log("🎯 REQUEST PROCESSING:", {
+    console.log("🎯 REQUEST:", {
       trigger: activeTrigger,
       language: language,
       messageLength: message?.length || 0,
@@ -243,22 +140,9 @@ serve(async (req) => {
       fileCount: attachedFiles.length
     });
     
-    // ENHANCED: Detailed file debugging with CDN awareness
+    // Simple file logging
     if (attachedFiles.length > 0) {
-      console.log("🖼️ CDN-AWARE FILE PROCESSING:");
-      attachedFiles.forEach((file, index) => {
-        console.log(`File ${index + 1}:`, {
-          name: file.name,
-          type: file.type,
-          hasUrl: !!file.url,
-          hasPublicUrl: !!file.publicUrl,
-          actualUrl: file.url || file.publicUrl || 'NO_URL',
-          urlLength: (file.url || file.publicUrl || '').length,
-          uploadTimestamp: file.uploadTimestamp || 'UNKNOWN',
-          imageTypeName: file.imageType?.name || 'NO_TYPE',
-          imageTypeId: file.imageType?.id || 'NO_ID'
-        });
-      });
+      console.log("🖼️ Files:", attachedFiles.map(f => ({ name: f.name, hasUrl: !!f.url })));
     }
 
     if (!message?.trim() && !attachedFiles?.length) {
@@ -337,15 +221,9 @@ serve(async (req) => {
   }
 });
 
-// ENHANCED: Chat mode with CDN-aware image processing
+// SIMPLIFIED: Chat mode with reliable image processing
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 CDN-AWARE CHAT MODE PROCESSING");
-  console.log("🔍 Chat analysis:", {
-    fileCount: attachedFiles.length,
-    hasFiles: attachedFiles.length > 0,
-    userLanguage: language,
-    messagePreview: message.substring(0, 100)
-  });
+  console.log("💬 CHAT MODE PROCESSING");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -508,9 +386,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// ENHANCED: Claude API with CDN-aware image processing
+// SIMPLIFIED: Claude API with reliable image processing
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 CDN-AWARE CLAUDE API PROCESSING");
+  console.log("🧠 CLAUDE API PROCESSING");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -524,12 +402,7 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
   const userPreferredLanguage = language || 'en';
   const responseLanguage = userPreferredLanguage;
   
-  console.log("🌍 LANGUAGE PROCESSING:", {
-    userPreferredLanguage: userPreferredLanguage,
-    messageContainsArabic: isArabicMessage,
-    finalResponseLanguage: responseLanguage,
-    messagePreview: message.substring(0, 50)
-  });
+  console.log("🌍 Language:", responseLanguage, "- Message contains Arabic:", isArabicMessage);
   
   // Language-aware system prompt
   let systemPrompt = responseLanguage === 'ar'
@@ -615,22 +488,15 @@ Today's date: ${currentDate}
     });
   }
   
-  // ENHANCED: CDN-aware image processing with comprehensive error handling
+  // SIMPLIFIED: Fast image processing
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ CDN-AWARE FILE PROCESSING');
+    console.log('🖼️ Processing files...');
     
-    // Enhanced image file detection
     const imageFile = attachedFiles.find(file => {
       const hasUrl = !!(file.url || file.publicUrl);
       const isImageType = file.type?.startsWith('image/');
-      console.log(`🔍 File analysis: ${file.name}`, {
-        hasUrl,
-        isImageType,
-        url: file.url || file.publicUrl || 'NO_URL',
-        type: file.type || 'NO_TYPE'
-      });
       return hasUrl || isImageType;
     });
     
@@ -638,36 +504,19 @@ Today's date: ${currentDate}
       const imageUrl = imageFile.url || imageFile.publicUrl;
       const imageType = imageFile.type || 'image/jpeg';
       
-      console.log('🎯 CDN FILE PROCESSING:', {
-        fileName: imageFile.name,
-        imageUrl: imageUrl,
-        urlValid: !!imageUrl,
-        urlLength: imageUrl?.length || 0,
-        imageType: imageType,
-        hasImageType: !!imageFile.imageType,
-        imageTypeName: imageFile.imageType?.name || 'NONE',
-        imageTypeId: imageFile.imageType?.id || 'NONE',
-        hasContext: !!imageFile.context,
-        contextLength: imageFile.context?.length || 0
-      });
+      console.log('🎯 Processing:', imageFile.name);
       
       if (imageUrl) {
-        console.log('🔄 Starting CDN-aware base64 conversion...');
         const base64Data = await convertImageUrlToBase64(imageUrl);
         
         if (base64Data) {
-          console.log('✅ CDN conversion successful');
+          console.log('✅ Image converted successfully');
           
-          // Context integration
           let contextualMessage = message;
-          
           if (imageFile.context) {
             contextualMessage = `${imageFile.context}\n\nUser request: ${message}`;
-            console.log('✅ Context integrated successfully');
           } else if (imageFile.imageType?.name) {
-            const fallbackContext = `Analyze this ${imageFile.imageType.name}.`;
-            contextualMessage = `${fallbackContext}\n\nUser request: ${message}`;
-            console.log('⚠️ Using minimal fallback context');
+            contextualMessage = `Analyze this ${imageFile.imageType.name}.\n\nUser request: ${message}`;
           }
           
           currentMessage.content = [
@@ -682,20 +531,17 @@ Today's date: ${currentDate}
             }
           ];
           
-          console.log('📤 Message prepared for Claude API');
-          
         } else {
-          console.error("❌ CDN PROCESSING FAILED: Could not convert image to base64");
+          console.error("❌ Image processing failed");
           return {
             response: responseLanguage === 'ar' 
-              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. قد تكون الصورة غير متاحة مؤقتاً بسبب تحديث الخادم. يرجى المحاولة مرة أخرى خلال دقيقة.'
-              : '❌ Sorry, I encountered difficulty processing this image. The image may be temporarily unavailable due to server updates. Please try again in a moment.',
-            error: 'CDN image processing failed after multiple attempts',
+              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى المحاولة مرة أخرى.'
+              : '❌ Sorry, I encountered difficulty processing this image. Please try again.',
+            error: 'Image processing failed',
             success: false
           };
         }
       } else {
-        console.error("❌ NO VALID IMAGE URL");
         return {
           response: responseLanguage === 'ar' 
             ? '❌ لم يتم العثور على رابط صحيح للصورة.'
@@ -705,7 +551,6 @@ Today's date: ${currentDate}
         };
       }
     } else {
-      console.error("❌ NO VALID IMAGE FILE");
       return {
         response: responseLanguage === 'ar' 
           ? '❌ لم يتم العثور على ملف صورة صحيح.'
@@ -729,16 +574,6 @@ Today's date: ${currentDate}
       messages: messages
     };
 
-    console.log('📤 CLAUDE REQUEST SUMMARY:', {
-      model: requestBody.model,
-      maxTokens: requestBody.max_tokens,
-      systemPromptLanguage: responseLanguage,
-      systemPromptLength: requestBody.system.length,
-      messageCount: requestBody.messages.length,
-      hasImageContent: !!(messages[messages.length - 1]?.content?.find?.(c => c.type === 'image')),
-      userLanguage: responseLanguage
-    });
-
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -749,20 +584,11 @@ Today's date: ${currentDate}
       body: JSON.stringify(requestBody),
     });
     
-    console.log("📡 Claude API response:", {
-      status: claudeResponse.status,
-      ok: claudeResponse.ok,
-      statusText: claudeResponse.statusText
-    });
+    console.log("📡 Claude response status:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ CLAUDE API ERROR:", {
-        status: claudeResponse.status,
-        statusText: claudeResponse.statusText,
-        errorText: errorText,
-        requestLanguage: responseLanguage
-      });
+      console.error("❌ Claude API error:", errorText);
       
       let userFriendlyError = responseLanguage === 'ar' 
         ? 'واجهت مشكلة في معالجة طلبك.'
@@ -788,8 +614,6 @@ Today's date: ${currentDate}
       ? 'أعتذر، واجهت مشكلة في معالجة طلبك.'
       : 'I apologize, but I encountered an issue processing your request.');
     
-    console.log("🎉 PROCESSING COMPLETE");
-    
     return {
       response: responseText,
       success: true,
@@ -798,7 +622,7 @@ Today's date: ${currentDate}
     };
     
   } catch (error) {
-    console.error("❌ CLAUDE API CRITICAL ERROR:", error);
+    console.error("❌ Claude API error:", error);
     return {
       response: responseLanguage === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
