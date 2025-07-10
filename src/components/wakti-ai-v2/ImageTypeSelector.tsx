@@ -21,7 +21,7 @@ interface ImageTypeSelectorProps {
 export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false }: ImageTypeSelectorProps) {
   const { language } = useTheme();
 
-  // FIXED: Complete image types with proper contexts for each type
+  // FIXED: Simplified image types with working contexts
   const imageTypes: ImageTypeOption[] = [
     {
       id: 'passport',
@@ -29,9 +29,9 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false 
       icon: '📄',
       hint: language === 'ar' ? 'لاستخراج بيانات جواز السفر' : 'For passport data extraction',
       context: language === 'ar' 
-        ? 'هذه صورة جواز سفر. استخرج جميع النصوص المرئية تماماً كما هي مكتوبة، بما في ذلك الأرقام والتواريخ والأسماء.'
-        : 'This is a passport image. Extract ALL visible text exactly as written, including numbers, dates, names, and addresses.',
-      examplePrompt: language === 'ar' ? 'استخرج جميع النصوص من جواز السفر' : 'Extract all text from passport'
+        ? 'هذه صورة جواز سفر. استخرج البيانات الشخصية، تواريخ الصلاحية، ورقم الجواز. تحقق من صلاحية الجواز.'
+        : 'This is a passport image. Extract personal details, expiration dates, and passport number. Check passport validity.',
+      examplePrompt: language === 'ar' ? 'استخرج بيانات جواز السفر' : 'Extract passport information'
     },
     {
       id: 'id_card',
@@ -39,19 +39,19 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false 
       icon: '🆔',
       hint: language === 'ar' ? 'لاستخراج بيانات بطاقة الهوية' : 'For ID card data extraction',
       context: language === 'ar'
-        ? 'هذه صورة بطاقة هوية. استخرج جميع النصوص المرئية تماماً كما هي مكتوبة، بما في ذلك الأسماء والأرقام والتواريخ.'
-        : 'This is an ID card image. Extract ALL visible text exactly as written, including names, ID numbers, dates, and addresses.',
-      examplePrompt: language === 'ar' ? 'استخرج جميع النصوص من بطاقة الهوية' : 'Extract all text from ID card'
+        ? 'هذه صورة بطاقة هوية. استخرج الاسم، الرقم، تاريخ الانتهاء، والمعلومات الشخصية.'
+        : 'This is an ID card image. Extract name, ID number, expiration date, and personal information.',
+      examplePrompt: language === 'ar' ? 'استخرج بيانات بطاقة الهوية' : 'Extract ID card details'
     },
     {
       id: 'certificate',
       name: language === 'ar' ? 'شهادة' : 'Certificate',
       icon: '🏆',
-      hint: language === 'ar' ? 'لاستخراج نصوص الشهادات' : 'For extracting certificate text',
+      hint: language === 'ar' ? 'لتحليل الشهادات والدبلومات' : 'For analyzing certificates and diplomas',
       context: language === 'ar'
-        ? 'هذه صورة شهادة. استخرج جميع النصوص المرئية من الشهادة.'
-        : 'This is a certificate image. Extract ALL visible text from the certificate.',
-      examplePrompt: language === 'ar' ? 'استخرج النصوص من الشهادة' : 'Extract text from certificate'
+        ? 'هذه صورة شهادة. استخرج اسم الحاصل عليها، نوع الشهادة، الجهة المانحة، والتاريخ.'
+        : 'This is a certificate image. Extract recipient name, certificate type, issuing authority, and date.',
+      examplePrompt: language === 'ar' ? 'حلل هذه الشهادة' : 'Analyze this certificate'
     },
     {
       id: 'receipt',
@@ -59,69 +59,19 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false 
       icon: '🧾',
       hint: language === 'ar' ? 'لاستخراج بيانات الفواتير' : 'For receipt data extraction',
       context: language === 'ar'
-        ? 'هذه صورة فاتورة. استخرج جميع النصوص المرئية من الفاتورة.'
-        : 'This is a receipt image. Extract ALL visible text from the receipt.',
-      examplePrompt: language === 'ar' ? 'استخرج النصوص من الفاتورة' : 'Extract text from receipt'
-    },
-    {
-      id: 'people',
-      name: language === 'ar' ? 'أشخاص' : 'People',
-      icon: '👥',
-      hint: language === 'ar' ? 'لوصف الأشخاص في الصور' : 'For describing people in photos',
-      context: language === 'ar'
-        ? 'هذه صورة تحتوي على أشخاص. صف الأشخاص في الصورة، ملابسهم، وما يفعلونه.'
-        : 'This is a photo containing people. Describe the people in the image, their clothing, and what they are doing.',
-      examplePrompt: language === 'ar' ? 'صف الأشخاص في الصورة' : 'Describe the people in the image'
+        ? 'هذه صورة فاتورة. استخرج المبلغ الإجمالي، العناصر، التاريخ، واسم المتجر.'
+        : 'This is a receipt image. Extract total amount, items, date, and store name.',
+      examplePrompt: language === 'ar' ? 'استخرج بيانات الفاتورة' : 'Extract receipt details'
     },
     {
       id: 'person',
       name: language === 'ar' ? 'صورة شخصية' : 'Person Photo',
       icon: '👤',
-      hint: language === 'ar' ? 'لوصف شخص في الصورة' : 'For describing a person in photo',
+      hint: language === 'ar' ? 'لوصف الأشخاص في الصور' : 'For describing people in photos',
       context: language === 'ar'
-        ? 'هذه صورة شخص واحد. صف الشخص، مظهره، ملابسه، وما يفعله.'
-        : 'This is a photo of one person. Describe the person, their appearance, clothing, and what they are doing.',
+        ? 'هذه صورة شخص. صف المظهر، الملابس، والأنشطة المرئية في الصورة.'
+        : 'This is a person photo. Describe appearance, clothing, and visible activities.',
       examplePrompt: language === 'ar' ? 'صف الشخص في الصورة' : 'Describe the person in the image'
-    },
-    {
-      id: 'food',
-      name: language === 'ar' ? 'طعام' : 'Food',
-      icon: '🍕',
-      hint: language === 'ar' ? 'لوصف الطعام في الصور' : 'For describing food in images',
-      context: language === 'ar'
-        ? 'هذه صورة طعام. صف نوع الطعام، مكوناته، طريقة تقديمه، وشكله.'
-        : 'This is a food image. Describe the type of food, ingredients, presentation, and appearance.',
-      examplePrompt: language === 'ar' ? 'صف الطعام في الصورة' : 'Describe the food in the image'
-    },
-    {
-      id: 'object',
-      name: language === 'ar' ? 'كائن' : 'Object',
-      icon: '📦',
-      hint: language === 'ar' ? 'لوصف الأشياء والكائنات' : 'For describing objects and items',
-      context: language === 'ar'
-        ? 'هذه صورة تحتوي على كائن أو أشياء. صف الكائن، شكله، لونه، ووظيفته.'
-        : 'This is an image containing an object or items. Describe the object, its shape, color, and function.',
-      examplePrompt: language === 'ar' ? 'صف الكائن في الصورة' : 'Describe the object in the image'
-    },
-    {
-      id: 'report',
-      name: language === 'ar' ? 'تقرير' : 'Report',
-      icon: '📊',
-      hint: language === 'ar' ? 'لاستخراج نصوص التقارير' : 'For extracting report text',
-      context: language === 'ar'
-        ? 'هذه صورة تقرير. استخرج جميع النصوص المرئية من التقرير.'
-        : 'This is a report image. Extract ALL visible text from the report.',
-      examplePrompt: language === 'ar' ? 'استخرج النصوص من التقرير' : 'Extract text from report'
-    },
-    {
-      id: 'scenery',
-      name: language === 'ar' ? 'منظر طبيعي' : 'Scenery',
-      icon: '🌄',
-      hint: language === 'ar' ? 'لوصف المناظر الطبيعية' : 'For describing natural scenery',
-      context: language === 'ar'
-        ? 'هذه صورة منظر طبيعي. صف المنظر، العناصر الطبيعية، الألوان، والجو العام.'
-        : 'This is a scenery image. Describe the landscape, natural elements, colors, and overall atmosphere.',
-      examplePrompt: language === 'ar' ? 'صف المنظر الطبيعي' : 'Describe the scenery'
     },
     {
       id: 'document',
@@ -129,9 +79,9 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, compact = false 
       icon: '📋',
       hint: language === 'ar' ? 'لقراءة المستندات والنصوص' : 'For reading documents and text',
       context: language === 'ar'
-        ? 'هذا مستند يحتوي على نص. استخرج جميع النصوص المرئية من المستند.'
-        : 'This is a document with text. Extract ALL visible text from the document.',
-      examplePrompt: language === 'ar' ? 'استخرج النصوص من المستند' : 'Extract text from document'
+        ? 'هذا مستند يحتوي على نص. اقرأ واستخرج المحتوى النصي الموجود.'
+        : 'This is a document with text. Read and extract the textual content.',
+      examplePrompt: language === 'ar' ? 'اقرأ المستند' : 'Read the document'
     },
     {
       id: 'general',

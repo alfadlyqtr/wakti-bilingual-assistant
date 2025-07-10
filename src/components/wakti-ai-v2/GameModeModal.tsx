@@ -1,42 +1,158 @@
 
-import React from 'react';
-import { X, Gamepad2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, X, RotateCcw, Zap, Play, Pause } from 'lucide-react';
+import { useTheme } from '@/providers/ThemeProvider';
+import { TicTacToeGame } from './games/TicTacToeGame';
+import { ChessGame } from './games/ChessGame';
+import { SolitaireGame } from './games/SolitaireGame';
 
 interface GameModeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export const GameModeModal: React.FC<GameModeModalProps> = ({
-  open,
-  onOpenChange,
-}) => {
-  if (!open) return null;
+type GameType = 'selection' | 'tic-tac-toe' | 'chess' | 'solitaire';
 
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-background border border-border rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-500 rounded-lg text-white">
-              <Gamepad2 className="w-5 h-5" />
-            </div>
-            <h2 className="text-xl font-semibold text-foreground">Game Mode</h2>
+export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
+  const { language } = useTheme();
+  const [currentGame, setCurrentGame] = useState<GameType>('selection');
+  const [gameStats, setGameStats] = useState({ score: 0, moves: 0, timer: 0 });
+  const [gameActions, setGameActions] = useState<{
+    newGame?: () => void;
+    toggleTimer?: () => void;
+    autoComplete?: () => void;
+  }>({});
+
+  const handleClose = () => {
+    setCurrentGame('selection');
+    onOpenChange(false);
+  };
+
+  const handleBack = () => {
+    setCurrentGame('selection');
+  };
+
+  const renderGameSelection = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-300 mb-2">
+          {language === 'ar' ? 'اختر لعبة' : 'Choose a Game'}
+        </h2>
+        <p className="text-slate-600 dark:text-slate-400">
+          {language === 'ar' ? 'اختر لعبة للعب مع الذكاء الاصطناعي' : 'Select a game to play with AI'}
+        </p>
+      </div>
+      
+      <div className="grid gap-4">
+        <Button
+          onClick={() => setCurrentGame('tic-tac-toe')}
+          className="h-20 text-lg bg-blue-500 hover:bg-blue-600 text-white"
+        >
+          <div className="flex items-center space-x-3">
+            <span className="text-2xl">🟦</span>
+            <span>{language === 'ar' ? 'العب إكس أو' : 'Play Tic-Tac-Toe'}</span>
           </div>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="p-2 hover:bg-muted rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </div>
+        </Button>
         
-        <div className="p-6">
-          <p className="text-muted-foreground text-center">
-            Game Mode feature coming soon...
-          </p>
-        </div>
+        <Button
+          onClick={() => setCurrentGame('chess')}
+          className="h-20 text-lg bg-amber-600 hover:bg-amber-700 text-white"
+        >
+          <div className="flex items-center space-x-3">
+            <span className="text-2xl">♟️</span>
+            <span>{language === 'ar' ? 'العب شطرنج' : 'Play Chess'}</span>
+          </div>
+        </Button>
+        
+        <Button
+          onClick={() => setCurrentGame('solitaire')}
+          className="h-20 text-lg bg-green-600 hover:bg-green-700 text-white"
+        >
+          <div className="flex items-center space-x-3">
+            <span className="text-2xl">🃏</span>
+            <span>{language === 'ar' ? 'العب سوليتير' : 'Play Solitaire'}</span>
+          </div>
+        </Button>
       </div>
     </div>
   );
-};
+
+  const renderCurrentGame = () => {
+    switch (currentGame) {
+      case 'tic-tac-toe':
+        return <TicTacToeGame onBack={handleBack} />;
+      case 'chess':
+        return <ChessGame onBack={handleBack} />;
+      case 'solitaire':
+        return <SolitaireGame onBack={handleBack} onStatsChange={setGameStats} onActionsChange={setGameActions} />;
+      default:
+        return renderGameSelection();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent 
+        className="max-w-2xl max-h-[95vh] overflow-y-auto"
+        hideCloseButton={true}
+      >
+        <DialogHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center space-x-2">
+            {currentGame !== 'selection' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBack}
+                className="h-8 w-8 p-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
+            <DialogTitle>
+              {currentGame === 'selection' 
+                ? (language === 'ar' ? 'وضع الألعاب' : 'Game Mode')
+                : currentGame === 'tic-tac-toe'
+                ? (language === 'ar' ? 'إكس أو' : 'Tic-Tac-Toe')
+                : currentGame === 'chess'
+                ? (language === 'ar' ? 'شطرنج' : 'Chess')
+                : (language === 'ar' ? 'سوليتير' : 'Solitaire')
+              }
+            </DialogTitle>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {currentGame === 'solitaire' && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={gameActions.newGame} variant="outline" className="h-8 text-xs">
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  {language === 'ar' ? 'جديدة' : 'New'}
+                </Button>
+                <Button size="sm" onClick={gameActions.toggleTimer} variant="outline" className="h-8 w-8 p-0">
+                  {gameStats.timer ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                </Button>
+                <Button size="sm" onClick={gameActions.autoComplete} variant="outline" className="h-8 text-xs">
+                  <Zap className="h-3 w-3 mr-1" />
+                  {language === 'ar' ? 'تلقائي' : 'Auto'}
+                </Button>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClose}
+              className="h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogHeader>
+        
+        <div className="mt-4">
+          {renderCurrentGame()}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

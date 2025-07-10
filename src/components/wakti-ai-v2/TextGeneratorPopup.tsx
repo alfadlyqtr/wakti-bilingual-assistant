@@ -1,196 +1,521 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Bot, Search, ImagePlus, Wand2, MessageSquare, Mail, FileText, PenTool } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useToastHelper } from '@/hooks/use-toast-helper';
 import { supabase } from '@/integrations/supabase/client';
+import { Loader2, Wand2, Reply, FileText, Copy, RotateCcw, CheckCircle, AlertCircle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 
 interface TextGeneratorPopupProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
+  isOpen: boolean;
+  onClose: () => void;
+  onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
 }
 
-export default function TextGeneratorPopup({ 
-  open, 
-  onOpenChange, 
-  onTextGenerated 
-}: TextGeneratorPopupProps) {
+const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
+  isOpen,
+  onClose,
+  onTextGenerated
+}) => {
   const { language } = useTheme();
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [customPrompt, setCustomPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const { showError, showSuccess } = useToastHelper();
+  
+  const [activeTab, setActiveTab] = useState('compose');
+  const [isLoading, setIsLoading] = useState(false);
+  const [generatedText, setGeneratedText] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
+  const [lastError, setLastError] = useState<string>('');
+  
+  // Compose tab state
+  const [composePrompt, setComposePrompt] = useState('');
+  const [contentType, setContentType] = useState('');
+  const [tone, setTone] = useState('');
+  const [length, setLength] = useState('');
+  const [toAddress, setToAddress] = useState('');
+  const [fromAddress, setFromAddress] = useState('');
+  
+  // Reply tab state
+  const [keywords, setKeywords] = useState('');
+  const [originalMessage, setOriginalMessage] = useState('');
+  const [replyTone, setReplyTone] = useState('');
+  const [replyLength, setReplyLength] = useState('');
 
-  const categories = [
-    {
-      id: 'email',
-      name: language === 'ar' ? 'البريد الإلكتروني' : 'Email',
-      icon: Mail,
-      prompts: [
-        language === 'ar' ? 'كتابة رد مهذب على بريد إلكتروني' : 'Write a polite email reply',
-        language === 'ar' ? 'صياغة بريد إلكتروني رسمي' : 'Draft a formal email',
-        language === 'ar' ? 'كتابة رسالة شكر' : 'Write a thank you message'
-      ]
-    },
-    {
-      id: 'social',
-      name: language === 'ar' ? 'وسائل التواصل' : 'Social Media',
-      icon: MessageSquare,
-      prompts: [
-        language === 'ar' ? 'كتابة منشور جذاب' : 'Write an engaging post',
-        language === 'ar' ? 'صياغة تعليق مدروس' : 'Draft a thoughtful comment',
-        language === 'ar' ? 'إنشاء وصف للصورة' : 'Create an image caption'
-      ]
-    },
-    {
-      id: 'business',
-      name: language === 'ar' ? 'الأعمال' : 'Business',
-      icon: FileText,
-      prompts: [
-        language === 'ar' ? 'كتابة اقتراح مشروع' : 'Write a project proposal',
-        language === 'ar' ? 'صياغة تقرير' : 'Draft a report',
-        language === 'ar' ? 'إنشاء جدول أعمال اجتماع' : 'Create a meeting agenda'
-      ]
-    },
-    {
-      id: 'creative',
-      name: language === 'ar' ? 'الإبداع' : 'Creative',
-      icon: PenTool,
-      prompts: [
-        language === 'ar' ? 'كتابة قصة قصيرة' : 'Write a short story',
-        language === 'ar' ? 'إنشاء قصيدة' : 'Create a poem',
-        language === 'ar' ? 'صياغة نص إبداعي' : 'Draft creative content'
-      ]
+  // UPDATED: Content types - added text_message and removed social_post
+  const contentTypes = {
+    email: language === 'ar' ? 'بريد إلكتروني' : 'Email',
+    letter: language === 'ar' ? 'خطاب' : 'Letter',
+    text_message: language === 'ar' ? 'رسالة نصية' : 'Text Message',
+    report: language === 'ar' ? 'تقرير' : 'Report',
+    article: language === 'ar' ? 'مقال' : 'Article',
+    official_letter: language === 'ar' ? 'كتاب رسمي' : 'Official Letter',
+    poem: language === 'ar' ? 'قصيدة' : 'Poem',
+    story: language === 'ar' ? 'قصة' : 'Story'
+  };
+
+  // RESTORED: All tones including romantic
+  const tones = {
+    professional: language === 'ar' ? 'مهني' : 'Professional',
+    casual: language === 'ar' ? 'عادي' : 'Casual',
+    formal: language === 'ar' ? 'رسمي' : 'Formal',
+    friendly: language === 'ar' ? 'ودود' : 'Friendly',
+    persuasive: language === 'ar' ? 'مقنع' : 'Persuasive',
+    romantic: language === 'ar' ? 'رومانسي' : 'Romantic'
+  };
+
+  const lengths = {
+    short: language === 'ar' ? 'قصير' : 'Short',
+    medium: language === 'ar' ? 'متوسط' : 'Medium',
+    long: language === 'ar' ? 'طويل' : 'Long'
+  };
+
+  // Check if current content type requires address fields
+  const showAddressFields = ['email', 'letter', 'official_letter'].includes(contentType);
+
+  const generateText = async () => {
+    if (activeTab === 'compose' && !composePrompt.trim()) {
+      showError(language === 'ar' ? 'يرجى إدخال الموضوع أو الفكرة' : 'Please enter a topic or idea');
+      return;
     }
-  ];
+    
+    if (activeTab === 'reply' && !originalMessage.trim()) {
+      showError(language === 'ar' ? 'يرجى إدخال الرسالة الأصلية' : 'Please enter the original message');
+      return;
+    }
 
-  const handlePromptSelect = async (prompt: string) => {
-    setIsGenerating(true);
+    setIsLoading(true);
+    setLastError('');
+    
     try {
-      const { data, error } = await supabase.functions.invoke('generate-text', {
-        body: { 
+      let prompt = '';
+      
+      if (activeTab === 'compose') {
+        // Build compose prompt
+        prompt = language === 'ar' ? 
+          `اكتب ${contentType ? contentTypes[contentType] : 'نص'} حول: ${composePrompt}` :
+          `Write a ${contentType ? contentTypes[contentType] : 'text'} about: ${composePrompt}`;
+        
+        if (tone) {
+          prompt += language === 'ar' ? 
+            `\nالنبرة: ${tones[tone]}` : 
+            `\nTone: ${tones[tone]}`;
+        }
+        
+        if (length) {
+          prompt += language === 'ar' ? 
+            `\nالطول: ${lengths[length]}` : 
+            `\nLength: ${lengths[length]}`;
+        }
+
+        // Add address information if provided and relevant
+        if (showAddressFields) {
+          if (toAddress.trim()) {
+            prompt += language === 'ar' ? 
+              `\nإلى: ${toAddress}` : 
+              `\nTo: ${toAddress}`;
+          }
+          
+          if (fromAddress.trim()) {
+            prompt += language === 'ar' ? 
+              `\nمن: ${fromAddress}` : 
+              `\nFrom: ${fromAddress}`;
+          }
+        }
+      } else {
+        // Build reply prompt with keywords and original message
+        prompt = language === 'ar' ? 
+          'اكتب رداً على الرسالة التالية:' : 
+          'Write a reply to the following message:';
+        
+        prompt += `\n\n${language === 'ar' ? 'الرسالة الأصلية:' : 'Original Message:'}\n${originalMessage}`;
+        
+        if (keywords.trim()) {
+          prompt += `\n\n${language === 'ar' ? 'النقاط المهمة للتضمين:' : 'Key Points to Include:'}\n${keywords}`;
+        }
+        
+        if (replyTone) {
+          prompt += language === 'ar' ? 
+            `\nالنبرة: ${tones[replyTone]}` : 
+            `\nTone: ${tones[replyTone]}`;
+        }
+        
+        if (replyLength) {
+          prompt += language === 'ar' ? 
+            `\nالطول: ${lengths[replyLength]}` : 
+            `\nLength: ${lengths[replyLength]}`;
+        }
+      }
+
+      console.log('🎯 Text Generator: Using text-generator function for standalone text generation');
+      
+      // FIXED: Use text-generator function instead of unified-ai-brain
+      const { data, error } = await supabase.functions.invoke('text-generator', {
+        body: {
           prompt: prompt,
-          language: language 
+          mode: activeTab,
+          language: language
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Text generation error:', error);
+        const errorMessage = error.message || 'Text generation failed';
+        setLastError(errorMessage);
+        throw new Error(errorMessage);
+      }
 
-      const generatedText = data?.text || prompt;
-      onTextGenerated(generatedText, 'compose', true);
-      onOpenChange(false);
-    } catch (error) {
+      if (!data?.success) {
+        const errorMessage = data?.error || 'Text generation failed';
+        console.error('Text generation failed:', errorMessage);
+        setLastError(errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      if (!data?.generatedText) {
+        const errorMessage = 'No text generated';
+        setLastError(errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      setGeneratedText(data.generatedText);
+      setActiveTab('generated'); // Switch to generated text tab
+      showSuccess(language === 'ar' ? 'تم إنشاء النص بنجاح!' : 'Text generated successfully!');
+      
+    } catch (error: any) {
       console.error('Text generation error:', error);
-      onTextGenerated(prompt, 'compose', false);
-      onOpenChange(false);
+      const errorMessage = error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text');
+      setLastError(errorMessage);
+      showError(errorMessage);
     } finally {
-      setIsGenerating(false);
+      setIsLoading(false);
     }
   };
 
-  const handleCustomGenerate = async () => {
-    if (!customPrompt.trim()) return;
-    
-    setIsGenerating(true);
+  const handleCopyText = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('generate-text', {
-        body: { 
-          prompt: customPrompt,
-          language: language 
-        }
-      });
-
-      if (error) throw error;
-
-      const generatedText = data?.text || customPrompt;
-      onTextGenerated(generatedText, 'compose', true);
-      onOpenChange(false);
+      await navigator.clipboard.writeText(generatedText);
+      setIsCopied(true);
+      showSuccess(language === 'ar' ? 'تم نسخ النص!' : 'Text copied!');
+      setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
-      console.error('Text generation error:', error);
-      onTextGenerated(customPrompt, 'compose', false);
-      onOpenChange(false);
-    } finally {
-      setIsGenerating(false);
-      setCustomPrompt('');
+      showError(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
     }
+  };
+
+  const handleUseText = () => {
+    onTextGenerated(generatedText, activeTab as 'compose' | 'reply');
+    onClose();
+    
+    // Reset form
+    setComposePrompt('');
+    setKeywords('');
+    setOriginalMessage('');
+    setContentType('');
+    setTone('');
+    setReplyTone('');
+    setLength('');
+    setReplyLength('');
+    setToAddress('');
+    setFromAddress('');
+    setGeneratedText('');
+  };
+
+  const handleRegenerate = () => {
+    setGeneratedText('');
+    generateText();
+  };
+
+  const handleClose = () => {
+    // Reset all states
+    setActiveTab('compose');
+    setGeneratedText('');
+    setComposePrompt('');
+    setKeywords('');
+    setOriginalMessage('');
+    setContentType('');
+    setTone('');
+    setReplyTone('');
+    setLength('');
+    setReplyLength('');
+    setToAddress('');
+    setFromAddress('');
+    setIsCopied(false);
+    setLastError('');
+    onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <div className="p-2 bg-purple-500 rounded-lg text-white">
-              <Wand2 className="w-5 h-5" />
-            </div>
-            {language === 'ar' ? 'مولد النصوص الذكي' : 'Smart Text Generator'}
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <Wand2 className="w-5 h-5" />
+            {language === 'ar' ? 'منشئ النصوص الذكي' : 'Smart Text Generator'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Categories */}
-          <div className="grid grid-cols-2 gap-3">
-            {categories.map((category) => (
-              <Button
-                key={category.id}
-                variant={selectedCategory === category.id ? "default" : "outline"}
-                className="h-auto p-4 flex-col gap-2"
-                onClick={() => setSelectedCategory(selectedCategory === category.id ? '' : category.id)}
-              >
-                <category.icon className="w-5 h-5" />
-                <span className="text-sm">{category.name}</span>
-              </Button>
-            ))}
+        {/* Error Display */}
+        {lastError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 text-sm">
+            <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+            <div className="text-red-700">
+              <strong>{language === 'ar' ? 'خطأ:' : 'Error:'}</strong>
+              <br />
+              {lastError}
+            </div>
           </div>
+        )}
 
-          {/* Quick Prompts */}
-          {selectedCategory && (
-            <div className="space-y-3">
-              <h3 className="font-medium text-sm">
-                {language === 'ar' ? 'اقتراحات سريعة:' : 'Quick Suggestions:'}
-              </h3>
-              <div className="grid gap-2">
-                {categories
-                  .find(cat => cat.id === selectedCategory)
-                  ?.prompts.map((prompt, index) => (
-                    <Button
-                      key={index}
-                      variant="ghost"
-                      className="justify-start text-left h-auto p-3"
-                      onClick={() => handlePromptSelect(prompt)}
-                      disabled={isGenerating}
-                    >
-                      {prompt}
-                    </Button>
-                  ))}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsTrigger value="compose" className="flex items-center gap-2 text-sm">
+              <FileText className="w-4 h-4" />
+              {language === 'ar' ? 'إنشاء' : 'Compose'}
+            </TabsTrigger>
+            <TabsTrigger value="reply" className="flex items-center gap-2 text-sm">
+              <Reply className="w-4 h-4" />
+              {language === 'ar' ? 'رد' : 'Reply'}
+            </TabsTrigger>
+            <TabsTrigger value="generated" className="flex items-center gap-2 text-sm" disabled={!generatedText}>
+              <Wand2 className="w-4 h-4" />
+              {language === 'ar' ? 'النص المُولد' : 'Generated Text'}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="compose" className="space-y-4 mt-4">
+            <div>
+              <Label htmlFor="compose-prompt" className="text-sm font-medium">
+                {language === 'ar' ? 'الموضوع أو الفكرة' : 'Topic or Idea'}
+              </Label>
+              <Textarea
+                id="compose-prompt"
+                placeholder={language === 'ar' ? 'اكتب الموضوع أو الفكرة التي تريد إنشاء نص حولها...' : 'Enter the topic or idea you want to write about...'}
+                value={composePrompt}
+                onChange={(e) => setComposePrompt(e.target.value)}
+                rows={3}
+                className="mt-2"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</Label>
+                <Select value={contentType} onValueChange={setContentType}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر النوع' : 'Select type'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(contentTypes).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</Label>
+                <Select value={tone} onValueChange={setTone}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر النبرة' : 'Select tone'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(tones).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</Label>
+                <Select value={length} onValueChange={setLength}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الطول' : 'Select length'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(lengths).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          )}
 
-          {/* Custom Prompt */}
-          <div className="space-y-3">
-            <h3 className="font-medium text-sm">
-              {language === 'ar' ? 'أو اكتب طلبك الخاص:' : 'Or write your custom request:'}
-            </h3>
-            <textarea
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
-              placeholder={language === 'ar' 
-                ? 'اكتب ما تريد إنشاءه هنا...' 
-                : 'Describe what you want to generate...'
-              }
-              className="w-full h-24 p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <Button 
-              onClick={handleCustomGenerate}
-              disabled={!customPrompt.trim() || isGenerating}
-              className="w-full"
-            >
-              {isGenerating ? (
+            {/* Address Fields - Only show for relevant content types */}
+            {showAddressFields && (
+              <div className="space-y-3 pt-2 border-t border-border/50">
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  {language === 'ar' ? 'معلومات العنوان' : 'Address Information'}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="to-address" className="text-sm font-medium">
+                      {language === 'ar' ? 'إلى من' : 'To whom'}
+                    </Label>
+                    <Input
+                      id="to-address"
+                      placeholder={language === 'ar' ? 'اسم المستلم أو عنوانه' : 'Recipient name or address'}
+                      value={toAddress}
+                      onChange={(e) => setToAddress(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="from-address" className="text-sm font-medium">
+                      {language === 'ar' ? 'من المنزل' : 'From home'}
+                    </Label>
+                    <Input
+                      id="from-address"
+                      placeholder={language === 'ar' ? 'اسم المرسل أو عنوانه' : 'Sender name or address'}
+                      value={fromAddress}
+                      onChange={(e) => setFromAddress(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="reply" className="space-y-4 mt-4">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="keywords" className="text-sm font-medium">
+                  {language === 'ar' ? 'النقاط المهمة أو الكلمات المفتاحية' : 'Key Points or Keywords'}
+                </Label>
+                <Textarea
+                  id="keywords"
+                  placeholder={language === 'ar' ? 'اكتب النقاط المهمة أو الكلمات المفتاحية التي تريد تضمينها في الرد...' : 'Enter key points or keywords you want to include in the reply...'}
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
+                  rows={2}
+                  className="mt-2"
+                />
+              </div>
+
+              <div className="flex items-center gap-4">
+                <Separator className="flex-1" />
+                <span className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'و' : 'and'}
+                </span>
+                <Separator className="flex-1" />
+              </div>
+
+              <div>
+                <Label htmlFor="original-message" className="text-sm font-medium">
+                  {language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}
+                </Label>
+                <Textarea
+                  id="original-message"
+                  placeholder={language === 'ar' ? 'الصق الرسالة الأصلية التي تريد الرد عليها...' : 'Paste the original message you want to reply to...'}
+                  value={originalMessage}
+                  onChange={(e) => setOriginalMessage(e.target.value)}
+                  rows={4}
+                  className="mt-2"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</Label>
+                <Select value={replyTone} onValueChange={setReplyTone}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر النبرة' : 'Select tone'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(tones).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</Label>
+                <Select value={replyLength} onValueChange={setReplyLength}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الطول' : 'Select length'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(lengths).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="generated" className="space-y-4 mt-4">
+            {generatedText ? (
+              <div className="space-y-4">
+                <div className="bg-muted/50 rounded-lg p-4 border">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-sm">
+                      {language === 'ar' ? 'النص المُولد' : 'Generated Text'}
+                    </h3>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyText}
+                        className="flex items-center gap-2"
+                      >
+                        {isCopied ? (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                        {language === 'ar' ? 'نسخ' : 'Copy'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRegenerate}
+                        disabled={isLoading}
+                        className="flex items-center gap-2"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        {language === 'ar' ? 'إعادة إنشاء' : 'Regenerate'}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="prose prose-sm max-w-none text-sm leading-relaxed whitespace-pre-wrap">
+                    {generatedText}
+                  </div>
+                </div>
+                
+                <div className="flex justify-end">
+                  <Button onClick={handleUseText} className="flex items-center gap-2">
+                    <Wand2 className="w-4 h-4" />
+                    {language === 'ar' ? 'استخدام النص' : 'Use Text'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                <Wand2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>{language === 'ar' ? 'لا يوجد نص مُولد بعد' : 'No generated text yet'}</p>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {activeTab !== 'generated' && (
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={handleClose}>
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button onClick={generateText} disabled={isLoading}>
+              {isLoading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   {language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'}
                 </>
               ) : (
@@ -201,8 +526,10 @@ export default function TextGeneratorPopup({
               )}
             </Button>
           </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );
-}
+};
+
+export default TextGeneratorPopup;
