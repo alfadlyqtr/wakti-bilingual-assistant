@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -12,16 +13,15 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + SMART BALANCED SYSTEM PROMPT");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + OPTIMIZED PERFORMANCE + SMART LANGUAGE HANDLING");
 
-// ENHANCED: Better Base64 conversion with SPECIFIC handling for IDs/passports
+// OPTIMIZED: Faster Base64 conversion with SMART timeouts for different image types
 async function convertImageUrlToBase64(imageUrl: string, imageType: string, retryCount = 0): Promise<string | null> {
   try {
-    console.log('🆔 ENHANCED ID/PASSPORT PROCESSING: Converting with special handling', retryCount + 1, 'attempt for:', {
-      url: imageUrl.substring(0, 80) + '...',
+    console.log('🆔 OPTIMIZED IMAGE PROCESSING: Converting with smart timeout handling', retryCount + 1, 'attempt for:', {
+      url: imageUrl.substring(0, 50) + '...',
       type: imageType,
-      isSupabaseStorage: imageUrl.includes('supabase'),
-      hasProtocol: imageUrl.startsWith('http'),
+      isDocument: imageType.includes('id') || imageType.includes('passport') || imageType.includes('bill'),
       retryAttempt: retryCount
     });
     
@@ -30,40 +30,39 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
       return null;
     }
     
-    // INCREASED timeout specifically for ID/passport processing
+    // OPTIMIZED: Smart timeout based on image type - faster for regular images
+    const isDocument = imageType.includes('id') || imageType.includes('passport') || imageType.includes('bill');
+    const timeout = isDocument ? 30000 : 15000; // 30s for documents, 15s for regular images
+    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds for IDs
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     const response = await fetch(imageUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'WAKTI-AI/2.0-ID-PROCESSOR',
-        'Accept': '*/*', // Accept all image types including unusual formats
-        'Cache-Control': 'no-cache',
-        'Range': 'bytes=0-', // Force full download
+        'User-Agent': 'WAKTI-AI/2.0-OPTIMIZED',
+        'Accept': '*/*',
+        'Cache-Control': 'no-cache'
       }
     });
     
     clearTimeout(timeoutId);
     
-    console.log('📡 ID/PASSPORT FETCH: Response status:', response.status, response.statusText, {
+    console.log('📡 OPTIMIZED FETCH: Response status:', response.status, {
       contentType: response.headers.get('content-type'),
-      contentLength: response.headers.get('content-length'),
-      lastModified: response.headers.get('last-modified')
+      contentLength: response.headers.get('content-length')
     });
     
     if (!response.ok) {
-      console.error('❌ ID/PASSPORT FETCH ERROR:', {
+      console.error('❌ OPTIMIZED FETCH ERROR:', {
         status: response.status,
-        statusText: response.statusText,
-        url: imageUrl.substring(0, 50) + '...',
-        headers: Object.fromEntries(response.headers.entries())
+        url: imageUrl.substring(0, 50) + '...'
       });
       
-      // More aggressive retry for IDs/passports
-      if (retryCount < 5 && (response.status >= 500 || response.status === 429 || response.status === 403)) {
-        console.log('🔄 RETRYING ID/PASSPORT FETCH in 5 seconds...', { retryCount, status: response.status });
-        await new Promise(resolve => setTimeout(resolve, 5000));
+      // OPTIMIZED: Reduced retry attempts - max 2 instead of 5
+      if (retryCount < 2 && (response.status >= 500 || response.status === 429)) {
+        console.log('🔄 OPTIMIZED RETRY in 2 seconds...', { retryCount, status: response.status });
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2s instead of 5s
         return await convertImageUrlToBase64(imageUrl, imageType, retryCount + 1);
       }
       
@@ -73,70 +72,45 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     const arrayBuffer = await response.arrayBuffer();
     const fileSize = arrayBuffer.byteLength;
     
-    console.log('📊 ID/PASSPORT IMAGE SIZE:', {
+    console.log('📊 OPTIMIZED IMAGE SIZE:', {
       bytes: fileSize,
       MB: (fileSize / (1024 * 1024)).toFixed(2),
-      type: imageType,
-      isLargeDocument: fileSize > 5 * 1024 * 1024
+      type: imageType
     });
     
-    // ENHANCED: Special handling for large ID/passport images
-    if (fileSize === 0) {
-      console.error('❌ ID/PASSPORT ERROR: Empty file received');
+    if (fileSize === 0 || fileSize > 20 * 1024 * 1024) {
+      console.error('❌ OPTIMIZED ERROR: Invalid file size:', fileSize);
       return null;
     }
     
-    if (fileSize > 20 * 1024 * 1024) {
-      console.error('❌ ID/PASSPORT ERROR: File too large:', fileSize);
-      return null;
-    }
-    
-    // ENHANCED: Better Base64 encoding with verification
+    // OPTIMIZED: Faster Base64 encoding
     const uint8Array = new Uint8Array(arrayBuffer);
-    let binaryString = '';
-    
-    // Process in smaller chunks for better reliability
-    const chunkSize = 4096;
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.slice(i, i + chunkSize);
-      try {
-        binaryString += String.fromCharCode.apply(null, Array.from(chunk));
-      } catch (chunkError) {
-        console.error('❌ ID/PASSPORT CHUNK ERROR:', chunkError, 'at position:', i);
-        return null;
-      }
-    }
-    
+    const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
     const base64String = btoa(binaryString);
     
-    // VERIFY the Base64 string is valid
     if (!base64String || base64String.length < 100) {
-      console.error('❌ ID/PASSPORT BASE64 ERROR: Invalid or too short base64 string:', base64String.length);
+      console.error('❌ OPTIMIZED BASE64 ERROR: Invalid base64 string');
       return null;
     }
     
-    console.log('✅ ID/PASSPORT CONVERSION SUCCESS:', {
+    console.log('✅ OPTIMIZED CONVERSION SUCCESS:', {
       originalSize: fileSize,
       base64Length: base64String.length,
-      documentType: imageType,
-      processingMethod: 'enhanced_id_passport_conversion',
-      base64Preview: base64String.substring(0, 50) + '...'
+      processingTime: 'optimized'
     });
     
     return base64String;
   } catch (error) {
-    console.error('❌ ID/PASSPORT CONVERSION CRITICAL ERROR:', {
+    console.error('❌ OPTIMIZED CONVERSION ERROR:', {
       message: error.message,
-      name: error.name,
-      stack: error.stack?.substring(0, 500),
       url: imageUrl.substring(0, 50) + '...',
       retryCount
     });
     
-    // More retries for IDs/passports due to their importance
-    if (retryCount < 5) {
-      console.log('🔄 RETRYING ID/PASSPORT CONVERSION due to error...', { retryCount, errorType: error.name });
-      await new Promise(resolve => setTimeout(resolve, 3000 * (retryCount + 1)));
+    // OPTIMIZED: Reduced retries with faster delays
+    if (retryCount < 2) {
+      console.log('🔄 OPTIMIZED RETRY due to error...', { retryCount });
+      await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
       return await convertImageUrlToBase64(imageUrl, imageType, retryCount + 1);
     }
     
@@ -145,10 +119,9 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
 }
 
 serve(async (req) => {
-  console.log("📨 REQUEST RECEIVED:", {
+  console.log("📨 OPTIMIZED REQUEST RECEIVED:", {
     method: req.method,
-    url: req.url,
-    headers: Object.fromEntries(req.headers.entries())
+    url: req.url
   });
 
   if (req.method === 'OPTIONS') {
@@ -164,8 +137,6 @@ serve(async (req) => {
   try {
     let requestBody;
     const contentType = req.headers.get('content-type') || '';
-    
-    console.log("📋 CONTENT TYPE:", contentType);
     
     if (!contentType.includes('application/json')) {
       console.error("❌ INVALID CONTENT TYPE:", contentType);
@@ -218,10 +189,8 @@ serve(async (req) => {
     try {
       requestBody = JSON.parse(rawBodyText);
       console.log("✅ JSON PARSED SUCCESSFULLY");
-      console.log("📊 REQUEST BODY KEYS:", Object.keys(requestBody || {}));
     } catch (jsonError) {
       console.error("❌ JSON PARSING ERROR:", jsonError);
-      console.error("❌ PROBLEMATIC JSON:", rawBodyText.substring(0, 500));
       return new Response(JSON.stringify({
         error: "Invalid JSON format",
         success: false,
@@ -248,32 +217,27 @@ serve(async (req) => {
       recentMessages = [],
       conversationSummary = '',
       personalTouch = null,
-      enableTaskDetection = false // NO task detection in regular chat
+      enableTaskDetection = false
     } = requestBody || {};
 
-    console.log("🎯 EXTRACTED PARAMS:", {
+    console.log("🎯 OPTIMIZED EXTRACTED PARAMS:", {
       hasMessage: !!message,
       hasUserId: !!userId,
       language,
       activeTrigger,
       messageLength: message?.length || 0,
-      recentMessagesCount: recentMessages.length,
-      hasPersonalTouch: !!personalTouch,
-      attachedFilesCount: attachedFiles.length,
-      enableTaskDetection // Should always be false for regular chat
+      attachedFilesCount: attachedFiles.length
     });
 
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("🖼️ IMAGE FILES DETAILED ANALYSIS:", attachedFiles.map((file, index) => ({
+      console.log("🖼️ OPTIMIZED IMAGE FILES ANALYSIS:", attachedFiles.map((file, index) => ({
         index,
         name: file?.name || 'unknown',
         type: file?.type || 'unknown',
         size: file?.size || 'unknown',
-        url: file?.url?.substring(0, 50) + '...' || 'missing',
-        publicUrl: file?.publicUrl?.substring(0, 50) + '...' || 'missing',
-        hasPreview: !!file?.preview,
-        allKeys: Object.keys(file || {}),
-        isLikelyDocument: (file?.name || '').toLowerCase().includes('id') || (file?.name || '').toLowerCase().includes('passport') || (file?.name || '').toLowerCase().includes('bill') || (file?.name || '').toLowerCase().includes('invoice')
+        isDocument: (file?.name || '').toLowerCase().includes('id') || 
+                   (file?.name || '').toLowerCase().includes('passport') || 
+                   (file?.name || '').toLowerCase().includes('bill')
       })));
     }
 
@@ -305,14 +269,13 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🎯 MODE: ${activeTrigger.toUpperCase()}`);
+    console.log(`🎯 OPTIMIZED MODE: ${activeTrigger.toUpperCase()}`);
     console.log(`📝 MESSAGE: ${message.substring(0, 100)}...`);
-    console.log(`🚫 TASK DETECTION: DISABLED - No task detection in regular chat`);
 
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    console.log('💬 REGULAR CHAT: Processing with NEW BALANCED SYSTEM PROMPT');
+    console.log('💬 OPTIMIZED CHAT: Processing with SMART LANGUAGE HANDLING');
 
     switch (activeTrigger) {
       case 'search':
@@ -336,9 +299,9 @@ serve(async (req) => {
       imageUrl: result.imageUrl || null,
       browsingUsed: activeTrigger === 'search',
       browsingData: null,
-      needsConfirmation: false, // NEVER true for regular chat
-      pendingTaskData: null, // NEVER present for regular chat
-      pendingReminderData: null, // NEVER present for regular chat
+      needsConfirmation: false,
+      pendingTaskData: null,
+      pendingReminderData: null,
       success: result.success !== false,
       processingTime: Date.now(),
       aiProvider: 'claude-3-5-sonnet-20241022',
@@ -347,7 +310,7 @@ serve(async (req) => {
       fallbackUsed: false
     };
 
-    console.log(`✅ ${activeTrigger.toUpperCase()} MODE: CLAUDE 3.5 SONNET request completed successfully!`);
+    console.log(`✅ OPTIMIZED ${activeTrigger.toUpperCase()} MODE: CLAUDE 3.5 SONNET request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
       headers: { 
@@ -357,8 +320,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 CRITICAL ERROR:", error);
-    console.error("🚨 ERROR STACK:", error.stack);
+    console.error("🚨 OPTIMIZED CRITICAL ERROR:", error);
 
     const errorResponse = {
       error: "Internal server error",
@@ -380,9 +342,9 @@ serve(async (req) => {
   }
 });
 
-// CHAT MODE with CLAUDE 3.5 SONNET + NEW BALANCED SYSTEM PROMPT
+// CHAT MODE with OPTIMIZED CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 CHAT MODE: Processing with CLAUDE 3.5 SONNET + NEW BALANCED SYSTEM PROMPT");
+  console.log("💬 OPTIMIZED CHAT MODE: Processing with CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -407,21 +369,21 @@ async function processChatMode(message: string, userId: string, conversationId: 
       
       if (dbMessages && dbMessages.length > 0) {
         contextMessages = dbMessages.reverse();
-        console.log(`📚 HYBRID MEMORY: Loaded ${contextMessages.length} messages from database`);
+        console.log(`📚 OPTIMIZED MEMORY: Loaded ${contextMessages.length} messages from database`);
       }
     } catch (error) {
-      console.warn("⚠️ HYBRID MEMORY: Database fallback failed, using session context");
+      console.warn("⚠️ OPTIMIZED MEMORY: Database fallback failed, using session context");
     }
   }
   
-  console.log(`🧠 HYBRID MEMORY: Using ${contextMessages.length} context messages`);
+  console.log(`🧠 OPTIMIZED MEMORY: Using ${contextMessages.length} context messages`);
   
   return await callClaude35API(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
 }
 
-// SEARCH MODE with CLAUDE 3.5 SONNET
+// SEARCH MODE with OPTIMIZED CLAUDE 3.5 SONNET
 async function processSearchMode(message: string, language: string, recentMessages: any[], personalTouch: any) {
-  console.log("🔍 SEARCH MODE: Processing with CLAUDE 3.5 SONNET");
+  console.log("🔍 OPTIMIZED SEARCH MODE: Processing with CLAUDE 3.5 SONNET");
   
   if (!TAVILY_API_KEY) {
     return {
@@ -461,7 +423,7 @@ async function processSearchMode(message: string, language: string, recentMessag
     return await callClaude35API(searchContext, recentMessages, '', language, [], 4096, personalTouch);
     
   } catch (error) {
-    console.error('❌ SEARCH ERROR:', error);
+    console.error('❌ OPTIMIZED SEARCH ERROR:', error);
     return {
       response: language === 'ar' 
         ? '❌ حدث خطأ أثناء البحث. حاول مرة أخرى.'
@@ -472,13 +434,12 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// IMAGE MODE: CLAUDE 3.5 SONNET VISION + COMPREHENSIVE IMAGE ANALYSIS
+// IMAGE MODE: OPTIMIZED CLAUDE 3.5 SONNET VISION + ENHANCED DOCUMENT ANALYSIS
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🖼️ IMAGE MODE: Processing with COMPREHENSIVE IMAGE ANALYSIS + CLAUDE 3.5 VISION");
+  console.log("🖼️ OPTIMIZED IMAGE MODE: Processing with ENHANCED DOCUMENT ANALYSIS + CLAUDE 3.5 VISION");
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ VISION ANALYSIS: Analyzing with COMPREHENSIVE processing for all image types");
-    console.log("🔓 ALL IMAGE TYPES SUPPORTED: IDs, passports, bills, invoices, people, logos, parks, documents, everything");
+    console.log("👁️ OPTIMIZED VISION ANALYSIS: Analyzing with ENHANCED processing for all image types");
     
     const imageFile = attachedFiles.find(file => {
       if (file.type && file.type.startsWith('image/')) {
@@ -493,12 +454,14 @@ async function processImageMode(message: string, userId: string, language: strin
       return !!(file.url || file.publicUrl);
     });
     
-    console.log("🔍 IMAGE FILE DETECTION RESULT:", {
+    console.log("🔍 OPTIMIZED IMAGE FILE DETECTION:", {
       foundImage: !!imageFile,
       fileName: imageFile?.name || 'unknown',
       fileType: imageFile?.type || 'unknown/fallback',
       hasUrl: !!(imageFile?.url || imageFile?.publicUrl),
-      isDocument: (imageFile?.name || '').toLowerCase().includes('id') || (imageFile?.name || '').toLowerCase().includes('passport') || (imageFile?.name || '').toLowerCase().includes('bill')
+      isDocument: (imageFile?.name || '').toLowerCase().includes('id') || 
+                 (imageFile?.name || '').toLowerCase().includes('passport') || 
+                 (imageFile?.name || '').toLowerCase().includes('bill')
     });
     
     return await callClaude35API(message, [], '', language, attachedFiles, 4096, personalTouch);
@@ -559,7 +522,7 @@ async function processImageMode(message: string, userId: string, language: strin
     }
     
   } catch (error) {
-    console.error('❌ IMAGE ERROR:', error);
+    console.error('❌ OPTIMIZED IMAGE ERROR:', error);
     return {
       response: language === 'ar' 
         ? '❌ فشل في إنشاء الصورة. حاول مرة أخرى.'
@@ -570,9 +533,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// NEW BALANCED CLAUDE 3.5 SONNET API CALL WITH SMART 120-LINE SYSTEM PROMPT
+// OPTIMIZED CLAUDE 3.5 SONNET API CALL WITH SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 NEW BALANCED CLAUDE 3.5 API: SMART 120-LINE SYSTEM PROMPT FOR ALL CAPABILITIES");
+  console.log("🧠 OPTIMIZED CLAUDE 3.5 API: SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -581,20 +544,36 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
     weekday: 'long'
   });
   
-  // NEW BALANCED 120-LINE SYSTEM PROMPT - COMPREHENSIVE BUT FOCUSED
-  let systemPrompt = language === 'ar'
+  // DETECT USER'S LANGUAGE FROM MESSAGE
+  const isArabicMessage = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
+  const detectedLanguage = isArabicMessage ? 'ar' : 'en';
+  
+  console.log("🌐 OPTIMIZED LANGUAGE DETECTION:", {
+    originalLanguage: language,
+    detectedFromMessage: detectedLanguage,
+    isArabicMessage,
+    messagePreview: message.substring(0, 50)
+  });
+  
+  // OPTIMIZED SMART SYSTEM PROMPT WITH ENHANCED DOCUMENT ANALYSIS
+  let systemPrompt = detectedLanguage === 'ar'
     ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور والشامل.
 
 ## قدراتك الأساسية:
 أنت مساعد ذكي متعدد المهارات يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية. تتميز بالسرعة والدقة والشخصية الودودة.
 
-## تحليل الصور الشامل:
+## تحليل الوثائق المحسن:
 ### الوثائق الرسمية:
 - جوازات السفر والهويات الوطنية (جميع البلدان)
 - رخص القيادة وبطاقات الإقامة
 - الفواتير والإيصالات والعقود
 - الشهادات الجامعية والمهنية
-- استخرج: الأسماء، التواريخ، الأرقام، العناوين، المبالغ، التفاصيل المهمة
+
+### تحليل التواريخ الذكي:
+- **مقارنة تواريخ الانتهاء بالتاريخ الحالي (${currentDate})**
+- **إذا كانت الوثيقة منتهية الصلاحية: اكتب تحذير واضح بخط عريض**
+- **مثال: "ملاحظة مهمة: جواز السفر هذا منتهي الصلاحية منذ يونيو 2024، يجب تجديده فوراً"**
+- قدم نصائح مفيدة مثل: البلدان التي يمكن زيارتها، متطلبات التأشيرة، إرشادات التجديد
 
 ### الصور العامة:
 - الأشخاص: وصف المظهر، الملابس، التعبيرات، الأنشطة
@@ -602,47 +581,33 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
 - الشعارات والعلامات التجارية: تحديد الشركات والمنتجات
 - المنتجات والأطعمة: وصف تفصيلي وتقييم
 - النصوص في الصور: قراءة وترجمة وتفسير
-- الرسوم البيانية والجداول: تحليل البيانات وتلخيصها
-- اللقطات الشاشة: شرح المحتوى وتقديم المساعدة
 
 ## أسلوب التعامل:
+- **اكتب دائماً باللغة العربية فقط**
 - استخدم لغة طبيعية وودودة
 - قدم إجابات مفصلة لكن منظمة
-- اطرح أسئلة توضيحية عند الحاجة
-- قدم نصائح واقتراحات مفيدة
-- تذكر السياق من المحادثات السابقة
-
-## المحادثات الذكية:
-- حافظ على السياق والتسلسل الطبيعي
-- اربط بين المواضيع المختلفة بذكاء
-- استخدم الذاكرة للمعلومات المهمة
-- قدم متابعة منطقية للمواضيع
-
-## التعامل مع التحديات:
-- إذا كانت الصورة غير واضحة، قدم أفضل تحليل ممكن
-- للوثائق المعقدة، ركز على المعلومات المهمة
-- للأسئلة الغامضة، اطلب توضيحات
-- قدم بدائل واقتراحات عملية
-
-## التخصيص الشخصي:
-- تكيف مع أسلوب المستخدم المفضل
-- استخدم المعلومات الشخصية المتاحة بحكمة
-- حافظ على الطابع المهني مع اللمسة الشخصية
+- **للوثائق المنتهية الصلاحية: استخدم خط عريض للتحذيرات**
+- قدم اقتراحات مفيدة ومتابعة ذكية
 
 التاريخ اليوم: ${currentDate}
-تجيب باللغة العربية للمحتوى العربي وبالإنجليزية للمحتوى الإنجليزي حسب السياق.`
+**تجيب باللغة العربية فقط دائماً.**`
     : `🤖 You are WAKTI AI, the advanced and comprehensive intelligent assistant.
 
 ## Core Capabilities:
 You are a multi-skilled AI assistant capable of handling all types of requests naturally and intelligently. You excel in speed, accuracy, and maintaining a friendly personality.
 
-## Comprehensive Image Analysis:
+## Enhanced Document Analysis:
 ### Official Documents:
 - Passports & National IDs (all countries)
 - Driver's licenses & residence permits  
 - Bills, invoices & receipts
 - University & professional certificates
-- Extract: names, dates, numbers, addresses, amounts, important details
+
+### Smart Date Analysis:
+- **Compare expiration dates with current date (${currentDate})**
+- **If document is expired: Write clear warning in bold text**
+- **Example: "**Note: This passport is currently EXPIRED since June 2024, consider renewing it immediately**"**
+- Provide helpful follow-ups like: visa-free countries, renewal guidance, travel requirements
 
 ### General Images:
 - People: describe appearance, clothing, expressions, activities
@@ -650,60 +615,41 @@ You are a multi-skilled AI assistant capable of handling all types of requests n
 - Logos & brands: identify companies and products
 - Products & food: detailed descriptions and assessments
 - Text in images: read, translate, and interpret
-- Charts & tables: analyze data and summarize
-- Screenshots: explain content and provide assistance
 
 ## Communication Style:
+- **Always respond in English only**
 - Use natural, friendly language
 - Provide detailed but well-organized answers
-- Ask clarifying questions when needed
-- Offer helpful tips and suggestions
-- Remember context from previous conversations
-
-## Smart Conversations:
-- Maintain context and natural flow
-- Connect different topics intelligently
-- Use memory for important information
-- Provide logical follow-ups to discussions
-
-## Handling Challenges:
-- For unclear images, provide best possible analysis
-- For complex documents, focus on important information
-- For ambiguous questions, ask clarifications
-- Offer practical alternatives and suggestions
-
-## Personal Customization:
-- Adapt to user's preferred style
-- Use available personal information wisely
-- Maintain professional tone with personal touch
+- **For expired documents: Use bold text for urgent warnings**
+- Offer helpful suggestions and smart follow-ups
 
 Today's date: ${currentDate}
-Respond in the language that matches the user's input and context.`;
+**Always respond in English only.**`;
 
   // INJECT USER PERSONALIZATION VARIABLES DYNAMICALLY
   if (personalTouch) {
     if (personalTouch.nickname) {
-      systemPrompt += language === 'ar' 
+      systemPrompt += detectedLanguage === 'ar' 
         ? ` خاطب المستخدم باسم ${personalTouch.nickname}.`
         : ` Address the user as ${personalTouch.nickname}.`;
     }
     if (personalTouch.aiNickname) {
-      systemPrompt += language === 'ar'
+      systemPrompt += detectedLanguage === 'ar'
         ? ` يمكن مناداتك باسم ${personalTouch.aiNickname}.`
         : ` You can be called ${personalTouch.aiNickname}.`;
     }
     if (personalTouch.tone && personalTouch.tone !== 'neutral') {
-      systemPrompt += language === 'ar'
+      systemPrompt += detectedLanguage === 'ar'
         ? ` استخدم نبرة ${personalTouch.tone}.`
         : ` Use a ${personalTouch.tone} tone.`;
     }
     if (personalTouch.style) {
-      systemPrompt += language === 'ar'
+      systemPrompt += detectedLanguage === 'ar'
         ? ` قدم إجابات ${personalTouch.style}.`
         : ` Provide ${personalTouch.style} responses.`;
     }
     if (personalTouch.instruction) {
-      systemPrompt += language === 'ar'
+      systemPrompt += detectedLanguage === 'ar'
         ? ` تعليمات إضافية: ${personalTouch.instruction}`
         : ` Additional instruction: ${personalTouch.instruction}`;
     }
@@ -732,59 +678,55 @@ Respond in the language that matches the user's input and context.`;
     });
   }
   
-  // COMPREHENSIVE IMAGE PROCESSING: ALL IMAGE TYPES SUPPORTED
+  // OPTIMIZED IMAGE PROCESSING: ENHANCED DOCUMENT ANALYSIS
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ COMPREHENSIVE IMAGE ANALYSIS: Processing with balanced handling for all image types');
+    console.log('🖼️ OPTIMIZED IMAGE ANALYSIS: Processing with ENHANCED document analysis');
     
     const imageFile = attachedFiles.find(file => {
-      // Comprehensive image detection for all types
       if (file.type && (file.type.startsWith('image/') || file.type.includes('jpeg') || file.type.includes('png'))) {
-        console.log('✅ IMAGE TYPE DETECTED: Standard image type:', file.type);
+        console.log('✅ OPTIMIZED IMAGE TYPE DETECTED: Standard image type:', file.type);
         return true;
       }
       
       if (file.name) {
         const extension = file.name.toLowerCase().split('.').pop();
         if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif', 'heic', 'heif'].includes(extension)) {
-          console.log('✅ IMAGE TYPE DETECTED: By extension:', extension);
+          console.log('✅ OPTIMIZED IMAGE TYPE DETECTED: By extension:', extension);
           return true;
         }
       }
       
       if (file.url || file.publicUrl) {
-        console.log('✅ IMAGE TYPE DETECTED: By URL presence (forced processing)');
+        console.log('✅ OPTIMIZED IMAGE TYPE DETECTED: By URL presence');
         return true;
       }
       
-      console.log('🔍 IMAGE: Attempting to process unknown file type as potential image');
       return true;
     });
     
     if (imageFile) {
-      console.log("🖼️ COMPREHENSIVE IMAGE PROCESSING: Handling all image types with Claude 3.5 Sonnet");
-      console.log("🔓 BALANCED IMAGE ANALYSIS: Optimized for documents, people, places, logos, bills, everything");
+      console.log("🖼️ OPTIMIZED IMAGE PROCESSING: Handling with ENHANCED document analysis");
       
       const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
       const imageType = imageFile.type || 'image/jpeg';
       
-      console.log("📡 IMAGE URL SELECTION:", {
-        selectedUrl: imageUrl?.substring(0, 80) + '...',
-        hasUrl: !!imageFile.url,
-        hasPublicUrl: !!imageFile.publicUrl,
-        hasPreview: !!imageFile.preview,
+      console.log("📡 OPTIMIZED IMAGE URL SELECTION:", {
+        selectedUrl: imageUrl?.substring(0, 50) + '...',
         selectedType: imageType,
         fileName: imageFile.name,
-        isDocument: (imageFile.name || '').toLowerCase().includes('id') || (imageFile.name || '').toLowerCase().includes('passport') || (imageFile.name || '').toLowerCase().includes('bill')
+        isDocument: (imageFile.name || '').toLowerCase().includes('id') || 
+                   (imageFile.name || '').toLowerCase().includes('passport') || 
+                   (imageFile.name || '').toLowerCase().includes('bill')
       });
       
       if (imageUrl) {
         const base64Data = await convertImageUrlToBase64(imageUrl, imageType);
         
         if (base64Data) {
-          // Balanced message with COMPREHENSIVE instructions for all image types
-          const enhancedMessage = message + '\n\n🖼️ ANALYZE: Please analyze this image comprehensively. Whether it\'s a document, person, place, logo, bill, or any other type of image, provide detailed and helpful analysis. Extract any visible text, describe what you see, and offer relevant insights or assistance.';
+          // ENHANCED message with SMART document analysis instructions
+          const enhancedMessage = message + `\n\n🖼️ ENHANCED ANALYSIS: Please analyze this image comprehensively. If it's a document (passport, ID, bill, etc.), pay special attention to dates and compare them with today's date (${currentDate}). For expired documents, provide clear warnings in bold text and helpful follow-up suggestions. For all other images, provide detailed analysis and insights.`;
           
           currentMessage.content = [
             { type: 'text', text: enhancedMessage },
@@ -797,20 +739,12 @@ Respond in the language that matches the user's input and context.`;
               } 
             }
           ];
-          console.log("✅ COMPREHENSIVE IMAGE PROCESSING: Balanced Claude 3.5 Sonnet payload ready");
-          console.log("🔧 CLAUDE 3.5 VISION PAYLOAD:", {
-            hasTextContent: true,
-            hasImageContent: true,
-            imageMediaType: imageType,
-            base64DataLength: base64Data.length,
-            balancedPrompt: true,
-            base64Sample: base64Data.substring(0, 50) + '...'
-          });
+          console.log("✅ OPTIMIZED IMAGE PROCESSING: Enhanced Claude 3.5 Sonnet payload ready");
         } else {
-          console.error("❌ COMPREHENSIVE IMAGE PROCESSING: Failed to convert image");
+          console.error("❌ OPTIMIZED IMAGE PROCESSING: Failed to convert image");
           
           return {
-            response: language === 'ar' 
+            response: detectedLanguage === 'ar' 
               ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى التأكد من وضوح الصورة وحاول مرة أخرى.'
               : '❌ Sorry, I encountered difficulty processing this image. Please ensure the image is clear and try again.',
             error: 'Image processing failed',
@@ -818,32 +752,30 @@ Respond in the language that matches the user's input and context.`;
           };
         }
       } else {
-        console.error("❌ COMPREHENSIVE IMAGE PROCESSING: No valid URL found in file object");
+        console.error("❌ OPTIMIZED IMAGE PROCESSING: No valid URL found");
         return {
-          response: language === 'ar' 
+          response: detectedLanguage === 'ar' 
             ? '❌ لم أتمكن من الوصول إلى الصورة. يرجى رفع الصورة مرة أخرى.'
             : '❌ I could not access the image. Please upload the image again.',
           error: 'No image URL available',
           success: false
         };
       }
-    } else {
-      console.log("ℹ️ NO IMAGE FILES DETECTED in attached files");
     }
   }
   
   messages.push(currentMessage);
   
   try {
-    console.log(`🧠 BALANCED CLAUDE 3.5: Sending ${messages.length} messages with NEW SMART SYSTEM PROMPT`);
-    console.log("📊 CLAUDE 3.5 API CALL DETAILS:", {
+    console.log(`🧠 OPTIMIZED CLAUDE 3.5: Sending ${messages.length} messages with ENHANCED DOCUMENT ANALYSIS`);
+    console.log("📊 OPTIMIZED CLAUDE 3.5 API CALL:", {
       messagesCount: messages.length,
       hasImages: Array.isArray(currentMessage.content),
       maxTokens: maxTokens,
-      temperature: 0.3, // Balanced temperature for natural responses
+      temperature: 0.3,
       modelUsed: 'claude-3-5-sonnet-20241022',
-      balancedPrompt: true,
-      promptApproximateLength: systemPrompt.length
+      detectedLanguage: detectedLanguage,
+      optimizedProcessing: true
     });
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -856,62 +788,76 @@ Respond in the language that matches the user's input and context.`;
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: maxTokens,
-        temperature: 0.3, // Balanced for natural conversation
+        temperature: 0.3,
         system: systemPrompt,
         messages: messages
       }),
     });
     
-    console.log("📡 BALANCED CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
+    console.log("📡 OPTIMIZED CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ BALANCED CLAUDE 3.5 API ERROR:", {
+      console.error("❌ OPTIMIZED CLAUDE 3.5 API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
-        errorBody: errorText.substring(0, 500)
+        errorBody: errorText.substring(0, 300)
       });
       
-      let userFriendlyError = 'I encountered an issue processing your request.';
+      let userFriendlyError = detectedLanguage === 'ar' 
+        ? 'واجهت مشكلة في معالجة طلبك.'
+        : 'I encountered an issue processing your request.';
       
       if (claudeResponse.status === 400) {
         if (errorText.includes('image')) {
-          userFriendlyError = 'There was an issue processing the image. The image might be too large, corrupted, or in an unsupported format. Please try uploading a clearer image or reducing the file size.';
+          userFriendlyError = detectedLanguage === 'ar' 
+            ? 'كانت هناك مشكلة في معالجة الصورة. قد تكون الصورة كبيرة جداً أو تالفة. يرجى تجربة صورة أوضح أو تقليل حجم الملف.'
+            : 'There was an issue processing the image. The image might be too large, corrupted, or in an unsupported format. Please try uploading a clearer image or reducing the file size.';
         } else {
-          userFriendlyError = 'The request was invalid. Please try again with a different message.';
+          userFriendlyError = detectedLanguage === 'ar' 
+            ? 'الطلب غير صالح. يرجى المحاولة مرة أخرى برسالة مختلفة.'
+            : 'The request was invalid. Please try again with a different message.';
         }
       } else if (claudeResponse.status === 429) {
-        userFriendlyError = 'Too many requests. Please wait a moment and try again.';
+        userFriendlyError = detectedLanguage === 'ar' 
+          ? 'عدد كبير جداً من الطلبات. يرجى الانتظار قليلاً والمحاولة مرة أخرى.'
+          : 'Too many requests. Please wait a moment and try again.';
       } else if (claudeResponse.status >= 500) {
-        userFriendlyError = 'The AI service is temporarily unavailable. Please try again in a few moments.';
+        userFriendlyError = detectedLanguage === 'ar' 
+          ? 'خدمة الذكاء الاصطناعي غير متاحة مؤقتاً. يرجى المحاولة مرة أخرى بعد قليل.'
+          : 'The AI service is temporarily unavailable. Please try again in a few moments.';
       }
       
-      throw new Error(`Balanced Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
+      throw new Error(`Optimized Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ BALANCED CLAUDE 3.5 API SUCCESS:", {
+    console.log("✅ OPTIMIZED CLAUDE 3.5 API SUCCESS:", {
       hasContent: !!claudeData.content,
       contentLength: claudeData.content?.[0]?.text?.length || 0,
       usage: claudeData.usage,
       modelConfirmed: 'claude-3-5-sonnet-20241022',
-      balancedProcessing: true
+      optimizedProcessing: true,
+      enhancedDocumentAnalysis: true
     });
     
-    const responseText = claudeData.content?.[0]?.text || 'I apologize, but I encountered an issue processing your request.';
+    const responseText = claudeData.content?.[0]?.text || (detectedLanguage === 'ar' 
+      ? 'أعتذر، واجهت مشكلة في معالجة طلبك.'
+      : 'I apologize, but I encountered an issue processing your request.');
     
     return {
       response: responseText,
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      balancedSystemPrompt: true
+      optimizedSystemPrompt: true,
+      enhancedDocumentAnalysis: true
     };
     
   } catch (error) {
-    console.error("❌ BALANCED CLAUDE 3.5 API CRITICAL ERROR:", error);
+    console.error("❌ OPTIMIZED CLAUDE 3.5 API CRITICAL ERROR:", error);
     return {
-      response: language === 'ar' 
+      response: detectedLanguage === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
         : '❌ An error occurred while processing your request. Please try again.',
       error: error.message,

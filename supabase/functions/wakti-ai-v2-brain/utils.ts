@@ -15,14 +15,14 @@ export function generateConversationId(): string {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Simplified API key validation
+// OPTIMIZED API key validation
 export function validateApiKeys(): { valid: boolean; missing: string[] } {
   const keys = { ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY };
   const missing = Object.entries(keys).filter(([_, value]) => !value).map(([name]) => name);
   return { valid: missing.length === 0, missing };
 }
 
-// Utility functions
+// OPTIMIZED utility functions
 export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
@@ -36,8 +36,85 @@ export function formatTimestamp(date: Date): string {
   return date.toISOString();
 }
 
-// SIMPLIFIED: Claude 4 API with robust JSON parsing
-export async function callClaudeAPI(
+// ENHANCED: Date comparison for document analysis
+export function isDocumentExpired(expiryDateString: string): { expired: boolean; daysExpired?: number; formattedDate?: string } {
+  try {
+    // Parse various date formats commonly found in documents
+    const datePatterns = [
+      /(\d{1,2})\/(\d{1,2})\/(\d{4})/,  // MM/DD/YYYY or DD/MM/YYYY
+      /(\d{1,2})-(\d{1,2})-(\d{4})/,   // MM-DD-YYYY or DD-MM-YYYY
+      /(\d{4})-(\d{1,2})-(\d{1,2})/,   // YYYY-MM-DD
+      /(\d{1,2})\s+(\w+)\s+(\d{4})/,   // DD Month YYYY
+      /(\w+)\s+(\d{1,2}),?\s+(\d{4})/  // Month DD, YYYY
+    ];
+    
+    let parsedDate: Date | null = null;
+    
+    for (const pattern of datePatterns) {
+      const match = expiryDateString.match(pattern);
+      if (match) {
+        if (pattern === datePatterns[0] || pattern === datePatterns[1]) {
+          // Try both MM/DD and DD/MM formats
+          const date1 = new Date(parseInt(match[3]), parseInt(match[1]) - 1, parseInt(match[2]));
+          const date2 = new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
+          
+          // Use the date that makes more sense (not in the distant future)
+          const now = new Date();
+          const futureThreshold = new Date(now.getFullYear() + 10, now.getMonth(), now.getDate());
+          
+          if (date1 <= futureThreshold) {
+            parsedDate = date1;
+          } else if (date2 <= futureThreshold) {
+            parsedDate = date2;
+          } else {
+            parsedDate = date1; // Default to first format
+          }
+        } else if (pattern === datePatterns[2]) {
+          // YYYY-MM-DD
+          parsedDate = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+        } else {
+          // Handle month names
+          parsedDate = new Date(expiryDateString);
+        }
+        break;
+      }
+    }
+    
+    if (!parsedDate || isNaN(parsedDate.getTime())) {
+      // Fallback to generic date parsing
+      parsedDate = new Date(expiryDateString);
+      if (isNaN(parsedDate.getTime())) {
+        return { expired: false };
+      }
+    }
+    
+    const now = new Date();
+    const diffTime = now.getTime() - parsedDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return {
+      expired: diffTime > 0,
+      daysExpired: diffDays > 0 ? diffDays : undefined,
+      formattedDate: parsedDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })
+    };
+  } catch (error) {
+    console.error('Error parsing expiry date:', error);
+    return { expired: false };
+  }
+}
+
+// ENHANCED: Language detection from text
+export function detectLanguageFromText(text: string): 'ar' | 'en' {
+  const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+  return arabicPattern.test(text) ? 'ar' : 'en';
+}
+
+// OPTIMIZED: Claude 4 API with enhanced error handling and faster response
+export async function callClaude35API(
   messages: any[],
   maxTokens: number = 4096,
   model: string = 'claude-3-5-sonnet-20241022'
@@ -56,31 +133,32 @@ export async function callClaudeAPI(
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
-      messages
+      messages,
+      temperature: 0.3 // Optimized for consistent responses
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Claude 4 API error (${response.status}): ${errorText}`);
+    throw new Error(`Claude 3.5 API error (${response.status}): ${errorText}`);
   }
 
-  // Safe JSON parsing
+  // OPTIMIZED: Fast JSON parsing with validation
   const responseText = await response.text();
   if (!responseText || responseText.trim() === '') {
-    throw new Error('Empty response from Claude 4 API');
+    throw new Error('Empty response from Claude 3.5 API');
   }
 
   try {
     return JSON.parse(responseText);
   } catch (jsonError) {
-    console.error('❌ Claude 4 JSON parsing error:', jsonError);
+    console.error('❌ Claude 3.5 JSON parsing error:', jsonError);
     console.error('❌ Raw response:', responseText.substring(0, 200));
-    throw new Error('Invalid JSON response from Claude 4 API');
+    throw new Error('Invalid JSON response from Claude 3.5 API');
   }
 }
 
-// SIMPLIFIED: DeepSeek fallback with robust JSON parsing
+// OPTIMIZED: DeepSeek fallback (kept for compatibility but optimized)
 export async function callDeepSeekAPI(
   messages: any[],
   maxTokens: number = 4096
@@ -99,7 +177,7 @@ export async function callDeepSeekAPI(
       model: 'deepseek-chat',
       messages,
       max_tokens: maxTokens,
-      temperature: 0.7
+      temperature: 0.3 // Optimized for consistency
     }),
   });
 
@@ -108,7 +186,7 @@ export async function callDeepSeekAPI(
     throw new Error(`DeepSeek API error (${response.status}): ${errorText}`);
   }
 
-  // Safe JSON parsing
+  // OPTIMIZED: Fast JSON parsing
   const responseText = await response.text();
   if (!responseText || responseText.trim() === '') {
     throw new Error('Empty response from DeepSeek API');
