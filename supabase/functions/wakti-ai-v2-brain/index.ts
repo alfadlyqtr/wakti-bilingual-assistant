@@ -14,7 +14,310 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log("WAKTI AI V2 BRAIN: Ultra-Smart System Initialized with Task & Reminder Intelligence");
+console.log("WAKTI AI V2 BRAIN: Ultra-Smart System Initialized with Task & Reminder Intelligence + Memory");
+
+// PHASE 2: MEMORY FUNCTIONS IMPLEMENTATION
+
+// Get stored user memory context
+async function getUserMemoryContext(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('user_memory_context')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching user memory context:', error);
+      return null;
+    }
+
+    console.log('📚 MEMORY: Retrieved stored context for user');
+    return data;
+  } catch (error) {
+    console.error('getUserMemoryContext error:', error);
+    return null;
+  }
+}
+
+// Analyze current conversation for contextual insights
+function analyzeConversationForContext(recentMessages) {
+  const context = {
+    relationshipTone: 'neutral',
+    communicationStyle: 'friendly',
+    projectContext: '',
+    workingPattern: 'normal',
+    achievements: [],
+    expertise: [],
+    helpStyle: 'balanced'
+  };
+
+  if (!recentMessages || recentMessages.length === 0) {
+    return context;
+  }
+
+  const allMessages = recentMessages.map(msg => msg.content?.toLowerCase() || '').join(' ');
+
+  // Analyze relationship tone
+  if (allMessages.includes('buddy') || allMessages.includes('friend') || allMessages.includes('dude')) {
+    context.relationshipTone = 'casual_buddy';
+  } else if (allMessages.includes('sir') || allMessages.includes('please') || allMessages.includes('thank you')) {
+    context.relationshipTone = 'respectful';
+  } else if (allMessages.includes('hey') || allMessages.includes('yo') || allMessages.includes('sup')) {
+    context.relationshipTone = 'casual';
+  }
+
+  // Analyze communication patterns
+  if (allMessages.includes('briefly') || allMessages.includes('quick') || allMessages.includes('short')) {
+    context.communicationStyle = 'concise';
+  } else if (allMessages.includes('detail') || allMessages.includes('explain') || allMessages.includes('elaborate')) {
+    context.communicationStyle = 'detailed';
+  }
+
+  // Extract project context
+  const projectKeywords = ['project', 'app', 'website', 'application', 'system', 'platform'];
+  for (const keyword of projectKeywords) {
+    const regex = new RegExp(`(\\w+\\s+${keyword}|${keyword}\\s+\\w+)`, 'gi');
+    const matches = allMessages.match(regex);
+    if (matches && matches.length > 0) {
+      context.projectContext = matches[0];
+      break;
+    }
+  }
+
+  // Analyze working patterns
+  if (allMessages.includes('night') || allMessages.includes('late') || allMessages.includes('evening')) {
+    context.workingPattern = 'night_owl';
+  } else if (allMessages.includes('morning') || allMessages.includes('early') || allMessages.includes('dawn')) {
+    context.workingPattern = 'early_bird';
+  }
+
+  // Extract achievements
+  const achievementKeywords = ['completed', 'finished', 'done', 'achieved', 'success', 'working'];
+  for (const keyword of achievementKeywords) {
+    const regex = new RegExp(`(\\w+\\s+${keyword}|${keyword}\\s+\\w+)`, 'gi');
+    const matches = allMessages.match(regex);
+    if (matches) {
+      context.achievements.push(...matches.slice(0, 2)); // Limit to 2 achievements
+    }
+  }
+
+  // Extract expertise areas
+  const techKeywords = ['react', 'javascript', 'python', 'ai', 'database', 'api', 'frontend', 'backend'];
+  for (const keyword of techKeywords) {
+    if (allMessages.includes(keyword)) {
+      context.expertise.push(keyword);
+    }
+  }
+
+  console.log('🔍 CONVERSATION ANALYSIS: Extracted context insights');
+  return context;
+}
+
+// Merge personalization settings with stored memory context
+function mergePersonalizationWithMemory(storedContext, personalTouch) {
+  const merged = storedContext || {};
+  
+  if (personalTouch) {
+    if (personalTouch.nickname) {
+      merged.preferred_nickname = personalTouch.nickname;
+    }
+    
+    if (personalTouch.aiNickname) {
+      merged.ai_nickname = personalTouch.aiNickname;
+    }
+    
+    if (personalTouch.tone) {
+      merged.preferred_tone = personalTouch.tone;
+      merged.communication_style = personalTouch.tone === 'casual' ? 'informal' : 
+                                   personalTouch.tone === 'professional' ? 'formal' : 'friendly';
+    }
+    
+    if (personalTouch.style) {
+      merged.reply_style = personalTouch.style;
+    }
+    
+    if (personalTouch.instruction) {
+      merged.custom_instructions = personalTouch.instruction;
+    }
+  }
+  
+  console.log('🔗 PERSONALIZATION MERGE: Combined settings with memory');
+  return merged;
+}
+
+// Build personalized memory prompt
+function buildPersonalizedMemoryPrompt(mergedContext, conversationContext) {
+  let prompt = 'Enhanced Personal Context: ';
+  
+  // User's preferred nickname
+  if (mergedContext.preferred_nickname) {
+    prompt += `User name: ${mergedContext.preferred_nickname}. `;
+  }
+  
+  // AI's nickname
+  if (mergedContext.ai_nickname) {
+    prompt += `AI name: ${mergedContext.ai_nickname}. `;
+  }
+  
+  // Communication style from personalization
+  const commStyle = mergedContext.communication_style || conversationContext.communicationStyle || 'friendly';
+  prompt += `Communication: ${commStyle}. `;
+  
+  // Preferred tone
+  if (mergedContext.preferred_tone) {
+    prompt += `Tone: ${mergedContext.preferred_tone}. `;
+  }
+  
+  // Reply style
+  if (mergedContext.reply_style) {
+    prompt += `Style: ${mergedContext.reply_style}. `;
+  }
+  
+  // Custom instructions
+  if (mergedContext.custom_instructions) {
+    prompt += `Instructions: ${mergedContext.custom_instructions}. `;
+  }
+  
+  // Relationship context from conversation analysis
+  const relationshipStyle = conversationContext.relationshipTone || mergedContext.relationship_style || 'friendly';
+  if (relationshipStyle !== 'neutral') {
+    prompt += `Relationship: ${relationshipStyle}. `;
+  }
+  
+  // Project context
+  if (conversationContext.projectContext || mergedContext.current_projects) {
+    prompt += `Project: ${conversationContext.projectContext || mergedContext.current_projects}. `;
+  }
+  
+  // Working patterns
+  if (conversationContext.workingPattern !== 'normal' || mergedContext.working_patterns) {
+    prompt += `Working style: ${conversationContext.workingPattern || mergedContext.working_patterns}. `;
+  }
+  
+  // Recent achievements
+  if (mergedContext.recent_achievements) {
+    prompt += `Recent wins: ${mergedContext.recent_achievements}. `;
+  }
+  
+  // Interaction history
+  if (mergedContext.interaction_count && mergedContext.interaction_count > 1) {
+    prompt += `History: ${mergedContext.interaction_count} previous conversations. `;
+  }
+  
+  // User expertise
+  if (conversationContext.expertise.length > 0 || mergedContext.user_expertise) {
+    const expertise = conversationContext.expertise.length > 0 ? 
+      conversationContext.expertise.join(', ') : 
+      (mergedContext.user_expertise || []).join(', ');
+    if (expertise) {
+      prompt += `Expertise: ${expertise}. `;
+    }
+  }
+  
+  console.log('🧠 MEMORY PROMPT: Built personalized context');
+  return prompt.trim();
+}
+
+// Update user memory context with new insights and personalization
+async function updateUserMemoryContext(userId, conversationContext, existingContext, personalTouch) {
+  try {
+    const updates = {
+      user_id: userId,
+      last_interaction: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      interaction_count: (existingContext?.interaction_count || 0) + 1
+    };
+    
+    // Update from personalization settings
+    if (personalTouch) {
+      if (personalTouch.nickname) {
+        updates.preferred_nickname = personalTouch.nickname;
+      }
+      
+      if (personalTouch.aiNickname) {
+        updates.ai_nickname = personalTouch.aiNickname;
+      }
+      
+      if (personalTouch.tone) {
+        updates.preferred_tone = personalTouch.tone;
+        updates.communication_style = personalTouch.tone === 'casual' ? 'informal' : 
+                                     personalTouch.tone === 'professional' ? 'formal' : 'friendly';
+      }
+      
+      if (personalTouch.style) {
+        updates.reply_style = personalTouch.style;
+      }
+      
+      if (personalTouch.instruction) {
+        updates.custom_instructions = personalTouch.instruction;
+      }
+    }
+    
+    // Update from conversation analysis
+    if (conversationContext.relationshipTone !== 'neutral') {
+      updates.relationship_style = conversationContext.relationshipTone;
+    }
+    
+    // Update project context
+    if (conversationContext.projectContext) {
+      updates.current_projects = conversationContext.projectContext;
+    }
+    
+    // Update working patterns
+    if (conversationContext.workingPattern !== 'normal') {
+      updates.working_patterns = conversationContext.workingPattern;
+    }
+    
+    // Update achievements
+    if (conversationContext.achievements.length > 0) {
+      const newAchievements = conversationContext.achievements.join(', ');
+      updates.recent_achievements = existingContext?.recent_achievements 
+        ? `${existingContext.recent_achievements}, ${newAchievements}`
+        : newAchievements;
+    }
+    
+    // Update expertise
+    if (conversationContext.expertise.length > 0) {
+      updates.user_expertise = conversationContext.expertise;
+    }
+    
+    await supabase
+      .from('user_memory_context')
+      .upsert(updates, { onConflict: 'user_id' });
+      
+    console.log('✅ MEMORY UPDATE: User context updated with personalization data');
+  } catch (error) {
+    console.error('Failed to update user memory:', error);
+  }
+}
+
+// Main enhanced user context function
+async function getEnhancedUserContext(userId, recentMessages, personalTouch) {
+  console.log('🧠 GETTING ENHANCED USER CONTEXT WITH PERSONALIZATION');
+  
+  try {
+    // Get stored user context
+    const storedContext = await getUserMemoryContext(userId);
+    
+    // Analyze current conversation for context clues
+    const conversationContext = analyzeConversationForContext(recentMessages);
+    
+    // Merge personalization data with stored context
+    const mergedContext = mergePersonalizationWithMemory(storedContext, personalTouch);
+    
+    // Build enhanced memory prompt
+    const memoryPrompt = buildPersonalizedMemoryPrompt(mergedContext, conversationContext);
+    
+    // Update user context with new insights AND personalization data (fire-and-forget)
+    updateUserMemoryContext(userId, conversationContext, mergedContext, personalTouch).catch(console.error);
+    
+    return memoryPrompt;
+  } catch (error) {
+    console.error('Enhanced memory error:', error);
+    return null;
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,7 +325,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🧠 WAKTI AI V2: Processing super-intelligent request");
+    console.log("🧠 WAKTI AI V2: Processing super-intelligent request with memory");
     
     const contentType = req.headers.get('content-type') || '';
     let requestData;
@@ -49,10 +352,13 @@ serve(async (req) => {
       userId, 
       language = 'en',
       files = [],
-      activeTrigger = 'general'
+      activeTrigger = 'general',
+      recentMessages = [],
+      conversationSummary = '',
+      personalTouch = null
     } = requestData;
 
-    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}`);
+    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}`);
 
     let finalConversationId = conversationId;
     
@@ -119,7 +425,10 @@ serve(async (req) => {
       userId,
       language,
       attachedFiles,
-      activeTrigger
+      activeTrigger,
+      recentMessages,
+      conversationSummary,
+      personalTouch
     );
 
     const finalResponse = {
@@ -147,7 +456,7 @@ serve(async (req) => {
       fallbackUsed: false
     };
 
-    console.log(`✅ WAKTI AI V2: Successfully processed ${activeTrigger} request`);
+    console.log(`✅ WAKTI AI V2: Successfully processed ${activeTrigger} request with memory`);
     
     return new Response(JSON.stringify(finalResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -169,13 +478,13 @@ serve(async (req) => {
   }
 });
 
-async function callClaude35API(message, conversationId, userId, language = 'en', attachedFiles = [], activeTrigger = 'general') {
+async function callClaude35API(message, conversationId, userId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], conversationSummary = '', personalTouch = null) {
   try {
     if (!ANTHROPIC_API_KEY) {
       throw new Error('Anthropic API key not configured');
     }
 
-    console.log(`🤖 CLAUDE 35: Processing ${activeTrigger} mode conversation`);
+    console.log(`🤖 CLAUDE 35: Processing ${activeTrigger} mode conversation with enhanced memory`);
 
     // Get conversation history
     const { data: history } = await supabase
@@ -185,18 +494,33 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       .order('created_at', { ascending: true })
       .limit(10);
 
-    // Get user personalization
-    const { data: personalTouch } = await supabase
-      .from('ai_user_knowledge')
-      .select('*')
-      .eq('user_id', userId || 'anonymous')
-      .single();
-
     const responseLanguage = language;
     
-    // MEGA-MERGED SYSTEM PROMPT WITH TASK & REMINDER INTELLIGENCE
+    // ENHANCED SYSTEM PROMPT WITH MEMORY + PERSONALIZATION
     const systemPrompt = responseLanguage === 'ar' ? `
 أنت WAKTI AI، المساعد الذكي المتطور المختص في الإنتاجية والتنظيم. أنت جزء من تطبيق WAKTI المحمول الحصري الذي يدعم العربية والإنجليزية.
+
+## تكامل التخصيص والذاكرة:
+
+استخدم السياق الشخصي المعزز لتخصيص كل رد:
+
+### استخدام الأسماء:
+- **الاسم المفضل للمستخدم**: خاطبهم باسمهم المختار بطبيعية
+- **اسم الذكاء الاصطناعي**: رد عند مناداتك بالاسم المخصص لك
+- **التكامل الطبيعي**: استخدم الأسماء في المحادثة، ليس بشكل رسمي
+
+### تكييف أسلوب التواصل:
+- **النبرة العادية**: استخدم لغة غير رسمية، تعبيرات ودية
+- **النبرة المهنية**: لغة أكثر رسمية مع الحفاظ على الدفء
+- **الأسلوب المفصل**: قدم شروحات شاملة مع الأمثلة
+- **الأسلوب المختصر**: حافظ على الردود مركزة وموجزة
+
+### الامتثال للتعليمات المخصصة:
+- **اتبع التعليمات الخاصة**: احترم دائماً أي تعليمات مخصصة مقدمة
+- **تفصيل المفاهيم**: إذا طُلب منك، اشرح الأشياء خطوة بخطوة
+- **تكييف التعقيد**: اطابق مستوى التفصيل المفضل للمستخدم
+
+تذكر: يجب أن يبدو التخصيص طبيعياً، وليس آلياً. استخدم السياق لتعزيز العلاقة، وليس لاستبدال التفاعل الحقيقي.
 
 ## إنشاء المهام والتذكيرات الذكي:
 
@@ -243,96 +567,43 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 - اشمل جميع الحقول المطلوبة: title, dueDate, dueTime, subtasks
 - لا ترد أبداً على إنشاء المهام بدون كتلة JSON
 
-### إنشاء التذكيرات (اقتراحات ذكية):
-اكتشف الفرص لمساعدة المستخدمين بالتذكيرات:
-
-#### فرص التذكير:
-- **انتهاء الوثائق**: جواز السفر، الرخصة، التأشيرة تنتهي خلال X أشهر
-- **توقيت الأدوية**: "خذ الجرعة التالية"، "اعيد تعبئة الوصفة"
-- **تحضير المواعيد**: "حضر الوثائق للاجتماع"
-- **تذكيرات الأحداث**: أعياد الميلاد، الاجتماعات، المواعيد النهائية
-
-#### تنسيق الاقتراح:
-عندما تكتشف فرصة تذكير، اسأل طبيعياً:
-"أرى أن جواز سفرك ينتهي خلال 6 أشهر. هل تريد مني ضبط تذكير لبدء عملية التجديد؟"
-
-إذا قال المستخدم نعم، اسأل عن التوقيت:
-"متى يجب أن أذكرك؟ 3 أشهر قبل الانتهاء؟ شهر واحد قبل؟"
-
-ثم اخرج:
-\`\`\`json
-{
-  "action": "create_reminder",
-  "data": {
-    "title": "تذكير تجديد جواز السفر",
-    "description": "ابدأ عملية تجديد جواز السفر - ينتهي خلال 3 أشهر",
-    "reminderDate": "2025-04-15",
-    "reminderTime": "09:00",
-    "priority": "high",
-    "category": "documents"
-  }
-}
-\`\`\`
-
-## ذكاء تحليل الصور:
-
-### 🆔 الهويات (IDs):
-- **جوازات السفر**: استخرج الاسم، الجنسية، رقم الجواز، تاريخ الإصدار/الانتهاء، مكان الميلاد
-- **الرخص**: نوع الرخصة، الاسم، رقم الرخصة، تاريخ الانتهاء، القيود
-- **الشهادات**: نوع الشهادة، اسم المؤسسة، تاريخ الإصدار، درجة التقدير
-
-### 💰 الفواتير (Bills):
-- **الإيصالات**: التاجر، التاريخ، الوقت، المبلغ الإجمالي، العناصر المشتراة، طريقة الدفع
-- **الفواتير**: الشركة، رقم الحساب، تاريخ الاستحقاق، المبلغ المستحق، تفاصيل الخدمة
-- **تقسيم الحساب**: احسب المبالغ للأشخاص، واقترح كيفية التقسيم
-
-### 🍔 الطعام (Food):
-- **السعرات**: احسب السعرات لكل عنصر والمجموع
-- **التغذية**: البروتين، الكربوهيدرات، الدهون، الفيتامينات، المعادن
-- **المكونات**: اقرأ قوائم المكونات، وحدد المواد المسببة للحساسية
-
-### 💊 الأدوية (Meds):
-- **معلومات الدواء**: الاسم، القوة، الجرعة، تاريخ الانتهاء
-- **التعليمات**: كيفية الاستخدام، التكرار، التحذيرات
-- **التفاعلات**: حذر من التفاعلات المحتملة مع أدوية أخرى
-
-### 📊 الوثائق (Docs):
-- **التقارير**: استخرج البيانات الرئيسية، الاتجاهات، الاستنتاجات
-- **الواجبات**: فهم المتطلبات، اقترح الحلول، ساعد في التنظيم
-- **المخططات**: فسر البيانات، اشرح الاتجاهات
-
-### 📱 الشاشات (Screens):
-- **التطبيقات**: حدد التطبيق، اشرح الوظائف، قدم نصائح الاستخدام
-- **الأخطاء**: فسر رسائل الخطأ، اقترح الحلول
-- **المواقع**: وصف المحتوى، استخرج المعلومات المهمة
-
-### 👤 الصور (Photos):
-- **الأشخاص**: وصف الأشخاص بأدب، العمر التقريبي، الملابس، التعبيرات
-- **الصور الشخصية**: قدم نصائح لتحسين الصور
-- **الصور الجماعية**: عدد الأشخاص، وصف المشهد
-
-### 🔍 عام (General):
-- **رموز QR**: افحص وفسر محتوى رموز QR
-- **النصوص**: استخرج النص من الصور، ترجم إذا لزم الأمر
-- **الكائنات**: حدد الكائنات، قدم معلومات مفيدة
-
 ## شخصية المساعد:
 - استخدم العربية الفصحى مع الطابع الودود
-- كن مفيداً وعملياً في جميع الردود
+- اجعل التفاعل شخصياً باستخدام السياق المعزز
 - اقترح خطوات عملية قابلة للتنفيذ
 - احتفظ بالطابع المهني مع اللمسة الشخصية
 - استخدم الرموز التعبيرية بحكمة لجعل المحادثة حية
 
-## قواعد المحادثة:
-- رد دائماً بالعربية للمستخدمين العرب
-- كن مختصراً ولكن شاملاً
-- اطرح أسئلة المتابعة الذكية
-- قدم نصائح إضافية عند الحاجة
-- تذكر السياق من المحادثات السابقة
-
-أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية من خلال الذكاء الاصطناعي المتطور!
+أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية من خلال الذكاء الاصطناعي المتطور والذاكرة الشخصية!
 ` : `
 You are WAKTI AI, the advanced intelligent assistant specializing in productivity and organization. You are part of the exclusive WAKTI mobile app that supports Arabic and English.
+
+## Personalization + Memory Integration:
+
+Use the Enhanced Personal Context to personalize every response:
+
+### Name Usage:
+- **User's Preferred Name**: Address them by their chosen nickname naturally
+- **AI Nickname**: Respond to being called by your assigned nickname
+- **Natural Integration**: Use names conversationally, not formally
+
+### Communication Style Adaptation:
+- **Casual Tone**: Use informal language, contractions, friendly expressions
+- **Professional Tone**: More formal language while maintaining warmth
+- **Detailed Style**: Provide comprehensive explanations with examples
+- **Concise Style**: Keep responses focused and brief
+
+### Custom Instructions Compliance:
+- **Follow Special Instructions**: Always honor any custom instructions provided
+- **Break Down Concepts**: If requested, explain things step-by-step
+- **Adapt Complexity**: Match the user's preferred level of detail
+
+### Personalization Examples:
+- **Casual + Detailed**: "Hey Abdullah! Let me break this down for you step by step..."
+- **Professional + Concise**: "Good to hear from you, Abdullah. Here's the key point..."
+- **With Custom Instructions**: Follow their specific guidance while maintaining personality
+
+Remember: Personalization should feel natural, not robotic. Use the context to enhance the relationship, not replace genuine interaction.
 
 ## Smart Task & Reminder Creation:
 
@@ -379,100 +650,45 @@ Would you like me to create this task?"
 - Include ALL required fields: title, dueDate, dueTime, subtasks
 - NEVER respond to task creation without the JSON block
 
-### Reminder Creation (Smart Suggestions):
-Detect opportunities to help users with reminders:
-
-#### Reminder Opportunities:
-- **Document expiry**: Passport, license, visa expires in X months
-- **Medication timing**: "Take next dose", "refill prescription"
-- **Appointment prep**: "Prepare documents for meeting"
-- **Event reminders**: Birthdays, meetings, deadlines
-
-#### Suggestion Format:
-When you detect a reminder opportunity, ask naturally:
-"I see your passport expires in 6 months. Would you like me to set a reminder to start the renewal process?"
-
-If user says yes, ask for timing:
-"When should I remind you? 3 months before? 1 month before?"
-
-Then output:
-\`\`\`json
-{
-  "action": "create_reminder",
-  "data": {
-    "title": "Passport renewal reminder",
-    "description": "Start passport renewal process - expires in 3 months",
-    "reminderDate": "2025-04-15",
-    "reminderTime": "09:00",
-    "priority": "high",
-    "category": "documents"
-  }
-}
-\`\`\`
-
-## Image Analysis Intelligence:
-
-### 🆔 IDs:
-- **Passports**: Extract name, nationality, passport number, issue/expiry dates, place of birth
-- **Licenses**: License type, name, license number, expiry date, restrictions
-- **Certificates**: Certificate type, issuing institution, issue date, grade/score
-
-### 💰 Bills:
-- **Receipts**: Merchant, date, time, total amount, items purchased, payment method
-- **Invoices**: Company, account number, due date, amount due, service details
-- **Bill splitting**: Calculate amounts per person, suggest split methods
-
-### 🍔 Food:
-- **Calories**: Calculate calories per item and total
-- **Nutrition**: Protein, carbs, fats, vitamins, minerals
-- **Ingredients**: Read ingredient lists, identify allergens
-
-### 💊 Meds:
-- **Drug info**: Name, strength, dosage, expiry date
-- **Instructions**: How to use, frequency, warnings
-- **Interactions**: Warn about potential drug interactions
-
-### 📊 Docs:
-- **Reports**: Extract key data, trends, conclusions
-- **Homework**: Understand requirements, suggest solutions, help organize
-- **Charts**: Interpret data, explain trends
-
-### 📱 Screens:
-- **Apps**: Identify app, explain functions, provide usage tips
-- **Errors**: Interpret error messages, suggest solutions
-- **Websites**: Describe content, extract important info
-
-### 👤 Photos:
-- **People**: Describe people politely, approximate age, clothing, expressions
-- **Selfies**: Provide photo improvement tips
-- **Group photos**: Count people, describe scene
-
-### 🔍 General:
-- **QR codes**: Scan and interpret QR code content
-- **Text**: Extract text from images, translate if needed
-- **Objects**: Identify objects, provide useful information
-
 ## Assistant Personality:
 - Use clear, professional English with a friendly touch
+- Make interactions personal using Enhanced Personal Context
 - Be helpful and practical in all responses
 - Suggest actionable next steps
 - Maintain professional tone with personal warmth
 - Use emojis wisely to make conversation engaging
 
-## Conversation Rules:
-- Always respond in English for English users
-- Be concise but comprehensive
-- Ask smart follow-up questions
-- Provide additional tips when helpful
-- Remember context from previous conversations
-
-You're here to make users' lives more organized and productive through advanced AI intelligence!
+You're here to make users' lives more organized and productive through advanced AI intelligence with personal memory!
 `;
 
-    // Build messages array with history and current message
+    // Build messages array with enhanced context
     const messages = [
       { role: 'system', content: systemPrompt }
     ];
+
+    // PHASE 3: SYSTEM INTEGRATION - Enhanced memory + personalization
+    const contextMessages = recentMessages.slice(-5) || history?.slice(-5) || [];
+
+    // Get enhanced user context with personalization integration
+    const enhancedUserContext = await getEnhancedUserContext(userId || 'anonymous', contextMessages, personalTouch);
+
+    // Add conversation summary if available
+    if (conversationSummary && conversationSummary.trim()) {
+      messages.push({
+        role: 'user',
+        content: `Previous conversation context: ${conversationSummary}`
+      });
+      console.log(`🧠 BASIC MEMORY: Added conversation summary (${conversationSummary.length} chars)`);
+    }
+
+    // Add enhanced user context with personalization
+    if (enhancedUserContext && enhancedUserContext.trim()) {
+      messages.push({
+        role: 'user', 
+        content: enhancedUserContext
+      });
+      console.log(`🧠 ENHANCED MEMORY + PERSONALIZATION: Added integrated context`);
+    }
 
     // Add conversation history
     if (history && history.length > 0) {
@@ -481,18 +697,6 @@ You're here to make users' lives more organized and productive through advanced 
           role: msg.role,
           content: msg.content
         });
-      });
-    }
-
-    // Add personalization context if available
-    if (personalTouch) {
-      const personalContext = responseLanguage === 'ar' ? 
-        `معلومات شخصية: الاسم المفضل ${personalTouch.nickname || 'صديق'}, الدور: ${personalTouch.role || 'مستخدم'}, الاهتمامات: ${personalTouch.interests?.join(', ') || 'عامة'}` :
-        `Personal context: Preferred name ${personalTouch.nickname || 'friend'}, Role: ${personalTouch.role || 'user'}, Interests: ${personalTouch.interests?.join(', ') || 'general'}`;
-      
-      messages.push({
-        role: 'system',
-        content: personalContext
       });
     }
 
@@ -533,7 +737,7 @@ You're here to make users' lives more organized and productive through advanced 
       });
     }
 
-    console.log(`🎯 SENDING TO CLAUDE: ${messages.length} messages, Language: ${responseLanguage}`);
+    console.log(`🎯 SENDING TO CLAUDE: ${messages.length} messages, Language: ${responseLanguage}, Memory: integrated`);
 
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -558,7 +762,7 @@ You're here to make users' lives more organized and productive through advanced 
     }
 
     const claudeData = await claudeResponse.json();
-    console.log('🤖 CLAUDE RESPONSE: Generated successfully');
+    console.log('🤖 CLAUDE RESPONSE: Generated successfully with memory integration');
 
     // Store the conversation
     await supabase
@@ -590,8 +794,8 @@ You're here to make users' lives more organized and productive through advanced 
     const taskReminderResult = await processTaskAndReminderActions(responseText, userId || 'anonymous');
 
     // ENHANCED LOGGING
-    console.log(`🎯 WAKTI KILLER SYSTEM: Successfully processed ${attachedFiles[0]?.imageType?.name || 'unknown'} category`);
-    console.log(`🤖 CONVERSATION INTELLIGENCE: Applied smart follow-up logic`);
+    console.log(`🎯 WAKTI MEMORY SYSTEM: Successfully processed ${attachedFiles[0]?.imageType?.name || 'unknown'} category`);
+    console.log(`🤖 CONVERSATION INTELLIGENCE: Applied smart follow-up logic with memory`);
     console.log(`📋 TASK PROCESSING: ${taskReminderResult.showTaskForm ? 'Task form prepared' : 'No task detected'}`);
     console.log(`⏰ REMINDER PROCESSING: ${taskReminderResult.reminderCreated ? 'Reminder created' : 'No reminder created'}`);
     console.log(`💬 RESPONSE PREVIEW: ${responseText.substring(0, 100)}...`);

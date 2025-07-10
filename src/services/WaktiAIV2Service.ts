@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMemoryService } from './ChatMemoryService';
 import { HybridMemoryService } from './HybridMemoryService';
+import { MemoryIntegrationService } from './MemoryIntegrationService';
 
 export interface AIMessage {
   id: string;
@@ -35,6 +36,7 @@ export interface ConversationContext {
 class WaktiAIV2ServiceClass {
   private memoryService: typeof ChatMemoryService;
   private hybridMemoryService: typeof HybridMemoryService;
+  private memoryIntegrationService: typeof MemoryIntegrationService;
   private conversationCache = new Map<string, ConversationContext>();
   private saveQueue: Array<() => Promise<void>> = [];
   private processing = false;
@@ -42,10 +44,10 @@ class WaktiAIV2ServiceClass {
   constructor() {
     this.memoryService = ChatMemoryService;
     this.hybridMemoryService = HybridMemoryService;
+    this.memoryIntegrationService = MemoryIntegrationService;
     this.startBackgroundProcessor();
   }
 
-  // ULTRA-FAST: Background processor for memory operations
   private startBackgroundProcessor() {
     setInterval(async () => {
       if (this.processing || this.saveQueue.length === 0) return;
@@ -55,7 +57,6 @@ class WaktiAIV2ServiceClass {
       this.saveQueue.length = 0;
       
       try {
-        // Process all tasks in parallel for maximum speed
         await Promise.allSettled(tasks.map(task => task()));
         console.log('✅ Memory: Background processed', tasks.length, 'tasks');
       } catch (error) {
@@ -63,24 +64,43 @@ class WaktiAIV2ServiceClass {
       } finally {
         this.processing = false;
       }
-    }, 1000); // Process queue every second
+    }, 1000);
   }
 
-  // Clear personal touch cache method
   clearPersonalTouchCache() {
-    // Clear any cached personal touch data if we had it
-    // For now this is a placeholder since personal touch is stored in localStorage
     console.log('Personal touch cache cleared - settings will reload from localStorage');
   }
 
-  // ULTRA-FAST: Get or create conversation (with caching and error handling)
+  async clearMemoryContext(): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+
+      return await this.memoryIntegrationService.clearMemoryContext(user.id);
+    } catch (error) {
+      console.error('Error clearing memory context:', error);
+      return false;
+    }
+  }
+
+  async getMemoryStats() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      return await this.memoryIntegrationService.getMemoryStats(user.id);
+    } catch (error) {
+      console.error('Error getting memory stats:', error);
+      return null;
+    }
+  }
+
   private async getOrCreateConversation(userId: string, existingConversationId?: string | null): Promise<string> {
     if (existingConversationId) {
       return existingConversationId;
     }
 
     try {
-      // Create new conversation with retry logic
       const { data, error } = await supabase
         .from('ai_conversations')
         .insert({
@@ -93,7 +113,6 @@ class WaktiAIV2ServiceClass {
 
       if (error) {
         console.warn('Conversation creation failed:', error);
-        // Return fallback ID for graceful degradation
         return `fallback-${Date.now()}`;
       }
       
@@ -105,12 +124,135 @@ class WaktiAIV2ServiceClass {
     }
   }
 
-  // HYBRID MEMORY: Enhanced context loading with 3-layer system
+  async sendMessage(
+    message: string,
+    userId?: string,
+    language: string = 'en',
+    conversationId?: string | null,
+    inputType: 'text' | 'voice' = 'text',
+    recentMessages: AIMessage[] = [],
+    skipContextLoad: boolean = false,
+    activeTrigger: string = 'chat',
+    conversationSummary: string = '',
+    attachedFiles: any[] = []
+  ) {
+    try {
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Authentication required');
+        userId = user.id;
+      }
+
+      console.log('🚀 INTEGRATED MEMORY SYSTEM: Processing ultra-fast message with full personalization');
+
+      const [actualConversationId, contextPromise] = await Promise.all([
+        this.getOrCreateConversation(userId, conversationId),
+        skipContextLoad ? Promise.resolve(null) : this.loadConversationContext(userId, conversationId)
+      ]);
+
+      const context = contextPromise || {
+        recentMessages: recentMessages.slice(-5),
+        conversationSummary,
+        messageCount: recentMessages.length,
+        conversationId: actualConversationId
+      };
+
+      const userMessage: AIMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: message,
+        timestamp: new Date(),
+        inputType: inputType,
+        attachedFiles: attachedFiles
+      };
+
+      console.log('🧠 INTEGRATED MEMORY: Context loaded -', context.recentMessages.length, 'messages,', context.conversationSummary.length, 'summary chars');
+
+      const personalTouch = this.getPersonalTouch();
+      const memoryContext = await this.memoryIntegrationService.getUserMemoryContext(userId);
+      const integratedContext = this.memoryIntegrationService.buildIntegratedContext(memoryContext, personalTouch);
+
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('wakti-ai-v2-brain', {
+          body: {
+            message,
+            userId,
+            language,
+            conversationId: actualConversationId,
+            inputType,
+            activeTrigger,
+            attachedFiles,
+            conversationSummary: context.conversationSummary,
+            recentMessages: context.recentMessages,
+            personalTouch: personalTouch,
+            customSystemPrompt: '',
+            maxTokens: 4096,
+            userStyle: 'detailed',
+            userTone: 'neutral',
+            speedOptimized: true,
+            aggressiveOptimization: false,
+            hasTaskIntent: false,
+            personalityEnabled: true,
+            enableTaskCreation: true,
+            enablePersonality: true,
+            memoryEnabled: true,
+            integratedContext: integratedContext
+          }
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('AI request timeout - please try again')), 25000)
+        )
+      ]) as any;
+
+      if (error) {
+        console.error('❌ INTEGRATED MEMORY: AI service error:', error);
+        throw error;
+      }
+
+      const assistantMessage: AIMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: data.response || 'I apologize, but I encountered an issue processing your request.',
+        timestamp: new Date(),
+        intent: data.intent,
+        confidence: data.confidence as 'high' | 'medium' | 'low',
+        actionTaken: data.actionTaken,
+        imageUrl: data.imageUrl,
+        browsingUsed: data.browsingUsed,
+        browsingData: data.browsingData
+      };
+
+      this.hybridMemoryService.addMessage(userId, actualConversationId, userMessage, assistantMessage);
+
+      this.queueMessageSave(userId, actualConversationId, userMessage, assistantMessage);
+
+      this.saveQueue.push(async () => {
+        try {
+          await this.memoryService.addExchange(userMessage.content, assistantMessage.content, userId);
+          console.log('✅ Memory: ChatMemoryService updated');
+        } catch (error) {
+          console.warn('Memory service update failed:', error);
+        }
+      });
+
+      console.log('✅ INTEGRATED MEMORY SYSTEM: Ultra-fast message processed with full personalization');
+
+      return {
+        ...data,
+        conversationId: actualConversationId,
+        response: assistantMessage.content
+      };
+
+    } catch (error: any) {
+      console.error('❌ INTEGRATED MEMORY: AI Service Error:', error);
+      throw new Error(error.message || 'AI request failed');
+    }
+  }
+
   private async loadConversationContext(userId: string, conversationId: string | null): Promise<ConversationContext> {
     try {
       console.log('🧠 HYBRID MEMORY: Loading context from 3-layer system');
       
-      // Use HYBRID MEMORY for ultra-fast context loading
       const hybridContext = await this.hybridMemoryService.getHybridContext(userId, conversationId);
       
       console.log(`✅ HYBRID MEMORY: Loaded context - ${hybridContext.recentMessages.length} messages, ${hybridContext.conversationSummary.length} summary chars`);
@@ -140,70 +282,9 @@ class WaktiAIV2ServiceClass {
     }
   }
 
-  // Load recent messages (last 10) with better error handling
-  private async loadRecentMessages(conversationId: string): Promise<AIMessage[]> {
-    try {
-      const { data, error } = await supabase
-        .from('ai_chat_history')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) {
-        console.warn('Failed to load recent messages:', error);
-        return [];
-      }
-
-      const messages = (data || []).reverse().map(msg => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: new Date(msg.created_at),
-        intent: msg.intent,
-        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
-        actionTaken: msg.action_taken,
-        inputType: msg.input_type as 'text' | 'voice',
-        browsingUsed: msg.browsing_used,
-        browsingData: msg.browsing_data
-      }));
-
-      console.log('✅ Memory: Loaded', messages.length, 'recent messages');
-      return messages;
-    } catch (error) {
-      console.warn('Load recent messages error:', error);
-      return [];
-    }
-  }
-
-  // Load conversation summary with error handling
-  private async loadConversationSummary(userId: string, conversationId: string): Promise<string> {
-    try {
-      const { data, error } = await supabase
-        .from('ai_conversation_summaries')
-        .select('summary_text')
-        .eq('user_id', userId)
-        .eq('conversation_id', conversationId)
-        .single();
-
-      if (error || !data) {
-        console.log('No conversation summary found (normal for new conversations)');
-        return '';
-      }
-      
-      console.log('✅ Memory: Conversation summary loaded');
-      return data.summary_text;
-    } catch (error) {
-      console.warn('Load conversation summary error:', error);
-      return '';
-    }
-  }
-
-  // ULTRA-FAST: Queue message saving for background processing with better error handling
   private queueMessageSave(userId: string, conversationId: string, message: AIMessage, response?: AIMessage) {
     this.saveQueue.push(async () => {
       try {
-        // Skip saving for fallback conversation IDs
         if (conversationId.startsWith('fallback-')) {
           console.log('⚠️ Memory: Skipping database save for fallback conversation');
           return;
@@ -237,7 +318,6 @@ class WaktiAIV2ServiceClass {
           return;
         }
         
-        // Update conversation timestamp
         const { error: updateError } = await supabase
           .from('ai_conversations')
           .update({ last_message_at: new Date().toISOString() })
@@ -247,7 +327,6 @@ class WaktiAIV2ServiceClass {
           console.warn('⚠️ Memory: Conversation timestamp update failed:', updateError);
         }
 
-        // Clear cache to force refresh
         this.conversationCache.delete(conversationId);
         
         console.log('✅ Memory: Database saved', messagesToSave.length, 'messages');
@@ -257,135 +336,6 @@ class WaktiAIV2ServiceClass {
     });
   }
 
-  // ENHANCED: Main send message with HYBRID MEMORY integration and HAIKU speed
-  async sendMessage(
-    message: string,
-    userId?: string,
-    language: string = 'en',
-    conversationId?: string | null,
-    inputType: 'text' | 'voice' = 'text',
-    recentMessages: AIMessage[] = [],
-    skipContextLoad: boolean = false,
-    activeTrigger: string = 'chat',
-    conversationSummary: string = '',
-    attachedFiles: any[] = []
-  ) {
-    try {
-      // Get user ID
-      if (!userId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Authentication required');
-        userId = user.id;
-      }
-
-      console.log('🚀 HYBRID MEMORY + HAIKU: Processing ultra-fast message');
-
-      // HYBRID MEMORY: Get/create conversation and load context intelligently
-      const [actualConversationId, contextPromise] = await Promise.all([
-        this.getOrCreateConversation(userId, conversationId),
-        skipContextLoad ? Promise.resolve(null) : this.loadConversationContext(userId, conversationId)
-      ]);
-
-      const context = contextPromise || {
-        recentMessages: recentMessages.slice(-5), // Use provided messages if skipping context load
-        conversationSummary,
-        messageCount: recentMessages.length,
-        conversationId: actualConversationId
-      };
-
-      // Create user message object
-      const userMessage: AIMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: message,
-        timestamp: new Date(),
-        inputType: inputType,
-        attachedFiles: attachedFiles
-      };
-
-      console.log('🧠 HYBRID MEMORY: Context loaded -', context.recentMessages.length, 'messages,', context.conversationSummary.length, 'summary chars');
-
-      // ENHANCED: Call HAIKU-powered AI brain with full context and timeout protection
-      const { data, error } = await Promise.race([
-        supabase.functions.invoke('wakti-ai-v2-brain', {
-          body: {
-            message,
-            userId,
-            language,
-            conversationId: actualConversationId,
-            inputType,
-            activeTrigger,
-            attachedFiles,
-            conversationSummary: context.conversationSummary,
-            recentMessages: context.recentMessages,
-            customSystemPrompt: '',
-            maxTokens: 4096,
-            userStyle: 'detailed',
-            userTone: 'neutral',
-            speedOptimized: true,
-            aggressiveOptimization: false,
-            hasTaskIntent: false,
-            personalityEnabled: true,
-            enableTaskCreation: true,
-            enablePersonality: true,
-            personalTouch: this.getPersonalTouch()
-          }
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('AI request timeout - please try again')), 25000)
-        )
-      ]) as any;
-
-      if (error) {
-        console.error('❌ HAIKU: AI service error:', error);
-        throw error;
-      }
-
-      // Create assistant response message
-      const assistantMessage: AIMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: data.response || 'I apologize, but I encountered an issue processing your request.',
-        timestamp: new Date(),
-        intent: data.intent,
-        confidence: data.confidence as 'high' | 'medium' | 'low',
-        actionTaken: data.actionTaken,
-        imageUrl: data.imageUrl,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData
-      };
-
-      // HYBRID MEMORY: Add to all memory layers
-      this.hybridMemoryService.addMessage(userId, actualConversationId, userMessage, assistantMessage);
-
-      // ULTRA-FAST: Queue background save (fire-and-forget)
-      this.queueMessageSave(userId, actualConversationId, userMessage, assistantMessage);
-
-      // ULTRA-FAST: Update memory service in background
-      this.saveQueue.push(async () => {
-        try {
-          await this.memoryService.addExchange(userMessage.content, assistantMessage.content, userId);
-          console.log('✅ Memory: ChatMemoryService updated');
-        } catch (error) {
-          console.warn('Memory service update failed:', error);
-        }
-      });
-
-      console.log('✅ HYBRID MEMORY + HAIKU: Ultra-fast message processed successfully');
-
-      return {
-        ...data,
-        conversationId: actualConversationId,
-        response: assistantMessage.content
-      };
-
-    } catch (error: any) {
-      console.error('❌ HYBRID MEMORY: AI Service Error:', error);
-      throw new Error(error.message || 'AI request failed');
-    }
-  }
-
-  // Get personal touch settings
   private getPersonalTouch() {
     try {
       const stored = localStorage.getItem('wakti_personal_touch');
@@ -395,7 +345,6 @@ class WaktiAIV2ServiceClass {
     }
   }
 
-  // Get conversations
   async getConversations(): Promise<AIConversation[]> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -422,7 +371,6 @@ class WaktiAIV2ServiceClass {
     }
   }
 
-  // Get conversation messages
   async getConversationMessages(conversationId: string): Promise<any[]> {
     try {
       const { data, error } = await supabase
@@ -439,16 +387,13 @@ class WaktiAIV2ServiceClass {
     }
   }
 
-  // Delete conversation
   async deleteConversation(conversationId: string): Promise<void> {
     try {
-      // Delete in parallel
       await Promise.all([
         supabase.from('ai_chat_history').delete().eq('conversation_id', conversationId),
         supabase.from('ai_conversations').delete().eq('id', conversationId)
       ]);
       
-      // Clear cache
       this.conversationCache.delete(conversationId);
     } catch (error) {
       console.error('Error deleting conversation:', error);
@@ -456,11 +401,10 @@ class WaktiAIV2ServiceClass {
     }
   }
 
-  // Session management (browser storage)
   saveChatSession(messages: AIMessage[], conversationId?: string | null) {
     try {
       const sessionData = {
-        messages: messages.slice(-10), // Keep last 10 messages
+        messages: messages.slice(-10),
         conversationId,
         timestamp: Date.now()
       };
@@ -477,7 +421,6 @@ class WaktiAIV2ServiceClass {
 
       const sessionData = JSON.parse(stored);
       
-      // Check if session is not too old (24 hours)
       if (Date.now() - sessionData.timestamp > 24 * 60 * 60 * 1000) {
         this.clearChatSession();
         return null;
@@ -505,6 +448,5 @@ class WaktiAIV2ServiceClass {
   }
 }
 
-// Export singleton instance
 export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
 export { WaktiAIV2ServiceClass };

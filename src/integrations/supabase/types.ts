@@ -1836,6 +1836,72 @@ export type Database = {
           },
         ]
       }
+      user_memory_context: {
+        Row: {
+          ai_nickname: string | null
+          communication_style: string | null
+          conversation_themes: string[] | null
+          created_at: string | null
+          current_projects: string | null
+          custom_instructions: string | null
+          id: string
+          interaction_count: number | null
+          last_interaction: string | null
+          preferred_help_style: string | null
+          preferred_nickname: string | null
+          preferred_tone: string | null
+          recent_achievements: string | null
+          relationship_style: string | null
+          reply_style: string | null
+          updated_at: string | null
+          user_expertise: string[] | null
+          user_id: string
+          working_patterns: string | null
+        }
+        Insert: {
+          ai_nickname?: string | null
+          communication_style?: string | null
+          conversation_themes?: string[] | null
+          created_at?: string | null
+          current_projects?: string | null
+          custom_instructions?: string | null
+          id?: string
+          interaction_count?: number | null
+          last_interaction?: string | null
+          preferred_help_style?: string | null
+          preferred_nickname?: string | null
+          preferred_tone?: string | null
+          recent_achievements?: string | null
+          relationship_style?: string | null
+          reply_style?: string | null
+          updated_at?: string | null
+          user_expertise?: string[] | null
+          user_id: string
+          working_patterns?: string | null
+        }
+        Update: {
+          ai_nickname?: string | null
+          communication_style?: string | null
+          conversation_themes?: string[] | null
+          created_at?: string | null
+          current_projects?: string | null
+          custom_instructions?: string | null
+          id?: string
+          interaction_count?: number | null
+          last_interaction?: string | null
+          preferred_help_style?: string | null
+          preferred_nickname?: string | null
+          preferred_tone?: string | null
+          recent_achievements?: string | null
+          relationship_style?: string | null
+          reply_style?: string | null
+          updated_at?: string | null
+          user_expertise?: string[] | null
+          user_id?: string
+          working_patterns?: string | null
+        }
+        Relationships: []
+      }
       user_push_subscriptions: {
         Row: {
           created_at: string
