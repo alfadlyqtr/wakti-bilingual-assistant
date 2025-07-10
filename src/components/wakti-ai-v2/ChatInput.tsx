@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -112,33 +113,33 @@ export function ChatInput({
           imageTypeId: file.imageType?.id
         });
 
-        // Create context instruction based on image type
+        // Create context instruction based on image type - UPDATED with specific contexts
         let context = '';
         if (file.imageType?.id) {
           switch (file.imageType.id) {
-            case 'document':
-              context = 'This is an ID/Document image. Extract all information including names, dates, expiry dates, and validate if still valid. Compare expiry dates with current date and warn if expired.';
+            case 'passport':
+              context = 'This is a PASSPORT - extract personal information, passport number, issue/expiry dates, check if expired, and provide renewal advice if needed. Compare expiry dates with current date and warn if expired.';
               break;
-            case 'business_docs':
-              context = 'This is a business document. Analyze content, extract key terms, dates, and important business information.';
+            case 'id_card':
+              context = 'This is an ID CARD - extract personal details, ID number, validity dates, check expiry status and warn if expired. Compare dates with current date.';
+              break;
+            case 'certificate':
+              context = 'This is a CERTIFICATE/DOCUMENT - extract institution, dates, qualifications, validity period, and any important details.';
               break;
             case 'financial':
-              context = 'This is a financial document (bill/receipt). Extract amounts, dates, items, and financial details. Calculate totals and provide breakdown if requested.';
+              context = 'This is a BILL/RECEIPT - extract amounts, dates, items, calculate totals, and provide financial breakdown if requested.';
+              break;
+            case 'person':
+              context = 'This is a PHOTO of a person/people - describe appearance, clothing, setting, activities, and any notable details.';
+              break;
+            case 'place':
+              context = 'This is a PLACE/BUILDING - describe the location, architecture, notable features, and any identifying details.';
               break;
             case 'screenshots':
-              context = 'This is a screenshot. Describe the interface, buttons, text, and functionality shown in the image.';
+              context = 'This is a SCREENSHOT - describe the interface, buttons, text, functionality, and explain what is shown on screen.';
               break;
             case 'text_image':
-              context = 'This image contains text. Extract and transcribe all visible text accurately, including handwriting if present.';
-              break;
-            case 'academic':
-              context = 'This is academic content. Help explain concepts, solve problems, and provide detailed educational guidance.';
-              break;
-            case 'medical':
-              context = 'This is a medical document. Extract medical information, explain results, and provide clear interpretations.';
-              break;
-            case 'technical':
-              context = 'This is a technical diagram/chart. Analyze the data, components, and provide detailed technical explanations.';
+              context = 'This is TEXT EXTRACTION - extract and transcribe all visible text accurately, including handwritten content if present.';
               break;
             default:
               context = 'Provide detailed description and analysis of this image.';
@@ -154,7 +155,7 @@ export function ChatInput({
           publicUrl: file.publicUrl,
           optimized: true,
           imageType: file.imageType,
-          context: context // This is the key fix - adding context to the file object
+          context: context // This is the key fix - adding specific context to the file object
         };
       });
       
@@ -257,7 +258,7 @@ export function ChatInput({
                     flex-1 border-[2.5px]
                     bg-white/95 dark:bg-gray-800/90
                     text-gray-900 dark:text-gray-100
-                    ${textareaHighlightClass}
+                    ${textareaHighlight(activeTrigger)}
                     shadow-inner shadow-primary/10
                     backdrop-blur-[3px] resize-none
                     focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
@@ -269,7 +270,7 @@ export function ChatInput({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      if (canSend) {
+                      if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
                         handleSend();
                       }
                     }
@@ -279,13 +280,13 @@ export function ChatInput({
               </div>
               
               {/* Send button with proper enabling logic */}
-              {canSend && (
+              {((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
                         onClick={handleSend}
-                        disabled={!canSend}
+                        disabled={!((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading)}
                         className={`
                           h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
                           border-0 shadow-2xl backdrop-blur-md

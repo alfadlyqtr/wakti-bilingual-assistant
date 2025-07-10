@@ -15,40 +15,67 @@ export interface ImageTypeOption {
 
 const IMAGE_TYPES: ImageTypeOption[] = [
   {
-    id: 'document',
-    name: 'ID/Documents',
-    icon: '🆔',
-    description: 'Passports, IDs, licenses, certificates',
-    hint: 'Extract info, check dates, validate details',
-    examples: ['Extract passport info', 'Check ID expiry'],
-    examplePrompt: 'Extract all information from this document including names, dates, expiry dates, and validate if still valid'
+    id: 'passport',
+    name: 'Passport',
+    icon: '🛂',
+    description: 'Passport documents for travel',
+    hint: 'Extract passport info, check expiry, provide travel advice',
+    examples: ['Check passport expiry', 'Extract passport details'],
+    examplePrompt: 'This is a PASSPORT - extract personal information, passport number, issue/expiry dates, check if expired, and provide renewal advice if needed'
   },
   {
-    id: 'business_docs',
-    name: 'Business Documents',
-    icon: '📊',
-    description: 'Reports, contracts, business papers',
-    hint: 'Analyze business content and extract key info',
-    examples: ['Summarize contract', 'Extract business data'],
-    examplePrompt: 'Analyze this business document and provide key insights, terms, and important details'
+    id: 'id_card',
+    name: 'ID Card',
+    icon: '🆔',
+    description: 'National ID cards, residency permits',
+    hint: 'Extract ID details, check validity dates',
+    examples: ['Extract ID info', 'Check ID expiry'],
+    examplePrompt: 'This is an ID CARD - extract personal details, ID number, validity dates, check expiry status and warn if expired'
+  },
+  {
+    id: 'certificate',
+    name: 'Certificate/Document',
+    icon: '📄',
+    description: 'Certificates, licenses, official documents',
+    hint: 'Extract document info, dates, qualifications',
+    examples: ['Read certificate', 'Extract document details'],
+    examplePrompt: 'This is a CERTIFICATE/DOCUMENT - extract institution, dates, qualifications, validity period, and any important details'
   },
   {
     id: 'financial',
-    name: 'Financial Documents',
+    name: 'Bills/Receipts',
     icon: '💰',
     description: 'Bills, receipts, invoices, bank statements',
     hint: 'Extract amounts, dates, calculate totals',
     examples: ['Split restaurant bill', 'Extract invoice details'],
-    examplePrompt: 'Break down this financial document - show all amounts, dates, totals, and provide calculations if needed'
+    examplePrompt: 'This is a BILL/RECEIPT - extract amounts, dates, items, calculate totals, and provide financial breakdown'
+  },
+  {
+    id: 'person',
+    name: 'Person/Photo',
+    icon: '👤',
+    description: 'Photos of people, portraits, group photos',
+    hint: 'Describe people, appearance, activities',
+    examples: ['Describe person', 'Analyze group photo'],
+    examplePrompt: 'This is a PHOTO of a person/people - describe appearance, clothing, setting, activities, and any notable details'
+  },
+  {
+    id: 'place',
+    name: 'Place/Building',
+    icon: '🏢',
+    description: 'Buildings, locations, landmarks, scenery',
+    hint: 'Describe location, architecture, features',
+    examples: ['Identify building', 'Describe location'],
+    examplePrompt: 'This is a PLACE/BUILDING - describe the location, architecture, notable features, and any identifying details'
   },
   {
     id: 'screenshots',
-    name: 'Screenshots',
+    name: 'Screenshot',
     icon: '📱',
     description: 'App screens, website captures, UI elements',
     hint: 'Read and explain interface elements',
     examples: ['Explain app interface', 'Read screen content'],
-    examplePrompt: 'Describe what is shown in this screenshot including buttons, text, and functionality'
+    examplePrompt: 'This is a SCREENSHOT - describe the interface, buttons, text, functionality, and explain what is shown on screen'
   },
   {
     id: 'text_image',
@@ -57,34 +84,7 @@ const IMAGE_TYPES: ImageTypeOption[] = [
     description: 'Signs, handwritten notes, text in images',
     hint: 'Extract and transcribe all visible text',
     examples: ['Extract text', 'Transcribe handwriting'],
-    examplePrompt: 'Extract and transcribe all visible text from this image, including any handwritten content'
-  },
-  {
-    id: 'academic',
-    name: 'Academic Work',
-    icon: '🎓',
-    description: 'Homework, exams, study materials, research',
-    hint: 'Help with educational content and explanations',
-    examples: ['Solve homework', 'Explain concepts'],
-    examplePrompt: 'Help me understand this academic content - explain the concepts and provide detailed guidance'
-  },
-  {
-    id: 'medical',
-    name: 'Medical Documents',
-    icon: '🩺',
-    description: 'Lab results, prescriptions, medical reports',
-    hint: 'Extract medical info and explain results',
-    examples: ['Read lab results', 'Explain prescription'],
-    examplePrompt: 'Extract and explain the medical information from this document, including key results and recommendations'
-  },
-  {
-    id: 'technical',
-    name: 'Technical Diagrams',
-    icon: '⚙️',
-    description: 'Charts, graphs, technical drawings, blueprints',
-    hint: 'Analyze technical content and data',
-    examples: ['Explain chart data', 'Analyze diagram'],
-    examplePrompt: 'Analyze this technical diagram/chart and provide detailed explanations of the data and components'
+    examplePrompt: 'This is TEXT EXTRACTION - extract and transcribe all visible text accurately, including handwritten content if present'
   }
 ];
 
