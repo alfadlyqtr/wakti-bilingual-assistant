@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-react';
+import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2, Video } from 'lucide-react';
 import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { GameModeModal } from './GameModeModal';
+import { VideoGeneratorModal } from './video-generator/VideoGeneratorModal';
 
 interface QuickActionsProps {
   onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
@@ -14,6 +15,7 @@ interface QuickActionsProps {
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
   onClose?: () => void;
 }
+
 export function QuickActionsPanel({
   onSendMessage,
   activeTrigger,
@@ -27,6 +29,7 @@ export function QuickActionsPanel({
   const [showTextGen, setShowTextGen] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
+  const [showVideoGenerator, setShowVideoGenerator] = useState(false);
   
   const triggerModes = [{
     id: 'chat',
@@ -66,6 +69,12 @@ export function QuickActionsPanel({
     description: language === 'ar' ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة' : 'Clone your voice, translate and speak in different languages',
     action: () => setShowVoiceClone(true),
     color: 'bg-pink-500'
+  }, {
+    icon: <Video className="h-5 w-5" />,
+    label: language === 'ar' ? 'مولد الفيديو' : 'AI Video Generator',
+    description: language === 'ar' ? 'إنشاء فيديوهات من الصور باستخدام الذكاء الاصطناعي' : 'Create videos from images with AI templates',
+    action: () => setShowVideoGenerator(true),
+    color: 'bg-indigo-500'
   }, {
     icon: <Gamepad2 className="h-5 w-5" />,
     label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
@@ -156,6 +165,12 @@ export function QuickActionsPanel({
 
         {/* Voice Clone Popup */}
         <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
+
+        {/* Video Generator Modal */}
+        <VideoGeneratorModal 
+          isOpen={showVideoGenerator} 
+          onClose={() => setShowVideoGenerator(false)} 
+        />
 
         {/* Game Mode Modal */}
         <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />
