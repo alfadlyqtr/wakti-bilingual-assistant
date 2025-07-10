@@ -1,5 +1,3 @@
-
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -212,8 +210,14 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 - **المهام الفرعية**: قسم العناصر (حليب، أرز، خبز أو بنود جدول أعمال)
 - **الأولوية**: استنتج من كلمات الإلحاح (عاجل، مهم، فوري)
 
-#### تنسيق الإخراج للمهام:
-عندما يُطلب إنشاء مهمة، رد بـ:
+#### مهم جداً: تنسيق إخراج المهام - يجب الاتباع بدقة:
+عندما يقول المستخدم "أنشئ مهمة" أو "create task"، يجب أن ترد بـ:
+1. شرح مختصر باللغة الطبيعية
+2. متبوعاً فوراً بكتلة كود JSON
+
+**مثال على تنسيق الرد:**
+"سأساعدك في إنشاء هذه المهمة! إليك التفاصيل التي استخرجتها:
+
 \`\`\`json
 {
   "action": "create_task_form",
@@ -221,13 +225,23 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     "title": "التسوق في لولو",
     "description": "شراء البقالة للأسبوع",
     "dueDate": "2025-01-18",
-    "dueTime": "09:00",
+    "dueTime": "21:00",
     "priority": "medium",
     "subtasks": ["شراء حليب", "شراء أرز", "شراء خبز"],
     "category": "shopping"
   }
 }
 \`\`\`
+
+هل تريد مني إنشاء هذه المهمة؟"
+
+**قواعد حاسمة:**
+- اشمل دائماً كتلة كود JSON عند طلب إنشاء مهمة
+- استخدم \`\`\`json لبدء كتلة الكود
+- اختتم بـ \`\`\` لإغلاق كتلة الكود
+- يجب أن يكون JSON صحيحاً وقابلاً للتحليل
+- اشمل جميع الحقول المطلوبة: title, dueDate, dueTime, subtasks
+- لا ترد أبداً على إنشاء المهام بدون كتلة JSON
 
 ### إنشاء التذكيرات (اقتراحات ذكية):
 اكتشف الفرص لمساعدة المستخدمين بالتذكيرات:
@@ -332,8 +346,14 @@ When user says "create task" or "أنشئ مهمة", extract and structure the f
 - **Subtasks**: Break down items (milk, rice, bread OR agenda items)
 - **Priority**: Infer from urgency words (urgent, important, ASAP)
 
-#### Task Output Format:
-When task creation is requested, respond with:
+#### CRITICAL: Task Output Format - MUST FOLLOW EXACTLY:
+When user says "create task" or "أنشئ مهمة", you MUST respond with BOTH:
+1. A brief explanation in natural language
+2. IMMEDIATELY followed by the JSON code block
+
+**EXAMPLE RESPONSE FORMAT:**
+"I'll help you create that task! Here are the details I extracted:
+
 \`\`\`json
 {
   "action": "create_task_form",
@@ -341,13 +361,23 @@ When task creation is requested, respond with:
     "title": "Shopping at Lulu",
     "description": "Buy groceries for the week",
     "dueDate": "2025-01-18",
-    "dueTime": "09:00",
+    "dueTime": "21:00",
     "priority": "medium",
     "subtasks": ["Buy milk", "Buy rice", "Buy bread"],
     "category": "shopping"
   }
 }
 \`\`\`
+
+Would you like me to create this task?"
+
+**CRITICAL RULES:**
+- ALWAYS include the JSON code block when task creation is requested
+- Use \`\`\`json to start the code block
+- End with \`\`\` to close the code block  
+- The JSON must be valid and parseable
+- Include ALL required fields: title, dueDate, dueTime, subtasks
+- NEVER respond to task creation without the JSON block
 
 ### Reminder Creation (Smart Suggestions):
 Detect opportunities to help users with reminders:
@@ -732,4 +762,3 @@ async function createReminderInDatabase(reminderData, userId) {
     return null;
   }
 }
-
