@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
@@ -291,7 +290,9 @@ export function SimplifiedFileUpload({
                   {/* Show description when type is selected */}
                   {file.imageType && (
                     <div className="text-xs text-muted-foreground bg-primary/5 px-2 py-1 rounded border border-primary/20">
-                      <span className="text-primary font-medium">{file.imageType.icon} {file.imageType.name}:</span> {file.imageType.hint}
+                      <span className="text-primary font-medium">
+                        {file.imageType.icon} {file.imageType.name[language || 'en']}:
+                      </span> {file.imageType.description[language || 'en']}
                     </div>
                   )}
                 </div>
