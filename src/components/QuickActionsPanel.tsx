@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { GameModeModal } from './wakti-ai-v2/GameModeModal';
 import { ScreenshotUpload } from './wakti-ai-v2/ScreenshotUpload';
-import { VideoGeneratorModal } from './wakti-ai-v2/video-generator/VideoGeneratorModal';
 
 interface QuickAction {
   id: string;
@@ -38,6 +37,7 @@ const quickActions: QuickAction[] = [
     description: 'Create professional videos from images with 28+ templates',
     icon: Video,
     color: 'bg-indigo-500',
+    comingSoon: true, // Mark as coming soon since it's only available in chat
   },
   {
     id: 'document-scanner',
@@ -149,7 +149,7 @@ export const QuickActionsPanel = () => {
         </div>
       </div>
 
-      {/* Standalone Modals */}
+      {/* Standalone Modals - VideoGeneratorModal removed to avoid conflicts */}
       <GameModeModal 
         open={selectedAction === 'game-mode'} 
         onOpenChange={(open) => !open && closeModal()} 
@@ -158,11 +158,6 @@ export const QuickActionsPanel = () => {
       <ScreenshotUpload 
         isOpen={selectedAction === 'screenshot-ai'} 
         onClose={closeModal} 
-      />
-
-      <VideoGeneratorModal
-        isOpen={selectedAction === 'video-generator'}
-        onClose={closeModal}
       />
     </>
   );

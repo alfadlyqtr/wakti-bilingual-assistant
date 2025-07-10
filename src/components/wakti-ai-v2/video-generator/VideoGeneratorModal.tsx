@@ -156,7 +156,7 @@ export const VideoGeneratorModal: React.FC<VideoGeneratorModalProps> = ({
   const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
       <div className="bg-background border border-border rounded-2xl w-full max-w-6xl h-[95vh] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border bg-background rounded-t-2xl">

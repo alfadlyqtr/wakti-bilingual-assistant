@@ -1,4 +1,6 @@
+
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,7 +88,7 @@ export function QuickActionsPanel({
       setShowVideoGenerator(true);
       // Close drawer immediately for video generator
       if (onClose) {
-        setTimeout(() => onClose(), 100);
+        onClose();
       }
     },
     color: 'bg-indigo-500'
@@ -117,6 +119,37 @@ export function QuickActionsPanel({
   const handleToolAction = (action: () => void) => {
     action();
     console.log('🔧 Quick Actions: Tool opened');
+  };
+
+  // Render modals using React Portal to ensure they appear above everything
+  const renderModals = () => {
+    if (typeof document === 'undefined') return null;
+    
+    return createPortal(
+      <>
+        <TextGeneratorPopup 
+          isOpen={showTextGen} 
+          onClose={() => setShowTextGen(false)} 
+          onTextGenerated={onTextGenerated} 
+        />
+
+        <VoiceClonePopup 
+          open={showVoiceClone} 
+          onOpenChange={setShowVoiceClone} 
+        />
+
+        <VideoGeneratorModal 
+          isOpen={showVideoGenerator} 
+          onClose={() => setShowVideoGenerator(false)} 
+        />
+
+        <GameModeModal 
+          open={showGameMode} 
+          onOpenChange={setShowGameMode} 
+        />
+      </>,
+      document.body
+    );
   };
   
   return (
@@ -194,27 +227,8 @@ export function QuickActionsPanel({
         </div>
       </div>
 
-      {/* Standalone Modals - These render at root level, not inside drawer */}
-      <TextGeneratorPopup 
-        isOpen={showTextGen} 
-        onClose={() => setShowTextGen(false)} 
-        onTextGenerated={onTextGenerated} 
-      />
-
-      <VoiceClonePopup 
-        open={showVoiceClone} 
-        onOpenChange={setShowVoiceClone} 
-      />
-
-      <VideoGeneratorModal 
-        isOpen={showVideoGenerator} 
-        onClose={() => setShowVideoGenerator(false)} 
-      />
-
-      <GameModeModal 
-        open={showGameMode} 
-        onOpenChange={setShowGameMode} 
-      />
+      {/* Render modals via portal to ensure proper positioning */}
+      {renderModals()}
     </>
   );
 }
