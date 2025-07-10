@@ -3,7 +3,7 @@ import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
 
-export interface ImageType {
+export interface ImageTypeOption {
   id: string;
   name: string;
   icon: string;
@@ -12,7 +12,7 @@ export interface ImageType {
   examples: string[];
 }
 
-const IMAGE_TYPES: ImageType[] = [
+const IMAGE_TYPES: ImageTypeOption[] = [
   {
     id: 'document',
     name: 'Document',
@@ -73,14 +73,43 @@ const IMAGE_TYPES: ImageType[] = [
 
 interface ImageTypeSelectorProps {
   selectedType: string | null;
-  onTypeSelect: (type: ImageType) => void;
+  onTypeSelect: (type: ImageTypeOption) => void;
   className?: string;
+  compact?: boolean;
 }
 
-export function ImageTypeSelector({ selectedType, onTypeSelect, className = '' }: ImageTypeSelectorProps) {
+export function ImageTypeSelector({ selectedType, onTypeSelect, className = '', compact = false }: ImageTypeSelectorProps) {
   const { language } = useTheme();
 
   const selectedImageType = IMAGE_TYPES.find(type => type.id === selectedType);
+
+  if (compact) {
+    return (
+      <Select
+        value={selectedType || ''}
+        onValueChange={(value) => {
+          const imageType = IMAGE_TYPES.find(type => type.id === value);
+          if (imageType) onTypeSelect(imageType);
+        }}
+      >
+        <SelectTrigger className="h-8 w-32 bg-white/95 dark:bg-gray-800/90 border border-primary/20 hover:border-primary/40 rounded-lg text-xs">
+          <SelectValue placeholder={language === 'ar' ? 'نوع' : 'Type'} />
+        </SelectTrigger>
+        <SelectContent className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-xl shadow-2xl z-50">
+          {IMAGE_TYPES.map((type) => (
+            <SelectItem 
+              key={type.id} 
+              value={type.id}
+              className="flex items-center gap-2 p-2 hover:bg-primary/10 focus:bg-primary/10 rounded-lg cursor-pointer transition-colors text-xs"
+            >
+              <span className="text-sm">{type.icon}</span>
+              <span className="font-medium">{type.name}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -146,4 +175,3 @@ export function ImageTypeSelector({ selectedType, onTypeSelect, className = '' }
 }
 
 export { IMAGE_TYPES };
-export type { ImageType };

@@ -50,8 +50,6 @@ export function ChatInput({
   activeTrigger
 }: ChatInputProps) {
   const { language } = useTheme();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Use simplified file upload hook
   const {
@@ -63,7 +61,7 @@ export function ChatInput({
     startUploading
   } = useSimplifiedFileUpload();
 
-  // CRITICAL FIX: Handler to open Conversations Drawer (💬)
+  // Handler to open Conversations Drawer (💬)
   const handleOpenConversationsDrawer = () => {
     console.log('💬 EXTRA BUTTON: Dispatching custom event');
     if (typeof window !== "undefined") {
@@ -78,19 +76,16 @@ export function ChatInput({
     if (onOpenPlusDrawer) onOpenPlusDrawer();
   };
 
-  // FIXED: Camera capture function
+  // Placeholder functions for PlusMenu (handled by SimplifiedFileUpload now)
   const triggerCamera = () => {
-    console.log('📸 CAMERA: Triggering camera input');
-    cameraInputRef.current?.click();
+    console.log('📸 CAMERA: Handled by PlusMenu');
   };
 
-  // FIXED: File upload function
   const triggerUpload = () => {
-    console.log('📁 UPLOAD: Triggering file input');
-    fileInputRef.current?.click();
+    console.log('📁 UPLOAD: Handled by PlusMenu');
   };
 
-  // ENHANCED: Send message function with image type context
+  // Send message function with image type context
   const handleSend = () => {
     console.log('📤 SEND: Checking conditions');
     console.log('Message:', message.trim().length > 0);
@@ -150,7 +145,7 @@ export function ChatInput({
   const containerHighlight = modeHighlightStyles(activeTrigger);
   const textareaHighlightClass = textareaHighlight(activeTrigger);
 
-  // FIXED: Determine if send button should be enabled
+  // Determine if send button should be enabled
   const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading;
 
   return (
@@ -164,7 +159,7 @@ export function ChatInput({
         disabled={isLoading}
       />
 
-      {/* Main Input Area - FIXED SPACING */}
+      {/* Main Input Area */}
       <div className="px-3 pb-3 pt-2">
         <div className="max-w-4xl mx-auto">
           <div
@@ -212,27 +207,9 @@ export function ChatInput({
               </button>
               
               <ActiveModeIndicator activeTrigger={activeTrigger} />
-              
-              {/* Hidden file inputs */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,.txt"
-                onChange={() => {}} // Handled by SimplifiedFileUpload
-                className="hidden"
-              />
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={() => {}} // Handled by SimplifiedFileUpload
-                className="hidden"
-              />
             </div>
             
-            {/* INPUT ROW: Textarea + Send - IMPROVED DARK MODE VISIBILITY */}
+            {/* INPUT ROW: Textarea + Send */}
             <div className="relative flex items-end gap-2 px-3 pb-3 pt-0.5">
               <div className="flex-1 flex items-end">
                 <Textarea

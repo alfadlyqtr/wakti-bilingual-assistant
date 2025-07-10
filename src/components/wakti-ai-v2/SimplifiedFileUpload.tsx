@@ -1,11 +1,11 @@
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, Camera, X, Loader2 } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { supabase } from '@/integrations/supabase/client';
-import { ImageTypeSelector, ImageType } from './ImageTypeSelector';
+import { ImageTypeSelector, ImageTypeOption } from './ImageTypeSelector';
 
 export interface SimplifiedUploadedFile {
   id: string;
@@ -15,7 +15,7 @@ export interface SimplifiedUploadedFile {
   type: string;
   size: number;
   preview?: string;
-  imageType?: ImageType;
+  imageType?: ImageTypeOption;
 }
 
 interface SimplifiedFileUploadProps {
@@ -35,10 +35,7 @@ export function SimplifiedFileUpload({
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [selectedImageType, setSelectedImageType] = useState<ImageType | null>(null);
 
   const generatePreview = useCallback((file: File): Promise<string | undefined> => {
     return new Promise((resolve) => {
@@ -62,7 +59,7 @@ export function SimplifiedFileUpload({
     });
   }, []);
 
-  const uploadFiles = useCallback(async (files: File[], imageType: ImageType) => {
+  const uploadFiles = useCallback(async (files: File[], imageType: ImageTypeOption) => {
     if (!files || files.length === 0) return;
 
     try {
@@ -144,9 +141,8 @@ export function SimplifiedFileUpload({
         showSuccess(`Successfully uploaded ${successfulUploads.length} file(s) as ${imageType.name}`);
         console.log('🎉 All uploads completed. Total files:', successfulUploads.length);
         
-        // Clear pending files and selection
+        // Clear pending files
         setPendingFiles([]);
-        setSelectedImageType(null);
       }
 
       const failedUploads = results.filter(result => result.status === 'rejected').length;
@@ -171,66 +167,49 @@ export function SimplifiedFileUpload({
     }
 
     setPendingFiles(fileArray);
-    setSelectedImageType(null);
   };
 
-  const handleUploadConfirm = () => {
-    if (pendingFiles.length > 0 && selectedImageType) {
-      uploadFiles(pendingFiles, selectedImageType);
+  const handleTypeSelect = (imageType: ImageTypeOption) => {
+    if (pendingFiles.length > 0) {
+      uploadFiles(pendingFiles, imageType);
     }
   };
 
-  const handleUploadCancel = () => {
+  const handleCancel = () => {
     setPendingFiles([]);
-    setSelectedImageType(null);
   };
 
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
+  const updateFileImageType = (fileId: string, imageType: ImageTypeOption) => {
+    const updatedFiles = uploadedFiles.map(file => 
+      file.id === fileId ? { ...file, imageType } : file
+    );
+    onFilesUploaded(updatedFiles.filter(f => f.id !== fileId));
+    onFilesUploaded([updatedFiles.find(f => f.id === fileId)!]);
   };
 
-  const triggerCamera = () => {
-    cameraInputRef.current?.click();
-  };
+  // Expose file selection for PlusMenu
+  React.useEffect(() => {
+    const handleFileInput = (event: CustomEvent) => {
+      if (event.detail?.files) {
+        handleFileSelect(event.detail.files);
+      }
+    };
+
+    window.addEventListener('wakti-file-selected', handleFileInput as EventListener);
+    return () => window.removeEventListener('wakti-file-selected', handleFileInput as EventListener);
+  }, []);
 
   return (
     <div className="space-y-4">
-      {/* File Upload Buttons */}
-      {pendingFiles.length === 0 && (
-        <div className="flex gap-2">
-          <Button
-            onClick={triggerFileInput}
-            disabled={disabled || isUploading}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 h-9 px-3 rounded-xl bg-white/10 dark:bg-white/5 hover:bg-white/20 border-white/20 dark:border-white/10"
-          >
-            <Upload className="h-4 w-4" />
-            <span className="text-sm">{language === 'ar' ? 'تحميل' : 'Upload'}</span>
-          </Button>
-          
-          <Button
-            onClick={triggerCamera}
-            disabled={disabled || isUploading}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 h-9 px-3 rounded-xl bg-white/10 dark:bg-white/5 hover:bg-white/20 border-white/20 dark:border-white/10"
-          >
-            <Camera className="h-4 w-4" />
-            <span className="text-sm">{language === 'ar' ? 'كاميرا' : 'Camera'}</span>
-          </Button>
-        </div>
-      )}
-
       {/* Pending Files & Type Selection */}
       {pendingFiles.length > 0 && (
         <div className="p-4 rounded-xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-foreground">
-              {language === 'ar' ? 'ملفات جاهزة للرفع' : 'Files Ready to Upload'}
+              {language === 'ar' ? 'اختر نوع الصورة' : 'Select Image Type'}
             </h3>
             <Button
-              onClick={handleUploadCancel}
+              onClick={handleCancel}
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0 hover:bg-white/10"
@@ -253,28 +232,9 @@ export function SimplifiedFileUpload({
           </div>
 
           <ImageTypeSelector
-            selectedType={selectedImageType?.id || null}
-            onTypeSelect={setSelectedImageType}
+            selectedType={null}
+            onTypeSelect={handleTypeSelect}
           />
-
-          {selectedImageType && (
-            <div className="flex gap-2">
-              <Button
-                onClick={handleUploadConfirm}
-                disabled={isUploading}
-                className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-xl"
-              >
-                {isUploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-                <span className="text-sm">
-                  {language === 'ar' ? 'رفع الملفات' : 'Upload Files'}
-                </span>
-              </Button>
-            </div>
-          )}
         </div>
       )}
 
@@ -284,30 +244,48 @@ export function SimplifiedFileUpload({
           <h3 className="text-sm font-medium text-foreground">
             {language === 'ar' ? 'الملفات المرفوعة' : 'Uploaded Files'}
           </h3>
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
             {uploadedFiles.map((file) => (
               <div
                 key={file.id}
-                className="flex items-center gap-2 p-2 rounded-lg bg-white/10 dark:bg-white/5 border border-white/20 max-w-xs"
+                className="flex items-center gap-2 p-2 rounded-lg bg-white/10 dark:bg-white/5 border border-white/20"
               >
-                {file.imageType && (
-                  <span className="text-sm">{file.imageType.icon}</span>
+                {file.preview && (
+                  <img 
+                    src={file.preview} 
+                    alt={file.name}
+                    className="w-8 h-8 rounded object-cover flex-shrink-0"
+                  />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-foreground truncate">
                     {file.name}
                   </p>
-                  {file.imageType && (
-                    <p className="text-xs text-muted-foreground">
-                      {file.imageType.name}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    {file.imageType ? (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        {file.imageType.icon} {file.imageType.name}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-orange-500">
+                        {language === 'ar' ? 'حدد النوع' : 'Select type'}
+                      </span>
+                    )}
+                  </div>
                 </div>
+                
+                {/* Inline Type Selector */}
+                <ImageTypeSelector
+                  selectedType={file.imageType?.id || null}
+                  onTypeSelect={(type) => updateFileImageType(file.id, type)}
+                  compact={true}
+                />
+                
                 <Button
                   onClick={() => onRemoveFile(file.id)}
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 hover:bg-white/10"
+                  className="h-6 w-6 p-0 hover:bg-white/10 flex-shrink-0"
                 >
                   <X className="h-3 w-3" />
                 </Button>
@@ -317,23 +295,14 @@ export function SimplifiedFileUpload({
         </div>
       )}
 
-      {/* Hidden file inputs */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="image/*,.txt"
-        onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
-        className="hidden"
-      />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
-        className="hidden"
-      />
+      {isUploading && (
+        <div className="flex items-center justify-center gap-2 p-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm text-muted-foreground">
+            {language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
