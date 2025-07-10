@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
@@ -20,6 +19,7 @@ export interface SimplifiedUploadedFile {
 
 interface SimplifiedFileUploadProps {
   onFilesUploaded: (files: SimplifiedUploadedFile[]) => void;
+  onUpdateFiles: (files: SimplifiedUploadedFile[]) => void;
   uploadedFiles: SimplifiedUploadedFile[];
   onRemoveFile: (fileId: string) => void;
   isUploading: boolean;
@@ -29,6 +29,7 @@ interface SimplifiedFileUploadProps {
 
 export function SimplifiedFileUpload({
   onFilesUploaded,
+  onUpdateFiles,
   uploadedFiles,
   onRemoveFile,
   isUploading,
@@ -157,7 +158,7 @@ export function SimplifiedFileUpload({
     const updatedFiles = uploadedFiles.map(file => 
       file.id === fileId ? { ...file, imageType } : file
     );
-    onFilesUploaded(updatedFiles);
+    onUpdateFiles(updatedFiles);
     
     // Send example prompt to parent
     if (onExamplePromptSelect && imageType.examplePrompt) {

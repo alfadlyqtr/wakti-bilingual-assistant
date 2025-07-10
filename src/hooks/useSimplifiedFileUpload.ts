@@ -11,6 +11,10 @@ export function useSimplifiedFileUpload() {
     setIsUploading(false);
   }, []);
 
+  const updateFiles = useCallback((updatedFiles: SimplifiedUploadedFile[]) => {
+    setUploadedFiles(updatedFiles);
+  }, []);
+
   const removeFile = useCallback((fileId: string) => {
     setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
   }, []);
@@ -27,6 +31,7 @@ export function useSimplifiedFileUpload() {
     isUploading,
     uploadedFiles,
     handleFilesUploaded,
+    updateFiles,
     removeFile,
     clearFiles,
     startUploading

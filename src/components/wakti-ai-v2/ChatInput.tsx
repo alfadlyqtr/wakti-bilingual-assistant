@@ -55,6 +55,7 @@ export function ChatInput({
     isUploading,
     uploadedFiles,
     handleFilesUploaded,
+    updateFiles,
     removeFile,
     clearFiles,
     startUploading
@@ -165,6 +166,7 @@ export function ChatInput({
       {/* Simplified File Upload Component with example prompt handling */}
       <SimplifiedFileUpload
         onFilesUploaded={handleFilesUploaded}
+        onUpdateFiles={updateFiles}
         uploadedFiles={uploadedFiles}
         onRemoveFile={removeFile}
         isUploading={isUploading}
