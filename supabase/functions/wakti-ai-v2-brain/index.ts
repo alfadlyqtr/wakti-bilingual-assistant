@@ -13,9 +13,9 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: SIMPLE & RELIABLE IMAGE PROCESSING");
+console.log("🚀 WAKTI AI V2: ENHANCED IMAGE PROCESSING WITH CONTEXT-AWARE PROMPTS");
 
-// SIMPLE: Reliable image processing for ALL image types
+// ENHANCED: Reliable image processing with better error handling and logging
 async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promise<string | null> {
   try {
     console.log(`🔄 Processing image (attempt ${retryCount + 1}):`, imageUrl.substring(0, 50) + '...');
@@ -25,8 +25,8 @@ async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promis
       return null;
     }
     
-    // SIMPLE: 50 second timeout for ALL images
-    const timeout = 50000;
+    // ENHANCED: 70 second timeout with better error handling
+    const timeout = 70000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
@@ -35,16 +35,17 @@ async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promis
       headers: {
         'User-Agent': 'WAKTI-AI/2.0',
         'Accept': 'image/*',
+        'Cache-Control': 'no-cache'
       }
     });
     
     clearTimeout(timeoutId);
     
     if (!response.ok) {
-      console.error('❌ Fetch failed:', response.status);
+      console.error('❌ Fetch failed:', response.status, response.statusText);
       
-      // SIMPLE: Only retry on server errors, max 2 retries
-      if (retryCount < 2 && response.status >= 500) {
+      // ENHANCED: Retry on more error types, max 3 retries
+      if (retryCount < 3 && (response.status >= 500 || response.status === 429 || response.status === 408)) {
         console.log('🔄 Retrying in 3 seconds...');
         await new Promise(resolve => setTimeout(resolve, 3000));
         return await convertImageUrlToBase64(imageUrl, retryCount + 1);
@@ -63,7 +64,7 @@ async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promis
       return null;
     }
     
-    // SIMPLE: Direct Base64 conversion
+    // ENHANCED: Direct Base64 conversion with validation
     const uint8Array = new Uint8Array(arrayBuffer);
     const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
     const base64String = btoa(binaryString);
@@ -73,14 +74,14 @@ async function convertImageUrlToBase64(imageUrl: string, retryCount = 0): Promis
       return null;
     }
     
-    console.log('✅ Image converted successfully');
+    console.log('✅ Image converted successfully:', base64String.length, 'chars');
     return base64String;
     
   } catch (error) {
     console.error('❌ Image processing error:', error.message);
     
-    // SIMPLE: Only retry on network/timeout errors, max 2 retries
-    if (retryCount < 2 && (error.name === 'AbortError' || error.message.includes('network'))) {
+    // ENHANCED: Retry on network/timeout errors, max 3 retries
+    if (retryCount < 3 && (error.name === 'AbortError' || error.message.includes('network') || error.message.includes('timeout'))) {
       console.log('🔄 Retrying in 3 seconds...');
       await new Promise(resolve => setTimeout(resolve, 3000));
       return await convertImageUrlToBase64(imageUrl, retryCount + 1);
@@ -120,6 +121,11 @@ serve(async (req) => {
     } = requestBody || {};
 
     console.log("🎯 Processing:", activeTrigger, "- Files:", attachedFiles.length);
+    
+    // ENHANCED: Log image types for better debugging
+    if (attachedFiles.length > 0) {
+      console.log("🖼️ Image types:", attachedFiles.map(f => f.imageType?.name || 'unknown').join(', '));
+    }
 
     if (!message?.trim() && !attachedFiles?.length) {
       throw new Error("Message or attachment required");
@@ -197,9 +203,9 @@ serve(async (req) => {
   }
 });
 
-// CHAT MODE: Simple and reliable
+// ENHANCED: Chat mode with context-aware image processing
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 Chat mode with", attachedFiles.length, "files");
+  console.log("💬 Enhanced chat mode with", attachedFiles.length, "files");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -362,9 +368,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// SIMPLE CLAUDE API: Clean and reliable
+// ENHANCED: Claude API with context-aware image processing
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 Claude 3.5 API call");
+  console.log("🧠 Enhanced Claude 3.5 API call with context-aware processing");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -373,66 +379,111 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
     weekday: 'long'
   });
   
-  // SIMPLE: Language detection
+  // ENHANCED: Language detection
   const isArabicMessage = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
   const detectedLanguage = isArabicMessage ? 'ar' : 'en';
   
-  // SIMPLE: Clean system prompt (120 lines balanced)
+  // ENHANCED: Context-aware system prompt based on image types
   let systemPrompt = detectedLanguage === 'ar'
-    ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور.
+    ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور والمحسن.
 
 ## قدراتك الأساسية:
-أنت مساعد ذكي يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية.
+أنت مساعد ذكي يمكنه التعامل مع جميع أنواع الطلبات بطريقة طبيعية وذكية، مع قدرات محسنة لتحليل الصور.
 
-## تحليل الصور:
-### جميع أنواع الصور:
-- الوثائق الرسمية: جوازات السفر، الهويات، رخص القيادة، الفواتير
-- الأشخاص: وصف المظهر، الملابس، التعبيرات
-- الأماكن: المناظر الطبيعية، المباني، الشوارع
-- الشعارات والعلامات التجارية
-- المنتجات والأطعمة
-- النصوص في الصور
+## تحليل الصور المحسن والمتخصص:
+### أنواع الصور المدعومة:
+- **الوثائق الرسمية** 📄: جوازات السفر، الهويات، رخص القيادة، الشهادات، الفواتير
+- **الفواتير والإيصالات** 💰: الفواتير المالية، الإيصالات، المستندات المالية
+- **الأشخاص** 👤: وصف المظهر، الملابس، التعبيرات، الأنشطة
+- **الأماكن والمباني** 🏢: المناظر الطبيعية، المباني، الشوارع، المعالم
+- **التقارير والمخططات** 📊: تصورات البيانات، التقارير، الرسوم البيانية
+- **النصوص في الصور** 🔤: لقطات الشاشة، اللافتات، النصوص المكتوبة
+- **تحليل عام** ❓: وصف تفصيلي وتحليل شامل
 
-### تحليل التواريخ الذكي:
-- **مقارنة تواريخ الانتهاء بالتاريخ الحالي (${currentDate})**
-- **إذا كانت الوثيقة منتهية الصلاحية: اكتب تحذير واضح بخط عريض**
-- قدم نصائح مفيدة: البلدان، متطلبات التأشيرة، إرشادات التجديد
+### التحليل الذكي المحسن للتواريخ:
+- **مقارنة دقيقة لتواريخ الانتهاء مع التاريخ الحالي (${currentDate})**
+- **إذا كانت الوثيقة منتهية الصلاحية: اكتب تحذير واضح وعاجل بخط عريض**
+- **تقديم المشورة المفيدة**: البلدان بدون تأشيرة، إرشادات التجديد، متطلبات السفر
 
-## أسلوب التعامل:
+## أسلوب التعامل المحسن:
 - **اكتب دائماً باللغة العربية فقط**
-- استخدم لغة طبيعية وودودة
-- قدم إجابات مفصلة ومنظمة
-- **للوثائق المنتهية الصلاحية: استخدم خط عريض للتحذيرات**
+- استخدم لغة طبيعية وودودة ومهنية
+- قدم إجابات مفصلة ومنظمة ودقيقة
+- **للوثائق المنتهية الصلاحية: استخدم تحذيرات عاجلة بخط عريض**
+- **كن دقيقاً في استخراج المعلومات وتحليل البيانات**
 
 التاريخ اليوم: ${currentDate}
-**تجيب باللغة العربية فقط دائماً.**`
-    : `🤖 You are WAKTI AI, an advanced intelligent assistant.
+**تجيب باللغة العربية فقط دائماً وبدقة عالية.**`
+    : `🤖 You are WAKTI AI, an advanced and enhanced intelligent assistant.
 
 ## Core Capabilities:
-You are an intelligent assistant that can handle all types of requests naturally and smartly.
+You are an intelligent assistant that can handle all types of requests naturally and smartly, with enhanced image analysis capabilities.
 
-## Image Analysis:
-### All Image Types:
-- Official documents: passports, IDs, driver's licenses, bills
-- People: appearance, clothing, expressions, activities
-- Places: landscapes, buildings, streets, landmarks
-- Logos & brands: identify companies and products
-- Products & food: detailed descriptions and assessments
-- Text in images: read, translate, and interpret
+## Enhanced & Specialized Image Analysis:
+### Supported Image Types:
+- **Official Documents** 📄: Passports, IDs, driver's licenses, certificates, licenses
+- **Bills & Receipts** 💰: Financial documents, invoices, receipts, billing statements
+- **People** 👤: Appearance, clothing, expressions, activities, portraits
+- **Places & Buildings** 🏢: Landscapes, buildings, streets, landmarks, locations
+- **Reports & Charts** 📊: Data visualizations, reports, graphs, analytics
+- **Text in Images** 🔤: Screenshots, signs, written text, handwriting
+- **General Analysis** ❓: Detailed description and comprehensive analysis
 
-### Smart Date Analysis:
-- **Compare expiration dates with current date (${currentDate})**
-- **If document is expired: Write clear warning in bold text**
-- Provide helpful follow-ups: visa-free countries, renewal guidance, travel requirements
+### Enhanced Smart Date Analysis:
+- **Precise comparison of expiration dates with current date (${currentDate})**
+- **If document is expired: Write clear, urgent warning in bold text**
+- **Provide helpful advice**: visa-free countries, renewal guidance, travel requirements
 
-## Communication Style:
+## Enhanced Communication Style:
 - **Always respond in English only**
-- Use natural, friendly language
-- Provide detailed but well-organized answers
-- **For expired documents: Use bold text for urgent warnings**
+- Use natural, friendly, and professional language
+- Provide detailed, well-organized, and accurate answers
+- **For expired documents: Use urgent warnings in bold text**
+- **Be precise in information extraction and data analysis**
 
 Today's date: ${currentDate}
-**Always respond in English only.**`;
+**Always respond in English only with high precision.**`;
+
+  // ENHANCED: Add specific context based on image types
+  if (attachedFiles && attachedFiles.length > 0) {
+    const imageTypes = attachedFiles.map(f => f.imageType?.id).filter(Boolean);
+    const uniqueTypes = [...new Set(imageTypes)];
+    
+    if (uniqueTypes.length > 0) {
+      const contextInstructions = uniqueTypes.map(type => {
+        switch (type) {
+          case 'document':
+            return detectedLanguage === 'ar' 
+              ? '\n**تعليمات خاصة للوثائق**: استخرج جميع المعلومات، تحقق من تواريخ الانتهاء، قارن مع التاريخ الحالي، حذر إذا انتهت الصلاحية.'
+              : '\n**Document Instructions**: Extract all information, check expiry dates, compare with current date, warn if expired.';
+          case 'bill_receipt':
+            return detectedLanguage === 'ar' 
+              ? '\n**تعليمات الفواتير**: استخرج المبالغ، التواريخ، العناصر، احسب المجاميع، قدم تفاصيل مالية.'
+              : '\n**Bill/Receipt Instructions**: Extract amounts, dates, items, calculate totals, provide financial breakdown.';
+          case 'person':
+            return detectedLanguage === 'ar' 
+              ? '\n**تعليمات الأشخاص**: صف المظهر، الملابس، التعبيرات، الأنشطة بتفصيل.'
+              : '\n**Person Instructions**: Describe appearance, clothing, expressions, activities in detail.';
+          case 'place_building':
+            return detectedLanguage === 'ar' 
+              ? '\n**تعليمات الأماكن**: صف الموقع، العمارة، المحيط، الميزات البارزة.'
+              : '\n**Place/Building Instructions**: Describe location, architecture, surroundings, notable features.';
+          case 'report_chart':
+            return detectedLanguage === 'ar' 
+              ? '\n**تعليمات التقارير**: حلل البيانات، لخص النتائج، اشرح الاتجاهات، قدم رؤى.'
+              : '\n**Report/Chart Instructions**: Analyze data, summarize findings, explain trends, provide insights.';
+          case 'text_image':
+            return detectedLanguage === 'ar' 
+              ? '\n**تعليمات النصوص**: استخرج جميع النصوص المرئية بدقة، اقرأ الخط اليدوي.'
+              : '\n**Text Image Instructions**: Extract all visible text accurately, read handwriting if present.';
+          default:
+            return '';
+        }
+      }).join('');
+      
+      systemPrompt += contextInstructions;
+    }
+  }
 
   // Add personalization if available
   if (personalTouch) {
@@ -471,11 +522,11 @@ Today's date: ${currentDate}
     });
   }
   
-  // SIMPLE: Image processing
+  // ENHANCED: Image processing with context awareness
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ Processing', attachedFiles.length, 'images');
+    console.log('🖼️ Processing', attachedFiles.length, 'context-aware images');
     
     const imageFile = attachedFiles.find(file => 
       file.type?.startsWith('image/') || 
@@ -488,11 +539,19 @@ Today's date: ${currentDate}
       const imageType = imageFile.type || 'image/jpeg';
       
       if (imageUrl) {
+        console.log('🎯 Processing image with type context:', imageFile.imageType?.name || 'unknown');
+        
         const base64Data = await convertImageUrlToBase64(imageUrl);
         
         if (base64Data) {
+          // ENHANCED: Add context-specific instructions to message
+          let contextualMessage = message;
+          if (imageFile.context) {
+            contextualMessage = `${imageFile.context}\n\nUser message: ${message}`;
+          }
+          
           currentMessage.content = [
-            { type: 'text', text: message },
+            { type: 'text', text: contextualMessage },
             { 
               type: 'image', 
               source: { 
@@ -502,13 +561,13 @@ Today's date: ${currentDate}
               } 
             }
           ];
-          console.log("✅ Image added to message");
+          console.log("✅ Context-aware image added to message");
         } else {
           console.error("❌ Image processing failed");
           return {
             response: detectedLanguage === 'ar' 
-              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى المحاولة مرة أخرى.'
-              : '❌ Sorry, I encountered difficulty processing this image. Please try again.',
+              ? '❌ عذراً، واجهت صعوبة في معالجة هذه الصورة. يرجى المحاولة مرة أخرى أو جرب صورة أوضح.'
+              : '❌ Sorry, I encountered difficulty processing this image. Please try again or try a clearer image.',
             error: 'Image processing failed',
             success: false
           };
@@ -520,7 +579,7 @@ Today's date: ${currentDate}
   messages.push(currentMessage);
   
   try {
-    console.log(`🧠 Sending ${messages.length} messages to Claude`);
+    console.log(`🧠 Sending ${messages.length} messages to Enhanced Claude`);
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -538,11 +597,11 @@ Today's date: ${currentDate}
       }),
     });
     
-    console.log("📡 Claude API response status:", claudeResponse.status);
+    console.log("📡 Enhanced Claude API response status:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ Claude API error:", claudeResponse.status, errorText);
+      console.error("❌ Enhanced Claude API error:", claudeResponse.status, errorText);
       
       let userFriendlyError = detectedLanguage === 'ar' 
         ? 'واجهت مشكلة في معالجة طلبك.'
@@ -550,8 +609,8 @@ Today's date: ${currentDate}
       
       if (claudeResponse.status === 400 && errorText.includes('image')) {
         userFriendlyError = detectedLanguage === 'ar' 
-          ? 'كانت هناك مشكلة في معالجة الصورة. يرجى تجربة صورة أوضح.'
-          : 'There was an issue processing the image. Please try a clearer image.';
+          ? 'كانت هناك مشكلة في معالجة الصورة. يرجى تجربة صورة أوضح أو نوع مختلف.'
+          : 'There was an issue processing the image. Please try a clearer image or different type.';
       } else if (claudeResponse.status === 429) {
         userFriendlyError = detectedLanguage === 'ar' 
           ? 'عدد كبير من الطلبات. يرجى الانتظار قليلاً.'
@@ -566,7 +625,7 @@ Today's date: ${currentDate}
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ Claude API success");
+    console.log("✅ Enhanced Claude API success");
     
     const responseText = claudeData.content?.[0]?.text || (detectedLanguage === 'ar' 
       ? 'أعتذر، واجهت مشكلة في معالجة طلبك.'
@@ -580,7 +639,7 @@ Today's date: ${currentDate}
     };
     
   } catch (error) {
-    console.error("❌ Claude API critical error:", error);
+    console.error("❌ Enhanced Claude API critical error:", error);
     return {
       response: detectedLanguage === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
