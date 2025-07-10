@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -13,12 +12,12 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
-console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + OPTIMIZED PERFORMANCE + SMART LANGUAGE HANDLING");
+console.log("🚀 WAKTI AI V2: CLAUDE 3.5 SONNET + BALANCED PERFORMANCE + SMART LANGUAGE HANDLING");
 
-// OPTIMIZED: Faster Base64 conversion with SMART timeouts for different image types
+// BALANCED: Smart timeout and retry logic for reliable image processing
 async function convertImageUrlToBase64(imageUrl: string, imageType: string, retryCount = 0): Promise<string | null> {
   try {
-    console.log('🆔 OPTIMIZED IMAGE PROCESSING: Converting with smart timeout handling', retryCount + 1, 'attempt for:', {
+    console.log('🆔 BALANCED IMAGE PROCESSING: Converting with smart timeout handling', retryCount + 1, 'attempt for:', {
       url: imageUrl.substring(0, 50) + '...',
       type: imageType,
       isDocument: imageType.includes('id') || imageType.includes('passport') || imageType.includes('bill'),
@@ -30,9 +29,32 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
       return null;
     }
     
-    // OPTIMIZED: Smart timeout based on image type - faster for regular images
+    // BALANCED: Smart timeout ranges based on image type and retry attempt
     const isDocument = imageType.includes('id') || imageType.includes('passport') || imageType.includes('bill');
-    const timeout = isDocument ? 30000 : 15000; // 30s for documents, 15s for regular images
+    let baseTimeout: number;
+    let maxTimeout: number;
+    
+    if (isDocument) {
+      baseTimeout = 20000; // 20s base for documents
+      maxTimeout = 65000;   // 65s max for documents
+    } else {
+      baseTimeout = 20000; // 20s base for regular images
+      maxTimeout = 55000;   // 55s max for regular images
+    }
+    
+    // Progressive timeout: increase with retry attempts
+    const timeoutMultiplier = 1 + (retryCount * 0.3); // 30% increase per retry
+    const calculatedTimeout = Math.min(baseTimeout * timeoutMultiplier, maxTimeout);
+    const timeout = Math.round(calculatedTimeout);
+    
+    console.log('⏱️ BALANCED TIMEOUT CALCULATION:', {
+      isDocument,
+      baseTimeout: baseTimeout / 1000 + 's',
+      maxTimeout: maxTimeout / 1000 + 's',
+      retryCount,
+      timeoutMultiplier,
+      finalTimeout: timeout / 1000 + 's'
+    });
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -40,7 +62,7 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     const response = await fetch(imageUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'WAKTI-AI/2.0-OPTIMIZED',
+        'User-Agent': 'WAKTI-AI/2.0-BALANCED',
         'Accept': '*/*',
         'Cache-Control': 'no-cache'
       }
@@ -48,21 +70,28 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     
     clearTimeout(timeoutId);
     
-    console.log('📡 OPTIMIZED FETCH: Response status:', response.status, {
+    console.log('📡 BALANCED FETCH: Response status:', response.status, {
       contentType: response.headers.get('content-type'),
-      contentLength: response.headers.get('content-length')
+      contentLength: response.headers.get('content-length'),
+      timeoutUsed: timeout / 1000 + 's'
     });
     
     if (!response.ok) {
-      console.error('❌ OPTIMIZED FETCH ERROR:', {
+      console.error('❌ BALANCED FETCH ERROR:', {
         status: response.status,
-        url: imageUrl.substring(0, 50) + '...'
+        url: imageUrl.substring(0, 50) + '...',
+        timeout: timeout / 1000 + 's'
       });
       
-      // OPTIMIZED: Reduced retry attempts - max 2 instead of 5
-      if (retryCount < 2 && (response.status >= 500 || response.status === 429)) {
-        console.log('🔄 OPTIMIZED RETRY in 2 seconds...', { retryCount, status: response.status });
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 2s instead of 5s
+      // BALANCED: Smart retry logic - max 3 retries with progressive delays
+      if (retryCount < 3 && (response.status >= 500 || response.status === 429 || response.status === 408)) {
+        const retryDelay = 1000 + (retryCount * 1000); // 1s, 2s, 3s delays
+        console.log('🔄 BALANCED RETRY in', retryDelay / 1000, 'seconds...', { 
+          retryCount, 
+          status: response.status,
+          nextTimeout: Math.min(baseTimeout * (1 + ((retryCount + 1) * 0.3)), maxTimeout) / 1000 + 's'
+        });
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
         return await convertImageUrlToBase64(imageUrl, imageType, retryCount + 1);
       }
       
@@ -72,45 +101,54 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
     const arrayBuffer = await response.arrayBuffer();
     const fileSize = arrayBuffer.byteLength;
     
-    console.log('📊 OPTIMIZED IMAGE SIZE:', {
+    console.log('📊 BALANCED IMAGE SIZE:', {
       bytes: fileSize,
       MB: (fileSize / (1024 * 1024)).toFixed(2),
-      type: imageType
+      type: imageType,
+      processingTime: timeout / 1000 + 's timeout'
     });
     
     if (fileSize === 0 || fileSize > 20 * 1024 * 1024) {
-      console.error('❌ OPTIMIZED ERROR: Invalid file size:', fileSize);
+      console.error('❌ BALANCED ERROR: Invalid file size:', fileSize);
       return null;
     }
     
-    // OPTIMIZED: Faster Base64 encoding
+    // BALANCED: Efficient Base64 encoding
     const uint8Array = new Uint8Array(arrayBuffer);
     const binaryString = String.fromCharCode.apply(null, Array.from(uint8Array));
     const base64String = btoa(binaryString);
     
     if (!base64String || base64String.length < 100) {
-      console.error('❌ OPTIMIZED BASE64 ERROR: Invalid base64 string');
+      console.error('❌ BALANCED BASE64 ERROR: Invalid base64 string');
       return null;
     }
     
-    console.log('✅ OPTIMIZED CONVERSION SUCCESS:', {
+    console.log('✅ BALANCED CONVERSION SUCCESS:', {
       originalSize: fileSize,
       base64Length: base64String.length,
-      processingTime: 'optimized'
+      finalTimeout: timeout / 1000 + 's',
+      retryCount,
+      success: true
     });
     
     return base64String;
   } catch (error) {
-    console.error('❌ OPTIMIZED CONVERSION ERROR:', {
+    console.error('❌ BALANCED CONVERSION ERROR:', {
       message: error.message,
       url: imageUrl.substring(0, 50) + '...',
-      retryCount
+      retryCount,
+      errorType: error.name
     });
     
-    // OPTIMIZED: Reduced retries with faster delays
-    if (retryCount < 2) {
-      console.log('🔄 OPTIMIZED RETRY due to error...', { retryCount });
-      await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
+    // BALANCED: Intelligent retry on network errors
+    if (retryCount < 3 && (error.name === 'AbortError' || error.name === 'NetworkError' || error.message.includes('fetch'))) {
+      const retryDelay = 1000 + (retryCount * 1000); // 1s, 2s, 3s delays
+      console.log('🔄 BALANCED RETRY due to network error...', { 
+        retryCount, 
+        delay: retryDelay / 1000 + 's',
+        errorType: error.name 
+      });
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
       return await convertImageUrlToBase64(imageUrl, imageType, retryCount + 1);
     }
     
@@ -119,7 +157,7 @@ async function convertImageUrlToBase64(imageUrl: string, imageType: string, retr
 }
 
 serve(async (req) => {
-  console.log("📨 OPTIMIZED REQUEST RECEIVED:", {
+  console.log("📨 BALANCED REQUEST RECEIVED:", {
     method: req.method,
     url: req.url
   });
@@ -220,7 +258,7 @@ serve(async (req) => {
       enableTaskDetection = false
     } = requestBody || {};
 
-    console.log("🎯 OPTIMIZED EXTRACTED PARAMS:", {
+    console.log("🎯 BALANCED EXTRACTED PARAMS:", {
       hasMessage: !!message,
       hasUserId: !!userId,
       language,
@@ -230,7 +268,7 @@ serve(async (req) => {
     });
 
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("🖼️ OPTIMIZED IMAGE FILES ANALYSIS:", attachedFiles.map((file, index) => ({
+      console.log("🖼️ BALANCED IMAGE FILES ANALYSIS:", attachedFiles.map((file, index) => ({
         index,
         name: file?.name || 'unknown',
         type: file?.type || 'unknown',
@@ -269,13 +307,13 @@ serve(async (req) => {
       });
     }
 
-    console.log(`🎯 OPTIMIZED MODE: ${activeTrigger.toUpperCase()}`);
+    console.log(`🎯 BALANCED MODE: ${activeTrigger.toUpperCase()}`);
     console.log(`📝 MESSAGE: ${message.substring(0, 100)}...`);
 
     let result;
     const finalConversationId = conversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    console.log('💬 OPTIMIZED CHAT: Processing with SMART LANGUAGE HANDLING');
+    console.log('💬 BALANCED CHAT: Processing with SMART LANGUAGE HANDLING');
 
     switch (activeTrigger) {
       case 'search':
@@ -310,7 +348,7 @@ serve(async (req) => {
       fallbackUsed: false
     };
 
-    console.log(`✅ OPTIMIZED ${activeTrigger.toUpperCase()} MODE: CLAUDE 3.5 SONNET request completed successfully!`);
+    console.log(`✅ BALANCED ${activeTrigger.toUpperCase()} MODE: CLAUDE 3.5 SONNET request completed successfully!`);
 
     return new Response(JSON.stringify(finalResponse), {
       headers: { 
@@ -320,7 +358,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("🚨 OPTIMIZED CRITICAL ERROR:", error);
+    console.error("🚨 BALANCED CRITICAL ERROR:", error);
 
     const errorResponse = {
       error: "Internal server error",
@@ -342,9 +380,9 @@ serve(async (req) => {
   }
 });
 
-// CHAT MODE with OPTIMIZED CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING
+// CHAT MODE with BALANCED CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING
 async function processChatMode(message: string, userId: string, conversationId: string | null, language: string, attachedFiles: any[], maxTokens: number, recentMessages: any[], conversationSummary: string, personalTouch: any) {
-  console.log("💬 OPTIMIZED CHAT MODE: Processing with CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING");
+  console.log("💬 BALANCED CHAT MODE: Processing with CLAUDE 3.5 SONNET + SMART LANGUAGE HANDLING");
   
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -369,21 +407,21 @@ async function processChatMode(message: string, userId: string, conversationId: 
       
       if (dbMessages && dbMessages.length > 0) {
         contextMessages = dbMessages.reverse();
-        console.log(`📚 OPTIMIZED MEMORY: Loaded ${contextMessages.length} messages from database`);
+        console.log(`📚 BALANCED MEMORY: Loaded ${contextMessages.length} messages from database`);
       }
     } catch (error) {
-      console.warn("⚠️ OPTIMIZED MEMORY: Database fallback failed, using session context");
+      console.warn("⚠️ BALANCED MEMORY: Database fallback failed, using session context");
     }
   }
   
-  console.log(`🧠 OPTIMIZED MEMORY: Using ${contextMessages.length} context messages`);
+  console.log(`🧠 BALANCED MEMORY: Using ${contextMessages.length} context messages`);
   
   return await callClaude35API(message, contextMessages, conversationSummary, language, attachedFiles, maxTokens, personalTouch);
 }
 
-// SEARCH MODE with OPTIMIZED CLAUDE 3.5 SONNET
+// SEARCH MODE with BALANCED CLAUDE 3.5 SONNET
 async function processSearchMode(message: string, language: string, recentMessages: any[], personalTouch: any) {
-  console.log("🔍 OPTIMIZED SEARCH MODE: Processing with CLAUDE 3.5 SONNET");
+  console.log("🔍 BALANCED SEARCH MODE: Processing with CLAUDE 3.5 SONNET");
   
   if (!TAVILY_API_KEY) {
     return {
@@ -423,7 +461,7 @@ async function processSearchMode(message: string, language: string, recentMessag
     return await callClaude35API(searchContext, recentMessages, '', language, [], 4096, personalTouch);
     
   } catch (error) {
-    console.error('❌ OPTIMIZED SEARCH ERROR:', error);
+    console.error('❌ BALANCED SEARCH ERROR:', error);
     return {
       response: language === 'ar' 
         ? '❌ حدث خطأ أثناء البحث. حاول مرة أخرى.'
@@ -434,12 +472,12 @@ async function processSearchMode(message: string, language: string, recentMessag
   }
 }
 
-// IMAGE MODE: OPTIMIZED CLAUDE 3.5 SONNET VISION + ENHANCED DOCUMENT ANALYSIS
+// IMAGE MODE: BALANCED CLAUDE 3.5 SONNET VISION + ENHANCED DOCUMENT ANALYSIS
 async function processImageMode(message: string, userId: string, language: string, attachedFiles: any[], personalTouch: any) {
-  console.log("🖼️ OPTIMIZED IMAGE MODE: Processing with ENHANCED DOCUMENT ANALYSIS + CLAUDE 3.5 VISION");
+  console.log("🖼️ BALANCED IMAGE MODE: Processing with ENHANCED DOCUMENT ANALYSIS + CLAUDE 3.5 VISION");
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log("👁️ OPTIMIZED VISION ANALYSIS: Analyzing with ENHANCED processing for all image types");
+    console.log("👁️ BALANCED VISION ANALYSIS: Analyzing with ENHANCED processing for all image types");
     
     const imageFile = attachedFiles.find(file => {
       if (file.type && file.type.startsWith('image/')) {
@@ -454,7 +492,7 @@ async function processImageMode(message: string, userId: string, language: strin
       return !!(file.url || file.publicUrl);
     });
     
-    console.log("🔍 OPTIMIZED IMAGE FILE DETECTION:", {
+    console.log("🔍 BALANCED IMAGE FILE DETECTION:", {
       foundImage: !!imageFile,
       fileName: imageFile?.name || 'unknown',
       fileType: imageFile?.type || 'unknown/fallback',
@@ -522,7 +560,7 @@ async function processImageMode(message: string, userId: string, language: strin
     }
     
   } catch (error) {
-    console.error('❌ OPTIMIZED IMAGE ERROR:', error);
+    console.error('❌ BALANCED IMAGE ERROR:', error);
     return {
       response: language === 'ar' 
         ? '❌ فشل في إنشاء الصورة. حاول مرة أخرى.'
@@ -533,9 +571,9 @@ async function processImageMode(message: string, userId: string, language: strin
   }
 }
 
-// OPTIMIZED CLAUDE 3.5 SONNET API CALL WITH SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS
+// BALANCED CLAUDE 3.5 SONNET API CALL WITH SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS
 async function callClaude35API(message: string, contextMessages: any[], conversationSummary: string, language: string, attachedFiles: any[], maxTokens: number, personalTouch: any) {
-  console.log("🧠 OPTIMIZED CLAUDE 3.5 API: SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS");
+  console.log("🧠 BALANCED CLAUDE 3.5 API: SMART LANGUAGE HANDLING + ENHANCED DOCUMENT ANALYSIS");
   
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -548,14 +586,14 @@ async function callClaude35API(message: string, contextMessages: any[], conversa
   const isArabicMessage = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message);
   const detectedLanguage = isArabicMessage ? 'ar' : 'en';
   
-  console.log("🌐 OPTIMIZED LANGUAGE DETECTION:", {
+  console.log("🌐 BALANCED LANGUAGE DETECTION:", {
     originalLanguage: language,
     detectedFromMessage: detectedLanguage,
     isArabicMessage,
     messagePreview: message.substring(0, 50)
   });
   
-  // OPTIMIZED SMART SYSTEM PROMPT WITH ENHANCED DOCUMENT ANALYSIS
+  // BALANCED SMART SYSTEM PROMPT WITH ENHANCED DOCUMENT ANALYSIS
   let systemPrompt = detectedLanguage === 'ar'
     ? `🤖 أنت WAKTI AI، المساعد الذكي المتطور والشامل.
 
@@ -678,28 +716,28 @@ Today's date: ${currentDate}
     });
   }
   
-  // OPTIMIZED IMAGE PROCESSING: ENHANCED DOCUMENT ANALYSIS
+  // BALANCED IMAGE PROCESSING: ENHANCED DOCUMENT ANALYSIS
   let currentMessage: any = { role: 'user', content: message };
   
   if (attachedFiles && attachedFiles.length > 0) {
-    console.log('🖼️ OPTIMIZED IMAGE ANALYSIS: Processing with ENHANCED document analysis');
+    console.log('🖼️ BALANCED IMAGE ANALYSIS: Processing with ENHANCED document analysis');
     
     const imageFile = attachedFiles.find(file => {
       if (file.type && (file.type.startsWith('image/') || file.type.includes('jpeg') || file.type.includes('png'))) {
-        console.log('✅ OPTIMIZED IMAGE TYPE DETECTED: Standard image type:', file.type);
+        console.log('✅ BALANCED IMAGE TYPE DETECTED: Standard image type:', file.type);
         return true;
       }
       
       if (file.name) {
         const extension = file.name.toLowerCase().split('.').pop();
         if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif', 'heic', 'heif'].includes(extension)) {
-          console.log('✅ OPTIMIZED IMAGE TYPE DETECTED: By extension:', extension);
+          console.log('✅ BALANCED IMAGE TYPE DETECTED: By extension:', extension);
           return true;
         }
       }
       
       if (file.url || file.publicUrl) {
-        console.log('✅ OPTIMIZED IMAGE TYPE DETECTED: By URL presence');
+        console.log('✅ BALANCED IMAGE TYPE DETECTED: By URL presence');
         return true;
       }
       
@@ -707,12 +745,12 @@ Today's date: ${currentDate}
     });
     
     if (imageFile) {
-      console.log("🖼️ OPTIMIZED IMAGE PROCESSING: Handling with ENHANCED document analysis");
+      console.log("🖼️ BALANCED IMAGE PROCESSING: Handling with ENHANCED document analysis");
       
       const imageUrl = imageFile.url || imageFile.publicUrl || imageFile.preview;
       const imageType = imageFile.type || 'image/jpeg';
       
-      console.log("📡 OPTIMIZED IMAGE URL SELECTION:", {
+      console.log("📡 BALANCED IMAGE URL SELECTION:", {
         selectedUrl: imageUrl?.substring(0, 50) + '...',
         selectedType: imageType,
         fileName: imageFile.name,
@@ -739,9 +777,9 @@ Today's date: ${currentDate}
               } 
             }
           ];
-          console.log("✅ OPTIMIZED IMAGE PROCESSING: Enhanced Claude 3.5 Sonnet payload ready");
+          console.log("✅ BALANCED IMAGE PROCESSING: Enhanced Claude 3.5 Sonnet payload ready");
         } else {
-          console.error("❌ OPTIMIZED IMAGE PROCESSING: Failed to convert image");
+          console.error("❌ BALANCED IMAGE PROCESSING: Failed to convert image");
           
           return {
             response: detectedLanguage === 'ar' 
@@ -752,7 +790,7 @@ Today's date: ${currentDate}
           };
         }
       } else {
-        console.error("❌ OPTIMIZED IMAGE PROCESSING: No valid URL found");
+        console.error("❌ BALANCED IMAGE PROCESSING: No valid URL found");
         return {
           response: detectedLanguage === 'ar' 
             ? '❌ لم أتمكن من الوصول إلى الصورة. يرجى رفع الصورة مرة أخرى.'
@@ -767,15 +805,15 @@ Today's date: ${currentDate}
   messages.push(currentMessage);
   
   try {
-    console.log(`🧠 OPTIMIZED CLAUDE 3.5: Sending ${messages.length} messages with ENHANCED DOCUMENT ANALYSIS`);
-    console.log("📊 OPTIMIZED CLAUDE 3.5 API CALL:", {
+    console.log(`🧠 BALANCED CLAUDE 3.5: Sending ${messages.length} messages with ENHANCED DOCUMENT ANALYSIS`);
+    console.log("📊 BALANCED CLAUDE 3.5 API CALL:", {
       messagesCount: messages.length,
       hasImages: Array.isArray(currentMessage.content),
       maxTokens: maxTokens,
       temperature: 0.3,
       modelUsed: 'claude-3-5-sonnet-20241022',
       detectedLanguage: detectedLanguage,
-      optimizedProcessing: true
+      balancedProcessing: true
     });
     
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -794,11 +832,11 @@ Today's date: ${currentDate}
       }),
     });
     
-    console.log("📡 OPTIMIZED CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
+    console.log("📡 BALANCED CLAUDE 3.5 API RESPONSE STATUS:", claudeResponse.status);
     
     if (!claudeResponse.ok) {
       const errorText = await claudeResponse.text();
-      console.error("❌ OPTIMIZED CLAUDE 3.5 API ERROR:", {
+      console.error("❌ BALANCED CLAUDE 3.5 API ERROR:", {
         status: claudeResponse.status,
         statusText: claudeResponse.statusText,
         errorBody: errorText.substring(0, 300)
@@ -828,16 +866,16 @@ Today's date: ${currentDate}
           : 'The AI service is temporarily unavailable. Please try again in a few moments.';
       }
       
-      throw new Error(`Optimized Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
+      throw new Error(`Balanced Claude API error: ${claudeResponse.status} - ${userFriendlyError}`);
     }
     
     const claudeData = await claudeResponse.json();
-    console.log("✅ OPTIMIZED CLAUDE 3.5 API SUCCESS:", {
+    console.log("✅ BALANCED CLAUDE 3.5 API SUCCESS:", {
       hasContent: !!claudeData.content,
       contentLength: claudeData.content?.[0]?.text?.length || 0,
       usage: claudeData.usage,
       modelConfirmed: 'claude-3-5-sonnet-20241022',
-      optimizedProcessing: true,
+      balancedProcessing: true,
       enhancedDocumentAnalysis: true
     });
     
@@ -850,12 +888,12 @@ Today's date: ${currentDate}
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      optimizedSystemPrompt: true,
+      balancedSystemPrompt: true,
       enhancedDocumentAnalysis: true
     };
     
   } catch (error) {
-    console.error("❌ OPTIMIZED CLAUDE 3.5 API CRITICAL ERROR:", error);
+    console.error("❌ BALANCED CLAUDE 3.5 API CRITICAL ERROR:", error);
     return {
       response: detectedLanguage === 'ar' 
         ? '❌ حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.'
