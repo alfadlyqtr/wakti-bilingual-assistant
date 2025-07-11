@@ -5,19 +5,23 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 // ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
   'https://wakti.qa',
-  'https://www.wakti.qa', 
-  'https://lovable.dev',
-  'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com'
+  'https://www.wakti.qa'
 ];
 
 const getCorsHeaders = (origin: string | null) => {
-  const corsOrigin = allowedOrigins.includes(origin || '') ? origin : 'https://wakti.qa';
+  // Allow production domains + any lovable subdomain
+  const isAllowed = origin && (
+    allowedOrigins.includes(origin) ||
+    origin.includes('lovable.dev') ||
+    origin.includes('lovable.app') ||
+    origin.includes('lovableproject.com')
+  );
   
   return {
-    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Origin': isAllowed ? origin : '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth, content-length',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Max-Age': '86400', // 24 hours preflight cache
+    'Access-Control-Max-Age': '86400',
     'Access-Control-Allow-Credentials': 'false'
   };
 };
