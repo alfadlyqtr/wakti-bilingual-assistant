@@ -41,6 +41,7 @@ export function SimplifiedFileUpload({
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
+  const [showUploadInterface, setShowUploadInterface] = useState(true);
 
   const generatePreview = useCallback((file: File): Promise<string | undefined> => {
     return new Promise((resolve) => {
@@ -124,6 +125,12 @@ export function SimplifiedFileUpload({
         onFilesUploaded(successfulUploads);
         showSuccess(`Successfully processed ${successfulUploads.length} file(s)`);
         
+        // IMMEDIATE UI CLEANUP: Hide upload interface right away
+        setShowUploadInterface(false);
+        
+        // Show again after AI response completes (optional)
+        setTimeout(() => setShowUploadInterface(true), 2000);
+        
         // AUTO-SWITCH TO VISION MODE FOR IMAGES
         const hasImages = successfulUploads.some(file => file.type?.startsWith('image/'));
         if (hasImages && onAutoSwitchMode) {
@@ -197,7 +204,7 @@ export function SimplifiedFileUpload({
   return (
     <div className="space-y-4">
       {/* Uploaded Files Display */}
-      {uploadedFiles.length > 0 && (
+      {uploadedFiles.length > 0 && showUploadInterface && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-foreground">
             {language === 'ar' ? 'الملفات المرفوعة' : 'Uploaded Files'}

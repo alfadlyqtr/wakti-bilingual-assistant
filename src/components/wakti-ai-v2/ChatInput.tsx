@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { PlusMenu } from './PlusMenu';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
 import { SimplifiedFileUpload } from './SimplifiedFileUpload';
+import { QuickReplyPills } from './QuickReplyPills';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
 
 // Returns border/outline classes per mode for main container & textarea
@@ -52,6 +52,7 @@ export function ChatInput({
   onTriggerChange
 }: ChatInputProps) {
   const { language } = useTheme();
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
 
   // Use simplified file upload hook
   const {
@@ -72,6 +73,12 @@ export function ChatInput({
     } else {
       setMessage(prompt);
     }
+  };
+
+  // Handle quick reply pill clicks
+  const handlePillClick = (text: string) => {
+    setMessage(text);
+    setShowQuickReplies(false);
   };
 
   // Handler to open Conversations Drawer (💬)
@@ -136,6 +143,7 @@ export function ChatInput({
       );
       setMessage('');
       clearFiles();
+      setShowQuickReplies(false);
     } else {
       console.log('❌ SEND: No message or files to send');
     }
@@ -183,13 +191,19 @@ export function ChatInput({
             {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
             <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
               <PlusMenu
-                onCamera={triggerCamera}
-                onUpload={triggerUpload}
+                onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
+                onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
                 isLoading={isLoading || isUploading}
               />
               
               <button
-                onClick={handleOpenConversationsDrawer}
+                onClick={() => {
+                  console.log('💬 EXTRA BUTTON: Dispatching custom event');
+                  if (typeof window !== "undefined") {
+                    const nativeEvent = new CustomEvent("open-wakti-conversations");
+                    window.dispatchEvent(nativeEvent);
+                  }
+                }}
                 aria-label={language === "ar" ? "إضافي" : "Extra"}
                 className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
                 disabled={isLoading || isUploading}
@@ -202,7 +216,10 @@ export function ChatInput({
               </button>
               
               <button
-                onClick={handleOpenQuickActionsDrawer}
+                onClick={() => {
+                  console.log('⚡ QUICK ACTIONS: Opening drawer');
+                  if (onOpenPlusDrawer) onOpenPlusDrawer();
+                }}
                 aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
                 className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
                 disabled={isLoading || isUploading}
@@ -216,13 +233,26 @@ export function ChatInput({
               
               <ActiveModeIndicator activeTrigger={activeTrigger} />
             </div>
+
+            {/* Quick Reply Pills */}
+            {uploadedFiles.length > 0 && (
+              <QuickReplyPills
+                imageType={uploadedFiles[0]?.imageType || null}
+                onPillClick={handlePillClick}
+                isVisible={showQuickReplies && message === ''}
+              />
+            )}
             
             {/* INPUT ROW: Textarea + Send */}
             <div className="relative flex items-end gap-2 px-3 pb-3 pt-0.5">
               <div className="flex-1 flex items-end">
                 <Textarea
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    setShowQuickReplies(e.target.value === '' && uploadedFiles.length > 0);
+                  }}
+                  onFocus={() => setShowQuickReplies(message === '' && uploadedFiles.length > 0)}
                   placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
                   className={`
                     flex-1 border-[2.5px]
