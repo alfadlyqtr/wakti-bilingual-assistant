@@ -75,7 +75,7 @@ export function SimplifiedFileUpload({
 
       console.log('📁 CLAUDE WAY - Processing', files.length, 'files directly');
 
-      const uploadPromises = Array.from(files).map(async (file) => {
+      const uploadPromises = Array.from(files).map(async (file): Promise<SimplifiedUploadedFile | null> => {
         try {
           // Validate file
           if (file.size > 10 * 1024 * 1024) {
@@ -117,7 +117,7 @@ export function SimplifiedFileUpload({
         .filter((result): result is PromiseFulfilledResult<SimplifiedUploadedFile> => 
           result.status === 'fulfilled' && result.value !== null
         )
-        .map(result => result.value);
+        .map(result => result.value!);
 
       if (successfulUploads.length > 0) {
         console.log('🎉 CLAUDE WAY SUCCESS:', successfulUploads.length, 'files processed');
@@ -136,6 +136,8 @@ export function SimplifiedFileUpload({
       if (failedUploads > 0) {
         showError(`${failedUploads} file(s) failed to process`);
       }
+
+      return successfulUploads;
 
     } catch (error) {
       console.error('❌ Processing failed:', error);
