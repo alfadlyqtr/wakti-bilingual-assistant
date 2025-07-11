@@ -661,10 +661,8 @@ Would you like me to create this task?"
 You're here to make users' lives more organized and productive through advanced AI intelligence with personal memory!
 `;
 
-    // Build messages array with enhanced context
-    const messages = [
-      { role: 'system', content: systemPrompt }
-    ];
+    // Build messages array - NO SYSTEM ROLE IN MESSAGES!
+    const messages = [];
 
     // PHASE 3: SYSTEM INTEGRATION - Enhanced memory + personalization
     const contextMessages = recentMessages.slice(-5) || history?.slice(-5) || [];
@@ -672,31 +670,34 @@ You're here to make users' lives more organized and productive through advanced 
     // Get enhanced user context with personalization integration
     const enhancedUserContext = await getEnhancedUserContext(userId || 'anonymous', contextMessages, personalTouch);
 
-    // Add conversation summary if available
+    // Add conversation summary if available - USE 'user' ROLE
     if (conversationSummary && conversationSummary.trim()) {
       messages.push({
-        role: 'user',
+        role: 'user',  // ✅ FIXED: Use 'user' role, NOT 'system'
         content: `Previous conversation context: ${conversationSummary}`
       });
       console.log(`🧠 BASIC MEMORY: Added conversation summary (${conversationSummary.length} chars)`);
     }
 
-    // Add enhanced user context with personalization
+    // Add enhanced user context with personalization - USE 'user' ROLE
     if (enhancedUserContext && enhancedUserContext.trim()) {
       messages.push({
-        role: 'user', 
+        role: 'user',  // ✅ FIXED: Use 'user' role, NOT 'system'
         content: enhancedUserContext
       });
       console.log(`🧠 ENHANCED MEMORY + PERSONALIZATION: Added integrated context`);
     }
 
-    // Add conversation history
+    // Add conversation history - ENSURE CORRECT ROLES
     if (history && history.length > 0) {
       history.forEach(msg => {
-        messages.push({
-          role: msg.role,
-          content: msg.content
-        });
+        // Only add user and assistant messages, never system
+        if (msg.role === 'user' || msg.role === 'assistant') {
+          messages.push({
+            role: msg.role,
+            content: msg.content
+          });
+        }
       });
     }
 
@@ -727,18 +728,19 @@ You're here to make users' lives more organized and productive through advanced 
       });
       
       messages.push({
-        role: 'user',
+        role: 'user',  // ✅ Always use 'user' for user messages
         content: imageContent
       });
     } else {
       messages.push({
-        role: 'user',
+        role: 'user',  // ✅ Always use 'user' for user messages
         content: message
       });
     }
 
     console.log(`🎯 SENDING TO CLAUDE: ${messages.length} messages, Language: ${responseLanguage}, Memory: integrated`);
 
+    // ✅ FIXED: Proper Claude API call format
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -751,7 +753,8 @@ You're here to make users' lives more organized and productive through advanced 
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: 2000,
         temperature: 0.7,
-        messages: messages
+        system: systemPrompt,  // ✅ System prompt goes HERE
+        messages: messages     // ✅ Only user/assistant messages here
       })
     });
 
