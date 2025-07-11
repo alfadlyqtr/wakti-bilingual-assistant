@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
@@ -125,9 +124,6 @@ export function SimplifiedFileUpload({
         onFilesUploaded(successfulUploads);
         showSuccess(`Successfully processed ${successfulUploads.length} file(s)`);
         
-        // IMMEDIATE UI CLEANUP: Hide upload interface right away
-        setHideAfterUpload(true);
-        
         // AUTO-SWITCH TO VISION MODE FOR IMAGES
         const hasImages = successfulUploads.some(file => file.type?.startsWith('image/'));
         if (hasImages && onAutoSwitchMode) {
@@ -208,7 +204,7 @@ export function SimplifiedFileUpload({
 
   return (
     <div className="space-y-4">
-      {/* Uploaded Files Display - Hidden after upload */}
+      {/* Uploaded Files Display - Keep visible until AI processing completes */}
       {!hideAfterUpload && uploadedFiles.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-foreground">

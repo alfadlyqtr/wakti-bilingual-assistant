@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,7 +7,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { PlusMenu } from './PlusMenu';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
 import { SimplifiedFileUpload } from './SimplifiedFileUpload';
-import { QuickReplyPills } from './QuickReplyPills';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
 
 // Returns border/outline classes per mode for main container & textarea
@@ -73,11 +71,6 @@ export function ChatInput({
     } else {
       setMessage(prompt);
     }
-  };
-
-  // Handle quick reply pill clicks
-  const handlePillClick = (text: string) => {
-    setMessage(text);
   };
 
   // Handler to open Conversations Drawer (💬)
@@ -232,94 +225,49 @@ export function ChatInput({
               <ActiveModeIndicator activeTrigger={activeTrigger} />
             </div>
 
-            {/* Quick Reply Pills - Direct Implementation */}
+            {/* Quick Reply Pills - 2 per category */}
             {uploadedFiles.length > 0 && message === '' && (
               <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20">
                 {uploadedFiles[0]?.imageType?.id === 'ids' && (
                   <>
-                    <button 
-                      onClick={() => setMessage('What info is on this document?')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>🔍</span>
-                      <span>What info is on this document?</span>
-                    </button>
-                    <button 
-                      onClick={() => setMessage('Extract all the text for me')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>📝</span>
-                      <span>Extract all the text</span>
-                    </button>
-                    <button 
-                      onClick={() => setMessage('Read the foreign text')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>🌐</span>
-                      <span>Read the foreign text</span>
-                    </button>
+                    <button onClick={() => setMessage('What info is on this document?')} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm">🔍 What info is on this document?</button>
+                    <button onClick={() => setMessage('Extract all the text for me')} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm">📝 Extract all the text</button>
                   </>
                 )}
                 {uploadedFiles[0]?.imageType?.id === 'bills' && (
                   <>
-                    <button 
-                      onClick={() => setMessage('How much did I spend?')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>💰</span>
-                      <span>How much did I spend?</span>
-                    </button>
-                    <button 
-                      onClick={() => setMessage('Split this bill')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>➗</span>
-                      <span>Split this bill</span>
-                    </button>
-                    <button 
-                      onClick={() => setMessage('What items are on this invoice?')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>🛒</span>
-                      <span>What items are on this invoice?</span>
-                    </button>
+                    <button onClick={() => setMessage('How much did I spend?')} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm">💰 How much did I spend?</button>
+                    <button onClick={() => setMessage('Split this bill between ___ people')} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm">➗ Split this bill</button>
                   </>
                 )}
                 {uploadedFiles[0]?.imageType?.id === 'food' && (
                   <>
-                    <button 
-                      onClick={() => setMessage('How many calories is this?')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>🔥</span>
-                      <span>How many calories is this?</span>
-                    </button>
-                    <button 
-                      onClick={() => setMessage('What ingredients do you see?')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>🥗</span>
-                      <span>What ingredients do you see?</span>
-                    </button>
+                    <button onClick={() => setMessage('How many calories is this?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🔥 How many calories?</button>
+                    <button onClick={() => setMessage('What ingredients do you see?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🥗 What ingredients?</button>
                   </>
                 )}
-                {/* Default general pills for any other image type */}
-                {(!uploadedFiles[0]?.imageType || !['ids', 'bills', 'food'].includes(uploadedFiles[0].imageType.id)) && (
+                {uploadedFiles[0]?.imageType?.id === 'documents' && (
                   <>
-                    <button 
-                      onClick={() => setMessage('Describe everything you see')} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>👁️</span>
-                      <span>Describe everything you see</span>
-                    </button>
-                    <button 
-                      onClick={() => setMessage("What's the main subject here?")} 
-                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm transition-colors"
-                    >
-                      <span>🔍</span>
-                      <span>What's the main subject here?</span>
-                    </button>
+                    <button onClick={() => setMessage('Answer the questions in this')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📚 Answer the questions</button>
+                    <button onClick={() => setMessage('Explain this chart/report')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📊 Explain this chart</button>
+                  </>
+                )}
+                {uploadedFiles[0]?.imageType?.id === 'screenshots' && (
+                  <>
+                    <button onClick={() => setMessage('What\'s the error/problem here?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🚨 What's the error?</button>
+                    <button onClick={() => setMessage('How do I fix this step by step?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🛠️ How to fix this?</button>
+                  </>
+                )}
+                {uploadedFiles[0]?.imageType?.id === 'photos' && (
+                  <>
+                    <button onClick={() => setMessage('Describe the person/people')} className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm">👥 Describe the people</button>
+                    <button onClick={() => setMessage('Where was this taken?')} className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm">📍 Where was this taken?</button>
+                  </>
+                )}
+                {(!uploadedFiles[0]?.imageType || uploadedFiles[0]?.imageType?.id === 'general') && (
+                  <>
+                    <button onClick={() => setMessage('Describe everything you see')} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm">👁️ Describe everything</button>
+                    <button onClick={() => setMessage('What\'s the main subject here?')} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm">🔍 What's the main subject?</button>
                   </>
                 )}
               </div>
