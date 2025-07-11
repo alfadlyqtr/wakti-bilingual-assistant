@@ -161,7 +161,7 @@ export function SimplifiedFileUpload({
     
     // Send example prompt to parent
     if (onExamplePromptSelect && imageType.examplePrompt) {
-      onExamplePromptSelect(imageType.examplePrompt);
+      // onExamplePromptSelect(imageType.examplePrompt); // COMMENT THIS OUT
     }
   };
 
