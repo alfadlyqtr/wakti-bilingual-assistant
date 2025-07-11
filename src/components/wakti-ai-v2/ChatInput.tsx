@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -63,40 +64,6 @@ export function ChatInput({
     startUploading
   } = useSimplifiedFileUpload();
 
-  // Handle example prompt selection
-  const handleExamplePromptSelect = (prompt: string) => {
-    // If there's already text, append with a space, otherwise replace
-    if (message.trim()) {
-      setMessage(message + ' ' + prompt);
-    } else {
-      setMessage(prompt);
-    }
-  };
-
-  // Handler to open Conversations Drawer (💬)
-  const handleOpenConversationsDrawer = () => {
-    console.log('💬 EXTRA BUTTON: Dispatching custom event');
-    if (typeof window !== "undefined") {
-      const nativeEvent = new CustomEvent("open-wakti-conversations");
-      window.dispatchEvent(nativeEvent);
-    }
-  };
-  
-  // Handler to open Quick Actions Drawer (⚡)
-  const handleOpenQuickActionsDrawer = () => {
-    console.log('⚡ QUICK ACTIONS: Opening drawer');
-    if (onOpenPlusDrawer) onOpenPlusDrawer();
-  };
-
-  // Placeholder functions for PlusMenu (handled by SimplifiedFileUpload now)
-  const triggerCamera = () => {
-    console.log('📸 CAMERA: Handled by PlusMenu');
-  };
-
-  const triggerUpload = () => {
-    console.log('📁 UPLOAD: Handled by PlusMenu');
-  };
-
   // Enhanced send message function with proper data conversion
   const handleSendMessage = async () => {
     if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
@@ -149,7 +116,7 @@ export function ChatInput({
 
   return (
     <div className="w-full space-y-4">
-      {/* Simplified File Upload Component with example prompt handling */}
+      {/* Simplified File Upload Component */}
       <SimplifiedFileUpload
         onFilesUploaded={handleFilesUploaded}
         onUpdateFiles={updateFiles}
@@ -157,7 +124,6 @@ export function ChatInput({
         onRemoveFile={removeFile}
         isUploading={isUploading}
         disabled={isLoading}
-        onExamplePromptSelect={handleExamplePromptSelect}
         onAutoSwitchMode={(mode) => {
           console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
           if (onTriggerChange) {
@@ -225,7 +191,7 @@ export function ChatInput({
               <ActiveModeIndicator activeTrigger={activeTrigger} />
             </div>
 
-            {/* Quick Reply Pills - 2 per category */}
+            {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION */}
             {uploadedFiles.length > 0 && message === '' && (
               <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20">
                 {uploadedFiles[0]?.imageType?.id === 'ids' && (
@@ -246,13 +212,13 @@ export function ChatInput({
                     <button onClick={() => setMessage('What ingredients do you see?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🥗 What ingredients?</button>
                   </>
                 )}
-                {uploadedFiles[0]?.imageType?.id === 'documents' && (
+                {uploadedFiles[0]?.imageType?.id === 'docs' && (
                   <>
                     <button onClick={() => setMessage('Answer the questions in this')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📚 Answer the questions</button>
                     <button onClick={() => setMessage('Explain this chart/report')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📊 Explain this chart</button>
                   </>
                 )}
-                {uploadedFiles[0]?.imageType?.id === 'screenshots' && (
+                {uploadedFiles[0]?.imageType?.id === 'screens' && (
                   <>
                     <button onClick={() => setMessage('What\'s the error/problem here?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🚨 What's the error?</button>
                     <button onClick={() => setMessage('How do I fix this step by step?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🛠️ How to fix this?</button>
