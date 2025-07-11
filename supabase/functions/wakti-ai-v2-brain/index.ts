@@ -567,16 +567,16 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     }
 
     // 2. TASK/REMINDER DETECTION - Check for explicit task creation requests
-    else if (message.toLowerCase().includes('create task') || 
-             message.toLowerCase().includes('أنشئ مهمة') ||
-             message.toLowerCase().includes('add task') ||
-             message.toLowerCase().includes('new task')) {
+    if (detectedMode !== 'vision' && (message.toLowerCase().includes('create task') || 
+                                     message.toLowerCase().includes('أنشئ مهمة') ||
+                                     message.toLowerCase().includes('add task') ||
+                                     message.toLowerCase().includes('new task'))) {
       detectedMode = 'task';
       console.log('📝 TASK MODE ACTIVATED: Task creation detected');
     }
 
     // 3. CHAT MODE - Everything else
-    else {
+    if (detectedMode === activeTrigger && detectedMode !== 'vision' && detectedMode !== 'task') {
       detectedMode = 'chat';
       console.log('💬 CHAT MODE ACTIVATED: General conversation detected');
     }
