@@ -1,10 +1,23 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+// ENHANCED CORS CONFIGURATION FOR PRODUCTION
+const allowedOrigins = [
+  'https://wakti.qa',
+  'https://www.wakti.qa',
+  'https://lovable.dev',
+  'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com'
+];
+
+const getCorsHeaders = (origin: string | null) => {
+  const corsOrigin = allowedOrigins.includes(origin || '') ? origin : 'https://wakti.qa';
+  
+  return {
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Max-Age': '86400'
+  };
 };
 
 interface RequestBody {
@@ -15,9 +28,15 @@ interface RequestBody {
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { 
+      status: 200,
+      headers: corsHeaders 
+    });
   }
 
   try {

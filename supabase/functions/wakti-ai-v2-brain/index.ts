@@ -1,11 +1,26 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+// ENHANCED CORS CONFIGURATION FOR PRODUCTION
+const allowedOrigins = [
+  'https://wakti.qa',
+  'https://www.wakti.qa',
+  'https://lovable.dev',
+  'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com'
+];
+
+const getCorsHeaders = (origin: string | null) => {
+  const corsOrigin = allowedOrigins.includes(origin || '') ? origin : 'https://wakti.qa';
+  
+  return {
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth, content-length',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Max-Age': '86400', // 24 hours preflight cache
+    'Access-Control-Allow-Credentials': 'false'
+  };
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -320,8 +335,20 @@ async function getEnhancedUserContext(userId, recentMessages, personalTouch) {
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+  
+  // Enhanced preflight handling for image uploads
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    console.log("🔧 PREFLIGHT: Handling OPTIONS request from origin:", origin);
+    return new Response(null, { 
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/plain',
+        'Cache-Control': 'public, max-age=86400'
+      }
+    });
   }
 
   try {
@@ -459,7 +486,14 @@ serve(async (req) => {
     console.log(`✅ WAKTI AI V2: Successfully processed ${activeTrigger} request with memory`);
     
     return new Response(JSON.stringify(finalResponse), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      status: 200,
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY"
+      }
     });
 
   } catch (error) {
@@ -473,7 +507,11 @@ serve(async (req) => {
       reminderCreated: false
     }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache"
+      }
     });
   }
 });

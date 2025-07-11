@@ -3,10 +3,24 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+// ENHANCED CORS CONFIGURATION FOR PRODUCTION
+const allowedOrigins = [
+  'https://wakti.qa',
+  'https://www.wakti.qa',
+  'https://lovable.dev',
+  'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com'
+];
+
+const getCorsHeaders = (origin: string | null) => {
+  const corsOrigin = allowedOrigins.includes(origin || '') ? origin : 'https://wakti.qa';
+  
+  return {
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth, content-length',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Max-Age': '86400',
+    'Access-Control-Allow-Credentials': 'false'
+  };
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -18,8 +32,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 console.log("SIMPLE VOICE TRANSLATOR: Function loaded - Record > Whisper > GPT > TTS");
 
 serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+  
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/plain'
+      }
+    });
   }
 
   try {
@@ -30,7 +53,7 @@ serve(async (req) => {
     // Handle voice translation with audio blob (FormData)
     if (contentType.includes('multipart/form-data')) {
       console.log("VOICE TRANSLATION: Processing audio blob");
-      return await processVoiceTranslation(req);
+      return await processVoiceTranslation(req, corsHeaders);
     }
     
     // Handle TTS-only requests (JSON)
@@ -38,7 +61,7 @@ serve(async (req) => {
     
     if (requestBody.requestType === 'tts' || requestBody.text) {
       console.log("TTS REQUEST: Processing text-to-speech");
-      return await processTTS(requestBody);
+      return await processTTS(requestBody, corsHeaders);
     }
 
     return new Response(JSON.stringify({
@@ -62,7 +85,7 @@ serve(async (req) => {
 });
 
 // SIMPLE: Voice translation with automatic TTS
-async function processVoiceTranslation(req: Request) {
+async function processVoiceTranslation(req: Request, corsHeaders: Record<string, string>) {
   try {
     console.log("STEP 1: Starting voice translation");
     
@@ -149,7 +172,7 @@ async function processVoiceTranslation(req: Request) {
 }
 
 // SIMPLE: TTS generation
-async function processTTS(requestBody: any) {
+async function processTTS(requestBody: any, corsHeaders: Record<string, string>) {
   try {
     console.log("TTS: Processing text-to-speech request");
     
