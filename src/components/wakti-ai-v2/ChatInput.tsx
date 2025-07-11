@@ -37,6 +37,7 @@ interface ChatInputProps {
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
   activeTrigger: string;
+  onTriggerChange?: (trigger: string) => void;
 }
 
 export function ChatInput({
@@ -47,7 +48,8 @@ export function ChatInput({
   onSendMessage,
   onClearChat,
   onOpenPlusDrawer,
-  activeTrigger
+  activeTrigger,
+  onTriggerChange
 }: ChatInputProps) {
   const { language } = useTheme();
 
@@ -204,6 +206,13 @@ export function ChatInput({
         isUploading={isUploading}
         disabled={isLoading}
         onExamplePromptSelect={handleExamplePromptSelect}
+        onAutoSwitchMode={(mode) => {
+          console.log('🔍 AUTO MODE SWITCH: Switching to', mode);
+          // Pass the mode change up to parent
+          if (onTriggerChange) {
+            onTriggerChange(mode);
+          }
+        }}
       />
 
       {/* Main Input Area */}

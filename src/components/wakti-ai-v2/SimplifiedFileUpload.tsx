@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
@@ -25,6 +26,7 @@ interface SimplifiedFileUploadProps {
   isUploading: boolean;
   disabled?: boolean;
   onExamplePromptSelect?: (prompt: string) => void;
+  onAutoSwitchMode?: (mode: string) => void; // ADD THIS NEW PROP
 }
 
 export function SimplifiedFileUpload({
@@ -34,7 +36,8 @@ export function SimplifiedFileUpload({
   onRemoveFile,
   isUploading,
   disabled = false,
-  onExamplePromptSelect
+  onExamplePromptSelect,
+  onAutoSwitchMode
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
@@ -170,6 +173,13 @@ export function SimplifiedFileUpload({
         
         onFilesUploaded(successfulUploads);
         showSuccess(`Successfully uploaded ${successfulUploads.length} file(s)`);
+        
+        // AUTO-SWITCH TO VISION MODE FOR IMAGES
+        const hasImages = successfulUploads.some(file => file.preview && file.type?.startsWith('image/'));
+        if (hasImages && onAutoSwitchMode) {
+          console.log('🔍 AUTO-SWITCH: Images detected, switching to vision mode');
+          onAutoSwitchMode('vision');
+        }
       }
 
       const failedUploads = results.filter(result => result.status === 'rejected').length;
@@ -181,7 +191,7 @@ export function SimplifiedFileUpload({
       console.error('❌ Upload process failed:', error);
       showError('Upload failed. Please try again.');
     }
-  }, [generatePreview, showError, showSuccess, onFilesUploaded]);
+  }, [generatePreview, showError, showSuccess, onFilesUploaded, onAutoSwitchMode]);
 
   const updateFileImageType = (fileId: string, imageType: ImageTypeOption) => {
     console.log('🏷️ TYPE ASSIGNMENT AUDIT:', {

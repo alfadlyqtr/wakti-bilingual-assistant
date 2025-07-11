@@ -543,11 +543,13 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       })) || []
     });
 
-    // SMART MODE DETECTION - Auto-detect what the user wants
-    let detectedMode = activeTrigger; // Default to current trigger
-
-    // 1. IMAGE DETECTION - If images uploaded, switch to vision mode
-    if (attachedFiles && attachedFiles.length > 0) {
+    // TRIGGER-BASED MODE DETECTION (Frontend decides, Brain executes)
+    let detectedMode = activeTrigger; // Use the trigger that comes from frontend
+    
+    // Enhanced mode detection with image fallback
+    if (activeTrigger === 'vision') {
+      console.log('🔍 VISION MODE: Frontend sent vision trigger, processing images');
+    } else if (attachedFiles && attachedFiles.length > 0) {
       console.log(`🔍 DEBUG: Found ${attachedFiles.length} attached files, checking for images...`);
       
       const hasImages = attachedFiles.some((file) => {
@@ -562,31 +564,23 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       } else {
         console.log('🔍 DEBUG: No images found in attached files');
       }
-    } else {
-      console.log('🔍 DEBUG: No attached files found');
-    }
-
-    // 2. TASK/REMINDER DETECTION - Check for explicit task creation requests
-    if (detectedMode !== 'vision' && (message.toLowerCase().includes('create task') || 
-                                     message.toLowerCase().includes('أنشئ مهمة') ||
-                                     message.toLowerCase().includes('add task') ||
-                                     message.toLowerCase().includes('new task'))) {
+    } else if (message.toLowerCase().includes('create task') || 
+               message.toLowerCase().includes('أنشئ مهمة') ||
+               message.toLowerCase().includes('add task') ||
+               message.toLowerCase().includes('new task')) {
       detectedMode = 'task';
       console.log('📝 TASK MODE ACTIVATED: Task creation detected');
-    }
-
-    // 3. CHAT MODE - Everything else
-    if (detectedMode === activeTrigger && detectedMode !== 'vision' && detectedMode !== 'task') {
+    } else {
       detectedMode = 'chat';
       console.log('💬 CHAT MODE ACTIVATED: General conversation detected');
     }
 
-    // Log the smart detection result
-    console.log(`🧠 SMART DETECTION: Input mode "${activeTrigger}" → Detected mode "${detectedMode}"`);
+    // Log the mode detection result
+    console.log(`🧠 MODE DETECTION: Frontend trigger "${activeTrigger}" → Final mode "${detectedMode}"`);
 
     // SKIP TASK PROCESSING FOR VISION MODE
     if (detectedMode === 'vision') {
-      console.log('📸 TASK PROCESSING: Skipped (not needed for vision mode)');
+      console.log('📸 TASK PROCESSING: Skipped (vision mode)');
     }
 
     const responseLanguage = language;
@@ -736,7 +730,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     // PROCESS TASK & REMINDER ACTIONS - Only for non-vision modes
     let taskReminderResult = { showTaskForm: false, taskData: null, reminderCreated: false, reminderData: null };
     
-    if (detectedMode !== 'vision') {
+    if (detectedMode !== 'vision' && activeTrigger !== 'vision') {
       console.log('📝 TASK PROCESSING: Running task analysis');
       taskReminderResult = await processTaskAndReminderActions(responseText, userId);
     } else {
@@ -748,7 +742,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      mode: detectedMode,
+      mode: detectedMode, // Return the actual detected mode
       showTaskForm: taskReminderResult.showTaskForm,
       taskData: taskReminderResult.taskData,
       reminderCreated: taskReminderResult.reminderCreated,
