@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -382,18 +383,18 @@ serve(async (req) => {
       userId, 
       language = 'en',
       files = [],
+      attachedFiles: requestAttachedFiles = [],
       activeTrigger = 'general',
       recentMessages = [],
       conversationSummary = '',
-      personalTouch = null,
-      attachedFiles = []
+      personalTouch = null
     } = requestData;
 
     // ENSURE PROPER USER ID FOR MEMORY
     const actualUserId = userId || personalTouch?.userId || requestData.user_id || 'default_user';
     console.log('🔍 USER ID CHECK:', { original: userId, personal: personalTouch?.userId, final: actualUserId });
 
-    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, AttachedFiles=${attachedFiles.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}, UserId=${actualUserId}`);
+    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, AttachedFiles=${requestAttachedFiles.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}, UserId=${actualUserId}`);
 
     let finalConversationId = conversationId;
     
@@ -420,26 +421,31 @@ serve(async (req) => {
     }
 
     // USE EXISTING UPLOADED FILES INSTEAD OF RE-UPLOADING
-    let processedFiles = [];
-    if (requestData.attachedFiles && requestData.attachedFiles.length > 0) {
-      // Files are already uploaded - just use them directly
-      processedFiles = requestData.attachedFiles.map(file => ({
+    let attachedFiles = [];
+    
+    // Use already uploaded files from SimplifiedFileUpload instead of re-uploading
+    if (requestAttachedFiles && requestAttachedFiles.length > 0) {
+      console.log(`📎 USING EXISTING FILES: ${requestAttachedFiles.length} files already uploaded`);
+      
+      attachedFiles = requestAttachedFiles.map(file => ({
         url: file.url,
         type: file.type,
         name: file.name,
-        imageType: file.imageType || { id: 'general', name: 'General' }
+        imageType: file.imageType || { id: 'general', name: language === 'ar' ? 'عام' : 'General' }
       }));
       
-      console.log(`📎 USING EXISTING FILES: ${processedFiles.length} files already uploaded`);
+      attachedFiles.forEach(file => {
+        console.log(`📎 FILE READY: ${file.name} (${file.imageType.name}) - URL: ${file.url}`);
+      });
     }
 
     // DEBUG: Check what files we have
     console.log(`🔍 DEBUG ATTACHED FILES:`, {
       requestDataFiles: !!requestData.files,
-      requestDataAttachedFiles: !!requestData.attachedFiles,
-      attachedFilesLength: requestData.attachedFiles?.length || 0,
-      processedFilesLength: processedFiles.length,
-      attachedFilesContent: requestData.attachedFiles?.map(f => ({
+      requestAttachedFiles: !!requestAttachedFiles,
+      attachedFilesLength: requestAttachedFiles?.length || 0,
+      processedFilesLength: attachedFiles.length,
+      attachedFilesContent: requestAttachedFiles?.map(f => ({
         name: f.name,
         type: f.type,
         hasUrl: !!f.url,
@@ -452,7 +458,7 @@ serve(async (req) => {
       finalConversationId,
       actualUserId,
       language,
-      processedFiles, // Use the existing files
+      attachedFiles, // Use the processed files
       activeTrigger,
       recentMessages,
       conversationSummary,
