@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -475,12 +476,6 @@ serve(async (req) => {
       browsingData: null,
       needsConfirmation: false,
       
-      // ADD TASK & REMINDER FIELDS:
-      pendingTaskData: result.taskData || null,
-      pendingReminderData: result.reminderData || null,
-      showTaskForm: result.showTaskForm || false,
-      reminderCreated: result.reminderCreated || false,
-      
       success: result.success !== false,
       processingTime: Date.now(),
       aiProvider: 'claude-3-5-sonnet-20241022',
@@ -508,9 +503,7 @@ serve(async (req) => {
       error: error.message || 'Processing failed',
       success: false,
       response: 'I encountered an error processing your request. Please try again.',
-      conversationId: null,
-      showTaskForm: false,
-      reminderCreated: false
+      conversationId: null
     }), {
       status: 500,
       headers: { 
@@ -563,12 +556,6 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       } else {
         console.log('🔍 DEBUG: No images found in attached files');
       }
-    } else if (message.toLowerCase().includes('create task') || 
-               message.toLowerCase().includes('أنشئ مهمة') ||
-               message.toLowerCase().includes('add task') ||
-               message.toLowerCase().includes('new task')) {
-      detectedMode = 'task';
-      console.log('📝 TASK MODE ACTIVATED: Task creation detected');
     } else {
       detectedMode = 'chat';
       console.log('💬 CHAT MODE ACTIVATED: General conversation detected');
@@ -576,11 +563,6 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 
     // Log the mode detection result
     console.log(`🧠 MODE DETECTION: Frontend trigger "${activeTrigger}" → Final mode "${detectedMode}"`);
-
-    // SKIP TASK PROCESSING FOR VISION MODE
-    if (detectedMode === 'vision') {
-      console.log('📸 TASK PROCESSING: Skipped (vision mode)');
-    }
 
     const responseLanguage = language;
     let messages = [];
@@ -654,10 +636,6 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       systemPrompt = responseLanguage === 'ar' ? 
         `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.` :
         `You are WAKTI AI, an intelligent assistant specialized in image analysis. Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
-    } else if (detectedMode === 'task') {
-      systemPrompt = responseLanguage === 'ar' ? 
-        `أنت WAKTI AI، مساعد ذكي متخصص في إنشاء المهام والتذكيرات. عندما يطلب المستخدم إنشاء مهمة، استخرج التفاصيل وقدمها في تنسيق JSON محدد.` :
-        `You are WAKTI AI, an intelligent assistant specialized in creating tasks and reminders. When users request task creation, extract details and provide them in specific JSON format.`;
     } else {
       systemPrompt = responseLanguage === 'ar' ? 
         `أنت WAKTI AI، المساعد الذكي الودود المتخصص في الإنتاجية. ساعد المستخدم بطريقة مفيدة وودية.` :
@@ -721,26 +699,12 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       console.error('Failed to store conversation:', error);
     }
 
-    // PROCESS TASK & REMINDER ACTIONS - Only for non-vision modes
-    let taskReminderResult = { showTaskForm: false, taskData: null, reminderCreated: false, reminderData: null };
-    
-    if (detectedMode !== 'vision' && activeTrigger !== 'vision') {
-      console.log('📝 TASK PROCESSING: Running task analysis');
-      taskReminderResult = await processTaskAndReminderActions(responseText, userId);
-    } else {
-      console.log('📝 TASK PROCESSING: Skipped for vision mode');
-    }
-
     return {
       response: responseText,
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      mode: detectedMode, // Return the actual detected mode
-      showTaskForm: taskReminderResult.showTaskForm,
-      taskData: taskReminderResult.taskData,
-      reminderCreated: taskReminderResult.reminderCreated,
-      reminderData: taskReminderResult.reminderData
+      mode: detectedMode // Return the actual detected mode
     };
 
   } catch (error) {
@@ -748,151 +712,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     return {
       success: false,
       error: error.message,
-      response: language === 'ar' ? 'أعتذر، حدث خطأ في معالجة طلبك.' : 'I apologize, there was an error processing your request.',
-      showTaskForm: false,
-      reminderCreated: false
+      response: language === 'ar' ? 'أعتذر، حدث خطأ في معالجة طلبك.' : 'I apologize, there was an error processing your request.'
     };
-  }
-}
-
-// TASK & REMINDER PROCESSING FUNCTIONS
-async function processTaskAndReminderActions(responseText, userId) {
-  console.log('🎯 PROCESSING TASK & REMINDER ACTIONS');
-  
-  let result = {
-    showTaskForm: false,
-    taskData: null,
-    reminderCreated: false,
-    reminderData: null,
-    originalResponse: responseText
-  };
-  
-  // Process task creation requests
-  const taskMatch = extractTaskData(responseText);
-  if (taskMatch) {
-    result.showTaskForm = true;
-    result.taskData = await processTaskDateTime(taskMatch);
-    console.log('📋 TASK FORM DATA PREPARED:', result.taskData);
-  }
-  
-  // Process reminder creation
-  const reminderMatch = extractReminderData(responseText);
-  if (reminderMatch) {
-    const processedReminder = await processReminderDateTime(reminderMatch);
-    const createdReminder = await createReminderInDatabase(processedReminder, userId);
-    if (createdReminder) {
-      result.reminderCreated = true;
-      result.reminderData = createdReminder;
-      console.log('⏰ REMINDER CREATED:', createdReminder.id);
-    }
-  }
-  
-  return result;
-}
-
-// Extract task data from AI response
-function extractTaskData(responseText) {
-  const taskRegex = /```json\s*(\{[\s\S]*?"action":\s*"create_task_form"[\s\S]*?\})\s*```/g;
-  const match = taskRegex.exec(responseText);
-  
-  if (match) {
-    try {
-      const taskData = JSON.parse(match[1]);
-      return taskData.data;
-    } catch (error) {
-      console.error('Failed to parse task JSON:', error);
-    }
-  }
-  return null;
-}
-
-// Extract reminder data from AI response
-function extractReminderData(responseText) {
-  const reminderRegex = /```json\s*(\{[\s\S]*?"action":\s*"create_reminder"[\s\S]*?\})\s*```/g;
-  const match = reminderRegex.exec(responseText);
-  
-  if (match) {
-    try {
-      const reminderData = JSON.parse(match[1]);
-      return reminderData.data;
-    } catch (error) {
-      console.error('Failed to parse reminder JSON:', error);
-    }
-  }
-  return null;
-}
-
-// Process and convert task date/time
-async function processTaskDateTime(taskData) {
-  const today = new Date();
-  let dueDate = taskData.dueDate;
-  
-  // Convert relative dates to actual dates
-  if (typeof dueDate === 'string') {
-    const lowerDate = dueDate.toLowerCase();
-    
-    if (lowerDate.includes('tomorrow') || lowerDate.includes('غداً')) {
-      const tomorrow = new Date(today);
-      tomorrow.setDate(today.getDate() + 1);
-      dueDate = tomorrow.toISOString().split('T')[0];
-    } else if (lowerDate.includes('saturday') || lowerDate.includes('السبت')) {
-      const daysUntilSaturday = (6 - today.getDay() + 7) % 7 || 7;
-      const nextSaturday = new Date(today);
-      nextSaturday.setDate(today.getDate() + daysUntilSaturday);
-      dueDate = nextSaturday.toISOString().split('T')[0];
-    } else if (lowerDate.includes('sunday') || lowerDate.includes('الأحد')) {
-      const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
-      const nextSunday = new Date(today);
-      nextSunday.setDate(today.getDate() + daysUntilSunday);
-      dueDate = nextSunday.toISOString().split('T')[0];
-    }
-    // Add more day conversions as needed...
-  }
-  
-  return {
-    ...taskData,
-    dueDate: dueDate,
-    parsedDateTime: `${dueDate}T${taskData.dueTime || '09:00'}:00Z`
-  };
-}
-
-// Process reminder date/time
-async function processReminderDateTime(reminderData) {
-  // Similar processing for reminders
-  return {
-    ...reminderData,
-    reminderDateTime: `${reminderData.reminderDate}T${reminderData.reminderTime || '09:00'}:00Z`
-  };
-}
-
-// Create reminder in database
-async function createReminderInDatabase(reminderData, userId) {
-  try {
-    const reminder = {
-      user_id: userId,
-      title: reminderData.title,
-      description: reminderData.description || '',
-      due_date: reminderData.reminderDate,
-      due_time: reminderData.reminderTime || '09:00',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    const { data, error } = await supabase
-      .from('tr_reminders')
-      .insert([reminder])
-      .select()
-      .single();
-      
-    if (error) {
-      console.error('Failed to create reminder:', error);
-      return null;
-    }
-    
-    console.log('✅ REMINDER CREATED IN DATABASE:', data.id);
-    return data;
-  } catch (error) {
-    console.error('Database error creating reminder:', error);
-    return null;
   }
 }
