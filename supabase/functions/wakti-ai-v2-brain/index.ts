@@ -529,263 +529,125 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       throw new Error('Anthropic API key not configured');
     }
 
-    console.log(`🤖 CLAUDE 35: Processing ${activeTrigger} mode conversation with enhanced memory for user ${userId}`);
+    // 🎯 SMART MODE DETECTION
+    let actualMode = activeTrigger;
+    let skipTaskProcessing = false;
+    let skipMemoryOverload = false;
 
-    // Get conversation history
-    const { data: history } = await supabase
-      .from('ai_chat_history')
-      .select('role, content, created_at')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .limit(10);
+    // 1. IMAGE UPLOADED = FORCE VISION MODE
+    if (attachedFiles && attachedFiles.length > 0) {
+      const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
+      if (hasImages) {
+        actualMode = 'vision';
+        skipTaskProcessing = true;
+        skipMemoryOverload = true;
+        console.log('👁️ VISION MODE ACTIVATED: Image detected - focusing on vision processing');
+      }
+    }
+
+    // 2. EXPLICIT TASK COMMANDS
+    const taskTriggers = ['create task', 'أنشئ مهمة', 'remind me', 'set reminder', 'add task'];
+    const hasExplicitTaskIntent = taskTriggers.some(trigger => 
+      message.toLowerCase().includes(trigger.toLowerCase())
+    );
+
+    if (hasExplicitTaskIntent && actualMode !== 'vision') {
+      actualMode = 'task_creation';
+      console.log('📝 TASK MODE ACTIVATED: Explicit task/reminder command detected');
+    }
+
+    console.log(`🎯 FINAL MODE: ${actualMode} (skipTasks: ${skipTaskProcessing}, skipMemory: ${skipMemoryOverload})`);
 
     const responseLanguage = language;
-    
-    // ENHANCED SYSTEM PROMPT WITH MEMORY + PERSONALIZATION
-    const systemPrompt = responseLanguage === 'ar' ? `
-أنت WAKTI AI، المساعد الذكي المتطور المختص في الإنتاجية والتنظيم. أنت جزء من تطبيق WAKTI المحمول الحصري الذي يدعم العربية والإنجليزية.
+    let messages = [];
 
-## تكامل التخصيص والذاكرة:
-
-استخدم السياق الشخصي المعزز لتخصيص كل رد:
-
-### استخدام الأسماء:
-- **الاسم المفضل للمستخدم**: خاطبهم باسمهم المختار بطبيعية
-- **اسم الذكاء الاصطناعي**: رد عند مناداتك بالاسم المخصص لك
-- **التكامل الطبيعي**: استخدم الأسماء في المحادثة، ليس بشكل رسمي
-
-### تكييف أسلوب التواصل:
-- **النبرة العادية**: استخدم لغة غير رسمية، تعبيرات ودية
-- **النبرة المهنية**: لغة أكثر رسمية مع الحفاظ على الدفء
-- **الأسلوب المفصل**: قدم شروحات شاملة مع الأمثلة
-- **الأسلوب المختصر**: حافظ على الردود مركزة وموجزة
-
-### الامتثال للتعليمات المخصصة:
-- **اتبع التعليمات الخاصة**: احترم دائماً أي تعليمات مخصصة مقدمة
-- **تفصيل المفاهيم**: إذا طُلب منك، اشرح الأشياء خطوة بخطوة
-- **تكييف التعقيد**: اطابق مستوى التفصيل المفضل للمستخدم
-
-تذكر: يجب أن يبدو التخصيص طبيعياً، وليس آلياً. استخدم السياق لتعزيز العلاقة، وليس لاستبدال التفاعل الحقيقي.
-
-## إنشاء المهام والتذكيرات الذكي:
-
-### إنشاء المهام (بناءً على أمر المستخدم):
-عندما يقول المستخدم "أنشئ مهمة" أو "create task"، استخرج وهيكل التالي:
-
-#### قواعد تحليل المهام:
-- **العنوان**: النشاط الرئيسي (مثال: "التسوق في لولو"، "اجتماع مع أحمد")
-- **التاريخ**: حول التواريخ النسبية (غداً، السبت، الـ15، الأسبوع القادم)
-- **الوقت**: استخرج الوقت (9:00 صباحاً، 3 مساءً، المساء)
-- **المهام الفرعية**: قسم العناصر (حليب، أرز، خبز أو بنود جدول أعمال)
-- **الأولوية**: استنتج من كلمات الإلحاح (عاجل، مهم، فوري)
-
-#### مهم جداً: تنسيق إخراج المهام - يجب الاتباع بدقة:
-عندما يقول المستخدم "أنشئ مهمة" أو "create task"، يجب أن ترد بـ:
-1. شرح مختصر باللغة الطبيعية
-2. متبوعاً فوراً بكتلة كود JSON
-
-**مثال على تنسيق الرد:**
-"سأساعدك في إنشاء هذه المهمة! إليك التفاصيل التي استخرجتها:
-
-\`\`\`json
-{
-  "action": "create_task_form",
-  "data": {
-    "title": "التسوق في لولو",
-    "description": "شراء البقالة للأسبوع",
-    "dueDate": "2025-01-18",
-    "dueTime": "21:00",
-    "priority": "medium",
-    "subtasks": ["شراء حليب", "شراء أرز", "شراء خبز"],
-    "category": "shopping"
-  }
-}
-\`\`\`
-
-هل تريد مني إنشاء هذه المهمة؟"
-
-**قواعد حاسمة:**
-- اشمل دائماً كتلة كود JSON عند طلب إنشاء مهمة
-- استخدم \`\`\`json لبدء كتلة الكود
-- اختتم بـ \`\`\` لإغلاق كتلة الكود
-- يجب أن يكون JSON صحيحاً وقابلاً للتحليل
-- اشمل جميع الحقول المطلوبة: title, dueDate, dueTime, subtasks
-- لا ترد أبداً على إنشاء المهام بدون كتلة JSON
-
-## شخصية المساعد:
-- استخدم العربية الفصحى مع الطابع الودود
-- اجعل التفاعل شخصياً باستخدام السياق المعزز
-- اقترح خطوات عملية قابلة للتنفيذ
-- احتفظ بالطابع المهني مع اللمسة الشخصية
-- استخدم الرموز التعبيرية بحكمة لجعل المحادثة حية
-
-أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية من خلال الذكاء الاصطناعي المتطور والذاكرة الشخصية!
-` : `
-You are WAKTI AI, the advanced intelligent assistant specializing in productivity and organization. You are part of the exclusive WAKTI mobile app that supports Arabic and English.
-
-## Personalization + Memory Integration:
-
-Use the Enhanced Personal Context to personalize every response:
-
-### Name Usage:
-- **User's Preferred Name**: Address them by their chosen nickname naturally
-- **AI Nickname**: Respond to being called by your assigned nickname
-- **Natural Integration**: Use names conversationally, not formally
-
-### Communication Style Adaptation:
-- **Casual Tone**: Use informal language, contractions, friendly expressions
-- **Professional Tone**: More formal language while maintaining warmth
-- **Detailed Style**: Provide comprehensive explanations with examples
-- **Concise Style**: Keep responses focused and brief
-
-### Custom Instructions Compliance:
-- **Follow Special Instructions**: Always honor any custom instructions provided
-- **Break Down Concepts**: If requested, explain things step-by-step
-- **Adapt Complexity**: Match the user's preferred level of detail
-
-### Personalization Examples:
-- **Casual + Detailed**: "Hey Abdullah! Let me break this down for you step by step..."
-- **Professional + Concise**: "Good to hear from you, Abdullah. Here's the key point..."
-- **With Custom Instructions**: Follow their specific guidance while maintaining personality
-
-Remember: Personalization should feel natural, not robotic. Use the context to enhance the relationship, not replace genuine interaction.
-
-## Smart Task & Reminder Creation:
-
-### Task Creation (User Command Based):
-When user says "create task" or "أنشئ مهمة", extract and structure the following:
-
-#### Task Parsing Rules:
-- **Title**: Main activity (e.g., "Shopping at Lulu", "Meeting with Ahmed")
-- **Date**: Convert relative dates (tomorrow, Saturday, 15th, next week)
-- **Time**: Extract time (9:00 AM, 3 PM, evening)
-- **Subtasks**: Break down items (milk, rice, bread OR agenda items)
-- **Priority**: Infer from urgency words (urgent, important, ASAP)
-
-#### CRITICAL: Task Output Format - MUST FOLLOW EXACTLY:
-When user says "create task" or "أنشئ مهمة", you MUST respond with BOTH:
-1. A brief explanation in natural language
-2. IMMEDIATELY followed by the JSON code block
-
-**EXAMPLE RESPONSE FORMAT:**
-"I'll help you create that task! Here are the details I extracted:
-
-\`\`\`json
-{
-  "action": "create_task_form",
-  "data": {
-    "title": "Shopping at Lulu",
-    "description": "Buy groceries for the week",
-    "dueDate": "2025-01-18",
-    "dueTime": "21:00",
-    "priority": "medium",
-    "subtasks": ["Buy milk", "Buy rice", "Buy bread"],
-    "category": "shopping"
-  }
-}
-\`\`\`
-
-Would you like me to create this task?"
-
-**CRITICAL RULES:**
-- ALWAYS include the JSON code block when task creation is requested
-- Use \`\`\`json to start the code block
-- End with \`\`\` to close the code block  
-- The JSON must be valid and parseable
-- Include ALL required fields: title, dueDate, dueTime, subtasks
-- NEVER respond to task creation without the JSON block
-
-## Assistant Personality:
-- Use clear, professional English with a friendly touch
-- Make interactions personal using Enhanced Personal Context
-- Be helpful and practical in all responses
-- Suggest actionable next steps
-- Maintain professional tone with personal warmth
-- Use emojis wisely to make conversation engaging
-
-You're here to make users' lives more organized and productive through advanced AI intelligence with personal memory!
-`;
-
-    // Build messages array - NO SYSTEM ROLE IN MESSAGES!
-    const messages = [];
-
-    // PHASE 3: SYSTEM INTEGRATION - Enhanced memory + personalization
-    const contextMessages = recentMessages.slice(-5) || history?.slice(-5) || [];
-
-    // Get enhanced user context with personalization integration
-    const enhancedUserContext = await getEnhancedUserContext(userId, contextMessages, personalTouch);
-
-    // Add conversation summary if available - USE 'user' ROLE
-    if (conversationSummary && conversationSummary.trim()) {
-      messages.push({
-        role: 'user',  // ✅ FIXED: Use 'user' role, NOT 'system'
-        content: `Previous conversation context: ${conversationSummary}`
-      });
-      console.log(`🧠 BASIC MEMORY: Added conversation summary (${conversationSummary.length} chars)`);
+    // 🧠 CONDITIONAL MEMORY LOADING (not for vision)
+    if (!skipMemoryOverload && personalTouch) {
+      const contextMessages = recentMessages.slice(-3) || [];
+      const enhancedUserContext = await getEnhancedUserContext(userId, contextMessages, personalTouch);
+      
+      if (enhancedUserContext && enhancedUserContext.trim()) {
+        messages.push({
+          role: 'user',
+          content: `Personal context: ${enhancedUserContext}`
+        });
+        console.log('🧠 MEMORY: Added light personal context');
+      }
     }
 
-    // Add enhanced user context with personalization - USE 'user' ROLE
-    if (enhancedUserContext && enhancedUserContext.trim()) {
-      messages.push({
-        role: 'user',  // ✅ FIXED: Use 'user' role, NOT 'system'
-        content: enhancedUserContext
+    // 👁️ VISION PROCESSING - SPECIALIZED
+    if (actualMode === 'vision') {
+      console.log('👁️ VISION: Building image analysis request...');
+      
+      const visionContent = [];
+      
+      visionContent.push({
+        type: 'text',
+        text: message || 'Analyze this image and describe what you see in detail.'
       });
-      console.log(`🧠 ENHANCED MEMORY + PERSONALIZATION: Added integrated context for user ${userId}`);
-    }
 
-    // Add conversation history - ENSURE CORRECT ROLES
-    if (history && history.length > 0) {
-      history.forEach(msg => {
-        // Only add user and assistant messages, never system
-        if (msg.role === 'user' || msg.role === 'assistant') {
-          messages.push({
-            role: msg.role,
-            content: msg.content
+      for (const file of attachedFiles) {
+        if (file.type?.startsWith('image/')) {
+          console.log(`📎 VISION: Adding image ${file.name} to Claude request`);
+          
+          let imageData;
+          if (file.url.includes('base64,')) {
+            imageData = file.url.split('base64,')[1];
+          } else {
+            try {
+              const response = await fetch(file.url);
+              const arrayBuffer = await response.arrayBuffer();
+              const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+              imageData = base64;
+            } catch (error) {
+              console.error('Failed to fetch image for base64 conversion:', error);
+              continue;
+            }
+          }
+
+          visionContent.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: file.type,
+              data: imageData
+            }
           });
         }
-      });
-    }
+      }
 
-    // Handle image attachments
-    if (attachedFiles.length > 0) {
-      const imageContent = [];
-      
-      attachedFiles.forEach(file => {
-        const categoryHint = file.imageType ? 
-          (responseLanguage === 'ar' ? 
-            `هذه صورة من فئة "${file.imageType.name}" - ` :
-            `This is a "${file.imageType.name}" category image - `) 
-          : '';
-          
-        imageContent.push({
-          type: 'text',
-          text: categoryHint + message
-        });
-        
-        imageContent.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: file.type,
-            data: file.url.includes('base64,') ? file.url.split('base64,')[1] : file.url
-          }
-        });
-      });
-      
       messages.push({
-        role: 'user',  // ✅ Always use 'user' for user messages
-        content: imageContent
+        role: 'user',
+        content: visionContent
       });
+
     } else {
       messages.push({
-        role: 'user',  // ✅ Always use 'user' for user messages
+        role: 'user',
         content: message
       });
     }
 
-    console.log(`🎯 SENDING TO CLAUDE: ${messages.length} messages, Language: ${responseLanguage}, Memory: integrated`);
+    // 🎯 MODE-SPECIFIC SYSTEM PROMPTS
+    let systemPrompt;
+    
+    if (actualMode === 'vision') {
+      systemPrompt = responseLanguage === 'ar' ? 
+        `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.` :
+        `You are WAKTI AI, an intelligent assistant specialized in image analysis. Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
+    } else if (actualMode === 'task_creation') {
+      systemPrompt = responseLanguage === 'ar' ? 
+        `أنت WAKTI AI، مساعد ذكي متخصص في إنشاء المهام والتذكيرات. عندما يطلب المستخدم إنشاء مهمة، استخرج التفاصيل وقدمها في تنسيق JSON محدد.` :
+        `You are WAKTI AI, an intelligent assistant specialized in creating tasks and reminders. When users request task creation, extract details and provide them in specific JSON format.`;
+    } else {
+      systemPrompt = responseLanguage === 'ar' ? 
+        `أنت WAKTI AI، المساعد الذكي الودود المتخصص في الإنتاجية. ساعد المستخدم بطريقة مفيدة وودية.` :
+        `You are WAKTI AI, a friendly intelligent assistant specialized in productivity. Help the user in a helpful and friendly way.`;
+    }
 
-    // ✅ FIXED: Proper Claude API call format
+    console.log(`🤖 CALLING CLAUDE: Mode=${actualMode}, Messages=${messages.length}, Language=${responseLanguage}`);
+
+    // 📡 CLAUDE API CALL
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -796,10 +658,10 @@ You're here to make users' lives more organized and productive through advanced 
       },
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 2000,
+        max_tokens: actualMode === 'vision' ? 3000 : 2000,
         temperature: 0.7,
-        system: systemPrompt,  // ✅ System prompt goes HERE
-        messages: messages     // ✅ Only user/assistant messages here
+        system: systemPrompt,
+        messages: messages
       })
     });
 
@@ -810,18 +672,19 @@ You're here to make users' lives more organized and productive through advanced 
     }
 
     const claudeData = await claudeResponse.json();
-    console.log('🤖 CLAUDE RESPONSE: Generated successfully with memory integration');
+    const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
 
-    // Store the conversation
-    await supabase
-      .from('ai_chat_history')
-      .insert([
+    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${actualMode} request`);
+
+    // 💾 STORE CONVERSATION
+    try {
+      await supabase.from('ai_chat_history').insert([
         {
           conversation_id: conversationId,
           user_id: userId,
           role: 'user',
           content: message,
-          input_type: attachedFiles.length > 0 ? 'image' : 'text',
+          input_type: actualMode === 'vision' ? 'image' : 'text',
           language: responseLanguage,
           created_at: new Date().toISOString()
         },
@@ -829,32 +692,37 @@ You're here to make users' lives more organized and productive through advanced 
           conversation_id: conversationId,
           user_id: userId,
           role: 'assistant',
-          content: claudeData.content?.[0]?.text || 'Response generated',
+          content: responseText,
           input_type: 'text',
           language: responseLanguage,
           created_at: new Date().toISOString()
         }
       ]);
+    } catch (error) {
+      console.error('Failed to store conversation:', error);
+    }
 
-    const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
+    // 📋 CONDITIONAL TASK PROCESSING (only when needed)
+    let taskReminderResult = {
+      showTaskForm: false,
+      taskData: null,
+      reminderCreated: false,
+      reminderData: null
+    };
 
-    // PROCESS TASK & REMINDER ACTIONS
-    const taskReminderResult = await processTaskAndReminderActions(responseText, userId);
-
-    // ENHANCED LOGGING
-    console.log(`🎯 WAKTI MEMORY SYSTEM: Successfully processed ${attachedFiles[0]?.imageType?.name || 'unknown'} category for user ${userId}`);
-    console.log(`🤖 CONVERSATION INTELLIGENCE: Applied smart follow-up logic with memory`);
-    console.log(`📋 TASK PROCESSING: ${taskReminderResult.showTaskForm ? 'Task form prepared' : 'No task detected'}`);
-    console.log(`⏰ REMINDER PROCESSING: ${taskReminderResult.reminderCreated ? 'Reminder created' : 'No reminder created'}`);
-    console.log(`💬 RESPONSE PREVIEW: ${responseText.substring(0, 100)}...`);
+    if (!skipTaskProcessing && actualMode === 'task_creation') {
+      taskReminderResult = await processTaskAndReminderActions(responseText, userId);
+      console.log(`📋 TASK PROCESSING: ${taskReminderResult.showTaskForm ? 'Task form prepared' : 'No task detected'}`);
+    } else {
+      console.log('📋 TASK PROCESSING: Skipped (not needed for this mode)');
+    }
 
     return {
       response: responseText,
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      
-      // ADD THESE NEW FIELDS:
+      mode: actualMode,
       showTaskForm: taskReminderResult.showTaskForm,
       taskData: taskReminderResult.taskData,
       reminderCreated: taskReminderResult.reminderCreated,
