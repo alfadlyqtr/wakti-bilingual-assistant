@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -6,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 // ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
   'https://wakti.qa',
-  'https://www.wakti.qa',
+  'https://www.wakti.qa', 
   'https://lovable.dev',
   'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com'
 ];
@@ -385,7 +384,11 @@ serve(async (req) => {
       personalTouch = null
     } = requestData;
 
-    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}`);
+    // ENSURE PROPER USER ID FOR MEMORY
+    const actualUserId = userId || personalTouch?.userId || requestData.user_id || 'default_user';
+    console.log('🔍 USER ID CHECK:', { original: userId, personal: personalTouch?.userId, final: actualUserId });
+
+    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}, UserId=${actualUserId}`);
 
     let finalConversationId = conversationId;
     
@@ -393,7 +396,7 @@ serve(async (req) => {
       const { data: newConversation, error: convError } = await supabase
         .from('ai_conversations')
         .insert([{
-          user_id: userId || 'anonymous',
+          user_id: actualUserId,
           title: message.substring(0, 50) || 'New Wakti AI Chat',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -449,7 +452,7 @@ serve(async (req) => {
     const result = await callClaude35API(
       message,
       finalConversationId,
-      userId,
+      actualUserId,
       language,
       attachedFiles,
       activeTrigger,
@@ -483,7 +486,7 @@ serve(async (req) => {
       fallbackUsed: false
     };
 
-    console.log(`✅ WAKTI AI V2: Successfully processed ${activeTrigger} request with memory`);
+    console.log(`✅ WAKTI AI V2: Successfully processed ${activeTrigger} request with memory for user ${actualUserId}`);
     
     return new Response(JSON.stringify(finalResponse), {
       status: 200,
@@ -522,7 +525,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       throw new Error('Anthropic API key not configured');
     }
 
-    console.log(`🤖 CLAUDE 35: Processing ${activeTrigger} mode conversation with enhanced memory`);
+    console.log(`🤖 CLAUDE 35: Processing ${activeTrigger} mode conversation with enhanced memory for user ${userId}`);
 
     // Get conversation history
     const { data: history } = await supabase
@@ -706,7 +709,7 @@ You're here to make users' lives more organized and productive through advanced 
     const contextMessages = recentMessages.slice(-5) || history?.slice(-5) || [];
 
     // Get enhanced user context with personalization integration
-    const enhancedUserContext = await getEnhancedUserContext(userId || 'anonymous', contextMessages, personalTouch);
+    const enhancedUserContext = await getEnhancedUserContext(userId, contextMessages, personalTouch);
 
     // Add conversation summary if available - USE 'user' ROLE
     if (conversationSummary && conversationSummary.trim()) {
@@ -723,7 +726,7 @@ You're here to make users' lives more organized and productive through advanced 
         role: 'user',  // ✅ FIXED: Use 'user' role, NOT 'system'
         content: enhancedUserContext
       });
-      console.log(`🧠 ENHANCED MEMORY + PERSONALIZATION: Added integrated context`);
+      console.log(`🧠 ENHANCED MEMORY + PERSONALIZATION: Added integrated context for user ${userId}`);
     }
 
     // Add conversation history - ENSURE CORRECT ROLES
@@ -811,7 +814,7 @@ You're here to make users' lives more organized and productive through advanced 
       .insert([
         {
           conversation_id: conversationId,
-          user_id: userId || 'anonymous',
+          user_id: userId,
           role: 'user',
           content: message,
           input_type: attachedFiles.length > 0 ? 'image' : 'text',
@@ -820,7 +823,7 @@ You're here to make users' lives more organized and productive through advanced 
         },
         {
           conversation_id: conversationId,
-          user_id: userId || 'anonymous',
+          user_id: userId,
           role: 'assistant',
           content: claudeData.content?.[0]?.text || 'Response generated',
           input_type: 'text',
@@ -832,10 +835,10 @@ You're here to make users' lives more organized and productive through advanced 
     const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
 
     // PROCESS TASK & REMINDER ACTIONS
-    const taskReminderResult = await processTaskAndReminderActions(responseText, userId || 'anonymous');
+    const taskReminderResult = await processTaskAndReminderActions(responseText, userId);
 
     // ENHANCED LOGGING
-    console.log(`🎯 WAKTI MEMORY SYSTEM: Successfully processed ${attachedFiles[0]?.imageType?.name || 'unknown'} category`);
+    console.log(`🎯 WAKTI MEMORY SYSTEM: Successfully processed ${attachedFiles[0]?.imageType?.name || 'unknown'} category for user ${userId}`);
     console.log(`🤖 CONVERSATION INTELLIGENCE: Applied smart follow-up logic with memory`);
     console.log(`📋 TASK PROCESSING: ${taskReminderResult.showTaskForm ? 'Task form prepared' : 'No task detected'}`);
     console.log(`⏰ REMINDER PROCESSING: ${taskReminderResult.reminderCreated ? 'Reminder created' : 'No reminder created'}`);
