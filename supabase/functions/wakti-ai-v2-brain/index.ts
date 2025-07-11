@@ -385,14 +385,15 @@ serve(async (req) => {
       activeTrigger = 'general',
       recentMessages = [],
       conversationSummary = '',
-      personalTouch = null
+      personalTouch = null,
+      attachedFiles = []
     } = requestData;
 
     // ENSURE PROPER USER ID FOR MEMORY
     const actualUserId = userId || personalTouch?.userId || requestData.user_id || 'default_user';
     console.log('🔍 USER ID CHECK:', { original: userId, personal: personalTouch?.userId, final: actualUserId });
 
-    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}, UserId=${actualUserId}`);
+    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, AttachedFiles=${attachedFiles.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}, UserId=${actualUserId}`);
 
     let finalConversationId = conversationId;
     
@@ -418,47 +419,40 @@ serve(async (req) => {
       console.log(`💬 NEW CONVERSATION: Created ID ${finalConversationId}`);
     }
 
-    let attachedFiles = [];
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const fileName = `wakti-ai-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-        const fileExt = file.name?.split('.').pop() || 'jpg';
-        const filePath = `${fileName}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('wakti-ai-uploads')
-          .upload(filePath, file, {
-            contentType: file.type,
-            cacheControl: '3600'
-          });
-          
-        if (!uploadError && uploadData) {
-          const { data: urlData } = supabase.storage
-            .from('wakti-ai-uploads')
-            .getPublicUrl(filePath);
-            
-          const imageTypeData = requestData.imageTypes && requestData.imageTypes.length > 0 
-            ? requestData.imageTypes[0] 
-            : { id: 'general', name: language === 'ar' ? 'عام' : 'General' };
-            
-          attachedFiles.push({
-            url: urlData.publicUrl,
-            type: file.type,
-            name: file.name,
-            imageType: imageTypeData
-          });
-          
-          console.log(`📎 FILE UPLOADED: ${filePath} (${imageTypeData.name})`);
-        }
-      }
+    // USE EXISTING UPLOADED FILES INSTEAD OF RE-UPLOADING
+    let processedFiles = [];
+    if (requestData.attachedFiles && requestData.attachedFiles.length > 0) {
+      // Files are already uploaded - just use them directly
+      processedFiles = requestData.attachedFiles.map(file => ({
+        url: file.url,
+        type: file.type,
+        name: file.name,
+        imageType: file.imageType || { id: 'general', name: 'General' }
+      }));
+      
+      console.log(`📎 USING EXISTING FILES: ${processedFiles.length} files already uploaded`);
     }
+
+    // DEBUG: Check what files we have
+    console.log(`🔍 DEBUG ATTACHED FILES:`, {
+      requestDataFiles: !!requestData.files,
+      requestDataAttachedFiles: !!requestData.attachedFiles,
+      attachedFilesLength: requestData.attachedFiles?.length || 0,
+      processedFilesLength: processedFiles.length,
+      attachedFilesContent: requestData.attachedFiles?.map(f => ({
+        name: f.name,
+        type: f.type,
+        hasUrl: !!f.url,
+        imageType: f.imageType?.name
+      })) || []
+    });
 
     const result = await callClaude35API(
       message,
       finalConversationId,
       actualUserId,
       language,
-      attachedFiles,
+      processedFiles, // Use the existing files
       activeTrigger,
       recentMessages,
       conversationSummary,
@@ -532,7 +526,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     console.log(`🧠 WAKTI AI V2: Processing ${activeTrigger} mode conversation`);
     
     // DEBUG: Check what's in attachedFiles
-    console.log(`🔍 DEBUG ATTACHED FILES:`, {
+    console.log(`🔍 DEBUG ATTACHED FILES IN CLAUDE CALL:`, {
       attachedFilesExists: !!attachedFiles,
       attachedFilesLength: attachedFiles?.length || 0,
       attachedFilesContent: attachedFiles?.map(f => ({
