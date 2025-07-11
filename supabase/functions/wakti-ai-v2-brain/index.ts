@@ -529,40 +529,48 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       throw new Error('Anthropic API key not configured');
     }
 
-    // 🎯 SMART MODE DETECTION
-    let actualMode = activeTrigger;
-    let skipTaskProcessing = false;
-    let skipMemoryOverload = false;
+    console.log(`🧠 WAKTI AI V2: Processing ${activeTrigger} mode conversation`);
 
-    // 1. IMAGE UPLOADED = FORCE VISION MODE
+    // SMART MODE DETECTION - Auto-detect what the user wants
+    let detectedMode = activeTrigger; // Default to current trigger
+
+    // 1. IMAGE DETECTION - If images uploaded, switch to vision mode
     if (attachedFiles && attachedFiles.length > 0) {
       const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
       if (hasImages) {
-        actualMode = 'vision';
-        skipTaskProcessing = true;
-        skipMemoryOverload = true;
-        console.log('👁️ VISION MODE ACTIVATED: Image detected - focusing on vision processing');
+        detectedMode = 'vision';
+        console.log('🔍 VISION MODE ACTIVATED: Image detected, switching to vision processing');
       }
     }
 
-    // 2. EXPLICIT TASK COMMANDS
-    const taskTriggers = ['create task', 'أنشئ مهمة', 'remind me', 'set reminder', 'add task'];
-    const hasExplicitTaskIntent = taskTriggers.some(trigger => 
-      message.toLowerCase().includes(trigger.toLowerCase())
-    );
-
-    if (hasExplicitTaskIntent && actualMode !== 'vision') {
-      actualMode = 'task_creation';
-      console.log('📝 TASK MODE ACTIVATED: Explicit task/reminder command detected');
+    // 2. TASK/REMINDER DETECTION - Check for explicit task creation requests
+    else if (message.toLowerCase().includes('create task') || 
+             message.toLowerCase().includes('أنشئ مهمة') ||
+             message.toLowerCase().includes('add task') ||
+             message.toLowerCase().includes('new task')) {
+      detectedMode = 'task';
+      console.log('📝 TASK MODE ACTIVATED: Task creation detected');
     }
 
-    console.log(`🎯 FINAL MODE: ${actualMode} (skipTasks: ${skipTaskProcessing}, skipMemory: ${skipMemoryOverload})`);
+    // 3. CHAT MODE - Everything else
+    else {
+      detectedMode = 'chat';
+      console.log('💬 CHAT MODE ACTIVATED: General conversation detected');
+    }
+
+    // Log the smart detection result
+    console.log(`🧠 SMART DETECTION: Input mode "${activeTrigger}" → Detected mode "${detectedMode}"`);
+
+    // SKIP TASK PROCESSING FOR VISION MODE
+    if (detectedMode === 'vision') {
+      console.log('📸 TASK PROCESSING: Skipped (not needed for vision mode)');
+    }
 
     const responseLanguage = language;
     let messages = [];
 
     // 🧠 CONDITIONAL MEMORY LOADING (not for vision)
-    if (!skipMemoryOverload && personalTouch) {
+    if (detectedMode !== 'vision' && personalTouch) {
       const contextMessages = recentMessages.slice(-3) || [];
       const enhancedUserContext = await getEnhancedUserContext(userId, contextMessages, personalTouch);
       
@@ -576,7 +584,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     }
 
     // 👁️ VISION PROCESSING - SPECIALIZED
-    if (actualMode === 'vision') {
+    if (detectedMode === 'vision') {
       console.log('👁️ VISION: Building image analysis request...');
       
       const visionContent = [];
@@ -631,11 +639,11 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     // 🎯 MODE-SPECIFIC SYSTEM PROMPTS
     let systemPrompt;
     
-    if (actualMode === 'vision') {
+    if (detectedMode === 'vision') {
       systemPrompt = responseLanguage === 'ar' ? 
         `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.` :
         `You are WAKTI AI, an intelligent assistant specialized in image analysis. Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
-    } else if (actualMode === 'task_creation') {
+    } else if (detectedMode === 'task') {
       systemPrompt = responseLanguage === 'ar' ? 
         `أنت WAKTI AI، مساعد ذكي متخصص في إنشاء المهام والتذكيرات. عندما يطلب المستخدم إنشاء مهمة، استخرج التفاصيل وقدمها في تنسيق JSON محدد.` :
         `You are WAKTI AI, an intelligent assistant specialized in creating tasks and reminders. When users request task creation, extract details and provide them in specific JSON format.`;
@@ -645,7 +653,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
         `You are WAKTI AI, a friendly intelligent assistant specialized in productivity. Help the user in a helpful and friendly way.`;
     }
 
-    console.log(`🤖 CALLING CLAUDE: Mode=${actualMode}, Messages=${messages.length}, Language=${responseLanguage}`);
+    console.log(`🤖 CALLING CLAUDE: Mode=${detectedMode}, Messages=${messages.length}, Language=${responseLanguage}`);
 
     // 📡 CLAUDE API CALL
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -658,7 +666,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       },
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
-        max_tokens: actualMode === 'vision' ? 3000 : 2000,
+        max_tokens: detectedMode === 'vision' ? 3000 : 2000,
         temperature: 0.7,
         system: systemPrompt,
         messages: messages
@@ -674,7 +682,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     const claudeData = await claudeResponse.json();
     const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
 
-    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${actualMode} request`);
+    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request`);
 
     // 💾 STORE CONVERSATION
     try {
@@ -684,7 +692,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
           user_id: userId,
           role: 'user',
           content: message,
-          input_type: actualMode === 'vision' ? 'image' : 'text',
+          input_type: detectedMode === 'vision' ? 'image' : 'text',
           language: responseLanguage,
           created_at: new Date().toISOString()
         },
@@ -702,19 +710,14 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       console.error('Failed to store conversation:', error);
     }
 
-    // 📋 CONDITIONAL TASK PROCESSING (only when needed)
-    let taskReminderResult = {
-      showTaskForm: false,
-      taskData: null,
-      reminderCreated: false,
-      reminderData: null
-    };
-
-    if (!skipTaskProcessing && actualMode === 'task_creation') {
+    // PROCESS TASK & REMINDER ACTIONS - Only for non-vision modes
+    let taskReminderResult = { showTaskForm: false, taskData: null, reminderCreated: false, reminderData: null };
+    
+    if (detectedMode !== 'vision') {
+      console.log('📝 TASK PROCESSING: Running task analysis');
       taskReminderResult = await processTaskAndReminderActions(responseText, userId);
-      console.log(`📋 TASK PROCESSING: ${taskReminderResult.showTaskForm ? 'Task form prepared' : 'No task detected'}`);
     } else {
-      console.log('📋 TASK PROCESSING: Skipped (not needed for this mode)');
+      console.log('📝 TASK PROCESSING: Skipped for vision mode');
     }
 
     return {
@@ -722,7 +725,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      mode: actualMode,
+      mode: detectedMode,
       showTaskForm: taskReminderResult.showTaskForm,
       taskData: taskReminderResult.taskData,
       reminderCreated: taskReminderResult.reminderCreated,
