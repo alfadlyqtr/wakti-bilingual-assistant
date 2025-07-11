@@ -41,7 +41,7 @@ export function SimplifiedFileUpload({
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
-  const [showUploadInterface, setShowUploadInterface] = useState(true);
+  const [hideAfterUpload, setHideAfterUpload] = useState(false);
 
   const generatePreview = useCallback((file: File): Promise<string | undefined> => {
     return new Promise((resolve) => {
@@ -126,10 +126,7 @@ export function SimplifiedFileUpload({
         showSuccess(`Successfully processed ${successfulUploads.length} file(s)`);
         
         // IMMEDIATE UI CLEANUP: Hide upload interface right away
-        setShowUploadInterface(false);
-        
-        // Show again after AI response completes (optional)
-        setTimeout(() => setShowUploadInterface(true), 2000);
+        setHideAfterUpload(true);
         
         // AUTO-SWITCH TO VISION MODE FOR IMAGES
         const hasImages = successfulUploads.some(file => file.type?.startsWith('image/'));
@@ -172,6 +169,14 @@ export function SimplifiedFileUpload({
     }
   };
 
+  const handleRemoveFile = (fileId: string) => {
+    onRemoveFile(fileId);
+    // Reset hideAfterUpload when files are removed
+    if (uploadedFiles.length <= 1) {
+      setHideAfterUpload(false);
+    }
+  };
+
   // Handle file selection from PlusMenu
   React.useEffect(() => {
     const handleFileInput = (event: CustomEvent<{ files: FileList }>) => {
@@ -203,8 +208,8 @@ export function SimplifiedFileUpload({
 
   return (
     <div className="space-y-4">
-      {/* Uploaded Files Display */}
-      {uploadedFiles.length > 0 && showUploadInterface && (
+      {/* Uploaded Files Display - Hidden after upload */}
+      {!hideAfterUpload && uploadedFiles.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-foreground">
             {language === 'ar' ? 'الملفات المرفوعة' : 'Uploaded Files'}
@@ -225,7 +230,7 @@ export function SimplifiedFileUpload({
                     />
                     {/* Delete button on thumbnail */}
                     <Button
-                      onClick={() => onRemoveFile(file.id)}
+                      onClick={() => handleRemoveFile(file.id)}
                       variant="ghost"
                       size="sm"
                       className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-500 text-white hover:bg-red-600"

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,7 +53,6 @@ export function ChatInput({
   onTriggerChange
 }: ChatInputProps) {
   const { language } = useTheme();
-  const [showQuickReplies, setShowQuickReplies] = useState(false);
 
   // Use simplified file upload hook
   const {
@@ -78,7 +78,6 @@ export function ChatInput({
   // Handle quick reply pill clicks
   const handlePillClick = (text: string) => {
     setMessage(text);
-    setShowQuickReplies(false);
   };
 
   // Handler to open Conversations Drawer (💬)
@@ -143,7 +142,6 @@ export function ChatInput({
       );
       setMessage('');
       clearFiles();
-      setShowQuickReplies(false);
     } else {
       console.log('❌ SEND: No message or files to send');
     }
@@ -234,13 +232,97 @@ export function ChatInput({
               <ActiveModeIndicator activeTrigger={activeTrigger} />
             </div>
 
-            {/* Quick Reply Pills */}
-            {uploadedFiles.length > 0 && (
-              <QuickReplyPills
-                imageType={uploadedFiles[0]?.imageType || null}
-                onPillClick={handlePillClick}
-                isVisible={showQuickReplies && message === ''}
-              />
+            {/* Quick Reply Pills - Direct Implementation */}
+            {uploadedFiles.length > 0 && message === '' && (
+              <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20">
+                {uploadedFiles[0]?.imageType?.id === 'ids' && (
+                  <>
+                    <button 
+                      onClick={() => setMessage('What info is on this document?')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>🔍</span>
+                      <span>What info is on this document?</span>
+                    </button>
+                    <button 
+                      onClick={() => setMessage('Extract all the text for me')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>📝</span>
+                      <span>Extract all the text</span>
+                    </button>
+                    <button 
+                      onClick={() => setMessage('Read the foreign text')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>🌐</span>
+                      <span>Read the foreign text</span>
+                    </button>
+                  </>
+                )}
+                {uploadedFiles[0]?.imageType?.id === 'bills' && (
+                  <>
+                    <button 
+                      onClick={() => setMessage('How much did I spend?')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>💰</span>
+                      <span>How much did I spend?</span>
+                    </button>
+                    <button 
+                      onClick={() => setMessage('Split this bill')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>➗</span>
+                      <span>Split this bill</span>
+                    </button>
+                    <button 
+                      onClick={() => setMessage('What items are on this invoice?')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>🛒</span>
+                      <span>What items are on this invoice?</span>
+                    </button>
+                  </>
+                )}
+                {uploadedFiles[0]?.imageType?.id === 'food' && (
+                  <>
+                    <button 
+                      onClick={() => setMessage('How many calories is this?')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>🔥</span>
+                      <span>How many calories is this?</span>
+                    </button>
+                    <button 
+                      onClick={() => setMessage('What ingredients do you see?')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>🥗</span>
+                      <span>What ingredients do you see?</span>
+                    </button>
+                  </>
+                )}
+                {/* Default general pills for any other image type */}
+                {(!uploadedFiles[0]?.imageType || !['ids', 'bills', 'food'].includes(uploadedFiles[0].imageType.id)) && (
+                  <>
+                    <button 
+                      onClick={() => setMessage('Describe everything you see')} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>👁️</span>
+                      <span>Describe everything you see</span>
+                    </button>
+                    <button 
+                      onClick={() => setMessage("What's the main subject here?")} 
+                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm transition-colors"
+                    >
+                      <span>🔍</span>
+                      <span>What's the main subject here?</span>
+                    </button>
+                  </>
+                )}
+              </div>
             )}
             
             {/* INPUT ROW: Textarea + Send */}
@@ -248,11 +330,7 @@ export function ChatInput({
               <div className="flex-1 flex items-end">
                 <Textarea
                   value={message}
-                  onChange={(e) => {
-                    setMessage(e.target.value);
-                    setShowQuickReplies(e.target.value === '' && uploadedFiles.length > 0);
-                  }}
-                  onFocus={() => setShowQuickReplies(message === '' && uploadedFiles.length > 0)}
+                  onChange={(e) => setMessage(e.target.value)}
                   placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
                   className={`
                     flex-1 border-[2.5px]
