@@ -89,23 +89,21 @@ export function SimplifiedFileUpload({
           // Generate preview
           const preview = await generatePreview(file);
           
-          // ENHANCED: Create consistent filename with timestamp and user ID
-          const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+          // FIXED: Use correct bucket and path pattern matching WaktiAIV2
           const timestamp = Date.now();
-          const randomId = Math.random().toString(36).substring(2, 8);
-          const fileName = `${user.id}/${timestamp}_${randomId}.${fileExt}`;
+          const filePath = `uploads/${user.id}/${timestamp}-${file.name}`;
 
           console.log('⬆️ UPLOAD AUDIT - Uploading file:', {
             originalName: file.name,
-            newFileName: fileName,
+            newFilePath: filePath,
             size: file.size,
             type: file.type
           });
 
-          // FIXED: Upload to wakti-ai-v2 bucket consistently
+          // FIXED: Upload to wakti-ai-v2 bucket (which exists)
           const { data, error } = await supabase.storage
             .from('wakti-ai-v2')
-            .upload(fileName, file, {
+            .upload(filePath, file, {
               cacheControl: '3600',
               upsert: false,
               contentType: file.type
@@ -119,7 +117,7 @@ export function SimplifiedFileUpload({
           // ENHANCED: Get public URL with validation
           const { data: { publicUrl } } = supabase.storage
             .from('wakti-ai-v2')
-            .getPublicUrl(fileName);
+            .getPublicUrl(filePath);
 
           // Validate the generated URL
           if (!publicUrl || !publicUrl.includes('wakti-ai-v2')) {
@@ -129,14 +127,14 @@ export function SimplifiedFileUpload({
 
           console.log('✅ UPLOAD SUCCESS:', {
             fileName: file.name,
-            storagePath: fileName,
+            storagePath: filePath,
             publicUrl: publicUrl,
             urlValid: publicUrl.startsWith('http'),
             bucketCorrect: publicUrl.includes('wakti-ai-v2')
           });
 
           const uploadedFile: SimplifiedUploadedFile = {
-            id: `file_${timestamp}_${randomId}`,
+            id: `file_${timestamp}_${Math.random().toString(36).substring(2, 8)}`,
             name: file.name,
             url: publicUrl,
             publicUrl: publicUrl,
