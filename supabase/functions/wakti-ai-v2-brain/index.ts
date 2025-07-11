@@ -2,27 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
-// Function to fetch image from URL and convert to base64
-async function fetchImageAsBase64(imageUrl: string): Promise<string> {
-  try {
-    console.log('🖼️ Fetching image from URL for base64 conversion:', imageUrl);
-    
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status}`);
-    }
-    
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-    
-    console.log('✅ Successfully converted image to base64');
-    return base64;
-  } catch (error) {
-    console.error('❌ Error fetching image for base64 conversion:', error);
-    throw new Error(`Failed to convert image to base64: ${error.message}`);
-  }
-}
-
 // ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
   'https://wakti.qa',
@@ -635,14 +614,14 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
         if (file.type?.startsWith('image/')) {
           console.log(`📎 VISION: Adding image ${file.name} to Claude request`);
           
-          // Handle base64 conversion properly
-          let imageData: string;
+          // CLAUDE WAY: Direct base64 processing
+          let imageData;
           if (file.url.includes('base64,')) {
-            // Already base64 data URL
             imageData = file.url.split('base64,')[1];
           } else {
-            // Supabase storage URL - fetch and convert to base64
-            imageData = await fetchImageAsBase64(file.url);
+            // This shouldn't happen with the new flow, but fallback
+            console.error('❌ Expected base64 data, got:', file.url.substring(0, 50));
+            throw new Error('Invalid image data format');
           }
 
           visionContent.push({

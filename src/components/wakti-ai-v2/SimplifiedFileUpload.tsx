@@ -73,7 +73,7 @@ export function SimplifiedFileUpload({
         throw new Error('Authentication required');
       }
 
-      console.log('📁 UPLOAD AUDIT - Starting upload for', files.length, 'files');
+      console.log('📁 CLAUDE WAY - Processing', files.length, 'files directly');
 
       const uploadPromises = Array.from(files).map(async (file) => {
         try {
@@ -86,67 +86,28 @@ export function SimplifiedFileUpload({
             throw new Error(`File type ${file.type} not supported`);
           }
 
-          // Generate preview
-          const preview = await generatePreview(file);
+          // Generate base64 data (this is what we'll send to brain)
+          const base64Data = await generatePreview(file);
           
-          // FIXED: Use correct bucket and path pattern matching WaktiAIV2
-          const timestamp = Date.now();
-          const filePath = `uploads/${user.id}/${timestamp}-${file.name}`;
-
-          console.log('⬆️ UPLOAD AUDIT - Uploading file:', {
-            originalName: file.name,
-            newFilePath: filePath,
-            size: file.size,
-            type: file.type
-          });
-
-          // FIXED: Upload to wakti-ai-v2 bucket (which exists)
-          const { data, error } = await supabase.storage
-            .from('wakti-ai-v2')
-            .upload(filePath, file, {
-              cacheControl: '3600',
-              upsert: false,
-              contentType: file.type
-            });
-
-          if (error) {
-            console.error('❌ UPLOAD ERROR:', error);
-            throw new Error(`Upload failed for ${file.name}: ${error.message}`);
+          if (!base64Data) {
+            throw new Error(`Failed to process ${file.name}`);
           }
 
-          // ENHANCED: Get public URL with validation
-          const { data: { publicUrl } } = supabase.storage
-            .from('wakti-ai-v2')
-            .getPublicUrl(filePath);
-
-          // Validate the generated URL
-          if (!publicUrl || !publicUrl.includes('wakti-ai-v2')) {
-            console.error('❌ INVALID URL GENERATED:', publicUrl);
-            throw new Error(`Invalid URL generated for ${file.name}`);
-          }
-
-          console.log('✅ UPLOAD SUCCESS:', {
-            fileName: file.name,
-            storagePath: filePath,
-            publicUrl: publicUrl,
-            urlValid: publicUrl.startsWith('http'),
-            bucketCorrect: publicUrl.includes('wakti-ai-v2')
-          });
-
-          const uploadedFile: SimplifiedUploadedFile = {
-            id: `file_${timestamp}_${Math.random().toString(36).substring(2, 8)}`,
+          // Create file object with base64 as the main data
+          const fileId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          
+          return {
+            id: fileId,
             name: file.name,
-            url: publicUrl,
-            publicUrl: publicUrl,
+            url: base64Data,           // BASE64 DATA (not storage URL)
+            publicUrl: base64Data,     // Same base64 data
             type: file.type,
             size: file.size,
-            preview: preview
+            preview: base64Data        // For display
           };
 
-          return uploadedFile;
         } catch (error) {
-          console.error('❌ Individual file upload failed:', error);
-          showError(`Failed to upload ${file.name}: ${error.message}`);
+          console.error(`❌ Failed to process ${file.name}:`, error);
           return null;
         }
       });
@@ -159,18 +120,9 @@ export function SimplifiedFileUpload({
         .map(result => result.value);
 
       if (successfulUploads.length > 0) {
-        console.log('🎉 UPLOAD COMPLETE:', {
-          totalFiles: files.length,
-          successfulUploads: successfulUploads.length,
-          uploadedFiles: successfulUploads.map(f => ({
-            name: f.name,
-            url: f.url,
-            type: f.type
-          }))
-        });
-        
+        console.log('🎉 CLAUDE WAY SUCCESS:', successfulUploads.length, 'files processed');
         onFilesUploaded(successfulUploads);
-        showSuccess(`Successfully uploaded ${successfulUploads.length} file(s)`);
+        showSuccess(`Successfully processed ${successfulUploads.length} file(s)`);
         
         // AUTO-SWITCH TO VISION MODE FOR IMAGES
         const hasImages = successfulUploads.some(file => file.type?.startsWith('image/'));
@@ -182,12 +134,12 @@ export function SimplifiedFileUpload({
 
       const failedUploads = results.filter(result => result.status === 'rejected').length;
       if (failedUploads > 0) {
-        showError(`${failedUploads} file(s) failed to upload`);
+        showError(`${failedUploads} file(s) failed to process`);
       }
 
     } catch (error) {
-      console.error('❌ Upload process failed:', error);
-      showError('Upload failed. Please try again.');
+      console.error('❌ Processing failed:', error);
+      showError('Processing failed. Please try again.');
     }
   }, [generatePreview, showError, showSuccess, onFilesUploaded, onAutoSwitchMode]);
 
@@ -282,7 +234,7 @@ export function SimplifiedFileUpload({
                       {file.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatFileSize(file.size)} • URL: {file.url ? '✅ Valid' : '❌ Invalid'}
+                      {formatFileSize(file.size)} • Base64: {file.url ? '✅ Ready' : '❌ Invalid'}
                     </p>
                   </div>
                   
@@ -314,7 +266,7 @@ export function SimplifiedFileUpload({
         <div className="flex items-center justify-center gap-2 p-4">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-sm text-muted-foreground">
-            {language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}
+            {language === 'ar' ? 'جاري المعالجة...' : 'Processing...'}
           </span>
         </div>
       )}
