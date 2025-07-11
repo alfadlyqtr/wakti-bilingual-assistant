@@ -530,17 +530,40 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     }
 
     console.log(`🧠 WAKTI AI V2: Processing ${activeTrigger} mode conversation`);
+    
+    // DEBUG: Check what's in attachedFiles
+    console.log(`🔍 DEBUG ATTACHED FILES:`, {
+      attachedFilesExists: !!attachedFiles,
+      attachedFilesLength: attachedFiles?.length || 0,
+      attachedFilesContent: attachedFiles?.map(f => ({
+        name: f.name,
+        type: f.type,
+        hasUrl: !!f.url,
+        imageType: f.imageType?.name
+      })) || []
+    });
 
     // SMART MODE DETECTION - Auto-detect what the user wants
     let detectedMode = activeTrigger; // Default to current trigger
 
     // 1. IMAGE DETECTION - If images uploaded, switch to vision mode
     if (attachedFiles && attachedFiles.length > 0) {
-      const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
+      console.log(`🔍 DEBUG: Found ${attachedFiles.length} attached files, checking for images...`);
+      
+      const hasImages = attachedFiles.some((file) => {
+        const isImage = file.type?.startsWith('image/');
+        console.log(`🔍 DEBUG FILE: ${file.name} - Type: ${file.type} - IsImage: ${isImage}`);
+        return isImage;
+      });
+      
       if (hasImages) {
         detectedMode = 'vision';
         console.log('🔍 VISION MODE ACTIVATED: Image detected, switching to vision processing');
+      } else {
+        console.log('🔍 DEBUG: No images found in attached files');
       }
+    } else {
+      console.log('🔍 DEBUG: No attached files found');
     }
 
     // 2. TASK/REMINDER DETECTION - Check for explicit task creation requests
