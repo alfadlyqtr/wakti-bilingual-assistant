@@ -26,7 +26,7 @@ interface SimplifiedFileUploadProps {
   isUploading: boolean;
   disabled?: boolean;
   onExamplePromptSelect?: (prompt: string) => void;
-  onAutoSwitchMode?: (mode: string) => void; // ADD THIS NEW PROP
+  onAutoSwitchMode?: (mode: string) => void;
 }
 
 export function SimplifiedFileUpload({
@@ -161,13 +161,13 @@ export function SimplifiedFileUpload({
         .map(result => result.value);
 
       if (successfulUploads.length > 0) {
-        console.log('🎉 UPLOAD AUDIT COMPLETE:', {
+        console.log('🎉 UPLOAD COMPLETE:', {
           totalFiles: files.length,
           successfulUploads: successfulUploads.length,
           uploadedFiles: successfulUploads.map(f => ({
             name: f.name,
             url: f.url,
-            urlValid: f.url.startsWith('http')
+            type: f.type
           }))
         });
         
@@ -175,7 +175,7 @@ export function SimplifiedFileUpload({
         showSuccess(`Successfully uploaded ${successfulUploads.length} file(s)`);
         
         // AUTO-SWITCH TO VISION MODE FOR IMAGES
-        const hasImages = successfulUploads.some(file => file.preview && file.type?.startsWith('image/'));
+        const hasImages = successfulUploads.some(file => file.type?.startsWith('image/'));
         if (hasImages && onAutoSwitchMode) {
           console.log('🔍 AUTO-SWITCH: Images detected, switching to vision mode');
           onAutoSwitchMode('vision');

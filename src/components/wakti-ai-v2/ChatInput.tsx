@@ -33,7 +33,7 @@ interface ChatInputProps {
   setMessage: (message: string) => void;
   isLoading: boolean;
   sessionMessages: any[];
-  onSendMessage: (message: string, inputType?: 'text' | 'voice', files?: any[]) => void;
+  onSendMessage: (message: string, trigger: string, files?: any[]) => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
   activeTrigger: string;
@@ -98,89 +98,42 @@ export function ChatInput({
     console.log('📁 UPLOAD: Handled by PlusMenu');
   };
 
-  // Enhanced send message function with proper context handling
-  const handleSend = () => {
-    console.log('📤 SEND: Checking conditions');
-    console.log('Message:', message.trim().length > 0);
-    console.log('Files:', uploadedFiles.length);
-    
-    if (message.trim() || uploadedFiles.length > 0) {
-      // Properly format files with context for the backend
-      const enhancedFiles = uploadedFiles.map(file => {
-        console.log('🔧 Processing file for send:', {
-          name: file.name,
-          type: file.type,
-          hasImageType: !!file.imageType,
-          imageTypeName: file.imageType?.name,
-          imageTypeId: file.imageType?.id
-        });
-
-        // Create context instruction based on image type - UPDATED with specific contexts
-        let context = '';
-        if (file.imageType?.id) {
-          switch (file.imageType.id) {
-            case 'passport':
-              context = 'This is a PASSPORT - extract personal information, passport number, issue/expiry dates, check if expired, and provide renewal advice if needed. Compare expiry dates with current date and warn if expired.';
-              break;
-            case 'id_card':
-              context = 'This is an ID CARD - extract personal details, ID number, validity dates, check expiry status and warn if expired. Compare dates with current date.';
-              break;
-            case 'certificate':
-              context = 'This is a CERTIFICATE/DOCUMENT - extract institution, dates, qualifications, validity period, and any important details.';
-              break;
-            case 'financial':
-              context = 'This is a BILL/RECEIPT - extract amounts, dates, items, calculate totals, and provide financial breakdown if requested.';
-              break;
-            case 'person':
-              context = 'This is a PHOTO of a person/people - describe appearance, clothing, setting, activities, and any notable details.';
-              break;
-            case 'place':
-              context = 'This is a PLACE/BUILDING - describe the location, architecture, notable features, and any identifying details.';
-              break;
-            case 'screenshots':
-              context = 'This is a SCREENSHOT - describe the interface, buttons, text, functionality, and explain what is shown on screen.';
-              break;
-            case 'text_image':
-              context = 'This is TEXT EXTRACTION - extract and transcribe all visible text accurately, including handwritten content if present.';
-              break;
-            case 'food':
-              context = 'This is FOOD - identify the dish, ingredients, cooking method, provide nutritional information and recipe suggestions if possible.';
-              break;
-            case 'object':
-              context = 'This is an OBJECT/ITEM - identify what it is, describe its function, materials, purpose, and provide relevant information.';
-              break;
-            case 'other':
-              context = 'Please provide a comprehensive analysis of this image. IMPORTANT: When selecting "Other", describe your specific analysis needs in the text box below.';
-              break;
-            default:
-              context = 'Provide detailed description and analysis of this image.';
+  // Enhanced send message function with proper data conversion
+  const handleSendMessage = async () => {
+    if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
+      console.log('📤 SEND: Message being sent', { message: message.substring(0, 50), filesCount: uploadedFiles.length });
+      
+      // AUTO-SWITCH TO VISION MODE IF IMAGES PRESENT
+      let finalTrigger = activeTrigger;
+      if (uploadedFiles.length > 0) {
+        const hasImages = uploadedFiles.some(file => file.type?.startsWith('image/'));
+        if (hasImages) {
+          finalTrigger = 'vision';
+          console.log('🔍 AUTO-SWITCH: Images detected, switching to vision mode');
+          // Update the actual trigger
+          if (onTriggerChange) {
+            onTriggerChange('vision');
           }
         }
+      }
 
-        return {
-          id: file.id,
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          url: file.url,
-          publicUrl: file.publicUrl,
-          optimized: true,
-          imageType: file.imageType,
-          context: context // This is the key fix - adding specific context to the file object
-        };
-      });
-      
-      console.log('📤 SENDING with enhanced context:', {
-        message: message.substring(0, 50) + '...',
-        filesCount: enhancedFiles.length,
-        fileContexts: enhancedFiles.map(f => ({
-          name: f.name,
-          imageType: f.imageType?.name,
-          contextLength: f.context?.length || 0
-        }))
-      });
-      
-      onSendMessage(message, 'text', enhancedFiles.length > 0 ? enhancedFiles : undefined);
+      // PROPERLY CONVERT UPLOADED FILES TO ATTACHED FILES FORMAT
+      const enhancedFiles = uploadedFiles.length > 0 ? uploadedFiles.map(file => ({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: file.url,
+        preview: file.preview,
+        imageType: file.imageType || { id: 'general', name: 'General' }
+      })) : undefined;
+
+      console.log('📎 ENHANCED FILES:', enhancedFiles);
+
+      await onSendMessage(
+        message, 
+        finalTrigger, // Use the auto-detected trigger
+        enhancedFiles
+      );
       setMessage('');
       clearFiles();
     } else {
@@ -207,8 +160,7 @@ export function ChatInput({
         disabled={isLoading}
         onExamplePromptSelect={handleExamplePromptSelect}
         onAutoSwitchMode={(mode) => {
-          console.log('🔍 AUTO MODE SWITCH: Switching to', mode);
-          // Pass the mode change up to parent
+          console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
           if (onTriggerChange) {
             onTriggerChange(mode);
           }
@@ -289,7 +241,7 @@ export function ChatInput({
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
-                        handleSend();
+                        handleSendMessage();
                       }
                     }
                   }}
@@ -298,13 +250,13 @@ export function ChatInput({
               </div>
               
               {/* Send button with proper enabling logic */}
-              {((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) && (
+              {canSend && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        onClick={handleSend}
-                        disabled={!((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading)}
+                        onClick={handleSendMessage}
+                        disabled={!canSend}
                         className={`
                           h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
                           border-0 shadow-2xl backdrop-blur-md
