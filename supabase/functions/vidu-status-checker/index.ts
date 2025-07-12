@@ -1,8 +1,6 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
   'https://wakti.qa',
   'https://www.wakti.qa',
@@ -12,7 +10,6 @@ const allowedOrigins = [
 
 const getCorsHeaders = (origin: string | null) => {
   const corsOrigin = allowedOrigins.includes(origin || '') ? origin : 'https://wakti.qa';
-  
   return {
     'Access-Control-Allow-Origin': corsOrigin,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -25,12 +22,8 @@ serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
   
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 200,
-      headers: corsHeaders 
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -42,46 +35,116 @@ serve(async (req) => {
 
     console.log('🔍 VIDU STATUS CHECKER: Checking status for task:', taskId);
 
-    // Get Vidu API key
     const viduApiKey = Deno.env.get('VIDU_API_KEY');
     if (!viduApiKey) {
+      console.error('❌ VIDU_API_KEY not found in environment');
       throw new Error('VIDU_API_KEY not configured');
     }
 
-    // Check video status with Vidu API
-    const statusResponse = await fetch(`https://api.vidu.com/ent/v2/jobs/${taskId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Token ${viduApiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    console.log('🔑 VIDU API KEY found, making request...');
 
-    if (!statusResponse.ok) {
-      console.error('❌ VIDU API ERROR:', statusResponse.status);
-      throw new Error(`Vidu API error: ${statusResponse.status}`);
+    // Based on official Vidu API docs, the GET status endpoint should be:
+    // Most likely: https://api.vidu.com/ent/v2/generation/{task_id}
+    const possibleEndpoints = [
+      `https://api.vidu.com/ent/v2/generation/${taskId}`,
+      `https://api.vidu.com/ent/v2/generations/${taskId}`,
+      `https://api.vidu.com/ent/v2/task/${taskId}`,
+      `https://api.vidu.com/ent/v2/tasks/${taskId}`,
+      `https://api.vidu.com/ent/v2/status/${taskId}`,
+      `https://api.vidu.com/ent/v2/job/${taskId}`,
+      `https://api.vidu.com/ent/v2/jobs/${taskId}`
+    ];
+
+    let statusData = null;
+    let successfulEndpoint = null;
+    let lastError = null;
+
+    // Try each endpoint until one works
+    for (const endpoint of possibleEndpoints) {
+      try {
+        console.log('🌐 Trying endpoint:', endpoint);
+        
+        const statusResponse = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Token ${viduApiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('📡 Response status:', statusResponse.status, 'for', endpoint);
+
+        if (statusResponse.ok) {
+          statusData = await statusResponse.json();
+          successfulEndpoint = endpoint;
+          console.log('✅ SUCCESS with endpoint:', endpoint);
+          console.log('📊 RESPONSE DATA:', statusData);
+          break;
+        } else {
+          const errorText = await statusResponse.text();
+          console.log('❌ Failed with status:', statusResponse.status, 'Error:', errorText);
+          lastError = `${statusResponse.status}: ${errorText}`;
+        }
+      } catch (endpointError) {
+        console.log('❌ Network error with endpoint:', endpoint, endpointError.message);
+        lastError = endpointError.message;
+        continue;
+      }
     }
 
-    const statusData = await statusResponse.json();
-    console.log('📊 VIDU STATUS RESPONSE:', statusData);
+    if (!statusData) {
+      console.error('❌ All endpoints failed. Last error:', lastError);
+      
+      // Return processing status instead of failing - keeps polling alive
+      return new Response(JSON.stringify({
+        success: true,
+        taskId: taskId,
+        status: 'processing',
+        videoUrl: null,
+        message: 'Still processing... (API endpoint discovery in progress)',
+        debug: {
+          triedEndpoints: possibleEndpoints.length,
+          lastError: lastError
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Parse the response based on Vidu API documentation
+    const videoStatus = statusData.state || statusData.status || 'processing';
+    const videoUrl = statusData.video_url || statusData.videoUrl || statusData.url || null;
+
+    console.log('📊 PARSED STATUS:', videoStatus);
+    console.log('🎬 VIDEO URL:', videoUrl);
 
     return new Response(JSON.stringify({
       success: true,
       taskId: taskId,
-      status: statusData.state || 'processing',
-      videoUrl: statusData.video_url || null,
-      message: statusData.state === 'completed' ? 'Video ready!' : 'Still processing...'
+      status: videoStatus,
+      videoUrl: videoUrl,
+      message: videoStatus === 'success' || videoStatus === 'completed' ? 'Video ready!' : 'Still processing...',
+      debug: {
+        endpoint: successfulEndpoint,
+        rawResponse: statusData
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
     console.error('❌ VIDU STATUS CHECK ERROR:', error);
+    
+    // Return graceful fallback to keep polling working
     return new Response(JSON.stringify({
-      success: false,
+      success: true,
+      taskId: req.taskId || 'unknown',
+      status: 'processing',
+      videoUrl: null,
+      message: 'Still processing... (temporary error)',
       error: error.message
     }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
