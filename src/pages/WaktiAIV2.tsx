@@ -91,6 +91,28 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // ADD VIDEO MESSAGE UPDATE HANDLER
+  useEffect(() => {
+    const handleSessionMessageUpdate = (event: CustomEvent) => {
+      const { filter, update } = event.detail;
+      
+      setSessionMessages(prevMessages => 
+        prevMessages.map(msg => {
+          if (filter(msg)) {
+            return update(msg);
+          }
+          return msg;
+        })
+      );
+    };
+    
+    window.addEventListener('updateSessionMessage', handleSessionMessageUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('updateSessionMessage', handleSessionMessageUpdate as EventListener);
+    };
+  }, []);
+
   useEffect(() => {
     const handleOpenConversationsDrawer = () => {
       console.log('💬 EXTRA BUTTON: Opening conversations drawer');

@@ -46,6 +46,58 @@ export function ChatMessages({
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Handle video update events
+  useEffect(() => {
+    const handleVideoUpdate = (event: CustomEvent) => {
+      console.log('🎬 CHAT UPDATE: Received video update event', event.detail);
+      
+      const { taskId, videoUrl, status, error, content } = event.detail;
+      
+      // Update parent component messages through custom event
+      const updateMessageEvent = new CustomEvent('updateSessionMessage', {
+        detail: {
+          filter: (msg: AIMessage) => {
+            // Look for message that contains the task ID or mentions video generation
+            return msg.content?.includes(taskId) || 
+                   (msg.content?.includes('Video generation started') && 
+                    msg.content?.includes('🎬'));
+          },
+          update: (msg: AIMessage) => {
+            console.log('🎬 CHAT UPDATE: Found message to update', msg.id);
+            
+            if (status === 'completed' && videoUrl) {
+              return {
+                ...msg,
+                content: content || `🎬 Video generated successfully!\n\n<video controls width="400" style="max-width: 100%; border-radius: 8px;">\n<source src="${videoUrl}" type="video/mp4">\nYour browser does not support the video tag.\n</video>`
+              };
+            } else if (status === 'failed') {
+              return {
+                ...msg,
+                content: content || `❌ Video generation failed: ${error}`
+              };
+            } else if (status === 'processing') {
+              return {
+                ...msg,
+                content: content
+              };
+            }
+            return msg;
+          }
+        }
+      });
+      
+      window.dispatchEvent(updateMessageEvent);
+    };
+    
+    // Listen for video update events
+    window.addEventListener('updateVideoMessage', handleVideoUpdate as EventListener);
+    
+    // Cleanup listener
+    return () => {
+      window.removeEventListener('updateVideoMessage', handleVideoUpdate as EventListener);
+    };
+  }, []);
+
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -79,6 +131,26 @@ export function ChatMessages({
     );
   };
 
+  // Function to render message content with HTML support for videos
+  const renderMessageContent = (content: string) => {
+    // Check if content contains HTML (video tags, styling, etc.)
+    if (content.includes('<video') || content.includes('<div style') || content.includes('<style>')) {
+      return (
+        <div 
+          dangerouslySetInnerHTML={{ __html: content }}
+          className="prose prose-sm max-w-none"
+        />
+      );
+    }
+    
+    // Regular text content
+    return (
+      <div className="whitespace-pre-wrap">
+        {content}
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-48">
       <div className="max-w-4xl mx-auto">
@@ -87,12 +159,32 @@ export function ChatMessages({
         
         {/* Chat Messages using ChatBubble component */}
         {sessionMessages.map((message, index) => (
-          <ChatBubble 
-            key={message.id} 
-            message={message} 
-            userProfile={userProfile}
-            activeTrigger={activeTrigger}
-          />
+          <div key={message.id} className="flex gap-3 justify-start mb-4">
+            <div className="flex-shrink-0">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                message.role === 'user' 
+                  ? 'bg-blue-500'
+                  : 'bg-gradient-to-br from-purple-500 to-blue-500'
+              }`}>
+                {message.role === 'user' ? (
+                  <User className="w-4 h-4 text-white" />
+                ) : (
+                  <Bot className="w-4 h-4 text-white" />
+                )}
+              </div>
+            </div>
+            <div className="max-w-[80%]">
+              <div className={`rounded-lg px-4 py-3 ${
+                message.role === 'user'
+                  ? 'bg-blue-50 text-blue-900 border border-blue-200'
+                  : 'bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border'
+              }`}>
+                <div className="text-sm leading-relaxed">
+                  {renderMessageContent(message.content)}
+                </div>
+              </div>
+            </div>
+          </div>
         ))}
         
         {/* Loading Indicator with proper TypingIndicator */}
