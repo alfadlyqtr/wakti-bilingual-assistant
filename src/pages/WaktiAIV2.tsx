@@ -12,6 +12,7 @@ import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
+import { VideoUploadInterface } from '@/components/wakti-ai-v2/VideoUploadInterface';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -56,10 +57,6 @@ const WaktiAIV2 = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isClearingChat, setIsClearingChat] = useState(false);
 
-  // Video generation state
-  const [videoCategory, setVideoCategory] = useState('custom');
-  const [videoTemplate, setVideoTemplate] = useState('image2video');
-
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { language } = useTheme();
@@ -67,45 +64,6 @@ const WaktiAIV2 = () => {
   const { canTranslate, refreshTranslationQuota } = useQuotaManagement();
   const { canUseVoice, refreshVoiceQuota } = useExtendedQuotaManagement();
   const { quota, fetchQuota } = useAIQuotaManagement();
-
-  // Template prompts for video generation
-  const getTemplatePrompt = (template: string) => {
-    const prompts: { [key: string]: string } = {
-      make_face: "The camera remains stationary. The subject stands still with hands on hips, head slightly tilted to the left, and a smiling expression. Then, the subject begins walking forward—directly toward the camera. Upon reaching the front of the lens, they simultaneously strike a playful pose and expression: mouth wide open, tongue sticking out, and eyes rolled upward.",
-      blow_kiss: "The subject gently leans forward, blows a kiss toward the camera from just below the lips using the right hand, then naturally waves at the camera.",
-      hair_swap: "The character transforms their hairstyle and color smoothly.",
-      flying: "The character begins flying forward like a superhero.",
-      nap_me: "The character lies down and covers themselves with a blanket.",
-      pilot: "The character appears in an airplane cockpit.",
-      interaction: "The two people face the camera, each extending a hand making a heart shape.",
-      hugging_pro: "The two subjects turn towards each other and begin to hug.",
-      carry_me: "One person begins to carry another on their back.",
-      emotionlab: "The character transitions from neutral to smiling expression.",
-      wild_laugh: "The character breaks into wild laughter.",
-      surprised: "The character shows surprise expression.",
-      send_roses: "The person picks up roses and presents them to another person.",
-      cartoon_doll: "The character jumps, turning into a smooth doll version of themselves.",
-      style_me: "The character puts on a crisp suit and walks forward.",
-      toy_me: "The subject slowly turns around and transforms into a figurine on a base.",
-      muscling: "A man takes off his shirt, revealing muscular chest.",
-      muscling_360p: "Lower resolution muscle reveal animation.",
-      fairy_me: "The character transforms into a magical fairy with wings.",
-      yayoi_kusama_style: "Style transformation into polka dot art style.",
-      irasutoya: "Style transformation into Japanese illustration style.",
-      american_comic: "Style transformation into Rick and Morty animation style.",
-      simpsons_comic: "Style transformation into Simpsons cartoon style.",
-      child_memory: "A child version appears and embraces the subject.",
-      outfit_show: "The model turns 180 degrees to showcase clothing.",
-      spin360: "The subject rotates 360 degrees to show all angles.",
-      live_memory: "Subtle movements like blinking and breathing.",
-      sakura_season: "Cherry blossom petals fall while subject looks up smiling.",
-      zoom_in_fast: "Camera steadily zooms in isolating details.",
-      zoom_out_image: "Camera pulls back revealing environment.",
-      zoom_out_startend: "Transition from close-up to wide shot.",
-      walk_forward: "Character walks forward toward camera naturally."
-    };
-    return prompts[template] || "Generate creative video animation.";
-  };
 
   const loadUserProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -199,12 +157,6 @@ const WaktiAIV2 = () => {
 
     if (!userProfile?.id) {
       showError(language === 'ar' ? 'يرجى تسجيل الدخول' : 'Please login first');
-      return;
-    }
-
-    // Handle video generation
-    if (activeTrigger === 'video' && attachedFiles && attachedFiles.length > 0) {
-      await handleGenerateVideo(messageContent, attachedFiles);
       return;
     }
 
@@ -455,79 +407,6 @@ const WaktiAIV2 = () => {
         ? 'فشل في إرسال الرسالة. يرجى المحاولة مرة أخرى.' 
         : 'Failed to send message. Please try again.'
       );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGenerateVideo = async (promptText: string, uploadedFiles: any[]) => {
-    try {
-      setIsLoading(true);
-      
-      // Get user
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
-      
-      if (!userId) {
-        showError(language === 'ar' ? 'يرجى تسجيل الدخول' : 'Please login first');
-        return;
-      }
-      
-      // Use uploaded files base64 (already converted)
-      const base64Images = uploadedFiles.map(file => file.url);
-      
-      // Get prompt
-      const isCustom = videoTemplate === 'image2video';
-      const promptToUse = isCustom ? promptText : getTemplatePrompt(videoTemplate);
-      
-      console.log('🎬 GENERATING VIDEO:', { template: videoTemplate, mode: isCustom ? 'image2video' : 'template2video' });
-      
-      // Call Supabase function
-      const response = await supabase.functions.invoke('vidu-video-generator', {
-        body: {
-          template: videoTemplate,
-          images: base64Images,
-          prompt: promptToUse,
-          user_id: userId,
-          mode: isCustom ? 'image2video' : 'template2video'
-        }
-      });
-      
-      if (response.error) {
-        console.error('❌ VIDEO ERROR:', response.error);
-        throw new Error(response.error.message || 'Video generation failed');
-      }
-      
-      console.log('✅ VIDEO SUCCESS:', response.data);
-      
-      // Create user message
-      const tempUserMessage: AIMessage = {
-        id: `user-temp-${Date.now()}`,
-        role: 'user',
-        content: promptText,
-        timestamp: new Date(),
-        inputType: 'text',
-        attachedFiles: uploadedFiles
-      };
-      
-      // Create video response message - use imageUrl property for video
-      const videoMessage: AIMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: 'Video generation started successfully! Processing your request...',
-        imageUrl: response.data.job_id, // Use imageUrl property for video
-        timestamp: new Date(),
-        intent: 'video'
-      };
-      
-      setSessionMessages(prev => [...prev, tempUserMessage, videoMessage]);
-      setMessage('');
-      
-      showSuccess(language === 'ar' ? 'تم بدء إنشاء الفيديو بنجاح!' : 'Video generation started successfully!');
-      
-    } catch (error: any) {
-      console.error('❌ VIDEO ERROR:', error);
-      showError(error.message || (language === 'ar' ? 'فشل في إنشاء الفيديو' : 'Failed to generate video'));
     } finally {
       setIsLoading(false);
     }
@@ -820,105 +699,36 @@ const WaktiAIV2 = () => {
 
         <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto p-4">
-            {/* Video controls when video mode is active and files are uploaded */}
-            {activeTrigger === 'video' && processedFiles.length > 0 && (
-              <div className="mb-4 p-4 rounded-lg bg-purple-900/20 border border-pink-500/30">
-                {/* Image thumbnails */}
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {processedFiles.map((file, index) => (
-                    <div key={index} className="relative">
-                      <img src={file.url} className="w-16 h-16 object-cover rounded" alt="Upload" />
-                      <button 
-                        onClick={() => setProcessedFiles(prev => prev.filter((_, i) => i !== index))} 
-                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Controls in ONE LINE */}
-                <div className="flex gap-2 items-center flex-wrap">
-                  <select 
-                    value={videoCategory} 
-                    onChange={(e) => setVideoCategory(e.target.value)} 
-                    className="flex-1 bg-gray-800 text-white rounded px-2 py-1 text-sm"
-                  >
-                    <option value="custom">Custom</option>
-                    <option value="fun">Fun & Interactive</option>
-                    <option value="transform">Transform & Style</option>
-                    <option value="camera">Camera & Motion</option>
-                  </select>
+            {activeTrigger === 'video' ? (
+              <VideoUploadInterface
+                onVideoGenerated={(videoData) => {
+                  console.log('✅ Video generated:', videoData);
                   
-                  <select 
-                    value={videoTemplate} 
-                    onChange={(e) => setVideoTemplate(e.target.value)} 
-                    className="flex-1 bg-gray-800 text-white rounded px-2 py-1 text-sm"
-                  >
-                    {videoCategory === 'custom' && <option value="image2video">Custom Prompt</option>}
-                    {videoCategory === 'fun' && (
-                      <>
-                        <option value="make_face">Make a Face</option>
-                        <option value="blow_kiss">Blow a Kiss</option>
-                        <option value="hair_swap">Hair Swap</option>
-                        <option value="flying">Flying</option>
-                        <option value="nap_me">Nap Me</option>
-                        <option value="pilot">Pilot</option>
-                        <option value="interaction">Finger Heart</option>
-                        <option value="hugging_pro">Hugging Pro</option>
-                        <option value="carry_me">Carry Me</option>
-                        <option value="emotionlab">Smile</option>
-                        <option value="wild_laugh">Wild Laugh</option>
-                        <option value="surprised">Surprised</option>
-                        <option value="send_roses">Send Roses</option>
-                      </>
-                    )}
-                    {videoCategory === 'transform' && (
-                      <>
-                        <option value="cartoon_doll">Cartoon Doll</option>
-                        <option value="style_me">Style Me</option>
-                        <option value="toy_me">Toy Me</option>
-                        <option value="muscling">Muscling</option>
-                        <option value="muscling_360p">Muscling 360p</option>
-                        <option value="fairy_me">Fairy Me</option>
-                        <option value="yayoi_kusama_style">Yayoi Kusama</option>
-                        <option value="irasutoya">Irasutoya</option>
-                        <option value="american_comic">American Comic</option>
-                        <option value="simpsons_comic">Simpsons</option>
-                        <option value="child_memory">Child Memory</option>
-                        <option value="outfit_show">Outfit Show</option>
-                        <option value="spin360">Spin 360</option>
-                        <option value="live_memory">Live Memory</option>
-                        <option value="sakura_season">Sakura Season</option>
-                      </>
-                    )}
-                    {videoCategory === 'camera' && (
-                      <>
-                        <option value="zoom_in_fast">Zoom In Fast</option>
-                        <option value="zoom_out_image">Zoom Out</option>
-                        <option value="zoom_out_startend">Zoom Out Start-End</option>
-                        <option value="walk_forward">Walk Forward</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-                
-                <div className="mt-2 text-xs text-gray-400">15/month video limit</div>
-              </div>
+                  const videoMessage: AIMessage = {
+                    id: `assistant-${Date.now()}`,
+                    role: 'assistant',
+                    content: 'Video generation started successfully! Processing your request...',
+                    imageUrl: videoData.job_id,
+                    timestamp: new Date(),
+                    intent: 'video'
+                  };
+                  
+                  setSessionMessages(prev => [...prev, videoMessage]);
+                }}
+              />
+            ) : (
+              <ChatInput
+                message={message}
+                setMessage={setMessage}
+                isLoading={isLoading}
+                sessionMessages={sessionMessages}
+                onSendMessage={handleSendMessage}
+                onClearChat={handleClearChat}
+                onOpenPlusDrawer={handleOpenPlusDrawer}
+                activeTrigger={activeTrigger}
+                onTriggerChange={handleTriggerChange}
+              />
             )}
-
-            <ChatInput
-              message={message}
-              setMessage={setMessage}
-              isLoading={isLoading}
-              sessionMessages={sessionMessages}
-              onSendMessage={handleSendMessage}
-              onClearChat={handleClearChat}
-              onOpenPlusDrawer={handleOpenPlusDrawer}
-              activeTrigger={activeTrigger}
-              onTriggerChange={handleTriggerChange}
-            />
           </div>
         </div>
       </div>
