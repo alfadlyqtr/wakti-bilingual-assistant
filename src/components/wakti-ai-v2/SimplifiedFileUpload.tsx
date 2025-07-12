@@ -1,42 +1,83 @@
-
-import React, { useRef, useState } from 'react';
-import { Upload, Camera, X, Image, Eye } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { X, FileType, RotateCcw } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 
-export interface SimplifiedUploadedFile {
+// Define the structure for image type options
+interface ImageTypeOption {
   id: string;
   name: string;
-  type: string;
+  icon: string;
+  description: string;
+}
+
+// Predefined image types
+const imageTypes: ImageTypeOption[] = [
+  {
+    id: 'general',
+    name: 'General',
+    icon: '🖼️',
+    description: 'General image with no specific category',
+  },
+  {
+    id: 'ids',
+    name: 'IDs / Documents',
+    icon: '🆔',
+    description: 'Identity cards, passports, and official documents',
+  },
+  {
+    id: 'bills',
+    name: 'Bills / Receipts',
+    icon: '🧾',
+    description: 'Invoices, receipts, and expense tracking',
+  },
+  {
+    id: 'food',
+    name: 'Food / Nutrition',
+    icon: '🍎',
+    description: 'Photos of food for calorie tracking or ingredient analysis',
+  },
+  {
+    id: 'docs',
+    name: 'Charts / Reports',
+    icon: '📊',
+    description: 'Graphs, data visualizations, and business reports',
+  },
+  {
+    id: 'screens',
+    name: 'Screenshots / Errors',
+    icon: '💻',
+    description: 'Application screenshots and error messages',
+  },
+  {
+    id: 'photos',
+    name: 'People / Places',
+    icon: '🌍',
+    description: 'Photos of people, landscapes, and travel destinations',
+  },
+];
+
+// Define the structure for uploaded files
+export interface UploadedFile {
+  id: string;
+  name: string;
   size: number;
+  type: string;
   url: string;
-  preview?: string;
-  imageType?: {
-    id: string;
-    name: string;
-  };
+  preview: string;
+  imageType?: ImageTypeOption;
 }
 
 interface SimplifiedFileUploadProps {
-  onFilesUploaded: (files: SimplifiedUploadedFile[]) => void;
-  onUpdateFiles: (files: SimplifiedUploadedFile[]) => void;
-  uploadedFiles: SimplifiedUploadedFile[];
+  onFilesUploaded: (files: UploadedFile[]) => void;
+  onUpdateFiles: (files: UploadedFile[]) => void;
+  uploadedFiles: UploadedFile[];
   onRemoveFile: (fileId: string) => void;
   isUploading: boolean;
   disabled?: boolean;
   onAutoSwitchMode?: (mode: string) => void;
 }
-
-const imageTypes = [
-  { id: 'general', name: '🔍 General', description: 'Analyze anything' },
-  { id: 'ids', name: '🆔 IDs & Documents', description: 'Extract text and info' },
-  { id: 'bills', name: '💰 Bills & Receipts', description: 'Calculate expenses' },
-  { id: 'food', name: '🍕 Food & Nutrition', description: 'Calories and ingredients' },
-  { id: 'docs', name: '📚 Academic & Reports', description: 'Answer questions' },
-  { id: 'screens', name: '💻 Screenshots & Errors', description: 'Debug and fix' },
-  { id: 'photos', name: '📸 Photos & People', description: 'Describe and identify' }
-];
 
 export function SimplifiedFileUpload({
   onFilesUploaded,
@@ -49,218 +90,234 @@ export function SimplifiedFileUpload({
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
   const { showError } = useToastHelper();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [showImageTypeSelector, setShowImageTypeSelector] = useState(false);
+  const [currentFileIndex, setCurrentFileIndex] = useState<number>(0);
 
-  const handleFileSelect = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    
-    const validFiles: SimplifiedUploadedFile[] = [];
-    
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        showError(`${file.name} ${language === 'ar' ? 'ليس ملف صورة صالح' : 'is not a valid image file'}`);
-        continue;
+  // Listen for custom event dispatched from PlusMenu
+  useEffect(() => {
+    const handleFileSelect = (event: any) => {
+      if (event.detail && event.detail.files) {
+        handleFilesSelected(Array.from(event.detail.files));
       }
-      
-      // Validate file size (5MB limit)
-      if (file.size > 5 * 1024 * 1024) {
-        showError(`${file.name} ${language === 'ar' ? 'كبير جداً (أقصى حد 5 ميجابايت)' : 'is too large (max 5MB)'}`);
-        continue;
-      }
-      
-      // Create preview URL
-      const previewUrl = URL.createObjectURL(file);
-      
-      const uploadedFile: SimplifiedUploadedFile = {
-        id: `${Date.now()}-${i}`,
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        url: previewUrl,
-        preview: previewUrl,
-        imageType: imageTypes[0] // Default to general
-      };
-      
-      validFiles.push(uploadedFile);
-    }
-    
-    if (validFiles.length > 0) {
-      onFilesUploaded(validFiles);
-      
-      // Auto-switch to vision mode when images are uploaded
-      if (onAutoSwitchMode) {
-        onAutoSwitchMode('vision');
-      }
-    }
+    };
+
+    window.addEventListener('wakti-file-selected', handleFileSelect);
+
+    return () => {
+      window.removeEventListener('wakti-file-selected', handleFileSelect);
+    };
+  }, [handleFilesSelected]);
+
+  // Convert file to base64 for preview
+  const convertToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
   };
 
-  const updateFileImageType = (fileId: string, imageType: { id: string; name: string }) => {
-    const updatedFiles = uploadedFiles.map(file => 
-      file.id === fileId ? { ...file, imageType } : file
-    );
+  // Handle file selection and convert to UploadedFile format
+  async function handleFilesSelected(files: File[]) {
+    if (!files || files.length === 0) {
+      console.log('No files selected');
+      return;
+    }
+
+    const newFiles: UploadedFile[] = [];
+
+    for (const file of files) {
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        showError(language === 'ar' ? 'الملف كبير جداً. الحد الأقصى هو 10 ميجابايت.' : 'File is too large. Max size is 10MB.');
+        continue; // Skip to the next file
+      }
+
+      try {
+        const base64String = await convertToBase64(file);
+        const newFile: UploadedFile = {
+          id: Math.random().toString(36).substring(7), // Generate a unique ID
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          url: base64String,
+          preview: base64String,
+        };
+        newFiles.push(newFile);
+
+        // Auto-switch mode based on file type
+        if (onAutoSwitchMode) {
+          if (file.type.startsWith('image/')) {
+            onAutoSwitchMode('vision');
+          } else if (file.type.startsWith('video/')) {
+            onAutoSwitchMode('video');
+          }
+        }
+      } catch (error) {
+        console.error('Error converting file to base64:', error);
+        showError(language === 'ar' ? 'فشل في معالجة الملف.' : 'Failed to process file.');
+      }
+    }
+
+    // Update the state with the new files
+    if (newFiles.length > 0) {
+      const updatedFiles = [...uploadedFiles, ...newFiles];
+      onUpdateFiles(updatedFiles);
+      onFilesUploaded(updatedFiles);
+      console.log('✅ UPLOAD: Files uploaded successfully', { count: updatedFiles.length });
+    }
+  }
+
+  // Handle image type change
+  const handleImageTypeChange = (fileId: string | undefined, imageType: ImageTypeOption) => {
+    if (!fileId) {
+      console.warn('No file ID provided for image type change.');
+      return;
+    }
+
+    const updatedFiles = uploadedFiles.map(file => {
+      if (file.id === fileId) {
+        return { ...file, imageType: imageType };
+      }
+      return file;
+    });
+
     onUpdateFiles(updatedFiles);
+    setShowImageTypeSelector(false);
+    console.log('🖼️ IMAGE TYPE: Updated image type', { fileId, imageType });
   };
 
-  const triggerFileInput = () => {
-    if (disabled) return;
-    fileInputRef.current?.click();
-  };
+  // Reset image type to default
+  const resetImageType = (fileId: string) => {
+    const updatedFiles = uploadedFiles.map(file => {
+      if (file.id === fileId) {
+        return { ...file, imageType: undefined };
+      }
+      return file;
+    });
 
-  const triggerCameraInput = () => {
-    if (disabled) return;
-    cameraInputRef.current?.click();
+    onUpdateFiles(updatedFiles);
+    console.log('🔄 IMAGE TYPE: Reset image type', { fileId });
   };
 
   return (
-    <div className="w-full">
-      {/* Hidden file inputs */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={(e) => handleFileSelect(e.target.files)}
-        className="hidden"
-        disabled={disabled}
-      />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={(e) => handleFileSelect(e.target.files)}
-        className="hidden"
-        disabled={disabled}
-      />
-
-      {/* File Upload Buttons - Only show when no files uploaded */}
-      {uploadedFiles.length === 0 && (
-        <div className="flex gap-2 px-3 pb-2">
-          <button
-            onClick={triggerFileInput}
-            disabled={disabled || isUploading}
-            className="flex-1 h-10 px-4 rounded-lg bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border border-white/20 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Upload className="h-4 w-4 text-foreground/70" />
-              <span className="text-sm font-medium text-foreground/80">
-                {language === 'ar' ? 'رفع صور' : 'Upload Images'}
-              </span>
-            </div>
-          </button>
-          
-          <button
-            onClick={triggerCameraInput}
-            disabled={disabled || isUploading}
-            className="flex-1 h-10 px-4 rounded-lg bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border border-white/20 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Camera className="h-4 w-4 text-foreground/70" />
-              <span className="text-sm font-medium text-foreground/80">
-                {language === 'ar' ? 'كاميرا' : 'Camera'}
-              </span>
-            </div>
-          </button>
-        </div>
-      )}
-
-      {/* Uploaded Files Display */}
+    <>
+      {/* Files Grid - Only show if files exist */}
       {uploadedFiles.length > 0 && (
-        <div className="px-3 pb-3 space-y-3">
-          {/* File Previews */}
-          <div className="flex flex-wrap gap-2">
-            {uploadedFiles.map((file) => (
-              <div key={file.id} className="relative group">
-                <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-primary/30 bg-background">
-                  <img
-                    src={file.preview || file.url}
-                    alt={file.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <button
-                  onClick={() => onRemoveFile(file.id)}
-                  className="absolute -top-1 -right-1 w-5 h-5 bg-destructive hover:bg-destructive/80 text-destructive-foreground rounded-full flex items-center justify-center text-xs transition-colors"
-                  title={language === 'ar' ? 'حذف الصورة' : 'Remove image'}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-1 py-0.5 rounded-b-lg">
-                  {(file.size / 1024).toFixed(0)}KB
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Image Type Selectors */}
-          <div className="space-y-2">
-            {uploadedFiles.map((file, index) => (
-              <div key={file.id} className="flex items-center gap-2 p-2 bg-background/50 rounded-lg border border-border/50">
-                <Image className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium text-foreground/80 min-w-0 flex-shrink-0">
-                  {language === 'ar' ? `صورة ${index + 1}` : `Image ${index + 1}`}
-                </span>
-                <select
-                  value={file.imageType?.id || 'general'}
-                  onChange={(e) => {
-                    const selectedType = imageTypes.find(type => type.id === e.target.value);
-                    if (selectedType) {
-                      updateFileImageType(file.id, { id: selectedType.id, name: selectedType.name });
-                    }
-                  }}
-                  className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                >
-                  {imageTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name} - {type.description}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-
-          {/* Add More Button */}
-          <div className="flex gap-2">
-            <button
-              onClick={triggerFileInput}
-              disabled={disabled || isUploading}
-              className="flex-1 h-8 px-3 rounded-lg bg-background/50 hover:bg-background/70 transition-all border border-border/50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-            >
-              <div className="flex items-center justify-center gap-1">
-                <Upload className="h-3 w-3" />
-                <span>{language === 'ar' ? 'إضافة المزيد' : 'Add More'}</span>
-              </div>
-            </button>
-            <button
-              onClick={triggerCameraInput}
-              disabled={disabled || isUploading}
-              className="flex-1 h-8 px-3 rounded-lg bg-background/50 hover:bg-background/70 transition-all border border-border/50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-            >
-              <div className="flex items-center justify-center gap-1">
-                <Camera className="h-3 w-3" />
-                <span>{language === 'ar' ? 'كاميرا' : 'Camera'}</span>
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {isUploading && (
         <div className="px-3 pb-2">
-          <div className="h-1 bg-background/20 rounded-full overflow-hidden">
-            <div className="h-full bg-primary animate-pulse rounded-full"></div>
+          <div className="max-w-4xl mx-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {uploadedFiles.map((file, index) => (
+                <div key={file.id} className="relative group">
+                  <div className="aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600">
+                    <img
+                      src={file.preview || file.url}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error('Image load error:', e);
+                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIxIDEyQzIxIDEyLjU1MjMgMjAuNTUyMyAxMyAyMCAxM0M0LjQgMTMgNCAxMi41NTIzIDQgMTJDNCA2LjQ3NzE1IDguNDc3MTUgMiAxNCAyQzE5LjUyMjggMiAyNCA2LjQ3NzE1IDI0IDEyWiIgZmlsbD0iI0Y5RkFGQiIvPgo8L3N2Zz4K';
+                      }}
+                    />
+                  </div>
+
+                  {/* File Controls */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-200 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="flex gap-1">
+                      <Button
+                        onClick={() => {
+                          setCurrentFileIndex(index);
+                          setShowImageTypeSelector(true);
+                        }}
+                        size="sm"
+                        className="bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm h-8 w-8 p-0"
+                        disabled={disabled || isUploading}
+                      >
+                        <FileType className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        onClick={() => onRemoveFile(file.id)}
+                        size="sm"
+                        className="bg-red-500/80 hover:bg-red-600/80 text-white border-0 backdrop-blur-sm h-8 w-8 p-0"
+                        disabled={disabled || isUploading}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Image Type Badge */}
+                  <div className="absolute bottom-1 left-1 right-1">
+                    <div className="bg-black/70 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm">
+                      <div className="flex items-center gap-1">
+                        <span>{file.imageType?.name || 'General'}</span>
+                        {file.imageType?.id !== 'general' && (
+                          <Button
+                            onClick={() => resetImageType(file.id)}
+                            className="p-0 h-4 w-4 bg-transparent hover:bg-white/20 text-white border-0"
+                            disabled={disabled || isUploading}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* File Size */}
+                  <div className="absolute top-1 right-1">
+                    <div className="bg-black/70 text-white text-xs px-1.5 py-0.5 rounded backdrop-blur-sm">
+                      {(file.size / 1024).toFixed(0)}KB
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <p className="text-xs text-center text-foreground/60 mt-1">
-            {language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}
-          </p>
         </div>
       )}
-    </div>
+
+      {/* Image Type Selector Modal */}
+      {showImageTypeSelector && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">
+                {language === 'ar' ? 'نوع الصورة' : 'Image Type'}
+              </h3>
+              <Button
+                onClick={() => setShowImageTypeSelector(false)}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {imageTypes.map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => handleImageTypeChange(uploadedFiles[currentFileIndex]?.id, type)}
+                  className="w-full text-left p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{type.icon}</span>
+                    <div>
+                      <div className="font-medium">{type.name}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {type.description}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
