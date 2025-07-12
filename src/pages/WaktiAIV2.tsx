@@ -510,12 +510,12 @@ const WaktiAIV2 = () => {
         attachedFiles: uploadedFiles
       };
       
-      // Create video response message
+      // Create video response message - use imageUrl property for video
       const videoMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: 'Video generation started successfully! Processing your request...',
-        videoUrl: response.data.job_id, // Will be updated with actual URL later
+        imageUrl: response.data.job_id, // Use imageUrl property for video
         timestamp: new Date(),
         intent: 'video'
       };
