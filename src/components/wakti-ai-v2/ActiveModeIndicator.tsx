@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Bot, Search, ImagePlus } from 'lucide-react';
+import { Bot, Search, ImagePlus, Video } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +30,12 @@ export function ActiveModeIndicator({ activeTrigger }: ActiveModeIndicatorProps)
           icon: ImagePlus,
           label: language === 'ar' ? 'إنشاء الصور' : 'Image Mode',
           className: "bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50"
+        };
+      case 'video':
+        return {
+          icon: Video,
+          label: language === 'ar' ? 'الفيديو' : 'Video Mode',
+          className: "bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700/50"
         };
       default:
         return null;

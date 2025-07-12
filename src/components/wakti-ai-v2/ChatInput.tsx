@@ -16,6 +16,7 @@ const modeHighlightStyles = (activeTrigger: string) => {
     case 'chat': return 'border-blue-400 ring-2 ring-blue-200/70 shadow-blue-200/10';
     case 'search': return 'border-green-400 ring-2 ring-green-200/70 shadow-green-100/10';
     case 'image': return 'border-orange-400 ring-2 ring-orange-200/70 shadow-orange-100/15';
+    case 'video': return 'border-purple-400 ring-2 ring-purple-200/70 shadow-purple-100/15';
     default: return 'border-primary/40';
   }
 };
@@ -24,6 +25,7 @@ const textareaHighlight = (activeTrigger: string) => {
     case 'chat': return 'border-blue-300 shadow-[inset_0_2px_12px_0_rgba(96,165,250,0.10)]';
     case 'search': return 'border-green-300 shadow-[inset_0_2px_12px_0_rgba(74,222,128,0.10)]';
     case 'image': return 'border-orange-300 shadow-[inset_0_2px_12px_0_rgba(251,191,36,0.08)]';
+    case 'video': return 'border-purple-300 shadow-[inset_0_2px_12px_0_rgba(147,51,234,0.10)]';
     default: return 'border-primary/20';
   }
 };
@@ -73,7 +75,7 @@ export function ChatInput({
       let finalTrigger = activeTrigger;
       if (uploadedFiles.length > 0) {
         const hasImages = uploadedFiles.some(file => file.type?.startsWith('image/'));
-        if (hasImages) {
+        if (hasImages && activeTrigger !== 'video') {
           finalTrigger = 'vision';
           console.log('🔍 AUTO-SWITCH: Images detected, switching to vision mode');
           // Update the actual trigger

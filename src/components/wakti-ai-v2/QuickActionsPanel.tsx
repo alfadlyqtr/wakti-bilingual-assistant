@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-react';
+import { MessageSquare, Search, Image, Video, PenTool, Mic, Gamepad2 } from 'lucide-react';
 import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { GameModeModal } from './GameModeModal';
@@ -14,6 +14,7 @@ interface QuickActionsProps {
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
   onClose?: () => void;
 }
+
 export function QuickActionsPanel({
   onSendMessage,
   activeTrigger,
@@ -21,9 +22,7 @@ export function QuickActionsPanel({
   onTextGenerated,
   onClose
 }: QuickActionsProps) {
-  const {
-    language
-  } = useTheme();
+  const { language } = useTheme();
   const [showTextGen, setShowTextGen] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
@@ -52,6 +51,14 @@ export function QuickActionsPanel({
     hoverColor: 'hover:bg-orange-500/20',
     borderColor: 'border-orange-500',
     description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
+  }, {
+    id: 'video',
+    label: language === 'ar' ? 'فيديو' : 'Video',
+    icon: <Video className="h-4 w-4" />,
+    activeColor: 'bg-purple-500',
+    hoverColor: 'hover:bg-purple-500/20',
+    borderColor: 'border-purple-500',
+    description: language === 'ar' ? 'إنشاء مقاطع الفيديو' : 'Generate videos'
   }];
   
   const quickActions = [{
