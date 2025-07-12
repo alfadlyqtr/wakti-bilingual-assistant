@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -158,14 +157,12 @@ export function ChatInput({
               {activeTrigger === 'video' ? (
                 <button
                   onClick={() => setShowVideoUpload && setShowVideoUpload(true)}
-                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0"
+                  className="h-9 px-2 rounded-2xl flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0"
                   disabled={isLoading || isUploading}
                   type="button"
+                  title={language === 'ar' ? 'إضافة فيديو' : 'Add Video'}
                 >
-                  <span className="text-lg">🎬</span>
-                  <span className="text-xs font-medium">
-                    {language === 'ar' ? 'فيديو' : 'Video'}
-                  </span>
+                  <span className="text-base">+🎬</span>
                 </button>
               ) : (
                 <PlusMenu

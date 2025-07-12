@@ -2124,6 +2124,7 @@ export type Database = {
           error_message: string | null
           id: string
           images: string[]
+          mode: string | null
           movement_amplitude: string | null
           prompt: string | null
           resolution: string | null
@@ -2143,6 +2144,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           images: string[]
+          mode?: string | null
           movement_amplitude?: string | null
           prompt?: string | null
           resolution?: string | null
@@ -2162,6 +2164,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           images?: string[]
+          mode?: string | null
           movement_amplitude?: string | null
           prompt?: string | null
           resolution?: string | null
