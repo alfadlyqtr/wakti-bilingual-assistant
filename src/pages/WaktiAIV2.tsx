@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Bot, Trash2, X } from 'lucide-react';
 import { ChatMessage } from '@/components/wakti-ai-v2/ChatMessage';
@@ -25,6 +26,7 @@ export default function WaktiAIV2() {
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showVideoUpload, setShowVideoUpload] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const { language } = useTheme();
   const navigate = useRouter().push;
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -151,6 +153,8 @@ export default function WaktiAIV2() {
           <QuickActionsPanel
             onTriggerChange={setActiveTrigger}
             activeTrigger={activeTrigger}
+            onSendMessage={handleSendMessage}
+            onTextGenerated={(text) => setMessage(text)}
           />
         </div>
       </div>

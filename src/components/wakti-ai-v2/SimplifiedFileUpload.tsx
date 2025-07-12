@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, FileType, RotateCcw } from 'lucide-react';
+import { X, FileType, RotateCcw, Upload, Camera } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 
@@ -59,7 +60,7 @@ const imageTypes: ImageTypeOption[] = [
 ];
 
 // Define the structure for uploaded files
-export interface UploadedFile {
+export interface SimplifiedUploadedFile {
   id: string;
   name: string;
   size: number;
@@ -70,9 +71,9 @@ export interface UploadedFile {
 }
 
 interface SimplifiedFileUploadProps {
-  onFilesUploaded: (files: UploadedFile[]) => void;
-  onUpdateFiles: (files: UploadedFile[]) => void;
-  uploadedFiles: UploadedFile[];
+  onFilesUploaded: (files: SimplifiedUploadedFile[]) => void;
+  onUpdateFiles: (files: SimplifiedUploadedFile[]) => void;
+  uploadedFiles: SimplifiedUploadedFile[];
   onRemoveFile: (fileId: string) => void;
   isUploading: boolean;
   disabled?: boolean;
@@ -106,7 +107,7 @@ export function SimplifiedFileUpload({
     return () => {
       window.removeEventListener('wakti-file-selected', handleFileSelect);
     };
-  }, [handleFilesSelected]);
+  }, []);
 
   // Convert file to base64 for preview
   const convertToBase64 = (file: File): Promise<string> => {
@@ -118,14 +119,14 @@ export function SimplifiedFileUpload({
     });
   };
 
-  // Handle file selection and convert to UploadedFile format
+  // Handle file selection and convert to SimplifiedUploadedFile format
   async function handleFilesSelected(files: File[]) {
     if (!files || files.length === 0) {
       console.log('No files selected');
       return;
     }
 
-    const newFiles: UploadedFile[] = [];
+    const newFiles: SimplifiedUploadedFile[] = [];
 
     for (const file of files) {
       // Check file size (max 10MB)
@@ -136,7 +137,7 @@ export function SimplifiedFileUpload({
 
       try {
         const base64String = await convertToBase64(file);
-        const newFile: UploadedFile = {
+        const newFile: SimplifiedUploadedFile = {
           id: Math.random().toString(36).substring(7), // Generate a unique ID
           name: file.name,
           size: file.size,
