@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Bot, Trash2, X } from 'lucide-react';
 import { ChatMessage } from '@/components/wakti-ai-v2/ChatMessage';
@@ -27,7 +27,7 @@ export default function WaktiAIV2() {
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const { language } = useTheme();
-  const navigate = useRouter().push;
+  const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom on new messages
