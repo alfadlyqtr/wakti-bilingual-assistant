@@ -137,37 +137,6 @@ export function SimplifiedFileUpload({
         disabled={disabled}
       />
 
-      {/* File Upload Buttons - Only show when no files uploaded */}
-      {uploadedFiles.length === 0 && (
-        <div className="flex gap-2 px-3 pb-2">
-          <button
-            onClick={triggerFileInput}
-            disabled={disabled || isUploading}
-            className="flex-1 h-10 px-4 rounded-lg bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border border-white/20 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Upload className="h-4 w-4 text-foreground/70" />
-              <span className="text-sm font-medium text-foreground/80">
-                {language === 'ar' ? 'رفع صور' : 'Upload Images'}
-              </span>
-            </div>
-          </button>
-          
-          <button
-            onClick={triggerCameraInput}
-            disabled={disabled || isUploading}
-            className="flex-1 h-10 px-4 rounded-lg bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border border-white/20 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Camera className="h-4 w-4 text-foreground/70" />
-              <span className="text-sm font-medium text-foreground/80">
-                {language === 'ar' ? 'كاميرا' : 'Camera'}
-              </span>
-            </div>
-          </button>
-        </div>
-      )}
-
       {/* Uploaded Files Display */}
       {uploadedFiles.length > 0 && (
         <div className="px-3 pb-3 space-y-3">
