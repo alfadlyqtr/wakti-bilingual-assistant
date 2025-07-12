@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Bot, Trash2, X } from 'lucide-react';
 import { ChatMessage } from '@/components/wakti-ai-v2/ChatMessage';

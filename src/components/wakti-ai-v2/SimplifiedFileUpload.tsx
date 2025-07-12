@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, FileType, RotateCcw, Upload, Camera } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
+import { supabase } from '@/integrations/supabase/client';
 
 // Define the structure for image type options
 interface ImageTypeOption {
