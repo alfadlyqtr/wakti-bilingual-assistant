@@ -37,6 +37,7 @@ const WaktiAIV2 = () => {
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [activeTrigger, setActiveTrigger] = useState('chat');
+  const [showVideoUpload, setShowVideoUpload] = useState(false);
 
   const [userProfile, setUserProfile] = useState<any>(null);
   const [personalTouch, setPersonalTouch] = useState<any>(null);
@@ -114,6 +115,19 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
     }
   }, [currentConversationId]);
+
+  const handleVideoGenerated = (videoData: any) => {
+    const videoMessage: AIMessage = {
+      id: `assistant-${Date.now()}`,
+      role: 'assistant',
+      content: `🎬 Video generation started! Template: ${videoData.template}`,
+      imageUrl: videoData.jobId,
+      timestamp: new Date(),
+      intent: 'video',
+      confidence: 'high' as 'high' | 'medium' | 'low'
+    };
+    setSessionMessages(prev => [...prev, videoMessage]);
+  };
 
   const isExplicitTaskCommand = (messageContent: string): boolean => {
     const lowerMessage = messageContent.toLowerCase().trim();
@@ -699,36 +713,31 @@ const WaktiAIV2 = () => {
 
         <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto p-4">
-            {activeTrigger === 'video' ? (
-              <VideoUploadInterface
-                onVideoGenerated={(videoData) => {
-                  console.log('✅ Video generated:', videoData);
-                  
-                  const videoMessage: AIMessage = {
-                    id: `assistant-${Date.now()}`,
-                    role: 'assistant',
-                    content: 'Video generation started successfully! Processing your request...',
-                    imageUrl: videoData.job_id,
-                    timestamp: new Date(),
-                    intent: 'video'
-                  };
-                  
-                  setSessionMessages(prev => [...prev, videoMessage]);
-                }}
-              />
-            ) : (
-              <ChatInput
-                message={message}
-                setMessage={setMessage}
-                isLoading={isLoading}
-                sessionMessages={sessionMessages}
-                onSendMessage={handleSendMessage}
-                onClearChat={handleClearChat}
-                onOpenPlusDrawer={handleOpenPlusDrawer}
-                activeTrigger={activeTrigger}
-                onTriggerChange={handleTriggerChange}
-              />
+            {/* Video Upload Interface - Show only in video mode when requested */}
+            {activeTrigger === 'video' && showVideoUpload && (
+              <div className="px-3 pb-3">
+                <div className="max-w-4xl mx-auto">
+                  <VideoUploadInterface
+                    onClose={() => setShowVideoUpload(false)}
+                    onVideoGenerated={handleVideoGenerated}
+                  />
+                </div>
+              </div>
             )}
+
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              isLoading={isLoading}
+              sessionMessages={sessionMessages}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat}
+              onOpenPlusDrawer={handleOpenPlusDrawer}
+              activeTrigger={activeTrigger}
+              onTriggerChange={handleTriggerChange}
+              showVideoUpload={showVideoUpload}
+              setShowVideoUpload={setShowVideoUpload}
+            />
           </div>
         </div>
       </div>

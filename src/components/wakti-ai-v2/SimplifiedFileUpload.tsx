@@ -1,8 +1,8 @@
 
 import React, { useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Upload, Camera, X, FileImage, Eye, FileText, Receipt, Utensils, Monitor, User, Image } from 'lucide-react';
+import { Upload, Camera, X, Image, Eye } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 
 export interface SimplifiedUploadedFile {
@@ -28,6 +28,16 @@ interface SimplifiedFileUploadProps {
   onAutoSwitchMode?: (mode: string) => void;
 }
 
+const imageTypes = [
+  { id: 'general', name: '🔍 General', description: 'Analyze anything' },
+  { id: 'ids', name: '🆔 IDs & Documents', description: 'Extract text and info' },
+  { id: 'bills', name: '💰 Bills & Receipts', description: 'Calculate expenses' },
+  { id: 'food', name: '🍕 Food & Nutrition', description: 'Calories and ingredients' },
+  { id: 'docs', name: '📚 Academic & Reports', description: 'Answer questions' },
+  { id: 'screens', name: '💻 Screenshots & Errors', description: 'Debug and fix' },
+  { id: 'photos', name: '📸 Photos & People', description: 'Describe and identify' }
+];
+
 export function SimplifiedFileUpload({
   onFilesUploaded,
   onUpdateFiles,
@@ -38,81 +48,56 @@ export function SimplifiedFileUpload({
   onAutoSwitchMode
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
-  const { showSuccess, showError } = useToastHelper();
-  
+  const { showError } = useToastHelper();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Image type categories for vision mode
-  const imageTypes = [
-    { id: 'general', name: language === 'ar' ? 'عام' : 'General', icon: Image },
-    { id: 'ids', name: language === 'ar' ? 'هويات ووثائق' : 'IDs & Documents', icon: FileText },
-    { id: 'bills', name: language === 'ar' ? 'فواتير وإيصالات' : 'Bills & Receipts', icon: Receipt },
-    { id: 'food', name: language === 'ar' ? 'طعام وشراب' : 'Food & Drinks', icon: Utensils },
-    { id: 'docs', name: language === 'ar' ? 'مستندات وتقارير' : 'Documents & Reports', icon: FileImage },
-    { id: 'screens', name: language === 'ar' ? 'لقطات شاشة' : 'Screenshots', icon: Monitor },
-    { id: 'photos', name: language === 'ar' ? 'صور شخصية' : 'Personal Photos', icon: User }
-  ];
-
-  // Convert file to base64
-  const convertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
-    });
-  };
-
-  // Handle file selection
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-
-    try {
-      const newFiles: SimplifiedUploadedFile[] = [];
+    
+    const validFiles: SimplifiedUploadedFile[] = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       
-      for (let i = 0; i < Math.min(files.length, 5); i++) { // Max 5 files
-        const file = files[i];
-        
-        if (!file.type.startsWith('image/')) {
-          showError(`${file.name} ${language === 'ar' ? 'ليس ملف صورة صالح' : 'is not a valid image file'}`);
-          continue;
-        }
-        
-        if (file.size > 5 * 1024 * 1024) { // 5MB limit
-          showError(`${file.name} ${language === 'ar' ? 'كبير جداً (أقصى حد 5 ميجابايت)' : 'is too large (max 5MB)'}`);
-          continue;
-        }
-
-        const base64 = await convertToBase64(file);
-        const uploadedFile: SimplifiedUploadedFile = {
-          id: `${Date.now()}-${i}`,
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          url: base64,
-          preview: base64,
-          imageType: imageTypes[0] // Default to general
-        };
-        
-        newFiles.push(uploadedFile);
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        showError(`${file.name} ${language === 'ar' ? 'ليس ملف صورة صالح' : 'is not a valid image file'}`);
+        continue;
       }
       
-      onFilesUploaded(newFiles);
-      showSuccess(`${newFiles.length} ${language === 'ar' ? 'صور تم تحميلها' : 'images uploaded'}`);
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        showError(`${file.name} ${language === 'ar' ? 'كبير جداً (أقصى حد 5 ميجابايت)' : 'is too large (max 5MB)'}`);
+        continue;
+      }
+      
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      
+      const uploadedFile: SimplifiedUploadedFile = {
+        id: `${Date.now()}-${i}`,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: previewUrl,
+        preview: previewUrl,
+        imageType: imageTypes[0] // Default to general
+      };
+      
+      validFiles.push(uploadedFile);
+    }
+    
+    if (validFiles.length > 0) {
+      onFilesUploaded(validFiles);
       
       // Auto-switch to vision mode when images are uploaded
-      if (newFiles.length > 0 && onAutoSwitchMode) {
+      if (onAutoSwitchMode) {
         onAutoSwitchMode('vision');
       }
-      
-    } catch (error) {
-      console.error('Upload error:', error);
-      showError(language === 'ar' ? 'فشل في تحميل الصور' : 'Failed to upload images');
     }
   };
 
-  // Update file image type
   const updateFileImageType = (fileId: string, imageType: { id: string; name: string }) => {
     const updatedFiles = uploadedFiles.map(file => 
       file.id === fileId ? { ...file, imageType } : file
@@ -120,8 +105,18 @@ export function SimplifiedFileUpload({
     onUpdateFiles(updatedFiles);
   };
 
+  const triggerFileInput = () => {
+    if (disabled) return;
+    fileInputRef.current?.click();
+  };
+
+  const triggerCameraInput = () => {
+    if (disabled) return;
+    cameraInputRef.current?.click();
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="w-full">
       {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
@@ -130,6 +125,7 @@ export function SimplifiedFileUpload({
         multiple
         onChange={(e) => handleFileSelect(e.target.files)}
         className="hidden"
+        disabled={disabled}
       />
       <input
         ref={cameraInputRef}
@@ -138,126 +134,131 @@ export function SimplifiedFileUpload({
         capture="environment"
         onChange={(e) => handleFileSelect(e.target.files)}
         className="hidden"
+        disabled={disabled}
       />
 
-      {/* Upload buttons for vision mode */}
+      {/* File Upload Buttons - Only show when no files uploaded */}
       {uploadedFiles.length === 0 && (
-        <div className="flex gap-2 justify-center">
-          <Button
-            onClick={() => fileInputRef.current?.click()}
+        <div className="flex gap-2 px-3 pb-2">
+          <button
+            onClick={triggerFileInput}
             disabled={disabled || isUploading}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+            className="flex-1 h-10 px-4 rounded-lg bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border border-white/20 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Upload className="h-4 w-4" />
-            {language === 'ar' ? 'رفع صور' : 'Upload Images'}
-          </Button>
-          <Button
-            onClick={() => cameraInputRef.current?.click()}
+            <div className="flex items-center justify-center gap-2">
+              <Upload className="h-4 w-4 text-foreground/70" />
+              <span className="text-sm font-medium text-foreground/80">
+                {language === 'ar' ? 'رفع صور' : 'Upload Images'}
+              </span>
+            </div>
+          </button>
+          
+          <button
+            onClick={triggerCameraInput}
             disabled={disabled || isUploading}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
+            className="flex-1 h-10 px-4 rounded-lg bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border border-white/20 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Camera className="h-4 w-4" />
-            {language === 'ar' ? 'كاميرا' : 'Camera'}
-          </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Camera className="h-4 w-4 text-foreground/70" />
+              <span className="text-sm font-medium text-foreground/80">
+                {language === 'ar' ? 'كاميرا' : 'Camera'}
+              </span>
+            </div>
+          </button>
         </div>
       )}
 
-      {/* Uploaded files display */}
+      {/* Uploaded Files Display */}
       {uploadedFiles.length > 0 && (
-        <div className="space-y-3">
-          <div className="grid gap-3">
+        <div className="px-3 pb-3 space-y-3">
+          {/* File Previews */}
+          <div className="flex flex-wrap gap-2">
             {uploadedFiles.map((file) => (
-              <div key={file.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-3">
-                <div className="flex items-center gap-3">
-                  {/* Image preview */}
-                  <div className="relative flex-shrink-0">
-                    <img 
-                      src={file.preview || file.url} 
-                      className="w-16 h-16 object-cover rounded-lg border" 
-                      alt={file.name}
-                    />
-                    <button 
-                      onClick={() => onRemoveFile(file.id)} 
-                      className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs transition-colors"
-                      title={language === 'ar' ? 'حذف الملف' : 'Remove file'}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                  
-                  {/* File info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {(file.size / 1024).toFixed(1)} KB
-                    </p>
-                  </div>
+              <div key={file.id} className="relative group">
+                <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-primary/30 bg-background">
+                  <img
+                    src={file.preview || file.url}
+                    alt={file.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-
-                {/* Image type selector for vision mode */}
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {language === 'ar' ? 'نوع الصورة:' : 'Image Type:'}
-                  </label>
-                  <select
-                    value={file.imageType?.id || 'general'}
-                    onChange={(e) => {
-                      const selectedType = imageTypes.find(type => type.id === e.target.value);
-                      if (selectedType) {
-                        updateFileImageType(file.id, selectedType);
-                      }
-                    }}
-                    className="w-full text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {imageTypes.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
+                <button
+                  onClick={() => onRemoveFile(file.id)}
+                  className="absolute -top-1 -right-1 w-5 h-5 bg-destructive hover:bg-destructive/80 text-destructive-foreground rounded-full flex items-center justify-center text-xs transition-colors"
+                  title={language === 'ar' ? 'حذف الصورة' : 'Remove image'}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-1 py-0.5 rounded-b-lg">
+                  {(file.size / 1024).toFixed(0)}KB
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Add more files button */}
-          {uploadedFiles.length < 5 && (
-            <div className="flex gap-2 justify-center">
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled || isUploading}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
-              >
-                <Upload className="h-4 w-4" />
-                {language === 'ar' ? 'إضافة المزيد' : 'Add More'}
-              </Button>
-              <Button
-                onClick={() => cameraInputRef.current?.click()}
-                disabled={disabled || isUploading}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 text-green-600 border-green-200 hover:bg-green-50"
-              >
-                <Camera className="h-4 w-4" />
-                {language === 'ar' ? 'كاميرا' : 'Camera'}
-              </Button>
-            </div>
-          )}
+          {/* Image Type Selectors */}
+          <div className="space-y-2">
+            {uploadedFiles.map((file, index) => (
+              <div key={file.id} className="flex items-center gap-2 p-2 bg-background/50 rounded-lg border border-border/50">
+                <Image className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-foreground/80 min-w-0 flex-shrink-0">
+                  {language === 'ar' ? `صورة ${index + 1}` : `Image ${index + 1}`}
+                </span>
+                <select
+                  value={file.imageType?.id || 'general'}
+                  onChange={(e) => {
+                    const selectedType = imageTypes.find(type => type.id === e.target.value);
+                    if (selectedType) {
+                      updateFileImageType(file.id, { id: selectedType.id, name: selectedType.name });
+                    }
+                  }}
+                  className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  {imageTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name} - {type.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          {/* Add More Button */}
+          <div className="flex gap-2">
+            <button
+              onClick={triggerFileInput}
+              disabled={disabled || isUploading}
+              className="flex-1 h-8 px-3 rounded-lg bg-background/50 hover:bg-background/70 transition-all border border-border/50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              <div className="flex items-center justify-center gap-1">
+                <Upload className="h-3 w-3" />
+                <span>{language === 'ar' ? 'إضافة المزيد' : 'Add More'}</span>
+              </div>
+            </button>
+            <button
+              onClick={triggerCameraInput}
+              disabled={disabled || isUploading}
+              className="flex-1 h-8 px-3 rounded-lg bg-background/50 hover:bg-background/70 transition-all border border-border/50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              <div className="flex items-center justify-center gap-1">
+                <Camera className="h-3 w-3" />
+                <span>{language === 'ar' ? 'كاميرا' : 'Camera'}</span>
+              </div>
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Loading state */}
+      {/* Loading State */}
       {isUploading && (
-        <div className="text-center text-sm text-gray-500 dark:text-gray-400">
-          {language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}
+        <div className="px-3 pb-2">
+          <div className="h-1 bg-background/20 rounded-full overflow-hidden">
+            <div className="h-full bg-primary animate-pulse rounded-full"></div>
+          </div>
+          <p className="text-xs text-center text-foreground/60 mt-1">
+            {language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}
+          </p>
         </div>
       )}
     </div>

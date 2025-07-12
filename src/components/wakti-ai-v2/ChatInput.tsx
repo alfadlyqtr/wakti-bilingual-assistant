@@ -40,6 +40,8 @@ interface ChatInputProps {
   onOpenPlusDrawer: () => void;
   activeTrigger: string;
   onTriggerChange?: (trigger: string) => void;
+  showVideoUpload?: boolean;
+  setShowVideoUpload?: (show: boolean) => void;
 }
 
 export function ChatInput({
@@ -51,7 +53,9 @@ export function ChatInput({
   onClearChat,
   onOpenPlusDrawer,
   activeTrigger,
-  onTriggerChange
+  onTriggerChange,
+  showVideoUpload = false,
+  setShowVideoUpload
 }: ChatInputProps) {
   const { language } = useTheme();
 
@@ -118,21 +122,23 @@ export function ChatInput({
 
   return (
     <div className="w-full space-y-4">
-      {/* Simplified File Upload Component */}
-      <SimplifiedFileUpload
-        onFilesUploaded={handleFilesUploaded}
-        onUpdateFiles={updateFiles}
-        uploadedFiles={uploadedFiles}
-        onRemoveFile={removeFile}
-        isUploading={isUploading}
-        disabled={isLoading}
-        onAutoSwitchMode={(mode) => {
-          console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
-          if (onTriggerChange) {
-            onTriggerChange(mode);
-          }
-        }}
-      />
+      {/* Simplified File Upload Component - Only show for non-video modes */}
+      {activeTrigger !== 'video' && (
+        <SimplifiedFileUpload
+          onFilesUploaded={handleFilesUploaded}
+          onUpdateFiles={updateFiles}
+          uploadedFiles={uploadedFiles}
+          onRemoveFile={removeFile}
+          isUploading={isUploading}
+          disabled={isLoading}
+          onAutoSwitchMode={(mode) => {
+            console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
+            if (onTriggerChange) {
+              onTriggerChange(mode);
+            }
+          }}
+        />
+      )}
 
       {/* Main Input Area */}
       <div className="px-3 pb-3 pt-2">
@@ -149,11 +155,25 @@ export function ChatInput({
           >
             {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
             <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
-              <PlusMenu
-                onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
-                onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
-                isLoading={isLoading || isUploading}
-              />
+              {activeTrigger === 'video' ? (
+                <button
+                  onClick={() => setShowVideoUpload && setShowVideoUpload(true)}
+                  className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0"
+                  disabled={isLoading || isUploading}
+                  type="button"
+                >
+                  <span className="text-lg">🎬</span>
+                  <span className="text-xs font-medium">
+                    {language === 'ar' ? 'فيديو' : 'Video'}
+                  </span>
+                </button>
+              ) : (
+                <PlusMenu
+                  onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
+                  onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
+                  isLoading={isLoading || isUploading}
+                />
+              )}
               
               <button
                 onClick={() => {
