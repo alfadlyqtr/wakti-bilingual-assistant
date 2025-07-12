@@ -126,6 +126,7 @@ export function ChatInput({
         onRemoveFile={removeFile}
         isUploading={isUploading}
         disabled={isLoading}
+        activeTrigger={activeTrigger}
         onAutoSwitchMode={(mode) => {
           console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
           if (onTriggerChange) {
