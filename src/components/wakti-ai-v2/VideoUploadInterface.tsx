@@ -152,10 +152,10 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
   };
 
   return (
-    <div className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-300 dark:border-purple-500/30 rounded-lg">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-purple-100">
+        <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">
           {language === 'ar' ? '🎬 إنشاء فيديو' : '🎬 Create Video'}
         </h3>
         <Button onClick={onClose} variant="ghost" size="sm">
@@ -165,15 +165,15 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
 
       {/* Upload Area */}
       {uploadedFiles.length === 0 && (
-        <div className="text-center py-8">
+        <div className="text-center py-8 bg-white dark:bg-transparent rounded-lg border border-purple-200 dark:border-purple-600">
           <div className="mb-4">
             <Sparkles className="h-12 w-12 text-purple-400 mx-auto mb-2" />
-            <p className="text-purple-200 text-sm">
+            <p className="text-purple-900 dark:text-purple-200 text-sm">
               {language === 'ar' ? 'ارفع صورك وحولها إلى فيديوهات مذهلة' : 'Upload your images and create amazing videos'}
             </p>
           </div>
           <div className="flex gap-3 justify-center">
-            <Button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 hover:bg-purple-700">
+            <Button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700">
               <Upload className="h-4 w-4 mr-2" />
               {language === 'ar' ? 'اختر صور' : 'Choose Images'}
             </Button>
@@ -182,7 +182,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               {language === 'ar' ? 'كاميرا' : 'Camera'}
             </Button>
           </div>
-          <p className="text-xs text-purple-300 mt-2">
+          <p className="text-xs text-purple-900 dark:text-purple-300 mt-2">
             {language === 'ar' ? 'حتى 5 صور • حد أقصى 5MB لكل صورة' : 'Up to 5 images • Max 5MB per image'}
           </p>
         </div>
@@ -219,7 +219,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               onClick={() => fileInputRef.current?.click()} 
               variant="outline" 
               size="sm"
-              className="border-purple-300 text-purple-300"
+              className="border-purple-300 text-purple-900 dark:text-purple-300"
             >
               <Upload className="h-3 w-3 mr-1" />
               {language === 'ar' ? 'المزيد' : 'Add More'}
@@ -310,7 +310,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
           </div>
 
           {/* Info */}
-          <div className="text-center text-xs text-purple-300">
+          <div className="text-center text-xs text-purple-900 dark:text-purple-300">
             {language === 'ar' ? 'مقاطع 4 ثوان • جودة 720p • حد 15/شهر' : '4-second clips • 720p quality • 15/month limit'}
           </div>
         </div>
