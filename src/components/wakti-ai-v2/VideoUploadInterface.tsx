@@ -1,9 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { X, Upload, Camera, Sparkles, Key } from 'lucide-react';
+import { X, Upload, Camera, Sparkles } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,8 +20,6 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
   const [videoTemplate, setVideoTemplate] = useState('image2video');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [showApiUpload, setShowApiUpload] = useState(false);
-  const [apiImageUrl, setApiImageUrl] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -88,30 +84,6 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       showError(error.message || 'Failed to upload images');
     } finally {
       setIsUploading(false);
-    }
-  };
-
-  const handleApiUpload = async () => {
-    if (!apiImageUrl) return;
-    
-    try {
-      // Validate URL format
-      new URL(apiImageUrl);
-      
-      const newFile = {
-        id: Date.now() + Math.random(),
-        name: 'API Upload',
-        url: apiImageUrl,
-        size: 0
-      };
-      
-      setUploadedFiles(prev => [...prev, newFile]);
-      setShowApiUpload(false);
-      setApiImageUrl('');
-      showSuccess("Image loaded from URL successfully!");
-    } catch (error) {
-      showError("Invalid URL format");
-      console.error('API upload failed:', error);
     }
   };
 
@@ -182,13 +154,13 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       const isCustom = videoTemplate === 'image2video';
       const promptToUse = isCustom ? 'Generate creative video animation' : getTemplatePrompt(videoTemplate);
 
-      console.log('🎬 GENERATING VIDEO WITH REPLICATE:', {
+      console.log('🎬 GENERATING VIDEO:', {
         template: videoTemplate,
         imageCount: imageUrls.length,
         userId: user.id
       });
 
-      // Call new Replicate edge function
+      // Call new edge function
       const response = await supabase.functions.invoke('replicate-video-generator', {
         body: {
           template: videoTemplate,
@@ -202,7 +174,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       if (response.error) throw new Error(response.error.message);
 
       if (response.data?.success) {
-        showSuccess('🎬 Video generation started with Replicate! You will be notified when it\'s ready.');
+        showSuccess('🎬 Video generation started! You will be notified when it\'s ready.');
         onVideoGenerated({ 
           jobId: response.data.job_id, 
           template: videoTemplate,
@@ -248,7 +220,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">
-          {language === 'ar' ? '🎬 إنشاء فيديو (Replicate)' : '🎬 Create Video (Replicate)'}
+          {language === 'ar' ? '🎬 إنشاء فيديو' : '🎬 Create Video'}
         </h3>
         <Button onClick={onClose} variant="ghost" size="sm">
           <X className="h-4 w-4" />
@@ -261,7 +233,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
           <div className="mb-4">
             <Sparkles className="h-12 w-12 text-purple-400 mx-auto mb-2" />
             <p className="text-purple-900 dark:text-purple-200 text-sm">
-              {language === 'ar' ? 'ارفع صورك وحولها إلى فيديوهات مذهلة بواسطة Replicate' : 'Upload your images and create amazing videos with Replicate'}
+              {language === 'ar' ? 'ارفع صورك وحولها إلى فيديوهات مذهلة' : 'Upload your images and create amazing videos'}
             </p>
           </div>
           <div className="flex gap-3 justify-center flex-wrap">
@@ -281,39 +253,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               <Camera className="h-4 w-4 mr-2" />
               {language === 'ar' ? 'كاميرا' : 'Camera'}
             </Button>
-            <Button 
-              onClick={() => setShowApiUpload(!showApiUpload)}
-              variant="outline" 
-              className="border-purple-300 text-purple-900 dark:text-purple-300"
-            >
-              <Key className="h-4 w-4 mr-2" />
-              {language === 'ar' ? 'رابط صورة' : 'API Upload'}
-            </Button>
           </div>
-
-          {/* API Upload Panel */}
-          {showApiUpload && (
-            <div className="mt-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-              <Label htmlFor="api-url" className="text-sm font-medium">
-                {language === 'ar' ? 'رابط الصورة' : 'Image URL'}
-              </Label>
-              <Input
-                id="api-url"
-                type="url"
-                placeholder="https://example.com/image.jpg"
-                value={apiImageUrl}
-                onChange={(e) => setApiImageUrl(e.target.value)}
-                className="mt-2"
-              />
-              <Button 
-                onClick={handleApiUpload}
-                className="mt-2 w-full"
-                disabled={!apiImageUrl}
-              >
-                {language === 'ar' ? 'تحميل من الرابط' : 'Load from URL'}
-              </Button>
-            </div>
-          )}
 
           <p className="text-xs text-purple-900 dark:text-purple-300 mt-2">
             {language === 'ar' ? 'حتى 5 صور • حد أقصى 5MB لكل صورة' : 'Up to 5 images • Max 5MB per image'}
@@ -340,7 +280,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
                   <X className="h-3 w-3" />
                 </Button>
                 <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 py-0.5 rounded-b-lg">
-                  {file.size > 0 ? `${(file.size / 1024).toFixed(0)}KB` : 'API'}
+                  {(file.size / 1024).toFixed(0)}KB
                 </div>
               </div>
             ))}
@@ -358,40 +298,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               <Upload className="h-3 w-3 mr-1" />
               {isUploading ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') : (language === 'ar' ? 'المزيد' : 'Add More')}
             </Button>
-            <Button 
-              onClick={() => setShowApiUpload(!showApiUpload)}
-              variant="outline" 
-              size="sm"
-              className="border-purple-300 text-purple-900 dark:text-purple-300"
-            >
-              <Key className="h-3 w-3 mr-1" />
-              {language === 'ar' ? 'رابط' : 'URL'}
-            </Button>
           </div>
-
-          {/* API Upload Panel for existing files */}
-          {showApiUpload && (
-            <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
-              <Label htmlFor="api-url-add" className="text-sm font-medium">
-                {language === 'ar' ? 'إضافة صورة من رابط' : 'Add Image from URL'}
-              </Label>
-              <Input
-                id="api-url-add"
-                type="url"
-                placeholder="https://example.com/image.jpg"
-                value={apiImageUrl}
-                onChange={(e) => setApiImageUrl(e.target.value)}
-                className="mt-2"
-              />
-              <Button 
-                onClick={handleApiUpload}
-                className="mt-2 w-full"
-                disabled={!apiImageUrl}
-              >
-                {language === 'ar' ? 'إضافة من الرابط' : 'Add from URL'}
-              </Button>
-            </div>
-          )}
 
           {/* Controls */}
           <div className="space-y-3">
@@ -469,16 +376,16 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 py-4 text-lg font-medium"
             >
               {isGenerating ? (
-                language === 'ar' ? 'جاري الإنشاء بواسطة Replicate...' : 'Generating with Replicate...'
+                language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'
               ) : (
-                language === 'ar' ? '🎬 إنشاء فيديو (Replicate)' : '🎬 Generate Video (Replicate)'
+                language === 'ar' ? '🎬 إنشاء فيديو' : '🎬 Generate Video'
               )}
             </Button>
           </div>
 
           {/* Info */}
           <div className="text-center text-xs text-purple-900 dark:text-purple-300">
-            {language === 'ar' ? 'مقاطع عالية الجودة • 832x480 • بواسطة Replicate' : 'High quality clips • 832x480 • Powered by Replicate'}
+            {language === 'ar' ? 'مقاطع عالية الجودة • 832x480' : 'High quality clips • 832x480'}
           </div>
         </div>
       )}
