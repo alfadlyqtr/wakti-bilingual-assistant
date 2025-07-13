@@ -31,7 +31,7 @@ serve(async (req) => {
     const prompt = getTemplatePrompt(template, customPrompt)
     console.log('🎬 Generated prompt:', prompt)
     
-    // Call Replicate API using Zeroscope v2 xl
+    // Call Replicate API using correct structure for Zeroscope v2 xl
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -41,10 +41,12 @@ serve(async (req) => {
       body: JSON.stringify({
         version: "9f747673945c62801b13b84701c6718b292b0bf7239c31b8b1f93c9d1b3df7b1",
         input: {
-          init_image: imageUrl,
+          image: imageUrl,
           prompt: prompt,
           num_frames: 24,
-          num_inference_steps: 20
+          num_inference_steps: 20,
+          guidance_scale: 17.5,
+          fps: 8
         }
       })
     })
@@ -108,46 +110,46 @@ function getTemplatePrompt(template: string, customPrompt?: string): string {
 
   const prompts: Record<string, string> = {
     // Custom
-    image2video: "A person moving naturally",
+    image2video: "smooth natural movement, high quality",
     
-    // FUN & INTERACTIVE (13 templates) - Simplified for Zeroscope
-    make_face: "A person making a playful facial expression",
-    blow_kiss: "A person blowing a kiss",
-    hair_swap: "A person with changing hairstyles",
-    flying: "A person flying through the air",
-    nap_me: "A person lying down to sleep",
-    pilot: "A person as an airplane pilot",
-    interaction: "Two people making heart shapes with hands",
-    hugging_pro: "Two people hugging",
-    carry_me: "One person carrying another",
-    emotionlab: "A person smiling warmly",
-    wild_laugh: "A person laughing joyfully",
-    surprised: "A person looking surprised",
-    send_roses: "A person giving roses",
+    // FUN & INTERACTIVE (13 templates)
+    make_face: "person making playful facial expression, tongue out, eyes rolling",
+    blow_kiss: "person blowing a kiss toward camera, romantic gesture",
+    hair_swap: "hair moving and changing style smoothly",
+    flying: "person flying through air like superhero",
+    nap_me: "person lying down peacefully, falling asleep",
+    pilot: "person in airplane cockpit as pilot",
+    interaction: "two people making heart shapes with hands",
+    hugging_pro: "two people embracing in warm hug",
+    carry_me: "one person carrying another on back",
+    emotionlab: "person's expression changing from neutral to happy smile",
+    wild_laugh: "person breaking into joyful wild laughter",
+    surprised: "person showing sudden surprise expression",
+    send_roses: "person presenting roses romantically",
 
-    // TRANSFORM & STYLE (15 templates) - Simplified for Zeroscope
-    cartoon_doll: "A person transforming into cartoon style",
-    style_me: "A person in elegant clothing",
-    toy_me: "A person as a toy figurine",
-    muscling: "A muscular person flexing",
-    muscling_360p: "A person showing strength",
-    fairy_me: "A person with magical fairy wings",
-    yayoi_kusama_style: "A person with polka dot patterns",
-    irasutoya: "A person in Japanese art style",
-    american_comic: "A person in comic book style",
-    simpsons_comic: "A person in cartoon animation style",
-    child_memory: "A person with childhood memories",
-    outfit_show: "A person modeling clothing",
-    spin360: "A person rotating to show all angles",
-    live_memory: "A person with natural movements",
-    sakura_season: "A person with falling cherry blossoms",
+    // TRANSFORM & STYLE (15 templates)
+    cartoon_doll: "person transforming into cartoon doll version",
+    style_me: "person putting on elegant outfit, fashion transformation",
+    toy_me: "person becoming toy figurine on base",
+    muscling: "person flexing and showing muscular physique",
+    muscling_360p: "person demonstrating strength and muscles",
+    fairy_me: "person growing magical fairy wings, transformation",
+    yayoi_kusama_style: "person covered in polka dot patterns",
+    irasutoya: "person in Japanese kawaii art style",
+    american_comic: "person in American comic book art style",
+    simpsons_comic: "person in Simpsons cartoon animation style",
+    child_memory: "adult person with child version appearing",
+    outfit_show: "model turning to showcase clothing details",
+    spin360: "person rotating 360 degrees smoothly",
+    live_memory: "subtle natural movements, breathing, blinking",
+    sakura_season: "cherry blossom petals falling around person",
 
-    // CAMERA & MOTION (4 templates) - Simplified for Zeroscope
-    zoom_in_fast: "Camera zooming in on a person",
-    zoom_out_image: "Camera pulling back from a person",
-    zoom_out_startend: "Camera transitioning from close-up to wide shot",
-    walk_forward: "A person walking toward camera"
+    // CAMERA & MOTION (4 templates)
+    zoom_in_fast: "camera zooming in on person smoothly",
+    zoom_out_image: "camera pulling back from person",
+    zoom_out_startend: "transition from close-up to wide shot",
+    walk_forward: "person walking toward camera naturally"
   }
 
-  return prompts[template] || "A person moving naturally"
+  return prompts[template] || "smooth natural movement, high quality"
 }
