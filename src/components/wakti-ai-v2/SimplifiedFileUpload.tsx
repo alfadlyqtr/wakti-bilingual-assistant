@@ -1,5 +1,4 @@
-
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Upload, Camera, X, Image, Eye } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,8 +51,27 @@ export function SimplifiedFileUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  // Add event listener for wakti-file-selected event from PlusMenu
+  useEffect(() => {
+    const handleWaktiFileSelected = (event: CustomEvent) => {
+      const { files } = event.detail;
+      if (files && files.length > 0) {
+        console.log('📁 SimplifiedFileUpload: Received files from PlusMenu:', files.length);
+        handleFileSelect(files);
+      }
+    };
+
+    window.addEventListener('wakti-file-selected', handleWaktiFileSelected as EventListener);
+    
+    return () => {
+      window.removeEventListener('wakti-file-selected', handleWaktiFileSelected as EventListener);
+    };
+  }, []);
+
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    
+    console.log('🔄 SimplifiedFileUpload: Processing', files.length, 'files');
     
     const validFiles: SimplifiedUploadedFile[] = [];
     
@@ -89,6 +107,7 @@ export function SimplifiedFileUpload({
     }
     
     if (validFiles.length > 0) {
+      console.log('✅ SimplifiedFileUpload: Successfully processed', validFiles.length, 'files');
       onFilesUploaded(validFiles);
       
       // Auto-switch to vision mode when images are uploaded
