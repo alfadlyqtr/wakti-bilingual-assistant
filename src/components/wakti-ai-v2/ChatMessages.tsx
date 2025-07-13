@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -7,6 +6,7 @@ import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
+import { VideoCountdownTimer } from './VideoCountdownTimer';
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,6 +52,7 @@ export function ChatMessages({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
+  const [videoPollingStates, setVideoPollingStates] = useState<Record<string, { isPolling: boolean; taskId?: string }>>({});
 
   // ENHANCED: Real-time video updates subscription with better error handling
   useEffect(() => {
@@ -141,6 +142,13 @@ export function ChatMessages({
           onUpdateMessage(recentVideoMessage.id, content);
         }
       }
+
+      // Clear polling state for this task
+      setVideoPollingStates(prev => {
+        const newState = { ...prev };
+        delete newState[taskId];
+        return newState;
+      });
     };
     
     // Listen for video update events
@@ -200,6 +208,27 @@ export function ChatMessages({
     
     // Speak using native device TTS
     speechSynthesis.speak(utterance);
+  };
+
+  // Check if message is a video generation message that needs countdown
+  const isVideoGenerationMessage = (message: AIMessage): { isVideo: boolean; taskId?: string } => {
+    if (message.role !== 'assistant') return { isVideo: false };
+    
+    const content = message.content?.toLowerCase() || '';
+    if (!content.includes('🎬') || !content.includes('video generation started')) {
+      return { isVideo: false };
+    }
+
+    // Try to extract task ID from imageUrl field (where it's stored temporarily)
+    const taskId = message.imageUrl;
+    return { isVideo: true, taskId };
+  };
+
+  const handlePollingStart = (messageId: string, taskId: string) => {
+    setVideoPollingStates(prev => ({
+      ...prev,
+      [messageId]: { isPolling: true, taskId }
+    }));
   };
 
   // FIXED: Show welcome message for new conversations
@@ -412,92 +441,106 @@ export function ChatMessages({
           {renderWelcomeMessage()}
           
           {/* Chat Messages with FIXED badge logic and enhanced video display */}
-          {sessionMessages.map((message, index) => (
-            <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
-              <div className="flex gap-3 max-w-[80%]">
-                {message.role === 'assistant' && (
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-                      <Bot className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                )}
-                
-                <div className={`rounded-lg px-4 py-3 relative ${
-                  message.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border'
-                }`}>
-                  {/* FIXED: Mode Badge with proper logic */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="secondary" className="text-xs px-2 py-0.5 font-medium">
-                      {getMessageBadge(message, activeTrigger)}
-                    </Badge>
-                  </div>
-                  
-                  <div className="text-sm leading-relaxed">
-                    {renderMessageContent(message)}
-                  </div>
-                  
-                  {/* Image Preview in Chat Messages */}
-                  {message.attachedFiles && message.attachedFiles.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      {message.attachedFiles.map((file, fileIndex) => (
-                        <div key={fileIndex} className="relative">
-                          <img
-                            src={file.url.startsWith('data:') ? file.url : `data:${file.type};base64,${file.url}`}
-                            alt={file.name}
-                            className="max-w-xs rounded-lg border border-border/50"
-                          />
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {file.imageType?.name || 'General'}
-                          </div>
-                        </div>
-                      ))}
+          {sessionMessages.map((message, index) => {
+            const videoInfo = isVideoGenerationMessage(message);
+            
+            return (
+              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
+                <div className="flex gap-3 max-w-[80%]">
+                  {message.role === 'assistant' && (
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                        <Bot className="w-4 h-4 text-white" />
+                      </div>
                     </div>
                   )}
                   
-                  {/* Mini Buttons Bar - Always Visible for Both User and AI */}
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex gap-1">
-                      {/* Copy Button */}
-                      <button
-                        onClick={() => navigator.clipboard.writeText(message.content)}
-                        className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
-                        title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
-                      >
-                        <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                      </button>
-                      
-                      {/* Native TTS Button with Stop Functionality */}
-                      <button
-                        onClick={() => handleSpeak(message.content, message.id)}
-                        className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
-                        title={speakingMessageId === message.id 
-                          ? (language === 'ar' ? 'إيقاف القراءة' : 'Stop reading')
-                          : (language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice')
-                        }
-                      >
-                        {speakingMessageId === message.id ? (
-                          <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                        ) : (
-                          <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                        )}
-                      </button>
+                  <div className={`rounded-lg px-4 py-3 relative ${
+                    message.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border'
+                  }`}>
+                    {/* FIXED: Mode Badge with proper logic */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="secondary" className="text-xs px-2 py-0.5 font-medium">
+                        {getMessageBadge(message, activeTrigger)}
+                      </Badge>
+                    </div>
+                    
+                    <div className="text-sm leading-relaxed">
+                      {renderMessageContent(message)}
+                    </div>
+                    
+                    {/* Video Countdown Timer - Only for video generation messages */}
+                    {videoInfo.isVideo && videoInfo.taskId && userProfile?.id && !videoPollingStates[message.id]?.isPolling && (
+                      <VideoCountdownTimer
+                        messageId={message.id}
+                        taskId={videoInfo.taskId}
+                        userId={userProfile.id}
+                        onPollingStart={() => handlePollingStart(message.id, videoInfo.taskId!)}
+                      />
+                    )}
+                    
+                    {/* Image Preview in Chat Messages */}
+                    {message.attachedFiles && message.attachedFiles.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {message.attachedFiles.map((file, fileIndex) => (
+                          <div key={fileIndex} className="relative">
+                            <img
+                              src={file.url.startsWith('data:') ? file.url : `data:${file.type};base64,${file.url}`}
+                              alt={file.name}
+                              className="max-w-xs rounded-lg border border-border/50"
+                            />
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {file.imageType?.name || 'General'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Mini Buttons Bar - Always Visible for Both User and AI */}
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="flex gap-1">
+                        {/* Copy Button */}
+                        <button
+                          onClick={() => navigator.clipboard.writeText(message.content)}
+                          className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                          title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
+                        >
+                          <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                        </button>
+                        
+                        {/* Native TTS Button with Stop Functionality */}
+                        <button
+                          onClick={() => handleSpeak(message.content, message.id)}
+                          className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                          title={speakingMessageId === message.id 
+                            ? (language === 'ar' ? 'إيقاف القراءة' : 'Stop reading')
+                            : (language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice')
+                          }
+                        >
+                          {speakingMessageId === message.id ? (
+                            <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                          ) : (
+                            <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
+                  
+                  {message.role === 'user' && (
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                        <User className="w-4 h-4 text-primary-foreground" />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
-                {message.role === 'user' && (
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-primary-foreground" />
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           
           {/* Loading Indicator with proper TypingIndicator */}
           {isLoading && <TypingIndicator />}
