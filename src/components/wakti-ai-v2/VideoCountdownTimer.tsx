@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
-import { Clock, Video } from 'lucide-react';
+import { Clock, Video, AlertCircle } from 'lucide-react';
 
 interface VideoCountdownTimerProps {
   messageId: string;
@@ -14,6 +14,7 @@ interface VideoCountdownTimerProps {
 export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart }: VideoCountdownTimerProps) {
   const [countdown, setCountdown] = useState(12);
   const [isActive, setIsActive] = useState(true);
+  const [status, setStatus] = useState<'counting' | 'polling' | 'error'>('counting');
   const { language } = useTheme();
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart 
       setCountdown(prev => {
         if (prev <= 1) {
           setIsActive(false);
+          setStatus('polling');
           startPolling();
           return 0;
         }
@@ -45,15 +47,34 @@ export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart 
 
       if (error) {
         console.error('🎬 COUNTDOWN: Polling error:', error);
+        setStatus('error');
       } else {
         console.log('🎬 COUNTDOWN: Polling response:', data);
+        if (data?.success === false) {
+          setStatus('error');
+        }
       }
     } catch (error) {
       console.error('🎬 COUNTDOWN: Failed to start polling:', error);
+      setStatus('error');
     }
   };
 
-  if (!isActive && countdown <= 0) {
+  if (status === 'error') {
+    return (
+      <div className="flex items-center gap-2 text-sm text-red-600 mt-2 p-2 bg-red-50 rounded-md border border-red-200">
+        <AlertCircle className="h-4 w-4" />
+        <span>
+          {language === 'ar' 
+            ? 'حدث خطأ في معالجة الفيديو. سيتم المحاولة مرة أخرى...'
+            : 'Video processing error. Will retry automatically...'
+          }
+        </span>
+      </div>
+    );
+  }
+
+  if (status === 'polling') {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2 p-2 bg-muted/30 rounded-md">
         <Video className="h-4 w-4 animate-pulse" />
