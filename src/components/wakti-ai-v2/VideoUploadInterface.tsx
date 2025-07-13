@@ -100,17 +100,25 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
         throw new Error('Please upload at least one image');
       }
 
+      // CRITICAL FIX: Get authenticated user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        throw new Error('Please log in to generate videos');
+      }
+
       const base64Images = uploadedFiles.map(file => file.base64);
       const isCustom = videoTemplate === 'image2video';
       const promptToUse = isCustom ? 'Generate creative video animation' : getTemplatePrompt(videoTemplate);
 
-      // DIRECT API CALL - NO POLLING
+      // FIXED: Include user_id in request
       const response = await supabase.functions.invoke('vidu-video-generator', {
         body: {
           template: videoTemplate,
           images: base64Images,
           prompt: promptToUse,
-          mode: isCustom ? 'image2video' : 'template2video'
+          mode: isCustom ? 'image2video' : 'template2video',
+          user_id: user.id // CRITICAL FIX: Include authenticated user ID
         }
       });
 

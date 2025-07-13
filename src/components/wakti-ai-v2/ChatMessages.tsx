@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -8,6 +9,7 @@ import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -25,6 +27,7 @@ interface ChatMessagesProps {
   onCancelTaskConfirmation: () => void;
   conversationId: string | null;
   isNewConversation: boolean;
+  onUpdateMessage?: (messageId: string, content: string) => void;
 }
 
 export function ChatMessages({
@@ -42,12 +45,96 @@ export function ChatMessages({
   onReminderConfirmation,
   onCancelTaskConfirmation,
   conversationId,
-  isNewConversation
+  isNewConversation,
+  onUpdateMessage
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
+
+  // CRITICAL FIX: Real-time video updates subscription
+  useEffect(() => {
+    if (!userProfile?.id) return;
+
+    console.log('🎬 CHAT: Setting up video updates subscription for user:', userProfile.id);
+
+    const channel = supabase
+      .channel('video-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'video_generation_tasks',
+          filter: `user_id=eq.${userProfile.id}`
+        },
+        (payload) => {
+          console.log('🎬 CHAT: Video update received:', payload);
+          
+          const { new: newRecord } = payload;
+          
+          if (newRecord.status === 'completed' && newRecord.video_url) {
+            // Find and update the corresponding chat message
+            const videoContent = `🎬 Video generated successfully!\n\n<video controls width="400" style="max-width: 100%; border-radius: 8px;">\n<source src="${newRecord.video_url}" type="video/mp4">\nYour browser does not support the video tag.\n</video>`;
+            
+            // Trigger message update through parent component
+            if (onUpdateMessage) {
+              // Look for message that mentions video generation for this task
+              const targetMessage = sessionMessages.find(msg => 
+                msg.content?.includes('Video generation started') && 
+                msg.content?.includes('🎬')
+              );
+              
+              if (targetMessage) {
+                console.log('🎬 CHAT: Updating message with video:', targetMessage.id);
+                onUpdateMessage(targetMessage.id, videoContent);
+              }
+            }
+            
+            // Also dispatch custom event for broader handling
+            window.dispatchEvent(new CustomEvent('updateVideoMessage', {
+              detail: {
+                taskId: newRecord.task_id,
+                videoUrl: newRecord.video_url,
+                status: newRecord.status,
+                content: videoContent
+              }
+            }));
+          } else if (newRecord.status === 'failed') {
+            // Handle failed video generation
+            const errorContent = `❌ Video generation failed. Please try again.`;
+            
+            if (onUpdateMessage) {
+              const targetMessage = sessionMessages.find(msg => 
+                msg.content?.includes('Video generation started') && 
+                msg.content?.includes('🎬')
+              );
+              
+              if (targetMessage) {
+                console.log('🎬 CHAT: Updating message with error:', targetMessage.id);
+                onUpdateMessage(targetMessage.id, errorContent);
+              }
+            }
+            
+            window.dispatchEvent(new CustomEvent('updateVideoMessage', {
+              detail: {
+                taskId: newRecord.task_id,
+                status: newRecord.status,
+                error: 'Video generation failed',
+                content: errorContent
+              }
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🎬 CHAT: Cleaning up video updates subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [userProfile?.id, sessionMessages, onUpdateMessage]);
 
   // Handle video update events
   useEffect(() => {
@@ -270,11 +357,14 @@ export function ChatMessages({
     if (content.includes('analyzing the image') || content.includes('i can see')) {
       return '👁️ Vision';
     }
+    if (content.includes('video generation') || content.includes('🎬')) {
+      return '🎬 Video';
+    }
     
     return '💬 Chat';
   };
 
-  // FIXED: Function to render message content with proper image display and modal functionality
+  // ENHANCED: Function to render message content with proper image/video display and modal functionality
   const renderMessageContent = (message: AIMessage) => {
     const content = message.content;
     
