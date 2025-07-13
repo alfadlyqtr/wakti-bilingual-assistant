@@ -11,7 +11,7 @@ export interface AIMessage {
   intent?: string;
   confidence?: 'high' | 'medium' | 'low';
   actionTaken?: boolean | null;
-  inputType?: 'text' | 'voice';
+  inputType?: 'text' | 'voice' | 'vision';
   imageUrl?: string;
   browsingUsed?: boolean;
   browsingData?: any;
@@ -129,7 +129,7 @@ class WaktiAIV2ServiceClass {
     userId?: string,
     language: string = 'en',
     conversationId?: string | null,
-    inputType: 'text' | 'voice' = 'text',
+    inputType: 'text' | 'voice' | 'vision' = 'text',
     recentMessages: AIMessage[] = [],
     skipContextLoad: boolean = false,
     activeTrigger: string = 'chat',

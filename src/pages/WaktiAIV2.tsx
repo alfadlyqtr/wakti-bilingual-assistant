@@ -91,7 +91,6 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // ADD VIDEO MESSAGE UPDATE HANDLER
   useEffect(() => {
     const handleSessionMessageUpdate = (event: CustomEvent) => {
       const { filter, update } = event.detail;
@@ -180,7 +179,7 @@ const WaktiAIV2 = () => {
     return allPatterns.some(pattern => pattern.test(messageContent));
   };
 
-  const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' = 'text', attachedFiles?: any[]) => {
+  const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' | 'vision' = 'text', attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
       return;
@@ -546,7 +545,7 @@ const WaktiAIV2 = () => {
         intent: msg.intent,
         confidence: msg.confidence_level as 'high' | 'medium' | 'low',
         actionTaken: msg.action_taken,
-        inputType: msg.input_type as 'text' | 'voice',
+        inputType: msg.input_type as 'text' | 'voice' | 'vision',
         browsingUsed: msg.browsing_used,
         browsingData: msg.browsing_data
       }));
