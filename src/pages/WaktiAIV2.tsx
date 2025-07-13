@@ -38,6 +38,8 @@ const WaktiAIV2 = () => {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [activeTrigger, setActiveTrigger] = useState('chat');
   const [showVideoUpload, setShowVideoUpload] = useState(false);
+  const [videoCategory, setVideoCategory] = useState('custom');
+  const [videoTemplate, setVideoTemplate] = useState('image2video');
 
   const [userProfile, setUserProfile] = useState<any>(null);
   const [personalTouch, setPersonalTouch] = useState<any>(null);
@@ -179,7 +181,7 @@ const WaktiAIV2 = () => {
     return allPatterns.some(pattern => pattern.test(messageContent));
   };
 
-  const handleSendMessage = async (messageContent: string, inputType: 'text' | 'voice' | 'vision' = 'text', attachedFiles?: any[]) => {
+  const handleSendMessage = async (messageContent: string, trigger: string, attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
       return;
@@ -196,7 +198,7 @@ const WaktiAIV2 = () => {
     }
 
     // Determine input type based on attached files
-    let finalInputType: 'text' | 'voice' | 'vision' = inputType;
+    let finalInputType: 'text' | 'voice' | 'vision' = trigger;
     if (attachedFiles && attachedFiles.length > 0) {
       finalInputType = 'vision';
     }
@@ -689,6 +691,11 @@ const WaktiAIV2 = () => {
     setShowQuickActions(true);
   };
 
+  const handleVideoTemplateChange = (category: string, template: string) => {
+    setVideoCategory(category);
+    setVideoTemplate(template);
+  };
+
   return (
     <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -741,6 +748,8 @@ const WaktiAIV2 = () => {
                   <VideoUploadInterface
                     onClose={() => setShowVideoUpload(false)}
                     onVideoGenerated={handleVideoGenerated}
+                    onTemplateChange={handleVideoTemplateChange}
+                    customPrompt={message}
                   />
                 </div>
               </div>
@@ -758,6 +767,8 @@ const WaktiAIV2 = () => {
               onTriggerChange={handleTriggerChange}
               showVideoUpload={showVideoUpload}
               setShowVideoUpload={setShowVideoUpload}
+              videoCategory={videoCategory}
+              videoTemplate={videoTemplate}
             />
           </div>
         </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Upload, Camera, Sparkles } from 'lucide-react';
@@ -9,9 +8,11 @@ import { supabase } from '@/integrations/supabase/client';
 interface VideoUploadInterfaceProps {
   onClose: () => void;
   onVideoGenerated: (data: any) => void;
+  onTemplateChange?: (category: string, template: string) => void;
+  customPrompt?: string;
 }
 
-export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadInterfaceProps) {
+export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChange, customPrompt }: VideoUploadInterfaceProps) {
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
   
@@ -152,12 +153,19 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       // Use storage URLs instead of base64
       const imageUrls = uploadedFiles.map(file => file.url);
       const isCustom = videoTemplate === 'image2video';
-      const promptToUse = isCustom ? 'Generate creative video animation' : getTemplatePrompt(videoTemplate);
+      
+      // Use the actual custom prompt from the textarea when in custom mode
+      const promptToUse = isCustom && customPrompt?.trim() 
+        ? customPrompt.trim() 
+        : isCustom 
+          ? 'Generate creative video animation' 
+          : getTemplatePrompt(videoTemplate);
 
       console.log('🎬 GENERATING VIDEO:', {
         template: videoTemplate,
         imageCount: imageUrls.length,
-        userId: user.id
+        userId: user.id,
+        customPrompt: isCustom ? promptToUse : 'N/A'
       });
 
       // Call new edge function
@@ -197,21 +205,35 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
   const handleCategoryChange = (category: string) => {
     setVideoCategory(category);
     // Set default template for each category
+    let newTemplate = 'image2video';
     switch (category) {
       case 'custom':
-        setVideoTemplate('image2video');
+        newTemplate = 'image2video';
         break;
       case 'fun':
-        setVideoTemplate('make_face');
+        newTemplate = 'make_face';
         break;
       case 'transform':
-        setVideoTemplate('cartoon_doll');
+        newTemplate = 'cartoon_doll';
         break;
       case 'camera':
-        setVideoTemplate('zoom_in_fast');
+        newTemplate = 'zoom_in_fast';
         break;
       default:
-        setVideoTemplate('image2video');
+        newTemplate = 'image2video';
+    }
+    setVideoTemplate(newTemplate);
+    
+    // Notify parent component
+    if (onTemplateChange) {
+      onTemplateChange(category, newTemplate);
+    }
+  };
+
+  const handleTemplateChange = (template: string) => {
+    setVideoTemplate(template);
+    if (onTemplateChange) {
+      onTemplateChange(videoCategory, template);
     }
   };
 
@@ -317,7 +339,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
             {/* Template */}
             <select 
               value={videoTemplate} 
-              onChange={(e) => setVideoTemplate(e.target.value)}
+              onChange={(e) => handleTemplateChange(e.target.value)}
               className="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-base border border-gray-600"
             >
               {videoCategory === 'custom' && (
@@ -369,10 +391,19 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               )}
             </select>
 
+            {/* Custom Prompt Info - Show when custom is selected */}
+            {videoCategory === 'custom' && (
+              <div className="text-center text-sm text-purple-900 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
+                {language === 'ar' 
+                  ? '💡 اكتب وصف الفيديو المخصص في منطقة النص أعلاه' 
+                  : '💡 Type your custom video prompt in the text area above'}
+              </div>
+            )}
+
             {/* Generate Button */}
             <Button 
               onClick={handleGenerateVideo}
-              disabled={isGenerating || uploadedFiles.length === 0 || isUploading}
+              disabled={isGenerating || uploadedFiles.length === 0 || isUploading || (videoCategory === 'custom' && !customPrompt?.trim())}
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 py-4 text-lg font-medium"
             >
               {isGenerating ? (

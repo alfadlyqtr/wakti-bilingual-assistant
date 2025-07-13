@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -41,6 +42,8 @@ interface ChatInputProps {
   onTriggerChange?: (trigger: string) => void;
   showVideoUpload?: boolean;
   setShowVideoUpload?: (show: boolean) => void;
+  videoCategory?: string;
+  videoTemplate?: string;
 }
 
 export function ChatInput({
@@ -54,7 +57,9 @@ export function ChatInput({
   activeTrigger,
   onTriggerChange,
   showVideoUpload = false,
-  setShowVideoUpload
+  setShowVideoUpload,
+  videoCategory = 'custom',
+  videoTemplate = 'image2video'
 }: ChatInputProps) {
   const { language } = useTheme();
 
@@ -116,8 +121,19 @@ export function ChatInput({
   const containerHighlight = modeHighlightStyles(activeTrigger);
   const textareaHighlightClass = textareaHighlight(activeTrigger);
 
+  // Determine if textarea should be enabled
+  const isTextareaEnabled = activeTrigger !== 'video' || (activeTrigger === 'video' && videoTemplate === 'image2video');
+  
   // Determine if send button should be enabled
-  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading;
+  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading && isTextareaEnabled;
+
+  // Get appropriate placeholder text
+  const getPlaceholderText = () => {
+    if (activeTrigger === 'video' && videoTemplate === 'image2video') {
+      return language === 'ar' ? 'اكتب وصف الفيديو المخصص...' : 'Enter your custom video prompt...';
+    }
+    return language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...';
+  };
 
   return (
     <div className="w-full space-y-4">
@@ -264,7 +280,7 @@ export function ChatInput({
                 <Textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
+                  placeholder={getPlaceholderText()}
                   className={`
                     flex-1 border-[2.5px]
                     bg-white/95 dark:bg-gray-800/90
@@ -277,16 +293,17 @@ export function ChatInput({
                     placeholder:text-gray-500 dark:placeholder:text-gray-400
                     rounded-xl
                     outline-none transition-all duration-200
+                    ${!isTextareaEnabled ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
+                      if (canSend) {
                         handleSendMessage();
                       }
                     }
                   }}
-                  disabled={isLoading || isUploading}
+                  disabled={isLoading || isUploading || !isTextareaEnabled}
                 />
               </div>
               
