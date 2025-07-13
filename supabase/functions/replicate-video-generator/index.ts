@@ -31,14 +31,15 @@ serve(async (req) => {
     const prompt = getTemplatePrompt(template, customPrompt)
     console.log('🎬 Generated prompt:', prompt)
     
-    // Call Replicate API using the correct format
-    const response = await fetch('https://api.replicate.com/v1/models/wavespeedai/wan-2.1-i2v-480p/predictions', {
+    // Call Replicate API using standard predictions endpoint with version
+    const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
         'Authorization': `Token ${REPLICATE_API_TOKEN}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
+        version: "53f68d7e9b5aedd6a93ecda594512a7089f6dfa9ee33861eb23318229fa741b8",
         input: {
           image: imageUrl,
           prompt: prompt,
