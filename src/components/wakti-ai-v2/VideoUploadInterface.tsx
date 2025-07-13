@@ -45,132 +45,6 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
     setUploadedFiles(prev => [...prev, ...base64Files]);
   };
 
-  // ADD POLLING SYSTEM FUNCTIONS
-  const pollVideoStatus = async (taskId: string) => {
-    console.log('🔄 POLLING: Starting video status polling for task:', taskId);
-    
-    let attempts = 0;
-    const maxAttempts = 12; // 2 minutes maximum (12 * 10 seconds)
-    
-    // SHOW INITIAL PROCESSING STATE
-    updateChatWithProcessing(taskId, 1, maxAttempts);
-    
-    const checkStatus = async (): Promise<void> => {
-      try {
-        attempts++;
-        console.log(`🔍 POLLING: Attempt ${attempts}/${maxAttempts} for task: ${taskId}`);
-        
-        // Call the new vidu-status-checker function
-        const { data, error } = await supabase.functions.invoke('vidu-status-checker', {
-          body: { taskId }
-        });
-        
-        if (error) {
-          console.error('❌ POLLING ERROR:', error);
-          return;
-        }
-        
-        console.log('📊 POLLING STATUS:', data);
-        
-        if (data?.status === 'completed' && data?.videoUrl) {
-          console.log('✅ POLLING SUCCESS: Video completed!', data.videoUrl);
-          
-          // Update the chat message with the actual video
-          updateChatWithCompletedVideo(taskId, data.videoUrl);
-          return;
-        }
-        
-        if (data?.status === 'failed') {
-          console.log('❌ POLLING FAILED: Video generation failed');
-          updateChatWithError(taskId, 'Video generation failed');
-          return;
-        }
-        
-        // Continue polling if still processing and under max attempts
-        if (attempts < maxAttempts && (data?.status === 'processing' || !data?.status)) {
-          console.log('⏳ POLLING: Still processing, checking again in 10 seconds...');
-          
-          // UPDATE CHAT WITH PROCESSING STATUS
-          updateChatWithProcessing(taskId, attempts, maxAttempts);
-          
-          setTimeout(checkStatus, 10000); // Check again in 10 seconds
-        } else if (attempts >= maxAttempts) {
-          console.log('⏰ POLLING TIMEOUT: Giving up after 2 minutes');
-          updateChatWithError(taskId, 'Video generation timeout - please try again');
-        }
-        
-      } catch (error) {
-        console.error('❌ POLLING EXCEPTION:', error);
-      }
-    };
-    
-    // Start checking after 15 seconds (give Vidu time to start)
-    console.log('⏳ POLLING: Waiting 15 seconds before first check...');
-    setTimeout(checkStatus, 15000);
-  };
-
-  // ADD THIS NEW FUNCTION FOR PROCESSING STATUS WITH SPINNER
-  const updateChatWithProcessing = (taskId: string, attempt: number, maxAttempts: number) => {
-    const progress = Math.round((attempt / maxAttempts) * 100);
-    const dots = '.'.repeat((attempt % 3) + 1);
-    
-    const processingContent = `
-      <div style="display: flex; align-items: center; gap: 12px; padding: 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; margin: 8px 0;">
-        <div style="width: 20px; height: 20px; border: 2px solid #3b82f6; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <div>
-          <div style="font-weight: 500; color: #3b82f6;">🎬 Generating video${dots}</div>
-          <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">This usually takes 30-60 seconds</div>
-          <div style="font-size: 11px; color: #9ca3af;">Attempt ${attempt} of ${maxAttempts}</div>
-        </div>
-      </div>
-      <style>
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      </style>
-    `;
-    
-    const chatUpdateEvent = new CustomEvent('updateVideoMessage', {
-      detail: { 
-        taskId, 
-        status: 'processing',
-        content: processingContent
-      }
-    });
-    window.dispatchEvent(chatUpdateEvent);
-  };
-
-  // ADD THESE HELPER FUNCTIONS
-  const updateChatWithCompletedVideo = (taskId: string, videoUrl: string) => {
-    console.log('🎬 UPDATING CHAT: Completed video', { taskId, videoUrl });
-    
-    // Create custom event to update chat message
-    const chatUpdateEvent = new CustomEvent('updateVideoMessage', {
-      detail: { 
-        taskId, 
-        videoUrl, 
-        status: 'completed',
-        content: `🎬 Video generated successfully!\n\n<video controls width="400" style="max-width: 100%; border-radius: 8px;">\n<source src="${videoUrl}" type="video/mp4">\nYour browser does not support the video tag.\n</video>`
-      }
-    });
-    window.dispatchEvent(chatUpdateEvent);
-  };
-
-  const updateChatWithError = (taskId: string, error: string) => {
-    console.log('❌ UPDATING CHAT: Error', { taskId, error });
-    
-    const chatUpdateEvent = new CustomEvent('updateVideoMessage', {
-      detail: { 
-        taskId, 
-        error, 
-        status: 'failed',
-        content: `❌ ${error}`
-      }
-    });
-    window.dispatchEvent(chatUpdateEvent);
-  };
-
   // ALL 33 TEMPLATES
   const getTemplatePrompt = (template: string) => {
     const prompts: Record<string, string> = {
@@ -230,7 +104,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       const isCustom = videoTemplate === 'image2video';
       const promptToUse = isCustom ? 'Generate creative video animation' : getTemplatePrompt(videoTemplate);
 
-      // DIRECT API CALL - NO STORAGE
+      // DIRECT API CALL - NO POLLING
       const response = await supabase.functions.invoke('vidu-video-generator', {
         body: {
           template: videoTemplate,
@@ -243,12 +117,8 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       if (response.error) throw new Error(response.error.message);
 
       if (response.data?.success) {
-        showSuccess('🎬 Video generation started!');
+        showSuccess('🎬 Video generation started! You will be notified when it\'s ready.');
         onVideoGenerated({ jobId: response.data.job_id, template: videoTemplate });
-        
-        // START POLLING (NEW LINE)
-        pollVideoStatus(response.data.job_id);
-        
         onClose();
       }
 

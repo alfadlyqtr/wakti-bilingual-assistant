@@ -34,19 +34,21 @@ serve(async (req) => {
       ? 'https://api.vidu.com/ent/v2/img2video'
       : 'https://api.vidu.com/ent/v2/template2video';
     
-    // Prepare request body
+    // Prepare request body with callback URL
     const requestBody = mode === 'image2video' ? {
       model: 'vidu2.0',
       images: images,
       prompt: prompt,
       duration: 4,
       resolution: '720p',
-      movement_amplitude: 'auto'
+      movement_amplitude: 'auto',
+      callback_url: 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/vidu-callback-receiver'
     } : {
       template: template,
       images: images,
       prompt: prompt,
-      seed: Math.floor(Math.random() * 1000000)
+      seed: Math.floor(Math.random() * 1000000),
+      callback_url: 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/vidu-callback-receiver'
     };
     
     console.log('🎬 CALLING VIDU API:', apiUrl);
