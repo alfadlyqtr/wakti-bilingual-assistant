@@ -1,6 +1,6 @@
 
-import React, { useEffect, useRef } from 'react';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
@@ -46,6 +46,7 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   // Handle video update events
   useEffect(() => {
@@ -105,10 +106,18 @@ export function ChatMessages({
     }
   }, [sessionMessages, showTaskConfirmation]);
 
-  // Native TTS function
-  const handleSpeak = (text: string) => {
+  // Native TTS function with stop functionality
+  const handleSpeak = (text: string, messageId: string) => {
+    // If currently speaking this message, stop it
+    if (speakingMessageId === messageId) {
+      speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+      return;
+    }
+    
     // Stop any currently playing speech
     speechSynthesis.cancel();
+    setSpeakingMessageId(messageId);
     
     // Create utterance with native TTS
     const utterance = new SpeechSynthesisUtterance(text);
@@ -127,6 +136,15 @@ export function ChatMessages({
     if (preferredVoice) {
       utterance.voice = preferredVoice;
     }
+    
+    // Handle speech end
+    utterance.onend = () => {
+      setSpeakingMessageId(null);
+    };
+    
+    utterance.onerror = () => {
+      setSpeakingMessageId(null);
+    };
     
     // Speak using native device TTS
     speechSynthesis.speak(utterance);
@@ -161,8 +179,8 @@ export function ChatMessages({
               }
             </div>
             
-            {/* Mini Buttons */}
-            <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {/* Mini Buttons - Always Visible */}
+            <div className="flex items-center justify-between mt-2">
               <div className="flex gap-1">
                 {/* Copy Button */}
                 <button
@@ -180,12 +198,16 @@ export function ChatMessages({
                 <button
                   onClick={() => handleSpeak(language === 'ar' 
                     ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
-                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`
+                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome'
                   )}
                   className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice'}
                 >
-                  <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                  {speakingMessageId === 'welcome' ? (
+                    <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                  ) : (
+                    <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                  )}
                 </button>
               </div>
             </div>
@@ -221,7 +243,7 @@ export function ChatMessages({
         {/* Welcome Message */}
         {renderWelcomeMessage()}
         
-        {/* Chat Messages with proper alignment, image previews, and mini buttons */}
+        {/* Chat Messages with proper alignment, image previews, and always visible mini buttons */}
         {sessionMessages.map((message, index) => (
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
             <div className="flex gap-3 max-w-[80%]">
@@ -273,8 +295,8 @@ export function ChatMessages({
                   </div>
                 )}
                 
-                {/* Mini Buttons Bar - Both User and AI */}
-                <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {/* Mini Buttons Bar - Always Visible for Both User and AI */}
+                <div className="flex items-center justify-between mt-2">
                   <div className="flex gap-1">
                     {/* Copy Button */}
                     <button
@@ -285,13 +307,20 @@ export function ChatMessages({
                       <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
                     </button>
                     
-                    {/* Native TTS Button */}
+                    {/* Native TTS Button with Stop Functionality */}
                     <button
-                      onClick={() => handleSpeak(message.content)}
+                      onClick={() => handleSpeak(message.content, message.id)}
                       className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
-                      title={language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice'}
+                      title={speakingMessageId === message.id 
+                        ? (language === 'ar' ? 'إيقاف القراءة' : 'Stop reading')
+                        : (language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice')
+                      }
                     >
-                      <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                      {speakingMessageId === message.id ? (
+                        <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                      ) : (
+                        <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                      )}
                     </button>
                   </div>
                 </div>
