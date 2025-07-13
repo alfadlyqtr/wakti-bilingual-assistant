@@ -111,13 +111,13 @@ export function ChatMessages({
     const userName = personalTouch?.nickname || userProfile?.display_name || (language === 'ar' ? 'صديقي' : 'friend');
     
     return (
-      <div className="flex gap-3 justify-start mb-6">
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-            <Bot className="w-4 h-4 text-white" />
+      <div className="flex justify-start mb-6">
+        <div className="flex gap-3 max-w-[80%]">
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+              <Bot className="w-4 h-4 text-white" />
+            </div>
           </div>
-        </div>
-        <div className="max-w-[80%]">
           <div className="rounded-lg px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border">
             <div className="text-sm leading-relaxed">
               {language === 'ar' 
@@ -157,32 +157,53 @@ export function ChatMessages({
         {/* Welcome Message */}
         {renderWelcomeMessage()}
         
-        {/* Chat Messages using ChatBubble component */}
+        {/* Chat Messages with proper alignment and image previews */}
         {sessionMessages.map((message, index) => (
-          <div key={message.id} className="flex gap-3 justify-start mb-4">
-            <div className="flex-shrink-0">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                message.role === 'user' 
-                  ? 'bg-blue-500'
-                  : 'bg-gradient-to-br from-purple-500 to-blue-500'
-              }`}>
-                {message.role === 'user' ? (
-                  <User className="w-4 h-4 text-white" />
-                ) : (
-                  <Bot className="w-4 h-4 text-white" />
-                )}
-              </div>
-            </div>
-            <div className="max-w-[80%]">
+          <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
+            <div className="flex gap-3 max-w-[80%]">
+              {message.role === 'assistant' && (
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                </div>
+              )}
+              
               <div className={`rounded-lg px-4 py-3 ${
                 message.role === 'user'
-                  ? 'bg-blue-50 text-blue-900 border border-blue-200'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border'
               }`}>
                 <div className="text-sm leading-relaxed">
                   {renderMessageContent(message.content)}
                 </div>
+                
+                {/* FIXED: Image Preview in Chat Messages */}
+                {message.attachedFiles && message.attachedFiles.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {message.attachedFiles.map((file, fileIndex) => (
+                      <div key={fileIndex} className="relative">
+                        <img
+                          src={file.url.startsWith('data:') ? file.url : `data:${file.type};base64,${file.url}`}
+                          alt={file.name}
+                          className="max-w-xs rounded-lg border border-border/50"
+                        />
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {file.imageType?.name || 'General'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+              
+              {message.role === 'user' && (
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                    <User className="w-4 h-4 text-primary-foreground" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}

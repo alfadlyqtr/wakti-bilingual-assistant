@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { Upload, Camera, X, Image, Eye } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -111,7 +110,7 @@ export function SimplifiedFileUpload({
         
         console.log('✅ CLAUDE WAY: Pure base64 data URL created for', file.name);
         
-        // PURE BASE64 PROCESSING - NO BLOB URLS
+        // PURE BASE64 PROCESSING - TRUE CLAUDE WAY
         const uploadedFile: SimplifiedUploadedFile = {
           id: `${Date.now()}-${i}`,
           name: file.name,
@@ -243,30 +242,6 @@ export function SimplifiedFileUpload({
                 </select>
               </div>
             ))}
-          </div>
-
-          {/* Add More Button */}
-          <div className="flex gap-2">
-            <button
-              onClick={triggerFileInput}
-              disabled={disabled || isUploading}
-              className="flex-1 h-8 px-3 rounded-lg bg-background/50 hover:bg-background/70 transition-all border border-border/50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-            >
-              <div className="flex items-center justify-center gap-1">
-                <Upload className="h-3 w-3" />
-                <span>{language === 'ar' ? 'إضافة المزيد' : 'Add More'}</span>
-              </div>
-            </button>
-            <button
-              onClick={triggerCameraInput}
-              disabled={disabled || isUploading}
-              className="flex-1 h-8 px-3 rounded-lg bg-background/50 hover:bg-background/70 transition-all border border-border/50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-            >
-              <div className="flex items-center justify-center gap-1">
-                <Camera className="h-3 w-3" />
-                <span>{language === 'ar' ? 'كاميرا' : 'Camera'}</span>
-              </div>
-            </button>
           </div>
         </div>
       )}
