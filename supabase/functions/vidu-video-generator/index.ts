@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -311,14 +310,18 @@ serve(async (req) => {
       ? 'https://api.vidu.com/ent/v2/img2video'
       : 'https://api.vidu.com/ent/v2/template2video';
     
+    // CRITICAL: Use the correct callback URL format
+    const callbackUrl = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/vidu-callback-receiver';
+    
     // Add callback URL to ALL templates - CRITICAL REQUIREMENT
     const requestBody = {
       ...templateConfig,
-      callback_url: 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/vidu-callback-receiver'
+      callback_url: callbackUrl
     };
     
     console.log('🎬 CALLING VIDU API:', apiUrl);
     console.log('🎬 REQUEST BODY:', JSON.stringify(requestBody, null, 2));
+    console.log('🎬 CALLBACK URL:', callbackUrl);
     
     // Call Vidu API
     const response = await fetch(apiUrl, {
@@ -337,9 +340,13 @@ serve(async (req) => {
     }
     
     const result = await response.json();
-    console.log('✅ VIDU SUCCESS:', result.task_id);
+    console.log('✅ VIDU SUCCESS:', {
+      task_id: result.task_id,
+      state: result.state,
+      full_response: result
+    });
     
-    // FIXED: Store in database with EXPLICIT column names and proper array handling
+    // FIXED: Store in database with proper initial status
     const { error: dbError } = await supabase
       .from('video_generation_tasks')
       .insert({
@@ -348,13 +355,14 @@ serve(async (req) => {
         template: template,
         mode: isCustom ? 'image2video' : 'template2video',
         prompt: templateConfig.prompt || 'No prompt specified',
-        status: result.state || 'processing',
-        images: images, // This should now be an array of URLs
+        status: 'processing', // FIXED: Start with processing, not result.state
+        images: images,
         seed: templateConfig.seed || Math.floor(Math.random() * 1000000),
         duration: templateConfig.duration || 4,
         resolution: templateConfig.resolution || '720p',
         movement_amplitude: templateConfig.movement_amplitude || 'auto',
         bgm: templateConfig.bgm || false,
+        video_url: null, // FIXED: Explicitly set to null initially
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
@@ -364,16 +372,16 @@ serve(async (req) => {
       throw new Error(`Database error: ${dbError.message}`);
     }
     
-    console.log('✅ DATABASE: Task stored successfully');
+    console.log('✅ DATABASE: Task stored successfully with task_id:', result.task_id);
     
     // Return success
     return new Response(JSON.stringify({
       success: true,
       job_id: result.task_id,
-      status: result.state || 'processing',
+      status: 'processing', // Always return processing initially
       message: 'Video generation started with template-specific configuration',
       template_used: template,
-      config_applied: templateConfig
+      callback_url: callbackUrl
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
