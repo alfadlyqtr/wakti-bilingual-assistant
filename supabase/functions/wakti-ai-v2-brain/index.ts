@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -425,7 +424,7 @@ serve(async (req) => {
     
     // Use already uploaded files from SimplifiedFileUpload instead of re-uploading
     if (requestAttachedFiles && requestAttachedFiles.length > 0) {
-      console.log(`📎 USING EXISTING FILES: ${requestAttachedFiles.length} files already uploaded`);
+      console.log(`📎 TRUE CLAUDE WAY: Using ${requestAttachedFiles.length} pure base64 files`);
       
       attachedFiles = requestAttachedFiles.map(file => ({
         url: file.url,
@@ -435,7 +434,7 @@ serve(async (req) => {
       }));
       
       attachedFiles.forEach(file => {
-        console.log(`📎 FILE READY: ${file.name} (${file.imageType.name}) - URL: ${file.url}`);
+        console.log(`📎 CLAUDE WAY FILE: ${file.name} (${file.imageType.name}) - Pure base64 data ready`);
       });
     }
 
@@ -594,16 +593,23 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 
       for (const file of attachedFiles) {
         if (file.type?.startsWith('image/')) {
-          console.log(`📎 VISION: Adding image ${file.name} to Claude request`);
+          console.log(`📎 TRUE CLAUDE WAY: Processing ${file.name} with image type: ${file.imageType?.name}`);
           
-          // CLAUDE WAY: Direct base64 processing
+          // TRUE CLAUDE WAY: Direct base64 data URL processing
           let imageData;
-          if (file.url.includes('base64,')) {
-            imageData = file.url.split('base64,')[1];
+          if (file.url.startsWith('data:')) {
+            // Extract base64 data from data URL
+            imageData = file.url.split(',')[1];
+            console.log('✅ CLAUDE WAY: Extracted base64 data from data URL');
           } else {
             // This shouldn't happen with the new flow, but fallback
-            console.error('❌ Expected base64 data, got:', file.url.substring(0, 50));
-            throw new Error('Invalid image data format');
+            console.error('❌ Expected base64 data URL, got:', file.url.substring(0, 50));
+            throw new Error('Invalid image data format - expected base64 data URL');
+          }
+
+          // Add image type context to improve analysis
+          if (file.imageType && file.imageType.id !== 'general') {
+            console.log(`🏷️ SPECIALIZED ANALYSIS: ${file.imageType.name} - Adding context`);
           }
 
           visionContent.push({
@@ -671,7 +677,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     const claudeData = await claudeResponse.json();
     const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
 
-    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request`);
+    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request with TRUE CLAUDE WAY`);
 
     // 💾 STORE CONVERSATION
     try {
@@ -681,7 +687,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
           user_id: userId,
           role: 'user',
           content: message,
-          input_type: detectedMode === 'vision' ? 'image' : 'text',
+          input_type: detectedMode === 'vision' ? 'vision' : 'text',
           language: responseLanguage,
           created_at: new Date().toISOString()
         },

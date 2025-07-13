@@ -77,9 +77,7 @@ export function SimplifiedFileUpload({
       reader.readAsDataURL(file);
       reader.onload = () => {
         const result = reader.result as string;
-        // Extract base64 part (remove data:image/jpeg;base64, prefix)
-        const base64 = result.split(',')[1];
-        resolve(base64);
+        resolve(result); // Return full data URL
       };
       reader.onerror = error => reject(error);
     });
@@ -88,7 +86,7 @@ export function SimplifiedFileUpload({
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
-    console.log('🔄 SimplifiedFileUpload: Processing', files.length, 'files');
+    console.log('🔄 TRUE CLAUDE WAY: Processing', files.length, 'files as pure base64');
     
     const validFiles: SimplifiedUploadedFile[] = [];
     
@@ -108,30 +106,30 @@ export function SimplifiedFileUpload({
       }
       
       try {
-        // Convert to base64
-        const base64Data = await fileToBase64(file);
+        // TRUE CLAUDE WAY: Convert to base64 data URL
+        const base64DataUrl = await fileToBase64(file);
         
-        // Create preview URL for display
-        const previewUrl = URL.createObjectURL(file);
+        console.log('✅ CLAUDE WAY: Pure base64 data URL created for', file.name);
         
+        // PURE BASE64 PROCESSING - NO BLOB URLS
         const uploadedFile: SimplifiedUploadedFile = {
           id: `${Date.now()}-${i}`,
           name: file.name,
           type: file.type,
           size: file.size,
-          url: previewUrl,
-          preview: previewUrl,
-          base64: base64Data,
-          imageType: imageTypes[0] // Default to general
+          url: base64DataUrl,           // ✅ PURE BASE64 DATA URL
+          preview: base64DataUrl,       // ✅ PURE BASE64 DATA URL  
+          base64: base64DataUrl,        // ✅ PURE BASE64 DATA URL
+          imageType: imageTypes[0]      // ✅ DEFAULT TO GENERAL
         };
         
         validFiles.push(uploadedFile);
-        console.log('📄 File processed:', {
+        console.log('📄 CLAUDE WAY File processed:', {
           name: file.name,
           size: file.size,
           type: file.type,
-          hasBase64: !!base64Data,
-          base64Length: base64Data.length
+          hasBase64DataUrl: !!base64DataUrl,
+          imageType: imageTypes[0].name
         });
       } catch (error) {
         console.error('❌ Error processing file:', file.name, error);
@@ -140,7 +138,7 @@ export function SimplifiedFileUpload({
     }
     
     if (validFiles.length > 0) {
-      console.log('✅ SimplifiedFileUpload: Successfully processed', validFiles.length, 'files');
+      console.log('✅ TRUE CLAUDE WAY SUCCESS: Successfully processed', validFiles.length, 'files as pure base64');
       onFilesUploaded(validFiles);
       
       // Auto-switch to vision mode when images are uploaded
@@ -156,6 +154,7 @@ export function SimplifiedFileUpload({
       file.id === fileId ? { ...file, imageType } : file
     );
     onUpdateFiles(updatedFiles);
+    console.log('🏷️ Image type updated:', imageType.name, 'for file:', fileId);
   };
 
   const triggerFileInput = () => {
@@ -199,7 +198,7 @@ export function SimplifiedFileUpload({
               <div key={file.id} className="relative group">
                 <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-primary/30 bg-background">
                   <img
-                    src={file.preview || file.url}
+                    src={file.url}
                     alt={file.name}
                     className="w-full h-full object-cover"
                   />
@@ -279,7 +278,7 @@ export function SimplifiedFileUpload({
             <div className="h-full bg-primary animate-pulse rounded-full"></div>
           </div>
           <p className="text-xs text-center text-foreground/60 mt-1">
-            {language === 'ar' ? 'جاري الرفع...' : 'Uploading...'}
+            {language === 'ar' ? 'جاري المعالجة...' : 'Processing...'}
           </p>
         </div>
       )}
