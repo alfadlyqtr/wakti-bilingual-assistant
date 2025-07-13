@@ -1,7 +1,9 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Upload, Camera, Sparkles } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { X, Upload, Camera, Sparkles, Key } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,6 +22,8 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
   const [videoTemplate, setVideoTemplate] = useState('image2video');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showApiUpload, setShowApiUpload] = useState(false);
+  const [apiImageUrl, setApiImageUrl] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +91,30 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
     }
   };
 
+  const handleApiUpload = async () => {
+    if (!apiImageUrl) return;
+    
+    try {
+      // Validate URL format
+      new URL(apiImageUrl);
+      
+      const newFile = {
+        id: Date.now() + Math.random(),
+        name: 'API Upload',
+        url: apiImageUrl,
+        size: 0
+      };
+      
+      setUploadedFiles(prev => [...prev, newFile]);
+      setShowApiUpload(false);
+      setApiImageUrl('');
+      showSuccess("Image loaded from URL successfully!");
+    } catch (error) {
+      showError("Invalid URL format");
+      console.error('API upload failed:', error);
+    }
+  };
+
   // ALL 33 TEMPLATES
   const getTemplatePrompt = (template: string) => {
     const prompts: Record<string, string> = {
@@ -94,42 +122,42 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       image2video: "Generate creative video animation",
       
       // Fun & Interactive (13)
-      make_face: "The camera remains stationary. The subject stands still with hands on hips, head slightly tilted to the left, and a smiling expression. Then, the subject begins walking forward—directly toward the camera. Upon reaching the front of the lens, they simultaneously strike a playful pose and expression: mouth wide open, tongue sticking out, and eyes rolled upward.",
-      blow_kiss: "The subject gently leans forward, blows a kiss toward the camera from just below the lips using the right hand, then naturally waves at the camera. Afterward, she unfolds a sweet and warm smile.",
-      hair_swap: "The character transforms their hairstyle and color smoothly.",
-      flying: "The character begins flying forward like a superhero through the air.",
-      nap_me: "The character lies down and covers themselves with a blanket for sleep.",
-      pilot: "The character appears in an airplane cockpit as a pilot.",
-      interaction: "The two people in the picture face the camera, each extending a hand and making a heart shape in front of their chest.",
-      hugging_pro: "The two subjects in the scene turn towards each other and begin to hug.",
-      carry_me: "One person in the scene begins to carry another on their back.",
-      emotionlab: "The character transitions from neutral to smiling expression.",
-      wild_laugh: "The character breaks into wild laughter.",
-      surprised: "The character shows surprise expression.",
-      send_roses: "The person picks up roses and presents them to another person.",
+      make_face: "Person walks toward camera, then makes playful face with tongue out and eyes rolled up",
+      blow_kiss: "Person leans forward, blows a kiss toward camera, then waves with a warm smile",
+      hair_swap: "Character's hairstyle and color transforms smoothly",
+      flying: "Character flies forward through the air like a superhero",
+      nap_me: "Character lies down and covers themselves with a blanket for sleep",
+      pilot: "Character appears in airplane cockpit as a pilot",
+      interaction: "Two people face camera, each making heart shape with hands",
+      hugging_pro: "Two people turn toward each other and embrace in a hug",
+      carry_me: "One person carries another on their back",
+      emotionlab: "Character's expression transitions from neutral to smiling",
+      wild_laugh: "Character breaks into joyful wild laughter",
+      surprised: "Character shows sudden surprise expression",
+      send_roses: "Person picks up roses and presents them to another person",
       
       // Transform & Style (15)
-      cartoon_doll: "The character in the picture jumped, turning into a smooth doll version of themselves.",
-      style_me: "The character puts on a crisp suit and walks gracefully toward the camera.",
-      toy_me: "The subject slowly turns around and transforms into a figurine on a base.",
-      muscling: "A man takes off his shirt, revealing his muscular chest.",
-      muscling_360p: "Lower resolution muscle reveal animation.",
-      fairy_me: "The character transforms into a magical fairy with wings.",
-      yayoi_kusama_style: "Style transformation into polka dot art style.",
-      irasutoya: "Style transformation into Japanese illustration style.",
-      american_comic: "Style transformation into Rick and Morty animation style.",
-      simpsons_comic: "Style transformation into Simpsons cartoon style.",
-      child_memory: "A child version appears and embraces the subject.",
-      outfit_show: "The model turns 180 degrees to showcase clothing details.",
-      spin360: "The subject rotates 360 degrees to show all angles.",
-      live_memory: "Subtle movements like blinking and breathing.",
-      sakura_season: "Cherry blossom petals fall while subject looks up smiling.",
+      cartoon_doll: "Character jumps and transforms into smooth doll version",
+      style_me: "Character puts on crisp suit and walks gracefully toward camera",
+      toy_me: "Character slowly turns around and transforms into figurine on base",
+      muscling: "Man takes off shirt revealing muscular chest",
+      muscling_360p: "Lower resolution muscle reveal animation",
+      fairy_me: "Character transforms into magical fairy with wings appearing",
+      yayoi_kusama_style: "Character transforms with polka dot pattern covering everything",
+      irasutoya: "Character transforms into Japanese illustration art style",
+      american_comic: "Character transforms into Rick and Morty animation style",
+      simpsons_comic: "Character transforms into Simpsons cartoon style",
+      child_memory: "Child version appears and embraces the adult subject",
+      outfit_show: "Model turns 180 degrees to showcase clothing details",
+      spin360: "Subject rotates 360 degrees to show all angles",
+      live_memory: "Subtle lifelike movements like blinking and breathing",
+      sakura_season: "Cherry blossom petals fall while subject looks up smiling",
       
       // Camera & Motion (4)
-      zoom_in_fast: "Camera steadily zooms in isolating details of the subject.",
-      zoom_out_image: "Camera pulls back revealing the surrounding environment.",
-      zoom_out_startend: "Transition from close-up to wide shot between two images.",
-      walk_forward: "Character walks forward toward camera naturally."
+      zoom_in_fast: "Camera steadily zooms in isolating details of subject",
+      zoom_out_image: "Camera pulls back revealing surrounding environment",
+      zoom_out_startend: "Transition from close-up to wide shot",
+      walk_forward: "Character walks forward toward camera naturally"
     };
     return prompts[template] || "Generate creative video animation";
   };
@@ -154,17 +182,17 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       const isCustom = videoTemplate === 'image2video';
       const promptToUse = isCustom ? 'Generate creative video animation' : getTemplatePrompt(videoTemplate);
 
-      console.log('🎬 GENERATING VIDEO:', {
+      console.log('🎬 GENERATING VIDEO WITH REPLICATE:', {
         template: videoTemplate,
         imageCount: imageUrls.length,
         userId: user.id
       });
 
-      // Call edge function with image URLs
-      const response = await supabase.functions.invoke('vidu-video-generator', {
+      // Call new Replicate edge function
+      const response = await supabase.functions.invoke('replicate-video-generator', {
         body: {
           template: videoTemplate,
-          images: imageUrls, // Send URLs, not base64
+          images: imageUrls,
           prompt: promptToUse,
           mode: isCustom ? 'image2video' : 'template2video',
           user_id: user.id
@@ -174,7 +202,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       if (response.error) throw new Error(response.error.message);
 
       if (response.data?.success) {
-        showSuccess('🎬 Video generation started! You will be notified when it\'s ready.');
+        showSuccess('🎬 Video generation started with Replicate! You will be notified when it\'s ready.');
         onVideoGenerated({ 
           jobId: response.data.job_id, 
           template: videoTemplate,
@@ -220,7 +248,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">
-          {language === 'ar' ? '🎬 إنشاء فيديو' : '🎬 Create Video'}
+          {language === 'ar' ? '🎬 إنشاء فيديو (Replicate)' : '🎬 Create Video (Replicate)'}
         </h3>
         <Button onClick={onClose} variant="ghost" size="sm">
           <X className="h-4 w-4" />
@@ -233,10 +261,10 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
           <div className="mb-4">
             <Sparkles className="h-12 w-12 text-purple-400 mx-auto mb-2" />
             <p className="text-purple-900 dark:text-purple-200 text-sm">
-              {language === 'ar' ? 'ارفع صورك وحولها إلى فيديوهات مذهلة' : 'Upload your images and create amazing videos'}
+              {language === 'ar' ? 'ارفع صورك وحولها إلى فيديوهات مذهلة بواسطة Replicate' : 'Upload your images and create amazing videos with Replicate'}
             </p>
           </div>
-          <div className="flex gap-3 justify-center">
+          <div className="flex gap-3 justify-center flex-wrap">
             <Button 
               onClick={() => fileInputRef.current?.click()} 
               className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
@@ -253,7 +281,40 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               <Camera className="h-4 w-4 mr-2" />
               {language === 'ar' ? 'كاميرا' : 'Camera'}
             </Button>
+            <Button 
+              onClick={() => setShowApiUpload(!showApiUpload)}
+              variant="outline" 
+              className="border-purple-300 text-purple-900 dark:text-purple-300"
+            >
+              <Key className="h-4 w-4 mr-2" />
+              {language === 'ar' ? 'رابط صورة' : 'API Upload'}
+            </Button>
           </div>
+
+          {/* API Upload Panel */}
+          {showApiUpload && (
+            <div className="mt-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+              <Label htmlFor="api-url" className="text-sm font-medium">
+                {language === 'ar' ? 'رابط الصورة' : 'Image URL'}
+              </Label>
+              <Input
+                id="api-url"
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={apiImageUrl}
+                onChange={(e) => setApiImageUrl(e.target.value)}
+                className="mt-2"
+              />
+              <Button 
+                onClick={handleApiUpload}
+                className="mt-2 w-full"
+                disabled={!apiImageUrl}
+              >
+                {language === 'ar' ? 'تحميل من الرابط' : 'Load from URL'}
+              </Button>
+            </div>
+          )}
+
           <p className="text-xs text-purple-900 dark:text-purple-300 mt-2">
             {language === 'ar' ? 'حتى 5 صور • حد أقصى 5MB لكل صورة' : 'Up to 5 images • Max 5MB per image'}
           </p>
@@ -279,7 +340,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
                   <X className="h-3 w-3" />
                 </Button>
                 <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 py-0.5 rounded-b-lg">
-                  {(file.size / 1024).toFixed(0)}KB
+                  {file.size > 0 ? `${(file.size / 1024).toFixed(0)}KB` : 'API'}
                 </div>
               </div>
             ))}
@@ -297,7 +358,40 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               <Upload className="h-3 w-3 mr-1" />
               {isUploading ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') : (language === 'ar' ? 'المزيد' : 'Add More')}
             </Button>
+            <Button 
+              onClick={() => setShowApiUpload(!showApiUpload)}
+              variant="outline" 
+              size="sm"
+              className="border-purple-300 text-purple-900 dark:text-purple-300"
+            >
+              <Key className="h-3 w-3 mr-1" />
+              {language === 'ar' ? 'رابط' : 'URL'}
+            </Button>
           </div>
+
+          {/* API Upload Panel for existing files */}
+          {showApiUpload && (
+            <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+              <Label htmlFor="api-url-add" className="text-sm font-medium">
+                {language === 'ar' ? 'إضافة صورة من رابط' : 'Add Image from URL'}
+              </Label>
+              <Input
+                id="api-url-add"
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={apiImageUrl}
+                onChange={(e) => setApiImageUrl(e.target.value)}
+                className="mt-2"
+              />
+              <Button 
+                onClick={handleApiUpload}
+                className="mt-2 w-full"
+                disabled={!apiImageUrl}
+              >
+                {language === 'ar' ? 'إضافة من الرابط' : 'Add from URL'}
+              </Button>
+            </div>
+          )}
 
           {/* Controls */}
           <div className="space-y-3">
@@ -375,16 +469,16 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 py-4 text-lg font-medium"
             >
               {isGenerating ? (
-                language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'
+                language === 'ar' ? 'جاري الإنشاء بواسطة Replicate...' : 'Generating with Replicate...'
               ) : (
-                language === 'ar' ? '🎬 إنشاء فيديو' : '🎬 Generate Video'
+                language === 'ar' ? '🎬 إنشاء فيديو (Replicate)' : '🎬 Generate Video (Replicate)'
               )}
             </Button>
           </div>
 
           {/* Info */}
           <div className="text-center text-xs text-purple-900 dark:text-purple-300">
-            {language === 'ar' ? 'مقاطع 4 ثوان • جودة 720p • حد 15/شهر' : '4-second clips • 720p quality • 15/month limit'}
+            {language === 'ar' ? 'مقاطع عالية الجودة • 832x480 • بواسطة Replicate' : 'High quality clips • 832x480 • Powered by Replicate'}
           </div>
         </div>
       )}

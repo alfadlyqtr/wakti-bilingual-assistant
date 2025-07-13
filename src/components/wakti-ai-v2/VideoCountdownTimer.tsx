@@ -13,7 +13,7 @@ interface VideoCountdownTimerProps {
 }
 
 export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart }: VideoCountdownTimerProps) {
-  const [countdown, setCountdown] = useState(20);
+  const [countdown, setCountdown] = useState(30); // Increased for Replicate
   const [isActive, setIsActive] = useState(true);
   const [status, setStatus] = useState<'counting' | 'ready' | 'checking' | 'success' | 'processing' | 'error'>('counting');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -44,23 +44,23 @@ export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart 
     setCheckingMessage('');
     
     try {
-      console.log('🎬 MANUAL CHECK: Starting manual check for task:', taskId);
+      console.log('🎬 REPLICATE CHECK: Starting manual check for task:', taskId);
       
-      const { data, error } = await supabase.functions.invoke('vidu-manual-check', {
+      const { data, error } = await supabase.functions.invoke('replicate-status-checker', {
         body: { taskId, userId }
       });
 
-      console.log('🎬 MANUAL CHECK: Response:', data, error);
+      console.log('🎬 REPLICATE CHECK: Response:', data, error);
 
       if (error) {
-        console.error('🎬 MANUAL CHECK: Edge function error:', error);
+        console.error('🎬 REPLICATE CHECK: Edge function error:', error);
         setStatus('error');
         setErrorMessage(language === 'ar' ? 'حدث خطأ في التحقق من الفيديو' : 'Error checking video status');
         return;
       }
 
       if (data.success && data.videoUrl) {
-        console.log('🎬 MANUAL CHECK: Video ready! URL:', data.videoUrl);
+        console.log('🎬 REPLICATE CHECK: Video ready! URL:', data.videoUrl);
         setVideoUrl(data.videoUrl);
         setStatus('success');
         
@@ -70,21 +70,21 @@ export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart 
             taskId: taskId,
             videoUrl: data.videoUrl,
             status: 'completed',
-            content: `🎬 **Video generation completed!**\n\nYour video is ready:\n\n<video controls width="400" class="video-player">\n<source src="${data.videoUrl}" type="video/mp4">\nYour browser does not support the video tag.\n</video>\n\n✨ Video generated successfully!`
+            content: `🎬 **Video generation completed with Replicate!**\n\nYour video is ready:\n\n<video controls width="400" class="video-player">\n<source src="${data.videoUrl}" type="video/mp4">\nYour browser does not support the video tag.\n</video>\n\n✨ Video generated successfully with Replicate AI!`
           }
         }));
         
       } else if (data.stillProcessing) {
-        console.log('🎬 MANUAL CHECK: Video still processing');
+        console.log('🎬 REPLICATE CHECK: Video still processing');
         setStatus('processing');
-        setCheckingMessage(data.message || (language === 'ar' ? 'الفيديو لا يزال قيد المعالجة...' : 'Video is still processing...'));
+        setCheckingMessage(data.message || (language === 'ar' ? 'الفيديو لا يزال قيد المعالجة بواسطة Replicate...' : 'Video is still being processed by Replicate...'));
       } else {
-        console.log('🎬 MANUAL CHECK: Error:', data.error);
+        console.log('🎬 REPLICATE CHECK: Error:', data.error);
         setStatus('error');
         setErrorMessage(data.error || (language === 'ar' ? 'فشل في التحقق من حالة الفيديو' : 'Failed to check video status'));
       }
     } catch (error) {
-      console.error('🎬 MANUAL CHECK: Exception:', error);
+      console.error('🎬 REPLICATE CHECK: Exception:', error);
       setStatus('error');
       setErrorMessage(language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred');
     }
@@ -96,8 +96,8 @@ export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart 
         <Video className="h-4 w-4" />
         <span>
           {language === 'ar' 
-            ? '✅ تم إنشاء الفيديو بنجاح!'
-            : '✅ Video generated successfully!'
+            ? '✅ تم إنشاء الفيديو بنجاح بواسطة Replicate!'
+            : '✅ Video generated successfully with Replicate!'
           }
         </span>
       </div>
@@ -150,8 +150,8 @@ export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart 
         <Loader2 className="h-4 w-4 animate-spin" />
         <span>
           {language === 'ar' 
-            ? 'جاري التحقق من حالة الفيديو...'
-            : 'Checking video status...'
+            ? 'جاري التحقق من حالة الفيديو في Replicate...'
+            : 'Checking video status on Replicate...'
           }
         </span>
       </div>
@@ -181,14 +181,14 @@ export function VideoCountdownTimer({ messageId, taskId, userId, onPollingStart 
       <Clock className="h-4 w-4" />
       <span>
         {language === 'ar' 
-          ? `جاري إنشاء الفيديو... ${countdown}ثانية`
-          : `Video generating... ${countdown}s`
+          ? `جاري إنشاء الفيديو بواسطة Replicate... ${countdown}ثانية`
+          : `Video generating with Replicate... ${countdown}s`
         }
       </span>
       <div className="ml-2 w-16 h-1 bg-blue-200 rounded-full overflow-hidden">
         <div 
           className="h-full bg-blue-500 transition-all duration-1000 ease-linear"
-          style={{ width: `${((20 - countdown) / 20) * 100}%` }}
+          style={{ width: `${((30 - countdown) / 30) * 100}%` }}
         />
       </div>
     </div>
