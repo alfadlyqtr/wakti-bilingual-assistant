@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX } from 'lucide-react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
@@ -217,8 +217,66 @@ export function ChatMessages({
     );
   };
 
-  // Function to render message content with HTML support for videos
-  const renderMessageContent = (content: string) => {
+  // FIXED: Determine badge based on message content and activeTrigger
+  const getMessageBadge = (message: AIMessage, currentActiveTrigger: string) => {
+    // For user messages, use the current active trigger or detect from content
+    if (message.role === 'user') {
+      // Check for explicit image generation keywords
+      const content = message.content.toLowerCase();
+      if (content.includes('generate image') || content.includes('create image') || content.includes('make image') || content.includes('draw') || content.includes('paint')) {
+        return '🎨 Image';
+      }
+      
+      // Check for explicit search keywords
+      if (content.includes('search for') || content.includes('find information') || content.includes('look up') || content.includes('what is')) {
+        return '🔍 Search';
+      }
+      
+      // Check for vision (if has attached files)
+      if (message.attachedFiles && message.attachedFiles.length > 0) {
+        return '👁️ Vision';
+      }
+      
+      // Check for voice input
+      if (message.inputType === 'voice') {
+        return '🎤 Voice';
+      }
+      
+      // Use current active trigger as fallback
+      if (currentActiveTrigger === 'image') return '🎨 Image';
+      if (currentActiveTrigger === 'search') return '🔍 Search';
+      if (currentActiveTrigger === 'vision') return '👁️ Vision';
+      if (currentActiveTrigger === 'video') return '🎬 Video';
+      
+      return '💬 Chat';
+    }
+    
+    // For assistant messages, use the saved intent or detect from content
+    if (message.intent === 'vision') return '👁️ Vision';
+    if (message.intent === 'search') return '🔍 Search';
+    if (message.intent === 'image') return '🎨 Image';
+    if (message.intent === 'video') return '🎬 Video';
+    if (message.intent === 'parse_task') return '🎯 Task';
+    
+    // Detect from content for assistant messages
+    const content = message.content.toLowerCase();
+    if (content.includes('image generated') || content.includes('here is the image') || message.imageUrl) {
+      return '🎨 Image';
+    }
+    if (content.includes('search results') || content.includes('found the following')) {
+      return '🔍 Search';
+    }
+    if (content.includes('analyzing the image') || content.includes('i can see')) {
+      return '👁️ Vision';
+    }
+    
+    return '💬 Chat';
+  };
+
+  // FIXED: Function to render message content with proper image display
+  const renderMessageContent = (message: AIMessage) => {
+    const content = message.content;
+    
     // Check if content contains HTML (video tags, styling, etc.)
     if (content.includes('<video') || content.includes('<div style') || content.includes('<style>')) {
       return (
@@ -227,6 +285,49 @@ export function ChatMessages({
           className="prose prose-sm max-w-none"
         />
       );
+    }
+    
+    // FIXED: Check for generated images (Runware URLs)
+    if (message.imageUrl || content.includes('https://im.runware.ai/')) {
+      const imageUrl = message.imageUrl || content.match(/https:\/\/im\.runware\.ai\/[^\s\)]+/)?.[0];
+      
+      if (imageUrl) {
+        return (
+          <div className="space-y-3">
+            {/* Show text content if any (excluding the URL) */}
+            {content && !content.includes(imageUrl) && (
+              <div className="whitespace-pre-wrap">
+                {content}
+              </div>
+            )}
+            
+            {/* Display the actual image */}
+            <div className="relative">
+              <img
+                src={imageUrl}
+                alt="Generated image"
+                className="max-w-full h-auto rounded-lg border border-border/50 shadow-sm"
+                onError={(e) => {
+                  console.error('Image failed to load:', imageUrl);
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              
+              {/* Copy URL button overlay */}
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(imageUrl);
+                  // Could add a toast here if needed
+                }}
+                className="absolute top-2 right-2 p-2 bg-black/50 hover:bg-black/70 text-white rounded-md transition-colors"
+                title={language === 'ar' ? 'نسخ رابط الصورة' : 'Copy image URL'}
+              >
+                <ExternalLink className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        );
+      }
     }
     
     // Regular text content
@@ -243,7 +344,7 @@ export function ChatMessages({
         {/* Welcome Message */}
         {renderWelcomeMessage()}
         
-        {/* Chat Messages with proper alignment, image previews, and always visible mini buttons */}
+        {/* Chat Messages with FIXED badge logic and image display */}
         {sessionMessages.map((message, index) => (
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
             <div className="flex gap-3 max-w-[80%]">
@@ -260,21 +361,15 @@ export function ChatMessages({
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border'
               }`}>
-                {/* Mode Badge - For both user and AI messages */}
+                {/* FIXED: Mode Badge with proper logic */}
                 <div className="flex items-center gap-2 mb-2">
                   <Badge variant="secondary" className="text-xs px-2 py-0.5 font-medium">
-                    {message.intent === 'vision' ? '👁️ Vision' : 
-                     message.intent === 'search' ? '🔍 Search' :
-                     message.intent === 'image' ? '🎨 Image' :
-                     message.intent === 'video' ? '🎬 Video' : 
-                     message.inputType === 'voice' ? '🎤 Voice' :
-                     message.inputType === 'vision' ? '👁️ Vision' :
-                     '💬 Chat'}
+                    {getMessageBadge(message, activeTrigger)}
                   </Badge>
                 </div>
                 
                 <div className="text-sm leading-relaxed">
-                  {renderMessageContent(message.content)}
+                  {renderMessageContent(message)}
                 </div>
                 
                 {/* Image Preview in Chat Messages */}
