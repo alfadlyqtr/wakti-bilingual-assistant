@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
@@ -30,15 +31,14 @@ serve(async (req) => {
     const prompt = getTemplatePrompt(template, customPrompt)
     console.log('🎬 Generated prompt:', prompt)
     
-    // Call Replicate API
-    const response = await fetch('https://api.replicate.com/v1/predictions', {
+    // Call Replicate API using the correct format
+    const response = await fetch('https://api.replicate.com/v1/models/wavespeedai/wan-2.1-i2v-480p/predictions', {
       method: 'POST',
       headers: {
         'Authorization': `Token ${REPLICATE_API_TOKEN}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: "wavespeedai/wan-2.1-i2v-480p",
         input: {
           image: imageUrl,
           prompt: prompt,
