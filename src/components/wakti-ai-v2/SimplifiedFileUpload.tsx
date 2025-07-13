@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { Upload, Camera, X, Image, Eye } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -11,6 +12,7 @@ export interface SimplifiedUploadedFile {
   size: number;
   url: string;
   preview?: string;
+  base64?: string;
   imageType?: {
     id: string;
     name: string;
@@ -51,7 +53,7 @@ export function SimplifiedFileUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Add event listener for wakti-file-selected event from PlusMenu
+  // Event listener for wakti-file-selected event from PlusMenu
   useEffect(() => {
     const handleWaktiFileSelected = (event: CustomEvent) => {
       const { files } = event.detail;
@@ -67,6 +69,21 @@ export function SimplifiedFileUpload({
       window.removeEventListener('wakti-file-selected', handleWaktiFileSelected as EventListener);
     };
   }, []);
+
+  // Convert File to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Extract base64 part (remove data:image/jpeg;base64, prefix)
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
 
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -90,20 +107,36 @@ export function SimplifiedFileUpload({
         continue;
       }
       
-      // Create preview URL
-      const previewUrl = URL.createObjectURL(file);
-      
-      const uploadedFile: SimplifiedUploadedFile = {
-        id: `${Date.now()}-${i}`,
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        url: previewUrl,
-        preview: previewUrl,
-        imageType: imageTypes[0] // Default to general
-      };
-      
-      validFiles.push(uploadedFile);
+      try {
+        // Convert to base64
+        const base64Data = await fileToBase64(file);
+        
+        // Create preview URL for display
+        const previewUrl = URL.createObjectURL(file);
+        
+        const uploadedFile: SimplifiedUploadedFile = {
+          id: `${Date.now()}-${i}`,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          url: previewUrl,
+          preview: previewUrl,
+          base64: base64Data,
+          imageType: imageTypes[0] // Default to general
+        };
+        
+        validFiles.push(uploadedFile);
+        console.log('📄 File processed:', {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          hasBase64: !!base64Data,
+          base64Length: base64Data.length
+        });
+      } catch (error) {
+        console.error('❌ Error processing file:', file.name, error);
+        showError(`${language === 'ar' ? 'فشل في معالجة' : 'Failed to process'} ${file.name}`);
+      }
     }
     
     if (validFiles.length > 0) {
@@ -112,6 +145,7 @@ export function SimplifiedFileUpload({
       
       // Auto-switch to vision mode when images are uploaded
       if (onAutoSwitchMode) {
+        console.log('🔄 Auto-switching to vision mode');
         onAutoSwitchMode('vision');
       }
     }

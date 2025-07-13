@@ -196,10 +196,16 @@ const WaktiAIV2 = () => {
       return;
     }
 
+    // Determine input type based on attached files
+    let finalInputType: 'text' | 'voice' | 'vision' = inputType;
+    if (attachedFiles && attachedFiles.length > 0) {
+      finalInputType = 'vision';
+    }
+
     console.log('🚀 MESSAGE PROCESSING: Starting with enhanced task detection');
     console.log('📊 MESSAGE DETAILS:', {
       content: messageContent.substring(0, 100) + '...',
-      inputType,
+      inputType: finalInputType,
       filesCount: attachedFiles?.length || 0,
       trigger: activeTrigger,
       isExplicitTask: isExplicitTaskCommand(messageContent)
@@ -243,7 +249,7 @@ const WaktiAIV2 = () => {
           role: 'user',
           content: messageContent,
           timestamp: new Date(),
-          inputType: inputType,
+          inputType: finalInputType,
           attachedFiles: attachedFiles
         };
 
@@ -265,22 +271,17 @@ const WaktiAIV2 = () => {
             subtasks: taskData.intentData.pendingTask.subtasks
           });
           
-          // FORCE task confirmation state with multiple updates
-          console.log('🔧 FORCING TASK CONFIRMATION STATE - CRITICAL UPDATE');
           setPendingTaskData(taskData.intentData.pendingTask);
           
-          // Force immediate state update using timeout
           setTimeout(() => {
             console.log('🔧 SECOND FORCE: Setting showTaskConfirmation to TRUE');
             setShowTaskConfirmation(true);
             
-            // Triple confirmation - force another update
             setTimeout(() => {
               console.log('🔧 TRIPLE FORCE: Final confirmation state update');
               setShowTaskConfirmation(true);
               setPendingTaskData(taskData.intentData.pendingTask);
               
-              // Debug current state
               console.log('🔍 FINAL TASK CONFIRMATION STATE CHECK:', {
                 showTaskConfirmation: true,
                 pendingTaskDataExists: !!taskData.intentData.pendingTask,
@@ -299,7 +300,7 @@ const WaktiAIV2 = () => {
         }
 
         setIsLoading(false);
-        return; // Exit early for task commands
+        return;
       }
 
       const hybridContext = await HybridMemoryService.getHybridContext(
@@ -318,22 +319,22 @@ const WaktiAIV2 = () => {
         role: 'user',
         content: messageContent,
         timestamp: new Date(),
-        inputType: inputType,
+        inputType: finalInputType,
         attachedFiles: attachedFiles
       };
       
       setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
       
-      console.log('📡 CALLING: WaktiAIV2Service for regular chat with CLAUDE 3.5 SONNET (NO task detection)');
+      console.log('📡 CALLING: WaktiAIV2Service for regular chat with CLAUDE 3.5 SONNET');
       
       const aiResponse = await WaktiAIV2Service.sendMessage(
         messageContent,
         userProfile?.id,
         language,
         currentConversationId,
-        inputType,
+        finalInputType,
         hybridContext.recentMessages,
-        false, // NO task detection in regular chat
+        false,
         activeTrigger,
         hybridContext.conversationSummary,
         attachedFiles || []
@@ -362,7 +363,6 @@ const WaktiAIV2 = () => {
         browsingData: aiResponse.browsingData
       };
 
-      // PROCESS TASK & REMINDER RESPONSE FIELDS
       if (aiResponse.showTaskForm && aiResponse.taskData) {
         console.log('📋 TASK FORM DETECTED:', aiResponse.taskData);
         setPendingTaskData(aiResponse.taskData);
