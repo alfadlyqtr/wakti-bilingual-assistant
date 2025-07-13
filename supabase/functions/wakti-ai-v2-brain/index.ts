@@ -29,10 +29,206 @@ const getCorsHeaders = (origin: string | null) => {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
+const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log("WAKTI AI V2 BRAIN: Ultra-Smart System Initialized with Task & Reminder Intelligence + Memory");
+console.log("WAKTI AI V2 BRAIN: Ultra-Smart System Initialized with Perfect API Routing");
+
+// RUNWARE IMAGE GENERATION FUNCTION
+async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
+  console.log('🎨 IMAGE GEN: Starting generation for:', prompt.substring(0, 50));
+  
+  if (!RUNWARE_API_KEY) {
+    return {
+      success: false,
+      error: language === 'ar' 
+        ? 'خدمة إنشاء الصور غير متاحة' 
+        : 'Image generation service not configured',
+      response: language === 'ar' 
+        ? 'أعتذر، خدمة إنشاء الصور غير متاحة حالياً.'
+        : 'I apologize, image generation service is not available at the moment.'
+    };
+  }
+
+  try {
+    const taskUUID = crypto.randomUUID();
+    
+    const imageGenPayload = [
+      {
+        taskType: "authentication",
+        apiKey: RUNWARE_API_KEY
+      },
+      {
+        taskType: "imageInference",
+        taskUUID: taskUUID,
+        positivePrompt: prompt,
+        width: 1024,
+        height: 1024,
+        model: "runware:100@1",
+        numberResults: 1,
+        outputFormat: "WEBP"
+      }
+    ];
+
+    const response = await fetch('https://api.runware.ai/v1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(imageGenPayload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ IMAGE API ERROR:', response.status, errorText);
+      throw new Error(`Image generation API error: ${response.status}`);
+    }
+
+    const responseText = await response.text();
+    if (!responseText || responseText.trim() === '') {
+      throw new Error('Empty response from image generation service');
+    }
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (jsonError) {
+      console.error('❌ IMAGE JSON parsing error:', jsonError);
+      throw new Error('Invalid JSON response from image generation service');
+    }
+
+    if (responseData && responseData.data && Array.isArray(responseData.data)) {
+      const imageResult = responseData.data.find((item: any) => item.taskType === 'imageInference');
+      
+      if (imageResult && imageResult.imageURL) {
+        console.log('✅ IMAGE GEN: Successfully generated image');
+        return {
+          success: true,
+          error: null,
+          response: language === 'ar' 
+            ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageResult.imageURL})\n\nالوصف: ${prompt}`
+            : `🎨 Image generated successfully!\n\n![Generated Image](${imageResult.imageURL})\n\nPrompt: ${prompt}`,
+          imageUrl: imageResult.imageURL
+        };
+      }
+    }
+
+    console.warn('⚠️ IMAGE GEN: No valid image URL in response');
+    return {
+      success: false,
+      error: language === 'ar' ? 'لم يتم إنشاء الصورة بنجاح' : 'Image generation failed',
+      response: language === 'ar' 
+        ? 'أعتذر، لم أتمكن من إنشاء الصورة. يرجى المحاولة مرة أخرى.'
+        : 'I apologize, I could not generate the image. Please try again.'
+    };
+
+  } catch (error) {
+    console.error('❌ IMAGE GEN: Critical error:', error);
+    
+    return {
+      success: false,
+      error: language === 'ar' ? 'خطأ في إنشاء الصورة' : 'Image generation failed',
+      response: language === 'ar' 
+        ? 'أعتذر، حدث خطأ أثناء إنشاء الصورة. يرجى المحاولة مرة أخرى.'
+        : 'I apologize, there was an error generating the image. Please try again.'
+    };
+  }
+}
+
+// TAVILY SEARCH FUNCTION
+async function performSearchWithTavily(query: string, userId: string, language: string = 'en') {
+  console.log('🔍 SEARCH: Starting search for:', query.substring(0, 50));
+  
+  if (!TAVILY_API_KEY) {
+    return {
+      success: false,
+      error: language === 'ar' ? 'خدمة البحث غير متاحة' : 'Search service not configured',
+      response: language === 'ar' 
+        ? 'أعتذر، خدمة البحث غير متاحة حالياً.'
+        : 'I apologize, search service is not available at the moment.'
+    };
+  }
+
+  try {
+    const searchPayload = {
+      api_key: TAVILY_API_KEY,
+      query: query,
+      search_depth: "basic",
+      include_answer: true,
+      include_raw_content: false,
+      max_results: 5
+    };
+
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(searchPayload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ SEARCH API ERROR:', response.status, errorText);
+      throw new Error(`Search API error: ${response.status}`);
+    }
+
+    const responseText = await response.text();
+    if (!responseText || responseText.trim() === '') {
+      throw new Error('Empty response from search service');
+    }
+
+    let searchData;
+    try {
+      searchData = JSON.parse(responseText);
+    } catch (jsonError) {
+      console.error('❌ SEARCH JSON parsing error:', jsonError);
+      throw new Error('Invalid JSON response from search service');
+    }
+
+    const results = Array.isArray(searchData.results) ? searchData.results : [];
+    const answer = searchData.answer || '';
+    
+    let searchResponse = language === 'ar' ? '🔍 نتائج البحث:\n\n' : '🔍 Search Results:\n\n';
+    
+    if (answer) {
+      searchResponse += language === 'ar' ? `**الإجابة المباشرة:**\n${answer}\n\n` : `**Direct Answer:**\n${answer}\n\n`;
+    }
+    
+    if (results.length > 0) {
+      searchResponse += language === 'ar' ? '**المصادر:**\n' : '**Sources:**\n';
+      results.forEach((result: any, index: number) => {
+        if (result && typeof result === 'object') {
+          searchResponse += `${index + 1}. **${result.title || 'No title'}**\n`;
+          searchResponse += `   ${result.content || 'No content'}\n`;
+          searchResponse += `   🔗 [${language === 'ar' ? 'المصدر' : 'Source'}](${result.url || '#'})\n\n`;
+        }
+      });
+    }
+
+    console.log(`✅ SEARCH: Found ${results.length} results`);
+    return {
+      success: true,
+      error: null,
+      response: searchResponse,
+      searchData: {
+        answer,
+        results,
+        query,
+        total_results: results.length
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ SEARCH: Critical error:', error);
+    
+    return {
+      success: false,
+      error: language === 'ar' ? 'فشل البحث' : 'Search failed',
+      response: language === 'ar' 
+        ? 'أعتذر، حدث خطأ أثناء البحث. يرجى المحاولة مرة أخرى.'
+        : 'I apologize, there was an error during the search. Please try again.'
+    };
+  }
+}
 
 // PHASE 2: MEMORY FUNCTIONS IMPLEMENTATION
 
@@ -355,7 +551,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🧠 WAKTI AI V2: Processing super-intelligent request with memory");
+    console.log("🧠 WAKTI AI V2: Processing super-intelligent request with perfect routing");
     
     const contentType = req.headers.get('content-type') || '';
     let requestData;
@@ -438,52 +634,57 @@ serve(async (req) => {
       });
     }
 
-    // DEBUG: Check what files we have
-    console.log(`🔍 DEBUG ATTACHED FILES:`, {
-      requestDataFiles: !!requestData.files,
-      requestAttachedFiles: !!requestAttachedFiles,
-      attachedFilesLength: requestAttachedFiles?.length || 0,
-      processedFilesLength: attachedFiles.length,
-      attachedFilesContent: requestAttachedFiles?.map(f => ({
-        name: f.name,
-        type: f.type,
-        hasUrl: !!f.url,
-        imageType: f.imageType?.name
-      })) || []
-    });
+    // 🚨 CRITICAL FIX: PERFECT API ROUTING BASED ON MODE
+    console.log(`🎯 PERFECT ROUTING: Mode=${activeTrigger}, HasImages=${attachedFiles.length > 0}`);
 
-    const result = await callClaude35API(
-      message,
-      finalConversationId,
-      actualUserId,
-      language,
-      attachedFiles, // Use the processed files
-      activeTrigger,
-      recentMessages,
-      conversationSummary,
-      personalTouch
-    );
+    let result;
+    
+    // ROUTE TO CORRECT API BASED ON MODE
+    if (activeTrigger === 'image') {
+      console.log('🎨 ROUTING TO RUNWARE: Image generation mode');
+      result = await generateImageWithRunware(message, actualUserId, language);
+      result.mode = 'image';
+      result.intent = 'image';
+    } else if (activeTrigger === 'search') {
+      console.log('🔍 ROUTING TO TAVILY: Search mode');
+      result = await performSearchWithTavily(message, actualUserId, language);
+      result.mode = 'search';
+      result.intent = 'search';
+    } else {
+      console.log('🤖 ROUTING TO CLAUDE: Chat/Vision mode');
+      result = await callClaude35API(
+        message,
+        finalConversationId,
+        actualUserId,
+        language,
+        attachedFiles,
+        activeTrigger,
+        recentMessages,
+        conversationSummary,
+        personalTouch
+      );
+    }
 
     const finalResponse = {
       response: result.response || 'Response received',
       conversationId: finalConversationId,
-      intent: activeTrigger,
+      intent: result.intent || activeTrigger,
       confidence: 'high',
       actionTaken: null,
       imageUrl: result.imageUrl || null,
       browsingUsed: activeTrigger === 'search',
-      browsingData: null,
+      browsingData: result.searchData || null,
       needsConfirmation: false,
       
       success: result.success !== false,
       processingTime: Date.now(),
-      aiProvider: 'claude-3-5-sonnet-20241022',
+      aiProvider: result.mode === 'image' ? 'runware' : result.mode === 'search' ? 'tavily' : 'claude-3-5-sonnet-20241022',
       claude35Enabled: true,
-      mode: activeTrigger,
+      mode: result.mode || activeTrigger,
       fallbackUsed: false
     };
 
-    console.log(`✅ WAKTI AI V2: Successfully processed ${activeTrigger} request with memory for user ${actualUserId}`);
+    console.log(`✅ WAKTI AI V2: Successfully processed ${activeTrigger} request with perfect routing for user ${actualUserId}`);
     
     return new Response(JSON.stringify(finalResponse), {
       status: 200,
@@ -522,18 +723,6 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 
     console.log(`🧠 WAKTI AI V2: Processing ${activeTrigger} mode conversation`);
     
-    // DEBUG: Check what's in attachedFiles
-    console.log(`🔍 DEBUG ATTACHED FILES IN CLAUDE CALL:`, {
-      attachedFilesExists: !!attachedFiles,
-      attachedFilesLength: attachedFiles?.length || 0,
-      attachedFilesContent: attachedFiles?.map(f => ({
-        name: f.name,
-        type: f.type,
-        hasUrl: !!f.url,
-        imageType: f.imageType?.name
-      })) || []
-    });
-
     // PROPER MODE DETECTION - ONLY VISION WHEN IMAGES PRESENT
     let detectedMode = 'chat'; // DEFAULT TO CHAT
 
@@ -550,13 +739,6 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     } else {
       detectedMode = 'chat';
       console.log('💬 CHAT MODE: No attachedFiles, using chat mode');
-    }
-
-    // Override only if explicitly requested
-    if (activeTrigger === 'search') {
-      detectedMode = 'search';
-    } else if (activeTrigger === 'image') {
-      detectedMode = 'image';
     }
 
     console.log(`🧠 MODE DETECTION RESULT: "${detectedMode}" (trigger: "${activeTrigger}", hasFiles: ${!!attachedFiles?.length})`);
@@ -676,7 +858,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 
     console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request with TRUE CLAUDE WAY`);
 
-    // 💾 STORE CONVERSATION
+    // 💾 STORE CONVERSATION WITH FIXED INTENT FIELD
     try {
       // PROPER INPUT TYPE FOR DATABASE - FIX THE CONSTRAINT VIOLATION
       const inputType = detectedMode === 'vision' ? 'image' : 'text';
@@ -687,7 +869,8 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
           user_id: userId,
           role: 'user',
           content: message,
-          input_type: inputType, // Use proper input type that matches database constraints
+          input_type: inputType,
+          intent: detectedMode, // 🚨 CRITICAL FIX: ADD INTENT FIELD
           language: responseLanguage,
           created_at: new Date().toISOString()
         },
@@ -697,6 +880,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
           role: 'assistant',
           content: responseText,
           input_type: 'text',
+          intent: detectedMode, // 🚨 CRITICAL FIX: ADD INTENT FIELD
           language: responseLanguage,
           created_at: new Date().toISOString()
         }
@@ -710,7 +894,8 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       success: true,
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
-      mode: detectedMode // Return the actual detected mode
+      mode: detectedMode,
+      intent: detectedMode // Return the actual detected mode as intent
     };
 
   } catch (error) {
@@ -718,7 +903,8 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     return {
       success: false,
       error: error.message,
-      response: language === 'ar' ? 'أعتذر، حدث خطأ في معالجة طلبك.' : 'I apologize, there was an error processing your request.'
+      response: language === 'ar' ? 'أعتذر، حدث خطأ في معالجة طلبك.' : 'I apologize, there was an error processing your request.',
+      intent: 'chat'
     };
   }
 }
