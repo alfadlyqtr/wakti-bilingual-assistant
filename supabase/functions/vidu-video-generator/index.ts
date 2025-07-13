@@ -265,10 +265,14 @@ serve(async (req) => {
   try {
     const { template, images, prompt, mode, user_id } = await req.json();
     
-    console.log('🎬 VIDEO GEN: Starting', { template, mode, imageCount: images?.length });
+    console.log('🎬 VIDEO GEN: Starting', { template, mode, imageCount: images?.length, user_id });
     
     if (!VIDU_API_KEY) {
       throw new Error('VIDU_API_KEY not configured');
+    }
+
+    if (!user_id) {
+      throw new Error('user_id is required');
     }
 
     // Initialize Supabase client
@@ -314,12 +318,12 @@ serve(async (req) => {
     const result = await response.json();
     console.log('✅ VIDU SUCCESS:', result.task_id);
     
-    // Store in database with ALL required fields
+    // FIXED: Store in database with EXPLICIT column names to prevent order mismatch
     const { error: dbError } = await supabase
       .from('video_generation_tasks')
       .insert({
-        user_id: user_id,
         task_id: result.task_id,
+        user_id: user_id,
         template: template,
         mode: isCustom ? 'image2video' : 'template2video',
         prompt: templateConfig.prompt || 'No prompt specified',
@@ -330,12 +334,16 @@ serve(async (req) => {
         resolution: templateConfig.resolution || '720p',
         movement_amplitude: templateConfig.movement_amplitude || 'auto',
         bgm: templateConfig.bgm || false,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       });
 
     if (dbError) {
       console.error('❌ DB ERROR:', dbError);
+      throw new Error(`Database error: ${dbError.message}`);
     }
+    
+    console.log('✅ DATABASE: Task stored successfully');
     
     // Return success
     return new Response(JSON.stringify({
