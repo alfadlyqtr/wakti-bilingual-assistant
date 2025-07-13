@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
@@ -39,7 +38,7 @@ serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        version: "8e78b90558f7c2b6b8b5b9bf8ddc3c83fe36b9b7",
+        model: "wavespeedai/wan-2.1-i2v-480p",
         input: {
           image: imageUrl,
           prompt: prompt,
@@ -89,7 +88,7 @@ serve(async (req) => {
       job_id: prediction.id,
       prediction_id: prediction.id,
       status: prediction.status,
-      message: 'Video generation started with Replicate'
+      message: 'Video generation started'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
