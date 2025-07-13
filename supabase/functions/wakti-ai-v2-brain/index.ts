@@ -534,49 +534,44 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       })) || []
     });
 
-    // TRIGGER-BASED MODE DETECTION (Frontend decides, Brain executes)
-    let detectedMode = activeTrigger; // Use the trigger that comes from frontend
-    
-    // Enhanced mode detection with image fallback
-    if (activeTrigger === 'vision') {
-      console.log('🔍 VISION MODE: Frontend sent vision trigger, processing images');
-    } else if (attachedFiles && attachedFiles.length > 0) {
-      console.log(`🔍 DEBUG: Found ${attachedFiles.length} attached files, checking for images...`);
-      
-      const hasImages = attachedFiles.some((file) => {
-        const isImage = file.type?.startsWith('image/');
-        console.log(`🔍 DEBUG FILE: ${file.name} - Type: ${file.type} - IsImage: ${isImage}`);
-        return isImage;
-      });
-      
+    // PROPER MODE DETECTION - ONLY VISION WHEN IMAGES PRESENT
+    let detectedMode = 'chat'; // DEFAULT TO CHAT
+
+    // Check if images are actually attached
+    if (attachedFiles && attachedFiles.length > 0) {
+      const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
       if (hasImages) {
         detectedMode = 'vision';
-        console.log('🔍 VISION MODE ACTIVATED: Image detected, switching to vision processing');
+        console.log('🔍 VISION MODE: Images detected, switching to vision processing');
       } else {
-        console.log('🔍 DEBUG: No images found in attached files');
+        detectedMode = 'chat';
+        console.log('💬 CHAT MODE: No images found, using chat mode');
       }
     } else {
       detectedMode = 'chat';
-      console.log('💬 CHAT MODE ACTIVATED: General conversation detected');
+      console.log('💬 CHAT MODE: No attachedFiles, using chat mode');
     }
 
-    // Log the mode detection result
-    console.log(`🧠 MODE DETECTION: Frontend trigger "${activeTrigger}" → Final mode "${detectedMode}"`);
+    // Override only if explicitly requested
+    if (activeTrigger === 'search') {
+      detectedMode = 'search';
+    } else if (activeTrigger === 'image') {
+      detectedMode = 'image';
+    }
+
+    console.log(`🧠 MODE DETECTION RESULT: "${detectedMode}" (trigger: "${activeTrigger}", hasFiles: ${!!attachedFiles?.length})`);
 
     const responseLanguage = language;
     let messages = [];
 
-    // 🧠 CONDITIONAL MEMORY LOADING (not for vision)
+    // 🧠 MEMORY LOADING - RESTORE FOR ALL MODES EXCEPT VISION
+    let memoryPrompt = '';
     if (detectedMode !== 'vision' && personalTouch) {
       const contextMessages = recentMessages.slice(-3) || [];
       const enhancedUserContext = await getEnhancedUserContext(userId, contextMessages, personalTouch);
-      
       if (enhancedUserContext && enhancedUserContext.trim()) {
-        messages.push({
-          role: 'user',
-          content: `Personal context: ${enhancedUserContext}`
-        });
-        console.log('🧠 MEMORY: Added light personal context');
+        memoryPrompt = enhancedUserContext;
+        console.log('🧠 MEMORY: Added personal context for', detectedMode, 'mode');
       }
     }
 
@@ -635,17 +630,19 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       });
     }
 
-    // 🎯 MODE-SPECIFIC SYSTEM PROMPTS
+    // MODE-SPECIFIC SYSTEM PROMPTS
     let systemPrompt;
-    
     if (detectedMode === 'vision') {
-      systemPrompt = responseLanguage === 'ar' ? 
-        `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.` :
-        `You are WAKTI AI, an intelligent assistant specialized in image analysis. Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
+      systemPrompt = responseLanguage === 'ar' 
+        ? `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.`
+        : `You are WAKTI AI, an intelligent assistant specialized in image analysis. Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
     } else {
-      systemPrompt = responseLanguage === 'ar' ? 
-        `أنت WAKTI AI، المساعد الذكي الودود المتخصص في الإنتاجية. ساعد المستخدم بطريقة مفيدة وودية.` :
-        `You are WAKTI AI, a friendly intelligent assistant specialized in productivity. Help the user in a helpful and friendly way.`;
+      // REGULAR CHAT MODE WITH MEMORY
+      const basePrompt = responseLanguage === 'ar' 
+        ? `أنت WAKTI AI، المساعد الذكي الودود المتخصص في الإنتاجية. ساعد المستخدم بطريقة مفيدة وودية.`
+        : `You are WAKTI AI, a friendly intelligent assistant specialized in productivity. Help the user in a helpful and friendly way.`;
+      
+      systemPrompt = memoryPrompt ? `${basePrompt}\n\n${memoryPrompt}` : basePrompt;
     }
 
     console.log(`🤖 CALLING CLAUDE: Mode=${detectedMode}, Messages=${messages.length}, Language=${responseLanguage}`);
@@ -681,13 +678,16 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 
     // 💾 STORE CONVERSATION
     try {
+      // PROPER INPUT TYPE FOR DATABASE
+      const inputType = detectedMode === 'vision' ? 'vision' : 'text';
+
       await supabase.from('ai_chat_history').insert([
         {
           conversation_id: conversationId,
           user_id: userId,
           role: 'user',
           content: message,
-          input_type: detectedMode === 'vision' ? 'vision' : 'text',
+          input_type: inputType, // Use proper input type
           language: responseLanguage,
           created_at: new Date().toISOString()
         },
