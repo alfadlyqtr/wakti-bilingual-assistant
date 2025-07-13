@@ -678,8 +678,8 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 
     // 💾 STORE CONVERSATION
     try {
-      // PROPER INPUT TYPE FOR DATABASE
-      const inputType = detectedMode === 'vision' ? 'vision' : 'text';
+      // PROPER INPUT TYPE FOR DATABASE - FIX THE CONSTRAINT VIOLATION
+      const inputType = detectedMode === 'vision' ? 'image' : 'text';
 
       await supabase.from('ai_chat_history').insert([
         {
@@ -687,7 +687,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
           user_id: userId,
           role: 'user',
           content: message,
-          input_type: inputType, // Use proper input type
+          input_type: inputType, // Use proper input type that matches database constraints
           language: responseLanguage,
           created_at: new Date().toISOString()
         },
