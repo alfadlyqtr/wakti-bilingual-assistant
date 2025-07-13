@@ -78,7 +78,7 @@ export function ChatMessages({
             console.log('🎬 CHAT: Video completed, URL:', newRecord.video_url);
             
             // Create video content with proper HTML5 video tag
-            const videoContent = `🎬 **Video generation completed!**\n\nYour video is ready:\n\n<video controls width="400" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">\n<source src="${newRecord.video_url}" type="video/mp4">\nYour browser does not support the video tag.\n</video>\n\n✨ Template: ${newRecord.template}\n⏱️ Duration: ${newRecord.duration}s\n📐 Resolution: ${newRecord.resolution}`;
+            const videoContent = `🎬 **Video generation completed!**\n\nYour video is ready:\n\n<video controls width="400" class="video-player">\n<source src="${newRecord.video_url}" type="video/mp4">\nYour browser does not support the video tag.\n</video>\n\n✨ Template: ${newRecord.template}\n⏱️ Duration: ${newRecord.duration}s\n📐 Resolution: ${newRecord.resolution}`;
             
             // Dispatch custom event for message update
             window.dispatchEvent(new CustomEvent('updateVideoMessage', {
@@ -342,15 +342,7 @@ export function ChatMessages({
       return (
         <div 
           dangerouslySetInnerHTML={{ __html: content }}
-          className="prose prose-sm max-w-none video-container"
-          style={{
-            '& video': {
-              borderRadius: '8px',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-              maxWidth: '100%',
-              height: 'auto'
-            }
-          }}
+          className="prose prose-sm max-w-none [&_video]:rounded-lg [&_video]:shadow-md [&_video]:max-w-full [&_video]:h-auto"
         />
       );
     }
