@@ -19,30 +19,72 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
   const [videoCategory, setVideoCategory] = useState('custom');
   const [videoTemplate, setVideoTemplate] = useState('image2video');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Convert file to base64
-  const convertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.readAsDataURL(file);
-    });
+  // Upload image to Supabase storage and return URL
+  const uploadImageToStorage = async (file: File): Promise<string> => {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('Please log in to upload images');
+    }
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+    
+    console.log('📤 UPLOAD: Uploading image to storage:', fileName);
+    
+    const { data, error } = await supabase.storage
+      .from('ai-temp-images')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('❌ UPLOAD ERROR:', error);
+      throw new Error(`Upload failed: ${error.message}`);
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('ai-temp-images')
+      .getPublicUrl(data.path);
+
+    console.log('✅ UPLOAD SUCCESS:', urlData.publicUrl);
+    return urlData.publicUrl;
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    const base64Files = await Promise.all(
-      files.map(async (file) => ({
-        id: Date.now() + Math.random(),
-        name: file.name,
-        base64: await convertToBase64(file),
-        size: file.size
-      }))
-    );
-    setUploadedFiles(prev => [...prev, ...base64Files]);
+    
+    if (files.length === 0) return;
+    
+    setIsUploading(true);
+    
+    try {
+      const uploadPromises = files.map(async (file) => {
+        const storageUrl = await uploadImageToStorage(file);
+        return {
+          id: Date.now() + Math.random(),
+          name: file.name,
+          url: storageUrl,
+          size: file.size
+        };
+      });
+
+      const uploadedFileData = await Promise.all(uploadPromises);
+      setUploadedFiles(prev => [...prev, ...uploadedFileData]);
+      
+      console.log('✅ ALL FILES UPLOADED:', uploadedFileData.length);
+    } catch (error: any) {
+      console.error('❌ FILE UPLOAD ERROR:', error);
+      showError(error.message || 'Failed to upload images');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // ALL 33 TEMPLATES
@@ -100,25 +142,32 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
         throw new Error('Please upload at least one image');
       }
 
-      // CRITICAL FIX: Get authenticated user
+      // Get authenticated user
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError || !user) {
         throw new Error('Please log in to generate videos');
       }
 
-      const base64Images = uploadedFiles.map(file => file.base64);
+      // Use storage URLs instead of base64
+      const imageUrls = uploadedFiles.map(file => file.url);
       const isCustom = videoTemplate === 'image2video';
       const promptToUse = isCustom ? 'Generate creative video animation' : getTemplatePrompt(videoTemplate);
 
-      // FIXED: Include user_id in request
+      console.log('🎬 GENERATING VIDEO:', {
+        template: videoTemplate,
+        imageCount: imageUrls.length,
+        userId: user.id
+      });
+
+      // Call edge function with image URLs
       const response = await supabase.functions.invoke('vidu-video-generator', {
         body: {
           template: videoTemplate,
-          images: base64Images,
+          images: imageUrls, // Send URLs, not base64
           prompt: promptToUse,
           mode: isCustom ? 'image2video' : 'template2video',
-          user_id: user.id // CRITICAL FIX: Include authenticated user ID
+          user_id: user.id
         }
       });
 
@@ -126,11 +175,18 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
 
       if (response.data?.success) {
         showSuccess('🎬 Video generation started! You will be notified when it\'s ready.');
-        onVideoGenerated({ jobId: response.data.job_id, template: videoTemplate });
+        onVideoGenerated({ 
+          jobId: response.data.job_id, 
+          template: videoTemplate,
+          taskId: response.data.job_id
+        });
         onClose();
+      } else {
+        throw new Error('Video generation failed to start');
       }
 
     } catch (error: any) {
+      console.error('❌ VIDEO GENERATION ERROR:', error);
       showError(error.message || 'Video generation failed');
     } finally {
       setIsGenerating(false);
@@ -181,11 +237,19 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
             </p>
           </div>
           <div className="flex gap-3 justify-center">
-            <Button onClick={() => fileInputRef.current?.click()} className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700">
+            <Button 
+              onClick={() => fileInputRef.current?.click()} 
+              className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
+              disabled={isUploading}
+            >
               <Upload className="h-4 w-4 mr-2" />
-              {language === 'ar' ? 'اختر صور' : 'Choose Images'}
+              {isUploading ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') : (language === 'ar' ? 'اختر صور' : 'Choose Images')}
             </Button>
-            <Button onClick={() => cameraInputRef.current?.click()} className="bg-pink-600 hover:bg-pink-700">
+            <Button 
+              onClick={() => cameraInputRef.current?.click()} 
+              className="bg-pink-600 hover:bg-pink-700"
+              disabled={isUploading}
+            >
               <Camera className="h-4 w-4 mr-2" />
               {language === 'ar' ? 'كاميرا' : 'Camera'}
             </Button>
@@ -204,7 +268,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
             {uploadedFiles.map((file) => (
               <div key={file.id} className="relative">
                 <img 
-                  src={file.base64} 
+                  src={file.url} 
                   className="w-16 h-16 object-cover rounded-lg border-2 border-purple-300" 
                   alt="Upload preview"
                 />
@@ -228,9 +292,10 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
               variant="outline" 
               size="sm"
               className="border-purple-300 text-purple-900 dark:text-purple-300"
+              disabled={isUploading}
             >
               <Upload className="h-3 w-3 mr-1" />
-              {language === 'ar' ? 'المزيد' : 'Add More'}
+              {isUploading ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') : (language === 'ar' ? 'المزيد' : 'Add More')}
             </Button>
           </div>
 
@@ -306,7 +371,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated }: VideoUploadI
             {/* Generate Button */}
             <Button 
               onClick={handleGenerateVideo}
-              disabled={isGenerating || uploadedFiles.length === 0}
+              disabled={isGenerating || uploadedFiles.length === 0 || isUploading}
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 py-4 text-lg font-medium"
             >
               {isGenerating ? (

@@ -265,7 +265,14 @@ serve(async (req) => {
   try {
     const { template, images, prompt, mode, user_id } = await req.json();
     
-    console.log('🎬 VIDEO GEN: Starting', { template, mode, imageCount: images?.length, user_id });
+    console.log('🎬 VIDEO GEN: Starting', { 
+      template, 
+      mode, 
+      imageCount: images?.length, 
+      user_id,
+      imageType: typeof images?.[0],
+      imagesPreview: images?.slice(0, 2).map((img: string) => img.substring(0, 50) + '...')
+    });
     
     if (!VIDU_API_KEY) {
       throw new Error('VIDU_API_KEY not configured');
@@ -273,6 +280,20 @@ serve(async (req) => {
 
     if (!user_id) {
       throw new Error('user_id is required');
+    }
+
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      throw new Error('At least one image URL is required');
+    }
+
+    // Validate that images are URLs, not base64
+    const invalidImages = images.filter((img: string) => {
+      return typeof img !== 'string' || (!img.startsWith('http') && !img.startsWith('https'));
+    });
+
+    if (invalidImages.length > 0) {
+      console.error('❌ INVALID IMAGES:', invalidImages);
+      throw new Error('All images must be valid URLs');
     }
 
     // Initialize Supabase client
@@ -318,7 +339,7 @@ serve(async (req) => {
     const result = await response.json();
     console.log('✅ VIDU SUCCESS:', result.task_id);
     
-    // FIXED: Store in database with EXPLICIT column names to prevent order mismatch
+    // FIXED: Store in database with EXPLICIT column names and proper array handling
     const { error: dbError } = await supabase
       .from('video_generation_tasks')
       .insert({
@@ -328,7 +349,7 @@ serve(async (req) => {
         mode: isCustom ? 'image2video' : 'template2video',
         prompt: templateConfig.prompt || 'No prompt specified',
         status: result.state || 'processing',
-        images: images,
+        images: images, // This should now be an array of URLs
         seed: templateConfig.seed || Math.floor(Math.random() * 1000000),
         duration: templateConfig.duration || 4,
         resolution: templateConfig.resolution || '720p',

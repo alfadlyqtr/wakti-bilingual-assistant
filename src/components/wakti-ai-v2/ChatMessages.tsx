@@ -53,14 +53,14 @@ export function ChatMessages({
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
 
-  // CRITICAL FIX: Real-time video updates subscription
+  // ENHANCED: Real-time video updates subscription with better error handling
   useEffect(() => {
     if (!userProfile?.id) return;
 
     console.log('🎬 CHAT: Setting up video updates subscription for user:', userProfile.id);
 
     const channel = supabase
-      .channel('video-updates')
+      .channel('video-updates-' + userProfile.id)
       .on(
         'postgres_changes',
         {
@@ -75,47 +75,26 @@ export function ChatMessages({
           const { new: newRecord } = payload;
           
           if (newRecord.status === 'completed' && newRecord.video_url) {
-            // Find and update the corresponding chat message
-            const videoContent = `🎬 Video generated successfully!\n\n<video controls width="400" style="max-width: 100%; border-radius: 8px;">\n<source src="${newRecord.video_url}" type="video/mp4">\nYour browser does not support the video tag.\n</video>`;
+            console.log('🎬 CHAT: Video completed, URL:', newRecord.video_url);
             
-            // Trigger message update through parent component
-            if (onUpdateMessage) {
-              // Look for message that mentions video generation for this task
-              const targetMessage = sessionMessages.find(msg => 
-                msg.content?.includes('Video generation started') && 
-                msg.content?.includes('🎬')
-              );
-              
-              if (targetMessage) {
-                console.log('🎬 CHAT: Updating message with video:', targetMessage.id);
-                onUpdateMessage(targetMessage.id, videoContent);
-              }
-            }
+            // Create video content with proper HTML5 video tag
+            const videoContent = `🎬 **Video generation completed!**\n\nYour video is ready:\n\n<video controls width="400" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">\n<source src="${newRecord.video_url}" type="video/mp4">\nYour browser does not support the video tag.\n</video>\n\n✨ Template: ${newRecord.template}\n⏱️ Duration: ${newRecord.duration}s\n📐 Resolution: ${newRecord.resolution}`;
             
-            // Also dispatch custom event for broader handling
+            // Dispatch custom event for message update
             window.dispatchEvent(new CustomEvent('updateVideoMessage', {
               detail: {
                 taskId: newRecord.task_id,
                 videoUrl: newRecord.video_url,
                 status: newRecord.status,
-                content: videoContent
+                content: videoContent,
+                template: newRecord.template
               }
             }));
-          } else if (newRecord.status === 'failed') {
-            // Handle failed video generation
-            const errorContent = `❌ Video generation failed. Please try again.`;
             
-            if (onUpdateMessage) {
-              const targetMessage = sessionMessages.find(msg => 
-                msg.content?.includes('Video generation started') && 
-                msg.content?.includes('🎬')
-              );
-              
-              if (targetMessage) {
-                console.log('🎬 CHAT: Updating message with error:', targetMessage.id);
-                onUpdateMessage(targetMessage.id, errorContent);
-              }
-            }
+          } else if (newRecord.status === 'failed') {
+            console.log('🎬 CHAT: Video generation failed');
+            
+            const errorContent = `❌ **Video generation failed**\n\nSorry, there was an issue generating your video. Please try again with different images or template.\n\n🔄 You can try:\n• Different image angles or lighting\n• Another template style\n• Reducing image file sizes`;
             
             window.dispatchEvent(new CustomEvent('updateVideoMessage', {
               detail: {
@@ -128,55 +107,40 @@ export function ChatMessages({
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('🎬 CHAT: Subscription status:', status);
+      });
 
     return () => {
       console.log('🎬 CHAT: Cleaning up video updates subscription');
       supabase.removeChannel(channel);
     };
-  }, [userProfile?.id, sessionMessages, onUpdateMessage]);
+  }, [userProfile?.id]);
 
   // Handle video update events
   useEffect(() => {
     const handleVideoUpdate = (event: CustomEvent) => {
       console.log('🎬 CHAT UPDATE: Received video update event', event.detail);
       
-      const { taskId, videoUrl, status, error, content } = event.detail;
+      const { taskId, videoUrl, status, error, content, template } = event.detail;
       
-      // Update parent component messages through custom event
-      const updateMessageEvent = new CustomEvent('updateSessionMessage', {
-        detail: {
-          filter: (msg: AIMessage) => {
-            // Look for message that contains the task ID or mentions video generation
-            return msg.content?.includes(taskId) || 
-                   (msg.content?.includes('Video generation started') && 
-                    msg.content?.includes('🎬'));
-          },
-          update: (msg: AIMessage) => {
-            console.log('🎬 CHAT UPDATE: Found message to update', msg.id);
-            
-            if (status === 'completed' && videoUrl) {
-              return {
-                ...msg,
-                content: content || `🎬 Video generated successfully!\n\n<video controls width="400" style="max-width: 100%; border-radius: 8px;">\n<source src="${videoUrl}" type="video/mp4">\nYour browser does not support the video tag.\n</video>`
-              };
-            } else if (status === 'failed') {
-              return {
-                ...msg,
-                content: content || `❌ Video generation failed: ${error}`
-              };
-            } else if (status === 'processing') {
-              return {
-                ...msg,
-                content: content
-              };
-            }
-            return msg;
-          }
+      // Find messages that mention video generation and update them
+      if (onUpdateMessage) {
+        // Look for recent video generation messages
+        const recentVideoMessage = sessionMessages
+          .slice()
+          .reverse()
+          .find(msg => 
+            msg.content?.includes('Video generation started') || 
+            msg.content?.includes('🎬') ||
+            msg.intent === 'video'
+          );
+        
+        if (recentVideoMessage) {
+          console.log('🎬 CHAT UPDATE: Updating message', recentVideoMessage.id);
+          onUpdateMessage(recentVideoMessage.id, content);
         }
-      });
-      
-      window.dispatchEvent(updateMessageEvent);
+      }
     };
     
     // Listen for video update events
@@ -186,7 +150,7 @@ export function ChatMessages({
     return () => {
       window.removeEventListener('updateVideoMessage', handleVideoUpdate as EventListener);
     };
-  }, []);
+  }, [sessionMessages, onUpdateMessage]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -262,8 +226,8 @@ export function ChatMessages({
             
             <div className="text-sm leading-relaxed">
               {language === 'ar' 
-                ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
-                : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
+                ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🎬 **إنشاء الفيديوهات** - ارفع صورك وسأحولها لفيديوهات مذهلة\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
+                : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🎬 **Generate Videos** - Upload your photos and I'll turn them into amazing videos\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
               }
             </div>
             
@@ -273,8 +237,8 @@ export function ChatMessages({
                 {/* Copy Button */}
                 <button
                   onClick={() => navigator.clipboard.writeText(language === 'ar' 
-                    ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
-                    : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
+                    ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🎬 **إنشاء الفيديوهات** - ارفع صورك وسأحولها لفيديوهات مذهلة\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
+                    : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🎬 **Generate Videos** - Upload your photos and I'll turn them into amazing videos\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
                   )}
                   className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
@@ -285,8 +249,8 @@ export function ChatMessages({
                 {/* Native TTS Button */}
                 <button
                   onClick={() => handleSpeak(language === 'ar' 
-                    ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
-                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome'
+                    ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، إنشاء الفيديوهات، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
+                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, generate videos, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome'
                   )}
                   className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice'}
@@ -313,6 +277,11 @@ export function ChatMessages({
       const content = message.content.toLowerCase();
       if (content.includes('generate image') || content.includes('create image') || content.includes('make image') || content.includes('draw') || content.includes('paint')) {
         return '🎨 Image';
+      }
+      
+      // Check for video generation keywords
+      if (content.includes('generate video') || content.includes('create video') || content.includes('make video')) {
+        return '🎬 Video';
       }
       
       // Check for explicit search keywords
@@ -351,20 +320,20 @@ export function ChatMessages({
     if (content.includes('image generated') || content.includes('here is the image') || message.imageUrl) {
       return '🎨 Image';
     }
+    if (content.includes('video generat') || content.includes('🎬') || content.includes('<video')) {
+      return '🎬 Video';
+    }
     if (content.includes('search results') || content.includes('found the following')) {
       return '🔍 Search';
     }
     if (content.includes('analyzing the image') || content.includes('i can see')) {
       return '👁️ Vision';
     }
-    if (content.includes('video generation') || content.includes('🎬')) {
-      return '🎬 Video';
-    }
     
     return '💬 Chat';
   };
 
-  // ENHANCED: Function to render message content with proper image/video display and modal functionality
+  // ENHANCED: Function to render message content with proper video display
   const renderMessageContent = (message: AIMessage) => {
     const content = message.content;
     
@@ -373,7 +342,15 @@ export function ChatMessages({
       return (
         <div 
           dangerouslySetInnerHTML={{ __html: content }}
-          className="prose prose-sm max-w-none"
+          className="prose prose-sm max-w-none video-container"
+          style={{
+            '& video': {
+              borderRadius: '8px',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+              maxWidth: '100%',
+              height: 'auto'
+            }
+          }}
         />
       );
     }
@@ -427,7 +404,7 @@ export function ChatMessages({
       }
     }
     
-    // Regular text content
+    // Regular text content with markdown-style formatting
     return (
       <div className="whitespace-pre-wrap">
         {content}
@@ -442,7 +419,7 @@ export function ChatMessages({
           {/* Welcome Message */}
           {renderWelcomeMessage()}
           
-          {/* Chat Messages with FIXED badge logic and image display */}
+          {/* Chat Messages with FIXED badge logic and enhanced video display */}
           {sessionMessages.map((message, index) => (
             <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
               <div className="flex gap-3 max-w-[80%]">
