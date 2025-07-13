@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.vidu-status-poller]
 verify_jwt = false
 
+[functions.vidu-manual-check]
+verify_jwt = false
+
 [functions.wakti-ai-v2-brain]
 verify_jwt = false
 
