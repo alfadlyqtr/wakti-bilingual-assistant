@@ -22,13 +22,13 @@ serve(async (req) => {
     // Extract data from callback - handle both possible formats
     const task_id = body.task_id || body.id || body.taskId
     const state = body.state || body.status
-    const video_url = body.video_url || body.videoUrl || body.url
+    const callback_video_url = body.video_url || body.videoUrl || body.url
     
     console.log('🎬 CALLBACK: Extracted data:', {
       task_id,
       state,
-      video_url,
-      hasVideoUrl: !!video_url
+      callback_video_url,
+      hasCallbackVideoUrl: !!callback_video_url
     })
     
     // Validation
@@ -92,6 +92,75 @@ serve(async (req) => {
       current_video_url: existingTask.video_url
     })
 
+    let finalVideoUrl = callback_video_url
+
+    // If status is completed but we don't have a video URL from callback, fetch it from Vidu API
+    if (dbStatus === 'completed' && !finalVideoUrl) {
+      console.log('🎬 CALLBACK: Status is completed but no video URL in callback. Fetching from Vidu API...')
+      
+      const viduApiKey = Deno.env.get('VIDU_API_KEY')
+      if (!viduApiKey) {
+        console.error('❌ CALLBACK: VIDU_API_KEY not configured')
+        return new Response(JSON.stringify({ 
+          error: 'VIDU_API_KEY not configured' 
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      try {
+        console.log('🎬 CALLBACK: Making GET request to Vidu API for task:', task_id)
+        
+        const viduResponse = await fetch(`https://api.vidu.com/ent/v2/generation/${task_id}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Token ${viduApiKey}`,
+            'Content-Type': 'application/json'
+          }
+        })
+
+        console.log('🎬 CALLBACK: Vidu API response status:', viduResponse.status)
+
+        if (!viduResponse.ok) {
+          const errorText = await viduResponse.text()
+          console.error('❌ CALLBACK: Vidu API error:', errorText)
+          throw new Error(`Vidu API error: ${viduResponse.status} - ${errorText}`)
+        }
+
+        const viduData = await viduResponse.json()
+        console.log('🎬 CALLBACK: Vidu API response data:', JSON.stringify(viduData, null, 2))
+
+        // Extract video URL from Vidu API response
+        finalVideoUrl = viduData.video_url || viduData.videoUrl || viduData.url
+        
+        if (finalVideoUrl) {
+          console.log('✅ CALLBACK: Successfully fetched video URL from Vidu API:', finalVideoUrl)
+        } else {
+          console.warn('⚠️ CALLBACK: No video URL found in Vidu API response')
+        }
+
+      } catch (viduError) {
+        console.error('❌ CALLBACK: Error fetching video from Vidu API:', viduError)
+        
+        // Log the error but don't fail the callback - update status anyway
+        await supabase
+          .from('audit_logs')
+          .insert({
+            action: 'vidu_fetch_error',
+            table_name: 'video_generation_tasks',
+            record_id: task_id,
+            user_id: existingTask.user_id,
+            details: {
+              error: viduError.message,
+              task_id: task_id,
+              callback_received: true,
+              vidu_fetch_failed: true
+            }
+          })
+      }
+    }
+
     // Prepare update data
     const updateData: any = {
       status: dbStatus,
@@ -99,9 +168,15 @@ serve(async (req) => {
     }
 
     // Only set video_url if we have one and status is completed
-    if (video_url && dbStatus === 'completed') {
-      updateData.video_url = video_url
-      console.log('🎬 CALLBACK: Setting video URL:', video_url)
+    if (finalVideoUrl && dbStatus === 'completed') {
+      updateData.video_url = finalVideoUrl
+      console.log('🎬 CALLBACK: Setting video URL in update:', finalVideoUrl)
+    }
+
+    // If failed, clear any existing video URL
+    if (dbStatus === 'failed') {
+      updateData.video_url = null
+      updateData.error_message = body.error_message || body.errorMessage || 'Video generation failed'
     }
 
     console.log('🎬 CALLBACK: Update data:', updateData)
@@ -128,7 +203,7 @@ serve(async (req) => {
     console.log('✅ CALLBACK: Task updated successfully:', {
       task_id,
       newStatus: dbStatus,
-      videoUrl: video_url,
+      videoUrl: finalVideoUrl,
       updatedRecord: updatedData
     })
 
@@ -143,9 +218,10 @@ serve(async (req) => {
         details: {
           original_state: state,
           mapped_status: dbStatus,
-          video_url: video_url,
+          video_url: finalVideoUrl,
           callback_body: body,
-          success: true
+          success: true,
+          video_fetched_from_api: !callback_video_url && !!finalVideoUrl
         }
       })
       .then(({ error }) => {
@@ -156,7 +232,7 @@ serve(async (req) => {
       success: true,
       task_id: task_id,
       status: dbStatus,
-      video_url: video_url || null
+      video_url: finalVideoUrl || null
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
