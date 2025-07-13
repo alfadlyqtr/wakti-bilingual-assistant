@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -8,6 +7,7 @@ import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { Badge } from '@/components/ui/badge';
+import { ImageModal } from './ImageModal';
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -47,6 +47,7 @@ export function ChatMessages({
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
 
   // Handle video update events
   useEffect(() => {
@@ -273,7 +274,7 @@ export function ChatMessages({
     return '💬 Chat';
   };
 
-  // FIXED: Function to render message content with proper image display
+  // FIXED: Function to render message content with proper image display and modal functionality
   const renderMessageContent = (message: AIMessage) => {
     const content = message.content;
     
@@ -287,26 +288,31 @@ export function ChatMessages({
       );
     }
     
-    // FIXED: Check for generated images (Runware URLs)
+    // FIXED: Check for generated images (Runware URLs) with modal functionality
     if (message.imageUrl || content.includes('https://im.runware.ai/')) {
       const imageUrl = message.imageUrl || content.match(/https:\/\/im\.runware\.ai\/[^\s\)]+/)?.[0];
       
       if (imageUrl) {
+        // Extract prompt from content if available
+        const promptMatch = content.match(/prompt:\s*(.+?)(?:\n|$)/i);
+        const prompt = promptMatch ? promptMatch[1].trim() : undefined;
+        
         return (
           <div className="space-y-3">
             {/* Show text content if any (excluding the URL) */}
             {content && !content.includes(imageUrl) && (
               <div className="whitespace-pre-wrap">
-                {content}
+                {content.replace(imageUrl, '').trim()}
               </div>
             )}
             
-            {/* Display the actual image */}
+            {/* Display the actual image with click handler for modal */}
             <div className="relative">
               <img
                 src={imageUrl}
                 alt="Generated image"
-                className="max-w-full h-auto rounded-lg border border-border/50 shadow-sm"
+                className="max-w-full h-auto rounded-lg border border-border/50 shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setSelectedImage({ url: imageUrl, prompt })}
                 onError={(e) => {
                   console.error('Image failed to load:', imageUrl);
                   e.currentTarget.style.display = 'none';
@@ -315,7 +321,8 @@ export function ChatMessages({
               
               {/* Copy URL button overlay */}
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   navigator.clipboard.writeText(imageUrl);
                   // Could add a toast here if needed
                 }}
@@ -339,129 +346,141 @@ export function ChatMessages({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-48">
-      <div className="max-w-4xl mx-auto">
-        {/* Welcome Message */}
-        {renderWelcomeMessage()}
-        
-        {/* Chat Messages with FIXED badge logic and image display */}
-        {sessionMessages.map((message, index) => (
-          <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
-            <div className="flex gap-3 max-w-[80%]">
-              {message.role === 'assistant' && (
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                </div>
-              )}
-              
-              <div className={`rounded-lg px-4 py-3 relative ${
-                message.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border'
-              }`}>
-                {/* FIXED: Mode Badge with proper logic */}
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge variant="secondary" className="text-xs px-2 py-0.5 font-medium">
-                    {getMessageBadge(message, activeTrigger)}
-                  </Badge>
-                </div>
-                
-                <div className="text-sm leading-relaxed">
-                  {renderMessageContent(message)}
-                </div>
-                
-                {/* Image Preview in Chat Messages */}
-                {message.attachedFiles && message.attachedFiles.length > 0 && (
-                  <div className="mt-2 space-y-2">
-                    {message.attachedFiles.map((file, fileIndex) => (
-                      <div key={fileIndex} className="relative">
-                        <img
-                          src={file.url.startsWith('data:') ? file.url : `data:${file.type};base64,${file.url}`}
-                          alt={file.name}
-                          className="max-w-xs rounded-lg border border-border/50"
-                        />
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {file.imageType?.name || 'General'}
-                        </div>
-                      </div>
-                    ))}
+    <>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-48">
+        <div className="max-w-4xl mx-auto">
+          {/* Welcome Message */}
+          {renderWelcomeMessage()}
+          
+          {/* Chat Messages with FIXED badge logic and image display */}
+          {sessionMessages.map((message, index) => (
+            <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
+              <div className="flex gap-3 max-w-[80%]">
+                {message.role === 'assistant' && (
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                      <Bot className="w-4 h-4 text-white" />
+                    </div>
                   </div>
                 )}
                 
-                {/* Mini Buttons Bar - Always Visible for Both User and AI */}
-                <div className="flex items-center justify-between mt-2">
-                  <div className="flex gap-1">
-                    {/* Copy Button */}
-                    <button
-                      onClick={() => navigator.clipboard.writeText(message.content)}
-                      className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
-                      title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
-                    >
-                      <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                    </button>
-                    
-                    {/* Native TTS Button with Stop Functionality */}
-                    <button
-                      onClick={() => handleSpeak(message.content, message.id)}
-                      className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
-                      title={speakingMessageId === message.id 
-                        ? (language === 'ar' ? 'إيقاف القراءة' : 'Stop reading')
-                        : (language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice')
-                      }
-                    >
-                      {speakingMessageId === message.id ? (
-                        <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                      ) : (
-                        <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                      )}
-                    </button>
+                <div className={`rounded-lg px-4 py-3 relative ${
+                  message.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border'
+                }`}>
+                  {/* FIXED: Mode Badge with proper logic */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="secondary" className="text-xs px-2 py-0.5 font-medium">
+                      {getMessageBadge(message, activeTrigger)}
+                    </Badge>
+                  </div>
+                  
+                  <div className="text-sm leading-relaxed">
+                    {renderMessageContent(message)}
+                  </div>
+                  
+                  {/* Image Preview in Chat Messages */}
+                  {message.attachedFiles && message.attachedFiles.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      {message.attachedFiles.map((file, fileIndex) => (
+                        <div key={fileIndex} className="relative">
+                          <img
+                            src={file.url.startsWith('data:') ? file.url : `data:${file.type};base64,${file.url}`}
+                            alt={file.name}
+                            className="max-w-xs rounded-lg border border-border/50"
+                          />
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {file.imageType?.name || 'General'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Mini Buttons Bar - Always Visible for Both User and AI */}
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex gap-1">
+                      {/* Copy Button */}
+                      <button
+                        onClick={() => navigator.clipboard.writeText(message.content)}
+                        className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                        title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
+                      >
+                        <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                      </button>
+                      
+                      {/* Native TTS Button with Stop Functionality */}
+                      <button
+                        onClick={() => handleSpeak(message.content, message.id)}
+                        className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                        title={speakingMessageId === message.id 
+                          ? (language === 'ar' ? 'إيقاف القراءة' : 'Stop reading')
+                          : (language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice')
+                        }
+                      >
+                        {speakingMessageId === message.id ? (
+                          <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                        ) : (
+                          <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
+                
+                {message.role === 'user' && (
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-primary-foreground" />
+                    </div>
+                  </div>
+                )}
               </div>
-              
-              {message.role === 'user' && (
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                    <User className="w-4 h-4 text-primary-foreground" />
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
-        ))}
-        
-        {/* Loading Indicator with proper TypingIndicator */}
-        {isLoading && <TypingIndicator />}
-        
-        {/* ENHANCED TASK CONFIRMATION DISPLAY WITH DEBUG LOGGING */}
-        {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
-          <div className="flex justify-center mb-8 mt-6">
-            <TaskConfirmationCard
-              type={pendingTaskData ? 'task' : 'reminder'}
-              data={pendingTaskData || pendingReminderData}
-              onConfirm={() => {
-                console.log('🎯 TASK CONFIRMATION: User confirmed', pendingTaskData || pendingReminderData);
-                if (pendingTaskData) {
-                  onTaskConfirmation(pendingTaskData);
-                } else {
-                  onReminderConfirmation(pendingReminderData);
-                }
-              }}
-              onCancel={() => {
-                console.log('❌ TASK CONFIRMATION: User cancelled');
-                onCancelTaskConfirmation();
-              }}
-              isLoading={taskConfirmationLoading}
-            />
-          </div>
-        )}
-        
-        {/* Extra spacing before end to ensure visibility */}
-        <div className="h-24" />
-        <div ref={messagesEndRef} />
+          ))}
+          
+          {/* Loading Indicator with proper TypingIndicator */}
+          {isLoading && <TypingIndicator />}
+          
+          {/* ENHANCED TASK CONFIRMATION DISPLAY WITH DEBUG LOGGING */}
+          {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
+            <div className="flex justify-center mb-8 mt-6">
+              <TaskConfirmationCard
+                type={pendingTaskData ? 'task' : 'reminder'}
+                data={pendingTaskData || pendingReminderData}
+                onConfirm={() => {
+                  console.log('🎯 TASK CONFIRMATION: User confirmed', pendingTaskData || pendingReminderData);
+                  if (pendingTaskData) {
+                    onTaskConfirmation(pendingTaskData);
+                  } else {
+                    onReminderConfirmation(pendingReminderData);
+                  }
+                }}
+                onCancel={() => {
+                  console.log('❌ TASK CONFIRMATION: User cancelled');
+                  onCancelTaskConfirmation();
+                }}
+                isLoading={taskConfirmationLoading}
+              />
+            </div>
+          )}
+          
+          {/* Extra spacing before end to ensure visibility */}
+          <div className="h-24" />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
-    </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <ImageModal
+          isOpen={!!selectedImage}
+          onClose={() => setSelectedImage(null)}
+          imageUrl={selectedImage.url}
+          prompt={selectedImage.prompt}
+        />
+      )}
+    </>
   );
 }
