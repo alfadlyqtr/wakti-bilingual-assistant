@@ -198,7 +198,7 @@ const WaktiAIV2 = () => {
     }
 
     // Determine input type based on attached files
-    let finalInputType: 'text' | 'voice' | 'vision' = trigger;
+    let finalInputType: 'text' | 'voice' | 'vision' = trigger as 'text' | 'voice' | 'vision';
     if (attachedFiles && attachedFiles.length > 0) {
       finalInputType = 'vision';
     }
