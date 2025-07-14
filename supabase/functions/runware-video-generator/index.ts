@@ -20,22 +20,22 @@ serve(async (req) => {
   try {
     const { image_url, prompt, user_id } = await req.json();
     
-    console.log('🎬 VIDEO GENERATION: Starting video generation', { 
+    console.log('🎬 RUNWARE VIDEO: Starting video generation', { 
       user_id,
       hasImage: !!image_url,
       promptLength: prompt?.length
     });
     
     if (!RUNWARE_API_KEY) {
-      throw new Error('Video generation service not configured');
+      throw new Error('RUNWARE_API_KEY not configured');
     }
 
     if (!user_id) {
-      throw new Error('Authentication required');
+      throw new Error('user_id is required');
     }
 
     if (!image_url || !prompt) {
-      throw new Error('Image and description are required');
+      throw new Error('Both image_url and prompt are required');
     }
 
     // Initialize Supabase client
@@ -89,7 +89,7 @@ serve(async (req) => {
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`❌ MODEL ${model} ERROR:`, response.status, errorText);
-          lastError = new Error(`${model} failed: ${response.status}`);
+          lastError = new Error(`${model} failed: ${response.status} - ${errorText}`);
           continue; // Try next model
         }
         
@@ -108,7 +108,7 @@ serve(async (req) => {
     // If all models failed
     if (!result || !modelUsed) {
       console.error('❌ ALL MODELS FAILED:', lastError);
-      throw new Error('Video generation service temporarily unavailable. Please try again later.');
+      throw new Error(`All video models failed. Last error: ${lastError?.message}`);
     }
     
     // Store in database
@@ -117,8 +117,8 @@ serve(async (req) => {
       .insert({
         task_id: taskUUID,
         user_id: user_id,
-        template: 'video_generation',
-        mode: 'image_to_video',
+        template: 'runware_video',
+        mode: 'runware_video',
         prompt: prompt,
         status: 'processing',
         images: [image_url],
@@ -133,7 +133,7 @@ serve(async (req) => {
 
     if (dbError) {
       console.error('❌ DB ERROR:', dbError);
-      throw new Error('Failed to save video generation task');
+      throw new Error(`Database error: ${dbError.message}`);
     }
     
     console.log('✅ DATABASE: Task stored successfully with task_id:', taskUUID);
@@ -143,17 +143,18 @@ serve(async (req) => {
       success: true,
       job_id: taskUUID,
       status: 'processing',
-      message: 'Video generation started successfully',
-      model_used: modelUsed
+      message: 'Runware video generation started',
+      model_used: modelUsed,
+      estimated_cost: '$0.22'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
     
   } catch (error) {
-    console.error('❌ VIDEO GENERATION ERROR:', error);
+    console.error('❌ RUNWARE VIDEO ERROR:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'Video generation failed'
+      error: error.message
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
