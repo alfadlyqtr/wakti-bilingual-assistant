@@ -1,4 +1,5 @@
 
+
 import { callDeepSeekAPI, detectLanguageFromText } from './utils.ts';
 
 /**
@@ -7,6 +8,7 @@ import { callDeepSeekAPI, detectLanguageFromText } from './utils.ts';
 
 export async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
   const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
+  const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
   
   console.log('🎨 IMAGE GEN: Starting generation for:', prompt.substring(0, 50));
   
@@ -20,36 +22,56 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
     };
   }
 
+  // ARABIC TRANSLATION LOGIC - SIMPLE 4 STEPS
+  let finalPrompt = prompt;
+  let originalPrompt = prompt;
+
   try {
-    let finalPrompt = prompt;
-    let translationUsed = false;
+    // STEP 1: Detect if prompt is in Arabic
+    const isArabic = language === 'ar' || /[\u0600-\u06FF]/.test(prompt);
     
-    // Check if prompt is in Arabic and needs translation
-    const detectedLanguage = detectLanguageFromText(prompt);
-    const isArabicPrompt = language === 'ar' || detectedLanguage === 'ar';
-    
-    if (isArabicPrompt) {
-      console.log('🌍 ARABIC PROMPT DETECTED: Translating to English for Runware');
+    // STEP 2: If Arabic detected, translate to English using DeepSeek
+    if (isArabic) {
+      console.log('🌐 ARABIC DETECTED: Translating to English for Runware');
       
-      try {
-        const translationResponse = await translateImagePrompt(prompt);
-        if (translationResponse.success && translationResponse.translatedPrompt) {
-          finalPrompt = translationResponse.translatedPrompt;
-          translationUsed = true;
-          console.log('✅ TRANSLATION SUCCESS:', {
-            original: prompt.substring(0, 30) + '...',
-            translated: finalPrompt.substring(0, 30) + '...'
-          });
-        } else {
-          console.warn('⚠️ TRANSLATION FAILED: Using original prompt');
-          // Continue with original Arabic prompt (Runware might handle some Arabic)
+      if (!DEEPSEEK_API_KEY) {
+        throw new Error('Translation service not available');
+      }
+
+      const translationResponse = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            {
+              role: 'system',
+              content: 'Translate Arabic image prompts to English for AI image generation. Return ONLY the English translation.'
+            },
+            {
+              role: 'user',
+              content: `Translate this Arabic image prompt to English: ${prompt}`
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.1
+        }),
+      });
+
+      if (translationResponse.ok) {
+        const result = await translationResponse.json();
+        const translatedText = result.choices?.[0]?.message?.content?.trim();
+        if (translatedText) {
+          finalPrompt = translatedText;
+          console.log('✅ TRANSLATION SUCCESS:', translatedText.substring(0, 50));
         }
-      } catch (translationError) {
-        console.error('❌ TRANSLATION ERROR:', translationError);
-        // Continue with original prompt if translation fails
       }
     }
 
+    // STEP 3: Send English prompt to Runware
     const taskUUID = crypto.randomUUID();
     
     const imageGenPayload = [
@@ -60,7 +82,7 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
       {
         taskType: "imageInference",
         taskUUID: taskUUID,
-        positivePrompt: finalPrompt,
+        positivePrompt: finalPrompt, // THIS IS THE ENGLISH PROMPT
         width: 1024,
         height: 1024,
         model: "runware:100@1",
@@ -77,113 +99,40 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ IMAGE API ERROR:', response.status, errorText);
-      throw new Error(`Image generation API error: ${response.status}`);
+      throw new Error(`Runware API error: ${response.status}`);
     }
 
-    // Safe JSON parsing with validation
-    const responseText = await response.text();
-    if (!responseText || responseText.trim() === '') {
-      throw new Error('Empty response from image generation service');
-    }
+    const responseData = await response.json();
 
-    let responseData;
-    try {
-      responseData = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error('❌ IMAGE JSON parsing error:', jsonError);
-      console.error('❌ Raw response:', responseText.substring(0, 200));
-      throw new Error('Invalid JSON response from image generation service');
-    }
-
-    // Process the response safely
-    if (responseData && responseData.data && Array.isArray(responseData.data)) {
+    if (responseData?.data) {
       const imageResult = responseData.data.find((item: any) => item.taskType === 'imageInference');
       
-      if (imageResult && imageResult.imageURL) {
-        console.log('✅ IMAGE GEN: Successfully generated image', {
-          translationUsed,
-          originalLanguage: isArabicPrompt ? 'ar' : 'en'
-        });
+      if (imageResult?.imageURL) {
+        // STEP 4: Return with generated image
+        console.log('✅ IMAGE GENERATED SUCCESSFULLY');
+        
+        const responseMessage = language === 'ar' 
+          ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageResult.imageURL})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
+          : `🎨 Image generated successfully!\n\n![Generated Image](${imageResult.imageURL})\n\n**Prompt:** ${finalPrompt}`;
+        
         return {
           success: true,
           error: null,
           imageUrl: imageResult.imageURL,
-          translationUsed,
-          originalPrompt: translationUsed ? prompt : undefined,
-          finalPrompt: translationUsed ? finalPrompt : undefined
+          response: responseMessage
         };
       }
     }
 
-    console.warn('⚠️ IMAGE GEN: No valid image URL in response');
-    return {
-      success: false,
-      error: language === 'ar' 
-        ? 'لم يتم إنشاء الصورة بنجاح' 
-        : 'Image generation failed - no image URL returned',
-      imageUrl: null
-    };
+    throw new Error('No image URL in response');
 
   } catch (error) {
-    console.error('❌ IMAGE GEN: Critical error:', error);
-    
+    console.error('❌ IMAGE GEN ERROR:', error);
     return {
       success: false,
       error: language === 'ar' ? 'خطأ في إنشاء الصورة' : 'Image generation failed',
-      imageUrl: null,
-      details: error.message
+      imageUrl: null
     };
   }
 }
 
-/**
- * Translate Arabic image prompt to English using DeepSeek
- */
-async function translateImagePrompt(arabicPrompt: string): Promise<{
-  success: boolean;
-  translatedPrompt?: string;
-  error?: string;
-}> {
-  try {
-    console.log('🔄 TRANSLATING IMAGE PROMPT:', arabicPrompt.substring(0, 50));
-    
-    const messages = [
-      {
-        role: 'system',
-        content: `You are a professional translator specializing in image generation prompts. 
-Translate the Arabic image description to English while preserving all visual details, artistic styles, and technical specifications.
-Keep the translation accurate and suitable for AI image generation.
-Only return the English translation, nothing else.`
-      },
-      {
-        role: 'user',
-        content: arabicPrompt
-      }
-    ];
-
-    const response = await callDeepSeekAPI(messages, 150);
-    
-    if (response?.choices?.[0]?.message?.content) {
-      const translatedPrompt = response.choices[0].message.content.trim();
-      
-      console.log('✅ PROMPT TRANSLATION SUCCESS:', {
-        original: arabicPrompt.substring(0, 30) + '...',
-        translated: translatedPrompt.substring(0, 30) + '...'
-      });
-      
-      return {
-        success: true,
-        translatedPrompt
-      };
-    } else {
-      throw new Error('Invalid translation response from DeepSeek');
-    }
-  } catch (error) {
-    console.error('❌ PROMPT TRANSLATION ERROR:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}
