@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
+import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
 import { Upload, Camera, Download, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +21,7 @@ interface IsolatedVideoDialogProps {
 export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogProps) {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
+  const { addTask, activeTasks } = useVideoStatusPoller();
 
   // State management - completely isolated
   const [screen, setScreen] = useState<'upload' | 'generating'>('upload');
@@ -28,12 +30,15 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
   const [movement, setMovement] = useState('auto');
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [taskUUID, setTaskUUID] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Find current task from active tasks
+  const currentTask = currentTaskId ? activeTasks.find(task => task.task_id === currentTaskId) : null;
+  const progress = currentTask?.status === 'completed' ? 100 : currentTask?.status === 'processing' ? 75 : 0;
 
   // Reset all state when dialog opens/closes
   React.useEffect(() => {
@@ -46,12 +51,24 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
         setMovement('auto');
         setIsUploading(false);
         setIsGenerating(false);
-        setProgress(0);
+        setCurrentTaskId(null);
         setVideoUrl(null);
-        setTaskUUID(null);
       }, 200);
     }
   }, [open]);
+
+  // Listen for task completion
+  React.useEffect(() => {
+    if (currentTask?.status === 'completed' && currentTask.video_url) {
+      setVideoUrl(currentTask.video_url);
+      setIsGenerating(false);
+      showSuccess('Your video is ready!');
+    } else if (currentTask?.status === 'failed') {
+      setIsGenerating(false);
+      setScreen('upload');
+      showError(currentTask.error_message || 'Video generation failed');
+    }
+  }, [currentTask, showSuccess, showError]);
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -89,65 +106,6 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
     }
   };
 
-  const pollForResults = async (taskUUID: string) => {
-    const maxPolls = 60; // 5 minutes with 5-second intervals
-    let pollCount = 0;
-
-    const poll = async (): Promise<void> => {
-      try {
-        pollCount++;
-        console.log(`🔍 POLLING: Attempt ${pollCount}/${maxPolls} for task ${taskUUID}`);
-
-        const { data, error } = await supabase.functions.invoke('runware-get-response', {
-          body: { taskUUID }
-        });
-
-        if (error) throw error;
-
-        // Check if we have results
-        if (data.data && data.data.length > 0) {
-          const result = data.data.find((item: any) => item.taskUUID === taskUUID);
-          
-          if (result) {
-            if (result.status === 'success' && result.videoURL) {
-              setProgress(100);
-              setVideoUrl(result.videoURL);
-              setIsGenerating(false);
-              showSuccess('Your video is ready!');
-              return;
-            } else if (result.status === 'error') {
-              throw new Error(result.message || 'Video generation failed');
-            }
-          }
-        }
-
-        // Check errors array
-        if (data.errors && data.errors.length > 0) {
-          const error = data.errors.find((err: any) => err.taskUUID === taskUUID);
-          if (error) {
-            throw new Error(error.message || 'Video generation failed');
-          }
-        }
-
-        // Continue polling if still pending and within limits
-        if (pollCount < maxPolls) {
-          setTimeout(poll, 5000); // Poll every 5 seconds
-        } else {
-          throw new Error('Video generation timed out. Please try again.');
-        }
-
-      } catch (error: any) {
-        console.error('❌ POLLING ERROR:', error);
-        setIsGenerating(false);
-        setScreen('upload');
-        showError(error.message || 'Failed to check video status');
-      }
-    };
-
-    // Start polling after initial delay
-    setTimeout(poll, 3000);
-  };
-
   const handleGenerateVideo = async () => {
     if (!image || !prompt.trim()) {
       showError('Please upload an image and enter a description');
@@ -162,9 +120,16 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
 
     setIsGenerating(true);
     setScreen('generating');
-    setProgress(0);
 
     try {
+      // Clear any stuck processing tasks first
+      await supabase
+        .from('video_generation_tasks')
+        .update({ status: 'failed' })
+        .eq('user_id', user.id)
+        .eq('status', 'processing')
+        .eq('template', 'isolated_video');
+
       const { data, error } = await supabase.functions.invoke('generate-video-isolated', {
         body: {
           image_base64: image,
@@ -177,21 +142,16 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
 
-      setTaskUUID(data.taskUUID);
+      const taskId = data.taskUUID;
+      setCurrentTaskId(taskId);
 
-      // Start progress simulation (gradually increase over time)
-      let currentProgress = 0;
-      const progressInterval = setInterval(() => {
-        currentProgress += 2;
-        setProgress(Math.min(currentProgress, 90)); // Stop at 90% until completion
-        
-        if (currentProgress >= 90) {
-          clearInterval(progressInterval);
-        }
-      }, 2000);
+      // Add task to the poller
+      addTask({
+        task_id: taskId,
+        status: 'processing'
+      });
 
-      // Start polling for results
-      pollForResults(data.taskUUID);
+      console.log('✅ ISOLATED VIDEO: Task added to poller:', taskId);
 
     } catch (error: any) {
       console.error('❌ ISOLATED VIDEO: Generation failed', error);

@@ -12,80 +12,6 @@ const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// POLLING FUNCTION FOR ASYNC VIDEO GENERATION
-async function pollForVideoResult(taskUUID: string, maxAttempts = 30) {
-  console.log('🎬 POLLING: Starting polling for taskUUID:', taskUUID);
-  
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      console.log(`🎬 POLLING: Attempt ${attempt}/${maxAttempts}`);
-      
-      const pollResponse = await fetch('https://api.runware.ai/v1', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RUNWARE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify([
-          {
-            taskType: "getResponse",
-            taskUUID: taskUUID
-          }
-        ])
-      });
-
-      if (!pollResponse.ok) {
-        console.error('🎬 POLLING: Poll request failed:', pollResponse.status);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        continue;
-      }
-
-      const pollData = await pollResponse.json();
-      console.log(`🎬 POLLING: Attempt ${attempt} response:`, JSON.stringify(pollData, null, 2));
-
-      if (pollData.data && pollData.data.length > 0) {
-        const videoResult = pollData.data.find((item: any) => 
-          item.taskType === 'videoInference' && item.taskUUID === taskUUID
-        );
-
-        if (videoResult) {
-          if (videoResult.status === 'success' && videoResult.videoURL) {
-            console.log('🎬 POLLING: Video generation completed successfully');
-            return {
-              success: true,
-              videoUrl: videoResult.videoURL,
-              cost: videoResult.cost || null
-            };
-          } else if (videoResult.status === 'error') {
-            console.error('🎬 POLLING: Video generation failed:', videoResult);
-            return {
-              success: false,
-              error: `Video generation failed: ${videoResult.message || 'Unknown error'}`
-            };
-          } else if (videoResult.status === 'pending') {
-            console.log('🎬 POLLING: Still processing, waiting...');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            continue;
-          }
-        }
-      }
-
-      // If no result yet, wait and try again
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-    } catch (error) {
-      console.error(`🎬 POLLING: Error on attempt ${attempt}:`, error);
-      await new Promise(resolve => setTimeout(resolve, 3000));
-    }
-  }
-
-  console.error('🎬 POLLING: Max attempts reached, video generation timed out');
-  return {
-    success: false,
-    error: 'Video generation timed out after maximum polling attempts'
-  };
-}
-
 serve(async (req) => {
   console.log('🎬 ISOLATED VIDEO: Function called, method:', req.method);
   
@@ -166,7 +92,37 @@ serve(async (req) => {
     const imageUrl = urlData.publicUrl;
     console.log('✅ ISOLATED VIDEO: Image uploaded successfully:', imageUrl);
     
-    // Try models with proper fallback logic like runware-video-generator
+    // Store initial database record
+    const dbInsert = {
+      task_id: taskUUID,
+      user_id: user_id,
+      template: 'isolated_video',
+      mode: 'isolated',
+      prompt: prompt,
+      status: 'processing',
+      images: [imageUrl],
+      duration: 5,
+      resolution: '1920x1080',
+      movement_amplitude: 'auto',
+      video_url: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    console.log('💾 ISOLATED VIDEO: Storing task in database');
+    
+    const { error: dbError } = await supabase
+      .from('video_generation_tasks')
+      .insert(dbInsert);
+
+    if (dbError) {
+      console.error('❌ ISOLATED VIDEO: Database insert failed:', dbError);
+      throw new Error('Failed to create video generation task');
+    }
+
+    console.log('✅ ISOLATED VIDEO: Task stored successfully');
+    
+    // Try models with proper fallback logic
     const models = ['vidu:1@1', 'klingai:5@3'];
     let lastError = null;
     let result = null;
@@ -212,100 +168,61 @@ serve(async (req) => {
           const errorText = await response.text();
           console.error(`❌ MODEL ${model} ERROR:`, response.status, errorText);
           lastError = new Error(`${model} failed: ${response.status} - ${errorText}`);
-          continue; // Try next model
+          continue;
         }
         
         result = await response.json();
         modelUsed = model;
         console.log(`✅ MODEL ${model} SUCCESS:`, result);
-        break; // Success, exit loop
+        
+        // Update database with model used
+        await supabase
+          .from('video_generation_tasks')
+          .update({ 
+            model_used: modelUsed,
+            updated_at: new Date().toISOString()
+          })
+          .eq('task_id', taskUUID);
+        
+        break;
         
       } catch (error) {
         console.error(`❌ MODEL ${model} EXCEPTION:`, error);
         lastError = error;
-        continue; // Try next model
+        continue;
       }
     }
 
     // If all models failed
     if (!result || !modelUsed) {
       console.error('❌ ALL MODELS FAILED:', lastError);
+      
+      // Update database with failure
+      await supabase
+        .from('video_generation_tasks')
+        .update({ 
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('task_id', taskUUID);
+      
       throw new Error(`All video models failed. Last error: ${lastError?.message}`);
     }
     
-    // Store in database (isolated from other video systems)
-    const dbInsert = {
-      task_id: taskUUID,
-      user_id: user_id,
-      template: 'isolated_video',
-      mode: 'isolated',
-      prompt: prompt,
-      status: 'processing',
-      images: [imageUrl],
-      model_used: modelUsed,
-      duration: 5,
-      resolution: '1920x1080',
-      movement_amplitude: 'auto',
-      video_url: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+    console.log('🎬 ISOLATED VIDEO: Task submitted successfully, will be polled by status checker');
+    
+    const successResponse = {
+      success: true,
+      taskUUID: taskUUID,
+      message: 'Video generation started successfully',
+      status: 'processing'
     };
 
-    console.log('💾 ISOLATED VIDEO: Storing task in database');
+    console.log('🚀 ISOLATED VIDEO: Sending success response');
     
-    const { error: dbError } = await supabase
-      .from('video_generation_tasks')
-      .insert(dbInsert);
-
-    if (dbError) {
-      console.error('❌ ISOLATED VIDEO DB ERROR:', dbError);
-      // Don't fail the whole request if DB insert fails, but log it
-      console.warn('⚠️ ISOLATED VIDEO: Database insert failed, but continuing with video generation');
-    } else {
-      console.log('✅ ISOLATED VIDEO: Task stored successfully');
-    }
-    
-    // Start polling for result
-    console.log('🎬 ISOLATED VIDEO: Task submitted successfully, starting polling');
-    const pollResult = await pollForVideoResult(taskUUID);
-
-    if (pollResult.success) {
-      // Update database with successful result
-      await supabase
-        .from('video_generation_tasks')
-        .update({ 
-          status: 'completed', 
-          video_url: pollResult.videoUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('task_id', taskUUID);
-
-      const successResponse = {
-        success: true,
-        taskUUID: taskUUID,
-        videoUrl: pollResult.videoUrl,
-        cost: pollResult.cost,
-        status: 'completed',
-        message: 'Video generated successfully'
-      };
-
-      console.log('🚀 ISOLATED VIDEO: Sending success response');
-      
-      return new Response(JSON.stringify(successResponse), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    } else {
-      // Update database with error
-      await supabase
-        .from('video_generation_tasks')
-        .update({ 
-          status: 'failed', 
-          updated_at: new Date().toISOString()
-        })
-        .eq('task_id', taskUUID);
-
-      throw new Error(pollResult.error || 'Video generation failed');
-    }
+    return new Response(JSON.stringify(successResponse), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
     
   } catch (error) {
     console.error('❌ ISOLATED VIDEO ERROR:', error);

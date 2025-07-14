@@ -19,47 +19,50 @@ export function useVideoStatusPoller() {
     try {
       console.log('🔍 POLLING STATUS:', taskId);
       
-      // Check if it's a Runware task (starts with runware or has specific format)
-      const isRunwareTask = taskId.includes('-') && taskId.length > 20;
-      
-      if (isRunwareTask) {
-        // Poll Runware status
-        const { data, error } = await supabase.functions.invoke('runware-status-poller', {
+      // Check database for task status
+      const { data: dbData, error: dbError } = await supabase
+        .from('video_generation_tasks')
+        .select('*')
+        .eq('task_id', taskId)
+        .single();
+
+      if (dbError) {
+        console.error('❌ DB POLL ERROR:', dbError);
+        return { status: 'processing' };
+      }
+
+      console.log('🔍 DB STATUS RESULT:', dbData.status);
+
+      if (dbData.status === 'processing') {
+        // Check Runware status for processing tasks
+        const { data: runwareData, error: runwareError } = await supabase.functions.invoke('runware-status-poller', {
           body: { task_id: taskId }
         });
 
-        if (error) throw error;
-
-        console.log('🔍 RUNWARE STATUS RESULT:', data);
-        
-        if (data.status === 'completed' && data.video_url) {
-          showSuccess('🎉 Your Runware video is ready!');
-          setActiveTasks(prev => prev.filter(task => task.task_id !== taskId));
-          return { status: 'completed', video_url: data.video_url };
-        } else if (data.status === 'failed') {
-          showError(`Video generation failed: ${data.error_message || 'Unknown error'}`);
-          setActiveTasks(prev => prev.filter(task => task.task_id !== taskId));
-          return { status: 'failed', error_message: data.error_message };
+        if (runwareError) {
+          console.error('❌ RUNWARE POLL ERROR:', runwareError);
+          return { status: 'processing' };
         }
-      } else {
-        // Check database for other video tasks
-        const { data: dbData, error: dbError } = await supabase
-          .from('video_generation_tasks')
-          .select('*')
-          .eq('task_id', taskId)
-          .single();
 
-        if (dbError) throw dbError;
-
-        if (dbData.status === 'completed' && dbData.video_url) {
+        console.log('🔍 RUNWARE STATUS RESULT:', runwareData);
+        
+        if (runwareData.status === 'completed' && runwareData.video_url) {
           showSuccess('🎉 Your video is ready!');
           setActiveTasks(prev => prev.filter(task => task.task_id !== taskId));
-          return { status: 'completed', video_url: dbData.video_url };
-        } else if (dbData.status === 'failed') {
-          showError(`Video generation failed: ${dbData.error_message || 'Unknown error'}`);
+          return { status: 'completed', video_url: runwareData.video_url };
+        } else if (runwareData.status === 'failed') {
+          showError(`Video generation failed: ${runwareData.error_message || 'Unknown error'}`);
           setActiveTasks(prev => prev.filter(task => task.task_id !== taskId));
-          return { status: 'failed', error_message: dbData.error_message };
+          return { status: 'failed', error_message: runwareData.error_message };
         }
+      } else if (dbData.status === 'completed' && dbData.video_url) {
+        showSuccess('🎉 Your video is ready!');
+        setActiveTasks(prev => prev.filter(task => task.task_id !== taskId));
+        return { status: 'completed', video_url: dbData.video_url };
+      } else if (dbData.status === 'failed') {
+        showError(`Video generation failed: ${dbData.error_message || 'Unknown error'}`);
+        setActiveTasks(prev => prev.filter(task => task.task_id !== taskId));
+        return { status: 'failed', error_message: dbData.error_message };
       }
       
       return { status: 'processing' };
@@ -70,16 +73,20 @@ export function useVideoStatusPoller() {
   }, [showSuccess, showError]);
 
   const addTask = useCallback((task: VideoTask) => {
+    console.log('➕ ADDING TASK TO POLLER:', task.task_id);
     setActiveTasks(prev => [...prev.filter(t => t.task_id !== task.task_id), task]);
   }, []);
 
   const removeTask = useCallback((taskId: string) => {
+    console.log('➖ REMOVING TASK FROM POLLER:', taskId);
     setActiveTasks(prev => prev.filter(task => task.task_id !== taskId));
   }, []);
 
   // Polling effect
   useEffect(() => {
     if (activeTasks.length === 0) return;
+
+    console.log('🔄 POLLING ACTIVE TASKS:', activeTasks.length);
 
     const interval = setInterval(() => {
       activeTasks.forEach(task => {
@@ -92,10 +99,20 @@ export function useVideoStatusPoller() {
     return () => clearInterval(interval);
   }, [activeTasks, pollTaskStatus]);
 
+  // Update task status
+  const updateTaskStatus = useCallback((taskId: string, status: 'processing' | 'completed' | 'failed', video_url?: string, error_message?: string) => {
+    setActiveTasks(prev => prev.map(task => 
+      task.task_id === taskId 
+        ? { ...task, status, video_url, error_message }
+        : task
+    ));
+  }, []);
+
   return {
     activeTasks,
     addTask,
     removeTask,
-    pollTaskStatus
+    pollTaskStatus,
+    updateTaskStatus
   };
 }
