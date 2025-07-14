@@ -23,13 +23,10 @@ async function pollForVideoResult(taskUUID: string, maxAttempts = 30) {
       const pollResponse = await fetch('https://api.runware.ai/v1', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${RUNWARE_API_KEY}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify([
-          {
-            taskType: "authentication",
-            apiKey: RUNWARE_API_KEY
-          },
           {
             taskType: "getResponse",
             taskUUID: taskUUID
@@ -151,29 +148,25 @@ serve(async (req) => {
 
     const runwareRequestBody = [
       {
-        taskType: "authentication",
-        apiKey: RUNWARE_API_KEY
-      },
-      {
         taskType: "videoInference",
         taskUUID: taskUUID,
-        model: model,
         positivePrompt: prompt,
+        model: model,
+        duration: 5,
+        width: 1920,
+        height: 1080,
         frameImages: [
           {
             inputImage: image_base64,
             frame: "first"
           }
         ],
-        duration: 5,
-        width: 1920,
-        height: 1080,
-        fps: 24,
+        deliveryMethod: "async",
         outputFormat: "MP4",
         outputQuality: 95,
         numberResults: 1,
-        deliveryMethod: "async",
         includeCost: true,
+        fps: 24,
         providerSettings: {
           klingai: {
             movementAmplitude: movementAmplitude
@@ -190,10 +183,11 @@ serve(async (req) => {
       movementAmplitude
     });
     
-    // Call Runware API
+    // Call Runware API with Bearer token authentication
     const response = await fetch('https://api.runware.ai/v1', {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${RUNWARE_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(runwareRequestBody)
