@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Search, Image, Video, PenTool, Mic, Gamepad2 } from 'lucide-react';
+import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-react';
 import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { GameModeModal } from './GameModeModal';
@@ -53,14 +54,6 @@ export function QuickActionsPanel({
     hoverColor: 'hover:bg-orange-500/20',
     borderColor: 'border-orange-500',
     description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
-  }, {
-    id: 'video',
-    label: language === 'ar' ? 'فيديو' : 'Video',
-    icon: <Video className="h-4 w-4" />,
-    activeColor: 'bg-purple-500',
-    hoverColor: 'hover:bg-purple-500/20',
-    borderColor: 'border-purple-500',
-    description: language === 'ar' ? 'إنشاء مقاطع الفيديو' : 'Generate videos'
   }];
   
   const quickActions = [{
@@ -70,7 +63,7 @@ export function QuickActionsPanel({
     action: () => setShowTextGen(true),
     color: 'bg-purple-500'
   }, {
-    icon: <Video className="h-5 w-5" />,
+    icon: <Image className="h-5 w-5" />,
     label: language === 'ar' ? 'إنشاء فيديو' : 'Create Video',
     description: language === 'ar' ? 'حول صورتك إلى فيديو متحرك' : 'Turn your image into an animated video',
     action: () => setShowVideoDialog(true),
@@ -100,19 +93,14 @@ export function QuickActionsPanel({
     }
   };
 
-  // UPDATED FUNCTION: Do NOT close the drawer after opening the popup/tool.
   const handleToolAction = (action: () => void) => {
     action();
-    // DO NOT close the drawer here! Popups will remain open now.
     console.log('🔧 Quick Actions: Tool opened and drawer stays open');
   };
   
   return <div className="h-full overflow-y-auto">
       <div className="p-4 space-y-6">
-        <div className="text-center">
-          
-          
-        </div>
+        <div className="text-center"></div>
 
         {/* AI Modes */}
         <Card className="bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 backdrop-blur-xl">
