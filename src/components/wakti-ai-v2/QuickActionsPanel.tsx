@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Search, Image, Video, PenTool, Mic, Gamepad2 } from 'lucide-react';
+import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2, Video } from 'lucide-react';
 import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { GameModeModal } from './GameModeModal';
@@ -29,6 +30,7 @@ export function QuickActionsPanel({
   const [showGameMode, setShowGameMode] = useState(false);
   const [showVideoDialog, setShowVideoDialog] = useState(false);
   
+  // REMOVED VIDEO MODE - Only chat, search, and image modes
   const triggerModes = [{
     id: 'chat',
     label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
@@ -53,14 +55,6 @@ export function QuickActionsPanel({
     hoverColor: 'hover:bg-orange-500/20',
     borderColor: 'border-orange-500',
     description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
-  }, {
-    id: 'video',
-    label: language === 'ar' ? 'فيديو' : 'Video',
-    icon: <Video className="h-4 w-4" />,
-    activeColor: 'bg-purple-500',
-    hoverColor: 'hover:bg-purple-500/20',
-    borderColor: 'border-purple-500',
-    description: language === 'ar' ? 'إنشاء مقاطع الفيديو' : 'Generate videos'
   }];
   
   const quickActions = [{
@@ -100,10 +94,8 @@ export function QuickActionsPanel({
     }
   };
 
-  // UPDATED FUNCTION: Do NOT close the drawer after opening the popup/tool.
   const handleToolAction = (action: () => void) => {
     action();
-    // DO NOT close the drawer here! Popups will remain open now.
     console.log('🔧 Quick Actions: Tool opened and drawer stays open');
   };
   
@@ -114,7 +106,7 @@ export function QuickActionsPanel({
           
         </div>
 
-        {/* AI Modes */}
+        {/* AI Modes - NO VIDEO MODE */}
         <Card className="bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 backdrop-blur-xl">
           <CardHeader>
             <CardTitle className="text-sm text-slate-700 dark:text-slate-300">
@@ -140,7 +132,7 @@ export function QuickActionsPanel({
           </CardContent>
         </Card>
 
-        {/* Quick Tools */}
+        {/* Quick Tools - Video is here as a standalone tool */}
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
             {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
@@ -169,7 +161,7 @@ export function QuickActionsPanel({
           onTextGenerated={onTextGenerated} 
         />
 
-        {/* Isolated Video Dialog */}
+        {/* Isolated Video Dialog - COMPLETELY SEPARATE */}
         <IsolatedVideoDialog 
           open={showVideoDialog} 
           onOpenChange={setShowVideoDialog} 

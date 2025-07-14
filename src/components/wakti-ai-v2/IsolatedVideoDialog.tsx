@@ -83,7 +83,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      handleFileSelect(file);
+      handleFileUpload(file);
     }
     // Reset input
     if (event.target) {
