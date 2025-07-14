@@ -20,7 +20,7 @@ serve(async (req) => {
   try {
     const { task_id } = await req.json();
     
-    console.log('🔍 RUNWARE STATUS: Checking task', task_id);
+    console.log('🔍 RUNWARE STATUS: Checking KlingAI task', task_id);
     
     if (!RUNWARE_API_KEY) {
       throw new Error('RUNWARE_API_KEY not configured');
@@ -33,13 +33,48 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
+    // First check if task has timed out (10 minutes)
+    const { data: taskData } = await supabase
+      .from('video_generation_tasks')
+      .select('created_at, status')
+      .eq('task_id', task_id)
+      .single();
+    
+    if (taskData && taskData.status === 'processing') {
+      const createdAt = new Date(taskData.created_at);
+      const now = new Date();
+      const timeDiff = now.getTime() - createdAt.getTime();
+      const timeoutMs = 10 * 60 * 1000; // 10 minutes
+      
+      if (timeDiff > timeoutMs) {
+        console.log('⏰ TASK TIMEOUT: Marking as failed due to timeout');
+        
+        await supabase
+          .from('video_generation_tasks')
+          .update({
+            status: 'failed',
+            error_message: 'Task timed out after 10 minutes',
+            updated_at: new Date().toISOString()
+          })
+          .eq('task_id', task_id);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          status: 'failed',
+          error_message: 'Task timed out after 10 minutes'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    
     // Check Runware API for status
     const requestBody = {
       taskType: "getResponse",
       taskUUID: task_id
     };
 
-    console.log('🔍 STATUS REQUEST:', JSON.stringify(requestBody, null, 2));
+    console.log('🔍 KLINGAI STATUS REQUEST:', JSON.stringify(requestBody, null, 2));
     
     const response = await fetch('https://api.runware.ai/v1', {
       method: 'POST',
@@ -53,6 +88,29 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ RUNWARE STATUS ERROR:', response.status, errorText);
+      
+      // Handle 400 errors by marking task as failed instead of infinite retries
+      if (response.status === 400) {
+        console.log('🔴 400 ERROR: Marking task as failed');
+        
+        await supabase
+          .from('video_generation_tasks')
+          .update({
+            status: 'failed',
+            error_message: `Runware API error: ${errorText}`,
+            updated_at: new Date().toISOString()
+          })
+          .eq('task_id', task_id);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          status: 'failed',
+          error_message: `Runware API error: ${errorText}`
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
       throw new Error(`Runware status check failed: ${response.status} - ${errorText}`);
     }
     
@@ -60,12 +118,12 @@ serve(async (req) => {
     console.log('✅ RUNWARE STATUS RESPONSE:', result);
     
     // Parse the response
-    const taskData = result[0];
-    if (!taskData) {
+    const taskResponse = result[0];
+    if (!taskResponse) {
       return new Response(JSON.stringify({
         success: true,
         status: 'processing',
-        message: 'Task still processing'
+        message: 'KlingAI task still processing'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -75,12 +133,14 @@ serve(async (req) => {
     let videoUrl = null;
     let errorMessage = null;
 
-    if (taskData.error) {
+    if (taskResponse.error || taskResponse.errorMessage) {
       dbStatus = 'failed';
-      errorMessage = taskData.error;
-    } else if (taskData.videoURL) {
+      errorMessage = taskResponse.errorMessage || taskResponse.error;
+      console.log('🔴 TASK ERROR:', errorMessage);
+    } else if (taskResponse.videoURL || taskResponse.video_url) {
       dbStatus = 'completed';
-      videoUrl = taskData.videoURL;
+      videoUrl = taskResponse.videoURL || taskResponse.video_url;
+      console.log('✅ TASK COMPLETED:', videoUrl);
     }
     
     // Update database
@@ -99,14 +159,14 @@ serve(async (req) => {
       throw new Error(`Database update error: ${dbError.message}`);
     }
     
-    console.log(`✅ DATABASE UPDATED: Task ${task_id} status: ${dbStatus}`);
+    console.log(`✅ DATABASE UPDATED: KlingAI Task ${task_id} status: ${dbStatus}`);
     
     return new Response(JSON.stringify({
       success: true,
       status: dbStatus,
       video_url: videoUrl,
       error_message: errorMessage,
-      task_data: taskData
+      task_data: taskResponse
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

@@ -18,8 +18,8 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
   const { showError, showSuccess } = useToastHelper();
   
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
-  const [videoCategory, setVideoCategory] = useState('runware');
-  const [videoTemplate, setVideoTemplate] = useState('runware_video');
+  const [videoCategory, setVideoCategory] = useState('klingai');
+  const [videoTemplate, setVideoTemplate] = useState('klingai_video');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
@@ -107,17 +107,18 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
       const imageUrl = uploadedFiles[0].url;
       const promptToUse = customPrompt?.trim() || 'Create a smooth video animation';
 
-      console.log('🎬 GENERATING RUNWARE VIDEO:', {
+      console.log('🎬 GENERATING KLINGAI VIDEO:', {
         imageUrl: imageUrl.substring(0, 50) + '...',
         prompt: promptToUse,
         userId: user.id
       });
 
-      // Call Runware video generator
-      const response = await supabase.functions.invoke('runware-video-generator', {
+      // Call KlingAI video generator via isolated function
+      const response = await supabase.functions.invoke('generate-video-isolated', {
         body: {
-          image_url: imageUrl,
+          image_base64: `data:image/jpeg;base64,${btoa(await (await fetch(imageUrl)).text())}`,
           prompt: promptToUse,
+          movement_style: 'auto',
           user_id: user.id
         }
       });
@@ -125,21 +126,21 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
       if (response.error) throw new Error(response.error.message);
 
       if (response.data?.success) {
-        showSuccess('🎬 Runware video generation started! You will be notified when it\'s ready.');
+        showSuccess('🎬 KlingAI video generation started! You will be notified when it\'s ready.');
         onVideoGenerated({ 
-          jobId: response.data.job_id, 
-          template: 'runware_video',
-          taskId: response.data.job_id,
+          jobId: response.data.taskUUID, 
+          template: 'klingai_video',
+          taskId: response.data.taskUUID,
           model_used: response.data.model_used,
           estimated_cost: response.data.estimated_cost
         });
         onClose();
       } else {
-        throw new Error('Runware video generation failed to start');
+        throw new Error('KlingAI video generation failed to start');
       }
 
     } catch (error: any) {
-      console.error('❌ RUNWARE VIDEO ERROR:', error);
+      console.error('❌ KLINGAI VIDEO ERROR:', error);
       showError(error.message || 'Video generation failed');
     } finally {
       setIsGenerating(false);
@@ -149,16 +150,13 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
   // Update template when category changes
   const handleCategoryChange = (category: string) => {
     setVideoCategory(category);
-    let newTemplate = 'runware_video';
+    let newTemplate = 'klingai_video';
     switch (category) {
-      case 'runware':
-        newTemplate = 'runware_video';
-        break;
-      case 'vidu':
-        newTemplate = 'image2video';
+      case 'klingai':
+        newTemplate = 'klingai_video';
         break;
       default:
-        newTemplate = 'runware_video';
+        newTemplate = 'klingai_video';
     }
     setVideoTemplate(newTemplate);
     
@@ -254,8 +252,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
               onChange={(e) => handleCategoryChange(e.target.value)}
               className="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-base border border-gray-600"
             >
-              <option value="runware">{language === 'ar' ? 'Runware - سريع وعالي الجودة' : 'Runware - Fast & High Quality'}</option>
-              <option value="vidu">{language === 'ar' ? 'Vidu - قوالب متقدمة' : 'Vidu - Advanced Templates'}</option>
+              <option value="klingai">{language === 'ar' ? 'KlingAI - سريع وعالي الجودة' : 'KlingAI - Fast & High Quality'}</option>
             </select>
 
             {/* Template */}
@@ -264,31 +261,21 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
               onChange={(e) => handleTemplateChange(e.target.value)}
               className="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-base border border-gray-600"
             >
-              {videoCategory === 'runware' && (
-                <option value="runware_video">{language === 'ar' ? 'فيديو Runware - 5 ثوان' : 'Runware Video - 5 seconds'}</option>
-              )}
-              {videoCategory === 'vidu' && (
-                <option value="image2video">{language === 'ar' ? 'موجه مخصص' : 'Custom Prompt'}</option>
-              )}
+              <option value="klingai_video">{language === 'ar' ? 'فيديو KlingAI 1.6 - 5 ثوان' : 'KlingAI 1.6 Video - 5 seconds'}</option>
             </select>
 
             {/* Info Card */}
             <div className="text-center text-sm text-purple-900 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
-              {videoCategory === 'runware' ? (
-                language === 'ar' 
-                  ? '⚡ Runware: فيديو 5 ثوان • 1920x1080 • $0.22' 
-                  : '⚡ Runware: 5-second video • 1920x1080 • $0.22'
-              ) : (
-                language === 'ar' 
-                  ? '💡 اكتب وصف الفيديو المخصص في منطقة النص أعلاه' 
-                  : '💡 Type your custom video prompt in the text area above'
-              )}
+              {language === 'ar' 
+                ? '⚡ KlingAI 1.6: فيديو 5 ثوان • 1920x1080 • جودة عالية' 
+                : '⚡ KlingAI 1.6: 5-second video • 1920x1080 • High Quality'
+              }
             </div>
 
             {/* Generate Button */}
             <Button 
               onClick={handleGenerateVideo}
-              disabled={isGenerating || uploadedFiles.length === 0 || isUploading || (videoCategory === 'vidu' && !customPrompt?.trim())}
+              disabled={isGenerating || uploadedFiles.length === 0 || isUploading}
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 py-4 text-lg font-medium"
             >
               {isGenerating ? (

@@ -54,6 +54,19 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     console.log('📡 ISOLATED VIDEO: Supabase client initialized');
     
+    // Clean up any stuck processing tasks first
+    await supabase
+      .from('video_generation_tasks')
+      .update({ 
+        status: 'failed',
+        error_message: 'Task cleanup - exceeded timeout',
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', user_id)
+      .eq('status', 'processing')
+      .eq('template', 'isolated_video')
+      .lt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()); // 10 minutes timeout
+    
     // Generate unique task UUID
     const taskUUID = crypto.randomUUID();
     console.log('🆔 ISOLATED VIDEO: Generated task UUID:', taskUUID);
@@ -103,7 +116,7 @@ serve(async (req) => {
       images: [imageUrl],
       duration: 5,
       resolution: '1920x1080',
-      movement_amplitude: 'auto',
+      movement_amplitude: movement_style || 'auto',
       video_url: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -122,15 +135,15 @@ serve(async (req) => {
 
     console.log('✅ ISOLATED VIDEO: Task stored successfully');
     
-    // Try models with proper fallback logic
-    const models = ['vidu:1@1', 'klingai:5@3'];
+    // Use KlingAI models with proper fallback
+    const models = ['klingai:6@3', 'klingai:5@3']; // KlingAI 1.6 primary, 1.5 fallback
     let lastError = null;
     let result = null;
     let modelUsed = null;
 
     for (const model of models) {
       try {
-        console.log(`🎬 TRYING MODEL: ${model}`);
+        console.log(`🎬 TRYING KLINGAI MODEL: ${model}`);
         
         const requestBody = {
           taskType: "videoInference",
@@ -144,15 +157,16 @@ serve(async (req) => {
           includeCost: true,
           referenceImages: [imageUrl],
           providerSettings: {
-            vidu: {
-              movementAmplitude: "auto"
+            klingai: {
+              movementAmplitude: movement_style || "auto",
+              creativityLevel: "balanced"
             }
           },
           positivePrompt: prompt,
           deliveryMethod: "async"
         };
 
-        console.log('🎬 REQUEST BODY:', JSON.stringify(requestBody, null, 2));
+        console.log('🎬 KLINGAI REQUEST BODY:', JSON.stringify(requestBody, null, 2));
         
         // Call Runware API
         const response = await fetch('https://api.runware.ai/v1', {
@@ -166,14 +180,14 @@ serve(async (req) => {
         
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`❌ MODEL ${model} ERROR:`, response.status, errorText);
+          console.error(`❌ KLINGAI MODEL ${model} ERROR:`, response.status, errorText);
           lastError = new Error(`${model} failed: ${response.status} - ${errorText}`);
           continue;
         }
         
         result = await response.json();
         modelUsed = model;
-        console.log(`✅ MODEL ${model} SUCCESS:`, result);
+        console.log(`✅ KLINGAI MODEL ${model} SUCCESS:`, result);
         
         // Update database with model used
         await supabase
@@ -187,7 +201,7 @@ serve(async (req) => {
         break;
         
       } catch (error) {
-        console.error(`❌ MODEL ${model} EXCEPTION:`, error);
+        console.error(`❌ KLINGAI MODEL ${model} EXCEPTION:`, error);
         lastError = error;
         continue;
       }
@@ -195,27 +209,30 @@ serve(async (req) => {
 
     // If all models failed
     if (!result || !modelUsed) {
-      console.error('❌ ALL MODELS FAILED:', lastError);
+      console.error('❌ ALL KLINGAI MODELS FAILED:', lastError);
       
       // Update database with failure
       await supabase
         .from('video_generation_tasks')
         .update({ 
           status: 'failed',
+          error_message: `KlingAI generation failed: ${lastError?.message}`,
           updated_at: new Date().toISOString()
         })
         .eq('task_id', taskUUID);
       
-      throw new Error(`All video models failed. Last error: ${lastError?.message}`);
+      throw new Error(`All KlingAI video models failed. Last error: ${lastError?.message}`);
     }
     
-    console.log('🎬 ISOLATED VIDEO: Task submitted successfully, will be polled by status checker');
+    console.log('🎬 ISOLATED VIDEO: KlingAI task submitted successfully, will be polled by status checker');
     
     const successResponse = {
       success: true,
       taskUUID: taskUUID,
-      message: 'Video generation started successfully',
-      status: 'processing'
+      message: 'KlingAI video generation started successfully',
+      status: 'processing',
+      model_used: modelUsed,
+      estimated_cost: result[0]?.cost || 0.22
     };
 
     console.log('🚀 ISOLATED VIDEO: Sending success response');
@@ -230,7 +247,7 @@ serve(async (req) => {
     
     const errorResponse = {
       success: false,
-      error: error.message || 'Video generation failed'
+      error: error.message || 'KlingAI video generation failed'
     };
     
     return new Response(JSON.stringify(errorResponse), {
