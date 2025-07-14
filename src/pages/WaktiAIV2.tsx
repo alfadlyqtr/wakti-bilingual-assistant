@@ -38,6 +38,10 @@ const WaktiAIV2 = () => {
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [activeTrigger, setActiveTrigger] = useState('chat');
+  const [showVideoUpload, setShowVideoUpload] = useState(false);
+  const [videoCategory, setVideoCategory] = useState('custom');
+  const [videoTemplate, setVideoTemplate] = useState('image2video');
+
   const [userProfile, setUserProfile] = useState<any>(null);
   const [personalTouch, setPersonalTouch] = useState<any>(null);
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
@@ -136,6 +140,20 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
     }
   }, [currentConversationId]);
+
+  const handleVideoGenerated = (data: any) => {
+    console.log('🎬 VIDEO GENERATED:', data);
+    
+    // Add to video status polling
+    addVideoTask({
+      task_id: data.jobId || data.taskId,
+      status: 'processing',
+      model_used: data.model_used
+    });
+    
+    // Clear video interface
+    setShowVideoUpload(false);
+  };
 
   const isExplicitTaskCommand = (messageContent: string): boolean => {
     const lowerMessage = messageContent.toLowerCase().trim();
@@ -676,6 +694,11 @@ const WaktiAIV2 = () => {
     setShowQuickActions(true);
   };
 
+  const handleVideoTemplateChange = (category: string, template: string) => {
+    setVideoCategory(category);
+    setVideoTemplate(template);
+  };
+
   return (
     <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -721,6 +744,20 @@ const WaktiAIV2 = () => {
 
         <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto p-4">
+            {/* Video Upload Interface - Show only in video mode when requested */}
+            {activeTrigger === 'video' && showVideoUpload && (
+              <div className="px-3 pb-3">
+                <div className="max-w-4xl mx-auto">
+                  <VideoUploadInterface
+                    onClose={() => setShowVideoUpload(false)}
+                    onVideoGenerated={handleVideoGenerated}
+                    onTemplateChange={handleVideoTemplateChange}
+                    customPrompt={message}
+                  />
+                </div>
+              </div>
+            )}
+
             <ChatInput
               message={message}
               setMessage={setMessage}
@@ -731,6 +768,10 @@ const WaktiAIV2 = () => {
               onOpenPlusDrawer={handleOpenPlusDrawer}
               activeTrigger={activeTrigger}
               onTriggerChange={handleTriggerChange}
+              showVideoUpload={showVideoUpload}
+              setShowVideoUpload={setShowVideoUpload}
+              videoCategory={videoCategory}
+              videoTemplate={videoTemplate}
             />
           </div>
         </div>
