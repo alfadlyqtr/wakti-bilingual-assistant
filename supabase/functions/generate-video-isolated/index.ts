@@ -132,100 +132,105 @@ serve(async (req) => {
     const taskUUID = crypto.randomUUID();
     console.log('🆔 ISOLATED VIDEO: Generated task UUID:', taskUUID);
     
-    // Use klingai:5@3 as specified (best for image-to-video)
-    const model = 'klingai:5@3';
+    // Convert base64 image to storage URL for Runware
+    console.log('📤 ISOLATED VIDEO: Uploading image to storage...');
+    const fileName = `video-input-${taskUUID}.jpg`;
+    const filePath = `${user_id}/${fileName}`;
     
-    // Prepare movement amplitude for KlingAI provider settings
-    let movementAmplitude = 'auto';
-    if (movement_style && movement_style !== 'auto') {
-      const movementMap: Record<string, string> = {
-        'slow': '0.2',
-        'medium': '0.5', 
-        'fast': '0.8'
-      };
-      movementAmplitude = movementMap[movement_style] || 'auto';
+    // Convert data URI to blob
+    const base64Data = image_base64.replace(/^data:image\/[a-z]+;base64,/, '');
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('ai-temp-images')
+      .upload(filePath, byteArray, {
+        contentType: 'image/jpeg',
+        cacheControl: '3600'
+      });
+
+    if (uploadError) {
+      console.error('❌ ISOLATED VIDEO: Image upload failed:', uploadError);
+      throw new Error('Failed to upload image for processing');
     }
 
-    const runwareRequestBody = [
-      {
-        taskType: "videoInference",
-        taskUUID: taskUUID,
-        positivePrompt: prompt,
-        model: model,
-        duration: 5,
-        width: 1920,
-        height: 1080,
-        frameImages: [
-          {
-            inputImage: image_base64,
-            frame: "first"
-          }
-        ],
-        deliveryMethod: "async",
-        outputFormat: "MP4",
-        outputQuality: 95,
-        numberResults: 1,
-        includeCost: true,
-        fps: 24,
-        providerSettings: {
-          klingai: {
-            movementAmplitude: movementAmplitude
-          }
-        }
-      }
-    ];
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('ai-temp-images')
+      .getPublicUrl(filePath);
+    
+    const imageUrl = urlData.publicUrl;
+    console.log('✅ ISOLATED VIDEO: Image uploaded successfully:', imageUrl);
+    
+    // Try models with proper fallback logic like runware-video-generator
+    const models = ['vidu:1@1', 'klingai:5@3'];
+    let lastError = null;
+    let result = null;
+    let modelUsed = null;
 
-    console.log('🎬 ISOLATED VIDEO: Sending to Runware', { 
-      model, 
-      duration: 5, 
-      quality: '1080p',
-      taskUUID: taskUUID,
-      movementAmplitude
-    });
-    
-    // Call Runware API with Bearer token authentication
-    const response = await fetch('https://api.runware.ai/v1', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RUNWARE_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(runwareRequestBody)
-    });
-    
-    console.log('📨 ISOLATED VIDEO: Runware response status:', response.status);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ ISOLATED VIDEO: Runware API error:', response.status, errorText);
-      
-      // Try to parse error for better user feedback
+    for (const model of models) {
       try {
-        const errorData = JSON.parse(errorText);
-        if (errorData.errors && errorData.errors.length > 0) {
-          const firstError = errorData.errors[0];
-          throw new Error(`Runware API error: ${firstError.message || 'Video generation failed'}`);
+        console.log(`🎬 TRYING MODEL: ${model}`);
+        
+        const requestBody = {
+          taskType: "videoInference",
+          taskUUID: taskUUID,
+          duration: 5,
+          model: model,
+          outputFormat: "mp4",
+          height: 1920,
+          width: 1080,
+          numberResults: 1,
+          includeCost: true,
+          referenceImages: [imageUrl],
+          providerSettings: {
+            vidu: {
+              movementAmplitude: "auto"
+            }
+          },
+          positivePrompt: prompt,
+          deliveryMethod: "async"
+        };
+
+        console.log('🎬 REQUEST BODY:', JSON.stringify(requestBody, null, 2));
+        
+        // Call Runware API
+        const response = await fetch('https://api.runware.ai/v1', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${RUNWARE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify([requestBody])
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ MODEL ${model} ERROR:`, response.status, errorText);
+          lastError = new Error(`${model} failed: ${response.status} - ${errorText}`);
+          continue; // Try next model
         }
-      } catch (parseError) {
-        // If parsing fails, use generic message
+        
+        result = await response.json();
+        modelUsed = model;
+        console.log(`✅ MODEL ${model} SUCCESS:`, result);
+        break; // Success, exit loop
+        
+      } catch (error) {
+        console.error(`❌ MODEL ${model} EXCEPTION:`, error);
+        lastError = error;
+        continue; // Try next model
       }
-      
-      throw new Error('Video generation failed. Please check your image and try again.');
-    }
-    
-    const result = await response.json();
-    console.log('✅ ISOLATED VIDEO: Runware response received:', result);
-    
-    // Verify the response format
-    if (!result.data || !Array.isArray(result.data) || result.data.length === 0) {
-      console.error('❌ ISOLATED VIDEO: Invalid response format:', result);
-      throw new Error('Invalid response from video generation service');
     }
 
-    const taskResponse = result.data.find((item: any) => item.taskType === 'videoInference');
-    if (!taskResponse || taskResponse.taskUUID !== taskUUID) {
-      console.error('❌ ISOLATED VIDEO: Task mismatch:', taskResponse);
-      throw new Error('Task mismatch in video generation response');
+    // If all models failed
+    if (!result || !modelUsed) {
+      console.error('❌ ALL MODELS FAILED:', lastError);
+      throw new Error(`All video models failed. Last error: ${lastError?.message}`);
     }
     
     // Store in database (isolated from other video systems)
@@ -236,11 +241,11 @@ serve(async (req) => {
       mode: 'isolated',
       prompt: prompt,
       status: 'processing',
-      images: [image_base64],
-      model_used: model,
+      images: [imageUrl],
+      model_used: modelUsed,
       duration: 5,
       resolution: '1920x1080',
-      movement_amplitude: movementAmplitude,
+      movement_amplitude: 'auto',
       video_url: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
