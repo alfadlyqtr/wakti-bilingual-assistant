@@ -64,14 +64,6 @@ export function QuickActionsPanel({
     color: 'bg-purple-500',
     disabled: false
   }, {
-    icon: <Image className="h-5 w-5" />,
-    label: language === 'ar' ? 'إنشاء فيديو' : 'Create Video',
-    description: language === 'ar' ? 'حول صورتك إلى فيديو متحرك' : 'Turn your image into an animated video',
-    action: () => {},
-    color: 'bg-blue-500',
-    disabled: true,
-    comingSoon: true
-  }, {
     icon: <Mic className="h-5 w-5" />,
     label: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
     description: language === 'ar' ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة' : 'Clone your voice, translate and speak in different languages',
@@ -85,6 +77,14 @@ export function QuickActionsPanel({
     action: () => setShowGameMode(true),
     color: 'bg-red-500',
     disabled: false
+  }, {
+    icon: <Image className="h-5 w-5" />,
+    label: language === 'ar' ? 'إنشاء فيديو' : 'Create Video',
+    description: language === 'ar' ? 'حول صورتك إلى فيديو متحرك' : 'Turn your image into an animated video',
+    action: () => {},
+    color: 'bg-blue-500',
+    disabled: true,
+    comingSoon: true
   }];
   
   const handleTriggerSelect = (triggerId: string) => {
