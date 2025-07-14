@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -27,6 +26,7 @@ export interface AIConversation {
 class WaktiAIV2ServiceClass {
   private saveQueue: Array<() => Promise<void>> = [];
   private processing = false;
+  private personalTouchCache: any = null;
 
   constructor() {
     this.startBackgroundProcessor();
@@ -240,6 +240,10 @@ class WaktiAIV2ServiceClass {
     } catch {
       return null;
     }
+  }
+
+  clearPersonalTouchCache() {
+    this.personalTouchCache = null;
   }
 
   async getConversations(): Promise<AIConversation[]> {
