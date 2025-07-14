@@ -12,7 +12,7 @@ import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
-import { VideoUploadInterface } from '@/components/wakti-ai-v2/VideoUploadInterface';
+import { VideoDialog } from '@/components/wakti-ai-v2/VideoDialog';
 import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
@@ -41,6 +41,7 @@ const WaktiAIV2 = () => {
   const [showVideoUpload, setShowVideoUpload] = useState(false);
   const [videoCategory, setVideoCategory] = useState('custom');
   const [videoTemplate, setVideoTemplate] = useState('image2video');
+  const [showVideoDialog, setShowVideoDialog] = useState(false);
 
   const [userProfile, setUserProfile] = useState<any>(null);
   const [personalTouch, setPersonalTouch] = useState<any>(null);
@@ -150,9 +151,10 @@ const WaktiAIV2 = () => {
       status: 'processing',
       model_used: data.model_used
     });
-    
-    // Clear video interface
-    setShowVideoUpload(false);
+  };
+
+  const handleOpenVideoDialog = () => {
+    setShowVideoDialog(true);
   };
 
   const isExplicitTaskCommand = (messageContent: string): boolean => {
@@ -719,6 +721,7 @@ const WaktiAIV2 = () => {
         onClearChat={handleClearChat}
         sessionMessages={sessionMessages}
         isLoading={isLoading}
+        onOpenVideoDialog={handleOpenVideoDialog}
       />
 
       <div className="flex flex-col h-full w-full relative">
@@ -744,20 +747,6 @@ const WaktiAIV2 = () => {
 
         <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto p-4">
-            {/* Video Upload Interface - Show only in video mode when requested */}
-            {activeTrigger === 'video' && showVideoUpload && (
-              <div className="px-3 pb-3">
-                <div className="max-w-4xl mx-auto">
-                  <VideoUploadInterface
-                    onClose={() => setShowVideoUpload(false)}
-                    onVideoGenerated={handleVideoGenerated}
-                    onTemplateChange={handleVideoTemplateChange}
-                    customPrompt={message}
-                  />
-                </div>
-              </div>
-            )}
-
             <ChatInput
               message={message}
               setMessage={setMessage}
@@ -768,14 +757,17 @@ const WaktiAIV2 = () => {
               onOpenPlusDrawer={handleOpenPlusDrawer}
               activeTrigger={activeTrigger}
               onTriggerChange={handleTriggerChange}
-              showVideoUpload={showVideoUpload}
-              setShowVideoUpload={setShowVideoUpload}
-              videoCategory={videoCategory}
-              videoTemplate={videoTemplate}
+              onOpenVideoDialog={handleOpenVideoDialog}
             />
           </div>
         </div>
       </div>
+
+      <VideoDialog
+        open={showVideoDialog}
+        onOpenChange={setShowVideoDialog}
+        onVideoGenerated={handleVideoGenerated}
+      />
 
       <NotificationBars
         searchConfirmationRequired={false}
