@@ -179,18 +179,23 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    let finalInputType: 'text' | 'voice' | 'vision' = trigger as 'text' | 'voice' | 'vision';
+    // FIXED: Respect the selected UI mode instead of parsing content
+    let finalInputType: 'text' | 'voice' | 'vision' = 'text';
+    let routingMode = activeTrigger; // Use the selected mode directly
+
+    // Only override for vision if files are attached
     if (attachedFiles && attachedFiles.length > 0) {
       finalInputType = 'vision';
+      if (routingMode !== 'video') {
+        routingMode = 'vision';
+      }
     }
 
-    console.log('🚀 MESSAGE PROCESSING: Starting with enhanced task detection');
-    console.log('📊 MESSAGE DETAILS:', {
-      content: messageContent.substring(0, 100) + '...',
-      inputType: finalInputType,
-      filesCount: attachedFiles?.length || 0,
-      trigger: activeTrigger,
-      isExplicitTask: isExplicitTaskCommand(messageContent)
+    console.log('🚀 MESSAGE ROUTING: Respecting selected mode', {
+      selectedMode: activeTrigger,
+      routingMode: routingMode,
+      messagePreview: messageContent.substring(0, 50) + '...',
+      hasFiles: !!attachedFiles?.length
     });
 
     setIsLoading(true);
@@ -198,33 +203,163 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
-      if (isExplicitTaskCommand(messageContent)) {
-        console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Processing with ENHANCED confirmation UI');
+      // ROUTE BASED ON SELECTED MODE (NOT MESSAGE CONTENT)
+      if (routingMode === 'image') {
+        console.log('🎨 ROUTING TO IMAGE MODE: Selected mode overrides content detection');
         
-        const taskResponse = await supabase.functions.invoke('process-ai-intent', {
-          body: {
-            text: messageContent,
-            mode: 'assistant',
-            userId: userProfile.id,
-            conversationHistory: sessionMessages.slice(-10)
+        // Route directly to image generation
+        const tempUserMessage: AIMessage = {
+          id: `user-temp-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: finalInputType,
+          attachedFiles: attachedFiles
+        };
+        
+        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+        
+        const imageResponse = await WaktiAIV2Service.sendMessage(
+          messageContent,
+          userProfile?.id,
+          language,
+          currentConversationId,
+          finalInputType,
+          [],
+          false,
+          'image', // Force image mode
+          '',
+          attachedFiles || []
+        );
+        
+        if (imageResponse.error) {
+          throw new Error(imageResponse.error);
+        }
+        
+        const assistantMessage: AIMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: imageResponse.response || 'Image generation completed',
+          timestamp: new Date(),
+          imageUrl: imageResponse.imageUrl
+        };
+        
+        setSessionMessages(prevMessages => {
+          const newMessages = [...prevMessages];
+          newMessages[newMessages.length - 1] = assistantMessage;
+          return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
+        });
+        
+        setCurrentConversationId(imageResponse.conversationId);
+        setIsNewConversation(false);
+        
+      } else if (routingMode === 'search') {
+        console.log('🔍 ROUTING TO SEARCH MODE: Selected mode overrides content detection');
+        
+        // Route directly to search
+        const tempUserMessage: AIMessage = {
+          id: `user-temp-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: finalInputType,
+          attachedFiles: attachedFiles
+        };
+        
+        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+        
+        const searchResponse = await WaktiAIV2Service.sendMessage(
+          messageContent,
+          userProfile?.id,
+          language,
+          currentConversationId,
+          finalInputType,
+          [],
+          false,
+          'search', // Force search mode
+          '',
+          attachedFiles || []
+        );
+        
+        if (searchResponse.error) {
+          throw new Error(searchResponse.error);
+        }
+        
+        const assistantMessage: AIMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: searchResponse.response || 'Search completed',
+          timestamp: new Date(),
+          browsingUsed: searchResponse.browsingUsed,
+          browsingData: searchResponse.browsingData
+        };
+        
+        setSessionMessages(prevMessages => {
+          const newMessages = [...prevMessages];
+          newMessages[newMessages.length - 1] = assistantMessage;
+          return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
+        });
+        
+        setCurrentConversationId(searchResponse.conversationId);
+        setIsNewConversation(false);
+        
+      } else {
+        // CHAT MODE OR EXPLICIT TASK COMMANDS (existing logic for chat/tasks)
+        if (isExplicitTaskCommand(messageContent)) {
+          console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Processing with task confirmation UI');
+          
+          const taskResponse = await supabase.functions.invoke('process-ai-intent', {
+            body: {
+              text: messageContent,
+              mode: 'assistant',
+              userId: userProfile.id,
+              conversationHistory: sessionMessages.slice(-10)
+            }
+          });
+
+          if (taskResponse.error) {
+            console.error('❌ TASK PROCESSING ERROR:', taskResponse.error);
+            throw new Error(`Task processing failed: ${taskResponse.error.message}`);
           }
-        });
 
-        console.log('📨 TASK RESPONSE RECEIVED:', {
-          error: !!taskResponse.error,
-          data: taskResponse.data,
-          intent: taskResponse.data?.intent,
-          hasIntentData: !!taskResponse.data?.intentData,
-          hasPendingTask: !!taskResponse.data?.intentData?.pendingTask
-        });
+          const taskData = taskResponse.data;
 
-        if (taskResponse.error) {
-          console.error('❌ TASK PROCESSING ERROR:', taskResponse.error);
-          throw new Error(`Task processing failed: ${taskResponse.error.message}`);
+          const tempUserMessage: AIMessage = {
+            id: `user-temp-${Date.now()}`,
+            role: 'user',
+            content: messageContent,
+            timestamp: new Date(),
+            inputType: finalInputType,
+            attachedFiles: attachedFiles
+          };
+
+          const taskMessage: AIMessage = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: taskData.response || 'Task processing completed',
+            timestamp: new Date()
+          };
+
+          setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
+
+          if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
+            setPendingTaskData(taskData.intentData.pendingTask);
+            setTimeout(() => {
+              setShowTaskConfirmation(true);
+            }, 50);
+          }
+
+          setIsLoading(false);
+          return;
         }
 
-        const taskData = taskResponse.data;
-        console.log('✅ TASK PROCESSING SUCCESS:', taskData);
+        // DEFAULT CHAT MODE
+        console.log('💬 ROUTING TO CHAT MODE: Regular conversation');
+        
+        const hybridContext = await HybridMemoryService.getHybridContext(
+          userProfile.id, 
+          currentConversationId
+        );
 
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -234,161 +369,81 @@ const WaktiAIV2 = () => {
           inputType: finalInputType,
           attachedFiles: attachedFiles
         };
+        
+        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+        
+        const aiResponse = await WaktiAIV2Service.sendMessage(
+          messageContent,
+          userProfile?.id,
+          language,
+          currentConversationId,
+          finalInputType,
+          hybridContext.recentMessages,
+          false,
+          'chat', // Force chat mode
+          hybridContext.conversationSummary,
+          attachedFiles || []
+        );
 
-        const taskMessage: AIMessage = {
+        if (aiResponse.error) {
+          throw new Error(aiResponse.error);
+        }
+        
+        const assistantMessage: AIMessage = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
-          content: taskData.response || 'Task processing completed',
-          timestamp: new Date()
+          content: aiResponse.response || 'Response received',
+          timestamp: new Date(),
+          intent: aiResponse.intent,
+          confidence: aiResponse.confidence as 'high' | 'medium' | 'low',
+          actionTaken: aiResponse.actionTaken,
+          imageUrl: aiResponse.imageUrl,
+          browsingUsed: aiResponse.browsingUsed,
+          browsingData: aiResponse.browsingData
         };
 
-        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
-
-        if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
-          console.log('🎯 ENHANCED TASK CONFIRMATION: FORCING UI display with debug logging', {
-            intentData: taskData.intentData,
-            pendingTask: taskData.intentData.pendingTask,
-            taskTitle: taskData.intentData.pendingTask.title,
-            taskDescription: taskData.intentData.pendingTask.description,
-            subtasks: taskData.intentData.pendingTask.subtasks
-          });
-          
-          setPendingTaskData(taskData.intentData.pendingTask);
-          
-          setTimeout(() => {
-            console.log('🔧 SECOND FORCE: Setting showTaskConfirmation to TRUE');
-            setShowTaskConfirmation(true);
-            
-            setTimeout(() => {
-              console.log('🔧 TRIPLE FORCE: Final confirmation state update');
-              setShowTaskConfirmation(true);
-              setPendingTaskData(taskData.intentData.pendingTask);
-              
-              console.log('🔍 FINAL TASK CONFIRMATION STATE CHECK:', {
-                showTaskConfirmation: true,
-                pendingTaskDataExists: !!taskData.intentData.pendingTask,
-                taskTitle: taskData.intentData.pendingTask?.title,
-                taskDataStructure: Object.keys(taskData.intentData.pendingTask || {})
-              });
-            }, 100);
-          }, 50);
-          
-        } else {
-          console.log('⚠️ NO TASK CONFIRMATION NEEDED:', {
-            intent: taskData.intent,
-            hasIntentData: !!taskData.intentData,
-            hasPendingTask: !!taskData.intentData?.pendingTask
-          });
+        if (aiResponse.showTaskForm && aiResponse.taskData) {
+          setPendingTaskData(aiResponse.taskData);
+          setShowTaskConfirmation(true);
         }
 
-        setIsLoading(false);
-        return;
-      }
-
-      const hybridContext = await HybridMemoryService.getHybridContext(
-        userProfile.id, 
-        currentConversationId
-      );
-      
-      console.log('✅ HYBRID MEMORY: Context loaded -', {
-        recentMessages: hybridContext.recentMessages.length,
-        conversationSummary: hybridContext.conversationSummary.length,
-        messageCount: hybridContext.messageCount
-      });
-
-      const tempUserMessage: AIMessage = {
-        id: `user-temp-${Date.now()}`,
-        role: 'user',
-        content: messageContent,
-        timestamp: new Date(),
-        inputType: finalInputType,
-        attachedFiles: attachedFiles
-      };
-      
-      setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
-      
-      console.log('📡 CALLING: WaktiAIV2Service for regular chat with CLAUDE 3.5 SONNET');
-      
-      const aiResponse = await WaktiAIV2Service.sendMessage(
-        messageContent,
-        userProfile?.id,
-        language,
-        currentConversationId,
-        finalInputType,
-        hybridContext.recentMessages,
-        false,
-        activeTrigger,
-        hybridContext.conversationSummary,
-        attachedFiles || []
-      );
-      
-      console.log('📨 AI RESPONSE:', {
-        success: !aiResponse.error,
-        hasResponse: !!aiResponse.response,
-        conversationId: aiResponse.conversationId?.substring(0, 8) + '...'
-      });
-
-      if (aiResponse.error) {
-        throw new Error(aiResponse.error);
-      }
-      
-      const assistantMessage: AIMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: aiResponse.response || 'Response received',
-        timestamp: new Date(),
-        intent: aiResponse.intent,
-        confidence: aiResponse.confidence as 'high' | 'medium' | 'low',
-        actionTaken: aiResponse.actionTaken,
-        imageUrl: aiResponse.imageUrl,
-        browsingUsed: aiResponse.browsingUsed,
-        browsingData: aiResponse.browsingData
-      };
-
-      if (aiResponse.showTaskForm && aiResponse.taskData) {
-        console.log('📋 TASK FORM DETECTED:', aiResponse.taskData);
-        setPendingTaskData(aiResponse.taskData);
-        setShowTaskConfirmation(true);
-      }
-
-      if (aiResponse.reminderCreated && aiResponse.reminderData) {
-        console.log('⏰ REMINDER CREATED:', aiResponse.reminderData);
-        showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
-        console.log('✅ Reminder created successfully!');
-      }
-      
-      setSessionMessages(prevMessages => {
-        const newMessages = [...prevMessages];
-        newMessages[newMessages.length - 1] = assistantMessage;
-        return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
-      });
-
-      HybridMemoryService.addMessage(
-        userProfile.id, 
-        aiResponse.conversationId, 
-        {
-          id: tempUserMessage.id,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          intent: '',
-          attachedFiles: attachedFiles
-        },
-        {
-          id: assistantMessage.id,
-          role: 'assistant', 
-          content: assistantMessage.content,
-          timestamp: new Date(),
-          intent: assistantMessage.intent || '',
-          attachedFiles: []
+        if (aiResponse.reminderCreated && aiResponse.reminderData) {
+          showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
         }
-      );
-      
-      setCurrentConversationId(aiResponse.conversationId);
-      setIsNewConversation(false);
+        
+        setSessionMessages(prevMessages => {
+          const newMessages = [...prevMessages];
+          newMessages[newMessages.length - 1] = assistantMessage;
+          return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
+        });
+
+        HybridMemoryService.addMessage(
+          userProfile.id, 
+          aiResponse.conversationId, 
+          {
+            id: tempUserMessage.id,
+            role: 'user',
+            content: messageContent,
+            timestamp: new Date(),
+            intent: '',
+            attachedFiles: attachedFiles
+          },
+          {
+            id: assistantMessage.id,
+            role: 'assistant', 
+            content: assistantMessage.content,
+            timestamp: new Date(),
+            intent: assistantMessage.intent || '',
+            attachedFiles: []
+          }
+        );
+        
+        setCurrentConversationId(aiResponse.conversationId);
+        setIsNewConversation(false);
+      }
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ SUCCESS: Processing completed in ${totalTime}ms with CLAUDE 3.5 SONNET`);
+      console.log(`✅ SUCCESS: Message routed to ${routingMode} mode in ${totalTime}ms`);
       
       setProcessedFiles([]);
       checkQuotas();
