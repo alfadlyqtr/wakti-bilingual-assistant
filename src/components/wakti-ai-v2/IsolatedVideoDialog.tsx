@@ -10,7 +10,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
-import { Upload, Camera, Download, Video } from 'lucide-react';
+import { Upload, Camera, Download, Video, AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface IsolatedVideoDialogProps {
@@ -23,7 +23,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
   const { showSuccess, showError } = useToastHelper();
   const { addTask, activeTasks } = useVideoStatusPoller();
 
-  // State management - completely isolated
+  // State management
   const [screen, setScreen] = useState<'upload' | 'generating'>('upload');
   const [image, setImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -32,6 +32,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +44,6 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
   // Reset all state when dialog opens/closes
   React.useEffect(() => {
     if (!open) {
-      // Complete reset when closed
       setTimeout(() => {
         setScreen('upload');
         setImage(null);
@@ -53,6 +53,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
         setIsGenerating(false);
         setCurrentTaskId(null);
         setVideoUrl(null);
+        setLastError(null);
       }, 200);
     }
   }, [open]);
@@ -66,9 +67,35 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
     } else if (currentTask?.status === 'failed') {
       setIsGenerating(false);
       setScreen('upload');
+      setLastError(currentTask.error_message || 'Video generation failed');
       showError(currentTask.error_message || 'Video generation failed');
     }
   }, [currentTask, showSuccess, showError]);
+
+  const handleCleanupStuckTasks = async () => {
+    try {
+      console.log('🧹 Cleaning up stuck tasks...');
+      const { data, error } = await supabase.functions.invoke('cleanup-stuck-video-tasks');
+      
+      if (error) {
+        console.error('❌ Cleanup error:', error);
+        showError('Failed to cleanup stuck tasks');
+        return;
+      }
+      
+      console.log('✅ Cleanup result:', data);
+      showSuccess('Stuck tasks cleaned up successfully');
+      
+      // Reset current state
+      setIsGenerating(false);
+      setScreen('upload');
+      setCurrentTaskId(null);
+      
+    } catch (error) {
+      console.error('❌ Cleanup exception:', error);
+      showError('Failed to cleanup stuck tasks');
+    }
+  };
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -86,9 +113,11 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
       if (!data.success) throw new Error(data.error);
 
       setImage(data.base64);
+      setLastError(null);
       console.log('✅ ISOLATED VIDEO: Image uploaded and converted to base64');
     } catch (error: any) {
       console.error('❌ ISOLATED VIDEO: Upload failed', error);
+      setLastError(`Upload failed: ${error.message}`);
       showError('Failed to upload image. Please try again.');
     } finally {
       setIsUploading(false);
@@ -100,7 +129,6 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
     if (file) {
       handleFileUpload(file);
     }
-    // Reset input
     if (event.target) {
       event.target.value = '';
     }
@@ -120,16 +148,11 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
 
     setIsGenerating(true);
     setScreen('generating');
+    setLastError(null);
 
     try {
-      // Clear any stuck processing tasks first
-      await supabase
-        .from('video_generation_tasks')
-        .update({ status: 'failed' })
-        .eq('user_id', user.id)
-        .eq('status', 'processing')
-        .eq('template', 'isolated_video');
-
+      console.log('🎬 Starting video generation...');
+      
       const { data, error } = await supabase.functions.invoke('generate-video-isolated', {
         body: {
           image_base64: image,
@@ -139,10 +162,26 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
         }
       });
 
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
+      console.log('📨 Function response:', { data, error });
+
+      if (error) {
+        console.error('❌ Function error:', error);
+        throw new Error(`Function error: ${error.message}`);
+      }
+
+      if (!data) {
+        throw new Error('No response from video generation function');
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Video generation failed');
+      }
 
       const taskId = data.taskUUID;
+      if (!taskId) {
+        throw new Error('No task ID returned from function');
+      }
+
       setCurrentTaskId(taskId);
 
       // Add task to the poller
@@ -152,9 +191,11 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
       });
 
       console.log('✅ ISOLATED VIDEO: Task added to poller:', taskId);
+      showSuccess('Video generation started! This may take 15-20 minutes.');
 
     } catch (error: any) {
       console.error('❌ ISOLATED VIDEO: Generation failed', error);
+      setLastError(error.message);
       showError(error.message || 'Failed to generate video');
       setScreen('upload');
       setIsGenerating(false);
@@ -182,6 +223,28 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
             {language === 'ar' ? 'إنشاء فيديو' : 'Create Video'}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Error display */}
+        {lastError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-red-700">
+                <p className="font-medium">Error:</p>
+                <p>{lastError}</p>
+              </div>
+            </div>
+            <Button
+              onClick={handleCleanupStuckTasks}
+              variant="outline"
+              size="sm"
+              className="mt-2 w-full bg-red-50 hover:bg-red-100 border-red-200"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {language === 'ar' ? 'إعادة تعيين وإعادة المحاولة' : 'Reset & Retry'}
+            </Button>
+          </div>
+        )}
 
         {screen === 'upload' && (
           <div className="space-y-4">
@@ -305,7 +368,6 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
           <div className="space-y-6 text-center py-4">
             {!videoUrl ? (
               <>
-                {/* Progress */}
                 <div className="space-y-4">
                   <div className="h-16 w-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
                     <Video className="h-8 w-8 text-primary animate-pulse" />
@@ -316,7 +378,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
                       {language === 'ar' ? 'جاري إنشاء الفيديو...' : 'Creating your video...'}
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      {language === 'ar' ? 'يرجى الانتظار، قد يستغرق هذا بضع دقائق...' : 'Please wait, this may take a few minutes...'}
+                      {language === 'ar' ? 'يرجى الانتظار، قد يستغرق هذا 15-20 دقيقة...' : 'Please wait, this may take 15-20 minutes...'}
                     </p>
                   </div>
 
@@ -326,11 +388,20 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
                       {Math.round(progress)}% {language === 'ar' ? 'مكتمل' : 'complete'}
                     </p>
                   </div>
+                  
+                  <Button
+                    onClick={handleCleanupStuckTasks}
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    {language === 'ar' ? 'إعادة تعيين' : 'Reset'}
+                  </Button>
                 </div>
               </>
             ) : (
               <>
-                {/* Video Result */}
                 <div className="space-y-4">
                   <h3 className="font-medium text-green-600">
                     {language === 'ar' ? '✅ تم إنشاء الفيديو بنجاح!' : '✅ Video created successfully!'}
