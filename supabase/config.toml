@@ -4,7 +4,7 @@ project_id = "hxauxozopvpzpdygoqwf"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "storage", "graphql_public"]
+schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
@@ -12,10 +12,10 @@ max_rows = 1000
 enabled = true
 port = 54324
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://localhost:3000"]
+additional_redirect_urls = ["https://localhost:3000", "http://localhost:5173", "https://localhost:5173"]
 jwt_expiry = 3600
 enable_signup = true
-enable_anonymous_sign_ins = false
+enable_confirmations = false
 
 [auth.email]
 enable_signup = true
@@ -25,42 +25,43 @@ enable_confirmations = false
 [db]
 port = 54322
 
-[db.pooler]
-enabled = false
-port = 54329
-pool_mode = "transaction"
-default_pool_size = 20
-max_client_conn = 100
+[functions.cleanup-ai-conversations]
+verify_jwt = false
 
-[realtime]
-enabled = true
-port = 54323
-ip_version = "ipv4"
+[functions.fix-stuck-notifications]
+verify_jwt = false
 
-[studio]
-enabled = true
-port = 54323
-api_url = "http://localhost:54321"
-
-[storage]
-enabled = true
-port = 54324
-file_size_limit = "50MiB"
-image_transformation = true
-
-[functions.text-generator]
+[functions.generate-event-image]
 verify_jwt = false
 
 [functions.generate-image]
 verify_jwt = false
 
-[functions.runware-video-generator]
+[functions.generate-video-isolated]
+verify_jwt = false
+
+[functions.get-recent-chat-history]
+verify_jwt = false
+
+[functions.process-notification-queue]
+verify_jwt = false
+
+[functions.quick-summary]
+verify_jwt = false
+
+[functions.runware-get-response]
 verify_jwt = false
 
 [functions.runware-status-poller]
 verify_jwt = false
 
-[functions.wakti-ai-v2-brain]
+[functions.runware-video-generator]
+verify_jwt = false
+
+[functions.summarize-text]
+verify_jwt = false
+
+[functions.test-push-notification]
 verify_jwt = false
 
 [functions.unified-ai-brain]
@@ -69,10 +70,22 @@ verify_jwt = false
 [functions.upload-for-video]
 verify_jwt = false
 
-[functions.generate-video-isolated]
+[functions.voice-clone]
 verify_jwt = false
 
-[edge_runtime]
+[functions.voice-clone-test]
+verify_jwt = false
+
+[functions.voice-clone-translator]
+verify_jwt = false
+
+[functions.wakti-ai-v2-brain]
+verify_jwt = false
+
+[studio]
 enabled = true
-port = 54325
-inspector_port = 5432
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324

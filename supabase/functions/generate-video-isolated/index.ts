@@ -34,7 +34,7 @@ serve(async (req) => {
     
     if (!RUNWARE_API_KEY) {
       console.error('❌ ISOLATED VIDEO: RUNWARE_API_KEY not configured');
-      throw new Error('Video service not configured');
+      throw new Error('Runware API key not configured. Please add RUNWARE_API_KEY to Supabase Edge Function secrets.');
     }
 
     if (!user_id) {
@@ -61,31 +61,45 @@ serve(async (req) => {
     // Use klingai:5@3 as specified (best for image-to-video)
     const model = 'klingai:5@3';
     
-    const runwareRequestBody = {
+    // Prepare movement amplitude for KlingAI provider settings
+    let movementAmplitude = 'auto';
+    if (movement_style && movement_style !== 'auto') {
+      const movementMap: Record<string, string> = {
+        'slow': '0.2',
+        'medium': '0.5', 
+        'fast': '0.8'
+      };
+      movementAmplitude = movementMap[movement_style] || 'auto';
+    }
+
+    const runwareRequestBody = [{
       taskType: "videoInference",
       taskUUID: taskUUID,
-      duration: 5, // 5 seconds as specified
       model: model,
-      outputFormat: "mp4",
-      height: 1080, // 1080p as specified
-      width: 1920,
+      positivePrompt: prompt,
+      referenceImages: [image_base64], // Use referenceImages as per Runware docs
+      duration: 5, // 5 seconds as specified
+      width: 1920, // 1920x1080 as specified
+      height: 1080,
+      fps: 24,
+      outputFormat: "MP4",
+      outputQuality: 95,
       numberResults: 1,
-      includeCost: false, // No cost info returned
-      referenceImages: [image_base64],
+      deliveryMethod: "async", // Required for video inference
+      includeCost: false,
       providerSettings: {
         klingai: {
-          movementAmplitude: movement_style === 'auto' ? 'auto' : movement_style
+          movementAmplitude: movementAmplitude
         }
-      },
-      positivePrompt: prompt,
-      deliveryMethod: "async"
-    };
+      }
+    }];
 
     console.log('🎬 ISOLATED VIDEO: Sending to Runware', { 
       model, 
       duration: 5, 
       quality: '1080p',
-      taskUUID: taskUUID
+      taskUUID: taskUUID,
+      movementAmplitude
     });
     
     // Call Runware API
@@ -95,7 +109,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${RUNWARE_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify([runwareRequestBody])
+      body: JSON.stringify(runwareRequestBody)
     });
     
     console.log('📨 ISOLATED VIDEO: Runware response status:', response.status);
@@ -103,11 +117,35 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ ISOLATED VIDEO: Runware API error:', response.status, errorText);
-      throw new Error('Video generation failed. Please try again.');
+      
+      // Try to parse error for better user feedback
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.errors && errorData.errors.length > 0) {
+          const firstError = errorData.errors[0];
+          throw new Error(`Runware API error: ${firstError.message || 'Video generation failed'}`);
+        }
+      } catch (parseError) {
+        // If parsing fails, use generic message
+      }
+      
+      throw new Error('Video generation failed. Please check your image and try again.');
     }
     
     const result = await response.json();
     console.log('✅ ISOLATED VIDEO: Runware response received:', result);
+    
+    // Verify the response format
+    if (!result.data || !Array.isArray(result.data) || result.data.length === 0) {
+      console.error('❌ ISOLATED VIDEO: Invalid response format:', result);
+      throw new Error('Invalid response from video generation service');
+    }
+
+    const taskResponse = result.data[0];
+    if (taskResponse.taskType !== 'videoInference' || taskResponse.taskUUID !== taskUUID) {
+      console.error('❌ ISOLATED VIDEO: Task mismatch:', taskResponse);
+      throw new Error('Task mismatch in video generation response');
+    }
     
     // Store in database (isolated from other video systems)
     const dbInsert = {
@@ -121,7 +159,7 @@ serve(async (req) => {
       model_used: model,
       duration: 5,
       resolution: '1920x1080',
-      movement_amplitude: movement_style,
+      movement_amplitude: movementAmplitude,
       video_url: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -135,17 +173,18 @@ serve(async (req) => {
 
     if (dbError) {
       console.error('❌ ISOLATED VIDEO DB ERROR:', dbError);
-      throw new Error('Failed to start video generation');
+      // Don't fail the whole request if DB insert fails, but log it
+      console.warn('⚠️ ISOLATED VIDEO: Database insert failed, but continuing with video generation');
+    } else {
+      console.log('✅ ISOLATED VIDEO: Task stored successfully');
     }
     
-    console.log('✅ ISOLATED VIDEO: Task stored successfully');
-    
-    // Return clean response with no technical details
+    // Return clean response with taskUUID for polling
     const successResponse = {
       success: true,
-      job_id: taskUUID,
+      taskUUID: taskUUID,
       status: 'processing',
-      message: 'Video generation started'
+      message: 'Video generation started successfully'
     };
 
     console.log('🚀 ISOLATED VIDEO: Sending success response');

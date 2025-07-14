@@ -9,7 +9,6 @@ import { Progress } from '@/components/ui/progress';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
-import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
 import { Upload, Camera, Download, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,7 +20,6 @@ interface IsolatedVideoDialogProps {
 export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogProps) {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
-  const { addTask, pollTaskStatus } = useVideoStatusPoller();
 
   // State management - completely isolated
   const [screen, setScreen] = useState<'upload' | 'generating'>('upload');
@@ -32,7 +30,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [taskUUID, setTaskUUID] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +48,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
         setIsGenerating(false);
         setProgress(0);
         setVideoUrl(null);
-        setJobId(null);
+        setTaskUUID(null);
       }, 200);
     }
   }, [open]);
@@ -91,6 +89,65 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
     }
   };
 
+  const pollForResults = async (taskUUID: string) => {
+    const maxPolls = 60; // 5 minutes with 5-second intervals
+    let pollCount = 0;
+
+    const poll = async (): Promise<void> => {
+      try {
+        pollCount++;
+        console.log(`🔍 POLLING: Attempt ${pollCount}/${maxPolls} for task ${taskUUID}`);
+
+        const { data, error } = await supabase.functions.invoke('runware-get-response', {
+          body: { taskUUID }
+        });
+
+        if (error) throw error;
+
+        // Check if we have results
+        if (data.data && data.data.length > 0) {
+          const result = data.data.find((item: any) => item.taskUUID === taskUUID);
+          
+          if (result) {
+            if (result.status === 'success' && result.videoURL) {
+              setProgress(100);
+              setVideoUrl(result.videoURL);
+              setIsGenerating(false);
+              showSuccess('Your video is ready!');
+              return;
+            } else if (result.status === 'error') {
+              throw new Error(result.message || 'Video generation failed');
+            }
+          }
+        }
+
+        // Check errors array
+        if (data.errors && data.errors.length > 0) {
+          const error = data.errors.find((err: any) => err.taskUUID === taskUUID);
+          if (error) {
+            throw new Error(error.message || 'Video generation failed');
+          }
+        }
+
+        // Continue polling if still pending and within limits
+        if (pollCount < maxPolls) {
+          setTimeout(poll, 5000); // Poll every 5 seconds
+        } else {
+          throw new Error('Video generation timed out. Please try again.');
+        }
+
+      } catch (error: any) {
+        console.error('❌ POLLING ERROR:', error);
+        setIsGenerating(false);
+        setScreen('upload');
+        showError(error.message || 'Failed to check video status');
+      }
+    };
+
+    // Start polling after initial delay
+    setTimeout(poll, 3000);
+  };
+
   const handleGenerateVideo = async () => {
     if (!image || !prompt.trim()) {
       showError('Please upload an image and enter a description');
@@ -120,45 +177,21 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
 
-      setJobId(data.job_id);
-      
-      // Add to polling system
-      addTask({
-        task_id: data.job_id,
-        status: 'processing'
-      });
+      setTaskUUID(data.taskUUID);
 
-      // Start progress simulation (30 seconds countdown)
+      // Start progress simulation (gradually increase over time)
       let currentProgress = 0;
       const progressInterval = setInterval(() => {
-        currentProgress += 3.33; // Increment to reach 100% in 30 seconds
-        setProgress(Math.min(currentProgress, 95)); // Stop at 95% until actual completion
+        currentProgress += 2;
+        setProgress(Math.min(currentProgress, 90)); // Stop at 90% until completion
         
-        if (currentProgress >= 95) {
+        if (currentProgress >= 90) {
           clearInterval(progressInterval);
         }
-      }, 1000);
+      }, 2000);
 
-      // Poll for completion
-      const pollInterval = setInterval(async () => {
-        if (!data.job_id) return;
-
-        const result = await pollTaskStatus(data.job_id);
-        if (result.status === 'completed' && result.video_url) {
-          clearInterval(pollInterval);
-          clearInterval(progressInterval);
-          setProgress(100);
-          setVideoUrl(result.video_url);
-          setIsGenerating(false);
-          showSuccess('Your video is ready!');
-        } else if (result.status === 'failed') {
-          clearInterval(pollInterval);
-          clearInterval(progressInterval);
-          showError('Video generation failed. Please try again.');
-          setScreen('upload');
-          setIsGenerating(false);
-        }
-      }, 10000); // Poll every 10 seconds
+      // Start polling for results
+      pollForResults(data.taskUUID);
 
     } catch (error: any) {
       console.error('❌ ISOLATED VIDEO: Generation failed', error);
@@ -240,7 +273,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
                   <img 
                     src={image} 
                     alt="Uploaded" 
-                    className="w-full h-32 object-cover rounded-lg border"
+                    className="w-full h-48 object-cover rounded-lg border"
                   />
                   <Button
                     variant="outline"
@@ -323,7 +356,7 @@ export function IsolatedVideoDialog({ open, onOpenChange }: IsolatedVideoDialogP
                       {language === 'ar' ? 'جاري إنشاء الفيديو...' : 'Creating your video...'}
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      {language === 'ar' ? 'يرجى الانتظار، قد يستغرق هذا دقيقة...' : 'Please wait, this may take a minute...'}
+                      {language === 'ar' ? 'يرجى الانتظار، قد يستغرق هذا بضع دقائق...' : 'Please wait, this may take a few minutes...'}
                     </p>
                   </div>
 
