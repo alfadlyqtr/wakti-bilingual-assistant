@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-react';
 import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
@@ -61,25 +61,30 @@ export function QuickActionsPanel({
     label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
     description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
     action: () => setShowTextGen(true),
-    color: 'bg-purple-500'
+    color: 'bg-purple-500',
+    disabled: false
   }, {
     icon: <Image className="h-5 w-5" />,
     label: language === 'ar' ? 'إنشاء فيديو' : 'Create Video',
     description: language === 'ar' ? 'حول صورتك إلى فيديو متحرك' : 'Turn your image into an animated video',
-    action: () => setShowVideoDialog(true),
-    color: 'bg-blue-500'
+    action: () => {},
+    color: 'bg-blue-500',
+    disabled: true,
+    comingSoon: true
   }, {
     icon: <Mic className="h-5 w-5" />,
     label: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
     description: language === 'ar' ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة' : 'Clone your voice, translate and speak in different languages',
     action: () => setShowVoiceClone(true),
-    color: 'bg-pink-500'
+    color: 'bg-pink-500',
+    disabled: false
   }, {
     icon: <Gamepad2 className="h-5 w-5" />,
     label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
     description: language === 'ar' ? 'العب ألعاب ذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
     action: () => setShowGameMode(true),
-    color: 'bg-red-500'
+    color: 'bg-red-500',
+    disabled: false
   }];
   
   const handleTriggerSelect = (triggerId: string) => {
@@ -134,19 +139,36 @@ export function QuickActionsPanel({
             {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
           </h3>
           <div className="grid gap-3">
-            {quickActions.map((action, index) => <Card key={index} className="cursor-pointer hover:shadow-md transition-all duration-300 bg-white/20 dark:bg-black/20 hover:bg-white/30 dark:hover:bg-black/30 border-white/30 dark:border-white/20 hover:border-white/40 dark:hover:border-white/30" onClick={() => handleToolAction(action.action)}>
+            {quickActions.map((action, index) => (
+              <Card 
+                key={index} 
+                className={`transition-all duration-300 bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 ${
+                  action.disabled 
+                    ? 'opacity-60 cursor-not-allowed' 
+                    : 'cursor-pointer hover:shadow-md hover:bg-white/30 dark:hover:bg-black/30 hover:border-white/40 dark:hover:border-white/30'
+                }`} 
+                onClick={action.disabled ? undefined : () => handleToolAction(action.action)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${action.color} text-white`}>
+                    <div className={`p-2 rounded-lg ${action.color} text-white ${action.disabled ? 'opacity-70' : ''}`}>
                       {action.icon}
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-medium text-sm text-slate-700 dark:text-slate-300">{action.label}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-sm text-slate-700 dark:text-slate-300">{action.label}</h3>
+                        {action.comingSoon && (
+                          <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                            {language === 'ar' ? 'قريباً' : 'Coming Soon'}
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400">{action.description}</p>
                     </div>
                   </div>
                 </CardContent>
-              </Card>)}
+              </Card>
+            ))}
           </div>
         </div>
 
