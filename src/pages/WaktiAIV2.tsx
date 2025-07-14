@@ -11,7 +11,6 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
-import { TRService } from '@/services/trService';
 import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
@@ -42,10 +41,6 @@ const WaktiAIV2 = () => {
   const [personalTouch, setPersonalTouch] = useState<any>(null);
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [isNewConversation, setIsNewConversation] = useState(true);
-  const [showTaskConfirmation, setShowTaskConfirmation] = useState(false);
-  const [pendingTaskData, setPendingTaskData] = useState<any>(null);
-  const [pendingReminderData, setPendingReminderData] = useState<any>(null);
-  const [taskConfirmationLoading, setTaskConfirmationLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [processedFiles, setProcessedFiles] = useState<any[]>([]);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
@@ -136,33 +131,6 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  const isExplicitTaskCommand = (messageContent: string): boolean => {
-    const lowerMessage = messageContent.toLowerCase().trim();
-    
-    const englishTaskPatterns = [
-      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{5,})/i,
-      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to|that)\s+(.{5,})/i,
-      /^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to|that)\s+(.{5,})/i,
-      /^task\s*:\s*(.{5,})/i,
-      /^add\s+task\s*:?\s*(.{5,})/i,
-      /^create\s+task\s*:?\s*(.{5,})/i,
-      /^make\s+task\s*:?\s*(.{5,})/i
-    ];
-    
-    const arabicTaskPatterns = [
-      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{5,})/i,
-      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{5,})/i,
-      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{5,})/i,
-      /^مهمة\s*:\s*(.{5,})/i,
-      /^أضف\s+مهمة\s*:?\s*(.{5,})/i,
-      /^أنشئ\s+مهمة\s*:?\s*(.{5,})/i,
-      /^اعمل\s+مهمة\s*:?\s*(.{5,})/i
-    ];
-
-    const allPatterns = [...englishTaskPatterns, ...arabicTaskPatterns];
-    return allPatterns.some(pattern => pattern.test(messageContent));
-  };
-
   const handleSendMessage = async (messageContent: string, trigger: string, attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
@@ -179,11 +147,9 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    // FIXED: Respect the selected UI mode instead of parsing content
     let finalInputType: 'text' | 'voice' | 'vision' = 'text';
-    let routingMode = activeTrigger; // Use the selected mode directly
+    let routingMode = activeTrigger;
 
-    // Only override for vision if files are attached
     if (attachedFiles && attachedFiles.length > 0) {
       finalInputType = 'vision';
       if (routingMode !== 'video') {
@@ -203,21 +169,19 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
-      // ROUTE BASED ON SELECTED MODE (NOT MESSAGE CONTENT)
+      const tempUserMessage: AIMessage = {
+        id: `user-temp-${Date.now()}`,
+        role: 'user',
+        content: messageContent,
+        timestamp: new Date(),
+        inputType: finalInputType,
+        attachedFiles: attachedFiles
+      };
+      
+      setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+
       if (routingMode === 'image') {
         console.log('🎨 ROUTING TO IMAGE MODE: Selected mode overrides content detection');
-        
-        // Route directly to image generation
-        const tempUserMessage: AIMessage = {
-          id: `user-temp-${Date.now()}`,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          inputType: finalInputType,
-          attachedFiles: attachedFiles
-        };
-        
-        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
         
         const imageResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -227,7 +191,7 @@ const WaktiAIV2 = () => {
           finalInputType,
           [],
           false,
-          'image', // Force image mode
+          'image',
           '',
           attachedFiles || []
         );
@@ -256,18 +220,6 @@ const WaktiAIV2 = () => {
       } else if (routingMode === 'search') {
         console.log('🔍 ROUTING TO SEARCH MODE: Selected mode overrides content detection');
         
-        // Route directly to search
-        const tempUserMessage: AIMessage = {
-          id: `user-temp-${Date.now()}`,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          inputType: finalInputType,
-          attachedFiles: attachedFiles
-        };
-        
-        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
-        
         const searchResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,
@@ -276,7 +228,7 @@ const WaktiAIV2 = () => {
           finalInputType,
           [],
           false,
-          'search', // Force search mode
+          'search',
           '',
           attachedFiles || []
         );
@@ -304,73 +256,12 @@ const WaktiAIV2 = () => {
         setIsNewConversation(false);
         
       } else {
-        // CHAT MODE OR EXPLICIT TASK COMMANDS (existing logic for chat/tasks)
-        if (isExplicitTaskCommand(messageContent)) {
-          console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Processing with task confirmation UI');
-          
-          const taskResponse = await supabase.functions.invoke('process-ai-intent', {
-            body: {
-              text: messageContent,
-              mode: 'assistant',
-              userId: userProfile.id,
-              conversationHistory: sessionMessages.slice(-10)
-            }
-          });
-
-          if (taskResponse.error) {
-            console.error('❌ TASK PROCESSING ERROR:', taskResponse.error);
-            throw new Error(`Task processing failed: ${taskResponse.error.message}`);
-          }
-
-          const taskData = taskResponse.data;
-
-          const tempUserMessage: AIMessage = {
-            id: `user-temp-${Date.now()}`,
-            role: 'user',
-            content: messageContent,
-            timestamp: new Date(),
-            inputType: finalInputType,
-            attachedFiles: attachedFiles
-          };
-
-          const taskMessage: AIMessage = {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
-            content: taskData.response || 'Task processing completed',
-            timestamp: new Date()
-          };
-
-          setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
-
-          if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
-            setPendingTaskData(taskData.intentData.pendingTask);
-            setTimeout(() => {
-              setShowTaskConfirmation(true);
-            }, 50);
-          }
-
-          setIsLoading(false);
-          return;
-        }
-
-        // DEFAULT CHAT MODE
         console.log('💬 ROUTING TO CHAT MODE: Regular conversation');
         
         const hybridContext = await HybridMemoryService.getHybridContext(
           userProfile.id, 
           currentConversationId
         );
-
-        const tempUserMessage: AIMessage = {
-          id: `user-temp-${Date.now()}`,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          inputType: finalInputType,
-          attachedFiles: attachedFiles
-        };
-        
-        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
         
         const aiResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -380,7 +271,7 @@ const WaktiAIV2 = () => {
           finalInputType,
           hybridContext.recentMessages,
           false,
-          'chat', // Force chat mode
+          'chat',
           hybridContext.conversationSummary,
           attachedFiles || []
         );
@@ -401,15 +292,6 @@ const WaktiAIV2 = () => {
           browsingUsed: aiResponse.browsingUsed,
           browsingData: aiResponse.browsingData
         };
-
-        if (aiResponse.showTaskForm && aiResponse.taskData) {
-          setPendingTaskData(aiResponse.taskData);
-          setShowTaskConfirmation(true);
-        }
-
-        if (aiResponse.reminderCreated && aiResponse.reminderData) {
-          showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
-        }
         
         setSessionMessages(prevMessages => {
           const newMessages = [...prevMessages];
@@ -499,66 +381,6 @@ const WaktiAIV2 = () => {
   useEffect(() => {
     checkQuotas();
   }, [canTranslate, canUseVoice]);
-
-  const handleTaskConfirmation = async (taskData: any) => {
-    setTaskConfirmationLoading(true);
-    try {
-      console.log('🎯 CREATING TASK:', taskData);
-      
-      const createdTask = await TRService.createTask({
-        title: taskData.title,
-        description: taskData.description || '',
-        due_date: taskData.due_date || undefined,
-        due_time: taskData.due_time || undefined,
-        priority: taskData.priority || 'normal',
-        task_type: 'one-time',
-        is_shared: false
-      });
-
-      console.log('✅ TASK CREATED:', createdTask);
-
-      if (taskData.subtasks && taskData.subtasks.length > 0) {
-        console.log('🎯 CREATING SUBTASKS:', taskData.subtasks);
-        for (let i = 0; i < taskData.subtasks.length; i++) {
-          await TRService.createSubtask({
-            task_id: createdTask.id,
-            title: taskData.subtasks[i],
-            completed: false,
-            order_index: i,
-          });
-        }
-      }
-
-      showSuccess(language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!');
-    } catch (error) {
-      console.error('❌ TASK CREATION ERROR:', error);
-      showError(language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task');
-    } finally {
-      setTaskConfirmationLoading(false);
-      setShowTaskConfirmation(false);
-      setPendingTaskData(null);
-    }
-  };
-
-  const handleReminderConfirmation = async (reminderData: any) => {
-    setTaskConfirmationLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
-    } catch (error) {
-      showError(language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder');
-    } finally {
-      setTaskConfirmationLoading(false);
-      setShowTaskConfirmation(false);
-      setPendingReminderData(null);
-    }
-  };
-
-  const handleCancelTaskConfirmation = () => {
-    setShowTaskConfirmation(false);
-    setPendingTaskData(null);
-    setPendingReminderData(null);
-  };
 
   const handleNewConversation = () => {
     setSessionMessages([]);
@@ -758,13 +580,6 @@ const WaktiAIV2 = () => {
             scrollAreaRef={scrollAreaRef}
             userProfile={userProfile}
             personalTouch={personalTouch}
-            showTaskConfirmation={showTaskConfirmation}
-            pendingTaskData={pendingTaskData}
-            pendingReminderData={pendingReminderData}
-            taskConfirmationLoading={taskConfirmationLoading}
-            onTaskConfirmation={handleTaskConfirmation}
-            onReminderConfirmation={handleReminderConfirmation}
-            onCancelTaskConfirmation={handleCancelTaskConfirmation}
             conversationId={currentConversationId}
             isNewConversation={isNewConversation}
           />
