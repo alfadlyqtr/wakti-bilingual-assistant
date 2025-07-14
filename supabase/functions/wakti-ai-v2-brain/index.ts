@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -129,309 +130,6 @@ async function performSearchWithTavily(query: string, userId: string, language: 
         ? 'أعتذر، حدث خطأ أثناء البحث. يرجى المحاولة مرة أخرى.'
         : 'I apologize, there was an error during the search. Please try again.'
     };
-  }
-}
-
-// PHASE 2: MEMORY FUNCTIONS IMPLEMENTATION
-
-// Get stored user memory context
-async function getUserMemoryContext(userId) {
-  try {
-    const { data, error } = await supabase
-      .from('user_memory_context')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching user memory context:', error);
-      return null;
-    }
-
-    console.log('📚 MEMORY: Retrieved stored context for user');
-    return data;
-  } catch (error) {
-    console.error('getUserMemoryContext error:', error);
-    return null;
-  }
-}
-
-// Analyze current conversation for contextual insights
-function analyzeConversationForContext(recentMessages) {
-  const context = {
-    relationshipTone: 'neutral',
-    communicationStyle: 'friendly',
-    projectContext: '',
-    workingPattern: 'normal',
-    achievements: [],
-    expertise: [],
-    helpStyle: 'balanced'
-  };
-
-  if (!recentMessages || recentMessages.length === 0) {
-    return context;
-  }
-
-  const allMessages = recentMessages.map(msg => msg.content?.toLowerCase() || '').join(' ');
-
-  // Analyze relationship tone
-  if (allMessages.includes('buddy') || allMessages.includes('friend') || allMessages.includes('dude')) {
-    context.relationshipTone = 'casual_buddy';
-  } else if (allMessages.includes('sir') || allMessages.includes('please') || allMessages.includes('thank you')) {
-    context.relationshipTone = 'respectful';
-  } else if (allMessages.includes('hey') || allMessages.includes('yo') || allMessages.includes('sup')) {
-    context.relationshipTone = 'casual';
-  }
-
-  // Analyze communication patterns
-  if (allMessages.includes('briefly') || allMessages.includes('quick') || allMessages.includes('short')) {
-    context.communicationStyle = 'concise';
-  } else if (allMessages.includes('detail') || allMessages.includes('explain') || allMessages.includes('elaborate')) {
-    context.communicationStyle = 'detailed';
-  }
-
-  // Extract project context
-  const projectKeywords = ['project', 'app', 'website', 'application', 'system', 'platform'];
-  for (const keyword of projectKeywords) {
-    const regex = new RegExp(`(\\w+\\s+${keyword}|${keyword}\\s+\\w+)`, 'gi');
-    const matches = allMessages.match(regex);
-    if (matches && matches.length > 0) {
-      context.projectContext = matches[0];
-      break;
-    }
-  }
-
-  // Analyze working patterns
-  if (allMessages.includes('night') || allMessages.includes('late') || allMessages.includes('evening')) {
-    context.workingPattern = 'night_owl';
-  } else if (allMessages.includes('morning') || allMessages.includes('early') || allMessages.includes('dawn')) {
-    context.workingPattern = 'early_bird';
-  }
-
-  // Extract achievements
-  const achievementKeywords = ['completed', 'finished', 'done', 'achieved', 'success', 'working'];
-  for (const keyword of achievementKeywords) {
-    const regex = new RegExp(`(\\w+\\s+${keyword}|${keyword}\\s+\\w+)`, 'gi');
-    const matches = allMessages.match(regex);
-    if (matches) {
-      context.achievements.push(...matches.slice(0, 2)); // Limit to 2 achievements
-    }
-  }
-
-  // Extract expertise areas
-  const techKeywords = ['react', 'javascript', 'python', 'ai', 'database', 'api', 'frontend', 'backend'];
-  for (const keyword of techKeywords) {
-    if (allMessages.includes(keyword)) {
-      context.expertise.push(keyword);
-    }
-  }
-
-  console.log('🔍 CONVERSATION ANALYSIS: Extracted context insights');
-  return context;
-}
-
-// Merge personalization settings with stored memory context
-function mergePersonalizationWithMemory(storedContext, personalTouch) {
-  const merged = storedContext || {};
-  
-  if (personalTouch) {
-    if (personalTouch.nickname) {
-      merged.preferred_nickname = personalTouch.nickname;
-    }
-    
-    if (personalTouch.aiNickname) {
-      merged.ai_nickname = personalTouch.aiNickname;
-    }
-    
-    if (personalTouch.tone) {
-      merged.preferred_tone = personalTouch.tone;
-      merged.communication_style = personalTouch.tone === 'casual' ? 'informal' : 
-                                   personalTouch.tone === 'professional' ? 'formal' : 'friendly';
-    }
-    
-    if (personalTouch.style) {
-      merged.reply_style = personalTouch.style;
-    }
-    
-    if (personalTouch.instruction) {
-      merged.custom_instructions = personalTouch.instruction;
-    }
-  }
-  
-  console.log('🔗 PERSONALIZATION MERGE: Combined settings with memory');
-  return merged;
-}
-
-// Build personalized memory prompt
-function buildPersonalizedMemoryPrompt(mergedContext, conversationContext) {
-  let prompt = 'Enhanced Personal Context: ';
-  
-  // User's preferred nickname
-  if (mergedContext.preferred_nickname) {
-    prompt += `User name: ${mergedContext.preferred_nickname}. `;
-  }
-  
-  // AI's nickname
-  if (mergedContext.ai_nickname) {
-    prompt += `AI name: ${mergedContext.ai_nickname}. `;
-  }
-  
-  // Communication style from personalization
-  const commStyle = mergedContext.communication_style || conversationContext.communicationStyle || 'friendly';
-  prompt += `Communication: ${commStyle}. `;
-  
-  // Preferred tone
-  if (mergedContext.preferred_tone) {
-    prompt += `Tone: ${mergedContext.preferred_tone}. `;
-  }
-  
-  // Reply style
-  if (mergedContext.reply_style) {
-    prompt += `Style: ${mergedContext.reply_style}. `;
-  }
-  
-  // Custom instructions
-  if (mergedContext.custom_instructions) {
-    prompt += `Instructions: ${mergedContext.custom_instructions}. `;
-  }
-  
-  // Relationship context from conversation analysis
-  const relationshipStyle = conversationContext.relationshipTone || mergedContext.relationship_style || 'friendly';
-  if (relationshipStyle !== 'neutral') {
-    prompt += `Relationship: ${relationshipStyle}. `;
-  }
-  
-  // Project context
-  if (conversationContext.projectContext || mergedContext.current_projects) {
-    prompt += `Project: ${conversationContext.projectContext || mergedContext.current_projects}. `;
-  }
-  
-  // Working patterns
-  if (conversationContext.workingPattern !== 'normal' || mergedContext.working_patterns) {
-    prompt += `Working style: ${conversationContext.workingPattern || mergedContext.working_patterns}. `;
-  }
-  
-  // Recent achievements
-  if (mergedContext.recent_achievements) {
-    prompt += `Recent wins: ${mergedContext.recent_achievements}. `;
-  }
-  
-  // Interaction history
-  if (mergedContext.interaction_count && mergedContext.interaction_count > 1) {
-    prompt += `History: ${mergedContext.interaction_count} previous conversations. `;
-  }
-  
-  // User expertise
-  if (conversationContext.expertise.length > 0 || mergedContext.user_expertise) {
-    const expertise = conversationContext.expertise.length > 0 ? 
-      conversationContext.expertise.join(', ') : 
-      (mergedContext.user_expertise || []).join(', ');
-    if (expertise) {
-      prompt += `Expertise: ${expertise}. `;
-    }
-  }
-  
-  console.log('🧠 MEMORY PROMPT: Built personalized context');
-  return prompt.trim();
-}
-
-// Update user memory context with new insights and personalization
-async function updateUserMemoryContext(userId, conversationContext, existingContext, personalTouch) {
-  try {
-    const updates = {
-      user_id: userId,
-      last_interaction: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      interaction_count: (existingContext?.interaction_count || 0) + 1
-    };
-    
-    // Update from personalization settings
-    if (personalTouch) {
-      if (personalTouch.nickname) {
-        updates.preferred_nickname = personalTouch.nickname;
-      }
-      
-      if (personalTouch.aiNickname) {
-        updates.ai_nickname = personalTouch.aiNickname;
-      }
-      
-      if (personalTouch.tone) {
-        updates.preferred_tone = personalTouch.tone;
-        updates.communication_style = personalTouch.tone === 'casual' ? 'informal' : 
-                                     personalTouch.tone === 'professional' ? 'formal' : 'friendly';
-      }
-      
-      if (personalTouch.style) {
-        updates.reply_style = personalTouch.style;
-      }
-      
-      if (personalTouch.instruction) {
-        updates.custom_instructions = personalTouch.instruction;
-      }
-    }
-    
-    // Update from conversation analysis
-    if (conversationContext.relationshipTone !== 'neutral') {
-      updates.relationship_style = conversationContext.relationshipTone;
-    }
-    
-    // Update project context
-    if (conversationContext.projectContext) {
-      updates.current_projects = conversationContext.projectContext;
-    }
-    
-    // Update working patterns
-    if (conversationContext.workingPattern !== 'normal') {
-      updates.working_patterns = conversationContext.workingPattern;
-    }
-    
-    // Update achievements
-    if (conversationContext.achievements.length > 0) {
-      const newAchievements = conversationContext.achievements.join(', ');
-      updates.recent_achievements = existingContext?.recent_achievements 
-        ? `${existingContext.recent_achievements}, ${newAchievements}`
-        : newAchievements;
-    }
-    
-    // Update expertise
-    if (conversationContext.expertise.length > 0) {
-      updates.user_expertise = conversationContext.expertise;
-    }
-    
-    await supabase
-      .from('user_memory_context')
-      .upsert(updates, { onConflict: 'user_id' });
-      
-    console.log('✅ MEMORY UPDATE: User context updated with personalization data');
-  } catch (error) {
-    console.error('Failed to update user memory:', error);
-  }
-}
-
-// Main enhanced user context function
-async function getEnhancedUserContext(userId, recentMessages, personalTouch) {
-  console.log('🧠 GETTING ENHANCED USER CONTEXT WITH PERSONALIZATION');
-  
-  try {
-    // Get stored user context
-    const storedContext = await getUserMemoryContext(userId);
-    
-    // Analyze current conversation for context clues
-    const conversationContext = analyzeConversationForContext(recentMessages);
-    
-    // Merge personalization data with stored context
-    const mergedContext = mergePersonalizationWithMemory(storedContext, personalTouch);
-    
-    // Build enhanced memory prompt
-    const memoryPrompt = buildPersonalizedMemoryPrompt(mergedContext, conversationContext);
-    
-    // Update user context with new insights AND personalization data (fire-and-forget)
-    updateUserMemoryContext(userId, conversationContext, mergedContext, personalTouch).catch(console.error);
-    
-    return memoryPrompt;
-  } catch (error) {
-    console.error('Enhanced memory error:', error);
-    return null;
   }
 }
 
@@ -648,16 +346,31 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     const responseLanguage = language;
     let messages = [];
 
-    // 🧠 MEMORY LOADING - RESTORE FOR ALL MODES EXCEPT VISION
-    let memoryPrompt = '';
-    if (detectedMode !== 'vision' && personalTouch) {
-      const contextMessages = recentMessages.slice(-3) || [];
-      const enhancedUserContext = await getEnhancedUserContext(userId, contextMessages, personalTouch);
-      if (enhancedUserContext && enhancedUserContext.trim()) {
-        memoryPrompt = enhancedUserContext;
-        console.log('🧠 MEMORY: Added personal context for', detectedMode, 'mode');
+    // SIMPLIFIED MEMORY: Load full conversation history + personalization
+    const { data: fullHistory } = await supabase
+      .from('ai_chat_history')
+      .select('role, content, created_at')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(24); // Last 12 exchanges = 24 messages
+
+    // Build personalization context for system prompt
+    let personalizationContext = '';
+    if (personalTouch) {
+      const parts = [];
+      if (personalTouch.nickname) parts.push(`User name: ${personalTouch.nickname}`);
+      if (personalTouch.aiNickname) parts.push(`AI name: ${personalTouch.aiNickname}`);
+      if (personalTouch.tone) parts.push(`Tone: ${personalTouch.tone}`);
+      if (personalTouch.style) parts.push(`Style: ${personalTouch.style}`);
+      if (personalTouch.instruction) parts.push(`Instructions: ${personalTouch.instruction}`);
+      
+      if (parts.length > 0) {
+        personalizationContext = `\n\nPersonalization: ${parts.join(', ')}`;
       }
     }
+
+    console.log(`🧠 SIMPLIFIED MEMORY: Using full conversation history (${fullHistory?.length || 0} messages) with personalization`);
 
     // 👁️ VISION PROCESSING - SPECIALIZED
     if (detectedMode === 'vision') {
@@ -708,6 +421,20 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       });
 
     } else {
+      // Add conversation history FIRST for context
+      if (fullHistory && fullHistory.length > 0) {
+        fullHistory.forEach(msg => {
+          if (msg.role === 'user' || msg.role === 'assistant') {
+            messages.push({
+              role: msg.role,
+              content: msg.content
+            });
+          }
+        });
+        console.log(`🧠 MEMORY: Added ${fullHistory.length} conversation messages for full context`);
+      }
+      
+      // Add current message LAST
       messages.push({
         role: 'user',
         content: message
@@ -721,12 +448,9 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
         ? `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.`
         : `You are WAKTI AI, an intelligent assistant specialized in image analysis. Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
     } else {
-      // REGULAR CHAT MODE WITH MEMORY
-      const basePrompt = responseLanguage === 'ar' 
-        ? `أنت WAKTI AI، المساعد الذكي الودود المتخصص في الإنتاجية. ساعد المستخدم بطريقة مفيدة وودية.`
-        : `You are WAKTI AI, a friendly intelligent assistant specialized in productivity. Help the user in a helpful and friendly way.`;
-      
-      systemPrompt = memoryPrompt ? `${basePrompt}\n\n${memoryPrompt}` : basePrompt;
+      // SIMPLIFIED CHAT MODE WITH PERSONALIZATION
+      const basePrompt = responseLanguage === 'ar' ? `أنت WAKTI AI، المساعد الذكي الودود المتخصص في الإنتاجية. ساعد المستخدم بطريقة مفيدة وودية.` : `You are WAKTI AI, a friendly intelligent assistant specialized in productivity. Help the user in a helpful and friendly way.`;
+      systemPrompt = basePrompt + personalizationContext;
     }
 
     console.log(`🤖 CALLING CLAUDE: Mode=${detectedMode}, Messages=${messages.length}, Language=${responseLanguage}`);
@@ -758,7 +482,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     const claudeData = await claudeResponse.json();
     const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
 
-    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request with TRUE CLAUDE WAY`);
+    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request with SIMPLIFIED MEMORY SYSTEM`);
 
     // 💾 STORE CONVERSATION WITH FIXED INTENT FIELD
     try {
