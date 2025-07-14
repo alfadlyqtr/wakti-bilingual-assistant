@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { generateImageWithRunware } from './imageGeneration.ts';
 
 // ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
@@ -35,105 +36,6 @@ const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 console.log("WAKTI AI V2 BRAIN: Ultra-Smart System Initialized with Perfect API Routing");
-
-// RUNWARE IMAGE GENERATION FUNCTION
-async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
-  console.log('🎨 IMAGE GEN: Starting generation for:', prompt.substring(0, 50));
-  
-  if (!RUNWARE_API_KEY) {
-    return {
-      success: false,
-      error: language === 'ar' 
-        ? 'خدمة إنشاء الصور غير متاحة' 
-        : 'Image generation service not configured',
-      response: language === 'ar' 
-        ? 'أعتذر، خدمة إنشاء الصور غير متاحة حالياً.'
-        : 'I apologize, image generation service is not available at the moment.'
-    };
-  }
-
-  try {
-    const taskUUID = crypto.randomUUID();
-    
-    const imageGenPayload = [
-      {
-        taskType: "authentication",
-        apiKey: RUNWARE_API_KEY
-      },
-      {
-        taskType: "imageInference",
-        taskUUID: taskUUID,
-        positivePrompt: prompt,
-        width: 1024,
-        height: 1024,
-        model: "runware:100@1",
-        numberResults: 1,
-        outputFormat: "WEBP"
-      }
-    ];
-
-    const response = await fetch('https://api.runware.ai/v1', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(imageGenPayload)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ IMAGE API ERROR:', response.status, errorText);
-      throw new Error(`Image generation API error: ${response.status}`);
-    }
-
-    const responseText = await response.text();
-    if (!responseText || responseText.trim() === '') {
-      throw new Error('Empty response from image generation service');
-    }
-
-    let responseData;
-    try {
-      responseData = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error('❌ IMAGE JSON parsing error:', jsonError);
-      throw new Error('Invalid JSON response from image generation service');
-    }
-
-    if (responseData && responseData.data && Array.isArray(responseData.data)) {
-      const imageResult = responseData.data.find((item: any) => item.taskType === 'imageInference');
-      
-      if (imageResult && imageResult.imageURL) {
-        console.log('✅ IMAGE GEN: Successfully generated image');
-        return {
-          success: true,
-          error: null,
-          response: language === 'ar' 
-            ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageResult.imageURL})\n\nالوصف: ${prompt}`
-            : `🎨 Image generated successfully!\n\n![Generated Image](${imageResult.imageURL})\n\nPrompt: ${prompt}`,
-          imageUrl: imageResult.imageURL
-        };
-      }
-    }
-
-    console.warn('⚠️ IMAGE GEN: No valid image URL in response');
-    return {
-      success: false,
-      error: language === 'ar' ? 'لم يتم إنشاء الصورة بنجاح' : 'Image generation failed',
-      response: language === 'ar' 
-        ? 'أعتذر، لم أتمكن من إنشاء الصورة. يرجى المحاولة مرة أخرى.'
-        : 'I apologize, I could not generate the image. Please try again.'
-    };
-
-  } catch (error) {
-    console.error('❌ IMAGE GEN: Critical error:', error);
-    
-    return {
-      success: false,
-      error: language === 'ar' ? 'خطأ في إنشاء الصورة' : 'Image generation failed',
-      response: language === 'ar' 
-        ? 'أعتذر، حدث خطأ أثناء إنشاء الصورة. يرجى المحاولة مرة أخرى.'
-        : 'I apologize, there was an error generating the image. Please try again.'
-    };
-  }
-}
 
 // TAVILY SEARCH FUNCTION
 async function performSearchWithTavily(query: string, userId: string, language: string = 'en') {
