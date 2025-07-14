@@ -12,6 +12,83 @@ const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+// POLLING FUNCTION FOR ASYNC VIDEO GENERATION
+async function pollForVideoResult(taskUUID: string, maxAttempts = 30) {
+  console.log('🎬 POLLING: Starting polling for taskUUID:', taskUUID);
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`🎬 POLLING: Attempt ${attempt}/${maxAttempts}`);
+      
+      const pollResponse = await fetch('https://api.runware.ai/v1', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([
+          {
+            taskType: "authentication",
+            apiKey: RUNWARE_API_KEY
+          },
+          {
+            taskType: "getResponse",
+            taskUUID: taskUUID
+          }
+        ])
+      });
+
+      if (!pollResponse.ok) {
+        console.error('🎬 POLLING: Poll request failed:', pollResponse.status);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        continue;
+      }
+
+      const pollData = await pollResponse.json();
+      console.log(`🎬 POLLING: Attempt ${attempt} response:`, JSON.stringify(pollData, null, 2));
+
+      if (pollData.data && pollData.data.length > 0) {
+        const videoResult = pollData.data.find((item: any) => 
+          item.taskType === 'videoInference' && item.taskUUID === taskUUID
+        );
+
+        if (videoResult) {
+          if (videoResult.status === 'success' && videoResult.videoURL) {
+            console.log('🎬 POLLING: Video generation completed successfully');
+            return {
+              success: true,
+              videoUrl: videoResult.videoURL,
+              cost: videoResult.cost || null
+            };
+          } else if (videoResult.status === 'error') {
+            console.error('🎬 POLLING: Video generation failed:', videoResult);
+            return {
+              success: false,
+              error: `Video generation failed: ${videoResult.message || 'Unknown error'}`
+            };
+          } else if (videoResult.status === 'pending') {
+            console.log('🎬 POLLING: Still processing, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            continue;
+          }
+        }
+      }
+
+      // If no result yet, wait and try again
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+    } catch (error) {
+      console.error(`🎬 POLLING: Error on attempt ${attempt}:`, error);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+  }
+
+  console.error('🎬 POLLING: Max attempts reached, video generation timed out');
+  return {
+    success: false,
+    error: 'Video generation timed out after maximum polling attempts'
+  };
+}
+
 serve(async (req) => {
   console.log('🎬 ISOLATED VIDEO: Function called, method:', req.method);
   
@@ -72,27 +149,38 @@ serve(async (req) => {
       movementAmplitude = movementMap[movement_style] || 'auto';
     }
 
-    const runwareRequestBody = [{
-      taskType: "videoInference",
-      taskUUID: taskUUID,
-      model: model,
-      positivePrompt: prompt,
-      referenceImages: [image_base64], // Use referenceImages as per Runware docs
-      duration: 5, // 5 seconds as specified
-      width: 1920, // 1920x1080 as specified
-      height: 1080,
-      fps: 24,
-      outputFormat: "MP4",
-      outputQuality: 95,
-      numberResults: 1,
-      deliveryMethod: "async", // Required for video inference
-      includeCost: false,
-      providerSettings: {
-        klingai: {
-          movementAmplitude: movementAmplitude
+    const runwareRequestBody = [
+      {
+        taskType: "authentication",
+        apiKey: RUNWARE_API_KEY
+      },
+      {
+        taskType: "videoInference",
+        taskUUID: taskUUID,
+        model: model,
+        positivePrompt: prompt,
+        frameImages: [
+          {
+            inputImage: image_base64,
+            frame: "first"
+          }
+        ],
+        duration: 5,
+        width: 1920,
+        height: 1080,
+        fps: 24,
+        outputFormat: "MP4",
+        outputQuality: 95,
+        numberResults: 1,
+        deliveryMethod: "async",
+        includeCost: true,
+        providerSettings: {
+          klingai: {
+            movementAmplitude: movementAmplitude
+          }
         }
       }
-    }];
+    ];
 
     console.log('🎬 ISOLATED VIDEO: Sending to Runware', { 
       model, 
@@ -106,7 +194,6 @@ serve(async (req) => {
     const response = await fetch('https://api.runware.ai/v1', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${RUNWARE_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(runwareRequestBody)
@@ -141,8 +228,8 @@ serve(async (req) => {
       throw new Error('Invalid response from video generation service');
     }
 
-    const taskResponse = result.data[0];
-    if (taskResponse.taskType !== 'videoInference' || taskResponse.taskUUID !== taskUUID) {
+    const taskResponse = result.data.find((item: any) => item.taskType === 'videoInference');
+    if (!taskResponse || taskResponse.taskUUID !== taskUUID) {
       console.error('❌ ISOLATED VIDEO: Task mismatch:', taskResponse);
       throw new Error('Task mismatch in video generation response');
     }
@@ -179,19 +266,47 @@ serve(async (req) => {
       console.log('✅ ISOLATED VIDEO: Task stored successfully');
     }
     
-    // Return clean response with taskUUID for polling
-    const successResponse = {
-      success: true,
-      taskUUID: taskUUID,
-      status: 'processing',
-      message: 'Video generation started successfully'
-    };
+    // Start polling for result
+    console.log('🎬 ISOLATED VIDEO: Task submitted successfully, starting polling');
+    const pollResult = await pollForVideoResult(taskUUID);
 
-    console.log('🚀 ISOLATED VIDEO: Sending success response');
-    
-    return new Response(JSON.stringify(successResponse), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    if (pollResult.success) {
+      // Update database with successful result
+      await supabase
+        .from('video_generation_tasks')
+        .update({ 
+          status: 'completed', 
+          video_url: pollResult.videoUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('task_id', taskUUID);
+
+      const successResponse = {
+        success: true,
+        taskUUID: taskUUID,
+        videoUrl: pollResult.videoUrl,
+        cost: pollResult.cost,
+        status: 'completed',
+        message: 'Video generated successfully'
+      };
+
+      console.log('🚀 ISOLATED VIDEO: Sending success response');
+      
+      return new Response(JSON.stringify(successResponse), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } else {
+      // Update database with error
+      await supabase
+        .from('video_generation_tasks')
+        .update({ 
+          status: 'failed', 
+          updated_at: new Date().toISOString()
+        })
+        .eq('task_id', taskUUID);
+
+      throw new Error(pollResult.error || 'Video generation failed');
+    }
     
   } catch (error) {
     console.error('❌ ISOLATED VIDEO ERROR:', error);
