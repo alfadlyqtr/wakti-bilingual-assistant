@@ -13,6 +13,7 @@ import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
 import { VideoUploadInterface } from '@/components/wakti-ai-v2/VideoUploadInterface';
+import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -67,6 +68,7 @@ const WaktiAIV2 = () => {
   const { canTranslate, refreshTranslationQuota } = useQuotaManagement();
   const { canUseVoice, refreshVoiceQuota } = useExtendedQuotaManagement();
   const { quota, fetchQuota } = useAIQuotaManagement();
+  const { addTask: addVideoTask } = useVideoStatusPoller();
 
   const loadUserProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -139,17 +141,18 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId]);
 
-  const handleVideoGenerated = (videoData: any) => {
-    const videoMessage: AIMessage = {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: `🎬 Video generation started! Template: ${videoData.template}`,
-      imageUrl: videoData.jobId,
-      timestamp: new Date(),
-      intent: 'video',
-      confidence: 'high' as 'high' | 'medium' | 'low'
-    };
-    setSessionMessages(prev => [...prev, videoMessage]);
+  const handleVideoGenerated = (data: any) => {
+    console.log('🎬 VIDEO GENERATED:', data);
+    
+    // Add to video status polling
+    addVideoTask({
+      task_id: data.jobId || data.taskId,
+      status: 'processing',
+      model_used: data.model_used
+    });
+    
+    // Clear video interface
+    setShowVideoUpload(false);
   };
 
   const isExplicitTaskCommand = (messageContent: string): boolean => {

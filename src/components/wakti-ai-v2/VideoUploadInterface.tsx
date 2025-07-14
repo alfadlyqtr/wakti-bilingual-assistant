@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Upload, Camera, Sparkles } from 'lucide-react';
@@ -17,8 +18,8 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
   const { showError, showSuccess } = useToastHelper();
   
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
-  const [videoCategory, setVideoCategory] = useState('custom');
-  const [videoTemplate, setVideoTemplate] = useState('image2video');
+  const [videoCategory, setVideoCategory] = useState('runware');
+  const [videoTemplate, setVideoTemplate] = useState('runware_video');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
@@ -88,53 +89,6 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
     }
   };
 
-  // ALL 33 TEMPLATES
-  const getTemplatePrompt = (template: string) => {
-    const prompts: Record<string, string> = {
-      // Custom (1)
-      image2video: "Generate creative video animation",
-      
-      // Fun & Interactive (13)
-      make_face: "Person walks toward camera, then makes playful face with tongue out and eyes rolled up",
-      blow_kiss: "Person leans forward, blows a kiss toward camera, then waves with a warm smile",
-      hair_swap: "Character's hairstyle and color transforms smoothly",
-      flying: "Character flies forward through the air like a superhero",
-      nap_me: "Character lies down and covers themselves with a blanket for sleep",
-      pilot: "Character appears in airplane cockpit as a pilot",
-      interaction: "Two people face camera, each making heart shape with hands",
-      hugging_pro: "Two people turn toward each other and embrace in a hug",
-      carry_me: "One person carries another on their back",
-      emotionlab: "Character's expression transitions from neutral to smiling",
-      wild_laugh: "Character breaks into joyful wild laughter",
-      surprised: "Character shows sudden surprise expression",
-      send_roses: "Person picks up roses and presents them to another person",
-      
-      // Transform & Style (15)
-      cartoon_doll: "Character jumps and transforms into smooth doll version",
-      style_me: "Character puts on crisp suit and walks gracefully toward camera",
-      toy_me: "Character slowly turns around and transforms into figurine on base",
-      muscling: "Man takes off shirt revealing muscular chest",
-      muscling_360p: "Lower resolution muscle reveal animation",
-      fairy_me: "Character transforms into magical fairy with wings appearing",
-      yayoi_kusama_style: "Character transforms with polka dot pattern covering everything",
-      irasutoya: "Character transforms into Japanese illustration art style",
-      american_comic: "Character transforms into Rick and Morty animation style",
-      simpsons_comic: "Character transforms into Simpsons cartoon style",
-      child_memory: "Child version appears and embraces the adult subject",
-      outfit_show: "Model turns 180 degrees to showcase clothing details",
-      spin360: "Subject rotates 360 degrees to show all angles",
-      live_memory: "Subtle lifelike movements like blinking and breathing",
-      sakura_season: "Cherry blossom petals fall while subject looks up smiling",
-      
-      // Camera & Motion (4)
-      zoom_in_fast: "Camera steadily zooms in isolating details of subject",
-      zoom_out_image: "Camera pulls back revealing surrounding environment",
-      zoom_out_startend: "Transition from close-up to wide shot",
-      walk_forward: "Character walks forward toward camera naturally"
-    };
-    return prompts[template] || "Generate creative video animation";
-  };
-
   const handleGenerateVideo = async () => {
     try {
       setIsGenerating(true);
@@ -150,31 +104,20 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
         throw new Error('Please log in to generate videos');
       }
 
-      // Use storage URLs instead of base64
-      const imageUrls = uploadedFiles.map(file => file.url);
-      const isCustom = videoTemplate === 'image2video';
-      
-      // Use the actual custom prompt from the textarea when in custom mode
-      const promptToUse = isCustom && customPrompt?.trim() 
-        ? customPrompt.trim() 
-        : isCustom 
-          ? 'Generate creative video animation' 
-          : getTemplatePrompt(videoTemplate);
+      const imageUrl = uploadedFiles[0].url;
+      const promptToUse = customPrompt?.trim() || 'Create a smooth video animation';
 
-      console.log('🎬 GENERATING VIDEO:', {
-        template: videoTemplate,
-        imageCount: imageUrls.length,
-        userId: user.id,
-        customPrompt: isCustom ? promptToUse : 'N/A'
+      console.log('🎬 GENERATING RUNWARE VIDEO:', {
+        imageUrl: imageUrl.substring(0, 50) + '...',
+        prompt: promptToUse,
+        userId: user.id
       });
 
-      // Call new edge function
-      const response = await supabase.functions.invoke('replicate-video-generator', {
+      // Call Runware video generator
+      const response = await supabase.functions.invoke('runware-video-generator', {
         body: {
-          template: videoTemplate,
-          images: imageUrls,
+          image_url: imageUrl,
           prompt: promptToUse,
-          mode: isCustom ? 'image2video' : 'template2video',
           user_id: user.id
         }
       });
@@ -182,19 +125,21 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
       if (response.error) throw new Error(response.error.message);
 
       if (response.data?.success) {
-        showSuccess('🎬 Video generation started! You will be notified when it\'s ready.');
+        showSuccess('🎬 Runware video generation started! You will be notified when it\'s ready.');
         onVideoGenerated({ 
           jobId: response.data.job_id, 
-          template: videoTemplate,
-          taskId: response.data.job_id
+          template: 'runware_video',
+          taskId: response.data.job_id,
+          model_used: response.data.model_used,
+          estimated_cost: response.data.estimated_cost
         });
         onClose();
       } else {
-        throw new Error('Video generation failed to start');
+        throw new Error('Runware video generation failed to start');
       }
 
     } catch (error: any) {
-      console.error('❌ VIDEO GENERATION ERROR:', error);
+      console.error('❌ RUNWARE VIDEO ERROR:', error);
       showError(error.message || 'Video generation failed');
     } finally {
       setIsGenerating(false);
@@ -204,23 +149,16 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
   // Update template when category changes
   const handleCategoryChange = (category: string) => {
     setVideoCategory(category);
-    // Set default template for each category
-    let newTemplate = 'image2video';
+    let newTemplate = 'runware_video';
     switch (category) {
-      case 'custom':
+      case 'runware':
+        newTemplate = 'runware_video';
+        break;
+      case 'vidu':
         newTemplate = 'image2video';
-        break;
-      case 'fun':
-        newTemplate = 'make_face';
-        break;
-      case 'transform':
-        newTemplate = 'cartoon_doll';
-        break;
-      case 'camera':
-        newTemplate = 'zoom_in_fast';
         break;
       default:
-        newTemplate = 'image2video';
+        newTemplate = 'runware_video';
     }
     setVideoTemplate(newTemplate);
     
@@ -255,7 +193,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
           <div className="mb-4">
             <Sparkles className="h-12 w-12 text-purple-400 mx-auto mb-2" />
             <p className="text-purple-900 dark:text-purple-200 text-sm">
-              {language === 'ar' ? 'ارفع صورك وحولها إلى فيديوهات مذهلة' : 'Upload your images and create amazing videos'}
+              {language === 'ar' ? 'ارفع صورة واحدة وحولها إلى فيديو مذهل' : 'Upload one image and turn it into an amazing video'}
             </p>
           </div>
           <div className="flex gap-3 justify-center flex-wrap">
@@ -265,7 +203,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
               disabled={isUploading}
             >
               <Upload className="h-4 w-4 mr-2" />
-              {isUploading ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') : (language === 'ar' ? 'اختر صور' : 'Choose Images')}
+              {isUploading ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') : (language === 'ar' ? 'اختر صورة' : 'Choose Image')}
             </Button>
             <Button 
               onClick={() => cameraInputRef.current?.click()} 
@@ -278,7 +216,7 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
           </div>
 
           <p className="text-xs text-purple-900 dark:text-purple-300 mt-2">
-            {language === 'ar' ? 'حتى 5 صور • حد أقصى 5MB لكل صورة' : 'Up to 5 images • Max 5MB per image'}
+            {language === 'ar' ? 'صورة واحدة • حد أقصى 5MB' : 'Single image • Max 5MB'}
           </p>
         </div>
       )}
@@ -308,20 +246,6 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
             ))}
           </div>
 
-          {/* Add More Button */}
-          <div className="flex gap-2">
-            <Button 
-              onClick={() => fileInputRef.current?.click()} 
-              variant="outline" 
-              size="sm"
-              className="border-purple-300 text-purple-900 dark:text-purple-300"
-              disabled={isUploading}
-            >
-              <Upload className="h-3 w-3 mr-1" />
-              {isUploading ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') : (language === 'ar' ? 'المزيد' : 'Add More')}
-            </Button>
-          </div>
-
           {/* Controls */}
           <div className="space-y-3">
             {/* Category */}
@@ -330,10 +254,8 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
               onChange={(e) => handleCategoryChange(e.target.value)}
               className="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-base border border-gray-600"
             >
-              <option value="custom">{language === 'ar' ? 'مخصص (1 قالب)' : 'Custom (1 template)'}</option>
-              <option value="fun">{language === 'ar' ? 'ممتع وتفاعلي (13 قالب)' : 'Fun & Interactive (13 templates)'}</option>
-              <option value="transform">{language === 'ar' ? 'تحويل وأسلوب (15 قالب)' : 'Transform & Style (15 templates)'}</option>
-              <option value="camera">{language === 'ar' ? 'كاميرا وحركة (4 قوالب)' : 'Camera & Motion (4 templates)'}</option>
+              <option value="runware">{language === 'ar' ? 'Runware - سريع وعالي الجودة' : 'Runware - Fast & High Quality'}</option>
+              <option value="vidu">{language === 'ar' ? 'Vidu - قوالب متقدمة' : 'Vidu - Advanced Templates'}</option>
             </select>
 
             {/* Template */}
@@ -342,68 +264,31 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
               onChange={(e) => handleTemplateChange(e.target.value)}
               className="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-base border border-gray-600"
             >
-              {videoCategory === 'custom' && (
+              {videoCategory === 'runware' && (
+                <option value="runware_video">{language === 'ar' ? 'فيديو Runware - 5 ثوان' : 'Runware Video - 5 seconds'}</option>
+              )}
+              {videoCategory === 'vidu' && (
                 <option value="image2video">{language === 'ar' ? 'موجه مخصص' : 'Custom Prompt'}</option>
-              )}
-              {videoCategory === 'fun' && (
-                <>
-                  <option value="make_face">Make a Face</option>
-                  <option value="blow_kiss">Blow a Kiss</option>
-                  <option value="hair_swap">Hair Swap</option>
-                  <option value="flying">Flying</option>
-                  <option value="nap_me">Nap Me</option>
-                  <option value="pilot">Pilot</option>
-                  <option value="interaction">Finger Heart</option>
-                  <option value="hugging_pro">Hugging Pro</option>
-                  <option value="carry_me">Carry Me</option>
-                  <option value="emotionlab">Smile</option>
-                  <option value="wild_laugh">Wild Laugh</option>
-                  <option value="surprised">Surprised</option>
-                  <option value="send_roses">Send Roses</option>
-                </>
-              )}
-              {videoCategory === 'transform' && (
-                <>
-                  <option value="cartoon_doll">Cartoon Doll</option>
-                  <option value="style_me">Style Me</option>
-                  <option value="toy_me">Toy Me</option>
-                  <option value="muscling">Muscling</option>
-                  <option value="muscling_360p">Muscling 360p</option>
-                  <option value="fairy_me">Fairy Me</option>
-                  <option value="yayoi_kusama_style">Yayoi Kusama</option>
-                  <option value="irasutoya">Irasutoya</option>
-                  <option value="american_comic">American Comic</option>
-                  <option value="simpsons_comic">Simpsons</option>
-                  <option value="child_memory">Child Memory</option>
-                  <option value="outfit_show">Outfit Show</option>
-                  <option value="spin360">Spin 360</option>
-                  <option value="live_memory">Live Memory</option>
-                  <option value="sakura_season">Sakura Season</option>
-                </>
-              )}
-              {videoCategory === 'camera' && (
-                <>
-                  <option value="zoom_in_fast">Zoom In Fast</option>
-                  <option value="zoom_out_image">Zoom Out</option>
-                  <option value="zoom_out_startend">Zoom Out Start-End</option>
-                  <option value="walk_forward">Walk Forward</option>
-                </>
               )}
             </select>
 
-            {/* Custom Prompt Info - Show when custom is selected */}
-            {videoCategory === 'custom' && (
-              <div className="text-center text-sm text-purple-900 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
-                {language === 'ar' 
+            {/* Info Card */}
+            <div className="text-center text-sm text-purple-900 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
+              {videoCategory === 'runware' ? (
+                language === 'ar' 
+                  ? '⚡ Runware: فيديو 5 ثوان • 1920x1080 • $0.22' 
+                  : '⚡ Runware: 5-second video • 1920x1080 • $0.22'
+              ) : (
+                language === 'ar' 
                   ? '💡 اكتب وصف الفيديو المخصص في منطقة النص أعلاه' 
-                  : '💡 Type your custom video prompt in the text area above'}
-              </div>
-            )}
+                  : '💡 Type your custom video prompt in the text area above'
+              )}
+            </div>
 
             {/* Generate Button */}
             <Button 
               onClick={handleGenerateVideo}
-              disabled={isGenerating || uploadedFiles.length === 0 || isUploading || (videoCategory === 'custom' && !customPrompt?.trim())}
+              disabled={isGenerating || uploadedFiles.length === 0 || isUploading || (videoCategory === 'vidu' && !customPrompt?.trim())}
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 py-4 text-lg font-medium"
             >
               {isGenerating ? (
@@ -413,11 +298,6 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
               )}
             </Button>
           </div>
-
-          {/* Info */}
-          <div className="text-center text-xs text-purple-900 dark:text-purple-300">
-            {language === 'ar' ? 'مقاطع عالية الجودة • 832x480' : 'High quality clips • 832x480'}
-          </div>
         </div>
       )}
 
@@ -425,7 +305,6 @@ export function VideoUploadInterface({ onClose, onVideoGenerated, onTemplateChan
       <input 
         ref={fileInputRef} 
         type="file" 
-        multiple 
         accept="image/*" 
         onChange={handleFileSelect} 
         className="hidden" 
