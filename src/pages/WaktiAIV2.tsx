@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
-import { HybridMemoryService } from '@/services/HybridMemoryService';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -179,11 +178,9 @@ const WaktiAIV2 = () => {
       return;
     }
 
-    // FIXED: Respect the selected UI mode instead of parsing content
     let finalInputType: 'text' | 'voice' | 'vision' = 'text';
-    let routingMode = activeTrigger; // Use the selected mode directly
+    let routingMode = activeTrigger;
 
-    // Only override for vision if files are attached
     if (attachedFiles && attachedFiles.length > 0) {
       finalInputType = 'vision';
       if (routingMode !== 'video') {
@@ -191,7 +188,7 @@ const WaktiAIV2 = () => {
       }
     }
 
-    console.log('🚀 MESSAGE ROUTING: Respecting selected mode', {
+    console.log('🚀 SIMPLIFIED MESSAGE ROUTING: Respecting selected mode', {
       selectedMode: activeTrigger,
       routingMode: routingMode,
       messagePreview: messageContent.substring(0, 50) + '...',
@@ -203,11 +200,9 @@ const WaktiAIV2 = () => {
     const startTime = Date.now();
 
     try {
-      // ROUTE BASED ON SELECTED MODE (NOT MESSAGE CONTENT)
       if (routingMode === 'image') {
         console.log('🎨 ROUTING TO IMAGE MODE: Selected mode overrides content detection');
         
-        // Route directly to image generation
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
           role: 'user',
@@ -227,7 +222,7 @@ const WaktiAIV2 = () => {
           finalInputType,
           [],
           false,
-          'image', // Force image mode
+          'image',
           '',
           attachedFiles || []
         );
@@ -256,7 +251,6 @@ const WaktiAIV2 = () => {
       } else if (routingMode === 'search') {
         console.log('🔍 ROUTING TO SEARCH MODE: Selected mode overrides content detection');
         
-        // Route directly to search
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
           role: 'user',
@@ -276,7 +270,7 @@ const WaktiAIV2 = () => {
           finalInputType,
           [],
           false,
-          'search', // Force search mode
+          'search',
           '',
           attachedFiles || []
         );
@@ -353,14 +347,9 @@ const WaktiAIV2 = () => {
           return;
         }
 
-        // DEFAULT CHAT MODE
-        console.log('💬 ROUTING TO CHAT MODE: Regular conversation');
+        // DEFAULT CHAT MODE WITH SIMPLIFIED MEMORY
+        console.log('💬 ROUTING TO CHAT MODE: Regular conversation with simplified memory');
         
-        const hybridContext = await HybridMemoryService.getHybridContext(
-          userProfile.id, 
-          currentConversationId
-        );
-
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
           role: 'user',
@@ -378,10 +367,10 @@ const WaktiAIV2 = () => {
           language,
           currentConversationId,
           finalInputType,
-          hybridContext.recentMessages,
+          [],
           false,
-          'chat', // Force chat mode
-          hybridContext.conversationSummary,
+          'chat',
+          '',
           attachedFiles || []
         );
 
@@ -416,34 +405,13 @@ const WaktiAIV2 = () => {
           newMessages[newMessages.length - 1] = assistantMessage;
           return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
         });
-
-        HybridMemoryService.addMessage(
-          userProfile.id, 
-          aiResponse.conversationId, 
-          {
-            id: tempUserMessage.id,
-            role: 'user',
-            content: messageContent,
-            timestamp: new Date(),
-            intent: '',
-            attachedFiles: attachedFiles
-          },
-          {
-            id: assistantMessage.id,
-            role: 'assistant', 
-            content: assistantMessage.content,
-            timestamp: new Date(),
-            intent: assistantMessage.intent || '',
-            attachedFiles: []
-          }
-        );
         
         setCurrentConversationId(aiResponse.conversationId);
         setIsNewConversation(false);
       }
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ SUCCESS: Message routed to ${routingMode} mode in ${totalTime}ms`);
+      console.log(`✅ SIMPLIFIED MEMORY SUCCESS: Message routed to ${routingMode} mode in ${totalTime}ms`);
       
       setProcessedFiles([]);
       checkQuotas();
@@ -566,10 +534,7 @@ const WaktiAIV2 = () => {
     setIsNewConversation(true);
     setIsSidebarOpen(false);
     
-    if (userProfile?.id) {
-      HybridMemoryService.clearAllMemory(userProfile.id);
-      console.log('🗑️ HYBRID MEMORY: Cleared for new conversation');
-    }
+    console.log('🗑️ SIMPLIFIED MEMORY: New conversation started');
   };
 
   const handleSelectConversation = async (conversationId: string) => {
@@ -621,10 +586,7 @@ const WaktiAIV2 = () => {
       setSessionMessages([]);
       WaktiAIV2Service.clearChatSession();
       
-      if (userProfile?.id) {
-        HybridMemoryService.clearAllMemory(userProfile.id, currentConversationId);
-        console.log('🗑️ HYBRID MEMORY: Chat cleared');
-      }
+      console.log('🗑️ SIMPLIFIED MEMORY: Chat cleared');
       
       setIsClearingChat(false);
     }, 500);
