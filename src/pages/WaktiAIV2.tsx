@@ -14,6 +14,7 @@ import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
 import { VideoUploadInterface } from '@/components/wakti-ai-v2/VideoUploadInterface';
 import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
+import { VideoDialog } from '@/components/wakti-ai-v2/VideoDialog';
 
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -41,6 +42,7 @@ const WaktiAIV2 = () => {
   const [showVideoUpload, setShowVideoUpload] = useState(false);
   const [videoCategory, setVideoCategory] = useState('custom');
   const [videoTemplate, setVideoTemplate] = useState('image2video');
+  const [showVideoDialog, setShowVideoDialog] = useState(false);
 
   const [userProfile, setUserProfile] = useState<any>(null);
   const [personalTouch, setPersonalTouch] = useState<any>(null);
@@ -744,20 +746,6 @@ const WaktiAIV2 = () => {
 
         <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
           <div className="max-w-4xl mx-auto p-4">
-            {/* Video Upload Interface - Show only in video mode when requested */}
-            {activeTrigger === 'video' && showVideoUpload && (
-              <div className="px-3 pb-3">
-                <div className="max-w-4xl mx-auto">
-                  <VideoUploadInterface
-                    onClose={() => setShowVideoUpload(false)}
-                    onVideoGenerated={handleVideoGenerated}
-                    onTemplateChange={handleVideoTemplateChange}
-                    customPrompt={message}
-                  />
-                </div>
-              </div>
-            )}
-
             <ChatInput
               message={message}
               setMessage={setMessage}
@@ -772,6 +760,7 @@ const WaktiAIV2 = () => {
               setShowVideoUpload={setShowVideoUpload}
               videoCategory={videoCategory}
               videoTemplate={videoTemplate}
+              onOpenVideoDialog={() => setShowVideoDialog(true)}
             />
           </div>
         </div>
@@ -781,6 +770,11 @@ const WaktiAIV2 = () => {
         searchConfirmationRequired={false}
         onSearchConfirmation={() => {}}
         onQuotaRefresh={checkQuotas}
+      />
+
+      <VideoDialog 
+        open={showVideoDialog} 
+        onOpenChange={setShowVideoDialog} 
       />
     </div>
   );
