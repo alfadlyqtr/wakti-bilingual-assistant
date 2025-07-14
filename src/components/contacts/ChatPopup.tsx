@@ -516,8 +516,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               <div className="text-center">
                 <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'} leading-relaxed`}>
                   {language === 'ar' 
-                    ? 'الرسائل تُحذف تلقائياً بعد 24 ساعة للخصوصية'
-                    : 'Messages auto-delete after 24 hours for privacy'
+                    ? 'الرسائل تُحذف تلقائياً بعد 3 أيام للخصوصية'
+                    : 'Messages auto-delete after 3 days for privacy'
                   }
                 </p>
               </div>
