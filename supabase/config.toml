@@ -1,11 +1,10 @@
 
-
 project_id = "hxauxozopvpzpdygoqwf"
 
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "graphql_public"]
+schemas = ["public", "storage", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
@@ -13,51 +12,67 @@ max_rows = 1000
 enabled = true
 port = 54324
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://lovable.app"]
+additional_redirect_urls = ["https://localhost:3000"]
 jwt_expiry = 3600
 enable_signup = true
-email_double_confirm_changes = true
-enable_manual_linking = false
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
 
 [db]
 port = 54322
 
-[functions.replicate-video-generator]
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[realtime]
+enabled = true
+port = 54323
+ip_version = "ipv4"
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://localhost:54321"
+
+[storage]
+enabled = true
+port = 54324
+file_size_limit = "50MiB"
+image_transformation = true
+
+[functions.text-generator]
 verify_jwt = false
 
-[functions.replicate-status-checker]
+[functions.generate-image]
+verify_jwt = false
+
+[functions.runware-video-generator]
+verify_jwt = false
+
+[functions.runware-status-poller]
 verify_jwt = false
 
 [functions.wakti-ai-v2-brain]
 verify_jwt = false
 
-[functions.process-ai-intent]
+[functions.unified-ai-brain]
 verify_jwt = false
 
-[functions.ai-summary-generator]
+[functions.upload-for-video]
 verify_jwt = false
 
-[functions.ai-conversation-summarizer]
+[functions.generate-video-isolated]
 verify_jwt = false
 
-[functions.elevenlabs-tts]
-verify_jwt = false
-
-[functions.elevenlabs-sts]
-verify_jwt = false
-
-[functions.deepseek-summarizer]
-verify_jwt = false
-
-[functions.perplexity-search]
-verify_jwt = false
-
-[functions.image-analyzer]
-verify_jwt = false
-
-[functions.runware-image-generator]
-verify_jwt = false
-
-[functions.process-event-generation]
-verify_jwt = false
-
+[edge_runtime]
+enabled = true
+port = 54325
+inspector_port = 5432

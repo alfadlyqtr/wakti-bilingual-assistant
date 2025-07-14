@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { MessageSquare, Search, Image, Video, PenTool, Mic, Gamepad2 } from 'luc
 import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { GameModeModal } from './GameModeModal';
+import { IsolatedVideoDialog } from './IsolatedVideoDialog';
 
 interface QuickActionsProps {
   onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
@@ -27,6 +27,7 @@ export function QuickActionsPanel({
   const [showTextGen, setShowTextGen] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
+  const [showVideoDialog, setShowVideoDialog] = useState(false);
   
   const triggerModes = [{
     id: 'chat',
@@ -68,6 +69,12 @@ export function QuickActionsPanel({
     description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
     action: () => setShowTextGen(true),
     color: 'bg-purple-500'
+  }, {
+    icon: <Video className="h-5 w-5" />,
+    label: language === 'ar' ? 'إنشاء فيديو' : 'Create Video',
+    description: language === 'ar' ? 'حول صورتك إلى فيديو متحرك' : 'Turn your image into an animated video',
+    action: () => setShowVideoDialog(true),
+    color: 'bg-blue-500'
   }, {
     icon: <Mic className="h-5 w-5" />,
     label: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
@@ -155,11 +162,17 @@ export function QuickActionsPanel({
           </div>
         </div>
 
-        {/* Text Generator Popup - FIXED: Using correct props */}
+        {/* Text Generator Popup */}
         <TextGeneratorPopup 
           isOpen={showTextGen} 
           onClose={() => setShowTextGen(false)} 
           onTextGenerated={onTextGenerated} 
+        />
+
+        {/* Isolated Video Dialog */}
+        <IsolatedVideoDialog 
+          open={showVideoDialog} 
+          onOpenChange={setShowVideoDialog} 
         />
 
         {/* Voice Clone Popup */}
