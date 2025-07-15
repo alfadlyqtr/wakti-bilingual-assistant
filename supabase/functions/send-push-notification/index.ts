@@ -95,34 +95,35 @@ serve(async (req) => {
       });
     }
 
-    // Prepare notification data for Progressier API
+    // Get user email for Progressier API
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', payload.userIds[0])
+      .single();
+
+    if (!userProfile?.email) {
+      console.error(`No email found for user ${payload.userIds[0]}`);
+      throw new Error('User email not found');
+    }
+
+    // Prepare notification data for Progressier API (correct format)
     const progressierPayload = {
-      userIds: payload.userIds,
-      notification: {
-        title: payload.title,
-        body: payload.body,
-        icon: payload.icon || '/favicon.ico',
-        badge: payload.badge || '/favicon.ico',
-        tag: payload.tag,
-        data: {
-          ...payload.data,
-          url: payload.url || payload.data?.deep_link,
-          requestId
-        },
-        actions: payload.actions,
-        requireInteraction: payload.requireInteraction || false,
-        silent: payload.silent || false,
-        vibrate: payload.vibrate || [200, 100, 200],
-      }
+      recipients: {
+        email: userProfile.email
+      },
+      title: payload.title,
+      body: payload.body,
+      url: payload.url || payload.data?.deep_link || 'https://wakti.qa/dashboard',
+      icon: payload.icon || 'https://wakti.qa/favicon.ico',
+      badge: payload.badge || 'https://wakti.qa/favicon.ico'
     };
 
     console.log(`[${requestId}] Sending to Progressier API:`, {
       url: PROGRESSIER_API_URL,
-      userCount: progressierPayload.userIds.length,
-      notificationTitle: progressierPayload.notification.title,
-      hasIcon: !!progressierPayload.notification.icon,
-      hasData: !!progressierPayload.notification.data,
-      dataKeys: Object.keys(progressierPayload.notification.data || {})
+      userEmail: progressierPayload.recipients.email,
+      notificationTitle: progressierPayload.title,
+      targetUrl: progressierPayload.url
     });
 
     // Send to Progressier API with enhanced error handling
@@ -131,7 +132,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PROGRESSIER_API_KEY}`,
+        'authorization': `Bearer ${PROGRESSIER_API_KEY}`,
       },
       body: JSON.stringify(progressierPayload),
     });
