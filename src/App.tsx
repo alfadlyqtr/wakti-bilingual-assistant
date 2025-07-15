@@ -76,8 +76,8 @@ function App() {
                     <Route path="/privacy-terms" element={<PrivacyTerms />} />
                     <Route path="/confirmed" element={<Confirmed />} />
                     
-                    {/* Shared task route (public) */}
-                    <Route path="/shared/:shareId" element={<SharedTask />} />
+                    {/* Shared task route (public) - FIXED */}
+                    <Route path="/shared-task/:shareLink" element={<SharedTask />} />
                     
                     {/* Maw3d public view */}
                     <Route path="/maw3d/:shortId" element={<Maw3dView />} />
