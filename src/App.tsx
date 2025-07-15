@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
-import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { notificationService } from "@/services/notificationService";
 import { useEffect } from "react";
@@ -16,6 +15,7 @@ import Contacts from "./pages/Contacts";
 import Maw3d from "./pages/Maw3d";
 import Settings from "./pages/Settings";
 import Calendar from "./pages/Calendar";
+import Dashboard from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +41,7 @@ function App() {
               <BrowserRouter>
                 <Routes>
                   <Route path="/" element={<AppLayout><Home /></AppLayout>} />
+                  <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
                   <Route path="/maw3d" element={<AppLayout><Maw3d /></AppLayout>} />
