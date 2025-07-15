@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 // Updated notification sounds using the uploaded MP3 files
@@ -24,19 +25,34 @@ export class NotificationService {
     this.preloadAudioFiles();
   }
 
-  private preloadAudioFiles() {
-    Object.entries(NOTIFICATION_SOUNDS).forEach(([soundName, soundPath]) => {
-      const audio = new Audio(soundPath);
-      audio.preload = 'auto';
-      audio.volume = 0.7;
-      
-      // Handle loading errors gracefully
-      audio.addEventListener('error', (e) => {
-        console.warn(`Failed to preload audio file: ${soundPath}`, e);
-      });
-      
-      this.audioCache.set(soundName, audio);
-    });
+  private async preloadAudioFiles() {
+    for (const [soundName, soundPath] of Object.entries(NOTIFICATION_SOUNDS)) {
+      try {
+        // First check if the file exists
+        const response = await fetch(soundPath, { method: 'HEAD' });
+        if (!response.ok) {
+          console.warn(`Audio file not found: ${soundPath}`);
+          continue;
+        }
+
+        const audio = new Audio(soundPath);
+        audio.preload = 'auto';
+        audio.volume = 0.7;
+        
+        // Handle loading errors gracefully
+        audio.addEventListener('error', (e) => {
+          console.warn(`Failed to preload audio file: ${soundPath}`, e);
+        });
+        
+        audio.addEventListener('canplaythrough', () => {
+          console.log(`Audio file loaded successfully: ${soundPath}`);
+        });
+        
+        this.audioCache.set(soundName, audio);
+      } catch (error) {
+        console.warn(`Failed to check/preload audio file: ${soundPath}`, error);
+      }
+    }
   }
 
   init() {
@@ -84,7 +100,6 @@ export class NotificationService {
       )
       .subscribe();
 
-    // Subscribe to task updates (shared task completions)
     const tasksChannel = supabase
       .channel('notification-tasks')
       .on(
@@ -104,7 +119,6 @@ export class NotificationService {
       )
       .subscribe();
 
-    // Subscribe to event RSVPs
     const rsvpChannel = supabase
       .channel('notification-rsvps')
       .on(
@@ -124,7 +138,6 @@ export class NotificationService {
       )
       .subscribe();
 
-    // Subscribe to admin messages
     const adminChannel = supabase
       .channel('notification-admin')
       .on(
@@ -147,13 +160,15 @@ export class NotificationService {
     this.subscriptions = [contactsChannel, tasksChannel, rsvpChannel, adminChannel];
   }
 
-  playNotificationSound() {
+  async playNotificationSound() {
     try {
+      console.log(`🔊 Attempting to play sound: ${this.currentSound}`);
+      
       // Try to get cached audio first
       let audio = this.audioCache.get(this.currentSound);
       
       if (!audio) {
-        // Fallback: create new audio element
+        console.log('Creating new audio element for', this.currentSound);
         const soundPath = NOTIFICATION_SOUNDS[this.currentSound as keyof typeof NOTIFICATION_SOUNDS];
         audio = new Audio(soundPath);
         audio.volume = 0.7;
@@ -162,25 +177,28 @@ export class NotificationService {
       
       // Reset audio to beginning and play
       audio.currentTime = 0;
-      audio.play().catch(e => {
-        console.log('Could not play notification sound:', e);
-        // Try fallback with new audio element
-        this.playFallbackSound();
-      });
+      
+      // Use async play with proper error handling
+      await audio.play();
+      console.log(`✅ Sound played successfully: ${this.currentSound}`);
+      
     } catch (error) {
-      console.log('Sound playback failed:', error);
-      this.playFallbackSound();
+      console.warn('🔇 Sound playback failed:', error);
+      // Try fallback with direct file creation
+      await this.playFallbackSound();
     }
   }
 
-  private playFallbackSound() {
+  private async playFallbackSound() {
     try {
+      console.log('🔄 Trying fallback sound playback');
       const soundPath = NOTIFICATION_SOUNDS[this.currentSound as keyof typeof NOTIFICATION_SOUNDS];
       const fallbackAudio = new Audio(soundPath);
       fallbackAudio.volume = 0.7;
-      fallbackAudio.play().catch(e => console.log('Fallback sound also failed:', e));
+      await fallbackAudio.play();
+      console.log('✅ Fallback sound played successfully');
     } catch (error) {
-      console.log('Fallback sound failed:', error);
+      console.warn('🔇 Fallback sound also failed:', error);
     }
   }
 
@@ -205,8 +223,10 @@ export class NotificationService {
     return this.currentSound;
   }
 
-  testSound(soundName: keyof typeof NOTIFICATION_SOUNDS) {
+  async testSound(soundName: keyof typeof NOTIFICATION_SOUNDS) {
     try {
+      console.log(`🧪 Testing sound: ${soundName}`);
+      
       // Try cached audio first
       let audio = this.audioCache.get(soundName);
       
@@ -218,15 +238,20 @@ export class NotificationService {
       }
       
       audio.currentTime = 0;
-      audio.play().catch(e => {
-        console.log('Could not play test sound:', e);
-        // Fallback for test sound
+      await audio.play();
+      console.log(`✅ Test sound played successfully: ${soundName}`);
+      
+    } catch (error) {
+      console.warn('🔇 Test sound failed:', error);
+      // Fallback for test sound
+      try {
         const fallbackAudio = new Audio(NOTIFICATION_SOUNDS[soundName]);
         fallbackAudio.volume = 0.7;
-        fallbackAudio.play().catch(err => console.log('Test sound fallback failed:', err));
-      });
-    } catch (error) {
-      console.log('Test sound failed:', error);
+        await fallbackAudio.play();
+        console.log('✅ Test fallback sound played');
+      } catch (err) {
+        console.warn('🔇 Test sound fallback also failed:', err);
+      }
     }
   }
 
@@ -244,7 +269,6 @@ export class NotificationService {
       </div>
     `;
     
-    // Add toast styles if not already present
     if (!document.head.querySelector('style[data-wakti-toast]')) {
       const style = document.createElement('style');
       style.setAttribute('data-wakti-toast', 'true');
@@ -321,7 +345,6 @@ export class NotificationService {
     
     document.body.appendChild(toast);
     
-    // Remove toast after 4 seconds
     setTimeout(() => {
       toast.style.animation = 'slideOut 0.3s ease-out';
       setTimeout(() => {
