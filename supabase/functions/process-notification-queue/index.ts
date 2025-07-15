@@ -52,14 +52,20 @@ serve(async (req) => {
       try {
         console.log(`Processing notification ${notification.id} for user ${notification.user_id}`);
 
-        // Get user's Progressier ID for push notifications
+        // Get user's profile data
         const { data: profile } = await supabase
           .from('profiles')
-          .select('progressier_user_id, display_name, email')
+          .select('display_name, email')
           .eq('id', notification.user_id)
           .single();
 
-        if (!profile || !profile.progressier_user_id) {
+        const { data: subscription } = await supabase
+          .from('user_push_subscriptions')
+          .select('progressier_user_id')
+          .eq('user_id', notification.user_id)
+          .single();
+
+        if (!profile || !subscription || !subscription.progressier_user_id) {
           console.log(`No Progressier ID found for user ${notification.user_id}, skipping push notification`);
           // Mark as sent anyway since not all users may have push notifications enabled
           await supabase
@@ -73,7 +79,7 @@ serve(async (req) => {
         // Send push notification
         const pushResponse = await supabase.functions.invoke('send-push-notification', {
           body: {
-            userIds: [profile.progressier_user_id],
+            userIds: [subscription.progressier_user_id],
             title: notification.title,
             body: notification.body,
             data: {
