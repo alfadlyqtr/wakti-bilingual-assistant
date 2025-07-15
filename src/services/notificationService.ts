@@ -1,11 +1,11 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-// 3 embedded notification sounds as base64 data (short 1-2 second clips)
+// 3 distinct notification sounds as base64 data (1-2 second clips with different frequencies)
 const NOTIFICATION_SOUNDS = {
-  chime: 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwMZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAUUXrTp3KFSDwxFnODyvmYfBTuM0+7PfC0GMnS86uOiUgcQXK3j2qhXEAouiNDJew==',
-  beep: 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwMZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAUUXrTp3KFSDwxFnODyvmYfBTuM0+7PfC0GMnS86uOiUgcQXK3j2qhXEAouiNDJew==',
-  ding: 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwMZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAUUXrTp3KFSDwxFnODyvmYfBTuM0+7PfC0GMnS86uOiUgcQXK3j2qhXEAouiNDJew=='
+  chime: 'data:audio/wav;base64,UklGRiQEAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAEAAA=', // Gentle bell sound ~800Hz
+  beep: 'data:audio/wav;base64,UklGRjIEAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQ4EAAA=', // Sharp electronic beep ~1000Hz  
+  ding: 'data:audio/wav;base64,UklGRkAEAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YRwEAAA=' // Simple notification ding ~600Hz
 };
 
 export class NotificationService {
