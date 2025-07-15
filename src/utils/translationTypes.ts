@@ -1409,4 +1409,13 @@ export type TranslationKey =
   | "black"
   
   // THE MISSING KEY THAT'S CAUSING THE BUILD ERROR:
-  | "tasksReminders";
+  | "tasksReminders"
+  
+  // SEARCH SPECIFIC KEYS - NEW ADDITIONS TO FIX CURRENT ERRORS:
+  | "searchDescription"
+  | "searchPlaceholder" 
+  | "searchHelpText"
+  
+  // ADMIN SPECIFIC KEYS - NEW ADDITIONS:
+  | "adminPayments"
+  | "adminSupport";

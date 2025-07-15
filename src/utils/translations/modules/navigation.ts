@@ -31,5 +31,7 @@ export const navigation = {
   createFirstEvent: "Create your first event",
   searchDescription: "Search through your tasks, events, and more",
   searchPlaceholder: "What are you looking for?",
-  searchHelpText: "Use keywords to find content across the app"
+  searchHelpText: "Use keywords to find content across the app",
+  adminPayments: "Admin Payments",
+  adminSupport: "Admin Support"
 };
