@@ -1,17 +1,17 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
-// 3 distinct notification sounds as base64 data (1-2 second clips with different frequencies)
+// Updated notification sounds using the uploaded MP3 files
 const NOTIFICATION_SOUNDS = {
-  chime: 'data:audio/wav;base64,UklGRiQEAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAEAAA=', // Gentle bell sound ~800Hz
-  beep: 'data:audio/wav;base64,UklGRjIEAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQ4EAAA=', // Sharp electronic beep ~1000Hz  
-  ding: 'data:audio/wav;base64,UklGRkAEAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YRwEAAA=' // Simple notification ding ~600Hz
+  chime: '/lovable-uploads/chime.mp3',
+  beep: '/lovable-uploads/beep.mp3', 
+  ding: '/lovable-uploads/ding.mp3'
 };
 
 export class NotificationService {
   private currentSound: string = 'chime';
   private isInitialized: boolean = false;
   private subscriptions: any[] = [];
+  private audioCache: Map<string, HTMLAudioElement> = new Map();
 
   constructor() {
     // Load user's sound preference from localStorage
@@ -19,6 +19,24 @@ export class NotificationService {
     if (savedSound && NOTIFICATION_SOUNDS[savedSound as keyof typeof NOTIFICATION_SOUNDS]) {
       this.currentSound = savedSound;
     }
+    
+    // Preload audio files
+    this.preloadAudioFiles();
+  }
+
+  private preloadAudioFiles() {
+    Object.entries(NOTIFICATION_SOUNDS).forEach(([soundName, soundPath]) => {
+      const audio = new Audio(soundPath);
+      audio.preload = 'auto';
+      audio.volume = 0.7;
+      
+      // Handle loading errors gracefully
+      audio.addEventListener('error', (e) => {
+        console.warn(`Failed to preload audio file: ${soundPath}`, e);
+      });
+      
+      this.audioCache.set(soundName, audio);
+    });
   }
 
   init() {
@@ -38,6 +56,9 @@ export class NotificationService {
     });
     this.subscriptions = [];
     this.isInitialized = false;
+    
+    // Clean up audio cache
+    this.audioCache.clear();
   }
 
   private setupRealtimeSubscriptions() {
@@ -128,17 +149,52 @@ export class NotificationService {
 
   playNotificationSound() {
     try {
-      const audio = new Audio(NOTIFICATION_SOUNDS[this.currentSound as keyof typeof NOTIFICATION_SOUNDS]);
-      audio.volume = 0.7;
-      audio.play().catch(e => console.log('Could not play sound:', e));
+      // Try to get cached audio first
+      let audio = this.audioCache.get(this.currentSound);
+      
+      if (!audio) {
+        // Fallback: create new audio element
+        const soundPath = NOTIFICATION_SOUNDS[this.currentSound as keyof typeof NOTIFICATION_SOUNDS];
+        audio = new Audio(soundPath);
+        audio.volume = 0.7;
+        this.audioCache.set(this.currentSound, audio);
+      }
+      
+      // Reset audio to beginning and play
+      audio.currentTime = 0;
+      audio.play().catch(e => {
+        console.log('Could not play notification sound:', e);
+        // Try fallback with new audio element
+        this.playFallbackSound();
+      });
     } catch (error) {
       console.log('Sound playback failed:', error);
+      this.playFallbackSound();
+    }
+  }
+
+  private playFallbackSound() {
+    try {
+      const soundPath = NOTIFICATION_SOUNDS[this.currentSound as keyof typeof NOTIFICATION_SOUNDS];
+      const fallbackAudio = new Audio(soundPath);
+      fallbackAudio.volume = 0.7;
+      fallbackAudio.play().catch(e => console.log('Fallback sound also failed:', e));
+    } catch (error) {
+      console.log('Fallback sound failed:', error);
     }
   }
 
   setSoundPreference(soundName: keyof typeof NOTIFICATION_SOUNDS) {
     this.currentSound = soundName;
     localStorage.setItem('wakti-notification-sound', soundName);
+    
+    // Preload the new sound if not cached
+    if (!this.audioCache.has(soundName)) {
+      const audio = new Audio(NOTIFICATION_SOUNDS[soundName]);
+      audio.preload = 'auto';
+      audio.volume = 0.7;
+      this.audioCache.set(soundName, audio);
+    }
   }
 
   getSoundOptions() {
@@ -150,9 +206,28 @@ export class NotificationService {
   }
 
   testSound(soundName: keyof typeof NOTIFICATION_SOUNDS) {
-    const audio = new Audio(NOTIFICATION_SOUNDS[soundName]);
-    audio.volume = 0.7;
-    audio.play().catch(e => console.log('Could not play test sound:', e));
+    try {
+      // Try cached audio first
+      let audio = this.audioCache.get(soundName);
+      
+      if (!audio) {
+        // Create new audio for testing
+        audio = new Audio(NOTIFICATION_SOUNDS[soundName]);
+        audio.volume = 0.7;
+        this.audioCache.set(soundName, audio);
+      }
+      
+      audio.currentTime = 0;
+      audio.play().catch(e => {
+        console.log('Could not play test sound:', e);
+        // Fallback for test sound
+        const fallbackAudio = new Audio(NOTIFICATION_SOUNDS[soundName]);
+        fallbackAudio.volume = 0.7;
+        fallbackAudio.play().catch(err => console.log('Test sound fallback failed:', err));
+      });
+    } catch (error) {
+      console.log('Test sound failed:', error);
+    }
   }
 
   showToast(title: string, message: string, type: 'message' | 'task' | 'contact' | 'event' | 'admin') {
