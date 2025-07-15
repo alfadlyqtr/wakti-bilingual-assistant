@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -8,6 +7,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
+import { realtimeNotificationService } from "@/services/realtimeNotificationService";
+import { useEffect } from "react";
 
 // Import all your existing components
 import Index from "./pages/Index";
@@ -54,6 +55,17 @@ import "./App.css";
 const queryClient = new QueryClient();
 
 function App() {
+  // Initialize real-time notification service
+  useEffect(() => {
+    console.log('🚀 App mounted - initializing notification service');
+    realtimeNotificationService.init();
+
+    return () => {
+      console.log('🛑 App unmounting - cleaning up notification service');
+      realtimeNotificationService.cleanup();
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

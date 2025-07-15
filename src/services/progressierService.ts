@@ -189,7 +189,13 @@ declare global {
       add: (userData: any) => Promise<void>;
       remove: (userId: string) => Promise<void>;
       update: (userId: string, data: any) => Promise<void>;
-      send: (notification: NotificationData, userIds?: string[]) => Promise<void>;
+      send: (notification: {
+        title: string;
+        body: string;
+        url?: string;
+        icon?: string;
+        badge?: string;
+      }) => Promise<void>;
     };
   }
 }
