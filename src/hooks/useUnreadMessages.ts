@@ -1,11 +1,13 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { notificationService } from "@/services/notificationService";
 
 export function useUnreadMessages() {
   const [unreadTotal, setUnreadTotal] = useState<number>(0);
   const [unreadPerContact, setUnreadPerContact] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [previousUnreadTotal, setPreviousUnreadTotal] = useState<number | undefined>(undefined);
 
   // Helper to log the current count state
   function logUnreadState(from: string, total: number, perContact: Record<string, number>) {
@@ -37,14 +39,30 @@ export function useUnreadMessages() {
         total += 1;
       });
     }
+    
+    // Store previous total before updating
+    setPreviousUnreadTotal(unreadTotal);
     setUnreadPerContact(counts);
     setUnreadTotal(total);
     setLoading(false);
     logUnreadState(from, total, counts);
+    
     if (error) {
       console.error(`[useUnreadMessages] fetchUnread error:`, error);
     }
   }
+
+  // Trigger notification when unread count increases
+  useEffect(() => {
+    if (previousUnreadTotal !== undefined && unreadTotal > previousUnreadTotal) {
+      // New message received
+      notificationService.showToast(
+        'New Message',
+        'You have a new message',
+        'message'
+      );
+    }
+  }, [unreadTotal, previousUnreadTotal]);
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout | null = null;
@@ -95,4 +113,3 @@ export function useUnreadMessages() {
 
   return { unreadTotal, unreadPerContact, loading, refetch: () => fetchUnread('refetch') };
 }
-

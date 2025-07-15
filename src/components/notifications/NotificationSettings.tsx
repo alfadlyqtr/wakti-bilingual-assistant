@@ -5,11 +5,12 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Bell, Clock, MessageCircle, Calendar, Users, CheckSquare } from 'lucide-react';
+import { Bell, Clock, MessageCircle, Calendar, Users, CheckSquare, Volume2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { progressierService } from '@/services/progressierService';
+import { notificationService } from '@/services/notificationService';
 
 interface NotificationPreferences {
   messages: boolean;
@@ -41,6 +42,7 @@ export default function NotificationSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
+  const [selectedSound, setSelectedSound] = useState(notificationService.getCurrentSound());
 
   useEffect(() => {
     loadPreferences();
@@ -101,6 +103,12 @@ export default function NotificationSettings() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSoundChange = (soundName: string) => {
+    setSelectedSound(soundName);
+    notificationService.setSoundPreference(soundName as any);
+    notificationService.testSound(soundName as any); // Play test sound
   };
 
   const updatePreference = (key: keyof NotificationPreferences, value: any) => {
@@ -166,6 +174,51 @@ export default function NotificationSettings() {
               </Button>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Notification Sound */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Volume2 className="h-5 w-5" />
+            Notification Sound
+          </CardTitle>
+          <CardDescription>
+            Choose your preferred notification sound
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {notificationService.getSoundOptions().map((soundName) => (
+            <div key={soundName} className="flex items-center justify-between p-3 rounded-lg border">
+              <div className="flex items-center gap-3">
+                <Volume2 className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <Label className="font-medium">
+                    {soundName.charAt(0).toUpperCase() + soundName.slice(1)}
+                  </Label>
+                  <div className="text-sm text-muted-foreground">
+                    {soundName === 'chime' && 'Gentle bell sound'}
+                    {soundName === 'beep' && 'Classic notification beep'}
+                    {soundName === 'ding' && 'Simple notification ding'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => notificationService.testSound(soundName as any)}
+                >
+                  Test
+                </Button>
+                <Switch
+                  checked={selectedSound === soundName}
+                  onCheckedChange={(checked) => checked && handleSoundChange(soundName)}
+                />
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
