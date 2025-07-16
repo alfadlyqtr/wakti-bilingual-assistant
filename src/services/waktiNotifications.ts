@@ -1,4 +1,3 @@
-
 import { waktiToast, WaktiNotification } from './waktiToast';
 import { waktiSounds, WaktiSoundType } from './waktiSounds';
 import { waktiBadges } from './waktiBadges';
@@ -228,7 +227,7 @@ class WaktiNotificationService {
 
     if (this.config.enableSounds) {
       console.log('🔊 Playing sound:', notification.sound);
-      waktiSounds.playSound(notification.sound);
+      waktiSounds.playNotificationSound(notification.sound);
     }
 
     if (this.config.enableVibration && 'navigator' in window && 'vibrate' in navigator) {
