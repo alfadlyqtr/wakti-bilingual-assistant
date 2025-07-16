@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,8 @@ import { ShareService } from '@/services/shareService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
+import { waktiNotifications } from '@/services/waktiNotifications';
 
 export default function Maw3dManage() {
   const { id } = useParams();
@@ -22,6 +25,21 @@ export default function Maw3dManage() {
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Initialize WN1 notification service for Maw3d management page
+  useEffect(() => {
+    if (user?.id) {
+      console.log('🔥 Initializing WN1 notification service for Maw3d management page');
+      wn1NotificationService.initialize(user.id);
+    }
+
+    // Clear Maw3d event badges when visiting this page
+    waktiNotifications.clearBadgeOnPageVisit('maw3d');
+
+    return () => {
+      wn1NotificationService.cleanup();
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (id) {
@@ -246,7 +264,7 @@ export default function Maw3dManage() {
           </CardContent>
         </Card>
 
-        {/* RSVP Statistics - Smaller Cards */}
+        {/* RSVP Statistics - Always show total count */}
         <div className="grid gap-4 md:grid-cols-3 mb-8">
           <Card className="border-2 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-4 text-center">

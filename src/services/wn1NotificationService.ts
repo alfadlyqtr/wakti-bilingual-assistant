@@ -1,5 +1,7 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { waktiSounds } from '@/services/waktiSounds';
+import { waktiBadges } from '@/services/waktiBadges';
 import { toast } from 'sonner';
 
 export interface WN1NotificationData {
@@ -175,7 +177,7 @@ class WN1NotificationService {
   private async handleQueuedNotification(queueItem: any): Promise<void> {
     const notificationType = queueItem.notification_type;
     
-    console.log('🔄 Processing notification type:', notificationType, 'for shared tasks');
+    console.log('🔄 Processing notification type:', notificationType);
     
     // Check if this notification type is enabled in preferences
     const typeEnabled = this.isNotificationTypeEnabled(notificationType);
@@ -196,7 +198,7 @@ class WN1NotificationService {
       userId: queueItem.user_id
     };
 
-    console.log('🚀 Processing shared task notification:', notification);
+    console.log('🚀 Processing notification:', notification);
     await this.processNotification(notification);
   }
 
@@ -247,13 +249,13 @@ class WN1NotificationService {
 
     // Show toast notification
     if (this.preferences.enableToasts) {
-      console.log('🍞 Showing toast for shared task notification');
+      console.log('🍞 Showing toast for notification');
       this.showToast(notification);
     }
 
     // Play notification sound
     if (this.preferences.enableSounds) {
-      console.log('🔊 Playing sound for shared task notification');
+      console.log('🔊 Playing sound for notification');
       await this.playNotificationSound();
     }
 
@@ -270,7 +272,7 @@ class WN1NotificationService {
 
     // Update badge count
     if (this.preferences.enableBadges && this.preferences.show_badges) {
-      console.log('🏷️ Updating badge for shared task notification');
+      console.log('🏷️ Updating badge for notification');
       this.updateBadgeCount(notification.type);
     }
   }
@@ -346,11 +348,19 @@ class WN1NotificationService {
     }, 6000);
   }
 
-  private updateBadgeCount(type?: string): void {
-    // Trigger badge update via custom event
-    window.dispatchEvent(new CustomEvent('notification-received', { 
-      detail: { type } 
-    }));
+  private updateBadgeCount(type: WN1NotificationData['type']): void {
+    // Map notification data types to badge categories
+    const typeMapping: Record<WN1NotificationData['type'], string> = {
+      'shared_tasks': 'shared_task',
+      'messages': 'message',
+      'contacts': 'contact',
+      'maw3d_events': 'event',
+      'admin_messages': 'admin'
+    };
+
+    const badgeType = typeMapping[type] || type;
+    waktiBadges.incrementBadge(badgeType, 1, 'normal');
+    console.log(`🏷️ Incremented badge for type: ${badgeType}`);
   }
 
   private async queueOfflineNotification(notification: WN1NotificationData): Promise<void> {
@@ -446,17 +456,17 @@ class WN1NotificationService {
     return { ...this.preferences };
   }
 
-  async testNotification(type: string = 'shared_task'): Promise<void> {
+  async testNotification(type: string = 'maw3d_events'): Promise<void> {
     const testNotification: WN1NotificationData = {
       id: 'test-' + Date.now(),
-      type: 'shared_tasks',
-      title: '🧪 Test Shared Task Notification',
-      body: 'This is a test notification for shared task updates',
+      type: 'maw3d_events',
+      title: '🧪 Test Maw3d Event Notification',
+      body: 'This is a test notification for Maw3d event updates',
       timestamp: Date.now(),
       userId: 'test'
     };
 
-    console.log('🧪 Testing shared task notification');
+    console.log('🧪 Testing Maw3d event notification');
     await this.processNotification(testNotification);
   }
 

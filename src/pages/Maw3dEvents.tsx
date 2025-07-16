@@ -1,89 +1,53 @@
-
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, Clock, MapPin, Edit, Share2, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Plus, Calendar, MapPin, Users, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
-import { ShareService } from '@/services/shareService';
-import { useTheme } from '@/providers/ThemeProvider';
+import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns';
 import { t } from '@/utils/translations';
-import { Maw3dService } from '@/services/maw3dService';
+import { useTheme } from '@/providers/ThemeProvider';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
+import { useAuth } from '@/contexts/AuthContext';
+import { waktiNotifications } from '@/services/waktiNotifications';
 
 export default function Maw3dEvents() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { language } = useTheme();
-  
-  // Use the same optimized hook as the main Maw3d page for consistent performance
-  const { events, loading: isLoading, error } = useOptimizedMaw3dEvents();
+  const { user } = useAuth();
+  const { events, attendingCounts, loading } = useOptimizedMaw3dEvents();
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const handleEventClick = (event: any) => {
-    console.log('Event clicked:', event.id);
-    // Navigate to management view since users only see their own events now
-    navigate(`/maw3d/manage/${event.id}`);
-  };
-
-  const handleShare = async (event: any, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event click
-    console.log('Share button clicked for event:', event.id, 'shortId:', event.short_id);
-    
-    try {
-      // Pass the full event object to ShareService
-      await ShareService.shareEvent(event);
-    } catch (error) {
-      console.error('Error in handleShare:', error);
-      toast.error('Failed to share event');
+  // Initialize WN1 notification service for Maw3d events
+  useEffect(() => {
+    if (user?.id) {
+      console.log('🔥 Initializing WN1 notification service for Maw3d events page');
+      wn1NotificationService.initialize(user.id);
     }
-  };
 
-  const handleEdit = (eventId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event click
-    navigate(`/maw3d/edit/${eventId}`);
-  };
+    // Clear Maw3d event badges when visiting this page
+    waktiNotifications.clearBadgeOnPageVisit('maw3d');
 
-  const handleDelete = async (eventId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event click
-    
-    if (!confirm(t("confirmDeleteEvent", language))) return;
-    
-    try {
-      await Maw3dService.deleteEvent(eventId);
-      // The optimized hook will automatically refresh the data
-      toast.success(t("eventDeleted", language));
-    } catch (error) {
-      console.error('Error deleting event:', error);
-      toast.error('Failed to delete event');
-    }
-  };
-
-  const formatEventTime = (event: any) => {
-    if (event.is_all_day) {
-      return t("allDay", language);
-    }
-    
-    const formatTime = (time: string) => {
-      if (!time) return '';
-      const [hours, minutes] = time.split(':');
-      const hour = parseInt(hours);
-      const minute = parseInt(minutes);
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const hour12 = hour % 12 || 12;
-      return `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+    return () => {
+      wn1NotificationService.cleanup();
     };
+  }, [user?.id]);
 
-    return `${formatTime(event.start_time || '')} - ${formatTime(event.end_time || '')}`;
+  const filteredEvents = events.filter(event =>
+    event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    event.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    event.location?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const getEventStatus = (event: any) => {
+    const eventDate = parseISO(event.event_date);
+    if (isToday(eventDate)) return 'today';
+    if (isTomorrow(eventDate)) return 'tomorrow';
+    if (isPast(eventDate)) return 'past';
+    return 'upcoming';
   };
 
   const getBackgroundStyle = (event: any) => {
-    console.log('=== MAW3D EVENTS: Getting background style ===');
-    console.log('Event background_type:', event.background_type);
-    console.log('Event image_blur:', event.image_blur, `(type: ${typeof event.image_blur})`);
-
     switch (event.background_type) {
       case 'color':
         return { backgroundColor: event.background_value };
@@ -91,57 +55,27 @@ export default function Maw3dEvents() {
         return { background: event.background_value };
       case 'image':
       case 'ai':
-        const style: React.CSSProperties = { 
+        return { 
           backgroundImage: `url(${event.background_value})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         };
-        
-        // DO NOT apply blur here - it will be applied to a separate pseudo-element
-        return style;
       default:
         return { backgroundColor: '#3b82f6' };
     }
   };
 
-  const getBlurredBackgroundStyle = (event: any) => {
-    if ((event.background_type === 'image' || event.background_type === 'ai') && 
-        event.image_blur && Number(event.image_blur) > 0) {
-      console.log('Creating blurred background with blur:', `${event.image_blur}px`);
-      return {
-        backgroundImage: `url(${event.background_value})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        filter: `blur(${event.image_blur}px)`,
-      };
-    }
-    return null;
-  };
-
-  // Handle error state
-  if (error) {
+  if (loading) {
     return (
-      <div className="flex-1 overflow-y-auto scrollbar-hide bg-background p-4">
-        <div className="text-center py-12">
-          <h3 className="text-lg font-medium mb-2">{t('errorLoadingEvent', language)}</h3>
-          <p className="text-muted-foreground mb-4">{error}</p>
-          <Button onClick={() => window.location.reload()} variant="outline">
-            {t('retry', language)}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex-1 overflow-y-auto scrollbar-hide bg-background p-4">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-48 bg-gray-200 rounded-lg"></div>
-            ))}
+      <div className="flex-1 overflow-y-auto bg-background">
+        <div className="p-4 pb-24">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded mb-4"></div>
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -149,119 +83,127 @@ export default function Maw3dEvents() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide bg-background">
+    <div className="flex-1 overflow-y-auto bg-background">
       <div className="p-4 pb-24">
-        {/* Create Event Button */}
-        <div className="flex justify-end mb-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">{t("maw3dEvents", language)}</h1>
+            <p className="text-sm text-muted-foreground">{t("createAndManageEvents", language)}</p>
+          </div>
           <Button onClick={() => navigate('/maw3d/create')} className="gap-2">
             <Plus className="w-4 h-4" />
             {t("createEvent", language)}
           </Button>
         </div>
 
-        {/* Events List - Stacked Layout */}
-        {events.length === 0 ? (
+        {/* Search */}
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder={t("searchEvents", language)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 border border-border rounded-lg bg-background"
+          />
+        </div>
+
+        {/* Events List */}
+        {filteredEvents.length === 0 ? (
           <div className="text-center py-12">
-            <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-xl font-semibold mb-2">{t("noEventsYet", language)}</h3>
-            <p className="text-muted-foreground mb-6">
-              {t("createFirstEvent", language)}
-            </p>
+            <Calendar className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium mb-2">{t("noEventsYet", language)}</h3>
+            <p className="text-muted-foreground mb-4">{t("createFirstEvent", language)}</p>
             <Button onClick={() => navigate('/maw3d/create')}>
               <Plus className="w-4 h-4 mr-2" />
               {t("createEvent", language)}
             </Button>
           </div>
         ) : (
-          <div className="space-y-6">
-            {events.map((event) => {
-              const blurredBgStyle = getBlurredBackgroundStyle(event);
+          <div className="space-y-4">
+            {filteredEvents.map((event) => {
+              const status = getEventStatus(event);
+              const attendingCount = attendingCounts[event.id] || 0;
               
               return (
-                <Card key={event.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
+                <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <div 
-                    className="relative h-56 flex items-end p-6"
+                    className="h-20 relative"
                     style={getBackgroundStyle(event)}
-                    onClick={() => handleEventClick(event)}
                   >
-                    {/* Blurred background layer (only for images with blur) */}
-                    {blurredBgStyle && (
-                      <div 
-                        className="absolute inset-0"
-                        style={blurredBgStyle}
-                      />
-                    )}
-                    
-                    {/* Dark overlay for better text readability */}
-                    <div className="absolute inset-0 bg-black/30" />
-                    
-                    {/* Text content - positioned above blur and overlay */}
-                    <div className="relative text-white w-full z-10">
-                      <h3 className="font-bold text-2xl mb-2">{event.title}</h3>
-                      {event.description && (
-                        <p className="text-lg opacity-90 line-clamp-2">{event.description}</p>
-                      )}
+                    <div className="absolute inset-0 bg-black/20" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <h3 
+                        className="font-bold text-lg text-center px-4"
+                        style={{
+                          fontSize: `${(event?.text_style?.fontSize || 16) + 2}px`,
+                          fontFamily: event?.text_style?.fontFamily || 'Arial',
+                          fontWeight: event?.text_style?.isBold ? 'bold' : 'normal',
+                          fontStyle: event?.text_style?.isItalic ? 'italic' : 'normal',
+                          textDecoration: event?.text_style?.isUnderline ? 'underline' : 'none',
+                          textShadow: event?.text_style?.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
+                          textAlign: event?.text_style?.alignment as any || 'center',
+                          color: event?.text_style?.color || '#000000'
+                        }}
+                      >
+                        {event.title}
+                      </h3>
                     </div>
                   </div>
                   
-                  <CardContent className="p-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                      <div className="flex items-center gap-3 text-muted-foreground">
-                        <Calendar className="w-5 h-5" />
-                        <span className="text-base">{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-3 text-muted-foreground">
-                        <Clock className="w-5 h-5" />
-                        <span className="text-base">{formatEventTime(event)}</span>
-                      </div>
-
-                      {event.location && (
-                        <div className="flex items-center gap-3 text-muted-foreground sm:col-span-2">
-                          <MapPin className="w-5 h-5" />
-                          <span className="text-base">{event.location}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="default" className="text-sm px-3 py-1">
-                          {t("yourEvent", language)}
-                        </Badge>
-                        {event.is_public && (
-                          <Badge variant="outline" className="text-sm px-3 py-1">{t("publicEvent", language)}</Badge>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        <span>{format(parseISO(event.event_date), 'MMM d, yyyy')}</span>
+                        {!event.is_all_day && event.start_time && (
+                          <>
+                            <Clock className="w-4 h-4 ml-2" />
+                            <span>{event.start_time}</span>
+                          </>
                         )}
                       </div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        status === 'today' ? 'bg-green-100 text-green-800' :
+                        status === 'tomorrow' ? 'bg-blue-100 text-blue-800' :
+                        status === 'past' ? 'bg-gray-100 text-gray-800' :
+                        'bg-purple-100 text-purple-800'
+                      }`}>
+                        {status === 'today' ? t("today", language) :
+                         status === 'tomorrow' ? t("tomorrow", language) :
+                         status === 'past' ? t("past", language) :
+                         t("upcoming", language)}
+                      </span>
                     </div>
 
-                    {/* Action buttons */}
-                    <div className="grid grid-cols-3 gap-3">
+                    {event.location && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                        <MapPin className="w-4 h-4" />
+                        <span className="truncate">{event.location}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                      <Users className="w-4 h-4" />
+                      <span>{attendingCount} {t("attending", language)}</span>
+                    </div>
+
+                    <div className="flex gap-2">
                       <Button
                         variant="outline"
-                        onClick={(e) => handleEdit(event.id, e)}
-                        className="flex items-center justify-center gap-2"
+                        size="sm"
+                        onClick={() => navigate(`/maw3d/manage/${event.id}`)}
+                        className="flex-1"
                       >
-                        <Edit className="w-4 h-4" />
-                        {t("edit", language)}
+                        {t("manageEvent", language)}
                       </Button>
-                      
                       <Button
                         variant="outline"
-                        onClick={(e) => handleShare(event, e)}
-                        className="flex items-center justify-center gap-2"
+                        size="sm"
+                        onClick={() => navigate(`/maw3d/edit/${event.id}`)}
+                        className="flex-1"
                       >
-                        <Share2 className="w-4 h-4" />
-                        {t("share", language)}
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        onClick={(e) => handleDelete(event.id, e)}
-                        className="flex items-center justify-center gap-2 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        {t("delete", language)}
+                        {t("editEvent", language)}
                       </Button>
                     </div>
                   </CardContent>
