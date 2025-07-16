@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { waktiSounds } from '@/services/waktiSounds';
 import { toast } from 'sonner';
@@ -75,7 +74,10 @@ class WN1NotificationService {
   }
 
   async initialize(userId: string): Promise<void> {
-    if (this.isInitialized && this.currentUserId === userId) return;
+    if (this.isInitialized && this.currentUserId === userId) {
+      console.log('🔄 WN1 Service already initialized for user:', userId);
+      return;
+    }
 
     console.log('🔥 Initializing WN1 notification service for user:', userId);
     
@@ -141,7 +143,10 @@ class WN1NotificationService {
   }
 
   private async setupRealtimeSubscriptions(userId: string): Promise<void> {
-    console.log('🔗 Setting up WN1 realtime subscriptions');
+    console.log('🔗 Setting up WN1 realtime subscriptions for user:', userId);
+
+    // Cleanup existing subscriptions first
+    this.cleanup();
 
     // Single subscription to notification_queue for all notification types
     this.subscriptions.notifications = supabase
@@ -155,13 +160,22 @@ class WN1NotificationService {
         console.log('📨 WN1 notification received:', payload.new);
         this.handleQueuedNotification(payload.new);
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ WN1 notification processor subscribed successfully');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ WN1 notification processor channel error');
+          this.isInitialized = false;
+        }
+      });
 
     console.log('✅ WN1 realtime subscriptions active');
   }
 
   private async handleQueuedNotification(queueItem: any): Promise<void> {
     const notificationType = queueItem.notification_type;
+    
+    console.log('🔄 Processing notification type:', notificationType, 'for shared tasks');
     
     // Check if this notification type is enabled in preferences
     const typeEnabled = this.isNotificationTypeEnabled(notificationType);
@@ -182,6 +196,7 @@ class WN1NotificationService {
       userId: queueItem.user_id
     };
 
+    console.log('🚀 Processing shared task notification:', notification);
     await this.processNotification(notification);
   }
 
@@ -197,7 +212,9 @@ class WN1NotificationService {
     };
 
     const preferenceKey = typeMap[type];
-    return preferenceKey ? this.preferences[preferenceKey] as boolean : true;
+    const enabled = preferenceKey ? this.preferences[preferenceKey] as boolean : true;
+    console.log(`🔍 Notification type '${type}' enabled: ${enabled}`);
+    return enabled;
   }
 
   private mapNotificationTypeToDataType(type: string): WN1NotificationData['type'] {
@@ -210,7 +227,7 @@ class WN1NotificationService {
       'admin_gifts': 'admin_messages'
     };
 
-    return typeMap[type] || 'messages';
+    return typeMap[type] || 'shared_tasks';
   }
 
   private async processNotification(notification: WN1NotificationData): Promise<void> {
@@ -230,16 +247,19 @@ class WN1NotificationService {
 
     // Show toast notification
     if (this.preferences.enableToasts) {
+      console.log('🍞 Showing toast for shared task notification');
       this.showToast(notification);
     }
 
     // Play notification sound
     if (this.preferences.enableSounds) {
+      console.log('🔊 Playing sound for shared task notification');
       await this.playNotificationSound();
     }
 
     // Show browser notification
     if (this.hasPermission) {
+      console.log('🌐 Showing browser notification');
       this.showBrowserNotification(notification);
     }
 
@@ -250,6 +270,7 @@ class WN1NotificationService {
 
     // Update badge count
     if (this.preferences.enableBadges && this.preferences.show_badges) {
+      console.log('🏷️ Updating badge for shared task notification');
       this.updateBadgeCount(notification.type);
     }
   }
@@ -435,6 +456,7 @@ class WN1NotificationService {
       userId: 'test'
     };
 
+    console.log('🧪 Testing shared task notification');
     await this.processNotification(testNotification);
   }
 
