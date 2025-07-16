@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { waktiSounds } from '@/services/waktiSounds';
 import { waktiBadges } from '@/services/waktiBadges';
@@ -167,36 +168,76 @@ class WN1NotificationService {
   }
 
   private async setupRealtimeSubscriptions(userId: string): Promise<void> {
-    console.log('🔗 Setting up WN1 polling for user:', userId);
+    console.log('🔗 Setting up WN1 realtime subscriptions using WORKING message pattern for user:', userId);
 
     // Cleanup existing subscriptions first
     this.cleanup();
 
-    // Use polling instead of broken real-time
-    this.subscriptions.polling = setInterval(async () => {
-      await this.checkForNewNotifications(userId);
-    }, 2000); // Check every 2 seconds
+    // Use the EXACT same pattern that works for messages
+    this.subscriptions.notifications = supabase
+      .channel("wn1-notifications")
+      .on('postgres_changes', { 
+        event: "*", 
+        schema: "public", 
+        table: "messages" 
+      }, () => {
+        console.log("[WN1] Messages updated - checking for notifications");
+        this.checkForUserNotifications(userId);
+      })
+      .on('postgres_changes', { 
+        event: "*", 
+        schema: "public", 
+        table: "maw3d_rsvps" 
+      }, () => {
+        console.log("[WN1] Maw3d RSVPs updated - checking for notifications");
+        this.checkForUserNotifications(userId);
+      })
+      .on('postgres_changes', { 
+        event: "*", 
+        schema: "public", 
+        table: "shared_task_completions" 
+      }, () => {
+        console.log("[WN1] Shared tasks updated - checking for notifications");
+        this.checkForUserNotifications(userId);
+      })
+      .on('postgres_changes', { 
+        event: "*", 
+        schema: "public", 
+        table: "contacts" 
+      }, () => {
+        console.log("[WN1] Contacts updated - checking for notifications");
+        this.checkForUserNotifications(userId);
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log('✅ WN1 notification processor subscribed successfully using message pattern');
+        } else if (status === "CHANNEL_ERROR") {
+          console.error('❌ WN1 notification processor channel error');
+          this.isInitialized = false;
+        }
+      });
 
-    console.log('✅ WN1 polling active (bypassing broken real-time)');
+    console.log('✅ WN1 realtime subscriptions active using working pattern');
   }
 
-  private async checkForNewNotifications(userId: string): Promise<void> {
+  private async checkForUserNotifications(userId: string): Promise<void> {
     try {
+      // Check for very recent notifications (last 5 seconds)
       const { data: newNotifications } = await supabase
         .from('notification_history')
         .select('*')
         .eq('user_id', userId)
-        .gte('sent_at', new Date(Date.now() - 10000).toISOString()) // Last 10 seconds
+        .gte('sent_at', new Date(Date.now() - 5000).toISOString())
         .order('sent_at', { ascending: false });
 
       if (newNotifications && newNotifications.length > 0) {
         for (const notification of newNotifications) {
-          console.log('📨 POLLING: Found new notification:', notification);
+          console.log('📨 REAL-TIME: Found new notification via source table change:', notification);
           await this.handleHistoryNotification(notification);
         }
       }
     } catch (error) {
-      console.error('❌ Polling error:', error);
+      console.error('❌ Real-time notification check error:', error);
     }
   }
 
@@ -554,11 +595,6 @@ class WN1NotificationService {
 
   cleanup(): void {
     console.log('🧹 Cleaning up WN1 service');
-    
-    // Clear polling interval
-    if (this.subscriptions.polling) {
-      clearInterval(this.subscriptions.polling);
-    }
     
     // Unsubscribe from all channels
     Object.values(this.subscriptions).forEach(subscription => {
