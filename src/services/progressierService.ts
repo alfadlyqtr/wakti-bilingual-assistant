@@ -1,29 +1,11 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+// PWA-only interface - notification functionality removed
 export interface ProgressierUserData {
   userId: string;
   email?: string;
   displayName?: string;
-  tags?: string[];
-}
-
-export interface NotificationData {
-  title: string;
-  body: string;
-  icon?: string;
-  badge?: string;
-  tag?: string;
-  data?: any;
-  actions?: Array<{
-    action: string;
-    title: string;
-    icon?: string;
-  }>;
-  requireInteraction?: boolean;
-  silent?: boolean;
-  timestamp?: number;
-  vibrate?: number[];
 }
 
 class ProgressierService {
@@ -61,7 +43,8 @@ class ProgressierService {
     return this.initPromise;
   }
 
-  async addUser(userData: ProgressierUserData): Promise<void> {
+  // PWA Installation and manifest handling only
+  async registerUser(userData: ProgressierUserData): Promise<void> {
     try {
       await this.waitForProgressier();
       
@@ -77,54 +60,37 @@ class ProgressierService {
         progressierData.name = userData.displayName;
       }
 
-      if (userData.tags && userData.tags.length > 0) {
-        progressierData.tags = userData.tags;
-      }
-
-      console.log('Adding user to Progressier:', progressierData);
+      console.log('Registering user with Progressier for PWA:', progressierData);
       
       await window.progressier.add(progressierData);
       
-      // Store subscription data in our database
-      await this.saveSubscriptionData(userData.userId, progressierData);
+      // Store basic registration data
+      await this.saveUserRegistration(userData.userId, progressierData);
       
-      console.log('User successfully added to Progressier');
+      console.log('User successfully registered with Progressier for PWA');
     } catch (error) {
-      console.error('Error adding user to Progressier:', error);
+      console.error('Error registering user with Progressier:', error);
       throw error;
     }
   }
 
-  async removeUser(userId: string): Promise<void> {
+  async unregisterUser(userId: string): Promise<void> {
     try {
       await this.waitForProgressier();
       
       await window.progressier.remove(userId);
       
       // Update our database
-      await this.updateSubscriptionStatus(userId, false);
+      await this.updateUserRegistration(userId, false);
       
-      console.log('User removed from Progressier');
+      console.log('User unregistered from Progressier');
     } catch (error) {
-      console.error('Error removing user from Progressier:', error);
+      console.error('Error unregistering user from Progressier:', error);
       throw error;
     }
   }
 
-  async updateUserTags(userId: string, tags: string[]): Promise<void> {
-    try {
-      await this.waitForProgressier();
-      
-      await window.progressier.update(userId, { tags });
-      
-      console.log('User tags updated in Progressier');
-    } catch (error) {
-      console.error('Error updating user tags:', error);
-      throw error;
-    }
-  }
-
-  private async saveSubscriptionData(userId: string, data: any): Promise<void> {
+  private async saveUserRegistration(userId: string, data: any): Promise<void> {
     try {
       const { error } = await supabase
         .from('user_push_subscriptions')
@@ -142,11 +108,11 @@ class ProgressierService {
 
       if (error) throw error;
     } catch (error) {
-      console.error('Error saving subscription data:', error);
+      console.error('Error saving user registration:', error);
     }
   }
 
-  private async updateSubscriptionStatus(userId: string, isActive: boolean): Promise<void> {
+  private async updateUserRegistration(userId: string, isActive: boolean): Promise<void> {
     try {
       const { error } = await supabase
         .from('user_push_subscriptions')
@@ -155,34 +121,28 @@ class ProgressierService {
 
       if (error) throw error;
     } catch (error) {
-      console.error('Error updating subscription status:', error);
+      console.error('Error updating user registration:', error);
     }
   }
 
-  async getNotificationPermission(): Promise<NotificationPermission> {
-    if (!('Notification' in window)) {
-      return 'denied';
-    }
-    return Notification.permission;
+  // PWA Installation methods
+  async isPWAInstalled(): Promise<boolean> {
+    // Check if running as PWA
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true;
   }
 
-  async requestNotificationPermission(): Promise<NotificationPermission> {
-    if (!('Notification' in window)) {
-      return 'denied';
-    }
-
-    if (Notification.permission === 'default') {
-      return await Notification.requestPermission();
-    }
-
-    return Notification.permission;
+  async canInstallPWA(): Promise<boolean> {
+    // Check if PWA can be installed
+    return 'serviceWorker' in navigator && 
+           !await this.isPWAInstalled();
   }
 }
 
 // Global instance
 export const progressierService = new ProgressierService();
 
-// Extend window interface for TypeScript
+// Extend window interface for TypeScript - PWA only
 declare global {
   interface Window {
     progressier?: {

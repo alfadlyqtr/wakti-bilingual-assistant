@@ -9,12 +9,12 @@ export function useUnreadCounts() {
   const [taskCount, setTaskCount] = useState(0);
 
   useEffect(() => {
-    // Get initial counts
+    // Get initial counts with standardized badge types
     const updateCounts = () => {
-      setMessageCount(waktiBadges.getBadgeCount('message'));
-      setContactCount(waktiBadges.getBadgeCount('contact'));
-      setEventCount(waktiBadges.getBadgeCount('event')); // Fixed: use 'event' not 'maw3d_events'
-      setTaskCount(waktiBadges.getBadgeCount('task') + waktiBadges.getBadgeCount('shared_task'));
+      setMessageCount(waktiBadges.getBadgeCount('messages'));
+      setContactCount(waktiBadges.getBadgeCount('contact_requests'));
+      setEventCount(waktiBadges.getBadgeCount('maw3d_events')); // Standardized
+      setTaskCount(waktiBadges.getBadgeCount('task_updates') + waktiBadges.getBadgeCount('shared_tasks'));
     };
 
     updateCounts();

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,9 +23,17 @@ export default function NotificationSettings() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    setPermissionStatus(wn1NotificationService.getPermissionStatus());
+    checkNotificationPermission();
     loadPreferences();
   }, []);
+
+  const checkNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      setPermissionStatus('denied');
+      return;
+    }
+    setPermissionStatus(Notification.permission);
+  };
 
   const loadPreferences = async () => {
     const currentPrefs = wn1NotificationService.getPreferences();
@@ -63,10 +70,16 @@ export default function NotificationSettings() {
     await updatePreference('quietHours', newQuietHours);
   };
 
-  const requestNotificationPermission = async () => {
+  const requestPermission = async () => {
     setIsLoading(true);
     try {
-      const permission = await wn1NotificationService.requestPermission();
+      if (!('Notification' in window)) {
+        setPermissionStatus('denied');
+        toast.error(language === 'ar' ? 'المتصفح لا يدعم الإشعارات' : 'Browser does not support notifications');
+        return;
+      }
+      
+      const permission = await Notification.requestPermission();
       setPermissionStatus(permission);
       
       if (permission === 'granted') {
@@ -142,7 +155,7 @@ export default function NotificationSettings() {
             </div>
             {permissionStatus !== 'granted' && (
               <Button 
-                onClick={requestNotificationPermission}
+                onClick={requestPermission}
                 disabled={isLoading || permissionStatus === 'denied'}
                 variant="outline"
               >
@@ -488,8 +501,8 @@ export default function NotificationSettings() {
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
               {language === 'ar' 
-                ? 'اختبر نظام الإشعارات المدمج والمحسّن للـ PWA'
-                : 'Test the integrated notification system optimized for PWA'}
+                ? 'اختبر نظام الإشعارات الموحد WN1'
+                : 'Test the unified WN1 notification system'}
             </p>
             <div className="flex flex-wrap gap-2 mb-3">
               <Badge variant="secondary" className="text-xs">
@@ -512,7 +525,7 @@ export default function NotificationSettings() {
             className="w-full"
             variant="default"
           >
-            🧪 {language === 'ar' ? 'اختبار الإشعارات' : 'Test Notifications'}
+            🧪 {language === 'ar' ? 'اختبار النظام الموحد' : 'Test Unified System'}
           </Button>
           
           <p className="text-xs text-muted-foreground text-center">

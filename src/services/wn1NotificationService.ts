@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 
 export interface WN1NotificationData {
   id: string;
-  type: 'messages' | 'contacts' | 'shared_tasks' | 'maw3d_events' | 'admin_messages';
+  type: 'messages' | 'contacts' | 'shared_tasks' | 'maw3d_events' | 'admin_messages' | 'task_updates' | 'contact_requests';
   title: string;
   body: string;
   data?: Record<string, any>;
@@ -73,6 +73,29 @@ class WN1NotificationService {
   constructor() {
     this.setupOnlineListener();
     this.loadPreferences();
+  }
+
+  // Standardize badge type mapping
+  private getBadgeType(notificationType: string): string {
+    switch (notificationType) {
+      case 'maw3d_events':
+      case 'event':
+        return 'maw3d_events';
+      case 'shared_tasks':
+      case 'shared_task':
+        return 'shared_tasks';
+      case 'messages':
+        return 'messages';
+      case 'task_updates':
+        return 'task_updates';
+      case 'contact_requests':
+        return 'contact_requests';
+      case 'admin_messages':
+      case 'admin_gifts':
+        return 'admin_messages';
+      default:
+        return notificationType;
+    }
   }
 
   async initialize(userId: string): Promise<void> {
@@ -349,18 +372,9 @@ class WN1NotificationService {
   }
 
   private updateBadgeCount(type: WN1NotificationData['type']): void {
-    // Map notification data types to badge categories
-    const typeMapping: Record<WN1NotificationData['type'], string> = {
-      'shared_tasks': 'shared_task',
-      'messages': 'message',
-      'contacts': 'contact',
-      'maw3d_events': 'event',
-      'admin_messages': 'admin'
-    };
-
-    const badgeType = typeMapping[type] || type;
+    const badgeType = this.getBadgeType(type);
     waktiBadges.incrementBadge(badgeType, 1, 'normal');
-    console.log(`🏷️ Incremented badge for type: ${badgeType}`);
+    console.log(`🏷️ Incremented badge for type: ${type} -> ${badgeType}`);
   }
 
   private async queueOfflineNotification(notification: WN1NotificationData): Promise<void> {
@@ -445,6 +459,34 @@ class WN1NotificationService {
     localStorage.setItem('wn1-preferences', JSON.stringify(this.preferences));
   }
 
+  // Badge management methods - extended to cover entire app
+  clearBadge(type: string): void {
+    const badgeType = this.getBadgeType(type);
+    console.log(`🏷️ Clearing ${badgeType} badge`);
+    waktiBadges.clearBadge(badgeType);
+  }
+
+  clearBadgeOnPageVisit(pageType: 'tr' | 'maw3d' | 'messages' | 'contacts' | 'dashboard'): void {
+    const badgeMap = {
+      'tr': ['task_updates', 'shared_tasks'],
+      'maw3d': ['maw3d_events'],
+      'messages': ['messages'],
+      'contacts': ['contact_requests'],
+      'dashboard': [] // Dashboard shows all badges, don't clear any
+    };
+
+    const badgesToClear = badgeMap[pageType] || [];
+    badgesToClear.forEach(badge => this.clearBadge(badge));
+    console.log(`🧹 Cleared badges for ${pageType} page visit:`, badgesToClear);
+  }
+
+  updateBadgeCount(type: string, count: number, priority: 'low' | 'normal' | 'high' | 'urgent' = 'normal'): void {
+    if (this.preferences.enableBadges) {
+      const badgeType = this.getBadgeType(type);
+      waktiBadges.updateBadge(badgeType, count, priority);
+    }
+  }
+
   // Public API methods
   async updatePreferences(newPreferences: Partial<WN1NotificationPreferences>): Promise<void> {
     this.preferences = { ...this.preferences, ...newPreferences };
@@ -460,13 +502,13 @@ class WN1NotificationService {
     const testNotification: WN1NotificationData = {
       id: 'test-' + Date.now(),
       type: 'maw3d_events',
-      title: '🧪 Test Maw3d Event Notification',
-      body: 'This is a test notification for Maw3d event updates',
+      title: '🧪 Test Notification',
+      body: 'This is a test notification from the unified WN1 system',
       timestamp: Date.now(),
       userId: 'test'
     };
 
-    console.log('🧪 Testing Maw3d event notification');
+    console.log('🧪 Testing unified notification system');
     await this.processNotification(testNotification);
   }
 

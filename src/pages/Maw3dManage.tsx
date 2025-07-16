@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import { ShareService } from '@/services/shareService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { waktiNotifications } from '@/services/waktiNotifications';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 export default function Maw3dManage() {
   const { id } = useParams();
@@ -24,21 +24,12 @@ export default function Maw3dManage() {
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize WAKTI notification service and clear badges
+  // Clear Maw3d event badges when visiting this page
   useEffect(() => {
-    if (user?.id) {
-      console.log('🔥 Initializing WAKTI notification service for Maw3d management page');
-      waktiNotifications.startNotificationProcessor(user.id);
+    if (user) {
+      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
     }
-
-    // Clear Maw3d event badges when visiting this page
-    console.log('🧹 Clearing Maw3d badges on page visit');
-    waktiNotifications.clearBadgeOnPageVisit('maw3d');
-
-    return () => {
-      waktiNotifications.stopNotificationProcessor();
-    };
-  }, [user?.id]);
+  }, [user]);
 
   useEffect(() => {
     if (id) {
