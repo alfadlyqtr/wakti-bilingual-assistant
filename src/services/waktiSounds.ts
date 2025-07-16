@@ -15,9 +15,23 @@ export interface SoundSettings {
 
 export class WaktiSoundManager {
   private settings: SoundSettings;
+  private userInteracted: boolean = false;
 
   constructor() {
     this.settings = this.loadSettings();
+    this.setupUserInteraction();
+  }
+
+  private setupUserInteraction(): void {
+    const enableInteraction = () => {
+      this.userInteracted = true;
+      document.removeEventListener('click', enableInteraction);
+      document.removeEventListener('touchstart', enableInteraction);
+      console.log('🎵 User interaction detected, audio enabled');
+    };
+    
+    document.addEventListener('click', enableInteraction);
+    document.addEventListener('touchstart', enableInteraction);
   }
 
   private loadSettings(): SoundSettings {
@@ -40,10 +54,15 @@ export class WaktiSoundManager {
     localStorage.setItem('wakti-sound-settings', JSON.stringify(this.settings));
   }
 
-  async playNotificationSound(soundType?: WaktiSoundType): Promise<void> {
+  async playNotificationSound(soundType?: WaktiSoundType): Promise<boolean> {
     if (!this.settings.enabled) {
-      console.log('Sound disabled in settings');
-      return;
+      console.log('🔇 Sound disabled in settings');
+      return false;
+    }
+
+    if (!this.userInteracted) {
+      console.log('🔇 No user interaction yet, cannot play sound');
+      return false;
     }
     
     const sound = soundType || this.settings.selectedSound;
@@ -52,10 +71,19 @@ export class WaktiSoundManager {
     try {
       const audio = new Audio(WAKTI_SOUNDS[sound]);
       audio.volume = this.settings.volume / 100;
+      
+      await new Promise((resolve, reject) => {
+        audio.addEventListener('canplaythrough', () => resolve(true));
+        audio.addEventListener('error', reject);
+        audio.load();
+      });
+      
       await audio.play();
       console.log('✅ Sound played successfully');
+      return true;
     } catch (error) {
       console.error('❌ Sound play failed:', error);
+      return false;
     }
   }
 

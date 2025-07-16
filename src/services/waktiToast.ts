@@ -1,4 +1,3 @@
-
 import { waktiSounds, WaktiSoundType } from './waktiSounds';
 
 export interface WaktiNotification {
@@ -22,6 +21,7 @@ class WaktiToastManager {
   private toasts: Map<string, WaktiNotification> = new Map();
   private settings: ToastSettings;
   private container: HTMLElement | null = null;
+  private recentToasts: Set<string> = new Set();
 
   constructor() {
     this.settings = this.loadToastSettings();
@@ -78,9 +78,27 @@ class WaktiToastManager {
     Object.assign(this.container.style, baseStyles, positionStyles[this.settings.position]);
   }
 
+  private generateToastKey(notification: WaktiNotification): string {
+    return `${notification.type}-${notification.title}-${notification.message}`;
+  }
+
+  private isDuplicateToast(notification: WaktiNotification): boolean {
+    const key = this.generateToastKey(notification);
+    if (this.recentToasts.has(key)) {
+      console.log('🚫 Duplicate toast prevented:', key);
+      return true;
+    }
+    
+    this.recentToasts.add(key);
+    setTimeout(() => this.recentToasts.delete(key), 2000);
+    return false;
+  }
+
   async show(notification: WaktiNotification): Promise<void> {
     if (!this.settings.enabled) return;
     
+    if (this.isDuplicateToast(notification)) return;
+
     if (!notification.id) {
       notification.id = `wakti-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     }
@@ -89,11 +107,15 @@ class WaktiToastManager {
       notification.duration = durations[notification.priority];
     }
 
-    // Play sound BEFORE showing toast
-    if (notification.sound) {
-      await waktiSounds.playNotificationSound(notification.sound);
-    } else {
-      await waktiSounds.playNotificationSound();
+    // Play sound FIRST and wait for it
+    try {
+      if (notification.sound) {
+        await waktiSounds.playNotificationSound(notification.sound);
+      } else {
+        await waktiSounds.playNotificationSound();
+      }
+    } catch (error) {
+      console.warn('Sound failed, but continuing with toast:', error);
     }
 
     this.toasts.set(notification.id, notification);

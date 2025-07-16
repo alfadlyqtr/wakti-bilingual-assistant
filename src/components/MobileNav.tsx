@@ -5,6 +5,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
 import { Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { waktiBadges } from "@/services/waktiBadges";
 
 export function MobileNav() {
   const { pathname } = useLocation();
@@ -12,6 +13,17 @@ export function MobileNav() {
   const { language } = useTheme();
   const { taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount } = useUnreadMessages();
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
+
+  // Clear badges when navigating to specific pages
+  useEffect(() => {
+    if (pathname.startsWith('/tr')) {
+      waktiBadges.clearBadge('task');
+    } else if (pathname.startsWith('/maw3d')) {
+      waktiBadges.clearBadge('event');
+    } else if (pathname.startsWith('/contacts')) {
+      waktiBadges.clearBadge('contact');
+    }
+  }, [pathname]);
 
   useEffect(() => {
     // Only show badges when there's actual data > 0
@@ -34,7 +46,7 @@ export function MobileNav() {
     });
   }, [taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount]);
   
-  // Navigation items - Updated with vibrant colors and animations
+  // Navigation items
   const navItems = [
     {
       name: language === 'ar' ? 'التقويم' : 'Calendar',
@@ -78,6 +90,14 @@ export function MobileNav() {
     sparkles: Sparkles,
     mic: Mic,
   };
+
+  const handleNavigation = (path: string, badgeType?: string) => {
+    // Clear relevant badge when navigating
+    if (badgeType) {
+      waktiBadges.clearBadge(badgeType);
+    }
+    navigate(path);
+  };
   
   return (
     <nav className="fixed bottom-1 left-0 w-full z-50">
@@ -90,7 +110,7 @@ export function MobileNav() {
             return (
               <li key={item.path} className="flex-1 flex justify-center">
                 <button
-                  onClick={() => navigate(item.path)}
+                  onClick={() => handleNavigation(item.path, item.badgeType)}
                   className={cn(
                     "flex flex-col items-center justify-center gap-1 p-2 rounded-xl w-full transition-all duration-300 relative group",
                     "hover:bg-gradient-card hover:shadow-glow hover:scale-105 active:scale-95",
@@ -127,7 +147,7 @@ export function MobileNav() {
                   </div>
                   <span className={cn(
                     "text-xs font-medium transition-all duration-300",
-                    item.path === '/tasjeel' ? "text-cyan-500" : "", // Added cyan color for Tasjeel text
+                    item.path === '/tasjeel' ? "text-cyan-500" : "",
                     isActive 
                       ? "text-foreground font-semibold" 
                       : "text-muted-foreground group-hover:text-foreground"

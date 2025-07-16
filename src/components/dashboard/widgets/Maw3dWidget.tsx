@@ -1,11 +1,11 @@
-
-import React from "react";
+import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { Hand, Heart, Plus, Calendar, MapPin, Users } from "lucide-react";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 import { format, parseISO, isToday, isTomorrow, isFuture } from "date-fns";
+import { waktiBadges } from "@/services/waktiBadges";
 
 interface Maw3dWidgetProps {
   language: 'en' | 'ar';
@@ -15,6 +15,11 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   const navigate = useNavigate();
   const { events, loading, attendingCounts } = useOptimizedMaw3dEvents();
 
+  // Clear Maw3d badges when component mounts (when user visits dashboard)
+  useEffect(() => {
+    waktiBadges.clearBadge('event');
+  }, []);
+
   // Filter and sort upcoming events
   const upcomingEvents = events
     .filter(event => isFuture(parseISO(event.event_date)) || isToday(parseISO(event.event_date)))
@@ -23,6 +28,12 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
 
   const todayEvents = events.filter(event => isToday(parseISO(event.event_date)));
   const tomorrowEvents = events.filter(event => isTomorrow(parseISO(event.event_date)));
+
+  const handleNavigateToMaw3d = () => {
+    // Clear badges when navigating to Maw3d page
+    waktiBadges.clearBadge('event');
+    navigate('/maw3d-events');
+  };
 
   return (
     <div className="relative group" dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -81,30 +92,29 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
                 <h4 className="text-xs font-medium text-muted-foreground">
                   {language === 'ar' ? 'الأحداث القادمة' : 'Next Events'}
                 </h4>
-                {upcomingEvents.slice(0, 2).map((event) => (
-                  <div key={event.id} className="flex items-center gap-2 p-2 rounded-lg bg-white/10 backdrop-blur-sm">
-                    <Heart className="h-3 w-3 text-purple-500 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{event.title}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        <span>{format(parseISO(event.event_date), "MMM d")}</span>
-                        {event.location && (
-                          <>
-                            <MapPin className="h-3 w-3" />
-                            <span className="truncate">{event.location}</span>
-                          </>
-                        )}
-                        {attendingCounts[event.id] > 0 && (
-                          <>
-                            <Users className="h-3 w-3" />
-                            <span>{attendingCounts[event.id]} attending</span>
-                          </>
-                        )}
+                {upcomingEvents.slice(0, 2).map((event) => {
+                  const attendingCount = attendingCounts[event.id] || 0;
+                  return (
+                    <div key={event.id} className="flex items-center gap-2 p-2 rounded-lg bg-white/10 backdrop-blur-sm">
+                      <Heart className="h-3 w-3 text-purple-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{event.title}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calendar className="h-3 w-3" />
+                          <span>{format(parseISO(event.event_date), "MMM d")}</span>
+                          {event.location && (
+                            <>
+                              <MapPin className="h-3 w-3" />
+                              <span className="truncate">{event.location}</span>
+                            </>
+                          )}
+                          <Users className="h-3 w-3" />
+                          <span>{attendingCount} attending</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>
@@ -114,7 +124,7 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
           variant="outline" 
           size="sm" 
           className="w-full bg-white/10 backdrop-blur-sm border-white/20 bg-purple-500/20 border-purple-500/40 transition-all duration-300" 
-          onClick={() => navigate('/maw3d-events')}
+          onClick={handleNavigateToMaw3d}
         >
           <Plus className="h-4 w-4 mr-2" />
           {language === 'ar' ? 'فتح Maw3d' : 'Open Maw3d'}

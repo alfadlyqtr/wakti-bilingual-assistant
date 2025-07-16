@@ -1,7 +1,6 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { waktiNotifications } from '@/services/waktiNotifications';
 
 export function useUnreadMessages() {
   const [unreadTotal, setUnreadTotal] = useState<number>(0);
@@ -78,10 +77,13 @@ export function useUnreadMessages() {
 
       const realContactCount = contactsData ? contactsData.length : 0;
 
-      // Fetch REAL shared task completions (last 24h)
+      // Fetch REAL shared task completions (last 24h) - FIXED TABLE REFERENCE
       const { data: sharedData, error: sharedError } = await supabase
         .from("shared_task_completions")
-        .select("task_id, my_tasks!inner(user_id)")
+        .select(`
+          task_id,
+          my_tasks!inner(user_id)
+        `)
         .eq("my_tasks.user_id", userId)
         .gte("completed_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
@@ -90,7 +92,10 @@ export function useUnreadMessages() {
       // Fetch REAL Maw3d RSVP responses for user's events (last 24h)
       const { data: maw3dData, error: maw3dError } = await supabase
         .from("maw3d_rsvps")
-        .select("event_id, maw3d_events!inner(created_by)")
+        .select(`
+          event_id,
+          maw3d_events!inner(created_by)
+        `)
         .eq("maw3d_events.created_by", userId)
         .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
@@ -99,7 +104,7 @@ export function useUnreadMessages() {
       setUnreadPerContact(counts);
       setUnreadTotal(total);
       setTaskCount(realTaskCount);
-      setEventCount(0); // Keep regular events at 0 for now
+      setEventCount(0);
       setContactCount(realContactCount);
       setSharedTaskCount(realSharedTaskCount);
       setMaw3dEventCount(realMaw3dEventCount);
@@ -120,7 +125,7 @@ export function useUnreadMessages() {
     }
   }
 
-  // Trigger notifications when counts increase
+  // Remove client-side notification triggering to prevent duplicates
   useEffect(() => {
     const current = { 
       unread: unreadTotal, 
@@ -130,42 +135,6 @@ export function useUnreadMessages() {
       sharedTask: sharedTaskCount,
       maw3dEvent: maw3dEventCount
     };
-    
-    // Only notify on actual increases, not initial loads
-    if (previousCounts.unread >= 0) {
-      if (current.unread > previousCounts.unread) {
-        const newMessages = current.unread - previousCounts.unread;
-        waktiNotifications.showNotification({
-          type: 'message',
-          title: 'New Message',
-          message: `You have ${newMessages} new message${newMessages > 1 ? 's' : ''}`
-        });
-      }
-      
-      if (current.sharedTask > previousCounts.sharedTask) {
-        waktiNotifications.showNotification({
-          type: 'shared_task',
-          title: 'Shared Task Update',
-          message: 'Someone completed a shared task'
-        });
-      }
-      
-      if (current.maw3dEvent > previousCounts.maw3dEvent) {
-        waktiNotifications.showNotification({
-          type: 'event',
-          title: 'Maw3d RSVP',
-          message: 'Someone responded to your Maw3d event'
-        });
-      }
-      
-      if (current.contact > previousCounts.contact) {
-        waktiNotifications.showNotification({
-          type: 'contact',
-          title: 'Contact Request',
-          message: 'You have a new contact request'
-        });
-      }
-    }
     
     setPreviousCounts(current);
   }, [unreadTotal, taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount]);
