@@ -1,13 +1,26 @@
-import React from "react";
+
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
 import { Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { waktiBadges } from "@/services/waktiBadges";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
+  const { taskCount, eventCount, contactCount } = useUnreadMessages();
+  const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    setBadgeStates({
+      task: waktiBadges.getBadgeDisplay('task'),
+      event: waktiBadges.getBadgeDisplay('event'), 
+      contact: waktiBadges.getBadgeDisplay('contact')
+    });
+  }, [taskCount, eventCount, contactCount]);
   
   // Navigation items - Updated with vibrant colors and animations
   const navItems = [
@@ -16,18 +29,21 @@ export function MobileNav() {
       path: '/calendar',
       icon: 'calendar',
       colorClass: 'nav-icon-calendar',
+      badgeType: 'event',
     },
     {
-      name: language === 'ar' ? 'مواعيد' : 'Maw3d',
+      name: language === 'ar' ? 'مواعيد' : 'Maw3d', 
       path: '/maw3d',
       icon: 'calendar-clock',
       colorClass: 'nav-icon-maw3d',
+      badgeType: 'event',
     },
     {
       name: language === 'ar' ? 'م & ت' : 'T & R',
       path: '/tr',
-      icon: 'list-todo',
+      icon: 'list-todo', 
       colorClass: 'nav-icon-tr',
+      badgeType: 'task',
     },
     {
       name: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
@@ -37,9 +53,9 @@ export function MobileNav() {
     },
     {
       name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      path: '/tasjeel',
+      path: '/tasjeel', 
       icon: 'mic',
-      colorClass: 'text-cyan-500', // Changed to cyan color
+      colorClass: 'text-cyan-500',
     }
   ];
   
@@ -84,6 +100,12 @@ export function MobileNav() {
                           : "group-hover:scale-110 group-hover:brightness-110"
                       )} 
                     />
+                    {/* Wakti Badge System */}
+                    {item.badgeType && badgeStates[item.badgeType]?.show && (
+                      <div className={cn(waktiBadges.getBadgeClasses(item.badgeType))}>
+                        {badgeStates[item.badgeType].count}
+                      </div>
+                    )}
                     {isActive && (
                       <div className="absolute inset-0 rounded-full animate-glow-pulse opacity-50" />
                     )}

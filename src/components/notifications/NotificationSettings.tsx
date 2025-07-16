@@ -1,15 +1,19 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Bell, Clock, MessageCircle, Calendar, Users, CheckSquare } from 'lucide-react';
+import { Bell, Clock, MessageCircle, Calendar, Users, CheckSquare, Volume2, Sliders, Palette } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { progressierService } from '@/services/progressierService';
+import { waktiNotifications } from '@/services/waktiNotifications';
+import { waktiSounds } from '@/services/waktiSounds';
+import { waktiToast } from '@/services/waktiToast';
+import { waktiBadges } from '@/services/waktiBadges';
+import { Slider } from '@/components/ui/slider';
 
 interface NotificationPreferences {
   messages: boolean;
@@ -41,6 +45,10 @@ export default function NotificationSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
+  const [soundSettings, setSoundSettings] = useState(waktiSounds.getSettings());
+  const [toastSettings, setToastSettings] = useState(waktiToast.getSettings());
+  const [badgeSettings, setBadgeSettings] = useState(waktiBadges.getSettings());
+  const [notificationConfig, setNotificationConfig] = useState(waktiNotifications.getConfig());
 
   useEffect(() => {
     loadPreferences();
@@ -120,6 +128,23 @@ export default function NotificationSettings() {
     }));
   };
 
+  const handleSoundVolumeChange = (volume: number[]) => {
+    const newSettings = { ...soundSettings, volume: volume[0] };
+    setSoundSettings(newSettings);
+    waktiSounds.updateSettings(newSettings);
+  };
+
+  const handleSoundChange = (soundType: string) => {
+    const newSettings = { ...soundSettings, selectedSound: soundType as any };
+    setSoundSettings(newSettings);
+    waktiSounds.updateSettings(newSettings);
+    waktiSounds.testSound(soundType as any);
+  };
+
+  const handleTestNotification = (type: string) => {
+    waktiNotifications.testNotification(type);
+  };
+
   if (loading) {
     return (
       <Card>
@@ -166,6 +191,129 @@ export default function NotificationSettings() {
               </Button>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Sound Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Volume2 className="h-5 w-5" />
+            Sound Settings
+          </CardTitle>
+          <CardDescription>
+            Customize notification sounds and volume
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base">Enable notification sounds</Label>
+              <div className="text-sm text-muted-foreground">
+                Play sounds when notifications arrive
+              </div>
+            </div>
+            <Switch
+              checked={soundSettings.enabled}
+              onCheckedChange={(enabled) => {
+                const newSettings = { ...soundSettings, enabled };
+                setSoundSettings(newSettings);
+                waktiSounds.updateSettings(newSettings);
+              }}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label>Volume: {soundSettings.volume}%</Label>
+            <Slider
+              value={[soundSettings.volume]}
+              onValueChange={handleSoundVolumeChange}
+              max={100}
+              step={5}
+              disabled={!soundSettings.enabled}
+            />
+          </div>
+
+          <div className="space-y-4">
+            <Label className="text-base">Notification sound</Label>
+            {waktiSounds.getAllSounds().map((soundType) => (
+              <div key={soundType} className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <Label className="capitalize">{waktiSounds.getSoundDisplayName(soundType)}</Label>
+                  <div className="text-sm text-muted-foreground">
+                    {soundType === 'chime' && 'Perfect for messages and general notifications'}
+                    {soundType === 'beep' && 'Great for task updates and alerts'}  
+                    {soundType === 'ding' && 'Ideal for events and calendar reminders'}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => waktiSounds.testSound(soundType)}
+                    disabled={!soundSettings.enabled}
+                  >
+                    Test
+                  </Button>
+                  <Switch
+                    checked={soundSettings.selectedSound === soundType}
+                    onCheckedChange={(checked) => checked && handleSoundChange(soundType)}
+                    disabled={!soundSettings.enabled}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Toast Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Toast Notifications
+          </CardTitle>
+          <CardDescription>
+            Customize notification toasts
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label>Enable toast notifications</Label>
+            <Switch
+              checked={toastSettings.enabled}
+              onCheckedChange={(enabled) => {
+                const newSettings = { ...toastSettings, enabled };
+                setToastSettings(newSettings);
+                waktiToast.updateSettings(newSettings);
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Test Notifications */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sliders className="h-5 w-5" />
+            Test Notifications
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-3">
+          <Button variant="outline" onClick={() => handleTestNotification('message')}>
+            💬 Message
+          </Button>
+          <Button variant="outline" onClick={() => handleTestNotification('task')}>
+            ✅ Task
+          </Button>
+          <Button variant="outline" onClick={() => handleTestNotification('shared_task')}>
+            🔄 Shared Task
+          </Button>
+          <Button variant="outline" onClick={() => handleTestNotification('event')}>
+            📅 Event
+          </Button>
         </CardContent>
       </Card>
 

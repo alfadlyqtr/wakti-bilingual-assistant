@@ -1,11 +1,23 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { waktiNotifications } from '@/services/waktiNotifications';
 
 export function useUnreadMessages() {
   const [unreadTotal, setUnreadTotal] = useState<number>(0);
   const [unreadPerContact, setUnreadPerContact] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [taskCount, setTaskCount] = useState<number>(0);
+  const [eventCount, setEventCount] = useState<number>(0);
+  const [contactCount, setContactCount] = useState<number>(0);
+  const [sharedTaskCount, setSharedTaskCount] = useState<number>(0);
+  const [previousCounts, setPreviousCounts] = useState<{
+    unread: number;
+    task: number;
+    event: number;
+    contact: number;
+    sharedTask: number;
+  }>({ unread: 0, task: 0, event: 0, contact: 0, sharedTask: 0 });
 
   // Helper to log the current count state
   function logUnreadState(from: string, total: number, perContact: Record<string, number>) {
@@ -45,6 +57,57 @@ export function useUnreadMessages() {
       console.error(`[useUnreadMessages] fetchUnread error:`, error);
     }
   }
+
+  // Trigger notifications when counts increase
+  useEffect(() => {
+    const current = { 
+      unread: unreadTotal, 
+      task: taskCount, 
+      event: eventCount, 
+      contact: contactCount, 
+      sharedTask: sharedTaskCount
+    };
+    
+    if (previousCounts.unread > 0) { // Only after initial load
+      if (current.unread > previousCounts.unread) {
+        waktiNotifications.showNotification({
+          type: 'message',
+          title: 'New Message',
+          message: 'You have a new message'
+        });
+      }
+      if (current.task > previousCounts.task) {
+        waktiNotifications.showNotification({
+          type: 'task', 
+          title: 'Task Update',
+          message: 'Task activity requires attention'
+        });
+      }
+      if (current.sharedTask > previousCounts.sharedTask) {
+        waktiNotifications.showNotification({
+          type: 'shared_task',
+          title: 'Shared Task Activity', 
+          message: 'Someone interacted with your shared task'
+        });
+      }
+      if (current.event > previousCounts.event) {
+        waktiNotifications.showNotification({
+          type: 'event',
+          title: 'Event Update',
+          message: 'New event activity'
+        });
+      }
+      if (current.contact > previousCounts.contact) {
+        waktiNotifications.showNotification({
+          type: 'contact',
+          title: 'Contact Request',
+          message: 'New contact request received'
+        });
+      }
+    }
+    
+    setPreviousCounts(current);
+  }, [unreadTotal, taskCount, eventCount, contactCount, sharedTaskCount, previousCounts]);
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout | null = null;
@@ -93,6 +156,14 @@ export function useUnreadMessages() {
     // No deps: only attach on mount.
   }, []);
 
-  return { unreadTotal, unreadPerContact, loading, refetch: () => fetchUnread('refetch') };
+  return { 
+    unreadTotal, 
+    unreadPerContact, 
+    taskCount,
+    eventCount, 
+    contactCount,
+    sharedTaskCount,
+    loading, 
+    refetch: () => fetchUnread('refetch') 
+  };
 }
-
