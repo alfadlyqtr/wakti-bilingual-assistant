@@ -1,135 +1,126 @@
-
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { waktiNotifications } from '@/services/waktiNotifications';
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
-  loading: boolean;
+  isAuthenticated: boolean;
   isLoading: boolean;
   signOut: () => Promise<void>;
-  updateProfile: (data: { display_name?: string; avatar_url?: string }) => Promise<{ error: any }>;
-  updateEmail: (newEmail: string) => Promise<{ error: any }>;
-  updatePassword: (newPassword: string) => Promise<{ error: any }>;
-  forgotPassword: (email: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-};
+}
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+interface AuthProviderProps {
+  children: React.ReactNode;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setSession(session);
-      setLoading(false);
-      
-      // Start WAKTI notification processor if user is logged in
-      if (session?.user) {
-        console.log('🚀 Starting WAKTI notifications for authenticated user');
-        waktiNotifications.startNotificationProcessor(session.user.id);
-      }
-    });
+    let mounted = true;
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setSession(session);
-      setLoading(false);
-      
-      if (session?.user) {
-        console.log('🚀 Auth state changed - starting WAKTI notifications');
-        waktiNotifications.startNotificationProcessor(session.user.id);
-      } else {
-        console.log('🛑 User logged out - stopping WAKTI notifications');
-        waktiNotifications.stopNotificationProcessor();
+    const initializeAuth = async () => {
+      try {
+        console.log('🔐 AuthContext: Initializing authentication...');
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (mounted) {
+          if (session?.user) {
+            setUser(session.user);
+            setIsAuthenticated(true);
+            console.log('✅ AuthContext: User authenticated:', session.user.id);
+            
+            // Initialize WN1 notification service
+            const { wn1NotificationService } = await import('@/services/wn1NotificationService');
+            await wn1NotificationService.initialize(session.user.id);
+            console.log('✅ AuthContext: WN1 notification service initialized');
+          } else {
+            setUser(null);
+            setIsAuthenticated(false);
+            console.log('❌ AuthContext: No active session');
+          }
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('❌ AuthContext: Auth initialization failed:', error);
+        if (mounted) {
+          setLoading(false);
+        }
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+
+        console.log('🔄 AuthContext: Auth state changed:', event);
+        
+        if (session?.user) {
+          setUser(session.user);
+          setIsAuthenticated(true);
+          
+          // Initialize WN1 for new session
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            const { wn1NotificationService } = await import('@/services/wn1NotificationService');
+            await wn1NotificationService.initialize(session.user.id);
+            console.log('✅ AuthContext: WN1 initialized for session');
+          }
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+          
+          // Cleanup WN1 on logout
+          if (event === 'SIGNED_OUT') {
+            const { wn1NotificationService } = await import('@/services/wn1NotificationService');
+            wn1NotificationService.cleanup();
+            console.log('🧹 AuthContext: WN1 cleaned up');
+          }
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
     try {
-      console.log('🛑 Signing out - stopping WAKTI notifications');
-      waktiNotifications.stopNotificationProcessor();
       await supabase.auth.signOut();
+      setUser(null);
+      setIsAuthenticated(false);
+      console.log('🚪 User signed out');
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('❌ Error signing out:', error);
     }
   };
 
-  const updateProfile = async (data: { display_name?: string; avatar_url?: string }) => {
-    try {
-      if (!user) throw new Error('No user logged in');
-
-      const { error } = await supabase
-        .from('profiles')
-        .update(data)
-        .eq('id', user.id);
-
-      return { error };
-    } catch (error) {
-      return { error };
-    }
-  };
-
-  const updateEmail = async (newEmail: string) => {
-    try {
-      const { error } = await supabase.auth.updateUser({ email: newEmail });
-      return { error };
-    } catch (error) {
-      return { error };
-    }
-  };
-
-  const updatePassword = async (newPassword: string) => {
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      return { error };
-    } catch (error) {
-      return { error };
-    }
-  };
-
-  const forgotPassword = async (email: string) => {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
-      });
-      return { error };
-    } catch (error) {
-      return { error };
-    }
-  };
-
-  const value = {
+  const value: AuthContextType = {
     user,
-    session,
-    loading,
-    isLoading: loading,
+    isAuthenticated,
+    isLoading,
     signOut,
-    updateProfile,
-    updateEmail,
-    updatePassword,
-    forgotPassword,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+  return (
+    <AuthContext.Provider value={value}>
+      {!isLoading && children}
+    </AuthContext.Provider>
+  );
+}

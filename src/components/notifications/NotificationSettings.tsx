@@ -8,162 +8,159 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Volume2, Play, Check, Bell, BellOff, Clock, Smartphone } from 'lucide-react';
-import { waktiSounds, WaktiSoundType } from '@/services/waktiSounds';
-import { waktiNotifications } from '@/services/waktiNotifications';
+import { Bell, BellOff, Clock, Smartphone, CheckCircle, AlertCircle } from 'lucide-react';
+import { wn1NotificationService, WN1NotificationPreferences } from '@/services/wn1NotificationService';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export default function NotificationSettings() {
   const { language } = useTheme();
-  const [soundSettings, setSoundSettings] = useState(waktiSounds.getSettings());
-  const [notificationConfig, setNotificationConfig] = useState(waktiNotifications.getConfig());
-  const [testingSound, setTestingSound] = useState<string | null>(null);
+  const { user } = useAuth();
+  const [preferences, setPreferences] = useState<WN1NotificationPreferences>(wn1NotificationService.getPreferences());
+  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    setSoundSettings(waktiSounds.getSettings());
-    setNotificationConfig(waktiNotifications.getConfig());
+    setPermissionStatus(wn1NotificationService.getPermissionStatus());
+    loadPreferences();
   }, []);
 
-  const handleSoundChange = async (soundType: WaktiSoundType) => {
-    console.log('🎵 Changing sound to:', soundType);
-    setTestingSound(soundType);
-    
-    const newSettings = { ...soundSettings, selectedSound: soundType };
-    setSoundSettings(newSettings);
-    waktiSounds.updateSettings(newSettings);
+  const loadPreferences = async () => {
+    const currentPrefs = wn1NotificationService.getPreferences();
+    setPreferences(currentPrefs);
+  };
+
+  const handlePreferenceChange = async (key: keyof WN1NotificationPreferences, value: any) => {
+    const newPreferences = { ...preferences, [key]: value };
+    setPreferences(newPreferences);
     
     try {
-      await waktiSounds.testSound(soundType);
-      console.log('✅ Sound test successful');
+      await wn1NotificationService.updatePreferences({ [key]: value });
+      
+      // Update user preferences in database
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ 
+            notification_preferences: newPreferences,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+      }
+      
+      toast.success(language === 'ar' ? 'تم تحديث الإعدادات' : 'Settings updated');
     } catch (error) {
-      console.error('❌ Sound test failed:', error);
-    } finally {
-      setTestingSound(null);
+      console.error('Failed to update preferences:', error);
+      toast.error(language === 'ar' ? 'فشل في تحديث الإعدادات' : 'Failed to update settings');
     }
   };
 
-  const handleVolumeChange = (value: number[]) => {
-    const newSettings = { ...soundSettings, volume: value[0] };
-    setSoundSettings(newSettings);
-    waktiSounds.updateSettings(newSettings);
+  const handleQuietHoursChange = async (key: 'enabled' | 'start' | 'end', value: boolean | string) => {
+    const newQuietHours = { ...preferences.quietHours, [key]: value };
+    await handlePreferenceChange('quietHours', newQuietHours);
   };
 
-  const handleSoundToggle = (enabled: boolean) => {
-    const newSettings = { ...soundSettings, enabled };
-    setSoundSettings(newSettings);
-    waktiSounds.updateSettings(newSettings);
+  const requestNotificationPermission = async () => {
+    setIsLoading(true);
+    try {
+      const permission = await wn1NotificationService.requestPermission();
+      setPermissionStatus(permission);
+      
+      if (permission === 'granted') {
+        toast.success(language === 'ar' ? 'تم منح إذن الإشعارات' : 'Notification permission granted');
+      } else {
+        toast.error(language === 'ar' ? 'تم رفض إذن الإشعارات' : 'Notification permission denied');
+      }
+    } catch (error) {
+      console.error('Permission request failed:', error);
+      toast.error(language === 'ar' ? 'فشل في طلب الإذن' : 'Permission request failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleNotificationConfigChange = (key: keyof typeof notificationConfig, value: any) => {
-    const newConfig = { ...notificationConfig, [key]: value };
-    setNotificationConfig(newConfig);
-    waktiNotifications.updateConfig(newConfig);
+  const testWN1System = async () => {
+    try {
+      await wn1NotificationService.testNotification();
+      toast.success(language === 'ar' ? 'تم إرسال إشعار تجريبي' : 'Test notification sent');
+    } catch (error) {
+      console.error('Test notification failed:', error);
+      toast.error(language === 'ar' ? 'فشل الإشعار التجريبي' : 'Test notification failed');
+    }
   };
 
-  const handleQuietHoursChange = (key: 'enabled' | 'start' | 'end', value: boolean | string) => {
-    const newQuietHours = { ...notificationConfig.quietHours, [key]: value };
-    const newConfig = { ...notificationConfig, quietHours: newQuietHours };
-    setNotificationConfig(newConfig);
-    waktiNotifications.updateConfig(newConfig);
+  const getPermissionStatusInfo = () => {
+    switch (permissionStatus) {
+      case 'granted':
+        return {
+          icon: <CheckCircle className="h-4 w-4 text-green-500" />,
+          text: language === 'ar' ? 'مُفعّل' : 'Enabled',
+          color: 'text-green-600'
+        };
+      case 'denied':
+        return {
+          icon: <AlertCircle className="h-4 w-4 text-red-500" />,
+          text: language === 'ar' ? 'مرفوض' : 'Blocked',
+          color: 'text-red-600'
+        };
+      default:
+        return {
+          icon: <AlertCircle className="h-4 w-4 text-orange-500" />,
+          text: language === 'ar' ? 'غير مُفعّل' : 'Not Set',
+          color: 'text-orange-600'
+        };
+    }
   };
 
-  const testNotificationSystem = async () => {
-    console.log('🧪 Testing full notification system');
-    await waktiNotifications.testNotification('message');
-  };
-
-  const testSpecificNotification = async (type: string) => {
-    await waktiNotifications.testNotification(type);
-  };
+  const permissionInfo = getPermissionStatusInfo();
 
   return (
     <div className="space-y-6">
-      {/* Sound Settings */}
+      {/* Browser Permission Status */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Volume2 className="h-5 w-5" />
-            {language === 'ar' ? 'إعدادات الصوت' : 'Sound Settings'}
+            <Bell className="h-5 w-5" />
+            {language === 'ar' ? 'إذن إشعارات المتصفح' : 'Browser Notification Permission'}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium">
-                {language === 'ar' ? 'تمكين الأصوات' : 'Enable Sounds'}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {language === 'ar' ? 'تشغيل أصوات الإشعارات' : 'Play notification sounds'}
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 rounded-md border">
+            <div className="flex items-center gap-3">
+              {permissionInfo.icon}
+              <div>
+                <p className="font-medium">
+                  {language === 'ar' ? 'حالة الإذن' : 'Permission Status'}
+                </p>
+                <p className={`text-sm ${permissionInfo.color}`}>
+                  {permissionInfo.text}
+                </p>
+              </div>
+            </div>
+            {permissionStatus !== 'granted' && (
+              <Button 
+                onClick={requestNotificationPermission}
+                disabled={isLoading || permissionStatus === 'denied'}
+                variant="outline"
+              >
+                {isLoading ? 
+                  (language === 'ar' ? 'جاري الطلب...' : 'Requesting...') :
+                  (language === 'ar' ? 'طلب الإذن' : 'Request Permission')
+                }
+              </Button>
+            )}
+          </div>
+          
+          {permissionStatus === 'denied' && (
+            <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-md border border-orange-200 dark:border-orange-800">
+              <p className="text-sm text-orange-800 dark:text-orange-200">
+                {language === 'ar' 
+                  ? 'تم حظر الإشعارات. يرجى تمكينها من إعدادات المتصفح.'
+                  : 'Notifications are blocked. Please enable them in your browser settings.'}
               </p>
             </div>
-            <Switch
-              checked={soundSettings.enabled}
-              onCheckedChange={handleSoundToggle}
-            />
-          </div>
-
-          {soundSettings.enabled && (
-            <>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium">
-                    {language === 'ar' ? 'مستوى الصوت' : 'Volume'}
-                  </h3>
-                  <span className="text-sm text-muted-foreground">{soundSettings.volume}%</span>
-                </div>
-                <Slider
-                  value={[soundSettings.volume]}
-                  onValueChange={handleVolumeChange}
-                  max={100}
-                  min={0}
-                  step={10}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="font-medium">
-                  {language === 'ar' ? 'صوت الإشعار' : 'Notification Sound'}
-                </h3>
-                <div className="grid gap-2">
-                  {waktiSounds.getAllSounds().map((sound) => (
-                    <div
-                      key={sound}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          {soundSettings.selectedSound === sound ? (
-                            <Check className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <div className="h-4 w-4" />
-                          )}
-                          <span className="font-medium">{waktiSounds.getSoundDisplayName(sound)}</span>
-                        </div>
-                        {soundSettings.selectedSound === sound && (
-                          <Badge variant="secondary" className="text-xs">
-                            {language === 'ar' ? 'الحالي' : 'Current'}
-                          </Badge>
-                        )}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSoundChange(sound)}
-                        disabled={testingSound === sound}
-                        className="flex items-center gap-2"
-                      >
-                        <Play className="h-3 w-3" />
-                        {testingSound === sound ? 
-                          (language === 'ar' ? 'يتم التشغيل...' : 'Playing...') : 
-                          (language === 'ar' ? 'تجربة' : 'Test')
-                        }
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
           )}
         </CardContent>
       </Card>
@@ -187,8 +184,8 @@ export default function NotificationSettings() {
               </p>
             </div>
             <Switch
-              checked={notificationConfig.enableToasts}
-              onCheckedChange={(checked) => handleNotificationConfigChange('enableToasts', checked)}
+              checked={preferences.enableToasts}
+              onCheckedChange={(checked) => handlePreferenceChange('enableToasts', checked)}
             />
           </div>
 
@@ -202,8 +199,8 @@ export default function NotificationSettings() {
               </p>
             </div>
             <Switch
-              checked={notificationConfig.enableBadges}
-              onCheckedChange={(checked) => handleNotificationConfigChange('enableBadges', checked)}
+              checked={preferences.enableBadges}
+              onCheckedChange={(checked) => handlePreferenceChange('enableBadges', checked)}
             />
           </div>
 
@@ -220,10 +217,44 @@ export default function NotificationSettings() {
               </p>
             </div>
             <Switch
-              checked={notificationConfig.enableVibration}
-              onCheckedChange={(checked) => handleNotificationConfigChange('enableVibration', checked)}
+              checked={preferences.enableVibration}
+              onCheckedChange={(checked) => handlePreferenceChange('enableVibration', checked)}
             />
           </div>
+
+          <div className="flex items-center justify-between p-4 rounded-md border">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">
+                {language === 'ar' ? 'تمكين الأصوات' : 'Enable Sounds'}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {language === 'ar' ? 'تشغيل أصوات الإشعارات' : 'Play notification sounds'}
+              </p>
+            </div>
+            <Switch
+              checked={preferences.enableSounds}
+              onCheckedChange={(checked) => handlePreferenceChange('enableSounds', checked)}
+            />
+          </div>
+
+          {preferences.enableSounds && (
+            <div className="space-y-3 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium">
+                  {language === 'ar' ? 'مستوى الصوت' : 'Sound Volume'}
+                </h3>
+                <span className="text-sm text-muted-foreground">{preferences.soundVolume}%</span>
+              </div>
+              <Slider
+                value={[preferences.soundVolume]}
+                onValueChange={(value) => handlePreferenceChange('soundVolume', value[0])}
+                max={100}
+                min={0}
+                step={10}
+                className="w-full"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -246,12 +277,12 @@ export default function NotificationSettings() {
               </p>
             </div>
             <Switch
-              checked={notificationConfig.quietHours.enabled}
+              checked={preferences.quietHours.enabled}
               onCheckedChange={(checked) => handleQuietHoursChange('enabled', checked)}
             />
           </div>
 
-          {notificationConfig.quietHours.enabled && (
+          {preferences.quietHours.enabled && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quietStart">
@@ -260,7 +291,7 @@ export default function NotificationSettings() {
                 <Input
                   id="quietStart"
                   type="time"
-                  value={notificationConfig.quietHours.start}
+                  value={preferences.quietHours.start}
                   onChange={(e) => handleQuietHoursChange('start', e.target.value)}
                 />
               </div>
@@ -271,7 +302,7 @@ export default function NotificationSettings() {
                 <Input
                   id="quietEnd"
                   type="time"
-                  value={notificationConfig.quietHours.end}
+                  value={preferences.quietHours.end}
                   onChange={(e) => handleQuietHoursChange('end', e.target.value)}
                 />
               </div>
@@ -280,58 +311,48 @@ export default function NotificationSettings() {
         </CardContent>
       </Card>
 
-      {/* Test Notifications */}
+      {/* Test WN1 System */}
       <Card>
         <CardHeader>
           <CardTitle>
-            {language === 'ar' ? 'اختبار الإشعارات' : 'Test Notifications'}
+            {language === 'ar' ? 'اختبار نظام WN1' : 'Test WN1 System'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Button 
-              variant="outline" 
-              onClick={() => testSpecificNotification('message')}
-              className="w-full"
-            >
-              {language === 'ar' ? 'رسالة' : 'Message'}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => testSpecificNotification('task')}
-              className="w-full"
-            >
-              {language === 'ar' ? 'مهمة' : 'Task'}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => testSpecificNotification('event')}
-              className="w-full"
-            >
-              {language === 'ar' ? 'حدث' : 'Event'}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => testSpecificNotification('contact')}
-              className="w-full"
-            >
-              {language === 'ar' ? 'جهة اتصال' : 'Contact'}
-            </Button>
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+              {language === 'ar' 
+                ? 'WN1 هو نظام الإشعارات الجديد المدمج داخلياً والمحسّن للـ PWA'
+                : 'WN1 is the new internal notification system optimized for PWA'}
+            </p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              <Badge variant="secondary" className="text-xs">
+                🔔 {language === 'ar' ? 'إشعارات المتصفح' : 'Browser Notifications'}
+              </Badge>
+              <Badge variant="secondary" className="text-xs">
+                🔊 {language === 'ar' ? 'نظام صوتي' : 'Audio System'}
+              </Badge>
+              <Badge variant="secondary" className="text-xs">
+                📴 {language === 'ar' ? 'طابور غير متصل' : 'Offline Queue'}
+              </Badge>
+              <Badge variant="secondary" className="text-xs">
+                ⚡ {language === 'ar' ? 'فوري' : 'Real-time'}
+              </Badge>
+            </div>
           </div>
-
-          <Separator />
-
+          
           <Button 
-            onClick={testNotificationSystem}
+            onClick={testWN1System}
             className="w-full"
-            variant="secondary"
+            variant="default"
           >
-            🧪 {language === 'ar' ? 'اختبار النظام الكامل' : 'Test Complete System'}
+            🧪 {language === 'ar' ? 'اختبار نظام WN1' : 'Test WN1 System'}
           </Button>
+          
           <p className="text-xs text-muted-foreground text-center">
             {language === 'ar' 
-              ? 'سيتم اختبار الصوت + التوست + الشارات معاً'
-              : 'This will test sound + toast + badge systems together'}
+              ? 'سيتم اختبار التوست + الصوت + إشعارات المتصفح + الاهتزاز'
+              : 'This will test toast + sound + browser notifications + vibration'}
           </p>
         </CardContent>
       </Card>

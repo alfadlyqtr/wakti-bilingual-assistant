@@ -11,14 +11,6 @@ export function useUnreadMessages() {
   const [contactCount, setContactCount] = useState<number>(0);
   const [sharedTaskCount, setSharedTaskCount] = useState<number>(0);
   const [maw3dEventCount, setMaw3dEventCount] = useState<number>(0);
-  const [previousCounts, setPreviousCounts] = useState<{
-    unread: number;
-    task: number;
-    event: number;
-    contact: number;
-    sharedTask: number;
-    maw3dEvent: number;
-  }>({ unread: 0, task: 0, event: 0, contact: 0, sharedTask: 0, maw3dEvent: 0 });
 
   function logUnreadState(from: string, total: number, perContact: Record<string, number>) {
     console.log(`[useUnreadMessages] Update via ${from}: unreadTotal=${total}, unreadPerContact=`, perContact);
@@ -77,7 +69,7 @@ export function useUnreadMessages() {
 
       const realContactCount = contactsData ? contactsData.length : 0;
 
-      // Fetch REAL shared task completions (last 24h) - FIXED TABLE REFERENCE
+      // Fetch REAL shared task completions (last 24h)
       const { data: sharedData, error: sharedError } = await supabase
         .from("shared_task_completions")
         .select(`
@@ -125,20 +117,6 @@ export function useUnreadMessages() {
     }
   }
 
-  // Remove client-side notification triggering to prevent duplicates
-  useEffect(() => {
-    const current = { 
-      unread: unreadTotal, 
-      task: taskCount, 
-      event: eventCount, 
-      contact: contactCount, 
-      sharedTask: sharedTaskCount,
-      maw3dEvent: maw3dEventCount
-    };
-    
-    setPreviousCounts(current);
-  }, [unreadTotal, taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount]);
-
   useEffect(() => {
     let pollInterval: NodeJS.Timeout | null = null;
     fetchUnread('mount/effect');
@@ -171,6 +149,14 @@ export function useUnreadMessages() {
         }
       });
 
+    // Listen for WN1 notification events to refresh counts
+    const handleWN1Notification = () => {
+      console.log("[useUnreadMessages] WN1 notification received, refreshing counts");
+      fetchUnread('wn1-notification');
+    };
+
+    window.addEventListener('wn1-notification-received', handleWN1Notification);
+
     // Fallback polling every 30s
     pollInterval = setInterval(() => {
       fetchUnread('polling');
@@ -185,6 +171,7 @@ export function useUnreadMessages() {
       supabase.removeChannel(channel);
       if (pollInterval) clearInterval(pollInterval);
       if (authListener) authListener.subscription.unsubscribe();
+      window.removeEventListener('wn1-notification-received', handleWN1Notification);
     };
   }, []);
 
