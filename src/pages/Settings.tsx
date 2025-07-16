@@ -25,11 +25,11 @@ import {
 } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import NotificationSettings from "@/components/notifications/NotificationSettings";
+import { QuotePreferencesManager } from "@/components/settings/QuotePreferencesManager";
+import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { t } from "@/utils/translations";
 import { Shield, Users, Eye, Quote, Palette, Bell, Layout } from "lucide-react";
 import { useToastHelper } from "@/hooks/use-toast-helper";
-import { QuotePreferencesManager } from "@/components/settings/QuotePreferencesManager";
-import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 
 export default function Settings() {
   const { theme, setTheme, language, setLanguage } = useTheme();
@@ -320,6 +320,12 @@ export default function Settings() {
 
           <TabsContent value="notifications" className="space-y-6">
             <NotificationSettings />
+            
+            {/* Quote Preferences */}
+            <QuotePreferencesManager />
+
+            {/* Custom Quotes */}
+            <CustomQuoteManager />
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -393,12 +399,6 @@ export default function Settings() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Daily Quote Settings */}
-            <QuotePreferencesManager />
-
-            {/* Custom Quotes */}
-            <CustomQuoteManager />
           </TabsContent>
         </Tabs>
       </div>

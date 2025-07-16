@@ -15,12 +15,9 @@ export interface SoundSettings {
 
 export class WaktiSoundManager {
   private settings: SoundSettings;
-  private audioContext: AudioContext | null = null;
-  private isInitialized: boolean = false;
 
   constructor() {
     this.settings = this.loadSettings();
-    this.initializeAudioSystem();
   }
 
   private loadSettings(): SoundSettings {
@@ -43,35 +40,6 @@ export class WaktiSoundManager {
     localStorage.setItem('wakti-sound-settings', JSON.stringify(this.settings));
   }
 
-  private initializeAudioSystem(): void {
-    // Create audio context immediately if user has already interacted
-    if (typeof window !== 'undefined') {
-      const initAudio = () => {
-        this.createAudioContext();
-        document.removeEventListener('click', initAudio);
-        document.removeEventListener('touchstart', initAudio);
-        document.removeEventListener('keydown', initAudio);
-      };
-      
-      // Listen for any user interaction
-      document.addEventListener('click', initAudio, { once: true });
-      document.addEventListener('touchstart', initAudio, { once: true });
-      document.addEventListener('keydown', initAudio, { once: true });
-    }
-  }
-
-  private createAudioContext(): void {
-    if (this.isInitialized) return;
-    
-    try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      this.isInitialized = true;
-      console.log('✅ Audio system initialized successfully');
-    } catch (error) {
-      console.warn('Audio context creation failed:', error);
-    }
-  }
-
   async playNotificationSound(soundType?: WaktiSoundType): Promise<void> {
     if (!this.settings.enabled) {
       console.log('Sound disabled in settings');
@@ -82,40 +50,17 @@ export class WaktiSoundManager {
     console.log('🔊 Playing sound:', sound, 'volume:', this.settings.volume);
     
     try {
-      // Force audio context creation if needed
-      if (!this.isInitialized) {
-        this.createAudioContext();
-      }
-      
       const audio = new Audio(WAKTI_SOUNDS[sound]);
       audio.volume = this.settings.volume / 100;
-      
-      // Force play with promise handling
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        await playPromise;
-        console.log('✅ Sound played successfully');
-      }
+      await audio.play();
+      console.log('✅ Sound played successfully');
     } catch (error) {
       console.error('❌ Sound play failed:', error);
-      // Try alternative method
-      try {
-        const audio = new Audio(WAKTI_SOUNDS[sound]);
-        audio.volume = this.settings.volume / 100;
-        audio.play();
-      } catch (fallbackError) {
-        console.error('❌ Fallback sound also failed:', fallbackError);
-      }
     }
   }
 
   async testSound(soundType: WaktiSoundType): Promise<void> {
     console.log('🎵 Testing sound:', soundType);
-    
-    // Force initialization for test
-    if (!this.isInitialized) {
-      this.createAudioContext();
-    }
     
     try {
       const audio = new Audio(WAKTI_SOUNDS[soundType]);
