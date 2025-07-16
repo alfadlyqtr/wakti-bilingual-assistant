@@ -2,6 +2,7 @@
 import { waktiToast, WaktiNotification } from './waktiToast';
 import { waktiSounds, WaktiSoundType } from './waktiSounds';
 import { waktiBadges } from './waktiBadges';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface WaktiNotificationConfig {
   enableToasts: boolean;
@@ -25,6 +26,8 @@ export interface NotificationTypeConfig {
 class WaktiNotificationService {
   private config: WaktiNotificationConfig;
   private typeConfigs: Map<string, NotificationTypeConfig> = new Map();
+  private isProcessorActive: boolean = false;
+  private userId: string | null = null;
 
   constructor() {
     this.config = this.loadConfig();
@@ -64,6 +67,8 @@ class WaktiNotificationService {
       ['shared_task', { sound: 'beep' as WaktiSoundType, priority: 'high' as const, duration: 4000, vibration: [200, 100, 200, 100, 200] }],
       ['contact', { sound: 'chime' as WaktiSoundType, priority: 'normal' as const, duration: 3000, vibration: [300, 100, 300] }],
       ['event', { sound: 'ding' as WaktiSoundType, priority: 'normal' as const, duration: 3000, vibration: [150, 75, 150] }],
+      ['contact_requests', { sound: 'chime' as WaktiSoundType, priority: 'normal' as const, duration: 3000, vibration: [300, 100, 300] }],
+      ['messages', { sound: 'chime' as WaktiSoundType, priority: 'normal' as const, duration: 3000, vibration: [200, 100, 200] }],
       ['admin', { sound: 'chime' as WaktiSoundType, priority: 'high' as const, duration: 4000, vibration: [500, 100, 500] }]
     ]);
 
@@ -80,6 +85,94 @@ class WaktiNotificationService {
     } else {
       this.typeConfigs = defaults;
     }
+  }
+
+  // CRITICAL: Real-time notification processor - bridges database to client
+  startNotificationProcessor(userId: string): void {
+    if (this.isProcessorActive && this.userId === userId) {
+      console.log('🔄 WAKTI Notification processor already active for user:', userId);
+      return;
+    }
+
+    this.userId = userId;
+    this.isProcessorActive = true;
+    
+    console.log('🚀 Starting WAKTI unified notification processor for user:', userId);
+
+    // Listen to notification_queue table for new notifications
+    const channel = supabase
+      .channel('wakti-unified-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notification_queue',
+          filter: `user_id=eq.${userId}`
+        },
+        (payload) => {
+          console.log('📨 New notification queued:', payload.new);
+          this.processQueuedNotification(payload.new);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ WAKTI notification processor subscribed successfully');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ WAKTI notification processor channel error');
+          this.isProcessorActive = false;
+        }
+      });
+
+    // Store channel reference for cleanup
+    (window as any).waktiNotificationChannel = channel;
+  }
+
+  stopNotificationProcessor(): void {
+    if ((window as any).waktiNotificationChannel) {
+      supabase.removeChannel((window as any).waktiNotificationChannel);
+      (window as any).waktiNotificationChannel = null;
+    }
+    this.isProcessorActive = false;
+    this.userId = null;
+    console.log('🛑 WAKTI notification processor stopped');
+  }
+
+  // Process notifications from the queue and trigger the unified system
+  private async processQueuedNotification(queueItem: any): Promise<void> {
+    try {
+      console.log('🔄 Processing queued notification:', queueItem);
+      
+      await this.showNotification({
+        type: queueItem.notification_type,
+        title: queueItem.title,
+        message: queueItem.body,
+        data: queueItem.data || {}
+      });
+
+      // Update badge count based on notification type
+      if (this.config.enableBadges) {
+        this.updateBadgeForNotificationType(queueItem.notification_type);
+      }
+
+    } catch (error) {
+      console.error('❌ Error processing queued notification:', error);
+    }
+  }
+
+  private updateBadgeForNotificationType(type: string): void {
+    // Map notification types to badge categories
+    const typeMapping: Record<string, string> = {
+      'shared_task': 'shared_task',
+      'messages': 'message',
+      'contact_requests': 'contact',
+      'event': 'event',
+      'task': 'task',
+      'admin': 'admin'
+    };
+
+    const badgeType = typeMapping[type] || type;
+    waktiBadges.incrementBadge(badgeType, 1, 'normal');
   }
 
   private isQuietTime(): boolean {
@@ -106,13 +199,13 @@ class WaktiNotificationService {
     customPriority?: 'low' | 'normal' | 'high' | 'urgent';
   }): Promise<void> {
     if (this.isQuietTime()) {
-      console.log('Notification skipped - quiet hours active');
+      console.log('🔇 Notification skipped - quiet hours active');
       return;
     }
 
     const typeConfig = this.typeConfigs.get(data.type);
     if (!typeConfig) {
-      console.warn(`No config found for notification type: ${data.type}`);
+      console.warn(`⚠️ No config found for notification type: ${data.type}`);
       return;
     }
 
@@ -126,21 +219,44 @@ class WaktiNotificationService {
       duration: typeConfig.duration
     };
 
+    console.log('🔔 Showing unified WAKTI notification:', notification);
+
+    // UNIFIED SYSTEM: Toast + Sound + Vibration
     if (this.config.enableToasts) {
       await waktiToast.show(notification);
     }
 
-    if (this.config.enableBadges) {
-      waktiBadges.incrementBadge(data.type, 1, notification.priority);
+    if (this.config.enableSounds) {
+      console.log('🔊 Playing sound:', notification.sound);
+      waktiSounds.playSound(notification.sound);
     }
 
     if (this.config.enableVibration && 'navigator' in window && 'vibrate' in navigator) {
       try {
         navigator.vibrate(typeConfig.vibration);
       } catch (error) {
-        console.warn('Vibration failed:', error);
+        console.warn('📳 Vibration failed:', error);
       }
     }
+  }
+
+  // Badge management methods
+  clearBadge(type: string): void {
+    console.log(`🏷️ Clearing ${type} badge`);
+    waktiBadges.clearBadge(type);
+  }
+
+  clearBadgeOnPageVisit(pageType: 'tr' | 'maw3d' | 'messages' | 'contacts'): void {
+    const badgeMap = {
+      'tr': ['task', 'shared_task'],
+      'maw3d': ['event'],
+      'messages': ['message'],
+      'contacts': ['contact']
+    };
+
+    const badgesToClear = badgeMap[pageType] || [];
+    badgesToClear.forEach(badge => this.clearBadge(badge));
+    console.log(`🧹 Cleared badges for ${pageType} page visit:`, badgesToClear);
   }
 
   updateBadgeCount(type: string, count: number, priority: 'low' | 'normal' | 'high' | 'urgent' = 'normal'): void {
@@ -149,15 +265,11 @@ class WaktiNotificationService {
     }
   }
 
-  clearBadge(type: string): void {
-    waktiBadges.clearBadge(type);
-  }
-
   async testNotification(type: string): Promise<void> {
     await this.showNotification({
       type,
       title: 'Test Notification',
-      message: `This is a test ${type} notification`
+      message: `This is a test ${type} notification from WAKTI unified system`
     });
   }
 
@@ -176,6 +288,13 @@ class WaktiNotificationService {
 
   getAllTypeConfigs(): Map<string, NotificationTypeConfig> {
     return new Map(this.typeConfigs);
+  }
+
+  getProcessorStatus(): { active: boolean; userId: string | null } {
+    return {
+      active: this.isProcessorActive,
+      userId: this.userId
+    };
   }
 }
 

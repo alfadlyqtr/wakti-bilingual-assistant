@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -5,7 +6,7 @@ import { t } from "@/utils/translations";
 import { Hand, Heart, Plus, Calendar, MapPin, Users } from "lucide-react";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 import { format, parseISO, isToday, isTomorrow, isFuture } from "date-fns";
-import { waktiBadges } from "@/services/waktiBadges";
+import { waktiNotifications } from "@/services/waktiNotifications";
 
 interface Maw3dWidgetProps {
   language: 'en' | 'ar';
@@ -17,7 +18,7 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
 
   // Clear Maw3d badges when component mounts (when user visits dashboard)
   useEffect(() => {
-    waktiBadges.clearBadge('event');
+    waktiNotifications.clearBadge('event');
   }, []);
 
   // Filter and sort upcoming events
@@ -30,8 +31,8 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   const tomorrowEvents = events.filter(event => isTomorrow(parseISO(event.event_date)));
 
   const handleNavigateToMaw3d = () => {
-    // Clear badges when navigating to Maw3d page
-    waktiBadges.clearBadge('event');
+    // Clear Maw3d related badges when navigating to Maw3d page
+    waktiNotifications.clearBadgeOnPageVisit('maw3d');
     navigate('/maw3d-events');
   };
 

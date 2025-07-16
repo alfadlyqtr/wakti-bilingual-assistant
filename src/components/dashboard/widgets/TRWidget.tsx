@@ -6,6 +6,7 @@ import { t } from "@/utils/translations";
 import { Hand, CheckSquare, Bell, Plus, AlertTriangle, Clock } from "lucide-react";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { format, isToday, isPast, parseISO } from "date-fns";
+import { waktiNotifications } from "@/services/waktiNotifications";
 
 interface TRWidgetProps {
   language: 'en' | 'ar';
@@ -49,6 +50,12 @@ export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
     .filter(item => item.due_date && !isPast(parseISO(item.due_date)))
     .sort((a, b) => parseISO(a.due_date!).getTime() - parseISO(b.due_date!).getTime())
     .slice(0, 2);
+
+  const handleNavigateToTR = () => {
+    // Clear T&R related badges when navigating to T&R page
+    waktiNotifications.clearBadgeOnPageVisit('tr');
+    navigate('/tr');
+  };
 
   return (
     <div className="relative group" dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -157,7 +164,7 @@ export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
           variant="outline" 
           size="sm" 
           className="w-full bg-white/10 backdrop-blur-sm border-white/20 bg-primary/20 border-primary/40 transition-all duration-300 text-foreground font-medium" 
-          onClick={() => navigate('/tr')}
+          onClick={handleNavigateToTR}
         >
           <Plus className="h-4 w-4 mr-2" />
           {language === 'ar' ? 'فتح المهام والتذكيرات' : 'Open T&R'}
