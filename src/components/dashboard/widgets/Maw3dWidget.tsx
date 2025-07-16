@@ -3,7 +3,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
-import { Hand, Heart, Plus, Calendar, MapPin } from "lucide-react";
+import { Hand, Heart, Plus, Calendar, MapPin, Users } from "lucide-react";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 import { format, parseISO, isToday, isTomorrow, isFuture } from "date-fns";
 
@@ -13,7 +13,7 @@ interface Maw3dWidgetProps {
 
 export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   const navigate = useNavigate();
-  const { events, loading } = useOptimizedMaw3dEvents();
+  const { events, loading, attendingCounts } = useOptimizedMaw3dEvents();
 
   // Filter and sort upcoming events
   const upcomingEvents = events
@@ -93,6 +93,12 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
                           <>
                             <MapPin className="h-3 w-3" />
                             <span className="truncate">{event.location}</span>
+                          </>
+                        )}
+                        {attendingCounts[event.id] > 0 && (
+                          <>
+                            <Users className="h-3 w-3" />
+                            <span>{attendingCounts[event.id]} attending</span>
                           </>
                         )}
                       </div>

@@ -11,15 +11,16 @@ export function useUnreadMessages() {
   const [eventCount, setEventCount] = useState<number>(0);
   const [contactCount, setContactCount] = useState<number>(0);
   const [sharedTaskCount, setSharedTaskCount] = useState<number>(0);
+  const [maw3dEventCount, setMaw3dEventCount] = useState<number>(0);
   const [previousCounts, setPreviousCounts] = useState<{
     unread: number;
     task: number;
     event: number;
     contact: number;
     sharedTask: number;
-  }>({ unread: 0, task: 0, event: 0, contact: 0, sharedTask: 0 });
+    maw3dEvent: number;
+  }>({ unread: 0, task: 0, event: 0, contact: 0, sharedTask: 0, maw3dEvent: 0 });
 
-  // Helper to log the current count state
   function logUnreadState(from: string, total: number, perContact: Record<string, number>) {
     console.log(`[useUnreadMessages] Update via ${from}: unreadTotal=${total}, unreadPerContact=`, perContact);
   }
@@ -33,6 +34,7 @@ export function useUnreadMessages() {
       setEventCount(0);
       setContactCount(0);
       setSharedTaskCount(0);
+      setMaw3dEventCount(0);
       setLoading(false);
       logUnreadState(`${from} (no session)`, 0, {});
       return;
@@ -58,7 +60,7 @@ export function useUnreadMessages() {
         });
       }
 
-      // Fetch REAL task counts - overdue tasks only
+      // Fetch REAL overdue tasks
       const { data: tasksData, error: tasksError } = await supabase
         .from("my_tasks")
         .select("id")
@@ -67,29 +69,7 @@ export function useUnreadMessages() {
 
       const realTaskCount = tasksData ? tasksData.length : 0;
 
-      // Fetch REAL event counts - pending RSVPs only
-      const { data: eventsData, error: eventsError } = await supabase
-        .from("events")
-        .select("id")
-        .eq("organizer_id", userId)
-        .gte("start_time", new Date().toISOString());
-
-      let realEventCount = 0;
-      if (eventsData) {
-        for (const event of eventsData) {
-          const { data: rsvps } = await supabase
-            .from("event_rsvps")
-            .select("id")
-            .eq("event_id", event.id)
-            .eq("response", "pending");
-          
-          if (rsvps && rsvps.length > 0) {
-            realEventCount++;
-          }
-        }
-      }
-
-      // Fetch REAL contact counts - pending requests only
+      // Fetch REAL pending contact requests
       const { data: contactsData, error: contactsError } = await supabase
         .from("contacts")
         .select("id")
@@ -98,7 +78,7 @@ export function useUnreadMessages() {
 
       const realContactCount = contactsData ? contactsData.length : 0;
 
-      // Fetch REAL shared task counts - recent completions only
+      // Fetch REAL shared task completions (last 24h)
       const { data: sharedData, error: sharedError } = await supabase
         .from("shared_task_completions")
         .select("task_id, my_tasks!inner(user_id)")
@@ -107,12 +87,22 @@ export function useUnreadMessages() {
 
       const realSharedTaskCount = sharedData ? sharedData.length : 0;
 
+      // Fetch REAL Maw3d RSVP responses for user's events (last 24h)
+      const { data: maw3dData, error: maw3dError } = await supabase
+        .from("maw3d_rsvps")
+        .select("event_id, maw3d_events!inner(created_by)")
+        .eq("maw3d_events.created_by", userId)
+        .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+      const realMaw3dEventCount = maw3dData ? maw3dData.length : 0;
+
       setUnreadPerContact(counts);
       setUnreadTotal(total);
       setTaskCount(realTaskCount);
-      setEventCount(realEventCount);
+      setEventCount(0); // Keep regular events at 0 for now
       setContactCount(realContactCount);
       setSharedTaskCount(realSharedTaskCount);
+      setMaw3dEventCount(realMaw3dEventCount);
       setLoading(false);
       logUnreadState(from, total, counts);
 
@@ -124,6 +114,7 @@ export function useUnreadMessages() {
       setEventCount(0);
       setContactCount(0);
       setSharedTaskCount(0);
+      setMaw3dEventCount(0);
       setLoading(false);
       logUnreadState(`${from} (error)`, 0, {});
     }
@@ -136,60 +127,87 @@ export function useUnreadMessages() {
       task: taskCount, 
       event: eventCount, 
       contact: contactCount, 
-      sharedTask: sharedTaskCount
+      sharedTask: sharedTaskCount,
+      maw3dEvent: maw3dEventCount
     };
     
-    if (previousCounts.unread >= 0 && previousCounts.unread !== current.unread) {
+    // Only notify on actual increases, not initial loads
+    if (previousCounts.unread >= 0) {
       if (current.unread > previousCounts.unread) {
         const newMessages = current.unread - previousCounts.unread;
-        setTimeout(() => {
-          waktiNotifications.showNotification({
-            type: 'message',
-            title: 'New Message',
-            message: `You have ${newMessages} new message${newMessages > 1 ? 's' : ''}`
-          });
-        }, 200);
+        waktiNotifications.showNotification({
+          type: 'message',
+          title: 'New Message',
+          message: `You have ${newMessages} new message${newMessages > 1 ? 's' : ''}`
+        });
+      }
+      
+      if (current.sharedTask > previousCounts.sharedTask) {
+        waktiNotifications.showNotification({
+          type: 'shared_task',
+          title: 'Shared Task Update',
+          message: 'Someone completed a shared task'
+        });
+      }
+      
+      if (current.maw3dEvent > previousCounts.maw3dEvent) {
+        waktiNotifications.showNotification({
+          type: 'event',
+          title: 'Maw3d RSVP',
+          message: 'Someone responded to your Maw3d event'
+        });
+      }
+      
+      if (current.contact > previousCounts.contact) {
+        waktiNotifications.showNotification({
+          type: 'contact',
+          title: 'Contact Request',
+          message: 'You have a new contact request'
+        });
       }
     }
     
     setPreviousCounts(current);
-  }, [unreadTotal, taskCount, eventCount, contactCount, sharedTaskCount]);
+  }, [unreadTotal, taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount]);
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout | null = null;
     fetchUnread('mount/effect');
 
-    // Realtime updates
-    const channel = supabase.channel("messages-unread")
-      .on(
-        'postgres_changes',
-        {
-          event: "*",
-          schema: "public",
-          table: "messages",
-        },
-        (payload) => {
-          console.log("[useUnreadMessages] Realtime message event:", payload);
-          fetchUnread('realtime');
-        }
-      )
+    // Realtime updates for all relevant tables
+    const channel = supabase.channel("wakti-notifications")
+      .on('postgres_changes', { event: "*", schema: "public", table: "messages" }, () => {
+        console.log("[useUnreadMessages] Messages updated");
+        fetchUnread('realtime-messages');
+      })
+      .on('postgres_changes', { event: "*", schema: "public", table: "shared_task_completions" }, () => {
+        console.log("[useUnreadMessages] Shared task completions updated");
+        fetchUnread('realtime-shared-tasks');
+      })
+      .on('postgres_changes', { event: "*", schema: "public", table: "maw3d_rsvps" }, () => {
+        console.log("[useUnreadMessages] Maw3d RSVPs updated");
+        fetchUnread('realtime-maw3d');
+      })
+      .on('postgres_changes', { event: "*", schema: "public", table: "contacts" }, () => {
+        console.log("[useUnreadMessages] Contacts updated");
+        fetchUnread('realtime-contacts');
+      })
+      .on('postgres_changes', { event: "*", schema: "public", table: "my_tasks" }, () => {
+        console.log("[useUnreadMessages] Tasks updated");
+        fetchUnread('realtime-tasks');
+      })
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           console.log('[useUnreadMessages] Realtime channel SUBSCRIBED');
         }
       });
 
-    // Fallback polling if realtime fails (every 30s)
+    // Fallback polling every 30s
     pollInterval = setInterval(() => {
       fetchUnread('polling');
     }, 30000);
 
-    // Debug: enable manual refresh in window for devs
-    if (typeof window !== "undefined") {
-      (window as any).debugRefetchUnreadMessages = () => fetchUnread('debug/manual');
-    }
-
-    // Handle session change edge-cases by listening to Supabase auth state
+    // Auth state change handler
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, _session) => {
       fetchUnread('auth-state-change');
     });
@@ -199,7 +217,6 @@ export function useUnreadMessages() {
       if (pollInterval) clearInterval(pollInterval);
       if (authListener) authListener.subscription.unsubscribe();
     };
-    // No deps: only attach on mount.
   }, []);
 
   return { 
@@ -209,6 +226,7 @@ export function useUnreadMessages() {
     eventCount, 
     contactCount,
     sharedTaskCount,
+    maw3dEventCount,
     loading, 
     refetch: () => fetchUnread('refetch') 
   };

@@ -1,111 +1,87 @@
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Maw3dService } from '@/services/maw3dService';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Maw3dEvent } from '@/types/maw3d';
-
-// Simple in-memory cache with TTL
-const CACHE_TTL = 30000; // 30 seconds
-let eventsCache: {
-  data: Maw3dEvent[] | null;
-  timestamp: number;
-  loading: boolean;
-} = {
-  data: null,
-  timestamp: 0,
-  loading: false
-};
 
 export function useOptimizedMaw3dEvents() {
   const [events, setEvents] = useState<Maw3dEvent[]>([]);
+  const [attendingCounts, setAttendingCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Prevent multiple simultaneous requests
-  const fetchingRef = useRef(false);
-  const mountedRef = useRef(true);
 
-  const fetchEvents = useCallback(async () => {
-    // Prevent multiple simultaneous calls
-    if (fetchingRef.current) {
-      console.log('🔄 Request already in progress, skipping...');
-      return;
-    }
-
-    // Check cache first
-    const now = Date.now();
-    const cacheValid = eventsCache.data && (now - eventsCache.timestamp) < CACHE_TTL;
-    
-    if (cacheValid && eventsCache.data) {
-      console.log('⚡ Using cached events:', eventsCache.data.length);
-      setEvents(eventsCache.data);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    if (eventsCache.loading) {
-      console.log('🔄 Another instance is loading, waiting...');
-      return;
-    }
-
+  const fetchEventsAndCounts = async () => {
     try {
-      fetchingRef.current = true;
-      eventsCache.loading = true;
       setLoading(true);
+      
+      // Fetch user's events
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('maw3d_events')
+        .select('*')
+        .order('event_date', { ascending: true });
+
+      if (eventsError) throw eventsError;
+
+      setEvents(eventsData || []);
+
+      // Fetch RSVP counts for all events
+      if (eventsData && eventsData.length > 0) {
+        const eventIds = eventsData.map(event => event.id);
+        
+        const { data: rsvpData, error: rsvpError } = await supabase
+          .from('maw3d_rsvps')
+          .select('event_id, response')
+          .in('event_id', eventIds);
+
+        if (rsvpError) throw rsvpError;
+
+        // Count RSVPs by event
+        const counts: Record<string, number> = {};
+        if (rsvpData) {
+          rsvpData.forEach(rsvp => {
+            if (rsvp.response === 'accepted') {
+              counts[rsvp.event_id] = (counts[rsvp.event_id] || 0) + 1;
+            }
+          });
+        }
+        
+        setAttendingCounts(counts);
+      }
+
       setError(null);
-
-      console.log('🔄 Fetching fresh Maw3d events from API');
-      const userEvents = await Maw3dService.getUserEvents();
-      
-      if (!mountedRef.current) return;
-
-      // Update cache
-      eventsCache = {
-        data: userEvents,
-        timestamp: now,
-        loading: false
-      };
-
-      setEvents(userEvents);
-      console.log('✅ Maw3d events fetched and cached:', userEvents.length);
-      
     } catch (err) {
-      console.error('❌ Error fetching Maw3d events:', err);
-      if (mountedRef.current) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch events');
-        setEvents([]);
-      }
-      eventsCache.loading = false;
+      console.error('Error fetching Maw3d events:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch events');
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-      fetchingRef.current = false;
-      eventsCache.loading = false;
+      setLoading(false);
     }
-  }, []); // Empty dependencies to prevent infinite loops
+  };
 
-  const refreshEvents = useCallback(() => {
-    console.log('🔄 Force refreshing Maw3d events');
-    // Clear cache to force fresh fetch
-    eventsCache = { data: null, timestamp: 0, loading: false };
-    return fetchEvents();
-  }, [fetchEvents]);
-
-  // Single effect for initial load only
   useEffect(() => {
-    mountedRef.current = true;
-    fetchEvents();
-    
+    fetchEventsAndCounts();
+
+    // Set up real-time subscriptions
+    const eventsChannel = supabase
+      .channel('maw3d-events-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maw3d_events' }, () => {
+        console.log('Maw3d events changed, refetching...');
+        fetchEventsAndCounts();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maw3d_rsvps' }, () => {
+        console.log('Maw3d RSVPs changed, refetching...');
+        fetchEventsAndCounts();
+      })
+      .subscribe();
+
     return () => {
-      mountedRef.current = false;
+      supabase.removeChannel(eventsChannel);
     };
-  }, []); // Empty dependencies - only run once on mount
+  }, []);
 
   return {
     events,
+    attendingCounts,
     loading,
     error,
-    refreshEvents
+    refetch: fetchEventsAndCounts
   };
 }

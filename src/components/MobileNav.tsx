@@ -5,27 +5,26 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
 import { Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
-import { waktiBadges } from "@/services/waktiBadges";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { taskCount, eventCount, contactCount } = useUnreadMessages();
+  const { taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount } = useUnreadMessages();
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
 
   useEffect(() => {
-    // Only show badges when there's actual data
+    // Only show badges when there's actual data > 0
     setBadgeStates({
       task: { 
-        show: taskCount > 0, 
-        count: taskCount > 99 ? '99+' : taskCount.toString(),
-        priority: taskCount > 5 ? 'high' : 'normal'
+        show: taskCount > 0 || sharedTaskCount > 0, 
+        count: (taskCount + sharedTaskCount) > 99 ? '99+' : (taskCount + sharedTaskCount).toString(),
+        priority: (taskCount + sharedTaskCount) > 5 ? 'high' : 'normal'
       },
       event: { 
-        show: eventCount > 0, 
-        count: eventCount > 99 ? '99+' : eventCount.toString(),
-        priority: eventCount > 3 ? 'high' : 'normal'
+        show: eventCount > 0 || maw3dEventCount > 0, 
+        count: (eventCount + maw3dEventCount) > 99 ? '99+' : (eventCount + maw3dEventCount).toString(),
+        priority: (eventCount + maw3dEventCount) > 3 ? 'high' : 'normal'
       }, 
       contact: { 
         show: contactCount > 0, 
@@ -33,7 +32,7 @@ export function MobileNav() {
         priority: contactCount > 0 ? 'normal' : 'low'
       }
     });
-  }, [taskCount, eventCount, contactCount]);
+  }, [taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount]);
   
   // Navigation items - Updated with vibrant colors and animations
   const navItems = [
