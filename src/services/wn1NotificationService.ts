@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { waktiSounds } from '@/services/waktiSounds';
 import { toast } from 'sonner';
@@ -66,8 +67,7 @@ class WN1NotificationService {
   private offlineQueue: WN1NotificationData[] = [];
   private isOnline = navigator.onLine;
   private subscriptions: { [key: string]: any } = {};
-  private soundRotationIndex = 0;
-  private soundFiles = ['chime', 'beep', 'ding'];
+  private currentUserId: string | null = null;
 
   constructor() {
     this.setupOnlineListener();
@@ -75,17 +75,18 @@ class WN1NotificationService {
   }
 
   async initialize(userId: string): Promise<void> {
-    if (this.isInitialized) return;
+    if (this.isInitialized && this.currentUserId === userId) return;
 
-    console.log('🔥 Initializing notification service for user:', userId);
+    console.log('🔥 Initializing WN1 notification service for user:', userId);
     
+    this.currentUserId = userId;
     await this.requestNotificationPermission();
     await this.loadUserPreferences(userId);
     await this.setupRealtimeSubscriptions(userId);
     await this.processOfflineQueue();
     
     this.isInitialized = true;
-    console.log('✅ Service initialized successfully');
+    console.log('✅ WN1 Service initialized successfully');
   }
 
   private async requestNotificationPermission(): Promise<void> {
@@ -140,195 +141,80 @@ class WN1NotificationService {
   }
 
   private async setupRealtimeSubscriptions(userId: string): Promise<void> {
-    console.log('🔗 Setting up realtime subscriptions');
+    console.log('🔗 Setting up WN1 realtime subscriptions');
 
-    // Messages subscription
-    this.subscriptions.messages = supabase
-      .channel('notifications-messages')
+    // Single subscription to notification_queue for all notification types
+    this.subscriptions.notifications = supabase
+      .channel('wn1-notifications')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'messages',
-        filter: `recipient_id=eq.${userId}`
+        table: 'notification_queue',
+        filter: `user_id=eq.${userId}`
       }, (payload) => {
-        if (this.preferences.messages) {
-          this.handleMessageNotification(payload.new);
-        }
+        console.log('📨 WN1 notification received:', payload.new);
+        this.handleQueuedNotification(payload.new);
       })
       .subscribe();
 
-    // Contacts subscription
-    this.subscriptions.contacts = supabase
-      .channel('notifications-contacts')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'contacts',
-        filter: `contact_id=eq.${userId}`
-      }, (payload) => {
-        if (this.preferences.contact_requests) {
-          this.handleContactNotification(payload.new);
-        }
-      })
-      .subscribe();
-
-    // Shared task completions subscription
-    this.subscriptions.sharedTasks = supabase
-      .channel('notifications-shared-tasks')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'shared_task_completions'
-      }, (payload) => {
-        if (this.preferences.shared_task_updates) {
-          this.handleSharedTaskNotification(payload.new, userId);
-        }
-      })
-      .subscribe();
-
-    // Maw3d RSVP subscription
-    this.subscriptions.maw3dEvents = supabase
-      .channel('notifications-maw3d')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'maw3d_rsvps'
-      }, (payload) => {
-        if (this.preferences.event_rsvps) {
-          this.handleMaw3dNotification(payload.new, userId);
-        }
-      })
-      .subscribe();
-
-    // Admin messages subscription
-    this.subscriptions.adminMessages = supabase
-      .channel('notifications-admin')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'admin_messages',
-        filter: `recipient_id=eq.${userId}`
-      }, (payload) => {
-        if (this.preferences.admin_gifts) {
-          this.handleAdminNotification(payload.new);
-        }
-      })
-      .subscribe();
-
-    console.log('✅ All realtime subscriptions active');
+    console.log('✅ WN1 realtime subscriptions active');
   }
 
-  private async handleMessageNotification(message: any): Promise<void> {
-    // Get sender name
-    const { data: sender } = await supabase
-      .from('profiles')
-      .select('display_name')
-      .eq('id', message.sender_id)
-      .single();
+  private async handleQueuedNotification(queueItem: any): Promise<void> {
+    const notificationType = queueItem.notification_type;
+    
+    // Check if this notification type is enabled in preferences
+    const typeEnabled = this.isNotificationTypeEnabled(notificationType);
+    
+    if (!typeEnabled) {
+      console.log(`🔇 Notification type '${notificationType}' is disabled, skipping`);
+      return;
+    }
 
     const notification: WN1NotificationData = {
-      id: message.id,
-      type: 'messages',
-      title: 'New Message',
-      body: `${sender?.display_name || 'Someone'} sent you a message`,
-      data: { messageId: message.id, senderId: message.sender_id },
-      deepLink: '/contacts',
+      id: queueItem.id,
+      type: this.mapNotificationTypeToDataType(notificationType),
+      title: queueItem.title,
+      body: queueItem.body,
+      data: queueItem.data || {},
+      deepLink: queueItem.deep_link,
       timestamp: Date.now(),
-      userId: message.recipient_id
+      userId: queueItem.user_id
     };
 
     await this.processNotification(notification);
   }
 
-  private async handleContactNotification(contact: any): Promise<void> {
-    if (contact.status !== 'pending') return;
-
-    // Get requester name
-    const { data: requester } = await supabase
-      .from('profiles')
-      .select('display_name')
-      .eq('id', contact.user_id)
-      .single();
-
-    const notification: WN1NotificationData = {
-      id: contact.id,
-      type: 'contacts',
-      title: 'Contact Request',
-      body: `${requester?.display_name || 'Someone'} wants to connect with you`,
-      data: { contactId: contact.id, requesterId: contact.user_id },
-      deepLink: '/contacts',
-      timestamp: Date.now(),
-      userId: contact.contact_id
+  private isNotificationTypeEnabled(type: string): boolean {
+    const typeMap: Record<string, keyof WN1NotificationPreferences> = {
+      'messages': 'messages',
+      'contact_requests': 'contact_requests',
+      'shared_task': 'shared_task_updates',
+      'event': 'event_rsvps',
+      'task': 'task_updates',
+      'admin_messages': 'admin_gifts',
+      'admin_gifts': 'admin_gifts'
     };
 
-    await this.processNotification(notification);
+    const preferenceKey = typeMap[type];
+    return preferenceKey ? this.preferences[preferenceKey] as boolean : true;
   }
 
-  private async handleSharedTaskNotification(completion: any, userId: string): Promise<void> {
-    // Get task details and check if user is the owner
-    const { data: task } = await supabase
-      .from('my_tasks')
-      .select('title, user_id')
-      .eq('id', completion.task_id)
-      .single();
-
-    if (!task || task.user_id !== userId) return;
-
-    const notification: WN1NotificationData = {
-      id: completion.id,
-      type: 'shared_tasks',
-      title: 'Task Update',
-      body: `${completion.completed_by_name || 'Someone'} completed: ${task.title}`,
-      data: { taskId: completion.task_id, completionId: completion.id },
-      deepLink: '/tr',
-      timestamp: Date.now(),
-      userId: userId
+  private mapNotificationTypeToDataType(type: string): WN1NotificationData['type'] {
+    const typeMap: Record<string, WN1NotificationData['type']> = {
+      'messages': 'messages',
+      'contact_requests': 'contacts',
+      'shared_task': 'shared_tasks',
+      'event': 'maw3d_events',
+      'admin_messages': 'admin_messages',
+      'admin_gifts': 'admin_messages'
     };
 
-    await this.processNotification(notification);
-  }
-
-  private async handleMaw3dNotification(rsvp: any, userId: string): Promise<void> {
-    // Get event details and check if user is the creator
-    const { data: event } = await supabase
-      .from('maw3d_events')
-      .select('title, created_by')
-      .eq('id', rsvp.event_id)
-      .single();
-
-    if (!event || event.created_by !== userId) return;
-
-    const notification: WN1NotificationData = {
-      id: rsvp.id,
-      type: 'maw3d_events',
-      title: 'Event RSVP',
-      body: `${rsvp.guest_name} responded ${rsvp.response} to: ${event.title}`,
-      data: { eventId: rsvp.event_id, rsvpId: rsvp.id },
-      deepLink: '/maw3d',
-      timestamp: Date.now(),
-      userId: userId
-    };
-
-    await this.processNotification(notification);
-  }
-
-  private async handleAdminNotification(adminMessage: any): Promise<void> {
-    const notification: WN1NotificationData = {
-      id: adminMessage.id,
-      type: 'admin_messages',
-      title: adminMessage.subject || 'Admin Message',
-      body: adminMessage.content.substring(0, 100) + (adminMessage.content.length > 100 ? '...' : ''),
-      data: { messageId: adminMessage.id },
-      deepLink: '/dashboard',
-      timestamp: Date.now(),
-      userId: adminMessage.recipient_id
-    };
-
-    await this.processNotification(notification);
+    return typeMap[type] || 'messages';
   }
 
   private async processNotification(notification: WN1NotificationData): Promise<void> {
-    console.log('🔔 Processing notification:', notification.type, notification.title);
+    console.log('🔔 Processing WN1 notification:', notification.type, notification.title);
 
     // Check quiet hours
     if (this.isQuietHours()) {
@@ -364,7 +250,7 @@ class WN1NotificationService {
 
     // Update badge count
     if (this.preferences.enableBadges && this.preferences.show_badges) {
-      this.updateBadgeCount();
+      this.updateBadgeCount(notification.type);
     }
   }
 
@@ -439,10 +325,11 @@ class WN1NotificationService {
     }, 6000);
   }
 
-  private updateBadgeCount(): void {
-    // This will be handled by the existing badge system
-    // Just trigger a refresh of unread counts
-    window.dispatchEvent(new CustomEvent('notification-received'));
+  private updateBadgeCount(type?: string): void {
+    // Trigger badge update via custom event
+    window.dispatchEvent(new CustomEvent('notification-received', { 
+      detail: { type } 
+    }));
   }
 
   private async queueOfflineNotification(notification: WN1NotificationData): Promise<void> {
@@ -473,7 +360,7 @@ class WN1NotificationService {
 
   private async storeInIndexedDB(notification: WN1NotificationData): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('NotificationQueue', 1);
+      const request = indexedDB.open('WN1NotificationQueue', 1);
       
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
@@ -497,7 +384,7 @@ class WN1NotificationService {
 
   private async removeFromIndexedDB(notificationId: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('NotificationQueue', 1);
+      const request = indexedDB.open('WN1NotificationQueue', 1);
       
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
@@ -531,19 +418,19 @@ class WN1NotificationService {
   async updatePreferences(newPreferences: Partial<WN1NotificationPreferences>): Promise<void> {
     this.preferences = { ...this.preferences, ...newPreferences };
     this.savePreferences();
-    console.log('💾 Preferences updated:', this.preferences);
+    console.log('💾 WN1 Preferences updated:', this.preferences);
   }
 
   getPreferences(): WN1NotificationPreferences {
     return { ...this.preferences };
   }
 
-  async testNotification(type: string = 'Test'): Promise<void> {
+  async testNotification(type: string = 'shared_task'): Promise<void> {
     const testNotification: WN1NotificationData = {
       id: 'test-' + Date.now(),
-      type: 'messages',
-      title: '🧪 Test Notification',
-      body: 'This is a test notification from the notification system',
+      type: 'shared_tasks',
+      title: '🧪 Test Shared Task Notification',
+      body: 'This is a test notification for shared task updates',
       timestamp: Date.now(),
       userId: 'test'
     };
@@ -563,12 +450,12 @@ class WN1NotificationService {
   getProcessorStatus(): { active: boolean; userId: string | null } {
     return {
       active: this.isInitialized,
-      userId: this.isInitialized ? 'current' : null
+      userId: this.currentUserId
     };
   }
 
   cleanup(): void {
-    console.log('🧹 Cleaning up service');
+    console.log('🧹 Cleaning up WN1 service');
     
     // Unsubscribe from all channels
     Object.values(this.subscriptions).forEach(subscription => {
@@ -579,6 +466,7 @@ class WN1NotificationService {
     
     this.subscriptions = {};
     this.isInitialized = false;
+    this.currentUserId = null;
   }
 }
 

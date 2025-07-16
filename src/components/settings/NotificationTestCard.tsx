@@ -2,200 +2,103 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useToastHelper } from '@/hooks/use-toast-helper';
-import { Bell, Bug, RefreshCw, Activity } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
 import { wn1NotificationService } from '@/services/wn1NotificationService';
+import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
-export const NotificationTestCard: React.FC = () => {
+export function NotificationTestCard() {
   const { language } = useTheme();
-  const { showSuccess, showError, showInfo } = useToastHelper();
-  const { user } = useAuth();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isChecking, setIsChecking] = useState(false);
-  const [isFixing, setIsFixing] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
-  const [queueStatus, setQueueStatus] = useState<any>(null);
+  const [testResults, setTestResults] = useState<Record<string, 'success' | 'error' | 'pending'>>({});
 
-  const handleTriggerProcessing = async () => {
-    setIsProcessing(true);
+  const testNotificationType = async (type: string, displayName: string) => {
+    setTestResults(prev => ({ ...prev, [type]: 'pending' }));
+    
     try {
-      showInfo(language === 'ar' ? 'جاري معالجة الإشعارات...' : 'Processing notifications...');
-      // Simulate some processing
-      setTimeout(() => {
-        showSuccess(language === 'ar' ? 'تم تشغيل معالجة الإشعارات' : 'Notification processing triggered');
-        setIsProcessing(false);
-      }, 2000);
+      await wn1NotificationService.testNotification(type);
+      setTestResults(prev => ({ ...prev, [type]: 'success' }));
     } catch (error) {
-      console.error('Error triggering processing:', error);
-      showError(language === 'ar' ? 'حدث خطأ أثناء تشغيل المعالجة' : 'Error occurred while triggering processing');
-      setIsProcessing(false);
+      console.error(`Failed to test ${type} notification:`, error);
+      setTestResults(prev => ({ ...prev, [type]: 'error' }));
     }
   };
 
-  const handleCheckStatus = async () => {
-    setIsChecking(true);
-    try {
-      const status = wn1NotificationService.getProcessorStatus();
-      setQueueStatus(status);
-      showSuccess(language === 'ar' ? 'تم فحص حالة الإشعارات' : 'Notification status checked');
-    } catch (error) {
-      console.error('Error checking status:', error);
-      showError(language === 'ar' ? 'حدث خطأ أثناء فحص الحالة' : 'Error occurred while checking status');
-    } finally {
-      setIsChecking(false);
+  const getStatusIcon = (status: 'success' | 'error' | 'pending' | undefined) => {
+    switch (status) {
+      case 'success':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'error':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case 'pending':
+        return <AlertCircle className="h-4 w-4 text-yellow-500 animate-spin" />;
+      default:
+        return null;
     }
   };
 
-  const handleFixStuck = async () => {
-    setIsFixing(true);
-    try {
-      showInfo(language === 'ar' ? 'جاري إصلاح الإشعارات المعلقة...' : 'Fixing stuck notifications...');
-      // Simulate fixing
-      setTimeout(() => {
-        showSuccess(language === 'ar' ? 'تم إصلاح الإشعارات المعلقة' : 'Fixed stuck notifications');
-        setIsFixing(false);
-      }, 1500);
-    } catch (error) {
-      console.error('Error fixing stuck notifications:', error);
-      showError(language === 'ar' ? 'حدث خطأ أثناء إصلاح الإشعارات' : 'Error occurred while fixing notifications');
-      setIsFixing(false);
-    }
-  };
-
-  const handleSendTest = async () => {
-    if (!user?.id) {
-      showError(language === 'ar' ? 'يجب تسجيل الدخول لإرسال اختبار' : 'Must be logged in to send test');
-      return;
-    }
-
-    setIsTesting(true);
-    try {
-      await wn1NotificationService.testNotification('test');
-      showSuccess(language === 'ar' ? 'تم إرسال إشعار تجريبي' : 'Test notification sent');
-    } catch (error) {
-      console.error('Error sending test notification:', error);
-      showError(language === 'ar' ? 'حدث خطأ أثناء إرسال الاختبار' : 'Error occurred while sending test');
-    } finally {
-      setIsTesting(false);
-    }
-  };
+  const notificationTypes = [
+    { type: 'shared_task', name: language === 'ar' ? 'المهام المشتركة' : 'Shared Tasks' },
+    { type: 'messages', name: language === 'ar' ? 'الرسائل' : 'Messages' },
+    { type: 'contact_requests', name: language === 'ar' ? 'طلبات الاتصال' : 'Contact Requests' },
+    { type: 'event_rsvps', name: language === 'ar' ? 'ردود الأحداث' : 'Event RSVPs' }
+  ];
 
   return (
-    <Card className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30">
+    <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-          <Bug className="h-5 w-5" />
-          {language === 'ar' ? 'اختبار الإشعارات' : 'Test Notifications'}
+        <CardTitle className="flex items-center gap-2">
+          <span>{language === 'ar' ? 'اختبار الإشعارات' : 'Test Notifications'}</span>
         </CardTitle>
-        <CardDescription className="text-orange-600 dark:text-orange-400">
+        <CardDescription>
           {language === 'ar' 
-            ? 'اختبر واتحقق من إعدادات الإشعارات الخاصة بك.'
+            ? 'اختبر واختبر إعدادات الإشعارات الخاصة بك.'
             : 'Test and verify your notification settings.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Button 
-            onClick={handleTriggerProcessing}
-            disabled={isProcessing}
-            variant="outline"
-            size="sm"
-            className="h-10"
-          >
-            {isProcessing ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600 mr-2"></div>
-                {language === 'ar' ? 'جاري التشغيل...' : 'Processing...'}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                {language === 'ar' ? 'تشغيل المعالجة' : 'Trigger Processing'}
-              </>
-            )}
-          </Button>
-
-          <Button 
-            onClick={handleCheckStatus}
-            disabled={isChecking}
-            variant="outline"
-            size="sm"
-            className="h-10"
-          >
-            {isChecking ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600 mr-2"></div>
-                {language === 'ar' ? 'جاري الفحص...' : 'Checking...'}
-              </>
-            ) : (
-              <>
-                <Activity className="mr-2 h-4 w-4" />
-                {language === 'ar' ? 'فحص الحالة' : 'Check Status'}
-              </>
-            )}
-          </Button>
-
-          <Button 
-            onClick={handleFixStuck}
-            disabled={isFixing}
-            variant="outline"
-            size="sm"
-            className="h-10"
-          >
-            {isFixing ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600 mr-2"></div>
-                {language === 'ar' ? 'جاري الإصلاح...' : 'Fixing...'}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                {language === 'ar' ? 'إصلاح العالقة' : 'Fix Stuck'}
-              </>
-            )}
-          </Button>
-
-          <Button 
-            onClick={handleSendTest}
-            disabled={isTesting || !user?.id}
-            variant="outline"
-            size="sm"
-            className="h-10"
-          >
-            {isTesting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600 mr-2"></div>
-                {language === 'ar' ? 'جاري الإرسال...' : 'Sending...'}
-              </>
-            ) : (
-              <>
-                <Bell className="mr-2 h-4 w-4" />
-                {language === 'ar' ? 'اختبار إشعار' : 'Test Notification'}
-              </>
-            )}
-          </Button>
+        <div className="grid gap-3">
+          {notificationTypes.map(({ type, name }) => (
+            <div key={type} className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="flex items-center gap-3">
+                <span className="font-medium">{name}</span>
+                {getStatusIcon(testResults[type])}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => testNotificationType(type, name)}
+                disabled={testResults[type] === 'pending'}
+              >
+                {language === 'ar' ? 'اختبار' : 'Test'}
+              </Button>
+            </div>
+          ))}
         </div>
 
-        {queueStatus && (
-          <div className="mt-4 p-3 bg-white dark:bg-gray-800 rounded-lg border">
-            <h4 className="font-medium mb-2">
-              {language === 'ar' ? 'حالة النظام:' : 'System Status:'}
-            </h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="font-medium">
-                  {language === 'ar' ? 'نشط:' : 'Active:'}
-                </span>
-                <div className="ml-2">
-                  {queueStatus.active ? (language === 'ar' ? 'نعم' : 'Yes') : (language === 'ar' ? 'لا' : 'No')}
-                </div>
-              </div>
+        <div className="mt-6 p-4 bg-muted rounded-lg">
+          <h4 className="font-medium mb-2">
+            {language === 'ar' ? 'معلومات النظام' : 'System Info'}
+          </h4>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>{language === 'ar' ? 'حالة الخدمة:' : 'Service Status:'}</span>
+              <Badge variant={wn1NotificationService.getProcessorStatus().active ? 'default' : 'destructive'}>
+                {wn1NotificationService.getProcessorStatus().active 
+                  ? (language === 'ar' ? 'نشط' : 'Active')
+                  : (language === 'ar' ? 'غير نشط' : 'Inactive')}
+              </Badge>
+            </div>
+            <div className="flex justify-between">
+              <span>{language === 'ar' ? 'إذن المتصفح:' : 'Browser Permission:'}</span>
+              <Badge variant={wn1NotificationService.getPermissionStatus() === 'granted' ? 'default' : 'destructive'}>
+                {wn1NotificationService.getPermissionStatus() === 'granted'
+                  ? (language === 'ar' ? 'ممنوح' : 'Granted')
+                  : (language === 'ar' ? 'مرفوض' : 'Denied')}
+              </Badge>
             </div>
           </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   );
-};
+}
