@@ -12,14 +12,15 @@ interface GiftNotification {
 }
 
 export function useGiftNotifications() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [currentGift, setCurrentGift] = useState<GiftNotification | null>(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
 
   useEffect(() => {
-    if (!user?.id) return;
+    // CRITICAL: Wait for auth to complete AND user to be logged in
+    if (loading || !user?.id) return;
 
-    console.log('Setting up gift notification listener for user:', user.id);
+    console.log('Gift notification system ready - setting up listener for user:', user.id);
 
     // Listen for new notifications of type 'admin_gifts'
     const channel = supabase
@@ -65,7 +66,7 @@ export function useGiftNotifications() {
       console.log('Cleaning up gift notification listener');
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, loading]);
 
   const closeGiftPopup = () => {
     setIsPopupOpen(false);
