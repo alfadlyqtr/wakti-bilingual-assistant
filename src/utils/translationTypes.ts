@@ -1418,4 +1418,8 @@ export type TranslationKey =
   | "myTasks"
   | "noTasksFound"
   | "noTasksYet"
-  | "createFirstTask";
+  | "createFirstTask"
+  
+  // NEW MISSING MAW3D KEYS FROM BUILD ERRORS:
+  | "createAndManageEvents"
+  | "searchEvents";

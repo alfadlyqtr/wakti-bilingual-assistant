@@ -52,4 +52,8 @@ export const en = {
   noTasksFound: "No tasks found",
   noTasksYet: "No tasks yet",
   createFirstTask: "Create your first task",
+  
+  // NEW MISSING MAW3D KEYS
+  createAndManageEvents: "Create and manage your events",
+  searchEvents: "Search events...",
 };
