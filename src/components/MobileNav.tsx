@@ -15,10 +15,23 @@ export function MobileNav() {
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
 
   useEffect(() => {
+    // Only show badges when there's actual data
     setBadgeStates({
-      task: waktiBadges.getBadgeDisplay('task'),
-      event: waktiBadges.getBadgeDisplay('event'), 
-      contact: waktiBadges.getBadgeDisplay('contact')
+      task: { 
+        show: taskCount > 0, 
+        count: taskCount > 99 ? '99+' : taskCount.toString(),
+        priority: taskCount > 5 ? 'high' : 'normal'
+      },
+      event: { 
+        show: eventCount > 0, 
+        count: eventCount > 99 ? '99+' : eventCount.toString(),
+        priority: eventCount > 3 ? 'high' : 'normal'
+      }, 
+      contact: { 
+        show: contactCount > 0, 
+        count: contactCount > 99 ? '99+' : contactCount.toString(),
+        priority: contactCount > 0 ? 'normal' : 'low'
+      }
     });
   }, [taskCount, eventCount, contactCount]);
   
@@ -100,9 +113,12 @@ export function MobileNav() {
                           : "group-hover:scale-110 group-hover:brightness-110"
                       )} 
                     />
-                    {/* Wakti Badge System */}
+                    {/* Real Badge System - Only show when data exists */}
                     {item.badgeType && badgeStates[item.badgeType]?.show && (
-                      <div className={cn(waktiBadges.getBadgeClasses(item.badgeType))}>
+                      <div className={cn(
+                        "absolute -top-2 -right-2 min-w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border-2 border-background z-10",
+                        badgeStates[item.badgeType].priority === 'high' && "animate-pulse bg-orange-500"
+                      )}>
                         {badgeStates[item.badgeType].count}
                       </div>
                     )}

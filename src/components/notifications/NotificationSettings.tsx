@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -138,7 +139,11 @@ export default function NotificationSettings() {
     const newSettings = { ...soundSettings, selectedSound: soundType as any };
     setSoundSettings(newSettings);
     waktiSounds.updateSettings(newSettings);
-    waktiSounds.testSound(soundType as any);
+    
+    // Force sound test with user interaction
+    setTimeout(() => {
+      waktiSounds.testSound(soundType as any);
+    }, 100);
   };
 
   const handleTestNotification = (type: string) => {

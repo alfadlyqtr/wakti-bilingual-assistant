@@ -1,3 +1,4 @@
+
 const WAKTI_SOUNDS = {
   chime: '/lovable-uploads/chime.mp3',
   beep: '/lovable-uploads/beep.mp3',
@@ -15,10 +16,12 @@ export interface SoundSettings {
 export class WaktiSoundManager {
   private settings: SoundSettings;
   private audioCache: Map<WaktiSoundType, HTMLAudioElement> = new Map();
+  private audioInitialized: boolean = false;
 
   constructor() {
     this.settings = this.loadSettings();
     this.preloadSounds();
+    this.initializeAudioContext();
   }
 
   private loadSettings(): SoundSettings {
@@ -39,6 +42,35 @@ export class WaktiSoundManager {
 
   private saveSettings(): void {
     localStorage.setItem('wakti-sound-settings', JSON.stringify(this.settings));
+  }
+
+  private initializeAudioContext(): void {
+    // Initialize audio on first user interaction
+    const enableAudio = () => {
+      this.enableAudio();
+      document.removeEventListener('click', enableAudio);
+      document.removeEventListener('touchstart', enableAudio);
+    };
+    
+    document.addEventListener('click', enableAudio, { once: true });
+    document.addEventListener('touchstart', enableAudio, { once: true });
+  }
+
+  private enableAudio(): void {
+    if (this.audioInitialized) return;
+    
+    // Pre-warm audio system with silent play
+    Object.values(WAKTI_SOUNDS).forEach(url => {
+      const audio = new Audio(url);
+      audio.volume = 0;
+      audio.play().catch(() => {}).then(() => {
+        audio.pause();
+        audio.volume = this.settings.volume / 100;
+      });
+    });
+    
+    this.audioInitialized = true;
+    console.log('Audio system initialized');
   }
 
   private async preloadSounds(): Promise<void> {
@@ -70,6 +102,11 @@ export class WaktiSoundManager {
   }
 
   async testSound(soundType: WaktiSoundType): Promise<void> {
+    // Force enable audio context for test
+    if (!this.audioInitialized) {
+      this.enableAudio();
+    }
+    
     try {
       const audio = new Audio(WAKTI_SOUNDS[soundType]);
       audio.volume = this.settings.volume / 100;

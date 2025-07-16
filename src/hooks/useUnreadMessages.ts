@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { waktiNotifications } from '@/services/waktiNotifications';
@@ -28,32 +29,103 @@ export function useUnreadMessages() {
     if (!session.session) {
       setUnreadPerContact({});
       setUnreadTotal(0);
+      setTaskCount(0);
+      setEventCount(0);
+      setContactCount(0);
+      setSharedTaskCount(0);
       setLoading(false);
       logUnreadState(`${from} (no session)`, 0, {});
       return;
     }
     const userId = session.session.user.id;
 
-    const { data, error } = await supabase
-      .from("messages")
-      .select("sender_id, is_read", { count: "exact" })
-      .eq("recipient_id", userId)
-      .eq("is_read", false);
+    try {
+      // Fetch REAL unread messages
+      const { data: messagesData, error: messagesError } = await supabase
+        .from("messages")
+        .select("sender_id, is_read")
+        .eq("recipient_id", userId)
+        .eq("is_read", false);
 
-    const counts: Record<string, number> = {};
-    let total = 0;
-    if (data) {
-      data.forEach((msg: any) => {
-        counts[msg.sender_id] = (counts[msg.sender_id] || 0) + 1;
-        total += 1;
-      });
-    }
-    setUnreadPerContact(counts);
-    setUnreadTotal(total);
-    setLoading(false);
-    logUnreadState(from, total, counts);
-    if (error) {
-      console.error(`[useUnreadMessages] fetchUnread error:`, error);
+      if (messagesError) throw messagesError;
+
+      const counts: Record<string, number> = {};
+      let total = 0;
+      if (messagesData) {
+        messagesData.forEach((msg: any) => {
+          counts[msg.sender_id] = (counts[msg.sender_id] || 0) + 1;
+          total += 1;
+        });
+      }
+
+      // Fetch REAL task counts - overdue tasks only
+      const { data: tasksData, error: tasksError } = await supabase
+        .from("my_tasks")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("status", "overdue");
+
+      const realTaskCount = tasksData ? tasksData.length : 0;
+
+      // Fetch REAL event counts - pending RSVPs only
+      const { data: eventsData, error: eventsError } = await supabase
+        .from("events")
+        .select("id")
+        .eq("organizer_id", userId)
+        .gte("start_time", new Date().toISOString());
+
+      let realEventCount = 0;
+      if (eventsData) {
+        for (const event of eventsData) {
+          const { data: rsvps } = await supabase
+            .from("event_rsvps")
+            .select("id")
+            .eq("event_id", event.id)
+            .eq("response", "pending");
+          
+          if (rsvps && rsvps.length > 0) {
+            realEventCount++;
+          }
+        }
+      }
+
+      // Fetch REAL contact counts - pending requests only
+      const { data: contactsData, error: contactsError } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("contact_id", userId)
+        .eq("status", "pending");
+
+      const realContactCount = contactsData ? contactsData.length : 0;
+
+      // Fetch REAL shared task counts - recent completions only
+      const { data: sharedData, error: sharedError } = await supabase
+        .from("shared_task_completions")
+        .select("task_id, my_tasks!inner(user_id)")
+        .eq("my_tasks.user_id", userId)
+        .gte("completed_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+      const realSharedTaskCount = sharedData ? sharedData.length : 0;
+
+      setUnreadPerContact(counts);
+      setUnreadTotal(total);
+      setTaskCount(realTaskCount);
+      setEventCount(realEventCount);
+      setContactCount(realContactCount);
+      setSharedTaskCount(realSharedTaskCount);
+      setLoading(false);
+      logUnreadState(from, total, counts);
+
+    } catch (error) {
+      console.error('[useUnreadMessages] Error:', error);
+      setUnreadPerContact({});
+      setUnreadTotal(0);
+      setTaskCount(0);
+      setEventCount(0);
+      setContactCount(0);
+      setSharedTaskCount(0);
+      setLoading(false);
+      logUnreadState(`${from} (error)`, 0, {});
     }
   }
 
