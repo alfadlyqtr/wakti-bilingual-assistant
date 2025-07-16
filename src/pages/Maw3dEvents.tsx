@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
-import EventCard from '@/components/maw3d/EventCard';
+import EventCard from '@/components/maw3d/Maw3dEventCard';
 import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 export default function Maw3dEvents() {

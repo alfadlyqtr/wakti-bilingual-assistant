@@ -129,7 +129,7 @@ class ProgressierService {
   async isPWAInstalled(): Promise<boolean> {
     // Check if running as PWA
     return window.matchMedia('(display-mode: standalone)').matches ||
-           window.navigator.standalone === true;
+           (navigator as any).standalone === true;
   }
 
   async canInstallPWA(): Promise<boolean> {

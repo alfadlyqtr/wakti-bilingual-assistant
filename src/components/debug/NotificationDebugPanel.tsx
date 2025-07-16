@@ -3,17 +3,17 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { waktiNotifications } from '@/services/waktiNotifications';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
 import { Bell, Check, X, Play, Square } from 'lucide-react';
 
 export const NotificationDebugPanel: React.FC = () => {
-  const [processorStatus, setProcessorStatus] = useState(waktiNotifications.getProcessorStatus());
-  const [config, setConfig] = useState(waktiNotifications.getConfig());
+  const [processorStatus, setProcessorStatus] = useState(wn1NotificationService.getProcessorStatus());
+  const [config, setConfig] = useState(wn1NotificationService.getPreferences());
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setProcessorStatus(waktiNotifications.getProcessorStatus());
-      setConfig(waktiNotifications.getConfig());
+      setProcessorStatus(wn1NotificationService.getProcessorStatus());
+      setConfig(wn1NotificationService.getPreferences());
     }, 1000);
 
     return () => clearInterval(interval);
@@ -90,7 +90,7 @@ export const NotificationDebugPanel: React.FC = () => {
                 key={type}
                 variant="outline"
                 size="sm"
-                onClick={() => waktiNotifications.testNotification(type)}
+                onClick={() => wn1NotificationService.testNotification(type)}
                 disabled={!processorStatus.active}
               >
                 {label}
@@ -106,7 +106,7 @@ export const NotificationDebugPanel: React.FC = () => {
           className="w-full"
           onClick={() => {
             ['task', 'shared_task', 'event', 'message', 'contact'].forEach(type => {
-              waktiNotifications.clearBadge(type);
+              wn1NotificationService.clearBadge(type);
             });
           }}
         >

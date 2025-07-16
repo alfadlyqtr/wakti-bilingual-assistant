@@ -1,9 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
-import { Editor } from '@tinymce/tinymce-react';
 import { Plus, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,13 +18,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { EventType } from '@/types';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import {
   Command,
   CommandEmpty,
@@ -47,18 +44,19 @@ import {
 } from "@/components/ui/dialog"
 import { wn1NotificationService } from '@/services/wn1NotificationService';
 
-const eventSchema = yup.object({
-  title: yup.string().required("Title is required"),
-  description: yup.string().required("Description is required"),
-  location: yup.string().required("Location is required"),
-  start_date: yup.date().required("Start date is required"),
-  end_date: yup.date().required("End date is required"),
-  event_type: yup.string().required("Event type is required"),
-  is_public: yup.boolean().default(false),
-  invited_users: yup.array().of(yup.string()).default([]),
-});
+// Define types inline
+type EventType = 'personal' | 'work' | 'family' | 'other';
 
-type EventFormValues = yup.InferType<typeof eventSchema>;
+interface EventFormValues {
+  title: string;
+  description: string;
+  location: string;
+  start_date: Date;
+  end_date: Date;
+  event_type: EventType;
+  is_public: boolean;
+  invited_users: string[];
+}
 
 export default function Maw3dCreate() {
   const navigate = useNavigate();
@@ -85,7 +83,6 @@ export default function Maw3dCreate() {
     getValues,
     watch,
   } = useForm<EventFormValues>({
-    resolver: yupResolver(eventSchema),
     defaultValues: {
       title: "",
       description: "",
@@ -206,11 +203,6 @@ export default function Maw3dCreate() {
     setValue("description", content);
   };
 
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIsPublic(e.target.checked);
-    setValue("is_public", e.target.checked);
-  };
-
   const filteredUsers = availableUsers.filter((user) => {
     const fullName = user.full_name || "";
     return fullName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -231,6 +223,7 @@ export default function Maw3dCreate() {
               <Controller
                 name="title"
                 control={control}
+                rules={{ required: "Title is required" }}
                 render={({ field }) => (
                   <Input id="title" placeholder={language === 'ar' ? 'أدخل عنوان الحدث' : 'Enter event title'} {...field} />
                 )}
@@ -240,25 +233,18 @@ export default function Maw3dCreate() {
 
             <div>
               <Label htmlFor="description">{language === 'ar' ? 'وصف الحدث' : 'Event Description'}</Label>
-              <Editor
-                apiKey="YOUR_TINYMCE_API_KEY"
-                value={editorContent}
-                init={{
-                  height: 300,
-                  menubar: false,
-                  plugins: [
-                    'advlist autolink lists link image charmap print preview anchor',
-                    'searchreplace visualblocks code fullscreen',
-                    'insertdatetime media table paste code help wordcount'
-                  ],
-                  toolbar:
-                    'undo redo | formatselect | ' +
-                    'bold italic backcolor | alignleft aligncenter ' +
-                    'alignright alignjustify | bullist numlist outdent indent | ' +
-                    'removeformat | help',
-                  content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
-                }}
-                onEditorChange={handleEditorChange}
+              <Controller
+                name="description"
+                control={control}
+                rules={{ required: "Description is required" }}
+                render={({ field }) => (
+                  <Textarea 
+                    id="description" 
+                    placeholder={language === 'ar' ? 'أدخل وصف الحدث' : 'Enter event description'}
+                    rows={5}
+                    {...field}
+                  />
+                )}
               />
               {errors.description && <p className="text-red-500">{errors.description.message}</p>}
             </div>
@@ -268,6 +254,7 @@ export default function Maw3dCreate() {
               <Controller
                 name="location"
                 control={control}
+                rules={{ required: "Location is required" }}
                 render={({ field }) => (
                   <Input id="location" placeholder={language === 'ar' ? 'أدخل موقع الحدث' : 'Enter event location'} {...field} />
                 )}
@@ -308,8 +295,6 @@ export default function Maw3dCreate() {
                   />
                 </PopoverContent>
               </Popover>
-              {errors.start_date && <p className="text-red-500">{errors.start_date.message}</p>}
-              {errors.end_date && <p className="text-red-500">{errors.end_date.message}</p>}
             </div>
 
             <div>
@@ -331,97 +316,17 @@ export default function Maw3dCreate() {
                   </Select>
                 )}
               />
-              {errors.event_type && <p className="text-red-500">{errors.event_type.message}</p>}
             </div>
 
             <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is_public"
+              <Switch
                 checked={isPublic}
-                onCheckedChange={handleCheckboxChange}
+                onCheckedChange={(checked: boolean) => {
+                  setIsPublic(checked);
+                  setValue("is_public", checked);
+                }}
               />
               <Label htmlFor="is_public">{language === 'ar' ? 'حدث عام' : 'Public Event'}</Label>
-            </div>
-
-            <div>
-              <Label>{language === 'ar' ? 'دعوة مستخدمين' : 'Invite Users'}</Label>
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    {language === 'ar' ? 'دعوة مستخدمين' : 'Invite Users'}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>{language === 'ar' ? 'دعوة مستخدمين' : 'Invite Users'}</DialogTitle>
-                    <DialogDescription>
-                      {language === 'ar' ? 'اختر المستخدمين لدعوتهم إلى هذا الحدث' : 'Choose users to invite to this event'}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Command>
-                    <CommandInput
-                      placeholder={language === 'ar' ? "ابحث عن مستخدم..." : "Type to search..."}
-                      value={searchTerm}
-                      onValueChange={setSearchTerm}
-                    />
-                    <CommandList>
-                      <CommandEmpty>{language === 'ar' ? "لا يوجد مستخدمين" : "No users found."}</CommandEmpty>
-                      <CommandGroup heading={language === 'ar' ? "المستخدمين" : "Users"}>
-                        <ScrollArea className="h-[200px] w-full rounded-md border">
-                          {filteredUsers.map((user) => (
-                            <CommandItem
-                              key={user.id}
-                              onSelect={() => {
-                                if (selectedUsers.includes(user.id)) {
-                                  setSelectedUsers(selectedUsers.filter((id) => id !== user.id));
-                                } else {
-                                  setSelectedUsers([...selectedUsers, user.id]);
-                                }
-                              }}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  checked={selectedUsers.includes(user.id)}
-                                  id={user.id}
-                                  className="mr-2"
-                                />
-                                <Avatar className="h-5 w-5">
-                                  <AvatarImage src={user.avatar_url} alt={user.full_name} />
-                                  <AvatarFallback>{user.full_name?.slice(0, 2)}</AvatarFallback>
-                                </Avatar>
-                                <span>{user.full_name}</span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </ScrollArea>
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                  <DialogFooter>
-                    <Button type="button" onClick={() => setOpen(false)}>
-                      {language === 'ar' ? 'حفظ' : 'Save'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              {selectedUsers.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {selectedUsers.map((userId) => {
-                    const user = availableUsers.find((u) => u.id === userId);
-                    return (
-                      user ? (
-                        <Badge key={userId} variant="secondary">
-                          <Avatar className="h-4 w-4 mr-1">
-                            <AvatarImage src={user.avatar_url} alt={user.full_name} />
-                            <AvatarFallback>{user.full_name?.slice(0, 2)}</AvatarFallback>
-                          </Avatar>
-                          {user.full_name}
-                        </Badge>
-                      ) : null
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             <Button type="submit">{language === 'ar' ? 'إنشاء الحدث' : 'Create Event'}</Button>

@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Home, MessageSquare, Users, Calendar, Bot } from 'lucide-react';
 import { UnreadBadge } from '@/components/UnreadBadge';
 import { useUnreadCounts } from '@/hooks/useUnreadCounts';
-import { waktiNotifications } from '@/services/waktiNotifications';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 export default function MobileNavigation() {
   const location = useLocation();
@@ -20,11 +20,11 @@ export default function MobileNavigation() {
   const handleNavClick = (path: string) => {
     // Clear badges when navigating to specific pages
     if (path === '/contacts') {
-      waktiNotifications.clearBadgeOnPageVisit('contacts');
+      wn1NotificationService.clearBadgeOnPageVisit('contacts');
     } else if (path === '/maw3d-events') {
-      waktiNotifications.clearBadgeOnPageVisit('maw3d');
+      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
     } else if (path === '/tr') {
-      waktiNotifications.clearBadgeOnPageVisit('tr');
+      wn1NotificationService.clearBadgeOnPageVisit('tr');
     }
   };
 

@@ -6,7 +6,7 @@ import { t } from "@/utils/translations";
 import { Hand, CheckSquare, Bell, Plus, AlertTriangle, Clock } from "lucide-react";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { format, isToday, isPast, parseISO } from "date-fns";
-import { waktiNotifications } from "@/services/waktiNotifications";
+import { wn1NotificationService } from "@/services/wn1NotificationService";
 
 interface TRWidgetProps {
   language: 'en' | 'ar';
@@ -53,7 +53,7 @@ export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
 
   const handleNavigateToTR = () => {
     // Clear T&R related badges when navigating to T&R page
-    waktiNotifications.clearBadgeOnPageVisit('tr');
+    wn1NotificationService.clearBadgeOnPageVisit('tr');
     navigate('/tr');
   };
 
