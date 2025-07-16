@@ -13,17 +13,26 @@ export function useOptimizedMaw3dEvents() {
     try {
       setLoading(true);
       
-      // Fetch user's events
+      // Get current user
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) throw userError;
+      if (!userData.user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Fetch ONLY the current user's events - explicit filtering for security
       const { data: eventsData, error: eventsError } = await supabase
         .from('maw3d_events')
         .select('*')
+        .eq('created_by', userData.user.id)  // Explicit user filtering
         .order('event_date', { ascending: true });
 
       if (eventsError) throw eventsError;
 
       setEvents(eventsData || []);
 
-      // Fetch RSVP counts for all events
+      // Fetch RSVP counts for user's events only
       if (eventsData && eventsData.length > 0) {
         const eventIds = eventsData.map(event => event.id);
         
@@ -59,14 +68,22 @@ export function useOptimizedMaw3dEvents() {
   useEffect(() => {
     fetchEventsAndCounts();
 
-    // Set up real-time subscriptions
+    // Set up real-time subscriptions for user's events only
     const eventsChannel = supabase
       .channel('maw3d-events-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maw3d_events' }, () => {
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'maw3d_events'
+      }, (payload) => {
         console.log('Maw3d events changed, refetching...');
         fetchEventsAndCounts();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maw3d_rsvps' }, () => {
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'maw3d_rsvps' 
+      }, (payload) => {
         console.log('Maw3d RSVPs changed, refetching...');
         fetchEventsAndCounts();
       })
