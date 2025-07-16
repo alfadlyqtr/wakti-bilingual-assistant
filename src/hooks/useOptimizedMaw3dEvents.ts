@@ -32,27 +32,27 @@ export function useOptimizedMaw3dEvents() {
 
       setEvents(eventsData || []);
 
-      // Fetch RSVP counts for user's events only
+      // Fetch RSVP counts for user's events only - FIXED: Count only 'accepted' responses
       if (eventsData && eventsData.length > 0) {
         const eventIds = eventsData.map(event => event.id);
         
         const { data: rsvpData, error: rsvpError } = await supabase
           .from('maw3d_rsvps')
           .select('event_id, response')
-          .in('event_id', eventIds);
+          .in('event_id', eventIds)
+          .eq('response', 'accepted'); // Only count accepted RSVPs
 
         if (rsvpError) throw rsvpError;
 
-        // Count RSVPs by event
+        // Count RSVPs by event - simplified since we already filtered for 'accepted'
         const counts: Record<string, number> = {};
         if (rsvpData) {
           rsvpData.forEach(rsvp => {
-            if (rsvp.response === 'accepted') {
-              counts[rsvp.event_id] = (counts[rsvp.event_id] || 0) + 1;
-            }
+            counts[rsvp.event_id] = (counts[rsvp.event_id] || 0) + 1;
           });
         }
         
+        console.log('📊 Attending counts calculated:', counts);
         setAttendingCounts(counts);
       }
 

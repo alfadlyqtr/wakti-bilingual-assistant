@@ -7,9 +7,8 @@ import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns';
 import { t } from '@/utils/translations';
 import { useTheme } from '@/providers/ThemeProvider';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
-import { useAuth } from '@/contexts/AuthContext';
 import { waktiNotifications } from '@/services/waktiNotifications';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Maw3dEvents() {
   const navigate = useNavigate();
@@ -18,18 +17,19 @@ export default function Maw3dEvents() {
   const { events, attendingCounts, loading } = useOptimizedMaw3dEvents();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Initialize WN1 notification service for Maw3d events
+  // Initialize WAKTI notification service and clear badges
   useEffect(() => {
     if (user?.id) {
-      console.log('🔥 Initializing WN1 notification service for Maw3d events page');
-      wn1NotificationService.initialize(user.id);
+      console.log('🔥 Initializing WAKTI notification service for Maw3d events page');
+      waktiNotifications.startNotificationProcessor(user.id);
     }
 
     // Clear Maw3d event badges when visiting this page
+    console.log('🧹 Clearing Maw3d badges on page visit');
     waktiNotifications.clearBadgeOnPageVisit('maw3d');
 
     return () => {
-      wn1NotificationService.cleanup();
+      waktiNotifications.stopNotificationProcessor();
     };
   }, [user?.id]);
 

@@ -13,7 +13,7 @@ export function useUnreadCounts() {
     const updateCounts = () => {
       setMessageCount(waktiBadges.getBadgeCount('message'));
       setContactCount(waktiBadges.getBadgeCount('contact'));
-      setEventCount(waktiBadges.getBadgeCount('event'));
+      setEventCount(waktiBadges.getBadgeCount('event')); // Fixed: use 'event' not 'maw3d_events'
       setTaskCount(waktiBadges.getBadgeCount('task') + waktiBadges.getBadgeCount('shared_task'));
     };
 

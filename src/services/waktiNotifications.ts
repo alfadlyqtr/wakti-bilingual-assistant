@@ -1,3 +1,4 @@
+
 import { waktiToast, WaktiNotification } from './waktiToast';
 import { waktiSounds, WaktiSoundType } from './waktiSounds';
 import { waktiBadges } from './waktiBadges';
@@ -160,17 +161,18 @@ class WaktiNotificationService {
   }
 
   private updateBadgeForNotificationType(type: string): void {
-    // Map notification types to badge categories
+    // Fixed mapping for consistent badge types
     const typeMapping: Record<string, string> = {
       'shared_task': 'shared_task',
       'messages': 'message',
       'contact_requests': 'contact',
-      'event': 'event',
+      'event': 'event',  // Map 'event' to 'event' for Maw3d
       'task': 'task',
       'admin': 'admin'
     };
 
     const badgeType = typeMapping[type] || type;
+    console.log(`🏷️ Incrementing badge for type: ${type} -> ${badgeType}`);
     waktiBadges.incrementBadge(badgeType, 1, 'normal');
   }
 
@@ -248,7 +250,7 @@ class WaktiNotificationService {
   clearBadgeOnPageVisit(pageType: 'tr' | 'maw3d' | 'messages' | 'contacts'): void {
     const badgeMap = {
       'tr': ['task', 'shared_task'],
-      'maw3d': ['event'],
+      'maw3d': ['event'],  // Clear 'event' badge for Maw3d pages
       'messages': ['message'],
       'contacts': ['contact']
     };

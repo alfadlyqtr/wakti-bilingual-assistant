@@ -1,21 +1,21 @@
 
 import React, { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
+import { waktiNotifications } from '@/services/waktiNotifications';
 import { EditEventForm } from '@/components/maw3d/EditEventForm';
 
 export default function Maw3dEdit() {
   const { user } = useAuth();
 
-  // Initialize WN1 notification service for Maw3d edit page
+  // Initialize WAKTI notification service for Maw3d edit page
   useEffect(() => {
     if (user?.id) {
-      console.log('🔥 Initializing WN1 notification service for Maw3d edit page');
-      wn1NotificationService.initialize(user.id);
+      console.log('🔥 Initializing WAKTI notification service for Maw3d edit page');
+      waktiNotifications.startNotificationProcessor(user.id);
     }
 
     return () => {
-      wn1NotificationService.cleanup();
+      waktiNotifications.stopNotificationProcessor();
     };
   }, [user?.id]);
 
