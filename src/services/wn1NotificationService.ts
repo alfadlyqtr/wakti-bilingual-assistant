@@ -173,21 +173,22 @@ class WN1NotificationService {
     // Cleanup existing subscriptions first
     this.cleanup();
 
-    // Single subscription to notification_queue for all notification types
+    // FIXED: Listen to notification_history instead of notification_queue
+    // because RLS blocks real-time on queue table
     this.subscriptions.notifications = supabase
       .channel('wn1-notifications')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'notification_queue',
+        table: 'notification_history',  // CHANGED: Use history table instead
         filter: `user_id=eq.${userId}`
       }, (payload) => {
-        console.log('📨 WN1 notification received:', payload.new);
-        this.handleQueuedNotification(payload.new);
+        console.log('📨 WN1 notification received from history:', payload.new);
+        this.handleHistoryNotification(payload.new);
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('✅ WN1 notification processor subscribed successfully');
+          console.log('✅ WN1 notification processor subscribed successfully to history');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ WN1 notification processor channel error');
           this.isInitialized = false;
@@ -195,6 +196,34 @@ class WN1NotificationService {
       });
 
     console.log('✅ WN1 realtime subscriptions active');
+  }
+
+  private async handleHistoryNotification(historyItem: any): Promise<void> {
+    const notificationType = historyItem.notification_type;
+    
+    console.log('🔄 Processing notification from history:', notificationType);
+    
+    // Check if this notification type is enabled in preferences
+    const typeEnabled = this.isNotificationTypeEnabled(notificationType);
+    
+    if (!typeEnabled) {
+      console.log(`🔇 Notification type '${notificationType}' is disabled, skipping`);
+      return;
+    }
+
+    const notification: WN1NotificationData = {
+      id: historyItem.id,
+      type: this.mapNotificationTypeToDataType(notificationType),
+      title: historyItem.title,
+      body: historyItem.body,
+      data: historyItem.data || {},
+      deepLink: historyItem.deep_link,
+      timestamp: Date.now(),
+      userId: historyItem.user_id
+    };
+
+    console.log('🚀 Processing notification from history:', notification);
+    await this.processNotification(notification);
   }
 
   private async handleQueuedNotification(queueItem: any): Promise<void> {
