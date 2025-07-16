@@ -480,13 +480,6 @@ class WN1NotificationService {
     console.log(`🧹 Cleared badges for ${pageType} page visit:`, badgesToClear);
   }
 
-  updateBadgeCount(type: string, count: number, priority: 'low' | 'normal' | 'high' | 'urgent' = 'normal'): void {
-    if (this.preferences.enableBadges) {
-      const badgeType = this.getBadgeType(type);
-      waktiBadges.updateBadge(badgeType, count, priority);
-    }
-  }
-
   // Public API methods
   async updatePreferences(newPreferences: Partial<WN1NotificationPreferences>): Promise<void> {
     this.preferences = { ...this.preferences, ...newPreferences };

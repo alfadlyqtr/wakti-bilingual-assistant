@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
-import EventCard from '@/components/maw3d/Maw3dEventCard';
+// Temporarily comment out this import
+// import { EventCard } from '@/components/maw3d/Maw3dEventCard';
 import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 export default function Maw3dEvents() {
@@ -95,15 +96,18 @@ export default function Maw3dEvents() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {events.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onEventClick={handleEventClick}
-                onManageClick={handleManageEvent}
-                currentUserId={user?.id}
-                language={language}
-                isRTL={isRTL}
-              />
+              <div key={event.id} className="p-4 border rounded-lg">
+                <h3>Event Card Placeholder</h3>
+                <p>{event.title}</p>
+                <div className="mt-4 flex gap-2">
+                  <Button size="sm" onClick={() => handleEventClick(event.id)}>
+                    {language === 'ar' ? 'عرض' : 'View'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleManageEvent(event.id)}>
+                    {language === 'ar' ? 'إدارة' : 'Manage'}
+                  </Button>
+                </div>
+              </div>
             ))}
           </div>
         )}
