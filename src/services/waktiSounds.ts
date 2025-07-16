@@ -1,4 +1,3 @@
-
 const WAKTI_SOUNDS = {
   chime: '/lovable-uploads/chime.mp3',
   beep: '/lovable-uploads/beep.mp3',
@@ -57,28 +56,26 @@ export class WaktiSoundManager {
 
   async playNotificationSound(soundType?: WaktiSoundType): Promise<void> {
     if (!this.settings.enabled) return;
+    
     const sound = soundType || this.settings.selectedSound;
-    const audio = this.audioCache.get(sound);
-    if (!audio) return;
-
+    console.log('Playing sound:', sound);
+    
     try {
-      audio.currentTime = 0;
+      const audio = new Audio(WAKTI_SOUNDS[sound]);
       audio.volume = this.settings.volume / 100;
       await audio.play();
     } catch (error) {
-      console.warn('Sound playback failed:', error);
+      console.warn('Sound failed:', error);
     }
   }
 
   async testSound(soundType: WaktiSoundType): Promise<void> {
-    const audio = this.audioCache.get(soundType);
-    if (!audio) return;
     try {
-      audio.currentTime = 0;
+      const audio = new Audio(WAKTI_SOUNDS[soundType]);
       audio.volume = this.settings.volume / 100;
       await audio.play();
     } catch (error) {
-      console.warn('Test sound failed:', error);
+      console.error('Test sound failed:', error);
     }
   }
 

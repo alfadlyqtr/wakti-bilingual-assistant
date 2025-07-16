@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { waktiNotifications } from '@/services/waktiNotifications';
@@ -68,46 +67,21 @@ export function useUnreadMessages() {
       sharedTask: sharedTaskCount
     };
     
-    if (previousCounts.unread > 0) { // Only after initial load
+    if (previousCounts.unread >= 0 && previousCounts.unread !== current.unread) {
       if (current.unread > previousCounts.unread) {
-        waktiNotifications.showNotification({
-          type: 'message',
-          title: 'New Message',
-          message: 'You have a new message'
-        });
-      }
-      if (current.task > previousCounts.task) {
-        waktiNotifications.showNotification({
-          type: 'task', 
-          title: 'Task Update',
-          message: 'Task activity requires attention'
-        });
-      }
-      if (current.sharedTask > previousCounts.sharedTask) {
-        waktiNotifications.showNotification({
-          type: 'shared_task',
-          title: 'Shared Task Activity', 
-          message: 'Someone interacted with your shared task'
-        });
-      }
-      if (current.event > previousCounts.event) {
-        waktiNotifications.showNotification({
-          type: 'event',
-          title: 'Event Update',
-          message: 'New event activity'
-        });
-      }
-      if (current.contact > previousCounts.contact) {
-        waktiNotifications.showNotification({
-          type: 'contact',
-          title: 'Contact Request',
-          message: 'New contact request received'
-        });
+        const newMessages = current.unread - previousCounts.unread;
+        setTimeout(() => {
+          waktiNotifications.showNotification({
+            type: 'message',
+            title: 'New Message',
+            message: `You have ${newMessages} new message${newMessages > 1 ? 's' : ''}`
+          });
+        }, 200);
       }
     }
     
     setPreviousCounts(current);
-  }, [unreadTotal, taskCount, eventCount, contactCount, sharedTaskCount, previousCounts]);
+  }, [unreadTotal, taskCount, eventCount, contactCount, sharedTaskCount]);
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout | null = null;

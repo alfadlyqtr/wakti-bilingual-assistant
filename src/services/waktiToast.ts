@@ -80,6 +80,7 @@ class WaktiToastManager {
 
   async show(notification: WaktiNotification): Promise<void> {
     if (!this.settings.enabled) return;
+    
     if (!notification.id) {
       notification.id = `wakti-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     }
@@ -88,6 +89,7 @@ class WaktiToastManager {
       notification.duration = durations[notification.priority];
     }
 
+    // Play sound BEFORE showing toast
     if (notification.sound) {
       await waktiSounds.playNotificationSound(notification.sound);
     } else {
