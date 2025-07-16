@@ -1,3 +1,4 @@
+
 import { auth } from "./modules/auth";
 import { common } from "./modules/common";
 import { navigation } from "./modules/navigation";
@@ -42,4 +43,13 @@ export const en = {
   ...billing,
   ...confirmation,
   ...games,
+  
+  // Additional TR specific translations
+  manageTasksAndResponsibilities: "Manage your tasks and responsibilities",
+  searchTasks: "Search tasks...",
+  sharedTasks: "Shared Tasks",
+  myTasks: "My Tasks",
+  noTasksFound: "No tasks found",
+  noTasksYet: "No tasks yet",
+  createFirstTask: "Create your first task",
 };

@@ -1409,4 +1409,13 @@ export type TranslationKey =
   | "black"
   
   // THE MISSING KEY THAT'S CAUSING THE BUILD ERROR:
-  | "tasksReminders";
+  | "tasksReminders"
+  
+  // NEW MISSING TR KEYS FROM BUILD ERRORS:
+  | "manageTasksAndResponsibilities"
+  | "searchTasks"
+  | "sharedTasks"
+  | "myTasks"
+  | "noTasksFound"
+  | "noTasksYet"
+  | "createFirstTask";

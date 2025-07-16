@@ -59,7 +59,7 @@ export default function TR() {
     
     try {
       setLoading(true);
-      const userTasks = await TRService.getUserTasks(user.id);
+      const userTasks = await TRService.getTasks();
       setTasks(userTasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
