@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { waktiSounds } from '@/services/waktiSounds';
 import { waktiBadges } from '@/services/waktiBadges';
@@ -168,34 +167,37 @@ class WN1NotificationService {
   }
 
   private async setupRealtimeSubscriptions(userId: string): Promise<void> {
-    console.log('🔗 Setting up WN1 realtime subscriptions for user:', userId);
+    console.log('🔗 Setting up WN1 polling for user:', userId);
 
     // Cleanup existing subscriptions first
     this.cleanup();
 
-    // FIXED: Listen to notification_history instead of notification_queue
-    // because RLS blocks real-time on queue table
-    this.subscriptions.notifications = supabase
-      .channel('wn1-notifications')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notification_history',  // CHANGED: Use history table instead
-        filter: `user_id=eq.${userId}`
-      }, (payload) => {
-        console.log('📨 WN1 notification received from history:', payload.new);
-        this.handleHistoryNotification(payload.new);
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ WN1 notification processor subscribed successfully to history');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ WN1 notification processor channel error');
-          this.isInitialized = false;
-        }
-      });
+    // Use polling instead of broken real-time
+    this.subscriptions.polling = setInterval(async () => {
+      await this.checkForNewNotifications(userId);
+    }, 2000); // Check every 2 seconds
 
-    console.log('✅ WN1 realtime subscriptions active');
+    console.log('✅ WN1 polling active (bypassing broken real-time)');
+  }
+
+  private async checkForNewNotifications(userId: string): Promise<void> {
+    try {
+      const { data: newNotifications } = await supabase
+        .from('notification_history')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('sent_at', new Date(Date.now() - 10000).toISOString()) // Last 10 seconds
+        .order('sent_at', { ascending: false });
+
+      if (newNotifications && newNotifications.length > 0) {
+        for (const notification of newNotifications) {
+          console.log('📨 POLLING: Found new notification:', notification);
+          await this.handleHistoryNotification(notification);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Polling error:', error);
+    }
   }
 
   private async handleHistoryNotification(historyItem: any): Promise<void> {
@@ -553,9 +555,14 @@ class WN1NotificationService {
   cleanup(): void {
     console.log('🧹 Cleaning up WN1 service');
     
+    // Clear polling interval
+    if (this.subscriptions.polling) {
+      clearInterval(this.subscriptions.polling);
+    }
+    
     // Unsubscribe from all channels
     Object.values(this.subscriptions).forEach(subscription => {
-      if (subscription) {
+      if (subscription && typeof subscription.unsubscribe === 'function') {
         supabase.removeChannel(subscription);
       }
     });
