@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Sun, Moon, Languages, Save, Palette, Bell, Database, Key, Settings } from "lucide-react";
@@ -10,7 +11,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
-import { NotificationTestPanel } from "@/components/admin/NotificationTestPanel";
+// Removed broken import: import { NotificationTestPanel } from "@/components/admin/NotificationTestPanel";
 
 export default function AdminSettings() {
   const navigate = useNavigate();
@@ -256,8 +257,8 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
 
-        {/* Add Notification Testing Panel */}
-        <NotificationTestPanel />
+        {/* Commented out broken component */}
+        {/* <NotificationTestPanel /> */}
       </div>
 
       {/* Admin Mobile Navigation */}

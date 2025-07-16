@@ -1,11 +1,18 @@
+
 import { createContext, useContext, useState, useEffect } from 'react';
 import { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  loading: boolean;
+  updateProfile: (updates: any) => Promise<void>;
+  updateEmail: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -25,6 +32,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setLoading] = useState<boolean>(true);
 
@@ -39,6 +47,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (mounted) {
           if (session?.user) {
             setUser(session.user);
+            setSession(session);
             setIsAuthenticated(true);
             console.log('✅ AuthContext: User authenticated:', session.user.id);
             
@@ -48,6 +57,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             console.log('✅ AuthContext: WN1 notification service initialized');
           } else {
             setUser(null);
+            setSession(null);
             setIsAuthenticated(false);
             console.log('❌ AuthContext: No active session');
           }
@@ -71,6 +81,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         if (session?.user) {
           setUser(session.user);
+          setSession(session);
           setIsAuthenticated(true);
           
           // Initialize WN1 for new session
@@ -81,6 +92,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
         } else {
           setUser(null);
+          setSession(null);
           setIsAuthenticated(false);
           
           // Cleanup WN1 on logout
@@ -100,10 +112,59 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
+  const updateProfile = async (updates: any) => {
+    try {
+      if (!user) throw new Error('No user logged in');
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      throw error;
+    }
+  };
+
+  const updateEmail = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ email });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating email:', error);
+      throw error;
+    }
+  };
+
+  const updatePassword = async (password: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating password:', error);
+      throw error;
+    }
+  };
+
+  const forgotPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error sending forgot password email:', error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
       setUser(null);
+      setSession(null);
       setIsAuthenticated(false);
       console.log('🚪 User signed out');
     } catch (error) {
@@ -113,8 +174,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const value: AuthContextType = {
     user,
+    session,
     isAuthenticated,
     isLoading,
+    loading: isLoading,
+    updateProfile,
+    updateEmail,
+    updatePassword,
+    forgotPassword,
     signOut,
   };
 

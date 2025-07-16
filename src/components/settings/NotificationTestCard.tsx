@@ -6,12 +6,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { Bell, Bug, RefreshCw, Activity } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  triggerNotificationProcessing, 
-  getNotificationQueueStatus, 
-  fixAllStuckNotifications,
-  sendTestNotification 
-} from '@/utils/notificationUtils';
+// Removed broken import: import { ... } from '@/utils/notificationUtils';
 
 export const NotificationTestCard: React.FC = () => {
   const { language } = useTheme();
@@ -26,15 +21,8 @@ export const NotificationTestCard: React.FC = () => {
   const handleTriggerProcessing = async () => {
     setIsProcessing(true);
     try {
-      const result = await triggerNotificationProcessing();
-      
-      if (result.success) {
-        showSuccess(language === 'ar' ? 'تم تشغيل معالجة الإشعارات بنجاح' : 'Notification processing triggered successfully');
-        console.log('Processing result:', result.data);
-      } else {
-        showError(language === 'ar' ? 'فشل في تشغيل معالجة الإشعارات' : 'Failed to trigger notification processing');
-        console.error('Processing failed:', result.message);
-      }
+      // TODO: Implement WN1 processing trigger
+      showInfo(language === 'ar' ? 'WN1 System - قيد التطوير' : 'WN1 System - Under Development');
     } catch (error) {
       console.error('Error triggering processing:', error);
       showError(language === 'ar' ? 'حدث خطأ أثناء تشغيل المعالجة' : 'Error occurred while triggering processing');
@@ -46,16 +34,8 @@ export const NotificationTestCard: React.FC = () => {
   const handleCheckStatus = async () => {
     setIsChecking(true);
     try {
-      const result = await getNotificationQueueStatus();
-      
-      if (result.success) {
-        setQueueStatus(result.data);
-        showInfo(language === 'ar' ? 'تم جلب حالة الطابور بنجاح' : 'Queue status retrieved successfully');
-        console.log('Queue status:', result.data);
-      } else {
-        showError(language === 'ar' ? 'فشل في جلب حالة الطابور' : 'Failed to get queue status');
-        console.error('Status check failed:', result.error);
-      }
+      // TODO: Implement WN1 status check
+      showInfo(language === 'ar' ? 'WN1 System - قيد التطوير' : 'WN1 System - Under Development');
     } catch (error) {
       console.error('Error checking status:', error);
       showError(language === 'ar' ? 'حدث خطأ أثناء فحص الحالة' : 'Error occurred while checking status');
@@ -67,17 +47,8 @@ export const NotificationTestCard: React.FC = () => {
   const handleFixStuck = async () => {
     setIsFixing(true);
     try {
-      const result = await fixAllStuckNotifications();
-      
-      if (result.success) {
-        showSuccess(language === 'ar' ? 'تم إصلاح الإشعارات العالقة بنجاح' : 'Stuck notifications fixed successfully');
-        console.log('Fix result:', result.data);
-        // Refresh status after fixing
-        handleCheckStatus();
-      } else {
-        showError(language === 'ar' ? 'فشل في إصلاح الإشعارات العالقة' : 'Failed to fix stuck notifications');
-        console.error('Fix failed:', result.message);
-      }
+      // TODO: Implement WN1 fix stuck
+      showInfo(language === 'ar' ? 'WN1 System - قيد التطوير' : 'WN1 System - Under Development');
     } catch (error) {
       console.error('Error fixing stuck notifications:', error);
       showError(language === 'ar' ? 'حدث خطأ أثناء إصلاح الإشعارات' : 'Error occurred while fixing notifications');
@@ -94,15 +65,8 @@ export const NotificationTestCard: React.FC = () => {
 
     setIsTesting(true);
     try {
-      const result = await sendTestNotification(user.id);
-      
-      if (result.success) {
-        showSuccess(language === 'ar' ? 'تم إرسال الإشعار التجريبي بنجاح' : 'Test notification sent successfully');
-        console.log('Test result:', result.data);
-      } else {
-        showError(language === 'ar' ? 'فشل في إرسال الإشعار التجريبي' : 'Failed to send test notification');
-        console.error('Test failed:', result.message);
-      }
+      // TODO: Implement WN1 test notification
+      showInfo(language === 'ar' ? 'WN1 System - قيد التطوير' : 'WN1 System - Under Development');
     } catch (error) {
       console.error('Error sending test notification:', error);
       showError(language === 'ar' ? 'حدث خطأ أثناء إرسال الاختبار' : 'Error occurred while sending test');
@@ -116,12 +80,12 @@ export const NotificationTestCard: React.FC = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
           <Bug className="h-5 w-5" />
-          {language === 'ar' ? 'اختبار نظام الإشعارات' : 'Notification System Testing'}
+          {language === 'ar' ? 'اختبار نظام WN1' : 'WN1 System Testing'}
         </CardTitle>
         <CardDescription className="text-orange-600 dark:text-orange-400">
           {language === 'ar' 
-            ? 'أدوات لاختبار وإصلاح نظام الإشعارات.'
-            : 'Tools for testing and debugging the notification system.'}
+            ? 'أدوات لاختبار وإصلاح نظام WN1 الجديد.'
+            : 'Tools for testing and debugging the new WN1 system.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -210,29 +174,15 @@ export const NotificationTestCard: React.FC = () => {
         {queueStatus && (
           <div className="mt-4 p-3 bg-white dark:bg-gray-800 rounded-lg border">
             <h4 className="font-medium mb-2">
-              {language === 'ar' ? 'حالة الطابور:' : 'Queue Status:'}
+              {language === 'ar' ? 'حالة النظام:' : 'System Status:'}
             </h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
                 <span className="font-medium">
-                  {language === 'ar' ? 'الطابور:' : 'Queue:'}
+                  {language === 'ar' ? 'WN1:' : 'WN1:'}
                 </span>
                 <div className="ml-2">
-                  {language === 'ar' ? 'المجموع:' : 'Total:'} {queueStatus.queue?.total || 0}
-                </div>
-                <div className="ml-2">
-                  {language === 'ar' ? 'معلق:' : 'Pending:'} {queueStatus.queue?.pending || 0}
-                </div>
-                <div className="ml-2">
-                  {language === 'ar' ? 'فاشل:' : 'Failed:'} {queueStatus.queue?.failed || 0}
-                </div>
-              </div>
-              <div>
-                <span className="font-medium">
-                  {language === 'ar' ? 'التاريخ:' : 'History:'}
-                </span>
-                <div className="ml-2">
-                  {language === 'ar' ? 'المجموع:' : 'Total:'} {queueStatus.history?.total || 0}
+                  {language === 'ar' ? 'نشط' : 'Active'}
                 </div>
               </div>
             </div>
