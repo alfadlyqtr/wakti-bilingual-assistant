@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { LoadingSpinner } from '@/components/ui/loading';
 
 interface AuthContextType {
   user: User | null;
@@ -51,10 +52,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setIsAuthenticated(true);
             console.log('✅ AuthContext: User authenticated:', session.user.id);
             
-            // Initialize WN1 notification service
-            const { wn1NotificationService } = await import('@/services/wn1NotificationService');
-            await wn1NotificationService.initialize(session.user.id);
-            console.log('✅ AuthContext: WN1 notification service initialized');
+            // Initialize WN1 notification service non-blocking
+            setTimeout(async () => {
+              try {
+                const { wn1NotificationService } = await import('@/services/wn1NotificationService');
+                await wn1NotificationService.initialize(session.user.id);
+                console.log('✅ AuthContext: WN1 notification service initialized');
+              } catch (error) {
+                console.error('⚠️ AuthContext: WN1 initialization failed, but auth continues:', error);
+              }
+            }, 0);
           } else {
             setUser(null);
             setSession(null);
@@ -84,11 +91,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setSession(session);
           setIsAuthenticated(true);
           
-          // Initialize WN1 for new session
+          // Initialize WN1 for new session non-blocking
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            const { wn1NotificationService } = await import('@/services/wn1NotificationService');
-            await wn1NotificationService.initialize(session.user.id);
-            console.log('✅ AuthContext: WN1 initialized for session');
+            setTimeout(async () => {
+              try {
+                const { wn1NotificationService } = await import('@/services/wn1NotificationService');
+                await wn1NotificationService.initialize(session.user.id);
+                console.log('✅ AuthContext: WN1 initialized for session');
+              } catch (error) {
+                console.error('⚠️ AuthContext: WN1 session initialization failed:', error);
+              }
+            }, 0);
           }
         } else {
           setUser(null);
@@ -97,9 +110,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           
           // Cleanup WN1 on logout
           if (event === 'SIGNED_OUT') {
-            const { wn1NotificationService } = await import('@/services/wn1NotificationService');
-            wn1NotificationService.cleanup();
-            console.log('🧹 AuthContext: WN1 cleaned up');
+            setTimeout(async () => {
+              try {
+                const { wn1NotificationService } = await import('@/services/wn1NotificationService');
+                wn1NotificationService.cleanup();
+                console.log('🧹 AuthContext: WN1 cleaned up');
+              } catch (error) {
+                console.error('⚠️ AuthContext: WN1 cleanup failed:', error);
+              }
+            }, 0);
           }
         }
         setLoading(false);
@@ -185,9 +204,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signOut,
   };
 
+  // Show loading spinner instead of blocking all rendering
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <LoadingSpinner size="lg" />
+          <p className="text-muted-foreground">Loading WAKTI...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <AuthContext.Provider value={value}>
-      {!isLoading && children}
+      {children}
     </AuthContext.Provider>
   );
 }
