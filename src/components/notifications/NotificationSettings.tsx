@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Bell, BellOff, Clock, Smartphone, CheckCircle, AlertCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Bell, BellOff, Clock, Smartphone, CheckCircle, AlertCircle, MessageCircle, Users, CheckSquare, Calendar, Volume2 } from 'lucide-react';
 import { wn1NotificationService, WN1NotificationPreferences } from '@/services/wn1NotificationService';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,7 +33,7 @@ export default function NotificationSettings() {
     setPreferences(currentPrefs);
   };
 
-  const handlePreferenceChange = async (key: keyof WN1NotificationPreferences, value: any) => {
+  const updatePreference = async (key: keyof WN1NotificationPreferences, value: any) => {
     const newPreferences = { ...preferences, [key]: value };
     setPreferences(newPreferences);
     
@@ -59,7 +60,7 @@ export default function NotificationSettings() {
 
   const handleQuietHoursChange = async (key: 'enabled' | 'start' | 'end', value: boolean | string) => {
     const newQuietHours = { ...preferences.quietHours, [key]: value };
-    await handlePreferenceChange('quietHours', newQuietHours);
+    await updatePreference('quietHours', newQuietHours);
   };
 
   const requestNotificationPermission = async () => {
@@ -81,7 +82,7 @@ export default function NotificationSettings() {
     }
   };
 
-  const testWN1System = async () => {
+  const testNotificationSystem = async () => {
     try {
       await wn1NotificationService.testNotification();
       toast.success(language === 'ar' ? 'تم إرسال إشعار تجريبي' : 'Test notification sent');
@@ -165,7 +166,7 @@ export default function NotificationSettings() {
         </CardContent>
       </Card>
 
-      {/* Notification Types Settings */}
+      {/* Notification Types */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -173,81 +174,179 @@ export default function NotificationSettings() {
             {language === 'ar' ? 'أنواع الإشعارات' : 'Notification Types'}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-md border">
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">
-                {language === 'ar' ? 'تمكين التوست' : 'Enable Toasts'}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {language === 'ar' ? 'عرض إشعارات منبثقة على الشاشة' : 'Show popup notifications on screen'}
-              </p>
-            </div>
-            <Switch
-              checked={preferences.enableToasts}
-              onCheckedChange={(checked) => handlePreferenceChange('enableToasts', checked)}
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-4 rounded-md border">
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">
-                {language === 'ar' ? 'تمكين الشارات' : 'Enable Badges'}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {language === 'ar' ? 'عرض عدادات الإشعارات غير المقروءة' : 'Show unread notification counters'}
-              </p>
-            </div>
-            <Switch
-              checked={preferences.enableBadges}
-              onCheckedChange={(checked) => handlePreferenceChange('enableBadges', checked)}
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-4 rounded-md border">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4" />
-                <Label className="text-sm font-medium">
-                  {language === 'ar' ? 'تمكين الاهتزاز' : 'Enable Vibration'}
-                </Label>
+        <CardContent className="space-y-6">
+          {/* Messages */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MessageCircle className="h-5 w-5 text-blue-500" />
+              <div>
+                <div className="font-medium">
+                  {language === 'ar' ? 'الرسائل' : 'Messages'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'رسائل جديدة من جهات الاتصال' : 'New direct messages from contacts'}
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {language === 'ar' ? 'اهتزاز الجهاز عند الإشعارات' : 'Vibrate device on notifications'}
-              </p>
             </div>
             <Switch
-              checked={preferences.enableVibration}
-              onCheckedChange={(checked) => handlePreferenceChange('enableVibration', checked)}
+              checked={preferences.messages}
+              onCheckedChange={(checked) => updatePreference('messages', checked)}
             />
           </div>
 
-          <div className="flex items-center justify-between p-4 rounded-md border">
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">
-                {language === 'ar' ? 'تمكين الأصوات' : 'Enable Sounds'}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {language === 'ar' ? 'تشغيل أصوات الإشعارات' : 'Play notification sounds'}
-              </p>
+          {/* Contact Requests */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Users className="h-5 w-5 text-green-500" />
+              <div>
+                <div className="font-medium">
+                  {language === 'ar' ? 'طلبات الاتصال' : 'Contact Requests'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'طلبات اتصال جديدة من مستخدمين آخرين' : 'New contact requests from other users'}
+                </div>
+              </div>
             </div>
             <Switch
-              checked={preferences.enableSounds}
-              onCheckedChange={(checked) => handlePreferenceChange('enableSounds', checked)}
+              checked={preferences.contact_requests}
+              onCheckedChange={(checked) => updatePreference('contact_requests', checked)}
             />
           </div>
 
+          {/* Task Updates */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CheckSquare className="h-5 w-5 text-purple-500" />
+              <div>
+                <div className="font-medium">
+                  {language === 'ar' ? 'تحديثات المهام' : 'Task Updates'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'تحديثات على مهامك وتذكيراتك' : 'Updates on your tasks and reminders'}
+                </div>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.task_updates}
+              onCheckedChange={(checked) => updatePreference('task_updates', checked)}
+            />
+          </div>
+
+          {/* Shared Task Updates */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CheckSquare className="h-5 w-5 text-orange-500" />
+              <div>
+                <div className="font-medium">
+                  {language === 'ar' ? 'تحديثات المهام المشتركة' : 'Shared Task Updates'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'تعليقات وإنجازات على المهام المشتركة' : 'Comments and completions on shared tasks'}
+                </div>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.shared_task_updates}
+              onCheckedChange={(checked) => updatePreference('shared_task_updates', checked)}
+            />
+          </div>
+
+          {/* Event RSVPs */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-5 w-5 text-pink-500" />
+              <div>
+                <div className="font-medium">
+                  {language === 'ar' ? 'ردود أحداث موعد' : 'Event RSVP Updates'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'ردود على دعوات أحداث موعد' : 'Responses to your Maw3d event invitations'}
+                </div>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.event_rsvps}
+              onCheckedChange={(checked) => updatePreference('event_rsvps', checked)}
+            />
+          </div>
+
+          {/* Calendar Reminders */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Clock className="h-5 w-5 text-yellow-500" />
+              <div>
+                <div className="font-medium">
+                  {language === 'ar' ? 'تذكيرات التقويم' : 'Calendar Reminders'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'تذكيرات الأحداث والمواعيد القادمة' : 'Upcoming events and appointment reminders'}
+                </div>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.calendar_reminders}
+              onCheckedChange={(checked) => updatePreference('calendar_reminders', checked)}
+            />
+          </div>
+
+          {/* Admin Gifts */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Bell className="h-5 w-5 text-red-500" />
+              <div>
+                <div className="font-medium">
+                  {language === 'ar' ? 'إشعارات النظام' : 'System Notifications'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'تحديثات مهمة وهدايا من فريق WAKTI' : 'Important updates and gifts from WAKTI team'}
+                </div>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.admin_gifts}
+              onCheckedChange={(checked) => updatePreference('admin_gifts', checked)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sound & Badge Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Volume2 className="h-5 w-5" />
+            {language === 'ar' ? 'إعدادات الصوت والشارات' : 'Sound & Badge Settings'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Notification Sound */}
+          <div className="space-y-2">
+            <Label>{language === 'ar' ? 'صوت الإشعار' : 'Notification Sound'}</Label>
+            <Select
+              value={preferences.notification_sound}
+              onValueChange={(value: 'chime' | 'beep' | 'ding') => updatePreference('notification_sound', value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="chime">{language === 'ar' ? 'جرس لطيف' : 'Chime'}</SelectItem>
+                <SelectItem value="beep">{language === 'ar' ? 'صفير كلاسيكي' : 'Beep'}</SelectItem>
+                <SelectItem value="ding">{language === 'ar' ? 'دينغ لطيف' : 'Ding'}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Sound Volume */}
           {preferences.enableSounds && (
-            <div className="space-y-3 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-medium">
-                  {language === 'ar' ? 'مستوى الصوت' : 'Sound Volume'}
-                </h3>
+                <Label>{language === 'ar' ? 'مستوى الصوت' : 'Sound Volume'}</Label>
                 <span className="text-sm text-muted-foreground">{preferences.soundVolume}%</span>
               </div>
               <Slider
                 value={[preferences.soundVolume]}
-                onValueChange={(value) => handlePreferenceChange('soundVolume', value[0])}
+                onValueChange={(value) => updatePreference('soundVolume', value[0])}
                 max={100}
                 min={0}
                 step={10}
@@ -255,6 +354,73 @@ export default function NotificationSettings() {
               />
             </div>
           )}
+
+          {/* Badge Notifications */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">
+                {language === 'ar' ? 'إظهار الشارات' : 'Show Badges'}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {language === 'ar' ? 'عرض شارات عدد الإشعارات على أيقونات التطبيق' : 'Display notification count badges on app icons'}
+              </div>
+            </div>
+            <Switch
+              checked={preferences.show_badges}
+              onCheckedChange={(checked) => updatePreference('show_badges', checked)}
+            />
+          </div>
+
+          {/* Enable Toasts */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">
+                {language === 'ar' ? 'تمكين التوست' : 'Enable Toasts'}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {language === 'ar' ? 'عرض إشعارات منبثقة على الشاشة' : 'Show popup notifications on screen'}
+              </div>
+            </div>
+            <Switch
+              checked={preferences.enableToasts}
+              onCheckedChange={(checked) => updatePreference('enableToasts', checked)}
+            />
+          </div>
+
+          {/* Enable Vibration */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Smartphone className="h-4 w-4" />
+              <div>
+                <div className="font-medium">
+                  {language === 'ar' ? 'تمكين الاهتزاز' : 'Enable Vibration'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'اهتزاز الجهاز عند الإشعارات' : 'Vibrate device on notifications'}
+                </div>
+              </div>
+            </div>
+            <Switch
+              checked={preferences.enableVibration}
+              onCheckedChange={(checked) => updatePreference('enableVibration', checked)}
+            />
+          </div>
+
+          {/* Enable Sounds */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">
+                {language === 'ar' ? 'تمكين الأصوات' : 'Enable Sounds'}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {language === 'ar' ? 'تشغيل أصوات الإشعارات' : 'Play notification sounds'}
+              </div>
+            </div>
+            <Switch
+              checked={preferences.enableSounds}
+              onCheckedChange={(checked) => updatePreference('enableSounds', checked)}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -311,19 +477,19 @@ export default function NotificationSettings() {
         </CardContent>
       </Card>
 
-      {/* Test WN1 System */}
+      {/* Test Notifications */}
       <Card>
         <CardHeader>
           <CardTitle>
-            {language === 'ar' ? 'اختبار نظام WN1' : 'Test WN1 System'}
+            {language === 'ar' ? 'اختبار الإشعارات' : 'Test Notifications'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
               {language === 'ar' 
-                ? 'WN1 هو نظام الإشعارات الجديد المدمج داخلياً والمحسّن للـ PWA'
-                : 'WN1 is the new internal notification system optimized for PWA'}
+                ? 'اختبر نظام الإشعارات المدمج والمحسّن للـ PWA'
+                : 'Test the integrated notification system optimized for PWA'}
             </p>
             <div className="flex flex-wrap gap-2 mb-3">
               <Badge variant="secondary" className="text-xs">
@@ -342,11 +508,11 @@ export default function NotificationSettings() {
           </div>
           
           <Button 
-            onClick={testWN1System}
+            onClick={testNotificationSystem}
             className="w-full"
             variant="default"
           >
-            🧪 {language === 'ar' ? 'اختبار نظام WN1' : 'Test WN1 System'}
+            🧪 {language === 'ar' ? 'اختبار الإشعارات' : 'Test Notifications'}
           </Button>
           
           <p className="text-xs text-muted-foreground text-center">

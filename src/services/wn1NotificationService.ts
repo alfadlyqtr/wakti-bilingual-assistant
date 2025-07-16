@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { waktiSounds } from '@/services/waktiSounds';
 import { toast } from 'sonner';
@@ -20,6 +19,17 @@ export interface WN1NotificationPreferences {
   enableVibration: boolean;
   enableSounds: boolean;
   soundVolume: number;
+  // Specific notification types
+  messages: boolean;
+  contact_requests: boolean;
+  task_updates: boolean;
+  shared_task_updates: boolean;
+  event_rsvps: boolean;
+  calendar_reminders: boolean;
+  admin_gifts: boolean;
+  // Sound and badge settings
+  notification_sound: 'chime' | 'beep' | 'ding';
+  show_badges: boolean;
   quietHours: {
     enabled: boolean;
     start: string;
@@ -36,6 +46,17 @@ class WN1NotificationService {
     enableVibration: true,
     enableSounds: true,
     soundVolume: 70,
+    // Notification types - all enabled by default
+    messages: true,
+    contact_requests: true,
+    task_updates: true,
+    shared_task_updates: true,
+    event_rsvps: true,
+    calendar_reminders: true,
+    admin_gifts: true,
+    // Sound and badge settings
+    notification_sound: 'chime',
+    show_badges: true,
     quietHours: {
       enabled: false,
       start: '22:00',
@@ -56,7 +77,7 @@ class WN1NotificationService {
   async initialize(userId: string): Promise<void> {
     if (this.isInitialized) return;
 
-    console.log('🔥 WN1: Initializing notification service for user:', userId);
+    console.log('🔥 Initializing notification service for user:', userId);
     
     await this.requestNotificationPermission();
     await this.loadUserPreferences(userId);
@@ -64,12 +85,12 @@ class WN1NotificationService {
     await this.processOfflineQueue();
     
     this.isInitialized = true;
-    console.log('✅ WN1: Service initialized successfully');
+    console.log('✅ Service initialized successfully');
   }
 
   private async requestNotificationPermission(): Promise<void> {
     if (!('Notification' in window)) {
-      console.warn('🚫 WN1: Browser notifications not supported');
+      console.warn('🚫 Browser notifications not supported');
       return;
     }
 
@@ -81,7 +102,7 @@ class WN1NotificationService {
     if (Notification.permission !== 'denied') {
       const permission = await Notification.requestPermission();
       this.hasPermission = permission === 'granted';
-      console.log('🔔 WN1: Notification permission:', permission);
+      console.log('🔔 Notification permission:', permission);
     }
   }
 
@@ -98,93 +119,103 @@ class WN1NotificationService {
           ...this.preferences,
           ...profile.notification_preferences
         };
-        console.log('📋 WN1: Loaded user preferences:', this.preferences);
+        console.log('📋 Loaded user preferences:', this.preferences);
       }
     } catch (error) {
-      console.error('❌ WN1: Failed to load preferences:', error);
+      console.error('❌ Failed to load preferences:', error);
     }
   }
 
   private setupOnlineListener(): void {
     window.addEventListener('online', () => {
       this.isOnline = true;
-      console.log('🌐 WN1: Back online, processing queue');
+      console.log('🌐 Back online, processing queue');
       this.processOfflineQueue();
     });
 
     window.addEventListener('offline', () => {
       this.isOnline = false;
-      console.log('📴 WN1: Gone offline, queuing notifications');
+      console.log('📴 Gone offline, queuing notifications');
     });
   }
 
   private async setupRealtimeSubscriptions(userId: string): Promise<void> {
-    console.log('🔗 WN1: Setting up realtime subscriptions');
+    console.log('🔗 Setting up realtime subscriptions');
 
     // Messages subscription
     this.subscriptions.messages = supabase
-      .channel('wn1-messages')
+      .channel('notifications-messages')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
         filter: `recipient_id=eq.${userId}`
       }, (payload) => {
-        this.handleMessageNotification(payload.new);
+        if (this.preferences.messages) {
+          this.handleMessageNotification(payload.new);
+        }
       })
       .subscribe();
 
     // Contacts subscription
     this.subscriptions.contacts = supabase
-      .channel('wn1-contacts')
+      .channel('notifications-contacts')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'contacts',
         filter: `contact_id=eq.${userId}`
       }, (payload) => {
-        this.handleContactNotification(payload.new);
+        if (this.preferences.contact_requests) {
+          this.handleContactNotification(payload.new);
+        }
       })
       .subscribe();
 
     // Shared task completions subscription
     this.subscriptions.sharedTasks = supabase
-      .channel('wn1-shared-tasks')
+      .channel('notifications-shared-tasks')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'shared_task_completions'
       }, (payload) => {
-        this.handleSharedTaskNotification(payload.new, userId);
+        if (this.preferences.shared_task_updates) {
+          this.handleSharedTaskNotification(payload.new, userId);
+        }
       })
       .subscribe();
 
     // Maw3d RSVP subscription
     this.subscriptions.maw3dEvents = supabase
-      .channel('wn1-maw3d')
+      .channel('notifications-maw3d')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'maw3d_rsvps'
       }, (payload) => {
-        this.handleMaw3dNotification(payload.new, userId);
+        if (this.preferences.event_rsvps) {
+          this.handleMaw3dNotification(payload.new, userId);
+        }
       })
       .subscribe();
 
     // Admin messages subscription
     this.subscriptions.adminMessages = supabase
-      .channel('wn1-admin')
+      .channel('notifications-admin')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'admin_messages',
         filter: `recipient_id=eq.${userId}`
       }, (payload) => {
-        this.handleAdminNotification(payload.new);
+        if (this.preferences.admin_gifts) {
+          this.handleAdminNotification(payload.new);
+        }
       })
       .subscribe();
 
-    console.log('✅ WN1: All realtime subscriptions active');
+    console.log('✅ All realtime subscriptions active');
   }
 
   private async handleMessageNotification(message: any): Promise<void> {
@@ -297,11 +328,11 @@ class WN1NotificationService {
   }
 
   private async processNotification(notification: WN1NotificationData): Promise<void> {
-    console.log('🔔 WN1: Processing notification:', notification.type, notification.title);
+    console.log('🔔 Processing notification:', notification.type, notification.title);
 
     // Check quiet hours
     if (this.isQuietHours()) {
-      console.log('🤫 WN1: Quiet hours active, skipping notification');
+      console.log('🤫 Quiet hours active, skipping notification');
       return;
     }
 
@@ -331,8 +362,10 @@ class WN1NotificationService {
       navigator.vibrate([200, 100, 200]);
     }
 
-    // Update badge count (will be handled by existing badge system)
-    this.updateBadgeCount();
+    // Update badge count
+    if (this.preferences.enableBadges && this.preferences.show_badges) {
+      this.updateBadgeCount();
+    }
   }
 
   private isQuietHours(): boolean {
@@ -372,13 +405,10 @@ class WN1NotificationService {
 
   private async playNotificationSound(): Promise<void> {
     try {
-      const soundFile = this.soundFiles[this.soundRotationIndex];
-      this.soundRotationIndex = (this.soundRotationIndex + 1) % this.soundFiles.length;
-      
-      await waktiSounds.playNotificationSound(soundFile as any);
-      console.log('🔊 WN1: Played notification sound:', soundFile);
+      await waktiSounds.playNotificationSound(this.preferences.notification_sound);
+      console.log('🔊 Played notification sound:', this.preferences.notification_sound);
     } catch (error) {
-      console.error('🔇 WN1: Failed to play sound:', error);
+      console.error('🔇 Failed to play sound:', error);
     }
   }
 
@@ -412,7 +442,7 @@ class WN1NotificationService {
   private updateBadgeCount(): void {
     // This will be handled by the existing badge system
     // Just trigger a refresh of unread counts
-    window.dispatchEvent(new CustomEvent('wn1-notification-received'));
+    window.dispatchEvent(new CustomEvent('notification-received'));
   }
 
   private async queueOfflineNotification(notification: WN1NotificationData): Promise<void> {
@@ -421,16 +451,16 @@ class WN1NotificationService {
     // Store in IndexedDB for persistence
     try {
       await this.storeInIndexedDB(notification);
-      console.log('💾 WN1: Notification queued offline:', notification.id);
+      console.log('💾 Notification queued offline:', notification.id);
     } catch (error) {
-      console.error('❌ WN1: Failed to store offline notification:', error);
+      console.error('❌ Failed to store offline notification:', error);
     }
   }
 
   private async processOfflineQueue(): Promise<void> {
     if (this.offlineQueue.length === 0) return;
 
-    console.log('📤 WN1: Processing', this.offlineQueue.length, 'offline notifications');
+    console.log('📤 Processing', this.offlineQueue.length, 'offline notifications');
     
     const queue = [...this.offlineQueue];
     this.offlineQueue = [];
@@ -443,7 +473,7 @@ class WN1NotificationService {
 
   private async storeInIndexedDB(notification: WN1NotificationData): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('WN1NotificationQueue', 1);
+      const request = indexedDB.open('NotificationQueue', 1);
       
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
@@ -467,7 +497,7 @@ class WN1NotificationService {
 
   private async removeFromIndexedDB(notificationId: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('WN1NotificationQueue', 1);
+      const request = indexedDB.open('NotificationQueue', 1);
       
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
@@ -488,7 +518,7 @@ class WN1NotificationService {
       try {
         this.preferences = { ...this.preferences, ...JSON.parse(saved) };
       } catch (error) {
-        console.error('❌ WN1: Failed to load preferences from localStorage');
+        console.error('❌ Failed to load preferences from localStorage');
       }
     }
   }
@@ -501,7 +531,7 @@ class WN1NotificationService {
   async updatePreferences(newPreferences: Partial<WN1NotificationPreferences>): Promise<void> {
     this.preferences = { ...this.preferences, ...newPreferences };
     this.savePreferences();
-    console.log('💾 WN1: Preferences updated:', this.preferences);
+    console.log('💾 Preferences updated:', this.preferences);
   }
 
   getPreferences(): WN1NotificationPreferences {
@@ -512,8 +542,8 @@ class WN1NotificationService {
     const testNotification: WN1NotificationData = {
       id: 'test-' + Date.now(),
       type: 'messages',
-      title: '🧪 WN1 Test Notification',
-      body: 'This is a test notification from the WN1 system',
+      title: '🧪 Test Notification',
+      body: 'This is a test notification from the notification system',
       timestamp: Date.now(),
       userId: 'test'
     };
@@ -530,8 +560,15 @@ class WN1NotificationService {
     return Notification.permission;
   }
 
+  getProcessorStatus(): { active: boolean; userId: string | null } {
+    return {
+      active: this.isInitialized,
+      userId: this.isInitialized ? 'current' : null
+    };
+  }
+
   cleanup(): void {
-    console.log('🧹 WN1: Cleaning up service');
+    console.log('🧹 Cleaning up service');
     
     // Unsubscribe from all channels
     Object.values(this.subscriptions).forEach(subscription => {
