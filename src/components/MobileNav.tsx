@@ -1,28 +1,29 @@
+
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
 import { Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
-import { useWN } from "@/hooks/useWN";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { waktiBadges } from "@/services/waktiBadges";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount, clearBadgeOnPageVisit } = useWN();
-  
+  const { taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount } = useUnreadMessages();
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
 
   // Clear badges when navigating to specific pages
   useEffect(() => {
     if (pathname.startsWith('/tr')) {
-      clearBadgeOnPageVisit('tr');
+      waktiBadges.clearBadge('task');
     } else if (pathname.startsWith('/maw3d')) {
-      clearBadgeOnPageVisit('maw3d');
+      waktiBadges.clearBadge('event');
     } else if (pathname.startsWith('/contacts')) {
-      clearBadgeOnPageVisit('contacts');
+      waktiBadges.clearBadge('contact');
     }
-  }, [pathname, clearBadgeOnPageVisit]);
+  }, [pathname]);
 
   useEffect(() => {
     // Only show badges when there's actual data > 0
@@ -93,9 +94,7 @@ export function MobileNav() {
   const handleNavigation = (path: string, badgeType?: string) => {
     // Clear relevant badge when navigating
     if (badgeType) {
-      if (badgeType === 'task') clearBadgeOnPageVisit('tr');
-      if (badgeType === 'event') clearBadgeOnPageVisit('maw3d');
-      if (badgeType === 'contact') clearBadgeOnPageVisit('contacts');
+      waktiBadges.clearBadge(badgeType);
     }
     navigate(path);
   };
