@@ -162,7 +162,7 @@ const WaktiAIV2 = () => {
     return allPatterns.some(pattern => pattern.test(messageContent));
   };
 
-  const handleSendMessage = async (messageContent: string, trigger: string, attachedFiles?: any[]) => {
+  const handleSendMessage = async (messageContent: string, trigger: string = 'chat', attachedFiles?: any[]) => {
     if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
       showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
       return;
@@ -604,7 +604,6 @@ const WaktiAIV2 = () => {
         <ChatMessages
           sessionMessages={sessionMessages}
           isLoading={isLoading}
-          error={error}
           onRetry={() => handleSendMessage(newMessage, activeTrigger)}
           language={language}
         />
@@ -613,19 +612,10 @@ const WaktiAIV2 = () => {
       {/* Chat Input */}
       <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <ChatInput
-          inputValue={newMessage}
-          setInputValue={setNewMessage}
-          isLoading={isLoading}
-          sessionMessages={sessionMessages}
           onSendMessage={handleSendMessage}
-          onClearChat={handleClearChat}
-          onOpenPlusDrawer={() => setShowQuickActions(true)}
-          activeTrigger={activeTrigger}
-          onTriggerChange={setActiveTrigger}
-          processedFiles={processedFiles}
-          setProcessedFiles={setProcessedFiles}
-          language={language}
           onFileUpload={handleFileChange}
+          disabled={isLoading}
+          placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
         />
       </div>
 
@@ -644,18 +634,20 @@ const WaktiAIV2 = () => {
         onSendMessage={handleSendMessage}
         activeTrigger={activeTrigger}
         onTriggerChange={setActiveTrigger}
-        processedFiles={processedFiles}
-        setProcessedFiles={setProcessedFiles}
-        language={language}
-        onFileUpload={handleFileChange}
+        onTextGenerated={() => {}}
+        onClearChat={handleClearChat}
+        sessionMessages={sessionMessages}
+        isLoading={isLoading}
       />
 
       {/* Notification Bars */}
       <NotificationBars
-        quotaExceeded={isQuotaExceeded}
-        extendedQuotaExceeded={isExtendedQuotaExceeded}
-        aiQuotaExceeded={isAIQuotaExceeded}
-        language={language}
+        searchConfirmationRequired={false}
+        onSearchConfirmation={() => {}}
+        onQuotaRefresh={() => {}}
+        quotaStatus={{ needs_upgrade: isQuotaExceeded }}
+        requestTimeout={false}
+        onTimeoutRetry={() => {}}
       />
     </div>
   );
