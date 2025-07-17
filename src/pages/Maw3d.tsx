@@ -1,146 +1,354 @@
-
-import React, { Suspense } from 'react';
-import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
-import { OptimizedEventCard } from '@/components/optimized/OptimizedEventCard';
-import { useNavigate } from 'react-router-dom';
-import { useTheme } from '@/providers/ThemeProvider';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Heart, Plus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { NavigationHeader } from '@/components/navigation/NavigationHeader';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { t } from '@/utils/translations';
+import { Badge } from '@/components/ui/badge';
+import { Calendar, Clock, MapPin, Users, Plus, Share2, Eye, Edit, Trash2 } from 'lucide-react';
+import { useAuth } from '@/providers/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { CreateEventDialog } from '@/components/maw3d/CreateEventDialog';
+import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
-// Ultra-fast skeleton component (reduced further)
-const EventsSkeleton = () => (
-  <div className="grid gap-4">
-    {[...Array(2)].map((_, i) => (
-      <div key={i} className="relative">
-        <Skeleton className="h-[150px] w-full rounded-xl" />
-        <div className="absolute bottom-4 left-4 right-4 space-y-2">
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-3 w-1/2" />
-        </div>
-      </div>
-    ))}
-  </div>
-);
+interface Maw3dEvent {
+  id: string;
+  created_at: string;
+  created_by: string;
+  title: string;
+  description: string;
+  location: string;
+  event_date: string;
+  event_time: string;
+  rsvps?: any[];
+}
 
-const OptimizedMaw3dEvents = React.memo(() => {
+const Maw3d = () => {
+  const [events, setEvents] = useState<Maw3dEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openCreateDialog, setOpenCreateDialog] = useState(false);
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const { language } = useTheme();
-  
-  // Use optimized hook with caching and deduplication
-  const { events, loading, error } = useOptimizedMaw3dEvents();
+  const { maw3dEventCount } = useUnreadMessages();
 
-  const handleEventClick = React.useCallback((event: any) => {
-    console.log('📱 Navigating to event management:', event.id);
-    navigate(`/maw3d/manage/${event.id}`);
-  }, [navigate]);
+  useEffect(() => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
 
-  const handleCreateEvent = React.useCallback(() => {
-    console.log('📱 Navigating to create event');
-    navigate('/maw3d/create');
-  }, [navigate]);
+    const fetchEvents = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('maw3d_events')
+          .select('*')
+          .eq('created_by', user.id)
+          .order('event_date', { ascending: true });
 
-  // Handle error state
-  if (error) {
-    return (
-      <div className="min-h-screen p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center py-12">
-            <Heart className="mx-auto h-12 w-12 text-red-500 mb-4" />
-            <h3 className="text-lg font-medium mb-2">{t('errorLoadingEvent', language)}</h3>
-            <p className="text-muted-foreground mb-4">{error}</p>
-            <Button onClick={() => window.location.reload()} variant="outline">
-              {t('retry', language)}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+        if (error) {
+          throw error;
+        }
+
+        if (data) {
+          setEvents(data);
+        }
+      } catch (error: any) {
+        console.error("Error fetching events:", error.message);
+        toast.error("Failed to load events.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+
+    // Setup real-time subscription for new events
+    const maw3dChannel = supabase
+      .channel('maw3d-events')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'maw3d_events' },
+        (payload) => {
+          console.log('Realtime event received:', payload);
+          fetchEvents(); // Refresh events on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(maw3dChannel);
+    };
+  }, [user, navigate]);
+
+  const handleEventCreated = (newEvent: Maw3dEvent) => {
+    setEvents([...events, newEvent]);
+    setOpenCreateDialog(false);
+  };
+
+  const handleEventUpdated = (updatedEvent: Maw3dEvent) => {
+    setEvents(events.map(event => event.id === updatedEvent.id ? updatedEvent : event));
+  };
+
+  const handleEventDeleted = async (eventId: string) => {
+    try {
+      const { error } = await supabase
+        .from('maw3d_events')
+        .delete()
+        .eq('id', eventId);
+
+      if (error) {
+        throw error;
+      }
+
+      setEvents(events.filter(event => event.id !== eventId));
+      toast.success("Event deleted successfully!");
+    } catch (error: any) {
+      console.error("Error deleting event:", error.message);
+      toast.error("Failed to delete event.");
+    }
+  };
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col gap-4 mb-8">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg">
-              <Heart className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                {t('maw3dEvents', language)}
-              </h1>
-              <p className="text-muted-foreground">
-                {loading 
-                  ? t('loading', language)
-                  : language === 'ar' 
-                    ? `عرض ${events.length} أحداث`
-                    : `Showing ${events.length} events`
-                }
-              </p>
-            </div>
+    <div className="min-h-screen bg-background">
+      <NavigationHeader />
+      <main className="container mx-auto px-4 py-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground mb-2">
+              My Events
+            </h1>
+            <p className="text-muted-foreground">
+              Organize and manage your events.
+            </p>
           </div>
-          
-          <div className="w-full">
-            <Button 
-              onClick={handleCreateEvent}
-              className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
-              size="lg"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              {t('createEvent', language)}
-            </Button>
-          </div>
+          <Button onClick={() => setOpenCreateDialog(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Event
+          </Button>
         </div>
 
-        {/* Events content */}
-        <Suspense fallback={<EventsSkeleton />}>
-          {loading ? (
-            <EventsSkeleton />
-          ) : events.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="max-w-md mx-auto p-8 rounded-2xl bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl">
-                <Heart className="mx-auto h-16 w-16 text-purple-400 mb-6" />
-                <h3 className="text-xl font-semibold mb-3 text-gray-800">
-                  {t('noEventsYet', language)}
-                </h3>
-                <p className="text-gray-600 mb-6 leading-relaxed">
-                  {language === 'ar' 
-                    ? 'أنشئ حدثك الأول للبدء'
-                    : 'Create your first event to get started'
-                  }
-                </p>
-                <Button 
-                  onClick={handleCreateEvent}
-                  size="lg"
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  {t('createEvent', language)}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-6 md:gap-8">
-              {events.map((event) => (
-                <OptimizedEventCard
-                  key={event.id}
-                  event={event}
-                  onClick={() => handleEventClick(event)}
-                />
-              ))}
-            </div>
-          )}
-        </Suspense>
-      </div>
+        {loading ? (
+          <p>Loading events...</p>
+        ) : events.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {events.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                onUpdate={handleEventUpdated}
+                onDelete={handleEventDeleted}
+              />
+            ))}
+          </div>
+        ) : (
+          <p>No events created yet. Create one to get started!</p>
+        )}
+      </main>
+
+      <CreateEventDialog
+        open={openCreateDialog}
+        onOpenChange={setOpenCreateDialog}
+        onEventCreated={handleEventCreated}
+      />
     </div>
   );
-});
+};
 
-OptimizedMaw3dEvents.displayName = 'OptimizedMaw3dEvents';
-
-export default function Maw3d() {
-  return <OptimizedMaw3dEvents />;
+interface EventCardProps {
+  event: Maw3dEvent;
+  onUpdate: (event: Maw3dEvent) => void;
+  onDelete: (eventId: string) => void;
 }
+
+const EventCard: React.FC<EventCardProps> = ({ event, onDelete, onUpdate }) => {
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const rsvpCount = event.rsvps ? event.rsvps.length : 0;
+  const eventDateTime = new Date(`${event.event_date}T${event.event_time}`);
+
+  const handleUpdate = (updatedEvent: Maw3dEvent) => {
+    onUpdate(updatedEvent);
+    setIsEditModalOpen(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          {event.title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Calendar className="h-4 w-4" />
+          <span>{format(eventDateTime, 'PPP')}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Clock className="h-4 w-4" />
+          <span>{format(eventDateTime, 'p')}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <MapPin className="h-4 w-4" />
+          <span>{event.location}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Users className="h-4 w-4" />
+          <span>
+            {rsvpCount} {rsvpCount === 1 ? 'RSVP' : 'RSVPs'}
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">{event.description}</p>
+
+        <div className="flex justify-end space-x-2">
+          <Button variant="ghost" size="sm">
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
+          </Button>
+          <Button variant="ghost" size="sm">
+            <Eye className="h-4 w-4 mr-2" />
+            View
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsEditModalOpen(true)}>
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => onDelete(event.id)}>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete
+          </Button>
+        </div>
+      </CardContent>
+
+      <EditEventDialog
+        isOpen={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        event={event}
+        onUpdate={handleUpdate}
+      />
+    </Card>
+  );
+};
+
+interface EditEventDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  event: Maw3dEvent;
+  onUpdate: (event: Maw3dEvent) => void;
+}
+
+const EditEventDialog: React.FC<EditEventDialogProps> = ({ isOpen, onOpenChange, event, onUpdate }) => {
+  const [title, setTitle] = useState(event.title);
+  const [description, setDescription] = useState(event.description);
+  const [location, setLocation] = useState(event.location);
+  const [eventDate, setEventDate] = useState(event.event_date);
+  const [eventTime, setEventTime] = useState(event.event_time);
+  const [loading, setLoading] = useState(false);
+
+  const handleUpdate = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('maw3d_events')
+        .update({
+          title,
+          description,
+          location,
+          event_date: eventDate,
+          event_time: eventTime,
+        })
+        .eq('id', event.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        onUpdate(data);
+        toast.success("Event updated successfully!");
+      }
+    } catch (error: any) {
+      console.error("Error updating event:", error.message);
+      toast.error("Failed to update event.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Event</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="title" className="text-right">
+              Title
+            </Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="description" className="text-right">
+              Description
+            </Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="location" className="text-right">
+              Location
+            </Label>
+            <Input
+              id="location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="event_date" className="text-right">
+              Date
+            </Label>
+            <Input
+              type="date"
+              id="event_date"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="event_time" className="text-right">
+              Time
+            </Label>
+            <Input
+              type="time"
+              id="event_time"
+              value={eventTime}
+              onChange={(e) => setEventTime(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+        </div>
+        <Button onClick={handleUpdate} disabled={loading}>
+          {loading ? "Updating..." : "Update Event"}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default Maw3d;

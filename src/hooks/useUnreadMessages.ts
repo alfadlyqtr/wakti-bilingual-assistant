@@ -261,14 +261,6 @@ export function useUnreadMessages() {
         }
       });
 
-    // Listen for WN1 notification events to refresh counts
-    const handleWN1Notification = () => {
-      console.log("[useUnreadMessages] WN1 notification received, refreshing counts");
-      fetchUnread('wn1-notification');
-    };
-
-    window.addEventListener('wn1-notification-received', handleWN1Notification);
-
     // Fallback polling every 30s
     pollInterval = setInterval(() => {
       fetchUnread('polling');
@@ -283,7 +275,6 @@ export function useUnreadMessages() {
       supabase.removeChannel(channel);
       if (pollInterval) clearInterval(pollInterval);
       if (authListener) authListener.subscription.unsubscribe();
-      window.removeEventListener('wn1-notification-received', handleWN1Notification);
     };
   }, []);
 
