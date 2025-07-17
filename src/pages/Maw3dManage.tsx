@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,6 @@ import { ShareService } from '@/services/shareService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 export default function Maw3dManage() {
   const { id } = useParams();
@@ -24,13 +22,6 @@ export default function Maw3dManage() {
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Clear Maw3d event badges when visiting this page
-  useEffect(() => {
-    if (user) {
-      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
-    }
-  }, [user]);
 
   useEffect(() => {
     if (id) {

@@ -8,20 +8,12 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 // Temporarily comment out this import
 // import { EventCard } from '@/components/maw3d/Maw3dEventCard';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 export default function Maw3dEvents() {
   const navigate = useNavigate();
   const { language } = useTheme();
   const { user } = useAuth();
   const { events, loading, refetch } = useOptimizedMaw3dEvents();
-
-  // Clear Maw3d event badges when visiting this page
-  useEffect(() => {
-    if (user) {
-      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
-    }
-  }, [user]);
 
   const handleCreateEvent = () => {
     navigate('/maw3d/create');

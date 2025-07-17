@@ -42,7 +42,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 // Define types inline
 type EventType = 'personal' | 'work' | 'family' | 'other';
@@ -94,13 +93,6 @@ export default function Maw3dCreate() {
       invited_users: [],
     },
   });
-
-  // Clear Maw3d event badges when visiting this page
-  useEffect(() => {
-    if (user) {
-      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
-    }
-  }, [user]);
 
   useEffect(() => {
     if (date?.from) {

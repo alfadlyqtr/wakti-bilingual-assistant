@@ -11,7 +11,6 @@ import { TRService, TRTask } from '@/services/trService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
 import { toast } from 'sonner';
 
 export default function TR() {
@@ -23,30 +22,6 @@ export default function TR() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'completed'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-
-  // Initialize WN1 notification service for shared task notifications
-  useEffect(() => {
-    if (user) {
-      console.log('🔥 Initializing WN1 notification service on TR page for user:', user.id);
-      wn1NotificationService.initialize(user.id).catch(error => {
-        console.error('❌ Failed to initialize WN1 notification service:', error);
-      });
-      
-      // Clear shared task badges when visiting TR page
-      try {
-        window.dispatchEvent(new CustomEvent('clear-badges', { 
-          detail: { types: ['shared_task', 'task'] } 
-        }));
-      } catch (error) {
-        console.warn('⚠️ Failed to clear badges:', error);
-      }
-    }
-
-    return () => {
-      // Cleanup notification service when leaving TR page
-      wn1NotificationService.cleanup();
-    };
-  }, [user]);
 
   useEffect(() => {
     if (user) {

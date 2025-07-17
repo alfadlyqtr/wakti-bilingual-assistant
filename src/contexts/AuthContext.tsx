@@ -1,224 +1,136 @@
 
-import { createContext, useContext, useState, useEffect } from 'react';
-import { Session, SupabaseClient, User } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { LoadingSpinner } from '@/components/ui/loading';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
   loading: boolean;
-  updateProfile: (updates: any) => Promise<void>;
-  updateEmail: (email: string) => Promise<void>;
-  updatePassword: (password: string) => Promise<void>;
-  forgotPassword: (email: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function useAuth(): AuthContextType {
+export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 }
 
 interface AuthProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isLoading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
-    const initializeAuth = async () => {
-      try {
-        console.log('🔐 AuthContext: Initializing authentication...');
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (mounted) {
-          if (session?.user) {
-            setUser(session.user);
-            setSession(session);
-            setIsAuthenticated(true);
-            console.log('✅ AuthContext: User authenticated:', session.user.id);
-            
-            // Initialize WN1 notification service non-blocking
-            setTimeout(async () => {
-              try {
-                const { wn1NotificationService } = await import('@/services/wn1NotificationService');
-                await wn1NotificationService.initialize(session.user.id);
-                console.log('✅ AuthContext: WN1 notification service initialized');
-              } catch (error) {
-                console.error('⚠️ AuthContext: WN1 initialization failed, but auth continues:', error);
-              }
-            }, 0);
-          } else {
-            setUser(null);
-            setSession(null);
-            setIsAuthenticated(false);
-            console.log('❌ AuthContext: No active session');
-          }
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('❌ AuthContext: Auth initialization failed:', error);
-        if (mounted) {
-          setLoading(false);
-        }
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id);
+      
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('User signed in, initializing services...');
+        // Services will be initialized by useUnreadMessages in AppLayout
       }
-    };
 
-    initializeAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return;
-
-        console.log('🔄 AuthContext: Auth state changed:', event);
-        
-        if (session?.user) {
-          setUser(session.user);
-          setSession(session);
-          setIsAuthenticated(true);
-          
-          // Initialize WN1 for new session non-blocking
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            setTimeout(async () => {
-              try {
-                const { wn1NotificationService } = await import('@/services/wn1NotificationService');
-                await wn1NotificationService.initialize(session.user.id);
-                console.log('✅ AuthContext: WN1 initialized for session');
-              } catch (error) {
-                console.error('⚠️ AuthContext: WN1 session initialization failed:', error);
-              }
-            }, 0);
-          }
-        } else {
-          setUser(null);
-          setSession(null);
-          setIsAuthenticated(false);
-          
-          // Cleanup WN1 on logout
-          if (event === 'SIGNED_OUT') {
-            setTimeout(async () => {
-              try {
-                const { wn1NotificationService } = await import('@/services/wn1NotificationService');
-                wn1NotificationService.cleanup();
-                console.log('🧹 AuthContext: WN1 cleaned up');
-              } catch (error) {
-                console.error('⚠️ AuthContext: WN1 cleanup failed:', error);
-              }
-            }, 0);
-          }
-        }
-        setLoading(false);
+      if (event === 'SIGNED_OUT') {
+        console.log('User signed out, cleaning up...');
+        setUser(null);
+        setSession(null);
       }
-    );
 
-    return () => {
-      mounted = false;
-      subscription?.unsubscribe();
-    };
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('Token refreshed for user:', session?.user?.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const updateProfile = async (updates: any) => {
-    try {
-      if (!user) throw new Error('No user logged in');
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-      
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      throw error;
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    
+    if (error) {
+      toast.error(error.message);
     }
+    
+    return { error };
   };
 
-  const updateEmail = async (email: string) => {
-    try {
-      const { error } = await supabase.auth.updateUser({ email });
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating email:', error);
-      throw error;
+  const signUp = async (email: string, password: string, fullName: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
+      },
+    });
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Check your email for the confirmation link!');
     }
-  };
-
-  const updatePassword = async (password: string) => {
-    try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating password:', error);
-      throw error;
-    }
-  };
-
-  const forgotPassword = async (email: string) => {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error sending forgot password email:', error);
-      throw error;
-    }
+    
+    return { error };
   };
 
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      setSession(null);
-      setIsAuthenticated(false);
-      console.log('🚪 User signed out');
-    } catch (error) {
-      console.error('❌ Error signing out:', error);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast.error(error.message);
     }
   };
 
-  const value: AuthContextType = {
-    user,
-    session,
-    isAuthenticated,
-    isLoading,
-    loading: isLoading,
-    updateProfile,
-    updateEmail,
-    updatePassword,
-    forgotPassword,
-    signOut,
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Check your email for the reset link!');
+    }
+    
+    return { error };
   };
 
-  // Show loading spinner instead of blocking all rendering
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <LoadingSpinner size="lg" />
-          <p className="text-muted-foreground">Loading WAKTI...</p>
-        </div>
-      </div>
-    );
-  }
+  const value = {
+    user,
+    session,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    resetPassword,
+  };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

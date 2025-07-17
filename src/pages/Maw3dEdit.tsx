@@ -12,7 +12,6 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 interface EventData {
   id: string;
@@ -36,13 +35,6 @@ export default function Maw3dEdit() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [event, setEvent] = useState<EventData | null>(null);
-
-  // Clear Maw3d event badges when visiting this page
-  useEffect(() => {
-    if (user) {
-      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
-    }
-  }, [user]);
 
   useEffect(() => {
     if (eventId) {

@@ -4,7 +4,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { Home, MessageSquare, Users, Calendar, Bot } from 'lucide-react';
 import { UnreadBadge } from '@/components/UnreadBadge';
 import { useUnreadCounts } from '@/hooks/useUnreadCounts';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
 
 export default function MobileNavigation() {
   const location = useLocation();
@@ -17,23 +16,11 @@ export default function MobileNavigation() {
     return location.pathname.startsWith(path);
   };
 
-  const handleNavClick = (path: string) => {
-    // Clear badges when navigating to specific pages
-    if (path === '/contacts') {
-      wn1NotificationService.clearBadgeOnPageVisit('contacts');
-    } else if (path === '/maw3d-events') {
-      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
-    } else if (path === '/tr') {
-      wn1NotificationService.clearBadgeOnPageVisit('tr');
-    }
-  };
-
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50">
       <div className="flex justify-around items-center py-2">
         <Link
           to="/"
-          onClick={() => handleNavClick('/')}
           className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
             isActive('/') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
           }`}
@@ -46,7 +33,6 @@ export default function MobileNavigation() {
 
         <Link
           to="/contacts"
-          onClick={() => handleNavClick('/contacts')}
           className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
             isActive('/contacts') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
           }`}
@@ -62,7 +48,6 @@ export default function MobileNavigation() {
 
         <Link
           to="/maw3d-events"
-          onClick={() => handleNavClick('/maw3d-events')}
           className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
             isActive('/maw3d') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
           }`}
