@@ -16,7 +16,7 @@ interface TRTask {
   due_date: string | null;
   status: 'open' | 'in_progress' | 'completed' | 'overdue';
   priority: 'high' | 'normal' | 'urgent'; // Fixed to match trService
-  task_type: 'one-time' | 'recurring';
+  task_type: 'one-time' | 'repeated'; // Fixed to match trService
   is_shared: boolean;
   completed: boolean;
   user_id: string;
@@ -59,7 +59,7 @@ const TR = () => {
           due_date: task.due_date,
           status: task.status,
           priority: task.priority === 'low' ? 'normal' : task.priority, // Map 'low' to 'normal'
-          task_type: task.task_type || 'one-time',
+          task_type: task.task_type === 'recurring' ? 'repeated' : 'one-time', // Map 'recurring' to 'repeated'
           is_shared: task.is_shared || false,
           completed: task.status === 'completed',
           user_id: task.user_id,
@@ -122,7 +122,7 @@ const TR = () => {
         due_date: data.due_date,
         status: data.status,
         priority: data.priority === 'low' ? 'normal' : data.priority,
-        task_type: data.task_type || 'one-time',
+        task_type: data.task_type === 'recurring' ? 'repeated' : 'one-time',
         is_shared: data.is_shared || false,
         completed: data.status === 'completed',
         user_id: data.user_id,
@@ -163,7 +163,7 @@ const TR = () => {
         due_date: data.due_date,
         status: data.status,
         priority: data.priority === 'low' ? 'normal' : data.priority,
-        task_type: data.task_type || 'one-time',
+        task_type: data.task_type === 'recurring' ? 'repeated' : 'one-time',
         is_shared: data.is_shared || false,
         completed: data.status === 'completed',
         user_id: data.user_id,

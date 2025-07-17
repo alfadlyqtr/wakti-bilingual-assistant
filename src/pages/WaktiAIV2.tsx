@@ -604,7 +604,6 @@ const WaktiAIV2 = () => {
         <ChatMessages
           sessionMessages={sessionMessages}
           isLoading={isLoading}
-          onRetry={() => handleSendMessage(newMessage, activeTrigger)}
           language={language}
         />
       </div>
