@@ -45,16 +45,14 @@ class WaktiToastManager {
       notification.duration = durations[notification.priority];
     }
 
-    // Play sound FIRST
+    // Play sound first
     try {
-      console.log('🔊 Playing notification sound...');
-      const soundPlayed = await waktiSounds.playNotificationSound(notification.sound);
-      console.log('🔊 Sound result:', soundPlayed);
+      await waktiSounds.playNotificationSound(notification.sound);
     } catch (error) {
       console.warn('🔊 Sound failed, but continuing with toast:', error);
     }
 
-    // Show toast using Sonner
+    // Show toast
     const icon = this.getNotificationIcon(notification.type);
     const toastMessage = `${icon} ${notification.title}: ${notification.message}`;
     
