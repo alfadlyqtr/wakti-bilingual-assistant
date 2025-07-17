@@ -21,8 +21,12 @@ export function useUnreadMessages() {
   const [prevSharedTaskCount, setPrevSharedTaskCount] = useState<number>(0);
   const [prevMaw3dEventCount, setPrevMaw3dEventCount] = useState<number>(0);
 
+  // Connection status monitoring
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+
   function logUnreadState(from: string, total: number, perContact: Record<string, number>) {
     console.log(`[useUnreadMessages] Update via ${from}: unreadTotal=${total}, unreadPerContact=`, perContact);
+    console.log(`[useUnreadMessages] Connection status: ${realtimeStatus}`);
   }
 
   async function fetchUnread(from: string = 'manual/initial') {
@@ -233,46 +237,46 @@ export function useUnreadMessages() {
     let pollInterval: NodeJS.Timeout | null = null;
     fetchUnread('mount/effect');
 
-    // Realtime updates for all relevant tables
-    const channel = supabase.channel("wakti-notifications")
+    // Enhanced realtime updates for all relevant tables with connection monitoring
+    const channel = supabase.channel("wakti-unified-notifications")
       .on('postgres_changes', { event: "*", schema: "public", table: "messages" }, () => {
-        console.log("[useUnreadMessages] Messages updated");
+        console.log("[useUnreadMessages] Messages updated (REAL-TIME)");
         fetchUnread('realtime-messages');
       })
+      .on('postgres_changes', { event: "*", schema: "public", table: "my_tasks" }, () => {
+        console.log("[useUnreadMessages] Tasks updated (REAL-TIME)");
+        fetchUnread('realtime-tasks');
+      })
       .on('postgres_changes', { event: "*", schema: "public", table: "shared_task_completions" }, () => {
-        console.log("[useUnreadMessages] Shared task completions updated");
+        console.log("[useUnreadMessages] Shared task completions updated (REAL-TIME)");
         fetchUnread('realtime-shared-tasks');
       })
       .on('postgres_changes', { event: "*", schema: "public", table: "maw3d_rsvps" }, () => {
-        console.log("[useUnreadMessages] Maw3d RSVPs updated");
+        console.log("[useUnreadMessages] Maw3d RSVPs updated (REAL-TIME)");
         fetchUnread('realtime-maw3d');
       })
       .on('postgres_changes', { event: "*", schema: "public", table: "contacts" }, () => {
-        console.log("[useUnreadMessages] Contacts updated");
+        console.log("[useUnreadMessages] Contacts updated (REAL-TIME)");
         fetchUnread('realtime-contacts');
       })
-      .on('postgres_changes', { event: "*", schema: "public", table: "my_tasks" }, () => {
-        console.log("[useUnreadMessages] Tasks updated");
-        fetchUnread('realtime-tasks');
-      })
       .subscribe((status) => {
+        console.log(`[useUnreadMessages] Realtime channel status: ${status}`);
         if (status === "SUBSCRIBED") {
-          console.log('[useUnreadMessages] Realtime channel SUBSCRIBED');
+          setRealtimeStatus('connected');
+          console.log('✅ Unified notification system SUBSCRIBED successfully');
+        } else if (status === "CHANNEL_ERROR") {
+          setRealtimeStatus('error');
+          console.error('❌ Unified notification system channel error');
+        } else {
+          setRealtimeStatus('connecting');
         }
       });
 
-    // Listen for WN1 notification events to refresh counts
-    const handleWN1Notification = () => {
-      console.log("[useUnreadMessages] WN1 notification received, refreshing counts");
-      fetchUnread('wn1-notification');
-    };
-
-    window.addEventListener('wn1-notification-received', handleWN1Notification);
-
-    // Fallback polling every 30s
+    // Reduced polling frequency since we now have real-time for everything
     pollInterval = setInterval(() => {
-      fetchUnread('polling');
-    }, 30000);
+      console.log('[useUnreadMessages] Fallback polling (should be rare now)');
+      fetchUnread('polling-fallback');
+    }, 60000); // Increased to 60s since real-time should handle most updates
 
     // Auth state change handler
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, _session) => {
@@ -283,7 +287,6 @@ export function useUnreadMessages() {
       supabase.removeChannel(channel);
       if (pollInterval) clearInterval(pollInterval);
       if (authListener) authListener.subscription.unsubscribe();
-      window.removeEventListener('wn1-notification-received', handleWN1Notification);
     };
   }, []);
 
@@ -295,7 +298,8 @@ export function useUnreadMessages() {
     contactCount,
     sharedTaskCount,
     maw3dEventCount,
-    loading, 
+    loading,
+    realtimeStatus,
     refetch: () => fetchUnread('refetch') 
   };
 }
