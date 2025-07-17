@@ -8,10 +8,15 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isLoading: boolean; // Alias for loading
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
+  forgotPassword: (email: string) => Promise<{ error: any }>; // Alias for resetPassword
+  updateProfile: (updates: { full_name?: string; avatar_url?: string }) => Promise<{ error: any }>;
+  updateEmail: (email: string) => Promise<{ error: any }>;
+  updatePassword: (password: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -122,14 +127,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return { error };
   };
 
+  const updateProfile = async (updates: { full_name?: string; avatar_url?: string }) => {
+    const { error } = await supabase.auth.updateUser({
+      data: updates
+    });
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Profile updated successfully!');
+    }
+    
+    return { error };
+  };
+
+  const updateEmail = async (email: string) => {
+    const { error } = await supabase.auth.updateUser({ email });
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Check your email to confirm the change!');
+    }
+    
+    return { error };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Password updated successfully!');
+    }
+    
+    return { error };
+  };
+
   const value = {
     user,
     session,
     loading,
+    isLoading: loading, // Alias for loading
     signIn,
     signUp,
     signOut,
     resetPassword,
+    forgotPassword: resetPassword, // Alias for resetPassword
+    updateProfile,
+    updateEmail,
+    updatePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
