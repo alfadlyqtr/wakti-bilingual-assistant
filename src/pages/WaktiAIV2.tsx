@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -593,13 +592,9 @@ const WaktiAIV2 = () => {
     }, 500);
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files && event.target.files[0];
-
-    if (selectedFile) {
-      setFile(selectedFile);
-      // Handle file processing logic here
-    }
+  const handleFileChange = (file: File) => {
+    setFile(file);
+    // Handle file processing logic here
   };
 
   return (
@@ -607,7 +602,7 @@ const WaktiAIV2 = () => {
       {/* Chat Messages */}
       <div className="flex-1 overflow-hidden">
         <ChatMessages
-          messages={sessionMessages}
+          sessionMessages={sessionMessages}
           isLoading={isLoading}
           error={error}
           onRetry={() => handleSendMessage(newMessage, activeTrigger)}
@@ -644,13 +639,22 @@ const WaktiAIV2 = () => {
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
         onNewConversation={handleNewConversation}
+        currentConversationId={currentConversationId}
+        fetchConversations={() => {}}
+        onSendMessage={handleSendMessage}
+        activeTrigger={activeTrigger}
+        onTriggerChange={setActiveTrigger}
+        processedFiles={processedFiles}
+        setProcessedFiles={setProcessedFiles}
+        language={language}
+        onFileUpload={handleFileChange}
       />
 
       {/* Notification Bars */}
       <NotificationBars
-        isQuotaExceeded={isQuotaExceeded}
-        isExtendedQuotaExceeded={isExtendedQuotaExceeded}
-        isAIQuotaExceeded={isAIQuotaExceeded}
+        quotaExceeded={isQuotaExceeded}
+        extendedQuotaExceeded={isExtendedQuotaExceeded}
+        aiQuotaExceeded={isAIQuotaExceeded}
         language={language}
       />
     </div>

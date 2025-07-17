@@ -4,7 +4,7 @@ import { NavigationHeader } from '@/components/navigation/NavigationHeader';
 import { TaskList } from '@/components/tr/TaskList';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import { useAuth } from '@/providers/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
@@ -13,7 +13,7 @@ interface TRTask {
   id: string;
   title: string;
   description?: string;
-  due_date?: string;
+  due_date: string | null;
   status: 'open' | 'in_progress' | 'completed' | 'overdue';
   priority: 'low' | 'normal' | 'high';
   task_type: 'one-time' | 'recurring';
