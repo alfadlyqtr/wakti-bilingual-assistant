@@ -1,6 +1,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { waktiSounds } from "@/services/waktiSounds";
 
 export function useUnreadMessages() {
   const [unreadTotal, setUnreadTotal] = useState<number>(0);
@@ -11,6 +13,13 @@ export function useUnreadMessages() {
   const [contactCount, setContactCount] = useState<number>(0);
   const [sharedTaskCount, setSharedTaskCount] = useState<number>(0);
   const [maw3dEventCount, setMaw3dEventCount] = useState<number>(0);
+
+  // Previous state tracking for notification detection
+  const [prevUnreadTotal, setPrevUnreadTotal] = useState<number>(0);
+  const [prevTaskCount, setPrevTaskCount] = useState<number>(0);
+  const [prevContactCount, setPrevContactCount] = useState<number>(0);
+  const [prevSharedTaskCount, setPrevSharedTaskCount] = useState<number>(0);
+  const [prevMaw3dEventCount, setPrevMaw3dEventCount] = useState<number>(0);
 
   function logUnreadState(from: string, total: number, perContact: Record<string, number>) {
     console.log(`[useUnreadMessages] Update via ${from}: unreadTotal=${total}, unreadPerContact=`, perContact);
@@ -93,6 +102,109 @@ export function useUnreadMessages() {
 
       const realMaw3dEventCount = maw3dData ? maw3dData.length : 0;
 
+      // Check for increases and trigger notifications (only for real-time updates)
+      if (from.includes('realtime')) {
+        console.log('🔔 Checking for notification triggers via real-time update');
+        
+        if (total > prevUnreadTotal) {
+          console.log('🔔 New messages detected, showing notification');
+          toast('New Message', {
+            description: 'You have new unread messages',
+            duration: 4000,
+            action: {
+              label: 'View',
+              onClick: () => window.location.href = '/contacts'
+            }
+          });
+          
+          try {
+            waktiSounds.playNotificationSound('chime');
+          } catch (error) {
+            console.error('Failed to play sound:', error);
+          }
+        }
+
+        if (realTaskCount > prevTaskCount) {
+          console.log('🔔 New overdue tasks detected, showing notification');
+          toast('Tasks Overdue', {
+            description: 'Some of your tasks have become overdue',
+            duration: 4000,
+            action: {
+              label: 'View',
+              onClick: () => window.location.href = '/tr'
+            }
+          });
+          
+          try {
+            waktiSounds.playNotificationSound('beep');
+          } catch (error) {
+            console.error('Failed to play sound:', error);
+          }
+        }
+
+        if (realContactCount > prevContactCount) {
+          console.log('🔔 New contact requests detected, showing notification');
+          toast('New Contact Request', {
+            description: 'You have new contact requests',
+            duration: 4000,
+            action: {
+              label: 'View',
+              onClick: () => window.location.href = '/contacts'
+            }
+          });
+          
+          try {
+            waktiSounds.playNotificationSound('ding');
+          } catch (error) {
+            console.error('Failed to play sound:', error);
+          }
+        }
+
+        if (realSharedTaskCount > prevSharedTaskCount) {
+          console.log('🔔 New shared task completions detected, showing notification');
+          toast('Shared Task Update', {
+            description: 'Someone completed your shared tasks',
+            duration: 4000,
+            action: {
+              label: 'View',
+              onClick: () => window.location.href = '/tr'
+            }
+          });
+          
+          try {
+            waktiSounds.playNotificationSound('chime');
+          } catch (error) {
+            console.error('Failed to play sound:', error);
+          }
+        }
+
+        if (realMaw3dEventCount > prevMaw3dEventCount) {
+          console.log('🔔 New event responses detected, showing notification');
+          toast('Event Response', {
+            description: 'Someone responded to your event',
+            duration: 4000,
+            action: {
+              label: 'View',
+              onClick: () => window.location.href = '/maw3d'
+            }
+          });
+          
+          try {
+            waktiSounds.playNotificationSound('ding');
+          } catch (error) {
+            console.error('Failed to play sound:', error);
+          }
+        }
+      }
+
+      // Update previous values for next comparison
+      setPrevUnreadTotal(total);
+      setPrevTaskCount(realTaskCount);
+      setPrevContactCount(realContactCount);
+      setPrevSharedTaskCount(realSharedTaskCount);
+      setPrevMaw3dEventCount(realMaw3dEventCount);
+
+      // Update current state
       setUnreadPerContact(counts);
       setUnreadTotal(total);
       setTaskCount(realTaskCount);
