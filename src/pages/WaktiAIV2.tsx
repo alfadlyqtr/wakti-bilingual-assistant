@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
+import { WaktiAIV2Service, AIMessage } from '@/services/WaktiAIV2Service';
+import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -9,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
+import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
 import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
@@ -27,72 +29,11 @@ const useDebounceCallback = (callback: Function, delay: number) => {
   }, [callback, delay]);
 };
 
-// SIMPLE FRONTEND MEMORY - NO BACKEND FETCHING
-const SimpleFrontendMemory = {
-  // Save messages to localStorage only
-  saveMessages: (messages: AIMessage[], conversationId: string | null) => {
-    try {
-      const data = {
-        messages: messages.slice(-30), // Keep last 30 messages
-        conversationId,
-        timestamp: Date.now()
-      };
-      localStorage.setItem('wakti_simple_memory', JSON.stringify(data));
-      console.log('💾 SIMPLE MEMORY: Saved', messages.length, 'messages to localStorage');
-    } catch (error) {
-      console.error('❌ SIMPLE MEMORY: Save failed:', error);
-    }
-  },
-
-  // Load messages from localStorage only
-  loadMessages: (): { messages: AIMessage[], conversationId: string | null } => {
-    try {
-      const stored = localStorage.getItem('wakti_simple_memory');
-      if (!stored) {
-        console.log('💭 SIMPLE MEMORY: No stored messages found');
-        return { messages: [], conversationId: null };
-      }
-
-      const data = JSON.parse(stored);
-      
-      // Check if data is less than 24 hours old
-      const now = Date.now();
-      const age = now - (data.timestamp || 0);
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-      
-      if (age > maxAge) {
-        localStorage.removeItem('wakti_simple_memory');
-        console.log('🗑️ SIMPLE MEMORY: Expired data removed');
-        return { messages: [], conversationId: null };
-      }
-
-      console.log('✅ SIMPLE MEMORY: Loaded', data.messages?.length || 0, 'messages from localStorage');
-      return {
-        messages: data.messages || [],
-        conversationId: data.conversationId || null
-      };
-    } catch (error) {
-      console.error('❌ SIMPLE MEMORY: Load failed:', error);
-      return { messages: [], conversationId: null };
-    }
-  },
-
-  // Clear all memory
-  clearMemory: () => {
-    try {
-      localStorage.removeItem('wakti_simple_memory');
-      console.log('🗑️ SIMPLE MEMORY: Cleared all data');
-    } catch (error) {
-      console.error('❌ SIMPLE MEMORY: Clear failed:', error);
-    }
-  }
-};
-
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<AIConversation[]>([]);
+  const [archivedConversations, setArchivedConversations] = useState<ConversationMetadata[]>([]);
   const [showConversations, setShowConversations] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -140,16 +81,21 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // SIMPLE FRONTEND MEMORY LOADING - NO BACKEND
-  const loadChatSession = () => {
-    console.log('🧠 SIMPLE MEMORY: Loading from frontend cache only');
-    const { messages, conversationId } = SimpleFrontendMemory.loadMessages();
+  // FRONTEND BOSS: Load memory and conversations
+  const loadFrontendMemory = () => {
+    console.log('👑 FRONTEND BOSS: Loading memory and conversations');
     
+    // Load active conversation
+    const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
     setSessionMessages(messages);
     setCurrentConversationId(conversationId);
     setIsNewConversation(!conversationId || messages.length === 0);
     
-    console.log('✅ SIMPLE MEMORY: Loaded', messages.length, 'messages instantly');
+    // Load archived conversations for sidebar
+    const archived = EnhancedFrontendMemory.loadArchivedConversations();
+    setArchivedConversations(archived);
+    
+    console.log('✅ FRONTEND BOSS: Loaded', messages.length, 'active messages and', archived.length, 'archived conversations');
   };
 
   useEffect(() => {
@@ -175,7 +121,7 @@ const WaktiAIV2 = () => {
 
   useEffect(() => {
     const handleOpenConversationsDrawer = () => {
-      console.log('💬 EXTRA BUTTON: Opening conversations drawer');
+      console.log('💬 OPENING CONVERSATIONS SIDEBAR');
       setShowConversations(true);
     };
 
@@ -189,7 +135,7 @@ const WaktiAIV2 = () => {
   useEffect(() => {
     loadUserProfile();
     loadPersonalTouch();
-    loadChatSession();
+    loadFrontendMemory();
   }, []);
 
   useEffect(() => {
@@ -251,20 +197,23 @@ const WaktiAIV2 = () => {
       }
     }
 
-    console.log('🚀 SIMPLIFIED MESSAGE ROUTING: Respecting selected mode', {
-      selectedMode: activeTrigger,
-      routingMode: routingMode,
-      messagePreview: messageContent.substring(0, 50) + '...',
-      hasFiles: !!attachedFiles?.length
-    });
+    console.log('👑 FRONTEND BOSS: Processing message in', routingMode, 'mode');
 
     setIsLoading(true);
     setError(null);
     const startTime = Date.now();
 
     try {
+      // FRONTEND BOSS: Ensure conversation ID exists
+      let workingConversationId = currentConversationId;
+      if (!workingConversationId) {
+        workingConversationId = EnhancedFrontendMemory.saveActiveConversation([], null);
+        setCurrentConversationId(workingConversationId);
+        setIsNewConversation(false);
+      }
+
       if (routingMode === 'image') {
-        console.log('🎨 ROUTING TO IMAGE MODE: Selected mode overrides content detection');
+        console.log('🎨 FRONTEND BOSS: Processing image generation');
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -278,11 +227,14 @@ const WaktiAIV2 = () => {
         const newMessages = [...sessionMessages, tempUserMessage];
         setSessionMessages(newMessages);
         
+        // Save to frontend memory
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+        
         const imageResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,
           language,
-          currentConversationId,
+          workingConversationId,
           finalInputType,
           newMessages,
           false,
@@ -305,14 +257,12 @@ const WaktiAIV2 = () => {
         
         const finalMessages = [...newMessages, assistantMessage];
         setSessionMessages(finalMessages);
-        setCurrentConversationId(imageResponse.conversationId);
-        setIsNewConversation(false);
         
-        // SIMPLE FRONTEND SAVE - NO BACKEND
-        SimpleFrontendMemory.saveMessages(finalMessages, imageResponse.conversationId);
+        // FRONTEND BOSS: Save to memory
+        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
         
       } else if (routingMode === 'search') {
-        console.log('🔍 ROUTING TO SEARCH MODE: Selected mode overrides content detection');
+        console.log('🔍 FRONTEND BOSS: Processing search');
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -326,11 +276,13 @@ const WaktiAIV2 = () => {
         const newMessages = [...sessionMessages, tempUserMessage];
         setSessionMessages(newMessages);
         
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+        
         const searchResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,
           language,
-          currentConversationId,
+          workingConversationId,
           finalInputType,
           newMessages,
           false,
@@ -354,16 +306,13 @@ const WaktiAIV2 = () => {
         
         const finalMessages = [...newMessages, assistantMessage];
         setSessionMessages(finalMessages);
-        setCurrentConversationId(searchResponse.conversationId);
-        setIsNewConversation(false);
         
-        // SIMPLE FRONTEND SAVE - NO BACKEND
-        SimpleFrontendMemory.saveMessages(finalMessages, searchResponse.conversationId);
+        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
         
       } else {
-        // CHAT MODE OR EXPLICIT TASK COMMANDS (existing logic for chat/tasks)
+        // CHAT MODE OR EXPLICIT TASK COMMANDS
         if (isExplicitTaskCommand(messageContent)) {
-          console.log('🎯 EXPLICIT TASK COMMAND DETECTED: Processing with task confirmation UI');
+          console.log('🎯 FRONTEND BOSS: Processing explicit task command');
           
           const taskResponse = await supabase.functions.invoke('process-ai-intent', {
             body: {
@@ -375,7 +324,7 @@ const WaktiAIV2 = () => {
           });
 
           if (taskResponse.error) {
-            console.error('❌ TASK PROCESSING ERROR:', taskResponse.error);
+            console.error('❌ FRONTEND BOSS: Task processing error:', taskResponse.error);
             throw new Error(`Task processing failed: ${taskResponse.error.message}`);
           }
 
@@ -407,15 +356,14 @@ const WaktiAIV2 = () => {
             }, 50);
           }
 
-          // SIMPLE FRONTEND SAVE - NO BACKEND
-          SimpleFrontendMemory.saveMessages(finalMessages, currentConversationId);
+          EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
 
           setIsLoading(false);
           return;
         }
 
-        // DEFAULT CHAT MODE WITH SIMPLE FRONTEND MEMORY
-        console.log('💬 ROUTING TO CHAT MODE: Regular conversation with simple frontend memory');
+        // DEFAULT CHAT MODE
+        console.log('💬 FRONTEND BOSS: Processing regular chat');
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -429,11 +377,13 @@ const WaktiAIV2 = () => {
         const newMessages = [...sessionMessages, tempUserMessage];
         setSessionMessages(newMessages);
         
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+        
         const aiResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,
           language,
-          currentConversationId,
+          workingConversationId,
           finalInputType,
           newMessages,
           false,
@@ -470,15 +420,12 @@ const WaktiAIV2 = () => {
         
         const finalMessages = [...newMessages, assistantMessage];
         setSessionMessages(finalMessages);
-        setCurrentConversationId(aiResponse.conversationId);
-        setIsNewConversation(false);
         
-        // SIMPLE FRONTEND SAVE - NO BACKEND
-        SimpleFrontendMemory.saveMessages(finalMessages, aiResponse.conversationId);
+        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
       }
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ SIMPLE FRONTEND MEMORY SUCCESS: Message processed in ${totalTime}ms`);
+      console.log(`✅ FRONTEND BOSS: Message processed in ${totalTime}ms`);
       
       setProcessedFiles([]);
       checkQuotas();
@@ -489,7 +436,7 @@ const WaktiAIV2 = () => {
 
     } catch (err: any) {
       const totalTime = Date.now() - startTime;
-      console.error("❌ ERROR:", err);
+      console.error("❌ FRONTEND BOSS ERROR:", err);
       console.error("📊 ERROR DETAILS:", {
         message: err.message,
         totalTime: totalTime + 'ms',
@@ -595,75 +542,109 @@ const WaktiAIV2 = () => {
     setPendingReminderData(null);
   };
 
+  // FRONTEND BOSS: New conversation workflow
   const handleNewConversation = () => {
-    // Keep last 3 messages for context, don't clear everything
-    const keepMessages = sessionMessages.slice(-3);
-    setSessionMessages(keepMessages);
-    setCurrentConversationId(null);
+    console.log('👑 FRONTEND BOSS: Starting new conversation workflow');
+    
+    const newConversationId = EnhancedFrontendMemory.startNewConversation(sessionMessages, currentConversationId);
+    
+    setSessionMessages([]);
+    setCurrentConversationId(newConversationId);
     setIsNewConversation(true);
     setIsSidebarOpen(false);
     
-    // Save the context we're keeping
-    SimpleFrontendMemory.saveMessages(keepMessages, null);
+    // Refresh archived conversations
+    const archived = EnhancedFrontendMemory.loadArchivedConversations();
+    setArchivedConversations(archived);
     
-    console.log('🔄 SIMPLE MEMORY: New conversation started, kept', keepMessages.length, 'messages for context');
+    console.log('✅ FRONTEND BOSS: New conversation workflow complete');
   };
 
+  // FRONTEND BOSS: Select archived conversation
   const handleSelectConversation = async (conversationId: string) => {
+    console.log('👑 FRONTEND BOSS: Loading archived conversation', conversationId);
+    
     try {
-      const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
-      const limitedMessages = messages.slice(-25).map(msg => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: new Date(msg.created_at),
-        intent: msg.intent,
-        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
-        actionTaken: msg.action_taken,
-        inputType: msg.input_type as 'text' | 'voice' | 'vision',
-        browsingUsed: msg.browsing_used,
-        browsingData: msg.browsing_data
-      }));
+      // Archive current conversation first
+      if (currentConversationId && sessionMessages.length > 0) {
+        EnhancedFrontendMemory.archiveCurrentConversation(sessionMessages, currentConversationId);
+      }
       
-      setSessionMessages(limitedMessages);
-      setCurrentConversationId(conversationId);
-      setIsNewConversation(false);
-      setIsSidebarOpen(false);
+      const conversation = EnhancedFrontendMemory.loadArchivedConversation(conversationId);
+      
+      if (conversation) {
+        setSessionMessages(conversation.messages);
+        setCurrentConversationId(conversation.conversationId);
+        setIsNewConversation(false);
+        setIsSidebarOpen(false);
 
-      // Save to simple frontend memory
-      SimpleFrontendMemory.saveMessages(limitedMessages, conversationId);
+        // Save as new active conversation
+        EnhancedFrontendMemory.saveActiveConversation(conversation.messages, conversation.conversationId);
+        
+        // Refresh archived list
+        const archived = EnhancedFrontendMemory.loadArchivedConversations();
+        setArchivedConversations(archived);
+        
+        console.log('✅ FRONTEND BOSS: Loaded archived conversation successfully');
+      } else {
+        throw new Error('Conversation not found');
+      }
 
     } catch (error) {
-      console.error("Error fetching conversation messages:", error);
-      showError(language === 'ar' ? 'فشل في جلب رسائل المحادثة' : 'Failed to fetch conversation messages');
+      console.error("❌ FRONTEND BOSS: Error loading conversation:", error);
+      showError(language === 'ar' ? 'فشل في جلب المحادثة' : 'Failed to load conversation');
     }
   };
 
+  // FRONTEND BOSS: Delete archived conversation
   const handleDeleteConversation = async (conversationId: string) => {
+    console.log('👑 FRONTEND BOSS: Deleting conversation', conversationId);
+    
     try {
-      await WaktiAIV2Service.deleteConversation(conversationId);
-      setConversations(prev => prev.filter(conv => conv.id !== conversationId));
-      if (currentConversationId === conversationId) {
-        handleNewConversation();
+      const success = EnhancedFrontendMemory.deleteArchivedConversation(conversationId);
+      
+      if (success) {
+        // Refresh archived conversations
+        const archived = EnhancedFrontendMemory.loadArchivedConversations();
+        setArchivedConversations(archived);
+        
+        // If this was the current conversation, start new one
+        if (currentConversationId === conversationId) {
+          handleNewConversation();
+        }
+        
+        showSuccess(language === 'ar' ? 'تم حذف المحادثة بنجاح' : 'Conversation deleted successfully');
+      } else {
+        throw new Error('Failed to delete conversation');
       }
-      showSuccess(language === 'ar' ? 'تم حذف المحادثة بنجاح' : 'Conversation deleted successfully');
     } catch (error) {
-      console.error("Error deleting conversation:", error);
+      console.error("❌ FRONTEND BOSS: Error deleting conversation:", error);
       showError(language === 'ar' ? 'فشل في حذف المحادثة' : 'Failed to delete conversation');
     }
   };
 
   const handleClearChat = () => {
+    console.log('👑 FRONTEND BOSS: Clearing current chat');
     setIsClearingChat(true);
+    
     setTimeout(() => {
+      // Archive current conversation if it has messages
+      if (currentConversationId && sessionMessages.length > 0) {
+        EnhancedFrontendMemory.archiveCurrentConversation(sessionMessages, currentConversationId);
+      }
+      
       setSessionMessages([]);
       setCurrentConversationId(null);
       setIsNewConversation(true);
       
-      // Clear simple frontend memory completely
-      SimpleFrontendMemory.clearMemory();
+      // Clear active conversation
+      EnhancedFrontendMemory.clearActiveConversation();
       
-      console.log('🗑️ SIMPLE MEMORY: Complete chat clear');
+      // Refresh archived conversations
+      const archived = EnhancedFrontendMemory.loadArchivedConversations();
+      setArchivedConversations(archived);
+      
+      console.log('✅ FRONTEND BOSS: Chat cleared and archived');
       
       setIsClearingChat(false);
     }, 500);
@@ -732,13 +713,9 @@ const WaktiAIV2 = () => {
   };
 
   const handleRefreshConversations = async () => {
-    try {
-      const conversations = await WaktiAIV2Service.getConversations();
-      setConversations(conversations);
-    } catch (error) {
-      console.error("Error refreshing conversations:", error);
-      showError(language === 'ar' ? 'فشل في تحديث قائمة المحادثات' : 'Failed to refresh conversation list');
-    }
+    console.log('👑 FRONTEND BOSS: Refreshing conversations from memory');
+    const archived = EnhancedFrontendMemory.loadArchivedConversations();
+    setArchivedConversations(archived);
   };
 
   const fetchConversations = async () => {
@@ -764,7 +741,12 @@ const WaktiAIV2 = () => {
         setShowConversations={setShowConversations}
         showQuickActions={showQuickActions}
         setShowQuickActions={setShowQuickActions}
-        conversations={conversations}
+        conversations={archivedConversations.map(conv => ({
+          id: conv.id,
+          title: conv.title,
+          lastMessageAt: conv.lastMessageAt,
+          createdAt: conv.createdAt
+        }))}
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
@@ -777,6 +759,17 @@ const WaktiAIV2 = () => {
         onClearChat={handleClearChat}
         sessionMessages={sessionMessages}
         isLoading={isLoading}
+      />
+
+      <ConversationSidebar
+        isOpen={showConversations}
+        onClose={() => setShowConversations(false)}
+        conversations={archivedConversations}
+        currentConversationId={currentConversationId}
+        onSelectConversation={handleSelectConversation}
+        onDeleteConversation={handleDeleteConversation}
+        onNewConversation={handleNewConversation}
+        onRefreshConversations={handleRefreshConversations}
       />
 
       <div className="flex flex-col h-full w-full relative">

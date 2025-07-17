@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -35,11 +36,11 @@ const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log("WAKTI AI V2 BRAIN: Ultra-Smart System Initialized with Perfect API Routing");
+console.log("WAKTI AI V2 BRAIN: BACKEND WORKER MODE - Frontend Boss, Backend Worker");
 
 // TAVILY SEARCH FUNCTION
 async function performSearchWithTavily(query: string, userId: string, language: string = 'en') {
-  console.log('🔍 SEARCH: Starting search for:', query.substring(0, 50));
+  console.log('🔍 BACKEND WORKER: Processing search request');
   
   if (!TAVILY_API_KEY) {
     return {
@@ -68,24 +69,10 @@ async function performSearchWithTavily(query: string, userId: string, language: 
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ SEARCH API ERROR:', response.status, errorText);
       throw new Error(`Search API error: ${response.status}`);
     }
 
-    const responseText = await response.text();
-    if (!responseText || responseText.trim() === '') {
-      throw new Error('Empty response from search service');
-    }
-
-    let searchData;
-    try {
-      searchData = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error('❌ SEARCH JSON parsing error:', jsonError);
-      throw new Error('Invalid JSON response from search service');
-    }
-
+    const searchData = await response.json();
     const results = Array.isArray(searchData.results) ? searchData.results : [];
     const answer = searchData.answer || '';
     
@@ -106,7 +93,7 @@ async function performSearchWithTavily(query: string, userId: string, language: 
       });
     }
 
-    console.log(`✅ SEARCH: Found ${results.length} results`);
+    console.log(`✅ BACKEND WORKER: Search completed with ${results.length} results`);
     return {
       success: true,
       error: null,
@@ -120,7 +107,7 @@ async function performSearchWithTavily(query: string, userId: string, language: 
     };
 
   } catch (error) {
-    console.error('❌ SEARCH: Critical error:', error);
+    console.error('❌ BACKEND WORKER: Search error:', error);
     
     return {
       success: false,
@@ -136,9 +123,8 @@ serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
   
-  // Enhanced preflight handling for image uploads
   if (req.method === "OPTIONS") {
-    console.log("🔧 PREFLIGHT: Handling OPTIONS request from origin:", origin);
+    console.log("🔧 BACKEND WORKER: Handling OPTIONS request");
     return new Response(null, { 
       status: 200,
       headers: {
@@ -150,7 +136,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🧠 WAKTI AI V2: Processing super-intelligent request with perfect routing");
+    console.log("🤖 BACKEND WORKER: Processing Claude request from Frontend Boss");
     
     const contentType = req.headers.get('content-type') || '';
     let requestData;
@@ -173,53 +159,27 @@ serve(async (req) => {
 
     const { 
       message, 
-      conversationId, 
+      conversationId, // Accept frontend ID without validation or creation
       userId, 
       language = 'en',
       files = [],
       attachedFiles: requestAttachedFiles = [],
       activeTrigger = 'general',
-      recentMessages = [],
+      recentMessages = [], // Use frontend-provided conversation history
       conversationSummary = '',
       personalTouch = null
     } = requestData;
 
-    // ENSURE PROPER USER ID FOR MEMORY
     const actualUserId = userId || personalTouch?.userId || requestData.user_id || 'default_user';
-    console.log('🔍 USER ID CHECK:', { original: userId, personal: personalTouch?.userId, final: actualUserId });
+    console.log(`🤖 BACKEND WORKER: Processing ${activeTrigger} mode for conversation ${conversationId || 'new'}`);
 
-    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, AttachedFiles=${requestAttachedFiles.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}, UserId=${actualUserId}, RecentMessages=${recentMessages.length}`);
+    // NO CONVERSATION MANAGEMENT - ACCEPT FRONTEND ID AS-IS
+    const finalConversationId = conversationId; // Use exactly what frontend provides
 
-    let finalConversationId = conversationId;
-    
-    if (!finalConversationId) {
-      const { data: newConversation, error: convError } = await supabase
-        .from('ai_conversations')
-        .insert([{
-          user_id: actualUserId,
-          title: message.substring(0, 50) || 'New Wakti AI Chat',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          last_message_at: new Date().toISOString()
-        }])
-        .select('id')
-        .single();
-        
-      if (convError) {
-        console.error('Conversation creation error:', convError);
-        throw new Error('Failed to create conversation');
-      }
-      
-      finalConversationId = newConversation.id;
-      console.log(`💬 NEW CONVERSATION: Created ID ${finalConversationId}`);
-    }
-
-    // USE EXISTING UPLOADED FILES INSTEAD OF RE-UPLOADING
     let attachedFiles = [];
     
-    // Use already uploaded files from SimplifiedFileUpload instead of re-uploading
     if (requestAttachedFiles && requestAttachedFiles.length > 0) {
-      console.log(`📎 TRUE CLAUDE WAY: Using ${requestAttachedFiles.length} pure base64 files`);
+      console.log(`📎 BACKEND WORKER: Processing ${requestAttachedFiles.length} files`);
       
       attachedFiles = requestAttachedFiles.map(file => ({
         url: file.url,
@@ -227,30 +187,25 @@ serve(async (req) => {
         name: file.name,
         imageType: file.imageType || { id: 'general', name: language === 'ar' ? 'عام' : 'General' }
       }));
-      
-      attachedFiles.forEach(file => {
-        console.log(`📎 CLAUDE WAY FILE: ${file.name} (${file.imageType.name}) - Pure base64 data ready`);
-      });
     }
 
-    // 🚨 CRITICAL FIX: PERFECT API ROUTING BASED ON MODE
-    console.log(`🎯 PERFECT ROUTING: Mode=${activeTrigger}, HasImages=${attachedFiles.length > 0}`);
+    console.log(`🎯 BACKEND WORKER: Mode=${activeTrigger}, HasImages=${attachedFiles.length > 0}`);
 
     let result;
     
     // ROUTE TO CORRECT API BASED ON MODE
     if (activeTrigger === 'image') {
-      console.log('🎨 ROUTING TO RUNWARE: Image generation mode');
+      console.log('🎨 BACKEND WORKER: Processing image generation');
       result = await generateImageWithRunware(message, actualUserId, language);
       result.mode = 'image';
       result.intent = 'image';
     } else if (activeTrigger === 'search') {
-      console.log('🔍 ROUTING TO TAVILY: Search mode');
+      console.log('🔍 BACKEND WORKER: Processing search request');
       result = await performSearchWithTavily(message, actualUserId, language);
       result.mode = 'search';
       result.intent = 'search';
     } else {
-      console.log('🤖 ROUTING TO CLAUDE: Chat/Vision mode');
+      console.log('🤖 BACKEND WORKER: Processing Claude chat/vision request');
       result = await callClaude35API(
         message,
         finalConversationId,
@@ -258,7 +213,7 @@ serve(async (req) => {
         language,
         attachedFiles,
         activeTrigger,
-        recentMessages,
+        recentMessages, // Use frontend conversation history
         conversationSummary,
         personalTouch
       );
@@ -266,7 +221,7 @@ serve(async (req) => {
 
     const finalResponse = {
       response: result.response || 'Response received',
-      conversationId: finalConversationId,
+      conversationId: finalConversationId, // Return frontend ID unchanged
       intent: result.intent || activeTrigger,
       confidence: 'high',
       actionTaken: null,
@@ -283,7 +238,7 @@ serve(async (req) => {
       fallbackUsed: false
     };
 
-    console.log(`✅ WAKTI AI V2: Successfully processed ${activeTrigger} request with perfect routing for user ${actualUserId}`);
+    console.log(`✅ BACKEND WORKER: Successfully processed ${activeTrigger} request, returning to Frontend Boss`);
     
     return new Response(JSON.stringify(finalResponse), {
       status: 200,
@@ -297,9 +252,9 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("❌ WAKTI AI V2 ERROR:", error);
+    console.error("❌ BACKEND WORKER ERROR:", error);
     return new Response(JSON.stringify({
-      error: error.message || 'Processing failed',
+      error: error.message || 'Backend worker failed',
       success: false,
       response: 'I encountered an error processing your request. Please try again.',
       conversationId: null
@@ -320,35 +275,23 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       throw new Error('Anthropic API key not configured');
     }
 
-    console.log(`🧠 WAKTI AI V2: Processing ${activeTrigger} mode conversation`);
+    console.log(`🤖 BACKEND WORKER: Processing ${activeTrigger} mode conversation`);
     
-    // PROPER MODE DETECTION - ONLY VISION WHEN IMAGES PRESENT
-    let detectedMode = 'chat'; // DEFAULT TO CHAT
+    let detectedMode = 'chat';
 
-    // Check if images are actually attached
     if (attachedFiles && attachedFiles.length > 0) {
       const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
       if (hasImages) {
         detectedMode = 'vision';
-        console.log('🔍 VISION MODE: Images detected, switching to vision processing');
-      } else {
-        detectedMode = 'chat';
-        console.log('💬 CHAT MODE: No images found, using chat mode');
+        console.log('🔍 BACKEND WORKER: Images detected, using vision mode');
       }
-    } else {
-      detectedMode = 'chat';
-      console.log('💬 CHAT MODE: No attachedFiles, using chat mode');
     }
 
-    console.log(`🧠 MODE DETECTION RESULT: "${detectedMode}" (trigger: "${activeTrigger}", hasFiles: ${!!attachedFiles?.length})`);
+    console.log(`🤖 BACKEND WORKER: Mode="${detectedMode}" (trigger: "${activeTrigger}")`);
 
     const responseLanguage = language;
     let messages = [];
 
-    // FIXED MEMORY SYSTEM - USE RECENT MESSAGES FROM FRONTEND
-    console.log(`🧠 FAST MEMORY: Using React state conversation history (${recentMessages?.length || 0} messages)`);
-
-    // Build personalization context for system prompt
     let personalizationContext = '';
     if (personalTouch) {
       const parts = [];
@@ -363,7 +306,6 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       }
     }
 
-    // GET CURRENT DATE FOR ACCURATE RESPONSES
     const currentDate = new Date().toLocaleDateString('en-US', { 
       weekday: 'long', 
       year: 'numeric', 
@@ -372,9 +314,8 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       timeZone: 'Asia/Qatar'
     });
 
-    // 👁️ VISION PROCESSING - SPECIALIZED
     if (detectedMode === 'vision') {
-      console.log('👁️ VISION: Building image analysis request...');
+      console.log('👁️ BACKEND WORKER: Building vision request');
       
       const visionContent = [];
       
@@ -385,23 +326,15 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 
       for (const file of attachedFiles) {
         if (file.type?.startsWith('image/')) {
-          console.log(`📎 TRUE CLAUDE WAY: Processing ${file.name} with image type: ${file.imageType?.name}`);
+          console.log(`📎 BACKEND WORKER: Processing ${file.name}`);
           
-          // TRUE CLAUDE WAY: Direct base64 data URL processing
           let imageData;
           if (file.url.startsWith('data:')) {
-            // Extract base64 data from data URL
             imageData = file.url.split(',')[1];
-            console.log('✅ CLAUDE WAY: Extracted base64 data from data URL');
+            console.log('✅ BACKEND WORKER: Extracted base64 data');
           } else {
-            // This shouldn't happen with the new flow, but fallback
             console.error('❌ Expected base64 data URL, got:', file.url.substring(0, 50));
             throw new Error('Invalid image data format - expected base64 data URL');
-          }
-
-          // Add image type context to improve analysis
-          if (file.imageType && file.imageType.id !== 'general') {
-            console.log(`🏷️ SPECIALIZED ANALYSIS: ${file.imageType.name} - Adding context`);
           }
 
           visionContent.push({
@@ -421,9 +354,8 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       });
 
     } else {
-      // FIXED: Use recentMessages from React state for conversation history
+      // USE FRONTEND-PROVIDED CONVERSATION HISTORY
       if (recentMessages && recentMessages.length > 0) {
-        // Take last 6 messages for context (3 exchanges)
         const historyMessages = recentMessages.slice(-6);
         historyMessages.forEach(msg => {
           if (msg.role === 'user' || msg.role === 'assistant') {
@@ -433,28 +365,25 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
             });
           }
         });
-        console.log(`🚀 FAST MEMORY: Added ${historyMessages.length} messages from React state for instant context`);
+        console.log(`🧠 BACKEND WORKER: Using ${historyMessages.length} messages from Frontend Boss conversation history`);
       }
       
-      // Add current message LAST
       messages.push({
         role: 'user',
         content: message
       });
     }
 
-    // OPTIMIZED SYSTEM PROMPTS FOR SPEED WITH CURRENT DATE
     let systemPrompt;
     if (detectedMode === 'vision') {
       systemPrompt = responseLanguage === 'ar' 
         ? `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. التاريخ الحالي: ${currentDate}
 
-قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.`
+قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك.`
         : `You are WAKTI AI, an intelligent assistant specialized in image analysis. Current date: ${currentDate}
 
-Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
+Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis.`;
     } else {
-      // OPTIMIZED STREAMLINED SYSTEM PROMPT WITH CURRENT DATE
       systemPrompt = responseLanguage === 'ar' ? `
 أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم. تدعم العربية والإنجليزية.
 التاريخ الحالي: ${currentDate}
@@ -462,18 +391,6 @@ Analyze the attached image in detail and extract all useful information from it.
 ## إنشاء الصور (في وضع المحادثة فقط):
 عندما تكون في وضع المحادثة ويطلب المستخدمون إنشاء صور، اردد بـ:
 "يرجى التبديل إلى وضع الصور لإنشاء المحتوى البصري."
-
-## التخصيص والذاكرة:
-- استخدم الأسماء المفضلة للمستخدم بطبيعية
-- اتبع نبرة التواصل المطلوبة (عادية، مهنية، مفصلة، مختصرة)
-- احترم التعليمات المخصصة دائماً
-- اجعل التخصيص طبيعياً، ليس آلياً
-
-## شخصية المساعد:
-- استخدم العربية الواضحة والودية
-- كن مفيداً وعملياً
-- اقترح خطوات عملية
-- حافظ على نبرة مهنية مع الدفء
 
 أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
 ` : `
@@ -484,26 +401,13 @@ Current date: ${currentDate}
 When in chat mode and users request image generation, respond with:
 "Please switch to image mode for visual content creation."
 
-## Personalization & Memory:
-- Use user's preferred names naturally
-- Follow requested communication tone (casual, professional, detailed, concise)
-- Always respect custom instructions
-- Make personalization feel natural, not robotic
-
-## Assistant Personality:
-- Use clear, friendly English
-- Be helpful and practical
-- Suggest actionable next steps
-- Maintain professional tone with warmth
-
 You're here to make users' lives more organized and productive!
 `;
       systemPrompt += personalizationContext;
     }
 
-    console.log(`🤖 CALLING CLAUDE: Mode=${detectedMode}, Messages=${messages.length}, Language=${responseLanguage}`);
+    console.log(`🤖 BACKEND WORKER: Calling Claude with mode=${detectedMode}, messages=${messages.length}`);
 
-    // 📡 CLAUDE API CALL
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -523,45 +427,17 @@ You're here to make users' lives more organized and productive!
 
     if (!claudeResponse.ok) {
       const errorData = await claudeResponse.text();
-      console.error('Claude API error:', claudeResponse.status, errorData);
+      console.error('❌ BACKEND WORKER: Claude API error:', claudeResponse.status, errorData);
       throw new Error(`Claude API error: ${claudeResponse.status}`);
     }
 
     const claudeData = await claudeResponse.json();
     const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
 
-    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request with FAST MEMORY SYSTEM`);
+    console.log(`✅ BACKEND WORKER: Claude response completed for ${detectedMode} mode`);
 
-    // 💾 STORE CONVERSATION WITH FIXED INTENT FIELD
-    try {
-      // PROPER INPUT TYPE FOR DATABASE - FIX THE CONSTRAINT VIOLATION
-      const inputType = detectedMode === 'vision' ? 'image' : 'text';
-
-      await supabase.from('ai_chat_history').insert([
-        {
-          conversation_id: conversationId,
-          user_id: userId,
-          role: 'user',
-          content: message,
-          input_type: inputType,
-          intent: detectedMode, // 🚨 CRITICAL FIX: ADD INTENT FIELD
-          language: responseLanguage,
-          created_at: new Date().toISOString()
-        },
-        {
-          conversation_id: conversationId,
-          user_id: userId,
-          role: 'assistant',
-          content: responseText,
-          input_type: 'text',
-          intent: detectedMode, // 🚨 CRITICAL FIX: ADD INTENT FIELD
-          language: responseLanguage,
-          created_at: new Date().toISOString()
-        }
-      ]);
-    } catch (error) {
-      console.error('Failed to store conversation:', error);
-    }
+    // NO DATABASE SAVING - FRONTEND BOSS HANDLES ALL PERSISTENCE
+    console.log('🤖 BACKEND WORKER: Skipping database save - Frontend Boss handles persistence');
 
     return {
       response: responseText,
@@ -569,11 +445,11 @@ You're here to make users' lives more organized and productive!
       model: 'claude-3-5-sonnet-20241022',
       usage: claudeData.usage,
       mode: detectedMode,
-      intent: detectedMode // Return the actual detected mode as intent
+      intent: detectedMode
     };
 
   } catch (error) {
-    console.error('Claude API Error:', error);
+    console.error('❌ BACKEND WORKER: Claude error:', error);
     return {
       success: false,
       error: error.message,
