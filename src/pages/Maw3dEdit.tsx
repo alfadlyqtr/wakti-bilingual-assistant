@@ -1,41 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import { NavigationHeader } from '@/components/navigation/NavigationHeader';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Calendar, Clock, MapPin, Users, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/providers/AuthContext';
-import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Calendar, Trash2 } from 'lucide-react';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
 
-const Maw3dEdit = () => {
+interface EventData {
+  id: string;
+  title: string;
+  description: string;
+  event_date: string;
+  event_time: string;
+  location: string;
+  max_attendees: number;
+  is_public: boolean;
+  requires_approval: boolean;
+  created_by: string;
+}
+
+export default function Maw3dEdit() {
+  const { eventId } = useParams<{ eventId: string }>();
+  const navigate = useNavigate();
+  const { language } = useTheme();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    event_date: '',
-    start_time: '',
-    end_time: '',
-    location: '',
-    is_all_day: false,
-    max_attendees: '',
-    auto_delete_enabled: true
-  });
-  
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const { eventId } = useParams();
+  const [event, setEvent] = useState<EventData | null>(null);
+
+  // Clear Maw3d event badges when visiting this page
+  useEffect(() => {
+    if (user) {
+      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (!user || !eventId) return;
-    fetchEvent();
-  }, [user, eventId]);
+    if (eventId) {
+      fetchEvent();
+    }
+  }, [eventId]);
 
   const fetchEvent = async () => {
     try {
@@ -43,101 +56,118 @@ const Maw3dEdit = () => {
         .from('maw3d_events')
         .select('*')
         .eq('id', eventId)
-        .eq('created_by', user?.id)
         .single();
 
       if (error) throw error;
 
-      setFormData({
-        title: data.title,
-        description: data.description || '',
-        event_date: data.event_date,
-        start_time: data.start_time || '',
-        end_time: data.end_time || '',
-        location: data.location || '',
-        is_all_day: data.is_all_day,
-        max_attendees: data.max_attendees?.toString() || '',
-        auto_delete_enabled: data.auto_delete_enabled
-      });
-    } catch (error: any) {
+      if (data.created_by !== user?.id) {
+        toast.error(language === 'ar' ? 'غير مصرح لك بتعديل هذا الحدث' : 'You are not authorized to edit this event');
+        navigate('/maw3d');
+        return;
+      }
+
+      setEvent(data);
+    } catch (error) {
       console.error('Error fetching event:', error);
-      toast.error('Failed to load event');
-      navigate('/maw3d-events');
+      toast.error(language === 'ar' ? 'فشل في تحميل الحدث' : 'Failed to load event');
+      navigate('/maw3d');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !eventId) return;
+  const handleSave = async () => {
+    if (!event) return;
 
     setSaving(true);
     try {
-      const eventData = {
-        title: formData.title,
-        description: formData.description || null,
-        event_date: formData.event_date,
-        start_time: formData.is_all_day ? null : formData.start_time || null,
-        end_time: formData.is_all_day ? null : formData.end_time || null,
-        location: formData.location || null,
-        is_all_day: formData.is_all_day,
-        max_attendees: formData.max_attendees ? parseInt(formData.max_attendees) : null,
-        auto_delete_enabled: formData.auto_delete_enabled,
-        updated_at: new Date().toISOString()
-      };
-
       const { error } = await supabase
         .from('maw3d_events')
-        .update(eventData)
-        .eq('id', eventId)
-        .eq('created_by', user.id);
+        .update({
+          title: event.title,
+          description: event.description,
+          event_date: event.event_date,
+          event_time: event.event_time,
+          location: event.location,
+          max_attendees: event.max_attendees,
+          is_public: event.is_public,
+          requires_approval: event.requires_approval,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', eventId);
 
       if (error) throw error;
 
-      toast.success('Event updated successfully!');
-      navigate('/maw3d-events');
-    } catch (error: any) {
+      toast.success(language === 'ar' ? 'تم تحديث الحدث بنجاح' : 'Event updated successfully');
+      navigate(`/maw3d/event/${eventId}`);
+    } catch (error) {
       console.error('Error updating event:', error);
-      toast.error('Failed to update event');
+      toast.error(language === 'ar' ? 'فشل في تحديث الحدث' : 'Failed to update event');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!user || !eventId) return;
-    if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) return;
+    if (!event || !confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا الحدث؟' : 'Are you sure you want to delete this event?')) {
+      return;
+    }
 
     setDeleting(true);
     try {
+      // Delete RSVPs first
+      await supabase
+        .from('maw3d_rsvps')
+        .delete()
+        .eq('event_id', eventId);
+
+      // Delete the event
       const { error } = await supabase
         .from('maw3d_events')
         .delete()
-        .eq('id', eventId)
-        .eq('created_by', user.id);
+        .eq('id', eventId);
 
       if (error) throw error;
 
-      toast.success('Event deleted successfully');
-      navigate('/maw3d-events');
-    } catch (error: any) {
+      toast.success(language === 'ar' ? 'تم حذف الحدث بنجاح' : 'Event deleted successfully');
+      navigate('/maw3d');
+    } catch (error) {
       console.error('Error deleting event:', error);
-      toast.error('Failed to delete event');
+      toast.error(language === 'ar' ? 'فشل في حذف الحدث' : 'Failed to delete event');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const updateEvent = (field: keyof EventData, value: any) => {
+    if (event) {
+      setEvent({ ...event, [field]: value });
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <NavigationHeader />
         <div className="container mx-auto p-4">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/4"></div>
-            <div className="h-32 bg-muted rounded"></div>
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-muted rounded w-1/3"></div>
+            <div className="h-64 bg-muted rounded-lg"></div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            {language === 'ar' ? 'الحدث غير موجود' : 'Event not found'}
+          </h2>
+          <Button onClick={() => navigate('/maw3d')}>
+            {language === 'ar' ? 'العودة للأحداث' : 'Back to Events'}
+          </Button>
         </div>
       </div>
     );
@@ -145,162 +175,183 @@ const Maw3dEdit = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader />
-      <div className="container mx-auto p-4">
-        <div className="mb-6">
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate('/maw3d-events')}
-            className="mb-4"
+      <div className="container mx-auto p-4 max-w-2xl">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/maw3d')}
+            className="flex items-center gap-2"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Events
+            <ArrowLeft className="h-4 w-4" />
+            {language === 'ar' ? 'العودة' : 'Back'}
           </Button>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Edit Event</h1>
-          <p className="text-muted-foreground">Update your event details.</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            {language === 'ar' ? 'تعديل الحدث' : 'Edit Event'}
+          </h1>
         </div>
 
-        <Card className="max-w-2xl">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Event Details
+              {language === 'ar' ? 'تفاصيل الحدث' : 'Event Details'}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <Label htmlFor="title">Event Title *</Label>
+          <CardContent className="space-y-6">
+            {/* Title */}
+            <div className="space-y-2">
+              <Label htmlFor="title">
+                {language === 'ar' ? 'عنوان الحدث' : 'Event Title'}
+              </Label>
+              <Input
+                id="title"
+                value={event.title}
+                onChange={(e) => updateEvent('title', e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل عنوان الحدث' : 'Enter event title'}
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">
+                {language === 'ar' ? 'وصف الحدث' : 'Event Description'}
+              </Label>
+              <Textarea
+                id="description"
+                value={event.description}
+                onChange={(e) => updateEvent('description', e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل وصف الحدث' : 'Enter event description'}
+                rows={4}
+              />
+            </div>
+
+            {/* Date and Time */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date" className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  {language === 'ar' ? 'التاريخ' : 'Date'}
+                </Label>
                 <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="Enter event title"
-                  required
+                  id="date"
+                  type="date"
+                  value={event.event_date}
+                  onChange={(e) => updateEvent('event_date', e.target.value)}
                 />
               </div>
-
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describe your event (optional)"
-                  rows={3}
+              <div className="space-y-2">
+                <Label htmlFor="time" className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  {language === 'ar' ? 'الوقت' : 'Time'}
+                </Label>
+                <Input
+                  id="time"
+                  type="time"
+                  value={event.event_time}
+                  onChange={(e) => updateEvent('event_time', e.target.value)}
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="event_date">Event Date *</Label>
-                  <Input
-                    id="event_date"
-                    type="date"
-                    value={formData.event_date}
-                    onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
-                    required
-                  />
-                </div>
+            {/* Location */}
+            <div className="space-y-2">
+              <Label htmlFor="location" className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                {language === 'ar' ? 'الموقع' : 'Location'}
+              </Label>
+              <Input
+                id="location"
+                value={event.location}
+                onChange={(e) => updateEvent('location', e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل موقع الحدث' : 'Enter event location'}
+              />
+            </div>
 
+            {/* Max Attendees */}
+            <div className="space-y-2">
+              <Label htmlFor="maxAttendees" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                {language === 'ar' ? 'الحد الأقصى للحضور' : 'Maximum Attendees'}
+              </Label>
+              <Input
+                id="maxAttendees"
+                type="number"
+                min="1"
+                value={event.max_attendees}
+                onChange={(e) => updateEvent('max_attendees', parseInt(e.target.value) || 1)}
+              />
+            </div>
+
+            {/* Settings */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">
+                {language === 'ar' ? 'إعدادات الحدث' : 'Event Settings'}
+              </h3>
+              
+              <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="location">Location</Label>
-                  <Input
-                    id="location"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="Event location (optional)"
-                  />
+                  <Label htmlFor="isPublic">
+                    {language === 'ar' ? 'حدث عام' : 'Public Event'}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'يمكن لأي شخص رؤية هذا الحدث' : 'Anyone can see this event'}
+                  </p>
                 </div>
+                <Switch
+                  id="isPublic"
+                  checked={event.is_public}
+                  onCheckedChange={(checked) => updateEvent('is_public', checked)}
+                />
               </div>
 
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>All Day Event</Label>
-                  <p className="text-sm text-muted-foreground">Toggle for all-day events</p>
+                <div>
+                  <Label htmlFor="requiresApproval">
+                    {language === 'ar' ? 'يتطلب موافقة' : 'Requires Approval'}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'يجب الموافقة على طلبات الحضور' : 'Attendance requests must be approved'}
+                  </p>
                 </div>
                 <Switch
-                  checked={formData.is_all_day}
-                  onCheckedChange={(checked) => setFormData({ ...formData, is_all_day: checked })}
+                  id="requiresApproval"
+                  checked={event.requires_approval}
+                  onCheckedChange={(checked) => updateEvent('requires_approval', checked)}
                 />
               </div>
+            </div>
 
-              {!formData.is_all_day && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="start_time">Start Time</Label>
-                    <Input
-                      id="start_time"
-                      type="time"
-                      value={formData.start_time}
-                      onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="end_time">End Time</Label>
-                    <Input
-                      id="end_time"
-                      type="time"
-                      value={formData.end_time}
-                      onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <Label htmlFor="max_attendees">Maximum Attendees</Label>
-                <Input
-                  id="max_attendees"
-                  type="number"
-                  min="1"
-                  value={formData.max_attendees}
-                  onChange={(e) => setFormData({ ...formData, max_attendees: e.target.value })}
-                  placeholder="Leave empty for unlimited"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Auto-delete after event</Label>
-                  <p className="text-sm text-muted-foreground">Automatically delete 24h after event ends</p>
-                </div>
-                <Switch
-                  checked={formData.auto_delete_enabled}
-                  onCheckedChange={(checked) => setFormData({ ...formData, auto_delete_enabled: checked })}
-                />
-              </div>
-
-              <div className="flex justify-between">
-                <Button 
-                  type="button" 
-                  variant="destructive"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  {deleting ? 'Deleting...' : 'Delete Event'}
-                </Button>
-                
-                <div className="flex gap-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => navigate('/maw3d-events')}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </div>
-              </div>
-            </form>
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-6">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 flex-1"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? 
+                  (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') :
+                  (language === 'ar' ? 'حفظ التغييرات' : 'Save Changes')
+                }
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? 
+                  (language === 'ar' ? 'جاري الحذف...' : 'Deleting...') :
+                  (language === 'ar' ? 'حذف الحدث' : 'Delete Event')
+                }
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     </div>
   );
-};
-
-export default Maw3dEdit;
+}

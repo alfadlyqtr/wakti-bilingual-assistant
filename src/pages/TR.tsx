@@ -1,218 +1,250 @@
+
 import React, { useState, useEffect } from 'react';
-import { NavigationHeader } from '@/components/navigation/NavigationHeader';
-import { TaskList } from '@/components/tr/TaskList';
+import { Plus, Search, Filter, Grid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { TRTaskCard } from '@/components/tr/TRTaskCard';
+import { SharedTaskCard } from '@/components/tr/SharedTaskCard';
+import { TRCreateTaskModal } from '@/components/tr/TRCreateTaskModal';
+import { TRService, TRTask } from '@/services/trService';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
 import { toast } from 'sonner';
-import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
-interface TRTask {
-  id: string;
-  title: string;
-  description?: string;
-  due_date: string | null;
-  status: 'open' | 'in_progress' | 'completed' | 'overdue';
-  priority: 'high' | 'normal' | 'urgent'; // Fixed to match trService
-  task_type: 'one-time' | 'repeated'; // Fixed to match trService
-  is_shared: boolean;
-  completed: boolean;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-const TR = () => {
+export default function TR() {
   const { user } = useAuth();
+  const { language } = useTheme();
   const [tasks, setTasks] = useState<TRTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const { refetch } = useUnreadMessages();
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'completed'>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
+  // Initialize WN1 notification service for shared task notifications
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchTasks = async () => {
-      setLoading(true);
+    if (user) {
+      console.log('🔥 Initializing WN1 notification service on TR page for user:', user.id);
+      wn1NotificationService.initialize(user.id).catch(error => {
+        console.error('❌ Failed to initialize WN1 notification service:', error);
+      });
+      
+      // Clear shared task badges when visiting TR page
       try {
-        const { data, error } = await supabase
-          .from('my_tasks')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching tasks:', error);
-          toast.error('Failed to load tasks.');
-        }
-
-        // Map the data to match TRTask interface
-        const mappedTasks: TRTask[] = (data || []).map(task => ({
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          due_date: task.due_date,
-          status: task.status,
-          priority: task.priority === 'low' ? 'normal' : task.priority, // Map 'low' to 'normal'
-          task_type: task.task_type === 'recurring' ? 'repeated' : 'one-time', // Map 'recurring' to 'repeated'
-          is_shared: task.is_shared || false,
-          completed: task.status === 'completed',
-          user_id: task.user_id,
-          created_at: task.created_at,
-          updated_at: task.updated_at || task.created_at
+        window.dispatchEvent(new CustomEvent('clear-badges', { 
+          detail: { types: ['shared_task', 'task'] } 
         }));
-
-        setTasks(mappedTasks);
-      } finally {
-        setLoading(false);
+      } catch (error) {
+        console.warn('⚠️ Failed to clear badges:', error);
       }
-    };
-
-    fetchTasks();
-
-    // Setup real-time subscription for task updates
-    const taskSubscription = supabase
-      .channel('public:my_tasks')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'my_tasks' },
-        (payload) => {
-          console.log('Task change received!', payload);
-          fetchTasks(); // Refresh tasks on any change
-          refetch(); // Refresh unread counts
-        }
-      )
-      .subscribe();
+    }
 
     return () => {
-      supabase.removeChannel(taskSubscription);
+      // Cleanup notification service when leaving TR page
+      wn1NotificationService.cleanup();
     };
-  }, [user, refetch]);
+  }, [user]);
 
-  const handleCreateTask = async (newTaskData: Partial<TRTask>) => {
+  useEffect(() => {
+    if (user) {
+      loadTasks();
+    }
+  }, [user]);
+
+  const loadTasks = async () => {
     if (!user) return;
-
+    
     try {
-      const { data, error } = await supabase
-        .from('my_tasks')
-        .insert([{ 
-          ...newTaskData, 
-          user_id: user.id,
-          status: 'open'
-        }])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating task:', error);
-        toast.error('Failed to create task.');
-        return;
-      }
-
-      // Map the created task to TRTask format
-      const mappedTask: TRTask = {
-        id: data.id,
-        title: data.title,
-        description: data.description,
-        due_date: data.due_date,
-        status: data.status,
-        priority: data.priority === 'low' ? 'normal' : data.priority,
-        task_type: data.task_type === 'recurring' ? 'repeated' : 'one-time',
-        is_shared: data.is_shared || false,
-        completed: data.status === 'completed',
-        user_id: data.user_id,
-        created_at: data.created_at,
-        updated_at: data.updated_at || data.created_at
-      };
-
-      setTasks([mappedTask, ...tasks]);
-      setIsCreateDialogOpen(false);
-      toast.success('Task created successfully!');
-      refetch();
+      setLoading(true);
+      const userTasks = await TRService.getTasks();
+      setTasks(userTasks);
     } catch (error) {
-      console.error('Unexpected error creating task:', error);
-      toast.error('Unexpected error creating task.');
+      console.error('Error loading tasks:', error);
+      toast.error('Failed to load tasks');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleTaskEdit = (task: TRTask) => {
-    // Handle task editing logic here
-    console.log('Edit task:', task);
+  const handleTaskCreated = () => {
+    loadTasks();
+    setShowCreateModal(false);
   };
 
-  const handleTasksChanged = () => {
-    // Refetch tasks when they change
-    if (!user) return;
-
-    const fetchTasks = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('my_tasks')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching tasks:', error);
-          toast.error('Failed to load tasks.');
-          return;
-        }
-
-        // Map the data to match TRTask interface
-        const mappedTasks: TRTask[] = (data || []).map(task => ({
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          due_date: task.due_date,
-          status: task.status,
-          priority: task.priority === 'low' ? 'normal' : task.priority,
-          task_type: task.task_type === 'recurring' ? 'repeated' : 'one-time',
-          is_shared: task.is_shared || false,
-          completed: task.status === 'completed',
-          user_id: task.user_id,
-          created_at: task.created_at,
-          updated_at: task.updated_at || task.created_at
-        }));
-
-        setTasks(mappedTasks);
-        refetch();
-      } catch (error) {
-        console.error('Unexpected error fetching tasks:', error);
-        toast.error('Unexpected error fetching tasks.');
-      }
-    };
-
-    fetchTasks();
+  const handleTaskUpdated = () => {
+    loadTasks();
   };
+
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         task.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (filterStatus === 'all') return matchesSearch;
+    if (filterStatus === 'active') return matchesSearch && !task.completed;
+    if (filterStatus === 'completed') return matchesSearch && task.completed;
+    
+    return matchesSearch;
+  });
+
+  const activeTasks = filteredTasks.filter(task => !task.completed);
+  const completedTasks = filteredTasks.filter(task => task.completed);
+  const sharedTasks = filteredTasks.filter(task => task.is_shared);
 
   if (loading) {
-    return <div>Loading tasks...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">{t('loading', language)}...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <NavigationHeader />
-      <div className="container mx-auto py-6">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-foreground">My Tasks</h1>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Task
+    <div className="container mx-auto px-4 py-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">TR - Task & Responsibility</h1>
+          <p className="text-muted-foreground">
+            {t('manageTasksAndResponsibilities', language)}
+          </p>
+        </div>
+        <Button onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
+          <Plus className="h-4 w-4 mr-2" />
+          {t('createTask', language)}
+        </Button>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t('searchTasks', language)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          <Button
+            variant={filterStatus === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFilterStatus('all')}
+          >
+            {t('all', language)}
+            <Badge variant="secondary" className="ml-2">
+              {tasks.length}
+            </Badge>
+          </Button>
+          <Button
+            variant={filterStatus === 'active' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFilterStatus('active')}
+          >
+            {t('active', language)}
+            <Badge variant="secondary" className="ml-2">
+              {activeTasks.length}
+            </Badge>
+          </Button>
+          <Button
+            variant={filterStatus === 'completed' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFilterStatus('completed')}
+          >
+            {t('completed', language)}
+            <Badge variant="secondary" className="ml-2">
+              {completedTasks.length}
+            </Badge>
           </Button>
         </div>
-        <TaskList
-          tasks={tasks}
-          onTaskEdit={handleTaskEdit}
-          onTasksChanged={handleTasksChanged}
-        />
-        {/* Create dialog would go here - simplified for now */}
+
+        <div className="flex gap-1 border rounded-md p-1">
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
+
+      {/* Shared Tasks Section */}
+      {sharedTasks.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">{t('sharedTasks', language)}</h2>
+            <Badge variant="outline">{sharedTasks.length}</Badge>
+          </div>
+          <div className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
+            {sharedTasks.map(task => (
+              <SharedTaskCard
+                key={task.id}
+                task={task}
+                assignees={[]}
+                onTaskUpdated={handleTaskUpdated}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Regular Tasks */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold">{t('myTasks', language)}</h2>
+          <Badge variant="outline">{filteredTasks.filter(t => !t.is_shared).length}</Badge>
+        </div>
+        
+        {filteredTasks.filter(t => !t.is_shared).length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">
+              {searchQuery || filterStatus !== 'all' 
+                ? t('noTasksFound', language)
+                : t('noTasksYet', language)
+              }
+            </p>
+            {!searchQuery && filterStatus === 'all' && (
+              <Button onClick={() => setShowCreateModal(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                {t('createFirstTask', language)}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
+            {filteredTasks.filter(t => !t.is_shared).map(task => (
+              <TRTaskCard
+                key={task.id}
+                task={task}
+                onTaskUpdated={handleTaskUpdated}
+                viewMode={viewMode}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create Task Modal */}
+      <TRCreateTaskModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onTaskCreated={handleTaskCreated}
+      />
     </div>
   );
-};
-
-export default TR;
+}

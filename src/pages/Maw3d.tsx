@@ -1,118 +1,58 @@
 
-import React, { useState, useEffect } from 'react';
-import { NavigationHeader } from '@/components/navigation/NavigationHeader';
+import React, { Suspense } from 'react';
+import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
+import { OptimizedEventCard } from '@/components/optimized/OptimizedEventCard';
+import { useNavigate } from 'react-router-dom';
+import { useTheme } from '@/providers/ThemeProvider';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Heart, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/providers/AuthContext';
-import { toast } from 'sonner';
-import { Plus, Calendar, MapPin, Users, Clock, Heart } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { t } from '@/utils/translations';
 
-interface Event {
-  id: string;
-  title: string;
-  description?: string;
-  event_date: string;
-  start_time?: string;
-  end_time?: string;
-  location?: string;
-  is_all_day: boolean;
-  max_attendees?: number;
-  created_by: string;
-  created_at: string;
-  short_id: string;
-}
+// Ultra-fast skeleton component (reduced further)
+const EventsSkeleton = () => (
+  <div className="grid gap-4">
+    {[...Array(2)].map((_, i) => (
+      <div key={i} className="relative">
+        <Skeleton className="h-[150px] w-full rounded-xl" />
+        <div className="absolute bottom-4 left-4 right-4 space-y-2">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
-const Maw3d = () => {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newEvent, setNewEvent] = useState({
-    title: '',
-    description: '',
-    event_date: '',
-    start_time: '',
-    end_time: '',
-    location: '',
-    is_all_day: false,
-    max_attendees: undefined as number | undefined
-  });
-  const { user } = useAuth();
+const OptimizedMaw3dEvents = React.memo(() => {
+  const navigate = useNavigate();
+  const { language } = useTheme();
+  
+  // Use optimized hook with caching and deduplication
+  const { events, loading, error } = useOptimizedMaw3dEvents();
 
-  useEffect(() => {
-    if (!user) return;
-    fetchEvents();
-  }, [user]);
+  const handleEventClick = React.useCallback((event: any) => {
+    console.log('📱 Navigating to event management:', event.id);
+    navigate(`/maw3d/manage/${event.id}`);
+  }, [navigate]);
 
-  const fetchEvents = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('maw3d_events')
-        .select('*')
-        .order('event_date', { ascending: true });
+  const handleCreateEvent = React.useCallback(() => {
+    console.log('📱 Navigating to create event');
+    navigate('/maw3d/create');
+  }, [navigate]);
 
-      if (error) throw error;
-      setEvents(data || []);
-    } catch (error: any) {
-      console.error('Error fetching events:', error);
-      toast.error('Failed to load events');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createEvent = async () => {
-    if (!user || !newEvent.title || !newEvent.event_date) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('maw3d_events')
-        .insert([{
-          ...newEvent,
-          created_by: user.id,
-          max_attendees: newEvent.max_attendees || null
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      setEvents([...events, data]);
-      setShowCreateDialog(false);
-      setNewEvent({
-        title: '',
-        description: '',
-        event_date: '',
-        start_time: '',
-        end_time: '',
-        location: '',
-        is_all_day: false,
-        max_attendees: undefined
-      });
-      
-      toast.success('Event created successfully!');
-    } catch (error: any) {
-      console.error('Error creating event:', error);
-      toast.error('Failed to create event');
-    }
-  };
-
-  if (loading) {
+  // Handle error state
+  if (error) {
     return (
-      <div className="min-h-screen bg-background">
-        <NavigationHeader />
-        <div className="container mx-auto p-4">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/4"></div>
-            <div className="h-32 bg-muted rounded"></div>
+      <div className="min-h-screen p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center py-12">
+            <Heart className="mx-auto h-12 w-12 text-red-500 mb-4" />
+            <h3 className="text-lg font-medium mb-2">{t('errorLoadingEvent', language)}</h3>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()} variant="outline">
+              {t('retry', language)}
+            </Button>
           </div>
         </div>
       </div>
@@ -120,158 +60,87 @@ const Maw3d = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <NavigationHeader />
-      <div className="container mx-auto p-4">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Maw3d Events</h1>
-            <p className="text-muted-foreground">Create and manage your events.</p>
+    <div className="min-h-screen p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg">
+              <Heart className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                {t('maw3dEvents', language)}
+              </h1>
+              <p className="text-muted-foreground">
+                {loading 
+                  ? t('loading', language)
+                  : language === 'ar' 
+                    ? `عرض ${events.length} أحداث`
+                    : `Showing ${events.length} events`
+                }
+              </p>
+            </div>
           </div>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Event
-          </Button>
+          
+          <div className="w-full">
+            <Button 
+              onClick={handleCreateEvent}
+              className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+              size="lg"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              {t('createEvent', language)}
+            </Button>
+          </div>
         </div>
 
-        {events.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center">
-              <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No events yet. Create your first event!</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4">
-            {events.map((event) => (
-              <Card key={event.id}>
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold">{event.title}</h3>
-                      {event.description && (
-                        <p className="text-muted-foreground mt-1">{event.description}</p>
-                      )}
-                    </div>
-                    <Badge variant="outline">{event.short_id}</Badge>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      {format(parseISO(event.event_date), 'MMM d, yyyy')}
-                    </div>
-                    
-                    {!event.is_all_day && event.start_time && (
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        {event.start_time}
-                        {event.end_time && ` - ${event.end_time}`}
-                      </div>
-                    )}
-                    
-                    {event.location && (
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-4 w-4" />
-                        {event.location}
-                      </div>
-                    )}
-                    
-                    {event.max_attendees && (
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4" />
-                        Max {event.max_attendees} attendees
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+        {/* Events content */}
+        <Suspense fallback={<EventsSkeleton />}>
+          {loading ? (
+            <EventsSkeleton />
+          ) : events.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="max-w-md mx-auto p-8 rounded-2xl bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl">
+                <Heart className="mx-auto h-16 w-16 text-purple-400 mb-6" />
+                <h3 className="text-xl font-semibold mb-3 text-gray-800">
+                  {t('noEventsYet', language)}
+                </h3>
+                <p className="text-gray-600 mb-6 leading-relaxed">
+                  {language === 'ar' 
+                    ? 'أنشئ حدثك الأول للبدء'
+                    : 'Create your first event to get started'
+                  }
+                </p>
+                <Button 
+                  onClick={handleCreateEvent}
+                  size="lg"
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Plus className="h-5 w-5 mr-2" />
+                  {t('createEvent', language)}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-6 md:gap-8">
+              {events.map((event) => (
+                <OptimizedEventCard
+                  key={event.id}
+                  event={event}
+                  onClick={() => handleEventClick(event)}
+                />
+              ))}
+            </div>
+          )}
+        </Suspense>
       </div>
-
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Event</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="title">Event Title</Label>
-              <Input
-                id="title"
-                value={newEvent.title}
-                onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                placeholder="Enter event title"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={newEvent.description}
-                onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                placeholder="Event description (optional)"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="event_date">Event Date</Label>
-              <Input
-                id="event_date"
-                type="date"
-                value={newEvent.event_date}
-                onChange={(e) => setNewEvent({ ...newEvent, event_date: e.target.value })}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="start_time">Start Time</Label>
-                <Input
-                  id="start_time"
-                  type="time"
-                  value={newEvent.start_time}
-                  onChange={(e) => setNewEvent({ ...newEvent, start_time: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="end_time">End Time</Label>
-                <Input
-                  id="end_time"
-                  type="time"
-                  value={newEvent.end_time}
-                  onChange={(e) => setNewEvent({ ...newEvent, end_time: e.target.value })}
-                />
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={newEvent.location}
-                onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
-                placeholder="Event location (optional)"
-              />
-            </div>
-            
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-                Cancel
-              </Button>
-              <Button onClick={createEvent} disabled={!newEvent.title || !newEvent.event_date}>
-                Create Event
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
-};
+});
 
-export default Maw3d;
+OptimizedMaw3dEvents.displayName = 'OptimizedMaw3dEvents';
+
+export default function Maw3d() {
+  return <OptimizedMaw3dEvents />;
+}

@@ -1,159 +1,104 @@
 
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
-import { 
-  Bell, 
-  MessageSquare, 
-  Users, 
-  CheckSquare, 
-  Calendar,
-  Gift,
-  TestTube
-} from 'lucide-react';
+import { useTheme } from '@/providers/ThemeProvider';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
+import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
-export const NotificationTestCard: React.FC = () => {
-  const [testing, setTesting] = useState<string | null>(null);
+export function NotificationTestCard() {
+  const { language } = useTheme();
+  const [testResults, setTestResults] = useState<Record<string, 'success' | 'error' | 'pending'>>({});
 
-  const testNotifications = [
-    {
-      id: 'message',
-      icon: MessageSquare,
-      label: 'Message',
-      title: 'New Message',
-      description: 'You have received a new message from a contact',
-      color: 'text-blue-500'
-    },
-    {
-      id: 'contact',
-      icon: Users,
-      label: 'Contact Request',
-      title: 'New Contact Request',
-      description: 'Someone wants to connect with you',
-      color: 'text-green-500'
-    },
-    {
-      id: 'task',
-      icon: CheckSquare,
-      label: 'Task Update',
-      title: 'Task Completed',
-      description: 'Someone completed your shared task',
-      color: 'text-orange-500'
-    },
-    {
-      id: 'event',
-      icon: Calendar,
-      label: 'Event RSVP',
-      title: 'Event Response',
-      description: 'Someone responded to your event invitation',
-      color: 'text-purple-500'
-    },
-    {
-      id: 'gift',
-      icon: Gift,
-      label: 'Admin Gift',
-      title: 'Gift Received!',
-      description: 'You received a gift from the Wakti Admin Team',
-      color: 'text-pink-500'
-    }
-  ];
-
-  const handleTestNotification = async (notification: typeof testNotifications[0]) => {
-    setTesting(notification.id);
+  const testNotificationType = async (type: string, displayName: string) => {
+    setTestResults(prev => ({ ...prev, [type]: 'pending' }));
     
     try {
-      // Show toast notification
-      toast(notification.title, {
-        description: notification.description,
-        duration: 4000,
-        action: {
-          label: 'View',
-          onClick: () => console.log(`Viewing ${notification.label}`)
-        }
-      });
-      
-      // Simulate vibration on mobile
-      if ('vibrate' in navigator) {
-        navigator.vibrate([100, 50, 100]);
-      }
-      
-      // Play notification sound (simplified)
-      try {
-        const audio = new Audio('/notification-sound.mp3');
-        audio.volume = 0.1;
-        audio.play().catch(() => {
-          console.log('Audio play failed - this is normal in some browsers');
-        });
-      } catch (error) {
-        console.log('Audio not available');
-      }
-      
+      await wn1NotificationService.testNotification(type);
+      setTestResults(prev => ({ ...prev, [type]: 'success' }));
     } catch (error) {
-      console.error('Error testing notification:', error);
-      toast.error('Failed to test notification');
-    } finally {
-      setTimeout(() => setTesting(null), 1000);
+      console.error(`Failed to test ${type} notification:`, error);
+      setTestResults(prev => ({ ...prev, [type]: 'error' }));
     }
   };
+
+  const getStatusIcon = (status: 'success' | 'error' | 'pending' | undefined) => {
+    switch (status) {
+      case 'success':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'error':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case 'pending':
+        return <AlertCircle className="h-4 w-4 text-yellow-500 animate-spin" />;
+      default:
+        return null;
+    }
+  };
+
+  const notificationTypes = [
+    { type: 'shared_task', name: language === 'ar' ? 'المهام المشتركة' : 'Shared Tasks' },
+    { type: 'messages', name: language === 'ar' ? 'الرسائل' : 'Messages' },
+    { type: 'contact_requests', name: language === 'ar' ? 'طلبات الاتصال' : 'Contact Requests' },
+    { type: 'event_rsvps', name: language === 'ar' ? 'ردود الأحداث' : 'Event RSVPs' }
+  ];
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <TestTube className="h-5 w-5" />
-          Test Notifications
+          <span>{language === 'ar' ? 'اختبار الإشعارات' : 'Test Notifications'}</span>
         </CardTitle>
+        <CardDescription>
+          {language === 'ar' 
+            ? 'اختبر واختبر إعدادات الإشعارات الخاصة بك.'
+            : 'Test and verify your notification settings.'}
+        </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Test different types of notifications to see how they appear and sound.
-          </p>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {testNotifications.map((notification) => {
-              const Icon = notification.icon;
-              const isLoading = testing === notification.id;
-              
-              return (
-                <Button
-                  key={notification.id}
-                  variant="outline"
-                  className="h-auto p-4 flex flex-col items-start gap-2"
-                  onClick={() => handleTestNotification(notification)}
-                  disabled={isLoading}
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <Icon className={`h-4 w-4 ${notification.color}`} />
-                    <span className="font-medium">{notification.label}</span>
-                    {isLoading && (
-                      <Badge variant="secondary" className="ml-auto">
-                        Testing...
-                      </Badge>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground text-left">
-                    {notification.description}
-                  </span>
-                </Button>
-              );
-            })}
-          </div>
-          
-          <div className="mt-4 p-3 bg-muted/30 rounded-lg">
-            <div className="flex items-center gap-2 text-sm">
-              <Bell className="h-4 w-4" />
-              <span className="font-medium">Note:</span>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3">
+          {notificationTypes.map(({ type, name }) => (
+            <div key={type} className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="flex items-center gap-3">
+                <span className="font-medium">{name}</span>
+                {getStatusIcon(testResults[type])}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => testNotificationType(type, name)}
+                disabled={testResults[type] === 'pending'}
+              >
+                {language === 'ar' ? 'اختبار' : 'Test'}
+              </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Test notifications respect your current notification settings. 
-              If you don't see or hear anything, check your notification preferences above.
-            </p>
+          ))}
+        </div>
+
+        <div className="mt-6 p-4 bg-muted rounded-lg">
+          <h4 className="font-medium mb-2">
+            {language === 'ar' ? 'معلومات النظام' : 'System Info'}
+          </h4>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>{language === 'ar' ? 'حالة الخدمة:' : 'Service Status:'}</span>
+              <Badge variant={wn1NotificationService.getProcessorStatus().active ? 'default' : 'destructive'}>
+                {wn1NotificationService.getProcessorStatus().active 
+                  ? (language === 'ar' ? 'نشط' : 'Active')
+                  : (language === 'ar' ? 'غير نشط' : 'Inactive')}
+              </Badge>
+            </div>
+            <div className="flex justify-between">
+              <span>{language === 'ar' ? 'إذن المتصفح:' : 'Browser Permission:'}</span>
+              <Badge variant={wn1NotificationService.getPermissionStatus() === 'granted' ? 'default' : 'destructive'}>
+                {wn1NotificationService.getPermissionStatus() === 'granted'
+                  ? (language === 'ar' ? 'ممنوح' : 'Granted')
+                  : (language === 'ar' ? 'مرفوض' : 'Denied')}
+              </Badge>
+            </div>
           </div>
         </div>
       </CardContent>
     </Card>
   );
-};
+}

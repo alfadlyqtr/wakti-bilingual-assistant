@@ -1,505 +1,402 @@
 
-import React, { useState, useEffect } from 'react';
-import { NavigationHeader } from '@/components/navigation/NavigationHeader';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/providers/AuthContext';
-import { toast } from 'sonner';
-import { 
-  User, Bell, Palette, Globe, Shield, CreditCard, 
-  Trash2, Download, Upload, Languages, Volume2,
-  Moon, Sun, Monitor, Smartphone, Mail, MessageSquare,
-  Calendar, Clock, Users, AlertTriangle, Eye, EyeOff
-} from 'lucide-react';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useState, useEffect } from "react";
+import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
+import { PageContainer } from "@/components/PageContainer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import NotificationSettings from "@/components/notifications/NotificationSettings";
+import { QuotePreferencesManager } from "@/components/settings/QuotePreferencesManager";
+import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
+import { t } from "@/utils/translations";
+import { Shield, Users, Eye, Quote, Palette, Bell, Layout } from "lucide-react";
+import { useToastHelper } from "@/hooks/use-toast-helper";
 
-type Theme = 'light' | 'dark';
-
-interface NotificationPreferences {
-  enableToasts: boolean;
-  enableBadges: boolean;
-  enableVibration: boolean;
-  enableSounds: boolean;
-  soundVolume: number;
-  // Specific notification types
-  messages: boolean;
-  contact_requests: boolean;
-  task_updates: boolean;
-  shared_task_updates: boolean;
-  event_rsvps: boolean;
-  calendar_reminders: boolean;
-  admin_gifts: boolean;
-  // Sound and badge settings
-  notification_sound: 'chime' | 'beep' | 'ding';
-  show_badges: boolean;
-  quietHours: {
-    enabled: boolean;
-    start: string;
-    end: string;
-  };
-}
-
-const SettingsPage: React.FC = () => {
-  const { user, signOut } = useAuth();
+export default function Settings() {
   const { theme, setTheme, language, setLanguage } = useTheme();
-  const [profile, setProfile] = useState<{
-    username: string | null;
-    full_name: string | null;
-    avatar_url: string | null;
-    website: string | null;
-    email: string | null;
-  }>({
-    username: null,
-    full_name: null,
-    avatar_url: null,
-    website: null,
-    email: null,
+  const { user } = useAuth();
+  const { showSuccess, showError } = useToastHelper();
+  const [activeTab, setActiveTab] = useState("appearance");
+
+  // Widget visibility settings
+  const [widgetSettings, setWidgetSettings] = useState({
+    showTasksWidget: true,
+    showCalendarWidget: true,
+    showEventsWidget: true,
+    showQuoteWidget: true,
+    showMaw3dWidget: true,
+    showTRWidget: true,
   });
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
-  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>({
-    enableToasts: true,
-    enableBadges: true,
-    enableVibration: true,
-    enableSounds: true,
-    soundVolume: 70,
-    // Notification types - all enabled by default
-    messages: true,
-    contact_requests: true,
-    task_updates: true,
-    shared_task_updates: true,
-    event_rsvps: true,
-    calendar_reminders: true,
-    admin_gifts: true,
-    // Sound and badge settings
-    notification_sound: 'chime',
-    show_badges: true,
-    quietHours: {
-      enabled: false,
-      start: '22:00',
-      end: '08:00'
-    }
+
+  // Privacy settings
+  const [privacySettings, setPrivacySettings] = useState({
+    autoApproveContacts: false,
+    profileVisibility: true,
+    showActivityStatus: true
   });
 
   useEffect(() => {
-    const getProfile = async () => {
-      try {
-        setLoading(true);
-        if (!user) throw new Error('No user found');
-
-        let { data, error, status } = await supabase
-          .from('profiles')
-          .select(`username, full_name, avatar_url, website, email`)
-          .eq('id', user.id)
-          .single();
-
-        if (error && status !== 406) {
-          throw error;
-        }
-
-        if (data) {
-          setProfile({
-            username: data.username,
-            full_name: data.full_name,
-            avatar_url: data.avatar_url,
-            website: data.website,
-            email: data.email || user.email,
-          });
-        }
-      } catch (error: any) {
-        toast.error(error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const getNotificationPreferences = async () => {
-      try {
-        setLoading(true);
-        if (!user) throw new Error('No user found');
-
-        let { data, error } = await supabase
-          .from('profiles')
-          .select('notification_preferences')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          throw error;
-        }
-
-        if (data?.notification_preferences) {
-          setNotificationPreferences(prev => ({
-            ...prev,
-            ...data.notification_preferences
-          }));
-        }
-      } catch (error: any) {
-        toast.error(error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    getProfile();
-    getNotificationPreferences();
+    if (user) {
+      loadSettings();
+    }
   }, [user]);
 
-  async function updateProfile({
-    username,
-    full_name,
-    website,
-    avatar_url,
-    email
-  }: {
-    username: string | null;
-    full_name: string | null;
-    website: string | null;
-    avatar_url: string | null;
-    email: string | null;
-  }) {
+  const loadSettings = async () => {
     try {
-      setUpdating(true);
-      if (!user) throw new Error('Could not update profile: No user found');
-
-      const updates = {
-        id: user.id,
-        username,
-        full_name,
-        website,
-        avatar_url,
-        email,
-        updated_at: new Date(),
-      };
-
-      let { error } = await supabase.from('profiles').upsert(updates);
-
-      if (error) {
-        throw error;
-      }
-      setProfile({ username, full_name, avatar_url, website, email });
-      toast.success('Profile updated successfully!');
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setUpdating(false);
-    }
-  }
-
-  async function updateNotificationPreferences(newPreferences: Partial<NotificationPreferences>) {
-    try {
-      setUpdating(true);
-      if (!user) throw new Error('Could not update preferences: No user found');
-
-      let { error } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
-        .update({ notification_preferences: { ...notificationPreferences, ...newPreferences } })
-        .eq('id', user.id);
+        .select('settings, auto_approve_contacts')
+        .eq('id', user?.id)
+        .single();
 
-      if (error) {
-        throw error;
+      if (profile?.settings?.widgets) {
+        setWidgetSettings(prev => ({
+          ...prev,
+          ...profile.settings.widgets
+        }));
       }
 
-      setNotificationPreferences(prev => ({ ...prev, ...newPreferences }));
-      toast.success('Notification preferences updated!');
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setUpdating(false);
+      // Load privacy settings
+      setPrivacySettings({
+        autoApproveContacts: profile?.auto_approve_contacts || false,
+        profileVisibility: profile?.settings?.privacy?.profileVisibility !== false,
+        showActivityStatus: profile?.settings?.privacy?.activityStatus !== false
+      });
+    } catch (error) {
+      console.error('Error loading settings:', error);
     }
-  }
-
-  const handleThemeChange = (newTheme: Theme) => {
-    setTheme(newTheme);
   };
 
-  const handleLanguageChange = (newLanguage: 'en' | 'ar') => {
-    setLanguage(newLanguage);
+  const handleThemeChange = (newTheme: string) => {
+    if (newTheme === 'light' || newTheme === 'dark') {
+      setTheme(newTheme);
+    }
+  };
+
+  const handleLanguageChange = (newLanguage: string) => {
+    if (newLanguage === 'en' || newLanguage === 'ar') {
+      setLanguage(newLanguage);
+    }
+  };
+
+  const updateWidgetSetting = async (key: keyof typeof widgetSettings, value: boolean) => {
+    try {
+      const newSettings = { ...widgetSettings, [key]: value };
+      setWidgetSettings(newSettings);
+
+      const { data: currentProfile } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('id', user?.id)
+        .single();
+
+      const currentSettings = currentProfile?.settings || {};
+
+      await supabase
+        .from('profiles')
+        .update({ 
+          settings: {
+            ...currentSettings,
+            widgets: newSettings
+          }
+        })
+        .eq('id', user?.id);
+
+      showSuccess(t("settingsUpdated", language));
+      
+      // Force dashboard to reload by dispatching a custom event
+      window.dispatchEvent(new CustomEvent('widgetSettingsChanged', { detail: newSettings }));
+    } catch (error) {
+      console.error('Error updating widget setting:', error);
+      showError(t("errorUpdatingSettings", language));
+      setWidgetSettings(widgetSettings);
+    }
+  };
+
+  const updatePrivacySetting = async (key: keyof typeof privacySettings, value: boolean) => {
+    try {
+      const newSettings = { ...privacySettings, [key]: value };
+      setPrivacySettings(newSettings);
+
+      if (key === 'autoApproveContacts') {
+        await supabase
+          .from('profiles')
+          .update({ auto_approve_contacts: value })
+          .eq('id', user?.id);
+      } else {
+        const { data: currentProfile } = await supabase
+          .from('profiles')
+          .select('settings')
+          .eq('id', user?.id)
+          .single();
+
+        const currentSettings = currentProfile?.settings || {};
+        const privacySettings = currentSettings.privacy || {};
+
+        const updatedPrivacy = {
+          ...privacySettings,
+          [key === 'profileVisibility' ? 'profileVisibility' : 'activityStatus']: value
+        };
+
+        await supabase
+          .from('profiles')
+          .update({ 
+            settings: {
+              ...currentSettings,
+              privacy: updatedPrivacy
+            }
+          })
+          .eq('id', user?.id);
+      }
+
+      showSuccess(language === 'ar' ? 'تم تحديث إعدادات الخصوصية' : 'Privacy settings updated');
+    } catch (error) {
+      console.error('Error updating privacy setting:', error);
+      showError(language === 'ar' ? 'خطأ في تحديث الإعدادات' : 'Error updating settings');
+      setPrivacySettings(privacySettings);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader />
-      <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold tracking-tight bg-gradient-primary bg-clip-text text-transparent mb-4">
-          Settings
-        </h1>
+      <div className="container mx-auto p-4 max-w-4xl">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">
+            {t("settings", language)}
+          </h1>
+          <p className="text-muted-foreground">
+            {language === "ar" ? "إدارة إعدادات التطبيق" : "Manage your app settings"}
+          </p>
+        </div>
 
-        <Tabs defaultValue="profile" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="profile">
-              <User className="mr-2 h-4 w-4" />
-              Profile
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="appearance" className="flex items-center gap-2">
+              <Palette className="h-4 w-4" />
+              {t("appearance", language)}
             </TabsTrigger>
-            <TabsTrigger value="notifications">
-              <Bell className="mr-2 h-4 w-4" />
-              Notifications
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              {t("notifications", language)}
             </TabsTrigger>
-            <TabsTrigger value="appearance">
-              <Palette className="mr-2 h-4 w-4" />
-              Appearance
-            </TabsTrigger>
-            <TabsTrigger value="language">
-              <Languages className="mr-2 h-4 w-4" />
-              Language
-            </TabsTrigger>
-            <TabsTrigger value="security">
-              <Shield className="mr-2 h-4 w-4" />
-              Security
+            <TabsTrigger value="dashboard" className="flex items-center gap-2">
+              <Layout className="h-4 w-4" />
+              {language === "ar" ? "لوحة التحكم" : "Dashboard"}
             </TabsTrigger>
           </TabsList>
 
-          {/* Profile Tab */}
-          <TabsContent value="profile" className="space-y-4">
+          <TabsContent value="appearance" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Profile Information</CardTitle>
+                <CardTitle>{t("appearanceSettings", language)}</CardTitle>
+                <CardDescription>
+                  {language === "ar" ? "تخصيص مظهر التطبيق" : "Customize the app appearance"}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    type="email"
-                    id="email"
-                    value={profile.email || ''}
-                    disabled
-                  />
-                </div>
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    type="text"
-                    id="username"
-                    value={profile.username || ''}
-                    onChange={(e) =>
-                      setProfile({ ...profile, username: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="full_name">Full Name</Label>
-                  <Input
-                    type="text"
-                    id="full_name"
-                    value={profile.full_name || ''}
-                    onChange={(e) =>
-                      setProfile({ ...profile, full_name: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="website">Website</Label>
-                  <Input
-                    type="url"
-                    id="website"
-                    value={profile.website || ''}
-                    onChange={(e) =>
-                      setProfile({ ...profile, website: e.target.value })
-                    }
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Button
-              onClick={() => updateProfile({
-                username: profile.username,
-                full_name: profile.full_name,
-                website: profile.website,
-                avatar_url: profile.avatar_url,
-                email: profile.email
-              })}
-              disabled={updating}
-            >
-              {updating ? 'Updating...' : 'Update Profile'}
-            </Button>
-          </TabsContent>
-
-          {/* Notifications Tab */}
-          <TabsContent value="notifications" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Notification Preferences</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="enableToasts">Enable Toasts</Label>
-                  <Switch
-                    id="enableToasts"
-                    checked={notificationPreferences.enableToasts}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ enableToasts: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="enableBadges">Enable Badges</Label>
-                  <Switch
-                    id="enableBadges"
-                    checked={notificationPreferences.enableBadges}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ enableBadges: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="enableVibration">Enable Vibration</Label>
-                  <Switch
-                    id="enableVibration"
-                    checked={notificationPreferences.enableVibration}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ enableVibration: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="enableSounds">Enable Sounds</Label>
-                  <Switch
-                    id="enableSounds"
-                    checked={notificationPreferences.enableSounds}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ enableSounds: checked })}
-                  />
-                </div>
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="soundVolume">Sound Volume</Label>
-                  <Input
-                    type="number"
-                    id="soundVolume"
-                    value={notificationPreferences.soundVolume}
-                    onChange={(e) => updateNotificationPreferences({ soundVolume: parseInt(e.target.value) })}
-                    min="0"
-                    max="100"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Notification Types</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="messages">Messages</Label>
-                  <Switch
-                    id="messages"
-                    checked={notificationPreferences.messages}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ messages: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="contact_requests">Contact Requests</Label>
-                  <Switch
-                    id="contact_requests"
-                    checked={notificationPreferences.contact_requests}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ contact_requests: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="task_updates">Task Updates</Label>
-                  <Switch
-                    id="task_updates"
-                    checked={notificationPreferences.task_updates}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ task_updates: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="shared_task_updates">Shared Task Updates</Label>
-                  <Switch
-                    id="shared_task_updates"
-                    checked={notificationPreferences.shared_task_updates}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ shared_task_updates: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="event_rsvps">Event RSVPs</Label>
-                  <Switch
-                    id="event_rsvps"
-                    checked={notificationPreferences.event_rsvps}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ event_rsvps: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="calendar_reminders">Calendar Reminders</Label>
-                  <Switch
-                    id="calendar_reminders"
-                    checked={notificationPreferences.calendar_reminders}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ calendar_reminders: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="admin_gifts">Admin Gifts</Label>
-                  <Switch
-                    id="admin_gifts"
-                    checked={notificationPreferences.admin_gifts}
-                    onCheckedChange={(checked) => updateNotificationPreferences({ admin_gifts: checked })}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Appearance Tab */}
-          <TabsContent value="appearance" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Appearance Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="theme">Theme</Label>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="theme">{t("theme", language)}</Label>
                   <Select value={theme} onValueChange={handleThemeChange}>
                     <SelectTrigger id="theme">
                       <SelectValue placeholder="Select theme" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
+                      <SelectItem value="light">{t("lightMode", language)}</SelectItem>
+                      <SelectItem value="dark">{t("darkMode", language)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
-          {/* Language Tab */}
-          <TabsContent value="language" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Language Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="language">Language</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="language">{t("language", language)}</Label>
                   <Select value={language} onValueChange={handleLanguageChange}>
                     <SelectTrigger id="language">
                       <SelectValue placeholder="Select language" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="ar">العربية</SelectItem>
+                      <SelectItem value="en">{t("english", language)}</SelectItem>
+                      <SelectItem value="ar">{t("arabic", language)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* Security Tab */}
-          <TabsContent value="security" className="space-y-4">
+            {/* Privacy Settings in Appearance Tab */}
             <Card>
               <CardHeader>
-                <CardTitle>Security Settings</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  {language === 'ar' ? 'إعدادات الخصوصية' : 'Privacy Settings'}
+                </CardTitle>
+                <CardDescription>
+                  {language === 'ar' 
+                    ? 'تحكم في خصوصيتك وكيفية تفاعل الآخرين معك'
+                    : 'Control your privacy and how others can interact with you'}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4">
-                <Button variant="destructive" onClick={() => signOut()}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Sign Out
-                </Button>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-md border">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      <Label className="text-sm font-medium">
+                        {language === 'ar' ? 'الموافقة التلقائية على طلبات التواصل' : 'Auto-approve Contact Requests'}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' 
+                        ? 'قبول طلبات إضافة جهات الاتصال تلقائياً بدون مراجعة'
+                        : 'Automatically accept contact requests without manual review'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={privacySettings.autoApproveContacts}
+                    onCheckedChange={(checked) => updatePrivacySetting('autoApproveContacts', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-md border">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4" />
+                      <Label className="text-sm font-medium">
+                        {language === 'ar' ? 'إظهار الملف الشخصي للآخرين' : 'Profile Visibility to Others'}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' 
+                        ? 'السماح للمستخدمين الآخرين برؤية ملفك الشخصي'
+                        : 'Allow other users to view your profile information'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={privacySettings.profileVisibility}
+                    onCheckedChange={(checked) => updatePrivacySetting('profileVisibility', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-md border">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 rounded-full bg-green-500"></div>
+                      <Label className="text-sm font-medium">
+                        {language === 'ar' ? 'إظهار حالة النشاط' : 'Show Activity Status'}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' 
+                        ? 'السماح للآخرين برؤية ما إذا كنت متصلاً أم لا'
+                        : 'Let others see when you are online or active'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={privacySettings.showActivityStatus}
+                    onCheckedChange={(checked) => updatePrivacySetting('showActivityStatus', checked)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="notifications" className="space-y-6">
+            <NotificationSettings />
+            
+            {/* Quote Preferences */}
+            <QuotePreferencesManager />
+
+            {/* Custom Quotes */}
+            <CustomQuoteManager />
+          </TabsContent>
+
+          <TabsContent value="dashboard" className="space-y-6">
+            {/* Widget Visibility */}
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("widgetVisibility", language)}</CardTitle>
+                <CardDescription>
+                  {language === "ar" ? "اختر الأدوات التي تريد عرضها في لوحة التحكم" : "Choose which widgets to display on your dashboard"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "إظهار الأحداث والمواعيد القادمة" : "Show upcoming events and appointments"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={widgetSettings.showCalendarWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showCalendarWidget', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "إظهار المهام المعلقة" : "Show pending tasks"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={widgetSettings.showTasksWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showTasksWidget', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "إظهار التذكيرات المعلقة" : "Show pending reminders"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={widgetSettings.showTRWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showTRWidget', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "إظهار أحداث مواعيد القادمة" : "Show upcoming Maw3d events"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={widgetSettings.showMaw3dWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showMaw3dWidget', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "إظهار الاقتباسات التحفيزية اليومية" : "Show daily inspirational quotes"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={widgetSettings.showQuoteWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
+                  />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -507,6 +404,4 @@ const SettingsPage: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default SettingsPage;
+}

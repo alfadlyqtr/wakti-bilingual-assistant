@@ -3,43 +3,28 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
 import { Bell, Check, X, Play, Square } from 'lucide-react';
-import { useUnreadMessages } from '@/hooks/useUnreadMessages';
-import { toast } from 'sonner';
 
 export const NotificationDebugPanel: React.FC = () => {
-  const { 
-    unreadTotal, 
-    taskCount, 
-    contactCount, 
-    sharedTaskCount, 
-    maw3dEventCount,
-    loading 
-  } = useUnreadMessages();
+  const [processorStatus, setProcessorStatus] = useState(wn1NotificationService.getProcessorStatus());
+  const [config, setConfig] = useState(wn1NotificationService.getPreferences());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProcessorStatus(wn1NotificationService.getProcessorStatus());
+      setConfig(wn1NotificationService.getPreferences());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const testNotifications = [
+    { type: 'shared_task', label: 'Shared Task' },
+    { type: 'event', label: 'Maw3d Event' },
     { type: 'messages', label: 'Message' },
-    { type: 'tasks', label: 'Task Update' },
-    { type: 'contacts', label: 'Contact Request' },
-    { type: 'events', label: 'Event Response' }
+    { type: 'contact_requests', label: 'Contact Request' }
   ];
-
-  const handleTestNotification = (type: string) => {
-    switch (type) {
-      case 'messages':
-        toast('New Message', { description: 'You have new unread messages' });
-        break;
-      case 'tasks':
-        toast('Task Update', { description: 'Your task status has changed' });
-        break;
-      case 'contacts':
-        toast('Contact Request', { description: 'Someone wants to connect with you' });
-        break;
-      case 'events':
-        toast('Event Response', { description: 'Someone responded to your event' });
-        break;
-    }
-  };
 
   return (
     <Card className="w-full max-w-md">
@@ -50,43 +35,48 @@ export const NotificationDebugPanel: React.FC = () => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Status */}
+        {/* Processor Status */}
         <div className="space-y-2">
-          <h4 className="font-medium">System Status</h4>
+          <h4 className="font-medium">Processor Status</h4>
           <div className="flex items-center gap-2">
-            {!loading ? (
+            {processorStatus.active ? (
               <>
                 <Play className="h-4 w-4 text-green-500" />
                 <Badge variant="default">Active</Badge>
               </>
             ) : (
               <>
-                <Square className="h-4 w-4 text-orange-500" />
-                <Badge variant="secondary">Loading</Badge>
+                <Square className="h-4 w-4 text-red-500" />
+                <Badge variant="destructive">Inactive</Badge>
               </>
             )}
           </div>
+          {processorStatus.userId && (
+            <p className="text-xs text-muted-foreground">
+              User: {processorStatus.userId.substring(0, 8)}...
+            </p>
+          )}
         </div>
 
-        {/* Notification Counts */}
+        {/* Configuration Status */}
         <div className="space-y-2">
-          <h4 className="font-medium">Current Counts</h4>
+          <h4 className="font-medium">Configuration</h4>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="flex items-center gap-1">
-              <Badge variant="outline">{unreadTotal}</Badge>
-              Messages
+              {config.enableToasts ? <Check className="h-3 w-3 text-green-500" /> : <X className="h-3 w-3 text-red-500" />}
+              Toasts
             </div>
             <div className="flex items-center gap-1">
-              <Badge variant="outline">{taskCount}</Badge>
-              Tasks
+              {config.enableSounds ? <Check className="h-3 w-3 text-green-500" /> : <X className="h-3 w-3 text-red-500" />}
+              Sounds
             </div>
             <div className="flex items-center gap-1">
-              <Badge variant="outline">{contactCount}</Badge>
-              Contacts
+              {config.enableBadges ? <Check className="h-3 w-3 text-green-500" /> : <X className="h-3 w-3 text-red-500" />}
+              Badges
             </div>
             <div className="flex items-center gap-1">
-              <Badge variant="outline">{maw3dEventCount}</Badge>
-              Events
+              {config.enableVibration ? <Check className="h-3 w-3 text-green-500" /> : <X className="h-3 w-3 text-red-500" />}
+              Vibration
             </div>
           </div>
         </div>
@@ -100,13 +90,28 @@ export const NotificationDebugPanel: React.FC = () => {
                 key={type}
                 variant="outline"
                 size="sm"
-                onClick={() => handleTestNotification(type)}
+                onClick={() => wn1NotificationService.testNotification(type)}
+                disabled={!processorStatus.active}
               >
                 {label}
               </Button>
             ))}
           </div>
         </div>
+
+        {/* Clear All Badges */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            ['task', 'shared_task', 'event', 'message', 'contact'].forEach(type => {
+              wn1NotificationService.clearBadge(type);
+            });
+          }}
+        >
+          Clear All Badges
+        </Button>
       </CardContent>
     </Card>
   );

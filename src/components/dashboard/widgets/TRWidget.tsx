@@ -6,6 +6,7 @@ import { t } from "@/utils/translations";
 import { Hand, CheckSquare, Bell, Plus, AlertTriangle, Clock } from "lucide-react";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { format, isToday, isPast, parseISO } from "date-fns";
+import { wn1NotificationService } from "@/services/wn1NotificationService";
 
 interface TRWidgetProps {
   language: 'en' | 'ar';
@@ -51,6 +52,8 @@ export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
     .slice(0, 2);
 
   const handleNavigateToTR = () => {
+    // Clear T&R related badges when navigating to T&R page
+    wn1NotificationService.clearBadgeOnPageVisit('tr');
     navigate('/tr');
   };
 

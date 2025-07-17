@@ -1,142 +1,53 @@
 
-import React, { useState, useEffect } from 'react';
-import { NavigationHeader } from '@/components/navigation/NavigationHeader';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/providers/AuthContext';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
-import { Plus, Calendar, MapPin, Users, Clock, Heart, Edit, Share2 } from 'lucide-react';
-import { format, parseISO, isFuture, isPast } from 'date-fns';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
+import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
+// Temporarily comment out this import
+// import { EventCard } from '@/components/maw3d/Maw3dEventCard';
+import { wn1NotificationService } from '@/services/wn1NotificationService';
 
-interface Event {
-  id: string;
-  title: string;
-  description?: string;
-  event_date: string;
-  start_time?: string;
-  end_time?: string;
-  location?: string;
-  is_all_day: boolean;
-  max_attendees?: number;
-  created_by: string;
-  created_at: string;
-  short_id: string;
-}
-
-const Maw3dEvents = () => {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+export default function Maw3dEvents() {
   const navigate = useNavigate();
+  const { language } = useTheme();
+  const { user } = useAuth();
+  const { events, loading, refetch } = useOptimizedMaw3dEvents();
 
+  // Clear Maw3d event badges when visiting this page
   useEffect(() => {
-    if (!user) return;
-    fetchEvents();
+    if (user) {
+      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
+    }
   }, [user]);
 
-  const fetchEvents = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('maw3d_events')
-        .select('*')
-        .order('event_date', { ascending: true });
-
-      if (error) throw error;
-      setEvents(data || []);
-    } catch (error: any) {
-      console.error('Error fetching events:', error);
-      toast.error('Failed to load events');
-    } finally {
-      setLoading(false);
-    }
+  const handleCreateEvent = () => {
+    navigate('/maw3d/create');
   };
 
-  const myEvents = events.filter(event => event.created_by === user?.id);
-  const upcomingEvents = events.filter(event => isFuture(parseISO(event.event_date)));
-  const pastEvents = events.filter(event => isPast(parseISO(event.event_date)));
+  const handleEventClick = (eventId: string) => {
+    navigate(`/maw3d/event/${eventId}`);
+  };
 
-  const renderEventCard = (event: Event, showActions = false) => (
-    <Card key={event.id}>
-      <CardContent className="p-6">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="text-lg font-semibold">{event.title}</h3>
-            {event.description && (
-              <p className="text-muted-foreground mt-1">{event.description}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{event.short_id}</Badge>
-            {showActions && (
-              <div className="flex gap-1">
-                <Button 
-                  size="sm" 
-                  variant="ghost"
-                  onClick={() => navigate(`/maw3d/edit/${event.id}`)}
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="ghost"
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/maw3d/e/${event.short_id}`);
-                    toast.success('Event link copied to clipboard!');
-                  }}
-                >
-                  <Share2 className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <Calendar className="h-4 w-4" />
-            {format(parseISO(event.event_date), 'MMM d, yyyy')}
-          </div>
-          
-          {!event.is_all_day && event.start_time && (
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              {event.start_time}
-              {event.end_time && ` - ${event.end_time}`}
-            </div>
-          )}
-          
-          {event.location && (
-            <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
-              {event.location}
-            </div>
-          )}
-          
-          {event.max_attendees && (
-            <div className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              Max {event.max_attendees} attendees
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
+  const handleManageEvent = (eventId: string) => {
+    navigate(`/maw3d/manage/${eventId}`);
+  };
+
+  const isRTL = language === 'ar';
 
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <NavigationHeader />
         <div className="container mx-auto p-4">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/4"></div>
-            <div className="h-32 bg-muted rounded"></div>
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-muted rounded w-1/3"></div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-64 bg-muted rounded-lg"></div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -145,80 +56,62 @@ const Maw3dEvents = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader />
-      <div className="container mx-auto p-4">
-        <div className="flex justify-between items-center mb-6">
+      <div className="container mx-auto p-4 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Maw3d Events</h1>
-            <p className="text-muted-foreground">Create and manage your events.</p>
+            <h1 className="text-3xl font-bold text-foreground">
+              {language === 'ar' ? 'موعد - إدارة الأحداث' : 'Maw3d - Event Management'}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {language === 'ar' ? 'إنشاء وإدارة الأحداث والمواعيد' : 'Create and manage events and appointments'}
+            </p>
           </div>
-          <Button onClick={() => navigate('/maw3d/create')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Event
+          <Button 
+            onClick={handleCreateEvent}
+            className="flex items-center gap-2"
+            size="lg"
+          >
+            <Plus className="h-5 w-5" />
+            {language === 'ar' ? 'إنشاء حدث جديد' : 'Create New Event'}
           </Button>
         </div>
 
-        <Tabs defaultValue="upcoming" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="upcoming">
-              Upcoming ({upcomingEvents.length})
-            </TabsTrigger>
-            <TabsTrigger value="my-events">
-              My Events ({myEvents.length})
-            </TabsTrigger>
-            <TabsTrigger value="past">
-              Past ({pastEvents.length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="upcoming" className="space-y-4">
-            {upcomingEvents.length === 0 ? (
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No upcoming events. Create your first event!</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {upcomingEvents.map((event) => renderEventCard(event))}
+        {/* Events Grid */}
+        {events.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+              <Plus className="h-12 w-12 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              {language === 'ar' ? 'لا توجد أحداث' : 'No events yet'}
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              {language === 'ar' ? 'ابدأ بإنشاء حدثك الأول' : 'Get started by creating your first event'}
+            </p>
+            <Button onClick={handleCreateEvent}>
+              {language === 'ar' ? 'إنشاء حدث' : 'Create Event'}
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {events.map((event) => (
+              <div key={event.id} className="p-4 border rounded-lg">
+                <h3>Event Card Placeholder</h3>
+                <p>{event.title}</p>
+                <div className="mt-4 flex gap-2">
+                  <Button size="sm" onClick={() => handleEventClick(event.id)}>
+                    {language === 'ar' ? 'عرض' : 'View'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleManageEvent(event.id)}>
+                    {language === 'ar' ? 'إدارة' : 'Manage'}
+                  </Button>
+                </div>
               </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="my-events" className="space-y-4">
-            {myEvents.length === 0 ? (
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">You haven't created any events yet.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {myEvents.map((event) => renderEventCard(event, true))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="past" className="space-y-4">
-            {pastEvents.length === 0 ? (
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No past events.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {pastEvents.map((event) => renderEventCard(event))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
-};
-
-export default Maw3dEvents;
+}
