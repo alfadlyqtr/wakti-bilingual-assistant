@@ -1,91 +1,97 @@
 
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Home, MessageSquare, Users, Calendar, Bot } from 'lucide-react';
-import { UnreadBadge } from '@/components/UnreadBadge';
-import { useUnreadCounts } from '@/hooks/useUnreadCounts';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { 
+  Home, 
+  CheckSquare, 
+  Calendar, 
+  MessageSquare, 
+  Users, 
+  Bot,
+  Settings
+} from 'lucide-react';
 
-export default function MobileNavigation() {
+export const MobileNavigation = () => {
+  const navigate = useNavigate();
   const location = useLocation();
-  const { messageCount, contactCount, eventCount } = useUnreadCounts();
+  const { 
+    unreadTotal, 
+    taskCount, 
+    contactCount, 
+    maw3dEventCount 
+  } = useUnreadMessages();
 
-  const isActive = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/';
+  const navItems = [
+    { 
+      icon: Home, 
+      label: 'Home', 
+      path: '/dashboard',
+      badge: 0
+    },
+    { 
+      icon: CheckSquare, 
+      label: 'T&R', 
+      path: '/tr',
+      badge: taskCount
+    },
+    { 
+      icon: Calendar, 
+      label: 'Maw3d', 
+      path: '/maw3d-events',
+      badge: maw3dEventCount
+    },
+    { 
+      icon: MessageSquare, 
+      label: 'Messages', 
+      path: '/contacts',
+      badge: unreadTotal
+    },
+    { 
+      icon: Users, 
+      label: 'Contacts', 
+      path: '/contacts',
+      badge: contactCount
+    },
+    { 
+      icon: Bot, 
+      label: 'AI', 
+      path: '/wakti-ai',
+      badge: 0
     }
-    return location.pathname.startsWith(path);
-  };
-
-  const handleNavClick = (path: string) => {
-    // Clear badges when navigating to specific pages
-    if (path === '/contacts') {
-      wn1NotificationService.clearBadgeOnPageVisit('contacts');
-    } else if (path === '/maw3d-events') {
-      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
-    } else if (path === '/tr') {
-      wn1NotificationService.clearBadgeOnPageVisit('tr');
-    }
-  };
+  ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50">
-      <div className="flex justify-around items-center py-2">
-        <Link
-          to="/"
-          onClick={() => handleNavClick('/')}
-          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
-            isActive('/') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <div className="relative">
-            <Home className="h-6 w-6" />
-          </div>
-          <span className="text-xs mt-1">Home</span>
-        </Link>
-
-        <Link
-          to="/contacts"
-          onClick={() => handleNavClick('/contacts')}
-          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
-            isActive('/contacts') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <div className="relative">
-            <Users className="h-6 w-6" />
-            {contactCount > 0 && (
-              <UnreadBadge count={contactCount} size="sm" className="-top-1 -right-1" />
-            )}
-          </div>
-          <span className="text-xs mt-1">Contacts</span>
-        </Link>
-
-        <Link
-          to="/maw3d-events"
-          onClick={() => handleNavClick('/maw3d-events')}
-          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
-            isActive('/maw3d') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <div className="relative">
-            <Calendar className="h-6 w-6" />
-            {eventCount > 0 && (
-              <UnreadBadge count={eventCount} size="sm" className="-top-1 -right-1" />
-            )}
-          </div>
-          <span className="text-xs mt-1">Events</span>
-        </Link>
-
-        <Link
-          to="/wakti-ai"
-          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
-            isActive('/wakti-ai') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Bot className="h-6 w-6" />
-          <span className="text-xs mt-1">AI</span>
-        </Link>
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t">
+      <div className="flex items-center justify-around px-2 py-2">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          const Icon = item.icon;
+          
+          return (
+            <Button
+              key={item.path}
+              variant={isActive ? "default" : "ghost"}
+              size="sm"
+              className="relative flex flex-col items-center gap-1 h-auto py-2 px-3"
+              onClick={() => navigate(item.path)}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="text-xs">{item.label}</span>
+              {item.badge > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                >
+                  {item.badge > 99 ? '99+' : item.badge}
+                </Badge>
+              )}
+            </Button>
+          );
+        })}
       </div>
-    </nav>
+    </div>
   );
-}
+};

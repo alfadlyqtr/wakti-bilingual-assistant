@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -28,7 +29,7 @@ const useDebounceCallback = (callback: Function, delay: number) => {
 };
 
 const WaktiAIV2 = () => {
-  const [message, setMessage] = useState('');
+  const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<AIConversation[]>([]);
@@ -596,163 +597,61 @@ const WaktiAIV2 = () => {
     const selectedFile = event.target.files && event.target.files[0];
 
     if (selectedFile) {
-      if (selectedFile.size > 5 * 1024 * 1024) {
-        showError(language === 'ar' ? 'حجم الملف يجب أن يكون أقل من 5 ميغابايت' : 'File size must be less than 5MB');
-        return;
-      }
-
       setFile(selectedFile);
-      await uploadFile(selectedFile);
+      // Handle file processing logic here
     }
-  };
-
-  const uploadFile = async (file: File) => {
-    setIsUploading(1);
-    setUploadProgress(0);
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Authentication required');
-
-      const filePath = `uploads/${user.id}/${Date.now()}-${file.name}`;
-      const { data, error } = await supabase.storage
-        .from('wakti-ai-v2')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/wakti-ai-v2/${filePath}`;
-
-      setProcessedFiles(prevFiles => [...prevFiles, {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        url: publicUrl,
-        publicUrl: publicUrl
-      }]);
-
-      showSuccess(language === 'ar' ? 'تم تحميل الملف بنجاح' : 'File uploaded successfully');
-    } catch (error: any) {
-      console.error("File upload error:", error);
-      showError(language === 'ar' ? 'فشل في تحميل الملف' : 'Failed to upload file');
-    } finally {
-      setIsUploading(0);
-      setUploadProgress(0);
-    }
-  };
-
-  const debouncedSaveSession = useDebounceCallback(() => {
-    const limitedMessages = sessionMessages.slice(-25);
-    WaktiAIV2Service.saveChatSession(limitedMessages, currentConversationId);
-  }, 500);
-
-  useEffect(() => {
-    debouncedSaveSession();
-  }, [sessionMessages, currentConversationId, debouncedSaveSession]);
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
-
-  const toggleSettings = () => {
-    setIsSettingsOpen(!isSettingsOpen);
-  };
-
-  const handleRefreshConversations = async () => {
-    try {
-      const conversations = await WaktiAIV2Service.getConversations();
-      setConversations(conversations);
-    } catch (error) {
-      console.error("Error refreshing conversations:", error);
-      showError(language === 'ar' ? 'فشل في تحديث قائمة المحادثات' : 'Failed to refresh conversation list');
-    }
-  };
-
-  const fetchConversations = async () => {
-    await handleRefreshConversations();
-  };
-
-  const handleTriggerChange = (trigger: string) => {
-    setActiveTrigger(trigger);
-  };
-
-  const handleTextGenerated = (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => {
-    setMessage(text);
-  };
-
-  const handleOpenPlusDrawer = () => {
-    setShowQuickActions(true);
   };
 
   return (
-    <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
+    <div className="flex flex-col h-screen bg-background">
+      {/* Chat Messages */}
+      <div className="flex-1 overflow-hidden">
+        <ChatMessages
+          messages={sessionMessages}
+          isLoading={isLoading}
+          error={error}
+          onRetry={() => handleSendMessage(newMessage, activeTrigger)}
+          language={language}
+        />
+      </div>
+
+      {/* Chat Input */}
+      <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <ChatInput
+          inputValue={newMessage}
+          setInputValue={setNewMessage}
+          isLoading={isLoading}
+          sessionMessages={sessionMessages}
+          onSendMessage={handleSendMessage}
+          onClearChat={handleClearChat}
+          onOpenPlusDrawer={() => setShowQuickActions(true)}
+          activeTrigger={activeTrigger}
+          onTriggerChange={setActiveTrigger}
+          processedFiles={processedFiles}
+          setProcessedFiles={setProcessedFiles}
+          language={language}
+          onFileUpload={handleFileChange}
+        />
+      </div>
+
+      {/* Drawers and Overlays */}
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
         showQuickActions={showQuickActions}
         setShowQuickActions={setShowQuickActions}
         conversations={conversations}
-        currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
-        fetchConversations={fetchConversations}
-        onSendMessage={handleSendMessage}
-        activeTrigger={activeTrigger}
-        onTriggerChange={handleTriggerChange}
-        onTextGenerated={handleTextGenerated}
         onNewConversation={handleNewConversation}
-        onClearChat={handleClearChat}
-        sessionMessages={sessionMessages}
-        isLoading={isLoading}
       />
 
-      <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
-          <ChatMessages
-            sessionMessages={sessionMessages.slice(-25)}
-            isLoading={isLoading}
-            activeTrigger={activeTrigger}
-            scrollAreaRef={scrollAreaRef}
-            userProfile={userProfile}
-            personalTouch={personalTouch}
-            showTaskConfirmation={showTaskConfirmation}
-            pendingTaskData={pendingTaskData}
-            pendingReminderData={pendingReminderData}
-            taskConfirmationLoading={taskConfirmationLoading}
-            onTaskConfirmation={handleTaskConfirmation}
-            onReminderConfirmation={handleReminderConfirmation}
-            onCancelTaskConfirmation={handleCancelTaskConfirmation}
-            conversationId={currentConversationId}
-            isNewConversation={isNewConversation}
-          />
-        </div>
-
-        <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
-          <div className="max-w-4xl mx-auto p-4">
-            <ChatInput
-              message={message}
-              setMessage={setMessage}
-              isLoading={isLoading}
-              sessionMessages={sessionMessages}
-              onSendMessage={handleSendMessage}
-              onClearChat={handleClearChat}
-              onOpenPlusDrawer={handleOpenPlusDrawer}
-              activeTrigger={activeTrigger}
-              onTriggerChange={handleTriggerChange}
-            />
-          </div>
-        </div>
-      </div>
-
+      {/* Notification Bars */}
       <NotificationBars
-        searchConfirmationRequired={false}
-        onSearchConfirmation={() => {}}
-        onQuotaRefresh={checkQuotas}
+        isQuotaExceeded={isQuotaExceeded}
+        isExtendedQuotaExceeded={isExtendedQuotaExceeded}
+        isAIQuotaExceeded={isAIQuotaExceeded}
+        language={language}
       />
     </div>
   );

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { NavigationHeader } from '@/components/navigation/NavigationHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +22,8 @@ import {
   Calendar, Clock, Users, AlertTriangle, Eye, EyeOff
 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
+
+type Theme = 'light' | 'dark';
 
 interface NotificationPreferences {
   enableToasts: boolean;
@@ -216,7 +219,7 @@ const SettingsPage: React.FC = () => {
     }
   }
 
-  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
+  const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);
   };
 
@@ -456,7 +459,6 @@ const SettingsPage: React.FC = () => {
                     <SelectContent>
                       <SelectItem value="light">Light</SelectItem>
                       <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

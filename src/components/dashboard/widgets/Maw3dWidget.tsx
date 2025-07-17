@@ -6,7 +6,6 @@ import { t } from "@/utils/translations";
 import { Hand, Heart, Plus, Calendar, MapPin, Users } from "lucide-react";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 import { format, parseISO, isToday, isTomorrow, isFuture } from "date-fns";
-import { wn1NotificationService } from "@/services/wn1NotificationService";
 
 interface Maw3dWidgetProps {
   language: 'en' | 'ar';
@@ -15,11 +14,6 @@ interface Maw3dWidgetProps {
 export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   const navigate = useNavigate();
   const { events, loading, attendingCounts } = useOptimizedMaw3dEvents();
-
-  // Clear Maw3d badges when component mounts (when user visits dashboard)
-  useEffect(() => {
-    wn1NotificationService.clearBadge('event');
-  }, []);
 
   // Filter and sort upcoming events
   const upcomingEvents = events
@@ -31,8 +25,6 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   const tomorrowEvents = events.filter(event => isTomorrow(parseISO(event.event_date)));
 
   const handleNavigateToMaw3d = () => {
-    // Clear Maw3d related badges when navigating to Maw3d page
-    wn1NotificationService.clearBadgeOnPageVisit('maw3d');
     navigate('/maw3d-events');
   };
 

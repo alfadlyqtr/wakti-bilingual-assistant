@@ -1,27 +1,22 @@
+
 import React, { useState, useEffect } from 'react';
 import { NavigationHeader } from '@/components/navigation/NavigationHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/providers/AuthContext';
-import { UserPlus, MessageCircle, Search, Check, X, Heart, Users, Mail, Star, Settings } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
-import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { UserPlus, MessageSquare, Check, X, Search, Users } from 'lucide-react';
 
 interface Contact {
   id: string;
-  created_at: string;
   user_id: string;
   contact_id: string;
+  created_at: string;
   status: 'pending' | 'accepted' | 'rejected';
   profile: {
     id: string;
@@ -31,351 +26,350 @@ interface Contact {
   };
 }
 
-interface Profile {
-  id: string;
-  updated_at: string;
-  username: string;
-  avatar_url: string;
-  email: string;
-}
-
 const Contacts = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [pendingRequests, setPendingRequests] = useState<Contact[]>([]);
+  const [searchEmail, setSearchEmail] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAddingContact, setIsAddingContact] = useState(false);
-  const [newContactEmail, setNewContactEmail] = useState('');
-  const [newContactNote, setNewContactNote] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const { unreadPerContact } = useUnreadMessages();
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
-    const fetchContacts = async () => {
-      setLoading(true);
-      try {
-        // Fetch accepted contacts
-        const { data: acceptedContacts, error: acceptedError } = await supabase
-          .from('contacts')
-          .select(`
-            id, created_at, user_id, contact_id, status,
-            profile:profiles!inner(id, username, avatar_url, email)
-          `)
-          .eq('user_id', user.id)
-          .eq('status', 'accepted')
-          .order('created_at', { ascending: false });
-
-        if (acceptedError) {
-          throw acceptedError;
-        }
-
-        // Fetch contacts where current user is the contact_id (accepted)
-        const { data: acceptedContactsAsContact, error: acceptedContactsAsContactError } = await supabase
-          .from('contacts')
-          .select(`
-            id, created_at, user_id, contact_id, status,
-            profile:profiles!inner(id, username, avatar_url, email)
-          `)
-          .eq('contact_id', user.id)
-          .eq('status', 'accepted')
-          .order('created_at', { ascending: false });
-
-        if (acceptedContactsAsContactError) {
-          throw acceptedContactsAsContactError;
-        }
-
-        // Fetch pending contact requests
-        const { data: pendingContacts, error: pendingError } = await supabase
-          .from('contacts')
-          .select(`
-            id, created_at, user_id, contact_id, status,
-            profile:profiles!inner(id, username, avatar_url, email)
-          `)
-          .eq('contact_id', user.id)
-          .eq('status', 'pending')
-          .order('created_at', { ascending: false });
-
-        if (pendingError) {
-          throw pendingError;
-        }
-
-        // Fetch all profiles for adding contacts
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .neq('id', user.id);
-
-        if (profilesError) {
-          throw profilesError;
-        }
-
-        const allContacts = [
-          ...(acceptedContacts || []),
-          ...(acceptedContactsAsContact || []),
-          ...(pendingContacts || [])
-        ];
-
-        setContacts(allContacts);
-        setProfiles(profilesData || []);
-      } catch (error: any) {
-        console.error('Error fetching contacts:', error);
-        toast.error(`Error: ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    if (!user) return;
     fetchContacts();
-  }, [user, navigate]);
+    fetchPendingRequests();
+  }, [user]);
 
-  const filteredContacts = contacts.filter(contact => {
-    const username = contact.profile?.username || '';
-    return username.toLowerCase().includes(searchTerm.toLowerCase());
-  });
+  const fetchContacts = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select(`
+          id,
+          user_id,
+          contact_id,
+          created_at,
+          status,
+          profiles!contacts_contact_id_fkey (
+            id,
+            username,
+            avatar_url,
+            email
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'accepted');
 
-  const handleAddContact = async () => {
-    setIsAddingContact(true);
+      if (error) throw error;
+
+      // Fix the type mapping - profiles comes as an array but we expect an object
+      const formattedContacts = data?.map(contact => ({
+        ...contact,
+        profile: contact.profiles as any
+      })) || [];
+
+      setContacts(formattedContacts);
+    } catch (error: any) {
+      console.error('Error fetching contacts:', error);
+      toast.error('Failed to load contacts');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSendContactRequest = async () => {
-    if (!user) {
-      toast.error('Please log in to send contact requests.');
-      return;
-    }
-
+  const fetchPendingRequests = async () => {
+    if (!user) return;
+    
     try {
-      // Validate email
-      if (!newContactEmail) {
-        throw new Error('Email is required.');
-      }
-
-      // Check if the email exists in profiles
-      const profile = profiles.find(p => p.email === newContactEmail);
-      if (!profile) {
-        throw new Error('No user found with this email.');
-      }
-
-      // Check if the contact request already exists
-      const { data: existingRequest } = await supabase
+      const { data, error } = await supabase
         .from('contacts')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('contact_id', profile.id)
-        .single();
+        .select(`
+          id,
+          user_id,
+          contact_id,
+          created_at,
+          status,
+          profiles!contacts_user_id_fkey (
+            id,
+            username,
+            avatar_url,
+            email
+          )
+        `)
+        .eq('contact_id', user.id)
+        .eq('status', 'pending');
 
-      if (existingRequest) {
-        throw new Error('Contact request already sent.');
-      }
+      if (error) throw error;
 
-      // Send contact request
+      // Fix the type mapping - profiles comes as an array but we expect an object
+      const formattedRequests = data?.map(request => ({
+        ...request,
+        profile: request.profiles as any
+      })) || [];
+
+      setPendingRequests(formattedRequests);
+    } catch (error: any) {
+      console.error('Error fetching pending requests:', error);
+      toast.error('Failed to load pending requests');
+    }
+  };
+
+  const searchUsers = async () => {
+    if (!searchEmail.trim()) return;
+    
+    setSearchLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, email, avatar_url')
+        .ilike('email', `%${searchEmail}%`)
+        .neq('id', user?.id)
+        .limit(10);
+
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error: any) {
+      console.error('Error searching users:', error);
+      toast.error('Failed to search users');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const sendContactRequest = async (contactId: string) => {
+    if (!user) return;
+    
+    try {
       const { error } = await supabase
         .from('contacts')
         .insert([
-          { user_id: user.id, contact_id: profile.id, status: 'pending', note: newContactNote }
+          {
+            user_id: user.id,
+            contact_id: contactId,
+            status: 'pending'
+          }
         ]);
 
-      if (error) {
-        throw error;
-      }
-
-      toast.success('Contact request sent successfully!');
-      setContacts(prevContacts => [
-        ...prevContacts,
-        {
-          id: 'temp-' + Date.now(),
-          created_at: new Date().toISOString(),
-          user_id: user.id,
-          contact_id: profile.id,
-          status: 'pending',
-          profile: profile as any
-        }
-      ]);
+      if (error) throw error;
+      
+      toast.success('Contact request sent!');
+      setSearchResults([]);
+      setSearchEmail('');
     } catch (error: any) {
       console.error('Error sending contact request:', error);
-      toast.error(`Error: ${error.message}`);
-    } finally {
-      setIsAddingContact(false);
-      setNewContactEmail('');
-      setNewContactNote('');
+      toast.error('Failed to send contact request');
     }
   };
 
-  const handleAcceptRequest = async (contactId: string) => {
+  const respondToRequest = async (requestId: string, status: 'accepted' | 'rejected') => {
     try {
       const { error } = await supabase
         .from('contacts')
-        .update({ status: 'accepted' })
-        .eq('id', contactId);
+        .update({ status })
+        .eq('id', requestId);
 
-      if (error) {
-        throw error;
+      if (error) throw error;
+      
+      if (status === 'accepted') {
+        toast.success('Contact request accepted!');
+        fetchContacts();
+      } else {
+        toast.success('Contact request rejected');
       }
-
-      // Optimistically update the UI
-      setContacts(prevContacts =>
-        prevContacts.map(contact =>
-          contact.id === contactId ? { ...contact, status: 'accepted' } : contact
-        )
-      );
-
-      toast.success('Contact request accepted!');
+      
+      fetchPendingRequests();
     } catch (error: any) {
-      console.error('Error accepting contact request:', error);
-      toast.error(`Error: ${error.message}`);
+      console.error('Error responding to request:', error);
+      toast.error('Failed to respond to request');
     }
   };
 
-  const handleRejectRequest = async (contactId: string) => {
-    try {
-      const { error } = await supabase
-        .from('contacts')
-        .delete()
-        .eq('id', contactId);
-
-      if (error) {
-        throw error;
-      }
-
-      // Optimistically update the UI
-      setContacts(prevContacts => prevContacts.filter(contact => contact.id !== contactId));
-
-      toast.success('Contact request rejected.');
-    } catch (error: any) {
-      console.error('Error rejecting contact request:', error);
-      toast.error(`Error: ${error.message}`);
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <NavigationHeader />
+        <div className="container mx-auto p-4">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-muted rounded w-1/4"></div>
+            <div className="h-32 bg-muted rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <NavigationHeader />
-      <main className="container mx-auto px-4 py-6">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground">Contacts</h1>
-          <Button onClick={handleAddContact}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Contact
-          </Button>
+      <div className="container mx-auto p-4">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Contacts</h1>
+          <p className="text-muted-foreground">Manage your contacts and connection requests.</p>
         </div>
 
-        <Input
-          type="search"
-          placeholder="Search contacts..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="mb-4"
-        />
+        <Tabs defaultValue="contacts" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="contacts" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              My Contacts ({contacts.length})
+            </TabsTrigger>
+            <TabsTrigger value="requests" className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              Requests ({pendingRequests.length})
+            </TabsTrigger>
+            <TabsTrigger value="add" className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Add Contact
+            </TabsTrigger>
+          </TabsList>
 
-        {loading ? (
-          <p>Loading contacts...</p>
-        ) : (
-          <div className="space-y-4">
-            {filteredContacts.length > 0 ? (
-              filteredContacts.map(contact => (
-                <Card key={contact.id}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <Avatar>
-                        <AvatarImage src={contact.profile?.avatar_url} alt={contact.profile?.username} />
-                        <AvatarFallback>{contact.profile?.username?.charAt(0).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      {contact.profile?.username}
-                      {contact.status === 'pending' && (
-                        <Badge variant="secondary">Pending</Badge>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-sm text-muted-foreground">
-                      <Mail className="mr-2 inline-block h-4 w-4" />
-                      {contact.profile?.email}
-                    </div>
-                    <div className="flex items-center justify-between mt-4">
-                      {contact.status === 'pending' && contact.contact_id === user?.id ? (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleAcceptRequest(contact.id)}
+          <TabsContent value="contacts" className="space-y-4">
+            {contacts.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No contacts yet. Start by adding some!</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {contacts.map((contact) => (
+                  <Card key={contact.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarImage src={contact.profile?.avatar_url} />
+                            <AvatarFallback>
+                              {contact.profile?.username?.charAt(0) || contact.profile?.email?.charAt(0) || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{contact.profile?.username || 'Unknown User'}</p>
+                            <p className="text-sm text-muted-foreground">{contact.profile?.email}</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline">
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          Message
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="requests" className="space-y-4">
+            {pendingRequests.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <UserPlus className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No pending requests</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {pendingRequests.map((request) => (
+                  <Card key={request.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarImage src={request.profile?.avatar_url} />
+                            <AvatarFallback>
+                              {request.profile?.username?.charAt(0) || request.profile?.email?.charAt(0) || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{request.profile?.username || 'Unknown User'}</p>
+                            <p className="text-sm text-muted-foreground">{request.profile?.email}</p>
+                            <Badge variant="outline">Pending Request</Badge>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            onClick={() => respondToRequest(request.id, 'accepted')}
                           >
-                            <Check className="mr-2 h-4 w-4" />
+                            <Check className="h-4 w-4 mr-2" />
                             Accept
                           </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleRejectRequest(contact.id)}
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => respondToRequest(request.id, 'rejected')}
                           >
-                            <X className="mr-2 h-4 w-4" />
-                            Reject
+                            <X className="h-4 w-4 mr-2" />
+                            Decline
                           </Button>
-                        </>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigate(`/messages/${contact.profile.id}`)}
-                        >
-                          <MessageCircle className="mr-2 h-4 w-4" />
-                          Message
-                          {unreadPerContact[contact.profile.id] > 0 && (
-                            <Badge variant="destructive" className="ml-2">
-                              {unreadPerContact[contact.profile.id]}
-                            </Badge>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <Card>
-                <CardContent>No contacts found.</CardContent>
-              </Card>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             )}
-          </div>
-        )}
+          </TabsContent>
 
-        <Dialog open={isAddingContact} onOpenChange={() => setIsAddingContact(false)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add New Contact</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="email" className="text-right">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  value={newContactEmail}
-                  onChange={(e) => setNewContactEmail(e.target.value)}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="note" className="text-right">
-                  Note
-                </Label>
-                <Textarea
-                  id="note"
-                  value={newContactNote}
-                  onChange={(e) => setNewContactNote(e.target.value)}
-                  className="col-span-3"
-                />
-              </div>
-            </div>
-            <Button onClick={handleSendContactRequest}>Send Contact Request</Button>
-          </DialogContent>
-        </Dialog>
-      </main>
+          <TabsContent value="add" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add New Contact</CardTitle>
+                <CardDescription>Search for users by email address to send connection requests.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter email address..."
+                    value={searchEmail}
+                    onChange={(e) => setSearchEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
+                  />
+                  <Button onClick={searchUsers} disabled={searchLoading}>
+                    <Search className="h-4 w-4 mr-2" />
+                    Search
+                  </Button>
+                </div>
+
+                {searchResults.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="font-medium">Search Results</h3>
+                    {searchResults.map((result) => (
+                      <Card key={result.id}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Avatar>
+                                <AvatarImage src={result.avatar_url} />
+                                <AvatarFallback>
+                                  {result.username?.charAt(0) || result.email?.charAt(0) || 'U'}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">{result.username || 'Unknown User'}</p>
+                                <p className="text-sm text-muted-foreground">{result.email}</p>
+                              </div>
+                            </div>
+                            <Button size="sm" onClick={() => sendContactRequest(result.id)}>
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Add Contact
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { UserMenu } from './UserMenu';
+import { UserMenu } from '@/components/navigation/UserMenu';
 import { NotificationBadges } from './NotificationBadges';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthContext';

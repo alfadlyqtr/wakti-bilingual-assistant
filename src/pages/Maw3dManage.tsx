@@ -1,146 +1,129 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { NavigationHeader } from '@/components/navigation/NavigationHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Share2, Trash2, CheckCircle, XCircle, User, MessageCircle } from 'lucide-react';
-import { format } from 'date-fns';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/providers/AuthContext';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
-import { EventPreview } from '@/components/maw3d/EventPreview';
-import { Maw3dService } from '@/services/maw3dService';
-import { ShareService } from '@/services/shareService';
-import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
-import { useTheme } from '@/providers/ThemeProvider';
-import { t } from '@/utils/translations';
-import { wn1NotificationService } from '@/services/wn1NotificationService';
+import { 
+  ArrowLeft, Calendar, MapPin, Users, Clock, Heart, 
+  Edit, Share2, CheckCircle, XCircle, HelpCircle 
+} from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 
-export default function Maw3dManage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  event_date: string;
+  start_time?: string;
+  end_time?: string;
+  location?: string;
+  is_all_day: boolean;
+  max_attendees?: number;
+  created_by: string;
+  created_at: string;
+  short_id: string;
+}
+
+interface RSVP {
+  id: string;
+  event_id: string;
+  user_id: string;
+  guest_name: string;
+  guest_email?: string;
+  response: 'attending' | 'not_attending' | 'maybe';
+  created_at: string;
+}
+
+const Maw3dManage = () => {
+  const [event, setEvent] = useState<Event | null>(null);
+  const [rsvps, setRsvps] = useState<RSVP[]>([]);
+  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
-  const { language } = useTheme();
-  const [event, setEvent] = useState<Maw3dEvent | null>(null);
-  const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Clear Maw3d event badges when visiting this page
-  useEffect(() => {
-    if (user) {
-      wn1NotificationService.clearBadgeOnPageVisit('maw3d');
-    }
-  }, [user]);
+  const navigate = useNavigate();
+  const { eventId } = useParams();
 
   useEffect(() => {
-    if (id) {
-      fetchEventData();
-    }
-  }, [id]);
+    if (!user || !eventId) return;
+    fetchEventAndRsvps();
+  }, [user, eventId]);
 
-  const fetchEventData = async () => {
+  const fetchEventAndRsvps = async () => {
     try {
-      if (!id) return;
-      
-      console.log('=== MANAGEMENT PAGE: FETCHING EVENT DATA ===');
-      console.log('Event ID:', id);
-      console.log('Current user ID:', user?.id);
-      
-      const eventData = await Maw3dService.getEvent(id);
-      if (!eventData) {
-        console.error('Event not found');
-        toast.error('Event not found');
-        navigate('/maw3d');
-        return;
-      }
+      // Fetch event
+      const { data: eventData, error: eventError } = await supabase
+        .from('maw3d_events')
+        .select('*')
+        .eq('id', eventId)
+        .eq('created_by', user?.id)
+        .single();
 
-      console.log('Event data:', eventData);
-      console.log('Event created_by:', eventData.created_by);
-      console.log('Current user:', user?.id);
-
-      // Check if user is the creator
-      if (eventData.created_by !== user?.id) {
-        console.error('User not creator:', { eventCreatedBy: eventData.created_by, currentUser: user?.id });
-        toast.error('You can only manage events you created');
-        navigate('/maw3d');
-        return;
-      }
-
+      if (eventError) throw eventError;
       setEvent(eventData);
-      
+
       // Fetch RSVPs
-      console.log('Fetching RSVPs for event:', eventData.id);
-      const eventRsvps = await Maw3dService.getRsvps(eventData.id);
-      console.log('Fetched RSVPs:', eventRsvps);
-      setRsvps(eventRsvps);
-    } catch (error) {
+      const { data: rsvpData, error: rsvpError } = await supabase
+        .from('maw3d_rsvps')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+
+      if (rsvpError) throw rsvpError;
+      setRsvps(rsvpData || []);
+    } catch (error: any) {
       console.error('Error fetching event data:', error);
-      toast.error('Failed to load event data');
-      navigate('/maw3d');
+      toast.error('Failed to load event');
+      navigate('/maw3d-events');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleShare = async () => {
-    if (!event) {
-      toast.error('Cannot generate link for this event');
-      return;
-    }
-    
-    try {
-      // Pass the full event object to ShareService
-      await ShareService.shareEvent(event);
-    } catch (error) {
-      console.error('Error sharing event:', error);
-      toast.error('Failed to share event');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!event || !confirm('Are you sure you want to delete this event?')) return;
-    
-    try {
-      await Maw3dService.deleteEvent(event.id);
-      toast.success('Event deleted successfully');
-      navigate('/maw3d');
-    } catch (error) {
-      console.error('Error deleting event:', error);
-      toast.error('Failed to delete event');
-    }
-  };
-
-  const getRsvpCounts = () => {
-    const accepted = rsvps.filter(rsvp => rsvp.response === 'accepted').length;
-    const declined = rsvps.filter(rsvp => rsvp.response === 'declined').length;
-    return { accepted, declined };
-  };
-
-  const getBackgroundStyle = (event: Maw3dEvent) => {
-    switch (event.background_type) {
-      case 'color':
-        return { backgroundColor: event.background_value };
-      case 'gradient':
-        return { background: event.background_value };
-      case 'image':
-      case 'ai':
-        return { 
-          backgroundImage: `url(${event.background_value})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        };
+  const getResponseIcon = (response: string) => {
+    switch (response) {
+      case 'attending':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'not_attending':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case 'maybe':
+        return <HelpCircle className="h-4 w-4 text-yellow-500" />;
       default:
-        return { backgroundColor: '#3b82f6' };
+        return null;
     }
   };
 
-  if (isLoading) {
+  const getResponseColor = (response: string) => {
+    switch (response) {
+      case 'attending':
+        return 'text-green-600 bg-green-50 border-green-200';
+      case 'not_attending':
+        return 'text-red-600 bg-red-50 border-red-200';
+      case 'maybe':
+        return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+      default:
+        return 'text-gray-600 bg-gray-50 border-gray-200';
+    }
+  };
+
+  const attendingRsvps = rsvps.filter(rsvp => rsvp.response === 'attending');
+  const notAttendingRsvps = rsvps.filter(rsvp => rsvp.response === 'not_attending');
+  const maybeRsvps = rsvps.filter(rsvp => rsvp.response === 'maybe');
+
+  if (loading) {
     return (
-      <div className="flex-1 overflow-y-auto bg-background flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
+      <div className="min-h-screen bg-background">
+        <NavigationHeader />
+        <div className="container mx-auto p-4">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-muted rounded w-1/4"></div>
+            <div className="h-32 bg-muted rounded"></div>
+          </div>
         </div>
       </div>
     );
@@ -148,267 +131,314 @@ export default function Maw3dManage() {
 
   if (!event) {
     return (
-      <div className="flex-1 overflow-y-auto bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Event not found</h1>
-          <Button onClick={() => navigate('/maw3d')}>
-            {t("backToEvents", language)}
-          </Button>
+      <div className="min-h-screen bg-background">
+        <NavigationHeader />
+        <div className="container mx-auto p-4">
+          <Card>
+            <CardContent className="p-6 text-center">
+              <p className="text-muted-foreground">Event not found or you don't have permission to manage it.</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
   }
 
-  const rsvpCounts = getRsvpCounts();
-  const acceptedRsvps = rsvps.filter(rsvp => rsvp.response === 'accepted');
-  const declinedRsvps = rsvps.filter(rsvp => rsvp.response === 'declined');
-
-  console.log('=== MANAGEMENT PAGE RENDER DEBUG ===');
-  console.log('Total RSVPs:', rsvps.length);
-  console.log('Accepted RSVPs:', acceptedRsvps.length);
-  console.log('Declined RSVPs:', declinedRsvps.length);
-  console.log('All RSVPs:', rsvps);
-
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
-      <div className="p-4 pb-24">
-        {/* Header with Back Button and Description */}
+    <div className="min-h-screen bg-background">
+      <NavigationHeader />
+      <div className="container mx-auto p-4">
         <div className="mb-6">
           <Button 
             variant="ghost" 
-            size="sm" 
-            onClick={() => navigate('/maw3d')}
-            className="gap-2 mb-3 text-sm px-2 py-1"
+            onClick={() => navigate('/maw3d-events')}
+            className="mb-4"
           >
-            <ArrowLeft className="w-3 h-3" />
-            {t("backToEvents", language)}
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Events
           </Button>
-          <p className="text-muted-foreground text-sm">{t("viewRsvpsAndManage", language)}</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Manage Event</h1>
+          <p className="text-muted-foreground">View RSVPs and manage your event.</p>
         </div>
 
-        {/* Event Preview - Title and Background Only */}
-        <div className="mb-8">
-          <div className="w-full max-w-md mx-auto">
-            <div 
-              className="relative rounded-lg overflow-hidden shadow-lg h-32 flex items-center justify-center"
-              style={getBackgroundStyle(event)}
-            >
-              <div className="absolute inset-0 bg-black/20" />
-              <h1 
-                className="relative font-bold text-2xl text-center px-4"
-                style={{
-                  fontSize: `${(event?.text_style?.fontSize || 16) + 8}px`,
-                  fontFamily: event?.text_style?.fontFamily || 'Arial',
-                  fontWeight: event?.text_style?.isBold ? 'bold' : 'normal',
-                  fontStyle: event?.text_style?.isItalic ? 'italic' : 'normal',
-                  textDecoration: event?.text_style?.isUnderline ? 'underline' : 'none',
-                  textShadow: event?.text_style?.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
-                  textAlign: event?.text_style?.alignment as any || 'center',
-                  color: event?.text_style?.color || '#000000'
-                }}
-              >
-                {event?.title || 'Event Title'}
-              </h1>
-            </div>
-          </div>
-        </div>
-
-        {/* Management Actions */}
-        <Card className="mb-8">
-          <CardHeader className="pb-6">
-            <CardTitle className="text-lg font-semibold">{t("eventManagement", language)}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Primary Actions - Horizontal Layout */}
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                onClick={() => navigate(`/maw3d/edit/${event?.id}`)}
-                className="gap-2 h-12"
-                size="lg"
-              >
-                <Edit className="w-5 h-5" />
-                {t("editEvent", language)}
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={handleShare}
-                className="gap-2 h-12"
-                size="lg"
-              >
-                <Share2 className="w-5 h-5" />
-                {t("shareEvent", language)}
-              </Button>
+        {/* Event Details */}
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-xl font-semibold">{event.title}</h2>
+                {event.description && (
+                  <p className="text-muted-foreground mt-1">{event.description}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{event.short_id}</Badge>
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  onClick={() => navigate(`/maw3d/edit/${event.id}`)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/maw3d/e/${event.short_id}`);
+                    toast.success('Event link copied to clipboard!');
+                  }}
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             
-            {/* Destructive Action */}
-            <div className="pt-2 border-t border-border">
-              <Button
-                variant="destructive"
-                onClick={handleDelete}
-                className="w-full gap-2 h-10"
-              >
-                <Trash2 className="w-4 h-4" />
-                {t("delete", language)}
-              </Button>
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <Calendar className="h-4 w-4" />
+                {format(parseISO(event.event_date), 'MMM d, yyyy')}
+              </div>
+              
+              {!event.is_all_day && event.start_time && (
+                <div className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  {event.start_time}
+                  {event.end_time && ` - ${event.end_time}`}
+                </div>
+              )}
+              
+              {event.location && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-4 w-4" />
+                  {event.location}
+                </div>
+              )}
+              
+              {event.max_attendees && (
+                <div className="flex items-center gap-1">
+                  <Users className="h-4 w-4" />
+                  Max {event.max_attendees} attendees
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* RSVP Statistics - Always show total count */}
-        <div className="grid gap-4 md:grid-cols-3 mb-8">
-          <Card className="border-2 hover:shadow-lg transition-all duration-200">
+        {/* RSVP Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card>
             <CardContent className="p-4 text-center">
-              <div className="relative">
-                <Users className="w-6 h-6 mx-auto mb-2 text-blue-600" />
-                <div className="text-2xl font-bold text-blue-600">{rsvps.length}</div>
-                <div className="text-xs font-medium text-muted-foreground">{t("totalResponses", language)}</div>
-              </div>
+              <div className="text-2xl font-bold text-green-600">{attendingRsvps.length}</div>
+              <div className="text-sm text-muted-foreground">Attending</div>
             </CardContent>
           </Card>
-          
-          <Card className="border-2 border-green-200 bg-green-50/50 dark:bg-green-950/20 hover:shadow-lg transition-all duration-200">
+          <Card>
             <CardContent className="p-4 text-center">
-              <div className="relative">
-                <CheckCircle className="w-6 h-6 mx-auto mb-2 text-green-600" />
-                <div className="text-2xl font-bold text-green-600">{rsvpCounts.accepted}</div>
-                <div className="text-xs font-medium text-green-700 dark:text-green-300">{t("going", language)}</div>
-              </div>
+              <div className="text-2xl font-bold text-yellow-600">{maybeRsvps.length}</div>
+              <div className="text-sm text-muted-foreground">Maybe</div>
             </CardContent>
           </Card>
-          
-          <Card className="border-2 border-red-200 bg-red-50/50 dark:bg-red-950/20 hover:shadow-lg transition-all duration-200">
+          <Card>
             <CardContent className="p-4 text-center">
-              <div className="relative">
-                <XCircle className="w-6 h-6 mx-auto mb-2 text-red-600" />
-                <div className="text-2xl font-bold text-red-600">{rsvpCounts.declined}</div>
-                <div className="text-xs font-medium text-red-700 dark:text-red-300">{t("declined", language)}</div>
-              </div>
+              <div className="text-2xl font-bold text-red-600">{notAttendingRsvps.length}</div>
+              <div className="text-sm text-muted-foreground">Not Attending</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold">{rsvps.length}</div>
+              <div className="text-sm text-muted-foreground">Total Responses</div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Vertical RSVP Lists - Thinner Cards */}
-        <div className="space-y-6">
-          {/* Attending Section */}
-          <Card className="shadow-md border-green-200">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span>{t("going", language)}</span>
-                </div>
-                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                  {acceptedRsvps.length}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {acceptedRsvps.length > 0 ? (
-                <div className="space-y-2">
-                  {acceptedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-start gap-3 p-3 bg-green-50/70 dark:bg-green-950/10 rounded-md border border-green-100 dark:border-green-800/30 hover:shadow-sm transition-shadow">
-                      {/* Avatar */}
-                      <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 mt-0.5">
-                        {rsvp.guest_name.charAt(0).toUpperCase()}
-                      </div>
-                      
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-green-800 dark:text-green-200 truncate text-sm">
-                          {rsvp.guest_name}
-                        </h3>
-                        <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mb-1">
-                          <Clock className="w-3 h-3" />
-                          {format(new Date(rsvp.created_at), 'MMM d, yyyy • h:mm a')}
-                        </div>
-                        {/* Comment Display */}
-                        {rsvp.comment && (
-                          <div className="mt-2 p-2 bg-white/50 dark:bg-green-800/20 rounded border border-green-200/50 dark:border-green-700/30">
-                            <div className="flex items-start gap-1">
-                              <MessageCircle className="w-3 h-3 text-green-600 flex-shrink-0 mt-0.5" />
-                              <p className="text-xs text-green-700 dark:text-green-300 leading-relaxed break-words" dir="auto">
-                                {rsvp.comment}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Status */}
-                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-muted-foreground">
-                  <CheckCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">{t("noRsvpsYet", language)}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* RSVP Details */}
+        <Tabs defaultValue="attending" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="attending">
+              Attending ({attendingRsvps.length})
+            </TabsTrigger>
+            <TabsTrigger value="maybe">
+              Maybe ({maybeRsvps.length})
+            </TabsTrigger>
+            <TabsTrigger value="not-attending">
+              Not Attending ({notAttendingRsvps.length})
+            </TabsTrigger>
+            <TabsTrigger value="all">
+              All Responses ({rsvps.length})
+            </TabsTrigger>
+          </TabsList>
 
-          {/* Declined Section */}
-          <Card className="shadow-md border-red-200">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <XCircle className="w-5 h-5 text-red-600" />
-                  <span>{t("declined", language)}</span>
-                </div>
-                <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
-                  {declinedRsvps.length}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {declinedRsvps.length > 0 ? (
-                <div className="space-y-2">
-                  {declinedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-start gap-3 p-3 bg-red-50/70 dark:bg-red-950/10 rounded-md border border-red-100 dark:border-red-800/30 hover:shadow-sm transition-shadow">
-                      {/* Avatar */}
-                      <div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 mt-0.5">
-                        {rsvp.guest_name.charAt(0).toUpperCase()}
-                      </div>
-                      
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-red-800 dark:text-red-200 truncate text-sm">
-                          {rsvp.guest_name}
-                        </h3>
-                        <div className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 mb-1">
-                          <Clock className="w-3 h-3" />
-                          {format(new Date(rsvp.created_at), 'MMM d, yyyy • h:mm a')}
-                        </div>
-                        {/* Comment Display */}
-                        {rsvp.comment && (
-                          <div className="mt-2 p-2 bg-white/50 dark:bg-red-800/20 rounded border border-red-200/50 dark:border-red-700/30">
-                            <div className="flex items-start gap-1">
-                              <MessageCircle className="w-3 h-3 text-red-600 flex-shrink-0 mt-0.5" />
-                              <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed break-words" dir="auto">
-                                {rsvp.comment}
-                              </p>
-                            </div>
+          <TabsContent value="attending" className="space-y-4">
+            {attendingRsvps.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <CheckCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No one is attending yet.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {attendingRsvps.map((rsvp) => (
+                  <Card key={rsvp.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback>
+                              {rsvp.guest_name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{rsvp.guest_name}</p>
+                            {rsvp.guest_email && (
+                              <p className="text-sm text-muted-foreground">{rsvp.guest_email}</p>
+                            )}
                           </div>
-                        )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getResponseIcon(rsvp.response)}
+                          <Badge className={getResponseColor(rsvp.response)}>
+                            {rsvp.response.replace('_', ' ')}
+                          </Badge>
+                        </div>
                       </div>
-                      
-                      {/* Status */}
-                      <XCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-muted-foreground">
-                  <XCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">{t("noRsvpsYet", language)}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="maybe" className="space-y-4">
+            {maybeRsvps.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <HelpCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No maybe responses.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {maybeRsvps.map((rsvp) => (
+                  <Card key={rsvp.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback>
+                              {rsvp.guest_name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{rsvp.guest_name}</p>
+                            {rsvp.guest_email && (
+                              <p className="text-sm text-muted-foreground">{rsvp.guest_email}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getResponseIcon(rsvp.response)}
+                          <Badge className={getResponseColor(rsvp.response)}>
+                            {rsvp.response}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="not-attending" className="space-y-4">
+            {notAttendingRsvps.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <XCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No one declined yet.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {notAttendingRsvps.map((rsvp) => (
+                  <Card key={rsvp.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback>
+                              {rsvp.guest_name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{rsvp.guest_name}</p>
+                            {rsvp.guest_email && (
+                              <p className="text-sm text-muted-foreground">{rsvp.guest_email}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getResponseIcon(rsvp.response)}
+                          <Badge className={getResponseColor(rsvp.response)}>
+                            Not Attending
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="all" className="space-y-4">
+            {rsvps.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No responses yet. Share your event to get RSVPs!</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {rsvps.map((rsvp) => (
+                  <Card key={rsvp.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback>
+                              {rsvp.guest_name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{rsvp.guest_name}</p>
+                            {rsvp.guest_email && (
+                              <p className="text-sm text-muted-foreground">{rsvp.guest_email}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              {format(parseISO(rsvp.created_at), 'MMM d, yyyy')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getResponseIcon(rsvp.response)}
+                          <Badge className={getResponseColor(rsvp.response)}>
+                            {rsvp.response.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
-}
+};
+
+export default Maw3dManage;

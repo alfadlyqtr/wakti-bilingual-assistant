@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { NavigationHeader } from '@/components/navigation/NavigationHeader';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/providers/AuthContext';
-import { Send, Mic, Image, Camera, Paperclip, Phone, Video, Search, ArrowLeft } from 'lucide-react';
+import { Send, ArrowLeft, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
@@ -33,7 +34,7 @@ interface Contact {
     id: string;
     full_name: string;
     avatar_url: string;
-  } | null;
+  };
 }
 
 const Messages = () => {
@@ -78,7 +79,7 @@ const Messages = () => {
             contact_id,
             created_at,
             status,
-            profile:profiles (
+            profiles!contacts_contact_id_fkey (
               id,
               full_name,
               avatar_url
@@ -93,7 +94,12 @@ const Messages = () => {
         }
 
         if (contactsData) {
-          setContacts(contactsData as Contact[]);
+          // Fix the type mapping - profiles comes as an array but we expect an object
+          const formattedContacts = contactsData.map(contact => ({
+            ...contact,
+            profile: contact.profiles as any
+          }));
+          setContacts(formattedContacts);
         }
       } catch (err: any) {
         setError(err.message);
@@ -232,20 +238,10 @@ const Messages = () => {
 
   const formatTimeAgo = (dateStr: string): string => {
     try {
-      return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: { formatDistance: (token: string, count: number) => {
-        switch (token) {
-          case 'xSeconds': return 'ثواني';
-          case 'xMinutes': return 'دقائق';
-          case 'xHours': return 'ساعات';
-          case 'xDays': return 'أيام';
-          case 'xMonths': return 'شهور';
-          case 'xYears': return 'سنوات';
-          default: return '';
-        }
-      }} });
+      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
     } catch (error) {
       console.error("Error formatting date:", error);
-      return 'منذ وقت قصير';
+      return 'Recently';
     }
   };
 
@@ -346,19 +342,23 @@ const Messages = () => {
                 </ScrollArea>
               </CardContent>
               <div className="p-4">
-                <Input
-                  type="text"
-                  placeholder="Type your message..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                />
-                <Button className="mt-2 w-full" onClick={handleSendMessage}>Send</Button>
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Type your message..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                  />
+                  <Button onClick={handleSendMessage}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </Card>
           </div>
