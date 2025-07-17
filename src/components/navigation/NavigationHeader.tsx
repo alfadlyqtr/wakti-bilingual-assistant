@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { UserMenu } from '@/components/navigation/UserMenu';
 import { NotificationBadges } from './NotificationBadges';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useAuth } from '@/providers/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const NavigationHeader = () => {
   const { theme, language } = useTheme();
