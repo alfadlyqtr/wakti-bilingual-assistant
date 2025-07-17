@@ -20,6 +20,7 @@ export class WaktiSoundManager {
   constructor() {
     this.settings = this.loadSettings();
     this.setupUserInteraction();
+    console.log('🎵 WaktiSoundManager initialized:', this.settings);
   }
 
   private setupUserInteraction(): void {
@@ -38,11 +39,15 @@ export class WaktiSoundManager {
     const saved = localStorage.getItem('wakti-sound-settings');
     if (saved) {
       try {
-        return { ...this.getDefaultSettings(), ...JSON.parse(saved) };
+        const parsed = { ...this.getDefaultSettings(), ...JSON.parse(saved) };
+        console.log('🎵 Loaded saved settings:', parsed);
+        return parsed;
       } catch (e) {
+        console.warn('🎵 Failed to parse saved settings, using defaults');
         return this.getDefaultSettings();
       }
     }
+    console.log('🎵 Using default settings');
     return this.getDefaultSettings();
   }
 
@@ -52,9 +57,17 @@ export class WaktiSoundManager {
 
   private saveSettings(): void {
     localStorage.setItem('wakti-sound-settings', JSON.stringify(this.settings));
+    console.log('🎵 Settings saved:', this.settings);
   }
 
   async playNotificationSound(soundType?: WaktiSoundType): Promise<boolean> {
+    console.log('🔊 playNotificationSound called:', {
+      soundType,
+      enabled: this.settings.enabled,
+      userInteracted: this.userInteracted,
+      volume: this.settings.volume
+    });
+
     if (!this.settings.enabled) {
       console.log('🔇 Sound disabled in settings');
       return false;
@@ -66,15 +79,42 @@ export class WaktiSoundManager {
     }
     
     const sound = soundType || this.settings.selectedSound;
-    console.log('🔊 Playing sound:', sound, 'volume:', this.settings.volume);
+    const soundUrl = WAKTI_SOUNDS[sound];
+    
+    console.log('🔊 Attempting to play sound:', {
+      sound,
+      soundUrl,
+      volume: this.settings.volume / 100
+    });
     
     try {
-      const audio = new Audio(WAKTI_SOUNDS[sound]);
+      // Test if the file exists first
+      const response = await fetch(soundUrl, { method: 'HEAD' });
+      if (!response.ok) {
+        console.error('❌ Sound file not accessible:', soundUrl, response.status);
+        return false;
+      }
+      
+      const audio = new Audio(soundUrl);
       audio.volume = this.settings.volume / 100;
       
       await new Promise((resolve, reject) => {
-        audio.addEventListener('canplaythrough', () => resolve(true));
-        audio.addEventListener('error', reject);
+        const timeout = setTimeout(() => {
+          reject(new Error('Audio load timeout'));
+        }, 5000);
+        
+        audio.addEventListener('canplaythrough', () => {
+          clearTimeout(timeout);
+          console.log('✅ Audio loaded successfully');
+          resolve(true);
+        });
+        
+        audio.addEventListener('error', (e) => {
+          clearTimeout(timeout);
+          console.error('❌ Audio load error:', e);
+          reject(e);
+        });
+        
         audio.load();
       });
       
