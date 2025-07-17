@@ -346,14 +346,18 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     const responseLanguage = language;
     let messages = [];
 
-    // SIMPLIFIED MEMORY: Load full conversation history + personalization
+    // SIMPLIFIED MEMORY SYSTEM FIX - Load user history regardless of conversation_id
     const { data: fullHistory } = await supabase
       .from('ai_chat_history')
       .select('role, content, created_at')
-      .eq('conversation_id', conversationId)
       .eq('user_id', userId)
-      .order('created_at', { ascending: true })
-      .limit(24); // Last 12 exchanges = 24 messages
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    // Reverse to get chronological order for AI context
+    if (fullHistory) {
+      fullHistory.reverse();
+    }
 
     // Build personalization context for system prompt
     let personalizationContext = '';
