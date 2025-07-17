@@ -29,6 +29,112 @@ export function useUnreadMessages() {
     console.log(`[useUnreadMessages] Connection status: ${realtimeStatus}`);
   }
 
+  // Separate notification functions for each type
+  function checkAndNotifyMessages(newTotal: number, from: string) {
+    if (from.includes('realtime') && newTotal > prevUnreadTotal) {
+      console.log('🔔 New messages detected, showing notification');
+      toast('New Message', {
+        description: 'You have new unread messages',
+        duration: 4000,
+        action: {
+          label: 'View',
+          onClick: () => window.location.href = '/contacts'
+        }
+      });
+      
+      try {
+        waktiSounds.playNotificationSound('chime');
+      } catch (error) {
+        console.error('Failed to play sound:', error);
+      }
+    }
+    setPrevUnreadTotal(newTotal);
+  }
+
+  function checkAndNotifyTasks(newTaskCount: number, from: string) {
+    if (from.includes('realtime') && newTaskCount > prevTaskCount) {
+      console.log('🔔 New overdue tasks detected, showing notification');
+      toast('Tasks Overdue', {
+        description: 'Some of your tasks have become overdue',
+        duration: 4000,
+        action: {
+          label: 'View',
+          onClick: () => window.location.href = '/tr'
+        }
+      });
+      
+      try {
+        waktiSounds.playNotificationSound('beep');
+      } catch (error) {
+        console.error('Failed to play sound:', error);
+      }
+    }
+    setPrevTaskCount(newTaskCount);
+  }
+
+  function checkAndNotifyContacts(newContactCount: number, from: string) {
+    if (from.includes('realtime') && newContactCount > prevContactCount) {
+      console.log('🔔 New contact requests detected, showing notification');
+      toast('New Contact Request', {
+        description: 'You have new contact requests',
+        duration: 4000,
+        action: {
+          label: 'View',
+          onClick: () => window.location.href = '/contacts'
+        }
+      });
+      
+      try {
+        waktiSounds.playNotificationSound('ding');
+      } catch (error) {
+        console.error('Failed to play sound:', error);
+      }
+    }
+    setPrevContactCount(newContactCount);
+  }
+
+  function checkAndNotifySharedTasks(newSharedTaskCount: number, from: string) {
+    if (from.includes('realtime') && newSharedTaskCount > prevSharedTaskCount) {
+      console.log('🔔 New shared task completions detected, showing notification');
+      toast('Shared Task Update', {
+        description: 'Someone completed your shared tasks',
+        duration: 4000,
+        action: {
+          label: 'View',
+          onClick: () => window.location.href = '/tr'
+        }
+      });
+      
+      try {
+        waktiSounds.playNotificationSound('chime');
+      } catch (error) {
+        console.error('Failed to play sound:', error);
+      }
+    }
+    setPrevSharedTaskCount(newSharedTaskCount);
+  }
+
+  function checkAndNotifyMaw3dEvents(newMaw3dEventCount: number, from: string) {
+    if (from.includes('realtime') && newMaw3dEventCount > prevMaw3dEventCount) {
+      console.log('🔔 New event responses detected, showing notification');
+      toast('Event Response', {
+        description: 'Someone responded to your event',
+        duration: 4000,
+        action: {
+          label: 'View',
+          onClick: () => window.location.href = '/maw3d'
+        }
+      });
+      
+      try {
+        waktiSounds.playNotificationSound('ding');
+      } catch (error) {
+        console.error('Failed to play sound:', error);
+      }
+    }
+    setPrevMaw3dEventCount(newMaw3dEventCount);
+  }
+
   async function fetchUnread(from: string = 'manual/initial') {
     const { data: session } = await supabase.auth.getSession();
     if (!session.session) {
@@ -106,107 +212,12 @@ export function useUnreadMessages() {
 
       const realMaw3dEventCount = maw3dData ? maw3dData.length : 0;
 
-      // Check for increases and trigger notifications (only for real-time updates)
-      if (from.includes('realtime')) {
-        console.log('🔔 Checking for notification triggers via real-time update');
-        
-        if (total > prevUnreadTotal) {
-          console.log('🔔 New messages detected, showing notification');
-          toast('New Message', {
-            description: 'You have new unread messages',
-            duration: 4000,
-            action: {
-              label: 'View',
-              onClick: () => window.location.href = '/contacts'
-            }
-          });
-          
-          try {
-            waktiSounds.playNotificationSound('chime');
-          } catch (error) {
-            console.error('Failed to play sound:', error);
-          }
-        }
-
-        if (realTaskCount > prevTaskCount) {
-          console.log('🔔 New overdue tasks detected, showing notification');
-          toast('Tasks Overdue', {
-            description: 'Some of your tasks have become overdue',
-            duration: 4000,
-            action: {
-              label: 'View',
-              onClick: () => window.location.href = '/tr'
-            }
-          });
-          
-          try {
-            waktiSounds.playNotificationSound('beep');
-          } catch (error) {
-            console.error('Failed to play sound:', error);
-          }
-        }
-
-        if (realContactCount > prevContactCount) {
-          console.log('🔔 New contact requests detected, showing notification');
-          toast('New Contact Request', {
-            description: 'You have new contact requests',
-            duration: 4000,
-            action: {
-              label: 'View',
-              onClick: () => window.location.href = '/contacts'
-            }
-          });
-          
-          try {
-            waktiSounds.playNotificationSound('ding');
-          } catch (error) {
-            console.error('Failed to play sound:', error);
-          }
-        }
-
-        if (realSharedTaskCount > prevSharedTaskCount) {
-          console.log('🔔 New shared task completions detected, showing notification');
-          toast('Shared Task Update', {
-            description: 'Someone completed your shared tasks',
-            duration: 4000,
-            action: {
-              label: 'View',
-              onClick: () => window.location.href = '/tr'
-            }
-          });
-          
-          try {
-            waktiSounds.playNotificationSound('chime');
-          } catch (error) {
-            console.error('Failed to play sound:', error);
-          }
-        }
-
-        if (realMaw3dEventCount > prevMaw3dEventCount) {
-          console.log('🔔 New event responses detected, showing notification');
-          toast('Event Response', {
-            description: 'Someone responded to your event',
-            duration: 4000,
-            action: {
-              label: 'View',
-              onClick: () => window.location.href = '/maw3d'
-            }
-          });
-          
-          try {
-            waktiSounds.playNotificationSound('ding');
-          } catch (error) {
-            console.error('Failed to play sound:', error);
-          }
-        }
-      }
-
-      // Update previous values for next comparison
-      setPrevUnreadTotal(total);
-      setPrevTaskCount(realTaskCount);
-      setPrevContactCount(realContactCount);
-      setPrevSharedTaskCount(realSharedTaskCount);
-      setPrevMaw3dEventCount(realMaw3dEventCount);
+      // Check for increases and trigger notifications SEPARATELY for each type
+      checkAndNotifyMessages(total, from);
+      checkAndNotifyTasks(realTaskCount, from);
+      checkAndNotifyContacts(realContactCount, from);
+      checkAndNotifySharedTasks(realSharedTaskCount, from);
+      checkAndNotifyMaw3dEvents(realMaw3dEventCount, from);
 
       // Update current state
       setUnreadPerContact(counts);
