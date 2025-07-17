@@ -158,13 +158,13 @@ serve(async (req) => {
 
     const { 
       message, 
-      conversationId, // Accept frontend ID without validation or creation
+      conversationId,
       userId, 
       language = 'en',
       files = [],
       attachedFiles: requestAttachedFiles = [],
       activeTrigger = 'general',
-      recentMessages = [], // Use frontend-provided conversation history
+      recentMessages = [],
       conversationSummary = '',
       personalTouch = null
     } = requestData;
@@ -172,8 +172,7 @@ serve(async (req) => {
     const actualUserId = userId || personalTouch?.userId || requestData.user_id || 'default_user';
     console.log(`🤖 BACKEND WORKER: Processing ${activeTrigger} mode for conversation ${conversationId || 'new'}`);
 
-    // NO CONVERSATION MANAGEMENT - ACCEPT FRONTEND ID AS-IS
-    const finalConversationId = conversationId; // Use exactly what frontend provides
+    const finalConversationId = conversationId;
 
     let attachedFiles = [];
     
@@ -192,7 +191,6 @@ serve(async (req) => {
 
     let result;
     
-    // ROUTE TO CORRECT API BASED ON MODE
     if (activeTrigger === 'image') {
       console.log('🎨 BACKEND WORKER: Processing image generation');
       result = await generateImageWithRunware(message, actualUserId, language);
@@ -212,7 +210,7 @@ serve(async (req) => {
         language,
         attachedFiles,
         activeTrigger,
-        recentMessages, // Use frontend conversation history
+        recentMessages,
         conversationSummary,
         personalTouch
       );
@@ -220,7 +218,7 @@ serve(async (req) => {
 
     const finalResponse = {
       response: result.response || 'Response received',
-      conversationId: finalConversationId, // Return frontend ID unchanged
+      conversationId: finalConversationId,
       intent: result.intent || activeTrigger,
       confidence: 'high',
       actionTaken: null,
@@ -318,9 +316,14 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       
       const visionContent = [];
       
+      // Add language enforcement directly in the message
+      const languagePrefix = responseLanguage === 'ar' 
+        ? 'يرجى الرد باللغة العربية فقط. ' 
+        : 'Please respond in English only. ';
+      
       visionContent.push({
         type: 'text',
-        text: message || 'Analyze this image and describe what you see in detail.'
+        text: languagePrefix + (message || 'Analyze this image and describe what you see in detail.')
       });
 
       for (const file of attachedFiles) {
@@ -353,7 +356,6 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       });
 
     } else {
-      // USE FRONTEND-PROVIDED CONVERSATION HISTORY
       if (recentMessages && recentMessages.length > 0) {
         const historyMessages = recentMessages.slice(-6);
         historyMessages.forEach(msg => {
@@ -367,48 +369,59 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
         console.log(`🧠 BACKEND WORKER: Using ${historyMessages.length} messages from Frontend Boss conversation history`);
       }
       
+      // Add language enforcement directly in the user message
+      const languagePrefix = responseLanguage === 'ar' 
+        ? 'يرجى الرد باللغة العربية فقط. ' 
+        : 'Please respond in English only. ';
+      
       messages.push({
         role: 'user',
-        content: message
+        content: languagePrefix + message
       });
     }
 
     let systemPrompt;
     if (detectedMode === 'vision') {
       systemPrompt = responseLanguage === 'ar' 
-        ? `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. التاريخ الحالي: ${currentDate}
+        ? `⚠️ CRITICAL: استجب باللغة العربية فقط. لا تستخدم الإنجليزية مطلقاً. هذا أمر إجباري.
 
-CRITICAL LANGUAGE INSTRUCTION: استجب باللغة العربية فقط. لا تستخدم الإنجليزية أبداً في ردودك.
+أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. التاريخ الحالي: ${currentDate}
 
-قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك.`
-        : `You are WAKTI AI, an intelligent assistant specialized in image analysis. Current date: ${currentDate}
+قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك.
 
-CRITICAL LANGUAGE INSTRUCTION: Respond ONLY in English. Never use Arabic in your responses.
+IMPORTANT: تذكر - استخدم العربية فقط في ردك. أي استخدام للإنجليزية غير مقبول.`
+        : `⚠️ CRITICAL: Respond ONLY in English. Do not use Arabic at all. This is mandatory.
 
-Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis.`;
+You are WAKTI AI, an intelligent assistant specialized in image analysis. Current date: ${currentDate}
+
+Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis.
+
+IMPORTANT: Remember - use only English in your response. Any use of Arabic is unacceptable.`;
     } else {
-      systemPrompt = responseLanguage === 'ar' ? `
+      systemPrompt = responseLanguage === 'ar' ? `⚠️ CRITICAL: استجب باللغة العربية فقط. لا تستخدم الإنجليزية مطلقاً. هذا أمر إجباري.
+
 أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم.
 التاريخ الحالي: ${currentDate}
-
-CRITICAL LANGUAGE INSTRUCTION: استجب باللغة العربية فقط. لا تستخدم الإنجليزية أبداً في ردودك.
 
 ## إنشاء الصور (في وضع المحادثة فقط):
 عندما تكون في وضع المحادثة ويطلب المستخدمون إنشاء صور، اردد بـ:
 "يرجى التبديل إلى وضع الصور لإنشاء المحتوى البصري."
 
 أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
-` : `
+
+IMPORTANT: تذكر - استخدم العربية فقط في ردك. أي استخدام للإنجليزية غير مقبول.
+` : `⚠️ CRITICAL: Respond ONLY in English. Do not use Arabic at all. This is mandatory.
+
 You are WAKTI AI, an intelligent assistant specializing in productivity and organization.
 Current date: ${currentDate}
-
-CRITICAL LANGUAGE INSTRUCTION: Respond ONLY in English. Never use Arabic in your responses.
 
 ## Image Generation (Chat Mode Only):
 When in chat mode and users request image generation, respond with:
 "Please switch to image mode for visual content creation."
 
 You're here to make users' lives more organized and productive!
+
+IMPORTANT: Remember - use only English in your response. Any use of Arabic is unacceptable.
 `;
       systemPrompt += personalizationContext;
     }
@@ -443,7 +456,6 @@ You're here to make users' lives more organized and productive!
 
     console.log(`✅ BACKEND WORKER: Claude response completed for ${detectedMode} mode`);
 
-    // NO DATABASE SAVING - FRONTEND BOSS HANDLES ALL PERSISTENCE
     console.log('🤖 BACKEND WORKER: Skipping database save - Frontend Boss handles persistence');
 
     return {
