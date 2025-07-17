@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -364,6 +363,15 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       }
     }
 
+    // GET CURRENT DATE FOR ACCURATE RESPONSES
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      timeZone: 'Asia/Qatar'
+    });
+
     // 👁️ VISION PROCESSING - SPECIALIZED
     if (detectedMode === 'vision') {
       console.log('👁️ VISION: Building image analysis request...');
@@ -435,16 +443,21 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       });
     }
 
-    // OPTIMIZED SYSTEM PROMPTS FOR SPEED
+    // OPTIMIZED SYSTEM PROMPTS FOR SPEED WITH CURRENT DATE
     let systemPrompt;
     if (detectedMode === 'vision') {
       systemPrompt = responseLanguage === 'ar' 
-        ? `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.`
-        : `You are WAKTI AI, an intelligent assistant specialized in image analysis. Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
+        ? `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. التاريخ الحالي: ${currentDate}
+
+قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.`
+        : `You are WAKTI AI, an intelligent assistant specialized in image analysis. Current date: ${currentDate}
+
+Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
     } else {
-      // OPTIMIZED STREAMLINED SYSTEM PROMPT
+      // OPTIMIZED STREAMLINED SYSTEM PROMPT WITH CURRENT DATE
       systemPrompt = responseLanguage === 'ar' ? `
 أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم. تدعم العربية والإنجليزية.
+التاريخ الحالي: ${currentDate}
 
 ## إنشاء الصور (في وضع المحادثة فقط):
 عندما تكون في وضع المحادثة ويطلب المستخدمون إنشاء صور، اردد بـ:
@@ -465,6 +478,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
 أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
 ` : `
 You are WAKTI AI, an intelligent assistant specializing in productivity and organization. You support Arabic and English. 
+Current date: ${currentDate}
 
 ## Image Generation (Chat Mode Only):
 When in chat mode and users request image generation, respond with:
