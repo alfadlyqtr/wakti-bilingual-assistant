@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -188,7 +189,7 @@ serve(async (req) => {
     const actualUserId = userId || personalTouch?.userId || requestData.user_id || 'default_user';
     console.log('🔍 USER ID CHECK:', { original: userId, personal: personalTouch?.userId, final: actualUserId });
 
-    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, AttachedFiles=${requestAttachedFiles.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}, UserId=${actualUserId}`);
+    console.log(`🎯 REQUEST DETAILS: Trigger=${activeTrigger}, Language=${language}, Files=${files.length}, AttachedFiles=${requestAttachedFiles.length}, Memory=${personalTouch ? 'enabled' : 'disabled'}, UserId=${actualUserId}, RecentMessages=${recentMessages.length}`);
 
     let finalConversationId = conversationId;
     
@@ -345,18 +346,8 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
     const responseLanguage = language;
     let messages = [];
 
-    // SIMPLIFIED MEMORY SYSTEM FIX - Load user history regardless of conversation_id
-    const { data: fullHistory } = await supabase
-      .from('ai_chat_history')
-      .select('role, content, created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(6);
-
-    // Reverse to get chronological order for AI context
-    if (fullHistory) {
-      fullHistory.reverse();
-    }
+    // FIXED MEMORY SYSTEM - USE RECENT MESSAGES FROM FRONTEND
+    console.log(`🧠 FAST MEMORY: Using React state conversation history (${recentMessages?.length || 0} messages)`);
 
     // Build personalization context for system prompt
     let personalizationContext = '';
@@ -372,8 +363,6 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
         personalizationContext = `\n\nPersonalization: ${parts.join(', ')}`;
       }
     }
-
-    console.log(`🧠 SIMPLIFIED MEMORY: Using full conversation history (${fullHistory?.length || 0} messages) with personalization`);
 
     // 👁️ VISION PROCESSING - SPECIALIZED
     if (detectedMode === 'vision') {
@@ -424,9 +413,11 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       });
 
     } else {
-      // Add conversation history FIRST for context
-      if (fullHistory && fullHistory.length > 0) {
-        fullHistory.forEach(msg => {
+      // FIXED: Use recentMessages from React state for conversation history
+      if (recentMessages && recentMessages.length > 0) {
+        // Take last 6 messages for context (3 exchanges)
+        const historyMessages = recentMessages.slice(-6);
+        historyMessages.forEach(msg => {
           if (msg.role === 'user' || msg.role === 'assistant') {
             messages.push({
               role: msg.role,
@@ -434,7 +425,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
             });
           }
         });
-        console.log(`🧠 MEMORY: Added ${fullHistory.length} conversation messages for full context`);
+        console.log(`🚀 FAST MEMORY: Added ${historyMessages.length} messages from React state for instant context`);
       }
       
       // Add current message LAST
@@ -525,7 +516,7 @@ You're here to make users' lives more organized and productive!
     const claudeData = await claudeResponse.json();
     const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
 
-    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request with SIMPLIFIED MEMORY SYSTEM`);
+    console.log(`✅ CLAUDE RESPONSE: Successfully processed ${detectedMode} request with FAST MEMORY SYSTEM`);
 
     // 💾 STORE CONVERSATION WITH FIXED INTENT FIELD
     try {
