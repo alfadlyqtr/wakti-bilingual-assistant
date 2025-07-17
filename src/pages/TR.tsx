@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { NavigationHeader } from '@/components/navigation/NavigationHeader';
 import { TaskList } from '@/components/tr/TaskList';
@@ -140,66 +139,54 @@ const TR = () => {
     }
   };
 
-  const handleUpdateTask = async (taskId: string, updates: Partial<TRTask>) => {
-    try {
-      const { data, error } = await supabase
-        .from('my_tasks')
-        .update(updates)
-        .eq('id', taskId)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error updating task:', error);
-        toast.error('Failed to update task.');
-        return;
-      }
-
-      // Map the updated task to TRTask format
-      const mappedTask: TRTask = {
-        id: data.id,
-        title: data.title,
-        description: data.description,
-        due_date: data.due_date,
-        status: data.status,
-        priority: data.priority === 'low' ? 'normal' : data.priority,
-        task_type: data.task_type === 'recurring' ? 'repeated' : 'one-time',
-        is_shared: data.is_shared || false,
-        completed: data.status === 'completed',
-        user_id: data.user_id,
-        created_at: data.created_at,
-        updated_at: data.updated_at || data.created_at
-      };
-
-      setTasks(tasks.map(task => task.id === taskId ? mappedTask : task));
-      toast.success('Task updated successfully!');
-      refetch();
-    } catch (error) {
-      console.error('Unexpected error updating task:', error);
-      toast.error('Unexpected error updating task.');
-    }
+  const handleTaskEdit = (task: TRTask) => {
+    // Handle task editing logic here
+    console.log('Edit task:', task);
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    try {
-      const { error } = await supabase
-        .from('my_tasks')
-        .delete()
-        .eq('id', taskId);
+  const handleTasksChanged = () => {
+    // Refetch tasks when they change
+    if (!user) return;
 
-      if (error) {
-        console.error('Error deleting task:', error);
-        toast.error('Failed to delete task.');
-        return;
+    const fetchTasks = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('my_tasks')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching tasks:', error);
+          toast.error('Failed to load tasks.');
+          return;
+        }
+
+        // Map the data to match TRTask interface
+        const mappedTasks: TRTask[] = (data || []).map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          due_date: task.due_date,
+          status: task.status,
+          priority: task.priority === 'low' ? 'normal' : task.priority,
+          task_type: task.task_type === 'recurring' ? 'repeated' : 'one-time',
+          is_shared: task.is_shared || false,
+          completed: task.status === 'completed',
+          user_id: task.user_id,
+          created_at: task.created_at,
+          updated_at: task.updated_at || task.created_at
+        }));
+
+        setTasks(mappedTasks);
+        refetch();
+      } catch (error) {
+        console.error('Unexpected error fetching tasks:', error);
+        toast.error('Unexpected error fetching tasks.');
       }
+    };
 
-      setTasks(tasks.filter(task => task.id !== taskId));
-      toast.success('Task deleted successfully!');
-      refetch();
-    } catch (error) {
-      console.error('Unexpected error deleting task:', error);
-      toast.error('Unexpected error deleting task.');
-    }
+    fetchTasks();
   };
 
   if (loading) {
@@ -219,8 +206,8 @@ const TR = () => {
         </div>
         <TaskList
           tasks={tasks}
-          onUpdateTask={handleUpdateTask}
-          onDeleteTask={handleDeleteTask}
+          onTaskEdit={handleTaskEdit}
+          onTasksChanged={handleTasksChanged}
         />
         {/* Create dialog would go here - simplified for now */}
       </div>

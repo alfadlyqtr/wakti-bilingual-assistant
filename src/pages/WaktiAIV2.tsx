@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, WaktiAIV2ServiceClass, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -604,7 +605,19 @@ const WaktiAIV2 = () => {
         <ChatMessages
           sessionMessages={sessionMessages}
           isLoading={isLoading}
-          language={language}
+          activeTrigger={activeTrigger}
+          scrollAreaRef={scrollAreaRef}
+          userProfile={userProfile}
+          personalTouch={personalTouch}
+          showTaskConfirmation={showTaskConfirmation}
+          pendingTaskData={pendingTaskData}
+          pendingReminderData={pendingReminderData}
+          taskConfirmationLoading={taskConfirmationLoading}
+          onTaskConfirmation={handleTaskConfirmation}
+          onReminderConfirmation={handleReminderConfirmation}
+          onCancelTaskConfirmation={handleCancelTaskConfirmation}
+          conversationId={currentConversationId}
+          isNewConversation={isNewConversation}
         />
       </div>
 
