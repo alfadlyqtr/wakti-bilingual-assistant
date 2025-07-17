@@ -125,7 +125,7 @@ class WaktiAIV2ServiceClass {
             activeTrigger,
             attachedFiles,
             conversationSummary: '',
-            recentMessages: [],
+            recentMessages: recentMessages,
             personalTouch: personalTouch,
             customSystemPrompt: '',
             maxTokens: 4096,
