@@ -27,6 +27,67 @@ const useDebounceCallback = (callback: Function, delay: number) => {
   }, [callback, delay]);
 };
 
+// SIMPLE FRONTEND MEMORY - NO BACKEND FETCHING
+const SimpleFrontendMemory = {
+  // Save messages to localStorage only
+  saveMessages: (messages: AIMessage[], conversationId: string | null) => {
+    try {
+      const data = {
+        messages: messages.slice(-30), // Keep last 30 messages
+        conversationId,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('wakti_simple_memory', JSON.stringify(data));
+      console.log('💾 SIMPLE MEMORY: Saved', messages.length, 'messages to localStorage');
+    } catch (error) {
+      console.error('❌ SIMPLE MEMORY: Save failed:', error);
+    }
+  },
+
+  // Load messages from localStorage only
+  loadMessages: (): { messages: AIMessage[], conversationId: string | null } => {
+    try {
+      const stored = localStorage.getItem('wakti_simple_memory');
+      if (!stored) {
+        console.log('💭 SIMPLE MEMORY: No stored messages found');
+        return { messages: [], conversationId: null };
+      }
+
+      const data = JSON.parse(stored);
+      
+      // Check if data is less than 24 hours old
+      const now = Date.now();
+      const age = now - (data.timestamp || 0);
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+      
+      if (age > maxAge) {
+        localStorage.removeItem('wakti_simple_memory');
+        console.log('🗑️ SIMPLE MEMORY: Expired data removed');
+        return { messages: [], conversationId: null };
+      }
+
+      console.log('✅ SIMPLE MEMORY: Loaded', data.messages?.length || 0, 'messages from localStorage');
+      return {
+        messages: data.messages || [],
+        conversationId: data.conversationId || null
+      };
+    } catch (error) {
+      console.error('❌ SIMPLE MEMORY: Load failed:', error);
+      return { messages: [], conversationId: null };
+    }
+  },
+
+  // Clear all memory
+  clearMemory: () => {
+    try {
+      localStorage.removeItem('wakti_simple_memory');
+      console.log('🗑️ SIMPLE MEMORY: Cleared all data');
+    } catch (error) {
+      console.error('❌ SIMPLE MEMORY: Clear failed:', error);
+    }
+  }
+};
+
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -79,14 +140,16 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // SIMPLE FRONTEND MEMORY LOADING - NO BACKEND
   const loadChatSession = () => {
-    const session = WaktiAIV2Service.loadChatSession();
-    if (session) {
-      const limitedMessages = session.messages.slice(-25);
-      setSessionMessages(limitedMessages);
-      setCurrentConversationId(session.conversationId || null);
-      setIsNewConversation(!session.conversationId);
-    }
+    console.log('🧠 SIMPLE MEMORY: Loading from frontend cache only');
+    const { messages, conversationId } = SimpleFrontendMemory.loadMessages();
+    
+    setSessionMessages(messages);
+    setCurrentConversationId(conversationId);
+    setIsNewConversation(!conversationId || messages.length === 0);
+    
+    console.log('✅ SIMPLE MEMORY: Loaded', messages.length, 'messages instantly');
   };
 
   useEffect(() => {
@@ -212,7 +275,8 @@ const WaktiAIV2 = () => {
           attachedFiles: attachedFiles
         };
         
-        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+        const newMessages = [...sessionMessages, tempUserMessage];
+        setSessionMessages(newMessages);
         
         const imageResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -239,14 +303,13 @@ const WaktiAIV2 = () => {
           imageUrl: imageResponse.imageUrl
         };
         
-        setSessionMessages(prevMessages => {
-          const newMessages = [...prevMessages];
-          newMessages[newMessages.length - 1] = assistantMessage;
-          return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
-        });
-        
+        const finalMessages = [...newMessages, assistantMessage];
+        setSessionMessages(finalMessages);
         setCurrentConversationId(imageResponse.conversationId);
         setIsNewConversation(false);
+        
+        // SIMPLE FRONTEND SAVE - NO BACKEND
+        SimpleFrontendMemory.saveMessages(finalMessages, imageResponse.conversationId);
         
       } else if (routingMode === 'search') {
         console.log('🔍 ROUTING TO SEARCH MODE: Selected mode overrides content detection');
@@ -260,7 +323,8 @@ const WaktiAIV2 = () => {
           attachedFiles: attachedFiles
         };
         
-        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+        const newMessages = [...sessionMessages, tempUserMessage];
+        setSessionMessages(newMessages);
         
         const searchResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -288,14 +352,13 @@ const WaktiAIV2 = () => {
           browsingData: searchResponse.browsingData
         };
         
-        setSessionMessages(prevMessages => {
-          const newMessages = [...prevMessages];
-          newMessages[newMessages.length - 1] = assistantMessage;
-          return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
-        });
-        
+        const finalMessages = [...newMessages, assistantMessage];
+        setSessionMessages(finalMessages);
         setCurrentConversationId(searchResponse.conversationId);
         setIsNewConversation(false);
+        
+        // SIMPLE FRONTEND SAVE - NO BACKEND
+        SimpleFrontendMemory.saveMessages(finalMessages, searchResponse.conversationId);
         
       } else {
         // CHAT MODE OR EXPLICIT TASK COMMANDS (existing logic for chat/tasks)
@@ -334,7 +397,8 @@ const WaktiAIV2 = () => {
             timestamp: new Date()
           };
 
-          setSessionMessages(prevMessages => [...prevMessages, tempUserMessage, taskMessage]);
+          const finalMessages = [...sessionMessages, tempUserMessage, taskMessage];
+          setSessionMessages(finalMessages);
 
           if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
             setPendingTaskData(taskData.intentData.pendingTask);
@@ -343,12 +407,15 @@ const WaktiAIV2 = () => {
             }, 50);
           }
 
+          // SIMPLE FRONTEND SAVE - NO BACKEND
+          SimpleFrontendMemory.saveMessages(finalMessages, currentConversationId);
+
           setIsLoading(false);
           return;
         }
 
-        // DEFAULT CHAT MODE WITH SIMPLIFIED MEMORY
-        console.log('💬 ROUTING TO CHAT MODE: Regular conversation with simplified memory');
+        // DEFAULT CHAT MODE WITH SIMPLE FRONTEND MEMORY
+        console.log('💬 ROUTING TO CHAT MODE: Regular conversation with simple frontend memory');
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -359,7 +426,8 @@ const WaktiAIV2 = () => {
           attachedFiles: attachedFiles
         };
         
-        setSessionMessages(prevMessages => [...prevMessages, tempUserMessage]);
+        const newMessages = [...sessionMessages, tempUserMessage];
+        setSessionMessages(newMessages);
         
         const aiResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -400,18 +468,17 @@ const WaktiAIV2 = () => {
           showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
         }
         
-        setSessionMessages(prevMessages => {
-          const newMessages = [...prevMessages];
-          newMessages[newMessages.length - 1] = assistantMessage;
-          return [...newMessages.slice(0, -1), tempUserMessage, assistantMessage];
-        });
-        
+        const finalMessages = [...newMessages, assistantMessage];
+        setSessionMessages(finalMessages);
         setCurrentConversationId(aiResponse.conversationId);
         setIsNewConversation(false);
+        
+        // SIMPLE FRONTEND SAVE - NO BACKEND
+        SimpleFrontendMemory.saveMessages(finalMessages, aiResponse.conversationId);
       }
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ SIMPLIFIED MEMORY SUCCESS: Message routed to ${routingMode} mode in ${totalTime}ms`);
+      console.log(`✅ SIMPLE FRONTEND MEMORY SUCCESS: Message processed in ${totalTime}ms`);
       
       setProcessedFiles([]);
       checkQuotas();
@@ -529,12 +596,17 @@ const WaktiAIV2 = () => {
   };
 
   const handleNewConversation = () => {
-    setSessionMessages([]);
+    // Keep last 3 messages for context, don't clear everything
+    const keepMessages = sessionMessages.slice(-3);
+    setSessionMessages(keepMessages);
     setCurrentConversationId(null);
     setIsNewConversation(true);
     setIsSidebarOpen(false);
     
-    console.log('🗑️ SIMPLIFIED MEMORY: New conversation started');
+    // Save the context we're keeping
+    SimpleFrontendMemory.saveMessages(keepMessages, null);
+    
+    console.log('🔄 SIMPLE MEMORY: New conversation started, kept', keepMessages.length, 'messages for context');
   };
 
   const handleSelectConversation = async (conversationId: string) => {
@@ -558,7 +630,8 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
       setIsSidebarOpen(false);
 
-      WaktiAIV2Service.saveChatSession(limitedMessages, conversationId);
+      // Save to simple frontend memory
+      SimpleFrontendMemory.saveMessages(limitedMessages, conversationId);
 
     } catch (error) {
       console.error("Error fetching conversation messages:", error);
@@ -584,9 +657,13 @@ const WaktiAIV2 = () => {
     setIsClearingChat(true);
     setTimeout(() => {
       setSessionMessages([]);
-      WaktiAIV2Service.clearChatSession();
+      setCurrentConversationId(null);
+      setIsNewConversation(true);
       
-      console.log('🗑️ SIMPLIFIED MEMORY: Chat cleared');
+      // Clear simple frontend memory completely
+      SimpleFrontendMemory.clearMemory();
+      
+      console.log('🗑️ SIMPLE MEMORY: Complete chat clear');
       
       setIsClearingChat(false);
     }, 500);
@@ -645,15 +722,6 @@ const WaktiAIV2 = () => {
       setUploadProgress(0);
     }
   };
-
-  const debouncedSaveSession = useDebounceCallback(() => {
-    const limitedMessages = sessionMessages.slice(-25);
-    WaktiAIV2Service.saveChatSession(limitedMessages, currentConversationId);
-  }, 500);
-
-  useEffect(() => {
-    debouncedSaveSession();
-  }, [sessionMessages, currentConversationId, debouncedSaveSession]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
