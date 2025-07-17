@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -352,7 +351,7 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       .select('role, content, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(6);
 
     // Reverse to get chronological order for AI context
     if (fullHistory) {
@@ -445,16 +444,56 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       });
     }
 
-    // MODE-SPECIFIC SYSTEM PROMPTS
+    // OPTIMIZED SYSTEM PROMPTS FOR SPEED
     let systemPrompt;
     if (detectedMode === 'vision') {
       systemPrompt = responseLanguage === 'ar' 
         ? `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك. إذا كانت الصورة تحتوي على نص، اقرأه واستخرجه. إذا كانت تحتوي على أشخاص أو أشياء، صفها. إذا كانت وثيقة، لخص محتواها.`
         : `You are WAKTI AI, an intelligent assistant specialized in image analysis. Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis. If the image contains text, read and extract it. If it contains people or objects, describe them. If it's a document, summarize its content.`;
     } else {
-      // SIMPLIFIED CHAT MODE WITH PERSONALIZATION
-      const basePrompt = responseLanguage === 'ar' ? `أنت WAKTI AI، المساعد الذكي الودود المتخصص في الإنتاجية. ساعد المستخدم بطريقة مفيدة وودية.` : `You are WAKTI AI, a friendly intelligent assistant specialized in productivity. Help the user in a helpful and friendly way.`;
-      systemPrompt = basePrompt + personalizationContext;
+      // OPTIMIZED STREAMLINED SYSTEM PROMPT
+      systemPrompt = responseLanguage === 'ar' ? `
+أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم. تدعم العربية والإنجليزية.
+
+## إنشاء الصور (في وضع المحادثة فقط):
+عندما تكون في وضع المحادثة ويطلب المستخدمون إنشاء صور، اردد بـ:
+"يرجى التبديل إلى وضع الصور لإنشاء المحتوى البصري."
+
+## التخصيص والذاكرة:
+- استخدم الأسماء المفضلة للمستخدم بطبيعية
+- اتبع نبرة التواصل المطلوبة (عادية، مهنية، مفصلة، مختصرة)
+- احترم التعليمات المخصصة دائماً
+- اجعل التخصيص طبيعياً، ليس آلياً
+
+## شخصية المساعد:
+- استخدم العربية الواضحة والودية
+- كن مفيداً وعملياً
+- اقترح خطوات عملية
+- حافظ على نبرة مهنية مع الدفء
+
+أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
+` : `
+You are WAKTI AI, an intelligent assistant specializing in productivity and organization. You support Arabic and English. 
+
+## Image Generation (Chat Mode Only):
+When in chat mode and users request image generation, respond with:
+"Please switch to image mode for visual content creation."
+
+## Personalization & Memory:
+- Use user's preferred names naturally
+- Follow requested communication tone (casual, professional, detailed, concise)
+- Always respect custom instructions
+- Make personalization feel natural, not robotic
+
+## Assistant Personality:
+- Use clear, friendly English
+- Be helpful and practical
+- Suggest actionable next steps
+- Maintain professional tone with warmth
+
+You're here to make users' lives more organized and productive!
+`;
+      systemPrompt += personalizationContext;
     }
 
     console.log(`🤖 CALLING CLAUDE: Mode=${detectedMode}, Messages=${messages.length}, Language=${responseLanguage}`);
