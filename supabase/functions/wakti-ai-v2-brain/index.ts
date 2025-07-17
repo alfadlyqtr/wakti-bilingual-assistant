@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -379,14 +378,20 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       systemPrompt = responseLanguage === 'ar' 
         ? `أنت WAKTI AI، مساعد ذكي متخصص في تحليل الصور. التاريخ الحالي: ${currentDate}
 
+CRITICAL LANGUAGE INSTRUCTION: استجب باللغة العربية فقط. لا تستخدم الإنجليزية أبداً في ردودك.
+
 قم بتحليل الصورة المرفقة بالتفصيل واستخرج جميع المعلومات المفيدة منها. كن دقيقاً ووصفياً في تحليلك.`
         : `You are WAKTI AI, an intelligent assistant specialized in image analysis. Current date: ${currentDate}
+
+CRITICAL LANGUAGE INSTRUCTION: Respond ONLY in English. Never use Arabic in your responses.
 
 Analyze the attached image in detail and extract all useful information from it. Be precise and descriptive in your analysis.`;
     } else {
       systemPrompt = responseLanguage === 'ar' ? `
-أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم. تدعم العربية والإنجليزية.
+أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم.
 التاريخ الحالي: ${currentDate}
+
+CRITICAL LANGUAGE INSTRUCTION: استجب باللغة العربية فقط. لا تستخدم الإنجليزية أبداً في ردودك.
 
 ## إنشاء الصور (في وضع المحادثة فقط):
 عندما تكون في وضع المحادثة ويطلب المستخدمون إنشاء صور، اردد بـ:
@@ -394,8 +399,10 @@ Analyze the attached image in detail and extract all useful information from it.
 
 أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
 ` : `
-You are WAKTI AI, an intelligent assistant specializing in productivity and organization. You support Arabic and English. 
+You are WAKTI AI, an intelligent assistant specializing in productivity and organization.
 Current date: ${currentDate}
+
+CRITICAL LANGUAGE INSTRUCTION: Respond ONLY in English. Never use Arabic in your responses.
 
 ## Image Generation (Chat Mode Only):
 When in chat mode and users request image generation, respond with:
