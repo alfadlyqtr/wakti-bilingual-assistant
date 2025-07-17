@@ -56,4 +56,9 @@ export const en = {
   // NEW MISSING MAW3D KEYS
   createAndManageEvents: "Create and manage your events",
   searchEvents: "Search events...",
+  
+  // MISSING CONVERSATION SIDEBAR KEYS
+  conversations: "Conversations",
+  new_conversation: "New Conversation",
+  no_conversations: "No conversations",
 };

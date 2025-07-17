@@ -1422,4 +1422,9 @@ export type TranslationKey =
   
   // NEW MISSING MAW3D KEYS FROM BUILD ERRORS:
   | "createAndManageEvents"
-  | "searchEvents";
+  | "searchEvents"
+  
+  // MISSING CONVERSATION SIDEBAR KEYS:
+  | "conversations"
+  | "new_conversation"
+  | "no_conversations";

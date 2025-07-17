@@ -1,3 +1,4 @@
+
 import { authAr } from "./modules/ar/auth";
 import { commonAr } from "./modules/ar/common";
 import { navigationAr } from "./modules/ar/navigation";
@@ -42,4 +43,22 @@ export const ar = {
   ...billingAr,
   ...confirmationAr,
   ...gamesAr,
+  
+  // Additional TR specific translations
+  manageTasksAndResponsibilities: "إدارة مهامك ومسؤولياتك",
+  searchTasks: "البحث في المهام...",
+  sharedTasks: "المهام المشتركة",
+  myTasks: "مهامي",
+  noTasksFound: "لم يتم العثور على مهام",
+  noTasksYet: "لا توجد مهام بعد",
+  createFirstTask: "إنشاء أول مهمة لك",
+  
+  // NEW MISSING MAW3D KEYS
+  createAndManageEvents: "إنشاء وإدارة فعالياتك",
+  searchEvents: "البحث في الفعاليات...",
+  
+  // MISSING CONVERSATION SIDEBAR KEYS
+  conversations: "المحادثات",
+  new_conversation: "محادثة جديدة",
+  no_conversations: "لا توجد محادثات",
 };
