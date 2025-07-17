@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -11,7 +10,7 @@ export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount } = useUnreadMessages();
+  const { taskCount, maw3dEventCount, contactCount, sharedTaskCount } = useUnreadMessages();
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
 
   // Clear badges when navigating to specific pages
@@ -34,9 +33,9 @@ export function MobileNav() {
         priority: (taskCount + sharedTaskCount) > 5 ? 'high' : 'normal'
       },
       event: { 
-        show: eventCount > 0 || maw3dEventCount > 0, 
-        count: (eventCount + maw3dEventCount) > 99 ? '99+' : (eventCount + maw3dEventCount).toString(),
-        priority: (eventCount + maw3dEventCount) > 3 ? 'high' : 'normal'
+        show: maw3dEventCount > 0, 
+        count: maw3dEventCount > 99 ? '99+' : maw3dEventCount.toString(),
+        priority: maw3dEventCount > 3 ? 'high' : 'normal'
       }, 
       contact: { 
         show: contactCount > 0, 
@@ -44,7 +43,7 @@ export function MobileNav() {
         priority: contactCount > 0 ? 'normal' : 'low'
       }
     });
-  }, [taskCount, eventCount, contactCount, sharedTaskCount, maw3dEventCount]);
+  }, [taskCount, maw3dEventCount, contactCount, sharedTaskCount]);
   
   // Navigation items
   const navItems = [

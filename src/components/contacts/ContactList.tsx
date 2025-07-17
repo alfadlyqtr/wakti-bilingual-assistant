@@ -49,7 +49,7 @@ export function ContactList() {
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
-  const { unreadPerContact } = useUnreadMessages();
+  const { unreadTotal } = useUnreadMessages();
 
   // Fetch contacts with improved configuration
   const { 
@@ -196,7 +196,7 @@ export function ContactList() {
             const contactProfile = contact.profile || {};
             const displayName = contactProfile.username || "unknown";
             const emailOrName = contactProfile.display_name || contactProfile.email || "";
-            const unreadCount = unreadPerContact[contact.contact_id] || 0;
+            const unreadCount = unreadCounts[contact.contact_id] || 0;
             const avatarUrl = contactProfile.avatar_url;
             const isFavorite = contact.is_favorite === true;
             const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
