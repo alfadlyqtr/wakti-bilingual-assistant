@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -160,7 +161,7 @@ export function useUnreadMessages() {
     if (!user) return;
 
     try {
-      console.log('📊 Fetching unread counts...');
+      console.log('📊 Fetching unread counts for user:', user.id);
       
       // Messages count
       const { count: messageCount } = await supabase
@@ -169,17 +170,27 @@ export function useUnreadMessages() {
         .eq('recipient_id', user.id)
         .eq('is_read', false);
 
-      // Per-contact unread counts
-      const { data: perContactData } = await supabase
+      console.log('📨 Total unread messages:', messageCount);
+
+      // Per-contact unread counts with detailed logging
+      const { data: perContactData, error: perContactError } = await supabase
         .from('messages')
         .select('sender_id')
         .eq('recipient_id', user.id)
         .eq('is_read', false);
 
+      if (perContactError) {
+        console.error('❌ Error fetching per-contact unread:', perContactError);
+      }
+
+      console.log('📊 Per-contact unread data:', perContactData);
+
       const perContactCounts: Record<string, number> = {};
       perContactData?.forEach(msg => {
         perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
       });
+
+      console.log('📊 Per-contact unread counts:', perContactCounts);
 
       // Contact requests count
       const { count: contactRequestCount } = await supabase
@@ -215,7 +226,7 @@ export function useUnreadMessages() {
       setTaskCount(0); // Regular task count if needed
       setPerContactUnread(perContactCounts);
 
-      console.log('📊 Unread counts updated:', {
+      console.log('📊 Final unread counts updated:', {
         messages: messageCount,
         contacts: contactRequestCount,
         events: eventRsvpCount,

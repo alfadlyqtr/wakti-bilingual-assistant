@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
 import { ContactRelationshipIndicator } from "./ContactRelationshipIndicator";
 import { UnreadBadge } from "@/components/UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useAuth } from "@/contexts/AuthContext";
 
 type UserProfile = {
   display_name?: string;
@@ -41,6 +43,7 @@ type ContactType = {
 
 export function ContactList() {
   const { language } = useTheme();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
@@ -50,6 +53,12 @@ export function ContactList() {
   
   // Use unified unread system
   const { perContactUnread, refetch: refetchUnreadCounts } = useUnreadMessages();
+
+  // Debug logging for user and unread data
+  useEffect(() => {
+    console.log('🔍 ContactList - Current user:', user?.id);
+    console.log('🔍 ContactList - Per-contact unread counts:', perContactUnread);
+  }, [user, perContactUnread]);
 
   // Fetch contacts with improved configuration
   const { 
@@ -65,6 +74,17 @@ export function ContactList() {
     refetchInterval: 60000,
     refetchOnWindowFocus: true,
   });
+
+  // Debug logging for contacts data
+  useEffect(() => {
+    if (contacts) {
+      console.log('🔍 ContactList - Contacts data:', contacts);
+      contacts.forEach((contact: any) => {
+        const unreadCount = perContactUnread[contact.contact_id] || 0;
+        console.log(`🔍 Contact ${contact.contact_id} (${contact.profile?.username || 'unknown'}) has ${unreadCount} unread messages`);
+      });
+    }
+  }, [contacts, perContactUnread]);
 
   // Block contact mutation
   const blockContactMutation = useMutation({
@@ -196,10 +216,12 @@ export function ContactList() {
             const isFavorite = contact.is_favorite === true;
             const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
 
-            console.log(`Contact ${displayName} avatar:`, { 
-              avatarUrl, 
-              hasError: avatarErrors[contact.contact_id],
-              shouldShow: shouldShowAvatar(contact.contact_id, avatarUrl)
+            // Debug logging for each contact
+            console.log(`🔍 Rendering contact ${displayName}:`, {
+              contact_id: contact.contact_id,
+              unreadCount,
+              shouldShowBadge: unreadCount > 0,
+              perContactUnread: perContactUnread
             });
             
             return (
@@ -248,6 +270,8 @@ export function ContactList() {
                           }`}
                         >
                           <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-600'} ${unreadCount ? 'animate-blink' : ''}`} />
+                          {/* Debug: Force show badge for testing */}
+                          {console.log(`🔍 Badge for ${displayName}: count=${unreadCount}, shouldShow=${unreadCount > 0}`)}
                           <UnreadBadge count={unreadCount} blink={!!unreadCount} />
                         </Button>
                       </div>

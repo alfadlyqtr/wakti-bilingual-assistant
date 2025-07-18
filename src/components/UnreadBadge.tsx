@@ -9,11 +9,19 @@ interface UnreadBadgeProps {
 }
 
 export function UnreadBadge({ count, size = "md", blink = false, className = "" }: UnreadBadgeProps) {
-  if (!count || count < 1) return null;
+  // Debug logging
+  console.log(`🔍 UnreadBadge render: count=${count}, size=${size}, blink=${blink}`);
+  
+  if (!count || count < 1) {
+    console.log(`🔍 UnreadBadge not rendering: count is ${count}`);
+    return null;
+  }
 
   const display = count > 99 ? "99+" : count;
   const sz = size === "sm" ? "h-3 w-3 text-[9px] min-w-[13px]" : "h-5 w-5 text-xs min-w-[20px]";
   const blinkClass = blink ? "animate-blink" : "";
+
+  console.log(`🔍 UnreadBadge rendering with display=${display}, classes=${sz} ${blinkClass}`);
 
   return (
     <span
