@@ -45,12 +45,9 @@ class WaktiToastManager {
       notification.duration = durations[notification.priority];
     }
 
-    // Play sound first - with proper error handling
+    // Play sound immediately
     try {
-      const soundSuccess = await waktiSounds.playNotificationSound(notification.sound);
-      if (!soundSuccess) {
-        console.log('🔇 Sound failed to play, but continuing with toast');
-      }
+      await waktiSounds.playNotificationSound(notification.sound);
     } catch (error) {
       console.warn('🔊 Sound failed, but continuing with toast:', error);
     }

@@ -8,19 +8,16 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
 import { waktiSounds, WaktiSoundType, SoundSettings } from '@/services/waktiSounds';
-import { Volume2, VolumeX, Play, AlertCircle } from 'lucide-react';
+import { Volume2, VolumeX, Play } from 'lucide-react';
 import { toast } from 'sonner';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function SoundSettingsCard() {
   const { language } = useTheme();
   const [settings, setSettings] = useState<SoundSettings>(waktiSounds.getSettings());
   const [testingSound, setTestingSound] = useState(false);
-  const [userInteracted, setUserInteracted] = useState(waktiSounds.isUserInteracted());
 
   useEffect(() => {
     setSettings(waktiSounds.getSettings());
-    setUserInteracted(waktiSounds.isUserInteracted());
   }, []);
 
   const handleSettingChange = (key: keyof SoundSettings, value: any) => {
@@ -30,12 +27,6 @@ export function SoundSettingsCard() {
   };
 
   const handleTestSound = async () => {
-    if (!userInteracted) {
-      // Enable sounds first
-      waktiSounds.enableSounds();
-      setUserInteracted(true);
-    }
-
     setTestingSound(true);
     try {
       const success = await waktiSounds.testSound(settings.selectedSound);
@@ -50,12 +41,6 @@ export function SoundSettingsCard() {
     } finally {
       setTestingSound(false);
     }
-  };
-
-  const handleEnableSounds = () => {
-    waktiSounds.enableSounds();
-    setUserInteracted(true);
-    toast.success(language === 'ar' ? 'تم تفعيل الأصوات!' : 'Sounds enabled!');
   };
 
   return (
@@ -76,25 +61,6 @@ export function SoundSettingsCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* User Interaction Warning */}
-        {!userInteracted && (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {language === 'ar' 
-                ? 'يجب النقر على "تفعيل الأصوات" أولاً لتشغيل الإشعارات الصوتية'
-                : 'Click "Enable Sounds" first to allow notification sounds'}
-            </AlertDescription>
-            <Button 
-              onClick={handleEnableSounds} 
-              size="sm" 
-              className="mt-2"
-            >
-              {language === 'ar' ? 'تفعيل الأصوات' : 'Enable Sounds'}
-            </Button>
-          </Alert>
-        )}
-
         {/* Enable/Disable Sounds */}
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
@@ -156,7 +122,7 @@ export function SoundSettingsCard() {
             {/* Test Sound Button */}
             <Button
               onClick={handleTestSound}
-              disabled={testingSound || !userInteracted}
+              disabled={testingSound}
               variant="outline"
               className="w-full"
             >

@@ -10,7 +10,6 @@ import { getContacts, blockContact, deleteContact, toggleContactFavorite } from 
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 import { ChatPopup } from "./ChatPopup";
-import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,9 +46,10 @@ export function ContactList() {
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
-  const { unreadTotal } = useUnreadMessages();
+  
+  // Use unified unread system
+  const { perContactUnread, refetch: refetchUnreadCounts } = useUnreadMessages();
 
   // Fetch contacts with improved configuration
   const { 
@@ -98,7 +98,6 @@ export function ContactList() {
     mutationFn: ({ contactId, currentVal }: { contactId: string, currentVal: boolean }) =>
       toggleContactFavorite(contactId, !currentVal),
     onMutate: async ({ contactId, currentVal }) => {
-      // optimistic update: update cache before actual request
       await queryClient.cancelQueries({ queryKey: ['contacts'] });
       const previousContacts = queryClient.getQueryData<any[]>(['contacts']);
       queryClient.setQueryData(['contacts'], (old: any[] = []) =>
@@ -109,7 +108,6 @@ export function ContactList() {
       return { previousContacts };
     },
     onError: (err, variables, context) => {
-      // rollback
       queryClient.setQueryData(['contacts'], context?.previousContacts || []);
     },
     onSettled: () => {
@@ -117,16 +115,13 @@ export function ContactList() {
     }
   });
 
-  // Handle opening chat popup with a contact
   const handleOpenChat = (contactId: string, name: string, avatar?: string) => {
     setSelectedContact({ id: contactId, name, avatar });
     setChatOpen(true);
   };
 
-  // handle toggle favorite in db, with optimistic update
   const handleToggleFavorite = (contactId: string, isCurrentlyFavorite: boolean) => {
     favoriteMutation.mutate({ contactId, currentVal: isCurrentlyFavorite });
-    // No local toast because backend success triggers cache update, can add if desired
   };
 
   const handleBlock = (contactId: string) => {
@@ -196,7 +191,7 @@ export function ContactList() {
             const contactProfile = contact.profile || {};
             const displayName = contactProfile.username || "unknown";
             const emailOrName = contactProfile.display_name || contactProfile.email || "";
-            const unreadCount = unreadCounts[contact.contact_id] || 0;
+            const unreadCount = perContactUnread[contact.contact_id] || 0;
             const avatarUrl = contactProfile.avatar_url;
             const isFavorite = contact.is_favorite === true;
             const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
@@ -240,7 +235,6 @@ export function ContactList() {
                       >
                         <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
                       </Button>
-                      {/* Relationship Status Icon */}
                       <ContactRelationshipIndicator status={relationshipStatus} />
                       <div className="relative">
                         <Button 
@@ -284,38 +278,12 @@ export function ContactList() {
         )}
       </div>
 
-      {/* Chat popup */}
       {selectedContact && (
         <ChatPopup 
           isOpen={chatOpen}
           onClose={() => {
             setChatOpen(false);
-            setTimeout(() => {
-              const fetchUnreadCounts = async () => {
-                if (contacts) {
-                  const counts: Record<string, number> = {};
-                  for (const contact of contacts) {
-                    try {
-                      const { data } = await supabase.auth.getSession();
-                      if (data.session) {
-                        const { count } = await supabase
-                          .from("messages")
-                          .select("*", { count: "exact", head: true })
-                          .eq("sender_id", contact.contact_id)
-                          .eq("recipient_id", data.session.user.id)
-                          .eq("is_read", false);
-                        counts[contact.contact_id] = count || 0;
-                      }
-                    } catch (error) {
-                      console.error("Error fetching unread count:", error);
-                      counts[contact.contact_id] = 0;
-                    }
-                  }
-                  setUnreadCounts(counts);
-                }
-              };
-              fetchUnreadCounts();
-            }, 1000);
+            setTimeout(() => refetchUnreadCounts(), 1000);
           }}
           contactId={selectedContact.id}
           contactName={selectedContact.name}
@@ -323,7 +291,6 @@ export function ContactList() {
         />
       )}
 
-      {/* Delete confirmation dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

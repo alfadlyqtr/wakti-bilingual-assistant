@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +10,7 @@ export function useUnreadMessages() {
   const [maw3dEventCount, setMaw3dEventCount] = useState(0);
   const [taskCount, setTaskCount] = useState(0);
   const [sharedTaskCount, setSharedTaskCount] = useState(0);
+  const [perContactUnread, setPerContactUnread] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -41,6 +41,14 @@ export function useUnreadMessages() {
           sound: 'chime'
         });
         
+        fetchUnreadCounts();
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `recipient_id=eq.${user.id}`
+      }, () => {
         fetchUnreadCounts();
       })
       .subscribe();
@@ -161,6 +169,18 @@ export function useUnreadMessages() {
         .eq('recipient_id', user.id)
         .eq('is_read', false);
 
+      // Per-contact unread counts
+      const { data: perContactData } = await supabase
+        .from('messages')
+        .select('sender_id')
+        .eq('recipient_id', user.id)
+        .eq('is_read', false);
+
+      const perContactCounts: Record<string, number> = {};
+      perContactData?.forEach(msg => {
+        perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
+      });
+
       // Contact requests count
       const { count: contactRequestCount } = await supabase
         .from('contacts')
@@ -193,12 +213,14 @@ export function useUnreadMessages() {
       setMaw3dEventCount(eventRsvpCount || 0);
       setSharedTaskCount(sharedTaskResponseCount || 0);
       setTaskCount(0); // Regular task count if needed
+      setPerContactUnread(perContactCounts);
 
       console.log('📊 Unread counts updated:', {
         messages: messageCount,
         contacts: contactRequestCount,
         events: eventRsvpCount,
-        sharedTasks: sharedTaskResponseCount
+        sharedTasks: sharedTaskResponseCount,
+        perContact: perContactCounts
       });
 
     } catch (error) {
@@ -212,6 +234,7 @@ export function useUnreadMessages() {
     maw3dEventCount,
     taskCount,
     sharedTaskCount,
+    perContactUnread,
     refetch: fetchUnreadCounts
   };
 }
