@@ -13,23 +13,21 @@ interface SoundEnablerProps {
 
 export function SoundEnabler({ className = "", showAlways = false }: SoundEnablerProps) {
   const { language } = useTheme();
-  const [userInteracted, setUserInteracted] = useState(waktiSounds.isUserInteracted());
   const [soundsEnabled, setSoundsEnabled] = useState(waktiSounds.getSettings().enabled);
 
   useEffect(() => {
-    setUserInteracted(waktiSounds.isUserInteracted());
     setSoundsEnabled(waktiSounds.getSettings().enabled);
   }, []);
 
   const handleEnableSounds = () => {
-    waktiSounds.enableSounds();
     waktiSounds.updateSettings({ enabled: true });
-    setUserInteracted(true);
     setSoundsEnabled(true);
+    // Test the sound to confirm it works
+    waktiSounds.testSound('chime');
   };
 
-  // Don't show if user has already interacted and sounds are enabled, unless showAlways is true
-  if (!showAlways && userInteracted && soundsEnabled) {
+  // Don't show if sounds are already enabled, unless showAlways is true
+  if (!showAlways && soundsEnabled) {
     return null;
   }
 
