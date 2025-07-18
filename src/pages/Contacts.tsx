@@ -8,10 +8,9 @@ import { BlockedUsers } from "@/components/contacts/BlockedUsers";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
-import { getCurrentUserProfile } from "@/services/contactsService";
 import { Badge } from "@/components/ui/badge";
 import { Contact, Bell, ShieldCheck } from "lucide-react";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -37,13 +36,8 @@ function ContactsContent({
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }) {
-  // Get pending requests count
-  const { data: requests } = useQuery({
-    queryKey: ['contactRequests'],
-    queryFn: () => import('@/services/contactsService').then(module => module.getContactRequests()),
-  });
-
-  const pendingCount = requests?.length || 0;
+  // Use unified unread messages system instead of separate query
+  const { contactCount } = useUnreadMessages();
   
   // Handler for unblock success
   const handleUnblockSuccess = () => {
@@ -68,9 +62,9 @@ function ContactsContent({
           <TabsTrigger value="requests" className="flex gap-2 items-center">
             <Bell className="h-4 w-4" />
             <span>{t("requests", language)}</span>
-            {pendingCount > 0 && (
+            {contactCount > 0 && (
               <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
-                {pendingCount}
+                {contactCount}
               </Badge>
             )}
           </TabsTrigger>
