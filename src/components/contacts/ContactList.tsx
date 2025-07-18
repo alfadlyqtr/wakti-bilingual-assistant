@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -216,12 +215,13 @@ export function ContactList() {
             const isFavorite = contact.is_favorite === true;
             const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
 
-            // Debug logging for each contact
-            console.log(`🔍 Rendering contact ${displayName}:`, {
+            // Debug logging for each contact (moved outside JSX)
+            console.log(`🔍 DETAILED ContactList - Rendering contact ${displayName}:`, {
               contact_id: contact.contact_id,
               unreadCount,
               shouldShowBadge: unreadCount > 0,
-              perContactUnread: perContactUnread
+              perContactUnread: perContactUnread,
+              contactData: contact
             });
             
             return (
@@ -270,8 +270,6 @@ export function ContactList() {
                           }`}
                         >
                           <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-600'} ${unreadCount ? 'animate-blink' : ''}`} />
-                          {/* Debug: Force show badge for testing */}
-                          {console.log(`🔍 Badge for ${displayName}: count=${unreadCount}, shouldShow=${unreadCount > 0}`)}
                           <UnreadBadge count={unreadCount} blink={!!unreadCount} />
                         </Button>
                       </div>
