@@ -209,7 +209,7 @@ const WaktiAIV2 = () => {
     }
 
     let finalInputType: 'text' | 'voice' | 'vision' = 'text';
-    let routingMode = activeTrigger;
+    let routingMode = activeTrigger; // FIXED: Don't override user's selected mode
 
     // CLAUDE WAY: Process images differently for vision vs storage
     let processedAttachedFiles: any[] = [];
@@ -222,9 +222,14 @@ const WaktiAIV2 = () => {
       const nonImageFiles = attachedFiles.filter(file => !isImageFile(file));
       
       if (imageFiles.length > 0) {
-        finalInputType = 'vision';
-        if (routingMode !== 'video') {
-          routingMode = 'vision';
+        // FIXED: Only set vision mode if user hasn't explicitly selected another mode
+        // OR if they selected chat mode (which can handle vision)
+        if (routingMode === 'chat' || routingMode === 'vision') {
+          finalInputType = 'vision';
+          // Only switch to vision mode if user was in chat mode
+          if (routingMode === 'chat') {
+            routingMode = 'vision';
+          }
         }
         
         console.log('🖼️ CLAUDE WAY: Converting', imageFiles.length, 'images to base64 for Claude');
