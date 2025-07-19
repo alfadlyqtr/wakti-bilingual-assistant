@@ -521,35 +521,37 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
       throw new Error('Anthropic API key not configured');
     }
 
-    // Check if this is a weather query
-    const isWeatherQuery = await detectWeatherQuery(message, language);
-    
-    if (isWeatherQuery) {
-      console.log('🌤️ WEATHER: Detected weather query, processing...');
-      const weatherResponse = await processWeatherRequest(message, language);
-      
-      return {
-        response: weatherResponse,
-        success: true,
-        model: 'weather-api',
-        usage: null,
-        mode: 'weather',
-        intent: 'weather'
-      };
-    }
-
-    console.log(`🤖 BACKEND WORKER: Processing ${activeTrigger} mode conversation`);
-    
+    // FIXED: Check for images FIRST before weather detection
     let detectedMode = 'chat';
-
+    
     if (attachedFiles && attachedFiles.length > 0) {
       const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
       if (hasImages) {
         detectedMode = 'vision';
-        console.log('🔍 BACKEND WORKER: Images detected, using vision mode');
+        console.log('🔍 BACKEND WORKER: Images detected, using vision mode - SKIPPING weather detection');
       }
     }
 
+    // FIXED: Only check weather if NO images are attached (vision takes priority)
+    if (detectedMode !== 'vision') {
+      const isWeatherQuery = await detectWeatherQuery(message, language);
+      
+      if (isWeatherQuery) {
+        console.log('🌤️ WEATHER: Detected weather query, processing...');
+        const weatherResponse = await processWeatherRequest(message, language);
+        
+        return {
+          response: weatherResponse,
+          success: true,
+          model: 'weather-api',
+          usage: null,
+          mode: 'weather',
+          intent: 'weather'
+        };
+      }
+    }
+
+    console.log(`🤖 BACKEND WORKER: Processing ${activeTrigger} mode conversation`);
     console.log(`🤖 BACKEND WORKER: Mode="${detectedMode}" (trigger: "${activeTrigger}")`);
 
     const responseLanguage = language;
