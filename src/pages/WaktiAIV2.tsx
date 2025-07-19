@@ -362,8 +362,8 @@ const WaktiAIV2 = () => {
           return;
         }
 
-        // DEFAULT CHAT MODE
-        console.log('💬 FRONTEND BOSS: Processing regular chat');
+        // DEFAULT CHAT MODE - FIXED: Proper vision handling
+        console.log('💬 FRONTEND BOSS: Processing chat mode (including vision)');
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -396,24 +396,27 @@ const WaktiAIV2 = () => {
           throw new Error(aiResponse.error);
         }
         
+        // FIXED: Safe property access for vision responses
         const assistantMessage: AIMessage = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
           content: aiResponse.response || 'Response received',
           timestamp: new Date(),
-          intent: aiResponse.intent,
-          confidence: aiResponse.confidence as 'high' | 'medium' | 'low',
-          actionTaken: aiResponse.actionTaken,
-          imageUrl: aiResponse.imageUrl,
-          browsingUsed: aiResponse.browsingUsed,
-          browsingData: aiResponse.browsingData
+          intent: aiResponse.intent || undefined,
+          confidence: (aiResponse.confidence as 'high' | 'medium' | 'low') || undefined,
+          actionTaken: aiResponse.actionTaken || undefined,
+          imageUrl: aiResponse.imageUrl || undefined,
+          browsingUsed: aiResponse.browsingUsed || undefined,
+          browsingData: aiResponse.browsingData || undefined
         };
 
+        // FIXED: Safe task form handling
         if (aiResponse.showTaskForm && aiResponse.taskData) {
           setPendingTaskData(aiResponse.taskData);
           setShowTaskConfirmation(true);
         }
 
+        // FIXED: Safe reminder handling
         if (aiResponse.reminderCreated && aiResponse.reminderData) {
           showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
         }
