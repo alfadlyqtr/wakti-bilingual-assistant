@@ -37,6 +37,255 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 console.log("WAKTI AI V2 BRAIN: BACKEND WORKER MODE - Frontend Boss, Backend Worker");
 
+// Weather cache for performance optimization
+const weatherCache = new Map();
+const ipLocationCache = new Map();
+
+// WEATHER FUNCTIONALITY
+async function detectWeatherQuery(message: string, language: string): Promise<boolean> {
+  const weatherKeywords = {
+    en: ['weather', 'temperature', 'rain', 'sunny', 'cloudy', 'hot', 'cold', 'forecast', 'climate'],
+    ar: ['طقس', 'حرارة', 'مطر', 'مشمس', 'غائم', 'حار', 'بارد', 'توقعات', 'مناخ', 'جو']
+  };
+  
+  const keywords = weatherKeywords[language as keyof typeof weatherKeywords] || weatherKeywords.en;
+  const lowerMessage = message.toLowerCase();
+  
+  return keywords.some(keyword => lowerMessage.includes(keyword.toLowerCase()));
+}
+
+async function extractCityFromMessage(message: string, language: string): Promise<string | null> {
+  const cityPatterns = {
+    en: [
+      /weather in ([a-zA-Z\s]+)/i,
+      /temperature in ([a-zA-Z\s]+)/i,
+      /how.+weather.+in ([a-zA-Z\s]+)/i,
+      /([a-zA-Z\s]+) weather/i
+    ],
+    ar: [
+      /طقس في ([ا-ي\s]+)/i,
+      /حرارة في ([ا-ي\s]+)/i,
+      /كيف.+طقس.+في ([ا-ي\s]+)/i,
+      /طقس ([ا-ي\s]+)/i
+    ]
+  };
+  
+  const patterns = cityPatterns[language as keyof typeof cityPatterns] || cityPatterns.en;
+  
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return null;
+}
+
+async function getUserLocationFromIP(): Promise<{lat: number, lon: number, city: string} | null> {
+  try {
+    const cacheKey = 'user_ip_location';
+    if (ipLocationCache.has(cacheKey)) {
+      return ipLocationCache.get(cacheKey);
+    }
+    
+    const response = await fetch('http://ip-api.com/json/', {
+      method: 'GET',
+      headers: { 'User-Agent': 'WaktiAI/1.0' }
+    });
+    
+    if (!response.ok) throw new Error('IP geolocation failed');
+    
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      const location = {
+        lat: data.lat,
+        lon: data.lon,
+        city: data.city
+      };
+      
+      ipLocationCache.set(cacheKey, location);
+      setTimeout(() => ipLocationCache.delete(cacheKey), 1800000); // 30 min cache
+      
+      return location;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('IP geolocation error:', error);
+    return null;
+  }
+}
+
+async function geocodeCity(cityName: string): Promise<{lat: number, lon: number} | null> {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityName)}&format=json&limit=1`, {
+      method: 'GET',
+      headers: { 'User-Agent': 'WaktiAI/1.0' }
+    });
+    
+    if (!response.ok) throw new Error('Geocoding failed');
+    
+    const data = await response.json();
+    
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lon: parseFloat(data[0].lon)
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Geocoding error:', error);
+    return null;
+  }
+}
+
+async function getWeatherData(lat: number, lon: number): Promise<any> {
+  try {
+    const cacheKey = `weather_${lat}_${lon}`;
+    if (weatherCache.has(cacheKey)) {
+      return weatherCache.get(cacheKey);
+    }
+    
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min&timezone=auto`, {
+      method: 'GET',
+      headers: { 'User-Agent': 'WaktiAI/1.0' }
+    });
+    
+    if (!response.ok) throw new Error('Weather API failed');
+    
+    const data = await response.json();
+    
+    weatherCache.set(cacheKey, data);
+    setTimeout(() => weatherCache.delete(cacheKey), 1800000); // 30 min cache
+    
+    return data;
+  } catch (error) {
+    console.error('Weather API error:', error);
+    return null;
+  }
+}
+
+function getWeatherDescription(weatherCode: number, language: string): string {
+  const weatherCodes = {
+    en: {
+      0: 'clear sky',
+      1: 'mainly clear',
+      2: 'partly cloudy',
+      3: 'overcast',
+      45: 'foggy',
+      48: 'depositing rime fog',
+      51: 'light drizzle',
+      53: 'moderate drizzle',
+      55: 'dense drizzle',
+      61: 'slight rain',
+      63: 'moderate rain',
+      65: 'heavy rain',
+      80: 'slight rain showers',
+      81: 'moderate rain showers',
+      82: 'violent rain showers',
+      95: 'thunderstorm'
+    },
+    ar: {
+      0: 'سماء صافية',
+      1: 'صافية في الغالب',
+      2: 'غائمة جزئياً',
+      3: 'غائمة',
+      45: 'ضبابية',
+      48: 'ضباب متجمد',
+      51: 'رذاذ خفيف',
+      53: 'رذاذ معتدل',
+      55: 'رذاذ كثيف',
+      61: 'مطر خفيف',
+      63: 'مطر معتدل',
+      65: 'مطر غزير',
+      80: 'زخات مطر خفيفة',
+      81: 'زخات مطر معتدلة',
+      82: 'زخات مطر عنيفة',
+      95: 'عاصفة رعدية'
+    }
+  };
+  
+  const codes = weatherCodes[language as keyof typeof weatherCodes] || weatherCodes.en;
+  return codes[weatherCode as keyof typeof codes] || (language === 'ar' ? 'غير معروف' : 'unknown');
+}
+
+async function processWeatherRequest(message: string, language: string): Promise<string> {
+  try {
+    console.log('🌤️ WEATHER: Processing weather request');
+    
+    // Extract city from message or use IP location
+    const cityName = await extractCityFromMessage(message, language);
+    let location;
+    let cityDisplayName = '';
+    
+    if (cityName) {
+      console.log(`🌤️ WEATHER: City detected: ${cityName}`);
+      const coords = await geocodeCity(cityName);
+      if (coords) {
+        location = coords;
+        cityDisplayName = cityName;
+      }
+    }
+    
+    if (!location) {
+      console.log('🌤️ WEATHER: Using IP-based location');
+      const ipLocation = await getUserLocationFromIP();
+      if (ipLocation) {
+        location = { lat: ipLocation.lat, lon: ipLocation.lon };
+        cityDisplayName = ipLocation.city;
+      }
+    }
+    
+    if (!location) {
+      return language === 'ar' 
+        ? 'عذراً، لا أستطيع تحديد موقعك للحصول على معلومات الطقس.'
+        : 'Sorry, I cannot determine your location to get weather information.';
+    }
+    
+    // Get weather data
+    const weatherData = await getWeatherData(location.lat, location.lon);
+    
+    if (!weatherData || !weatherData.current_weather) {
+      return language === 'ar'
+        ? 'عذراً، لا أستطيع الحصول على معلومات الطقس الآن. يرجى المحاولة مرة أخرى لاحقاً.'
+        : 'Sorry, I cannot get weather information right now. Please try again later.';
+    }
+    
+    const currentTemp = Math.round(weatherData.current_weather.temperature);
+    const weatherCode = weatherData.current_weather.weathercode;
+    const weatherDesc = getWeatherDescription(weatherCode, language);
+    const maxTemp = weatherData.daily?.temperature_2m_max?.[0] ? Math.round(weatherData.daily.temperature_2m_max[0]) : null;
+    const minTemp = weatherData.daily?.temperature_2m_min?.[0] ? Math.round(weatherData.daily.temperature_2m_min[0]) : null;
+    
+    console.log(`✅ WEATHER: Successfully retrieved weather for ${cityDisplayName}`);
+    
+    // Format response in user's language
+    if (language === 'ar') {
+      let response = `🌤️ الطقس الآن في ${cityDisplayName}: ${currentTemp}°م مع ${weatherDesc}`;
+      if (maxTemp !== null && minTemp !== null) {
+        response += `\n\nتوقعات اليوم: العظمى ${maxTemp}°م والصغرى ${minTemp}°م`;
+      }
+      return response;
+    } else {
+      let response = `🌤️ Current weather in ${cityDisplayName}: ${currentTemp}°C with ${weatherDesc}`;
+      if (maxTemp !== null && minTemp !== null) {
+        response += `\n\nToday's forecast: High ${maxTemp}°C, Low ${minTemp}°C`;
+      }
+      return response;
+    }
+    
+  } catch (error) {
+    console.error('🌤️ WEATHER ERROR:', error);
+    return language === 'ar'
+      ? 'عذراً، حدث خطأ أثناء الحصول على معلومات الطقس.'
+      : 'Sorry, there was an error getting weather information.';
+  }
+}
+
 // TAVILY SEARCH FUNCTION
 async function performSearchWithTavily(query: string, userId: string, language: string = 'en') {
   console.log('🔍 BACKEND WORKER: Processing search request');
@@ -202,7 +451,7 @@ serve(async (req) => {
       result.mode = 'search';
       result.intent = 'search';
     } else {
-      console.log('🤖 BACKEND WORKER: Processing Claude chat/vision request');
+      console.log('🤖 BACKEND WORKER: Processing Claude chat/vision/weather request');
       result = await callClaude35API(
         message,
         finalConversationId,
@@ -229,7 +478,7 @@ serve(async (req) => {
       
       success: result.success !== false,
       processingTime: Date.now(),
-      aiProvider: result.mode === 'image' ? 'runware' : result.mode === 'search' ? 'tavily' : 'claude-3-5-sonnet-20241022',
+      aiProvider: result.mode === 'image' ? 'runware' : result.mode === 'search' ? 'tavily' : result.mode === 'weather' ? 'weather-api' : 'claude-3-5-sonnet-20241022',
       claude35Enabled: true,
       mode: result.mode || activeTrigger,
       fallbackUsed: false
@@ -270,6 +519,23 @@ async function callClaude35API(message, conversationId, userId, language = 'en',
   try {
     if (!ANTHROPIC_API_KEY) {
       throw new Error('Anthropic API key not configured');
+    }
+
+    // Check if this is a weather query
+    const isWeatherQuery = await detectWeatherQuery(message, language);
+    
+    if (isWeatherQuery) {
+      console.log('🌤️ WEATHER: Detected weather query, processing...');
+      const weatherResponse = await processWeatherRequest(message, language);
+      
+      return {
+        response: weatherResponse,
+        success: true,
+        model: 'weather-api',
+        usage: null,
+        mode: 'weather',
+        intent: 'weather'
+      };
     }
 
     console.log(`🤖 BACKEND WORKER: Processing ${activeTrigger} mode conversation`);
@@ -407,6 +673,9 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
 عندما تكون في وضع المحادثة ويطلب المستخدمون إنشاء صور، اردد بـ:
 "يرجى التبديل إلى وضع الصور لإنشاء المحتوى البصري."
 
+## معلومات الطقس:
+يمكنك تقديم معلومات الطقس الحالية للمستخدمين باللغة العربية.
+
 أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
 
 IMPORTANT: تذكر - استخدم العربية فقط في ردك. أي استخدام للإنجليزية غير مقبول.
@@ -418,6 +687,9 @@ Current date: ${currentDate}
 ## Image Generation (Chat Mode Only):
 When in chat mode and users request image generation, respond with:
 "Please switch to image mode for visual content creation."
+
+## Weather Information:
+You can provide current weather information to users in English.
 
 You're here to make users' lives more organized and productive!
 
