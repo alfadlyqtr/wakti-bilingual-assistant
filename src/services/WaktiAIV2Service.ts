@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -63,6 +62,12 @@ class WaktiAIV2ServiceClass {
 
       const personalTouch = this.getPersonalTouch();
 
+      // VISION TIMEOUT FIX: Determine timeout based on request type
+      const isVisionRequest = inputType === 'vision' || (attachedFiles && attachedFiles.length > 0);
+      const timeoutDuration = isVisionRequest ? 30000 : 10000; // 30s for vision, 10s for chat
+      
+      console.log(`⏱️ BACKEND WORKER: Using ${timeoutDuration/1000}s timeout for ${isVisionRequest ? 'VISION' : 'CHAT'} request`);
+
       // BACKEND WORKER: Pure Claude processing, no conversation management
       const { data, error } = await Promise.race([
         supabase.functions.invoke('wakti-ai-v2-brain', {
@@ -92,7 +97,7 @@ class WaktiAIV2ServiceClass {
           }
         }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Backend timeout - Claude took too long')), 10000) // Reduced to 10s
+          setTimeout(() => reject(new Error(`Backend timeout - ${isVisionRequest ? 'Vision' : 'Chat'} processing took too long (>${timeoutDuration/1000}s)`)), timeoutDuration)
         )
       ]) as any;
 
