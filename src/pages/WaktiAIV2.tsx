@@ -29,6 +29,27 @@ const useDebounceCallback = (callback: Function, delay: number) => {
   }, [callback, delay]);
 };
 
+// Helper function to convert file to base64
+const convertFileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Failed to convert file to base64'));
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+// Helper function to check if file is an image
+const isImageFile = (file: any): boolean => {
+  return file.type && file.type.startsWith('image/');
+};
+
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -190,10 +211,69 @@ const WaktiAIV2 = () => {
     let finalInputType: 'text' | 'voice' | 'vision' = 'text';
     let routingMode = activeTrigger;
 
+    // CLAUDE WAY: Process images differently for vision vs storage
+    let processedAttachedFiles: any[] = [];
+    
     if (attachedFiles && attachedFiles.length > 0) {
-      finalInputType = 'vision';
-      if (routingMode !== 'video') {
-        routingMode = 'vision';
+      console.log('🖼️ CLAUDE WAY: Processing attached files for vision', attachedFiles.length);
+      
+      // Separate images from other files
+      const imageFiles = attachedFiles.filter(file => isImageFile(file));
+      const nonImageFiles = attachedFiles.filter(file => !isImageFile(file));
+      
+      if (imageFiles.length > 0) {
+        finalInputType = 'vision';
+        if (routingMode !== 'video') {
+          routingMode = 'vision';
+        }
+        
+        console.log('🖼️ CLAUDE WAY: Converting', imageFiles.length, 'images to base64 for Claude');
+        
+        // Convert images to base64 (Claude Way)
+        for (const imageFile of imageFiles) {
+          try {
+            let base64Data: string;
+            
+            if (imageFile.url && imageFile.url.startsWith('data:')) {
+              // Already base64
+              base64Data = imageFile.url;
+            } else if (imageFile.file) {
+              // Convert File object to base64
+              base64Data = await convertFileToBase64(imageFile.file);
+            } else if (imageFile.url) {
+              // Fetch image from URL and convert to base64
+              const response = await fetch(imageFile.url);
+              const blob = await response.blob();
+              const file = new File([blob], imageFile.name || 'image', { type: imageFile.type });
+              base64Data = await convertFileToBase64(file);
+            } else {
+              throw new Error('Invalid image file format');
+            }
+            
+            processedAttachedFiles.push({
+              name: imageFile.name,
+              type: imageFile.type,
+              size: imageFile.size,
+              url: base64Data, // Claude Way: Use base64 directly
+              preview: imageFile.preview,
+              imageType: imageFile.imageType || { id: 'general', name: 'General' }
+            });
+            
+          } catch (error) {
+            console.error('❌ CLAUDE WAY: Failed to convert image to base64:', error);
+            showError(language === 'ar' ? 'فشل في معالجة الصورة' : 'Failed to process image');
+            return;
+          }
+        }
+        
+        console.log('✅ CLAUDE WAY: Converted', processedAttachedFiles.length, 'images to base64');
+      }
+      
+      // For non-image files, keep current upload system
+      if (nonImageFiles.length > 0) {
+        console.log('📁 STORAGE WAY: Processing', nonImageFiles.length, 'non-image files via Supabase');
+        // Add non-image files as-is (they should already be uploaded to storage)
+        processedAttachedFiles.push(...nonImageFiles);
       }
     }
 
@@ -221,7 +301,7 @@ const WaktiAIV2 = () => {
           content: messageContent,
           timestamp: new Date(),
           inputType: finalInputType,
-          attachedFiles: attachedFiles
+          attachedFiles: processedAttachedFiles
         };
         
         const newMessages = [...sessionMessages, tempUserMessage];
@@ -240,7 +320,7 @@ const WaktiAIV2 = () => {
           false,
           'image',
           '',
-          attachedFiles || []
+          processedAttachedFiles || []
         );
         
         if (imageResponse.error) {
@@ -270,7 +350,7 @@ const WaktiAIV2 = () => {
           content: messageContent,
           timestamp: new Date(),
           inputType: finalInputType,
-          attachedFiles: attachedFiles
+          attachedFiles: processedAttachedFiles
         };
         
         const newMessages = [...sessionMessages, tempUserMessage];
@@ -288,7 +368,7 @@ const WaktiAIV2 = () => {
           false,
           'search',
           '',
-          attachedFiles || []
+          processedAttachedFiles || []
         );
         
         if (searchResponse.error) {
@@ -310,7 +390,7 @@ const WaktiAIV2 = () => {
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
         
       } else {
-        // CHAT MODE OR EXPLICIT TASK COMMANDS
+        // CHAT MODE OR EXPLICIT TASK COMMANDS (INCLUDING VISION)
         if (isExplicitTaskCommand(messageContent)) {
           console.log('🎯 FRONTEND BOSS: Processing explicit task command');
           
@@ -336,7 +416,7 @@ const WaktiAIV2 = () => {
             content: messageContent,
             timestamp: new Date(),
             inputType: finalInputType,
-            attachedFiles: attachedFiles
+            attachedFiles: processedAttachedFiles
           };
 
           const taskMessage: AIMessage = {
@@ -362,8 +442,8 @@ const WaktiAIV2 = () => {
           return;
         }
 
-        // DEFAULT CHAT MODE - FIXED: Proper vision handling
-        console.log('💬 FRONTEND BOSS: Processing chat mode (including vision)');
+        // DEFAULT CHAT MODE - INCLUDING VISION WITH CLAUDE WAY
+        console.log('💬 FRONTEND BOSS: Processing chat mode (including Claude Way vision)');
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -371,7 +451,7 @@ const WaktiAIV2 = () => {
           content: messageContent,
           timestamp: new Date(),
           inputType: finalInputType,
-          attachedFiles: attachedFiles
+          attachedFiles: processedAttachedFiles
         };
         
         const newMessages = [...sessionMessages, tempUserMessage];
@@ -389,7 +469,7 @@ const WaktiAIV2 = () => {
           false,
           'chat',
           '',
-          attachedFiles || []
+          processedAttachedFiles || []
         );
 
         if (aiResponse.error) {
