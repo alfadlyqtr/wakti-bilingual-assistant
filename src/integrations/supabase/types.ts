@@ -1159,6 +1159,8 @@ export type Database = {
           auto_approve_contacts: boolean | null
           avatar_url: string | null
           billing_start_date: string | null
+          country: string | null
+          country_code: string | null
           created_at: string | null
           display_name: string | null
           email: string | null
@@ -1186,6 +1188,8 @@ export type Database = {
           auto_approve_contacts?: boolean | null
           avatar_url?: string | null
           billing_start_date?: string | null
+          country?: string | null
+          country_code?: string | null
           created_at?: string | null
           display_name?: string | null
           email?: string | null
@@ -1213,6 +1217,8 @@ export type Database = {
           auto_approve_contacts?: boolean | null
           avatar_url?: string | null
           billing_start_date?: string | null
+          country?: string | null
+          country_code?: string | null
           created_at?: string | null
           display_name?: string | null
           email?: string | null

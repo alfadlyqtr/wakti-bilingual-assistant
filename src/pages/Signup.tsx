@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, Globe } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,6 +18,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validateDisplayName, validateEmail, validatePassword, validateConfirmPassword } from "@/utils/validations";
+import { countries } from "@/utils/countries";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -28,6 +30,7 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
   const [dobInputValue, setDobInputValue] = useState("");
+  const [country, setCountry] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -74,6 +77,11 @@ export default function Signup() {
       setErrorMsg(language === 'en' ? 'Please select your date of birth' : 'يرجى اختيار تاريخ الميلاد');
       return;
     }
+
+    if (!country) {
+      setErrorMsg(language === 'en' ? 'Please select your country' : 'يرجى اختيار بلدك');
+      return;
+    }
     
     if (!agreedToTerms) {
       setErrorMsg(language === 'en' ? 'Please agree to the Privacy Policy and Terms of Service' : 'يرجى الموافقة على سياسة الخصوصية وشروط الخدمة');
@@ -88,6 +96,9 @@ export default function Signup() {
       
       console.log('Attempting signup with redirect URL:', redirectUrl);
       
+      // Find the selected country data
+      const selectedCountry = countries.find(c => c.code === country);
+      
       // Create the user in Supabase Auth with email confirmation
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -98,6 +109,8 @@ export default function Signup() {
             full_name: name,
             username,
             date_of_birth: dateOfBirth.toISOString().split('T')[0],
+            country: selectedCountry?.name || '',
+            country_code: country,
           },
         },
       });
@@ -132,7 +145,6 @@ export default function Signup() {
     }
   };
 
-  // Sync manual date input to picker and vice versa
   const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setDobInputValue(value);
@@ -147,7 +159,6 @@ export default function Signup() {
     }
   };
 
-  // When picking from calendar
   const handleCalendarDateSelect = (date: Date | undefined) => {
     setDateOfBirth(date);
     if (date) {
@@ -157,7 +168,6 @@ export default function Signup() {
     }
   };
 
-  // Translations
   const translations = {
     en: {
       appName: "WAKTI",
@@ -168,6 +178,7 @@ export default function Signup() {
       password: "Password",
       confirmPassword: "Confirm Password",
       dateOfBirth: "Date of Birth",
+      country: "Country",
       loading: "Loading...",
       signup: "Sign Up",
       alreadyHaveAccount: "Already have an account?",
@@ -178,6 +189,7 @@ export default function Signup() {
       and: "and",
       termsOfService: "Terms of Service",
       passwordRequirements: "Must be at least 6 characters, contain one uppercase letter and one number",
+      selectCountry: "Select your country",
       // Placeholders
       namePlaceholder: "Your Name",
       usernamePlaceholder: "username",
@@ -195,6 +207,7 @@ export default function Signup() {
       password: "كلمة المرور",
       confirmPassword: "تأكيد كلمة المرور",
       dateOfBirth: "تاريخ الميلاد",
+      country: "البلد",
       loading: "جاري التحميل...",
       signup: "إنشاء حساب",
       alreadyHaveAccount: "لديك حساب بالفعل؟",
@@ -205,6 +218,7 @@ export default function Signup() {
       and: "و",
       termsOfService: "شروط الخدمة",
       passwordRequirements: "يجب أن تكون 6 أحرف على الأقل، تحتوي على حرف كبير ورقم",
+      selectCountry: "اختر بلدك",
       // Placeholders
       namePlaceholder: "اسمك",
       usernamePlaceholder: "اسم المستخدم",
@@ -217,7 +231,6 @@ export default function Signup() {
 
   const t = translations[language];
 
-  // Update navigation after user closes dialog
   const handleDialogClose = () => {
     setIsEmailConfirmationDialogOpen(false);
     navigate("/login");
@@ -225,7 +238,6 @@ export default function Signup() {
 
   return (
     <>
-      {/* Original signup page */}
       <div className="mobile-container">
         <header className="mobile-header">
           <div className="flex items-center">
@@ -251,7 +263,6 @@ export default function Signup() {
               className="w-full max-w-md mx-auto"
             >
               <div className="mb-6 text-center">
-                {/* App logo with navigation to home */}
                 <div 
                   className="inline-block cursor-pointer mb-4"
                   onClick={() => navigate("/")}
@@ -331,11 +342,36 @@ export default function Signup() {
                     />
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="country" className="text-base">{t.country}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
+                      <Globe className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Select 
+                      value={country} 
+                      onValueChange={setCountry}
+                      disabled={isLoading}
+                      required
+                    >
+                      <SelectTrigger className="pl-10 py-6 text-base shadow-sm">
+                        <SelectValue placeholder={t.selectCountry} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {countries.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {language === 'ar' ? c.nameAr : c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
                   <div className="space-y-2">
-                    {/* Manual date entry */}
                     <Input
                       id="dob"
                       type="date"
@@ -347,7 +383,6 @@ export default function Signup() {
                       disabled={isLoading}
                       placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
                     />
-                    {/* OR calendar picker */}
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
@@ -443,7 +478,6 @@ export default function Signup() {
                   </div>
                 </div>
                 
-                {/* Privacy and Terms Checkbox */}
                 <div className="flex items-start space-x-3">
                   <Checkbox
                     id="terms"
@@ -499,7 +533,6 @@ export default function Signup() {
           </div>
         </div>
       </div>
-      {/* Email Confirmation Dialog */}
       <EmailConfirmationDialog
         open={isEmailConfirmationDialogOpen}
         onClose={handleDialogClose}
