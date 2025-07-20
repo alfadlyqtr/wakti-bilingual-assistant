@@ -1,5 +1,4 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, Loader2 } from 'lucide-react';
@@ -62,6 +61,7 @@ export function ChatInput({
   videoTemplate = 'image2video'
 }: ChatInputProps) {
   const { language } = useTheme();
+  const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
 
   // Use simplified file upload hook
   const {
@@ -74,6 +74,18 @@ export function ChatInput({
     startUploading
   } = useSimplifiedFileUpload();
 
+  // Auto-reset vision mode when no images are present
+  useEffect(() => {
+    // Only auto-reset if we previously auto-switched to vision mode
+    if (wasAutoSwitchedToVision && uploadedFiles.length === 0 && activeTrigger === 'vision') {
+      console.log('🔄 AUTO-RESET: No images present, switching back to chat mode');
+      if (onTriggerChange) {
+        onTriggerChange('chat');
+      }
+      setWasAutoSwitchedToVision(false);
+    }
+  }, [uploadedFiles.length, activeTrigger, wasAutoSwitchedToVision, onTriggerChange]);
+
   // Enhanced send message function with proper data conversion
   const handleSendMessage = async () => {
     if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
@@ -83,8 +95,9 @@ export function ChatInput({
       let finalTrigger = activeTrigger;
       if (uploadedFiles.length > 0) {
         const hasImages = uploadedFiles.some(file => file.type?.startsWith('image/'));
-        if (hasImages && activeTrigger !== 'video') {
+        if (hasImages && activeTrigger !== 'video' && activeTrigger !== 'vision') {
           finalTrigger = 'vision';
+          setWasAutoSwitchedToVision(true);
           console.log('🔍 AUTO-SWITCH: Images detected, switching to vision mode');
           // Update the actual trigger
           if (onTriggerChange) {
@@ -150,6 +163,9 @@ export function ChatInput({
             console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
             if (onTriggerChange) {
               onTriggerChange(mode);
+              if (mode === 'vision') {
+                setWasAutoSwitchedToVision(true);
+              }
             }
           }}
         />
