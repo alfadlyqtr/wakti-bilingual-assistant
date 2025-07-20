@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -6,13 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchWeatherData, getUVIndexLabel } from '@/services/weatherService';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Cloud, Loader2, AlertCircle, X } from 'lucide-react';
+import { Cloud, Loader2, AlertCircle, X, ArrowLeft } from 'lucide-react';
 
 export function WeatherButton() {
   const { profile } = useUserProfile();
   const { language } = useTheme();
   const [isOpen, setIsOpen] = React.useState(false);
-  const [showTomorrowDetails, setShowTomorrowDetails] = React.useState(false);
+  const [showTomorrow, setShowTomorrow] = React.useState(false);
 
   const { data: weather, isLoading, error } = useQuery({
     queryKey: ['weather', profile?.country],
@@ -32,6 +31,36 @@ export function WeatherButton() {
       'Sat': 'Saturday'
     };
     return dayMap[dayShort] || dayShort;
+  };
+
+  const getShortWindDirection = (fullDirection: string): string => {
+    const directionMap: Record<string, string> = {
+      'North': 'N',
+      'North Northeast': 'NNE',
+      'Northeast': 'NE',
+      'East Northeast': 'ENE',
+      'East': 'E',
+      'East Southeast': 'ESE',
+      'Southeast': 'SE',
+      'South Southeast': 'SSE',
+      'South': 'S',
+      'South Southwest': 'SSW',
+      'Southwest': 'SW',
+      'West Southwest': 'WSW',
+      'West': 'W',
+      'West Northwest': 'WNW',
+      'Northwest': 'NW',
+      'North Northwest': 'NNW'
+    };
+    return directionMap[fullDirection] || 'N';
+  };
+
+  const handleTomorrowClick = () => {
+    setShowTomorrow(true);
+  };
+
+  const handleBackToCurrent = () => {
+    setShowTomorrow(false);
   };
 
   return (
@@ -88,6 +117,16 @@ export function WeatherButton() {
             <X className="h-3 w-3 text-muted-foreground" />
           </button>
 
+          {/* Back Button (only shown when viewing tomorrow) */}
+          {showTomorrow && (
+            <button
+              onClick={handleBackToCurrent}
+              className="absolute top-2 left-2 z-20 p-1 rounded-full hover:bg-white/10 transition-colors"
+            >
+              <ArrowLeft className="h-3 w-3 text-muted-foreground" />
+            </button>
+          )}
+
           <div className="p-3 space-y-2">
             {error || !weather ? (
               <div className="text-center py-4">
@@ -103,20 +142,38 @@ export function WeatherButton() {
               </div>
             ) : (
               <>
-                {/* Current Weather - Compact Hero */}
+                {/* Current or Tomorrow Weather Header */}
                 <div className="text-center space-y-1">
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="text-2xl">{weather.icon}</span>
-                    <div className="text-xl font-bold">{weather.temperature}°C</div>
-                  </div>
-                  <div className="text-sm capitalize">{weather.description}</div>
-                  <div className="text-xs text-muted-foreground">
-                    L {weather.low}°C - H {weather.high}°C • Feels like {weather.feelsLike}°C
-                  </div>
+                  {showTomorrow && weather.tomorrow ? (
+                    <>
+                      <div className="text-xs text-muted-foreground mb-1">
+                        Tomorrow - {getDayName(weather.tomorrow.day)}
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-2xl">{weather.tomorrow.icon}</span>
+                        <div className="text-xl font-bold">{weather.tomorrow.temperature}°C</div>
+                      </div>
+                      <div className="text-sm capitalize">Tomorrow's Weather</div>
+                      <div className="text-xs text-muted-foreground">
+                        L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-2xl">{weather.icon}</span>
+                        <div className="text-xl font-bold">{weather.temperature}°C</div>
+                      </div>
+                      <div className="text-sm capitalize">{weather.description}</div>
+                      <div className="text-xs text-muted-foreground">
+                        L {weather.low}°C - H {weather.high}°C • Feels like {weather.feelsLike}°C
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {/* 5-Day Forecast with Full Day Names */}
-                {weather.forecast && weather.forecast.length > 0 && (
+                {/* 5-Day Forecast */}
+                {!showTomorrow && weather.forecast && weather.forecast.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">5-Day Forecast</div>
                     <div className="flex gap-1 overflow-x-auto">
@@ -142,109 +199,72 @@ export function WeatherButton() {
                   </div>
                 )}
 
-                {/* Weather Details Compact Grid */}
-                <div className="grid grid-cols-2 gap-2">
+                {/* Weather Details - Single Line Format */}
+                <div className="space-y-2">
+                  {/* Humidity - Single Line */}
                   <div 
-                    className="p-2 rounded-lg text-center space-y-1"
+                    className="p-2 rounded-lg text-center"
                     style={{
                       background: 'rgba(255, 255, 255, 0.05)',
                       backdropFilter: 'blur(10px)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                     }}
                   >
-                    <div className="text-base">💧</div>
-                    <div className="text-xs text-muted-foreground">Humidity</div>
-                    <div className="text-sm font-semibold">{weather.humidity}%</div>
-                  </div>
-
-                  <div 
-                    className="p-2 rounded-lg text-center space-y-1"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                    }}
-                  >
-                    <div className="text-base">💨</div>
-                    <div className="text-xs text-muted-foreground">Wind</div>
-                    <div className="text-sm font-semibold">{weather.windSpeed} km/h</div>
-                    <div className="text-xs text-muted-foreground">{weather.windDirectionFull}</div>
-                  </div>
-
-                  <div 
-                    className="p-2 rounded-lg text-center space-y-1"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                    }}
-                  >
-                    <div className="text-base">🌅</div>
-                    <div className="text-xs text-muted-foreground">Sunrise</div>
-                    <div className="text-sm font-semibold">{weather.sunrise}</div>
-                  </div>
-
-                  <div 
-                    className="p-2 rounded-lg text-center space-y-1"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                    }}
-                  >
-                    <div className="text-base">🌇</div>
-                    <div className="text-xs text-muted-foreground">Sunset</div>
-                    <div className="text-sm font-semibold">{weather.sunset}</div>
-                  </div>
-                </div>
-
-                {/* UV Index - Single Line */}
-                <div 
-                  className="p-2 rounded-lg text-center"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                  }}
-                >
-                  <div className="text-sm">
-                    <span className="text-base mr-2">☀️</span>
-                    UV Index: <span className="font-semibold">{weather.uvIndex} - {getUVIndexLabel(weather.uvIndex)}</span>
-                  </div>
-                </div>
-
-                {/* Tomorrow - Clickable Section */}
-                {weather.tomorrow && (
-                  <div 
-                    className="p-2 rounded-lg cursor-pointer hover:bg-white/5 transition-colors"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                    }}
-                    onClick={() => setShowTomorrowDetails(!showTomorrowDetails)}
-                  >
-                    <div className="text-sm text-center">
-                      Tomorrow - {getDayName(weather.tomorrow.day)} ➜ <span className="text-base">{weather.tomorrow.icon}</span> L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
+                    <div className="text-sm">
+                      <span className="text-base mr-2">💧</span>
+                      Humidity: <span className="font-semibold">{weather.humidity}%</span>
                     </div>
-                    
-                    {showTomorrowDetails && (
-                      <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>💧 Humidity: {weather.humidity}%</div>
-                          <div>💨 Wind: {weather.windSpeed} km/h {weather.windDirectionFull}</div>
-                          <div>🌅 Sunrise: {weather.sunrise}</div>
-                          <div>🌇 Sunset: {weather.sunset}</div>
-                        </div>
-                        <div className="text-xs text-center">
-                          ☀️ UV Index: {weather.uvIndex} - {getUVIndexLabel(weather.uvIndex)}
-                        </div>
-                      </div>
-                    )}
                   </div>
-                )}
 
-                {/* Location & Last Updated - Single Line */}
+                  {/* Wind - Single Line with Short Direction */}
+                  <div 
+                    className="p-2 rounded-lg text-center"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      backdropFilter: 'blur(10px)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                    }}
+                  >
+                    <div className="text-sm">
+                      <span className="text-base mr-2">💨</span>
+                      Wind: <span className="font-semibold">{weather.windSpeed} km/h {getShortWindDirection(weather.windDirectionFull)}</span>
+                    </div>
+                  </div>
+
+                  {/* UV Index - Keep Same */}
+                  <div 
+                    className="p-2 rounded-lg text-center"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      backdropFilter: 'blur(10px)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                    }}
+                  >
+                    <div className="text-sm">
+                      <span className="text-base mr-2">☀️</span>
+                      UV Index: <span className="font-semibold">{weather.uvIndex} - {getUVIndexLabel(weather.uvIndex)}</span>
+                    </div>
+                  </div>
+
+                  {/* Tomorrow - Clickable Navigation */}
+                  {!showTomorrow && weather.tomorrow && (
+                    <div 
+                      className="p-2 rounded-lg text-center cursor-pointer hover:bg-white/5 transition-colors"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                      }}
+                      onClick={handleTomorrowClick}
+                    >
+                      <div className="text-sm">
+                        Tomorrow - {getDayName(weather.tomorrow.day)} → <span className="text-base">{weather.tomorrow.icon}</span> L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Location & Last Updated */}
                 <div className="text-center text-xs text-muted-foreground pt-1 border-t border-white/10">
                   📍 {profile?.country || 'Qatar'} • Updated {weather.lastUpdated}
                 </div>
