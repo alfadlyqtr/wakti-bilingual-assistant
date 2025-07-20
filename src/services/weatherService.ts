@@ -1,4 +1,6 @@
 
+import { supabase } from '@/integrations/supabase/client';
+
 interface WeatherData {
   temperature: number;
   feelsLike: number;
@@ -33,7 +35,6 @@ interface UVResponse {
   value: number;
 }
 
-const WEATHER_API_KEY = '6c7e1c40ed4a5c99c6db8c3d8c7f0c8e'; // Free demo key
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
 interface CachedWeatherData {
@@ -71,6 +72,20 @@ const getLocationFromCountry = async (country: string): Promise<{ lat: number; l
   return countryCoords[country] || null;
 };
 
+const getApiKey = async (): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('get-weather-api-key');
+    if (error) {
+      console.error('Error getting API key:', error);
+      return null;
+    }
+    return data?.apiKey || null;
+  } catch (error) {
+    console.error('Error calling edge function:', error);
+    return null;
+  }
+};
+
 export const fetchWeatherData = async (country?: string): Promise<WeatherData | null> => {
   try {
     // Check cache first
@@ -84,6 +99,12 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       }
     }
 
+    // Get API key from Supabase secrets
+    const apiKey = await getApiKey();
+    if (!apiKey) {
+      throw new Error('Weather API key not available');
+    }
+
     // Get coordinates from country
     let coords = country ? await getLocationFromCountry(country) : null;
     
@@ -94,7 +115,7 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
 
     // Fetch current weather
     const weatherResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${coords.lat}&lon=${coords.lon}&appid=${WEATHER_API_KEY}&units=metric`
+      `https://api.openweathermap.org/data/2.5/weather?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=metric`
     );
     
     if (!weatherResponse.ok) {
@@ -105,7 +126,7 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
     
     // Fetch UV index
     const uvResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/uvi?lat=${coords.lat}&lon=${coords.lon}&appid=${WEATHER_API_KEY}`
+      `https://api.openweathermap.org/data/2.5/uvi?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}`
     );
     
     let uvIndex = 0;
