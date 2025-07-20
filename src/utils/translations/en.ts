@@ -1,4 +1,3 @@
-
 import { auth } from "./modules/auth";
 import { common } from "./modules/common";
 import { navigation } from "./modules/navigation";
@@ -20,6 +19,7 @@ import { legal } from "./modules/legal";
 import { billing } from "./modules/billing";
 import { confirmation } from "./modules/confirmation";
 import { games } from "./modules/games";
+import { weather } from "./modules/weather";
 
 export const en = {
   ...common,
@@ -43,6 +43,7 @@ export const en = {
   ...billing,
   ...confirmation,
   ...games,
+  ...weather,
   
   // Additional TR specific translations
   manageTasksAndResponsibilities: "Manage your tasks and responsibilities",

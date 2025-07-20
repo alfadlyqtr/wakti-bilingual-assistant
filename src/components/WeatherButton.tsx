@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchWeatherData, getUVIndexLabel } from '@/services/weatherService';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 import { Cloud, Loader2, AlertCircle, X, ArrowLeft } from 'lucide-react';
 
 export function WeatherButton() {
@@ -23,37 +24,70 @@ export function WeatherButton() {
 
   const getDayName = (dayShort: string) => {
     const dayMap: Record<string, string> = {
-      'Sun': 'Sunday',
-      'Mon': 'Monday', 
-      'Tue': 'Tuesday',
-      'Wed': 'Wednesday',
-      'Thu': 'Thursday',
-      'Fri': 'Friday',
-      'Sat': 'Saturday'
+      'Sun': t('sunday', language),
+      'Mon': t('monday', language), 
+      'Tue': t('tuesday', language),
+      'Wed': t('wednesday', language),
+      'Thu': t('thursday', language),
+      'Fri': t('friday', language),
+      'Sat': t('saturday', language)
     };
     return dayMap[dayShort] || dayShort;
   };
 
-  const getShortWindDirection = (fullDirection: string): string => {
+  const getFullWindDirection = (fullDirection: string): string => {
     const directionMap: Record<string, string> = {
-      'North': 'N',
-      'North Northeast': 'NNE',
-      'Northeast': 'NE',
-      'East Northeast': 'ENE',
-      'East': 'E',
-      'East Southeast': 'ESE',
-      'Southeast': 'SE',
-      'South Southeast': 'SSE',
-      'South': 'S',
-      'South Southwest': 'SSW',
-      'Southwest': 'SW',
-      'West Southwest': 'WSW',
-      'West': 'W',
-      'West Northwest': 'WNW',
-      'Northwest': 'NW',
-      'North Northwest': 'NNW'
+      'North': t('north', language),
+      'North Northeast': t('northNortheast', language),
+      'Northeast': t('northeast', language),
+      'East Northeast': t('eastNortheast', language),
+      'East': t('east', language),
+      'East Southeast': t('eastSoutheast', language),
+      'Southeast': t('southeast', language),
+      'South Southeast': t('southSoutheast', language),
+      'South': t('south', language),
+      'South Southwest': t('southSouthwest', language),
+      'Southwest': t('southwest', language),
+      'West Southwest': t('westSouthwest', language),
+      'West': t('west', language),
+      'West Northwest': t('westNorthwest', language),
+      'Northwest': t('northwest', language),
+      'North Northwest': t('northNorthwest', language)
     };
-    return directionMap[fullDirection] || 'N';
+    return directionMap[fullDirection] || fullDirection;
+  };
+
+  const translateWeatherDescription = (description: string): string => {
+    const descriptionMap: Record<string, string> = {
+      'clear sky': t('clearSky', language),
+      'few clouds': t('fewClouds', language),
+      'scattered clouds': t('scatteredClouds', language),
+      'broken clouds': t('brokenClouds', language),
+      'overcast clouds': t('overcastClouds', language),
+      'light rain': t('lightRain', language),
+      'moderate rain': t('moderateRain', language),
+      'heavy rain': t('heavyRain', language),
+      'thunderstorm': t('thunderstorm', language),
+      'snow': t('snow', language),
+      'mist': t('mist', language),
+      'fog': t('fog', language),
+      'sunny': t('sunny', language),
+      'cloudy': t('cloudy', language),
+      'partly cloudy': t('partlyCloudy', language)
+    };
+    return descriptionMap[description.toLowerCase()] || description;
+  };
+
+  const getUVIndexTranslated = (uvIndex: number): string => {
+    const label = getUVIndexLabel(uvIndex);
+    const uvMap: Record<string, string> = {
+      'Low': t('uvLow', language),
+      'Moderate': t('uvModerate', language),
+      'High': t('uvHigh', language),
+      'Very High': t('uvVeryHigh', language),
+      'Extreme': t('uvExtreme', language)
+    };
+    return uvMap[label] || label;
   };
 
   // Get selected day's weather data
@@ -91,12 +125,12 @@ export function WeatherButton() {
             {isLoading ? (
               <>
                 <Loader2 className="h-3 w-3 animate-spin" />
-                <span className="text-xs font-medium">Weather</span>
+                <span className="text-xs font-medium">{t('weather', language)}</span>
               </>
             ) : error || !weather ? (
               <>
                 <AlertCircle className="h-3 w-3" />
-                <span className="text-xs font-medium">Weather</span>
+                <span className="text-xs font-medium">{t('weather', language)}</span>
               </>
             ) : (
               <>
@@ -117,11 +151,11 @@ export function WeatherButton() {
           boxShadow: '0 20px 80px rgba(0, 0, 0, 0.2)',
         }}
       >
-        <div className="relative">
+        <div className={`relative ${language === 'ar' ? 'rtl' : 'ltr'}`}>
           {/* Close Button */}
           <button
             onClick={() => setIsOpen(false)}
-            className="absolute top-2 right-2 z-20 p-1 rounded-full hover:bg-white/10 transition-colors"
+            className={`absolute top-2 z-20 p-1 rounded-full hover:bg-white/10 transition-colors ${language === 'ar' ? 'left-2' : 'right-2'}`}
           >
             <X className="h-3 w-3 text-muted-foreground" />
           </button>
@@ -130,9 +164,9 @@ export function WeatherButton() {
           {selectedDay && (
             <button
               onClick={handleBackToCurrent}
-              className="absolute top-2 left-2 z-20 p-1 rounded-full hover:bg-white/10 transition-colors"
+              className={`absolute top-2 z-20 p-1 rounded-full hover:bg-white/10 transition-colors ${language === 'ar' ? 'right-2' : 'left-2'}`}
             >
-              <ArrowLeft className="h-3 w-3 text-muted-foreground" />
+              <ArrowLeft className={`h-3 w-3 text-muted-foreground ${language === 'ar' ? 'rotate-180' : ''}`} />
             </button>
           )}
 
@@ -141,11 +175,11 @@ export function WeatherButton() {
               <div className="text-center py-4">
                 <AlertCircle className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                 <div className="text-sm font-medium mb-1">
-                  {language === 'ar' ? 'لا يمكن تحميل بيانات الطقس' : 'Unable to load weather data'}
+                  {t('weatherLoadError', language)}
                 </div>
                 {error && (
                   <div className="text-xs text-muted-foreground">
-                    {language === 'ar' ? 'حاول مرة أخرى لاحقاً' : 'Please try again later'}
+                    {t('tryAgainLater', language)}
                   </div>
                 )}
               </div>
@@ -162,7 +196,7 @@ export function WeatherButton() {
                         <span className="text-2xl">{selectedDayWeather.icon}</span>
                         <div className="text-xl font-bold">{selectedDayWeather.high}°C</div>
                       </div>
-                      <div className="text-sm capitalize">{selectedDayWeather.description}</div>
+                      <div className="text-sm capitalize">{translateWeatherDescription(selectedDayWeather.description)}</div>
                       <div className="text-xs text-muted-foreground">
                         L {selectedDayWeather.low}°C - H {selectedDayWeather.high}°C
                       </div>
@@ -173,9 +207,9 @@ export function WeatherButton() {
                         <span className="text-2xl">{weather.icon}</span>
                         <div className="text-xl font-bold">{weather.temperature}°C</div>
                       </div>
-                      <div className="text-sm capitalize">{weather.description}</div>
+                      <div className="text-sm capitalize">{translateWeatherDescription(weather.description)}</div>
                       <div className="text-xs text-muted-foreground">
-                        L {weather.low}°C - H {weather.high}°C • Feels like {weather.feelsLike}°C
+                        L {weather.low}°C - H {weather.high}°C • {t('feelsLike', language)} {weather.feelsLike}°C
                       </div>
                     </>
                   )}
@@ -184,12 +218,12 @@ export function WeatherButton() {
                 {/* 5-Day Forecast - Only show when viewing current weather */}
                 {!selectedDay && weather.forecast && weather.forecast.length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground">5-Day Forecast</div>
-                    <div className="flex gap-1 overflow-x-auto">
+                    <div className="text-xs text-muted-foreground">{t('dayForecast', language)}</div>
+                    <div className="flex gap-1">
                       {weather.forecast.map((day, index) => (
                         <div
                           key={index}
-                          className="flex-shrink-0 text-center p-1.5 rounded-lg min-w-[50px] cursor-pointer hover:bg-white/10 transition-colors"
+                          className="flex-1 text-center p-1.5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors"
                           style={{
                             background: 'rgba(255, 255, 255, 0.05)',
                             backdropFilter: 'blur(10px)',
@@ -222,11 +256,11 @@ export function WeatherButton() {
                   >
                     <div className="text-sm">
                       <span className="text-base mr-2">💧</span>
-                      Humidity: <span className="font-semibold">{selectedDay ? '65' : weather.humidity}%</span>
+                      {t('humidity', language)}: <span className="font-semibold">{selectedDay ? '65' : weather.humidity}%</span>
                     </div>
                   </div>
 
-                  {/* Wind - Single Line with Short Direction */}
+                  {/* Wind - Single Line with Full Direction */}
                   <div 
                     className="p-2 rounded-lg text-center"
                     style={{
@@ -237,8 +271,8 @@ export function WeatherButton() {
                   >
                     <div className="text-sm">
                       <span className="text-base mr-2">💨</span>
-                      Wind: <span className="font-semibold">
-                        {selectedDay ? '25' : weather.windSpeed} km/h {selectedDay ? 'E' : getShortWindDirection(weather.windDirectionFull)}
+                      {t('wind', language)}: <span className="font-semibold">
+                        {selectedDay ? '25' : weather.windSpeed} {t('kmh', language)} {selectedDay ? t('east', language) : getFullWindDirection(weather.windDirectionFull)}
                       </span>
                     </div>
                   </div>
@@ -254,8 +288,8 @@ export function WeatherButton() {
                   >
                     <div className="text-sm">
                       <span className="text-base mr-2">☀️</span>
-                      UV Index: <span className="font-semibold">
-                        {selectedDay ? '8 - Very High' : `${weather.uvIndex} - ${getUVIndexLabel(weather.uvIndex)}`}
+                      {t('uvIndex', language)}: <span className="font-semibold">
+                        {selectedDay ? `8 - ${t('uvVeryHigh', language)}` : `${weather.uvIndex} - ${getUVIndexTranslated(weather.uvIndex)}`}
                       </span>
                     </div>
                   </div>
@@ -263,7 +297,7 @@ export function WeatherButton() {
 
                 {/* Location & Last Updated */}
                 <div className="text-center text-xs text-muted-foreground pt-1 border-t border-white/10">
-                  📍 {profile?.country || 'Qatar'} • Updated {weather.lastUpdated}
+                  📍 {profile?.country || 'Qatar'} • {t('updated', language)} {weather.lastUpdated}
                 </div>
               </>
             )}
