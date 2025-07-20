@@ -143,6 +143,9 @@ export function WeatherButton() {
       </PopoverTrigger>
       <PopoverContent 
         className="w-64 p-0 border-0 shadow-2xl"
+        strategy="fixed"
+        sideOffset={8}
+        avoidCollisions={true}
         style={{
           background: 'rgba(255, 255, 255, 0.1)',
           backdropFilter: 'blur(40px)',
@@ -219,11 +222,11 @@ export function WeatherButton() {
                 {!selectedDay && weather.forecast && weather.forecast.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">{t('dayForecast', language)}</div>
-                    <div className="flex gap-1">
+                    <div className="flex gap-0.5 overflow-x-auto scrollbar-hide scroll-smooth">
                       {weather.forecast.map((day, index) => (
                         <div
                           key={index}
-                          className="flex-1 text-center p-1.5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors"
+                          className="flex-shrink-0 w-12 text-center p-1 rounded-lg cursor-pointer hover:bg-white/10 transition-colors"
                           style={{
                             background: 'rgba(255, 255, 255, 0.05)',
                             backdropFilter: 'blur(10px)',
@@ -231,8 +234,8 @@ export function WeatherButton() {
                           }}
                           onClick={() => handleDayClick(day.day)}
                         >
-                          <div className="text-xs mb-1">{getDayName(day.day)}</div>
-                          <div className="text-base mb-1">{day.icon}</div>
+                          <div className="text-xs mb-1 truncate">{getDayName(day.day).slice(0, 3)}</div>
+                          <div className="text-sm mb-1">{day.icon}</div>
                           <div className="text-xs space-y-0.5">
                             <div className="font-medium">{day.high}°</div>
                             <div className="text-muted-foreground">{day.low}°</div>
