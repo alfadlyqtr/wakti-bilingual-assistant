@@ -11,13 +11,25 @@ interface WeatherData {
   humidity: number;
   windSpeed: number;
   windDirection: string;
+  windDirectionFull: string;
   uvIndex: number;
+  sunrise: string;
+  sunset: string;
   tomorrow?: {
+    day: string;
     temperature: number;
     icon: string;
     high: number;
     low: number;
   };
+  forecast: Array<{
+    day: string;
+    date: string;
+    icon: string;
+    high: number;
+    low: number;
+    description: string;
+  }>;
   lastUpdated: string;
 }
 
@@ -45,6 +57,8 @@ interface ForecastResponse {
   city: {
     name: string;
     country: string;
+    sunrise: number;
+    sunset: number;
   };
 }
 
@@ -96,6 +110,26 @@ const getWindDirection = (degrees: number): string => {
   return 'N';
 };
 
+const getWindDirectionFull = (degrees: number): string => {
+  if (degrees >= 348.75 || degrees < 11.25) return 'North';
+  if (degrees >= 11.25 && degrees < 33.75) return 'North Northeast';
+  if (degrees >= 33.75 && degrees < 56.25) return 'Northeast';
+  if (degrees >= 56.25 && degrees < 78.75) return 'East Northeast';
+  if (degrees >= 78.75 && degrees < 101.25) return 'East';
+  if (degrees >= 101.25 && degrees < 123.75) return 'East Southeast';
+  if (degrees >= 123.75 && degrees < 146.25) return 'Southeast';
+  if (degrees >= 146.25 && degrees < 168.75) return 'South Southeast';
+  if (degrees >= 168.75 && degrees < 191.25) return 'South';
+  if (degrees >= 191.25 && degrees < 213.75) return 'South Southwest';
+  if (degrees >= 213.75 && degrees < 236.25) return 'Southwest';
+  if (degrees >= 236.25 && degrees < 258.75) return 'West Southwest';
+  if (degrees >= 258.75 && degrees < 281.25) return 'West';
+  if (degrees >= 281.25 && degrees < 303.75) return 'West Northwest';
+  if (degrees >= 303.75 && degrees < 326.25) return 'Northwest';
+  if (degrees >= 326.25 && degrees < 348.75) return 'North Northwest';
+  return 'North';
+};
+
 const getLocationFromCountry = async (country: string): Promise<{ lat: number; lon: number } | null> => {
   const countryCoords: Record<string, { lat: number; lon: number }> = {
     'Qatar': { lat: 25.3548, lon: 51.1839 },
@@ -124,10 +158,17 @@ const getApiKey = async (): Promise<string | null> => {
   }
 };
 
+const formatTime = (timestamp: number): string => {
+  return new Date(timestamp * 1000).toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: true 
+  });
+};
+
 const getTomorrowData = (forecastList: ForecastResponse['list']) => {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(12, 0, 0, 0); // Look for noon tomorrow for best representation
   
   // Find the forecast entry closest to noon tomorrow
   const tomorrowEntries = forecastList.filter(entry => {
@@ -148,11 +189,57 @@ const getTomorrowData = (forecastList: ForecastResponse['list']) => {
   const maxTemp = Math.max(...tomorrowEntries.map(e => e.main.temp_max));
   
   return {
+    day: tomorrow.toLocaleDateString('en-US', { weekday: 'short' }),
     temperature: Math.round(noonEntry.main.temp),
     icon: getWeatherEmoji(noonEntry.weather[0].icon, noonEntry.weather[0].description),
     high: Math.round(maxTemp),
     low: Math.round(minTemp)
   };
+};
+
+const getFiveDayForecast = (forecastList: ForecastResponse['list']) => {
+  const dailyData: Record<string, any> = {};
+  
+  // Group entries by date
+  forecastList.forEach(entry => {
+    const date = new Date(entry.dt * 1000);
+    const dateKey = date.toDateString();
+    
+    if (!dailyData[dateKey]) {
+      dailyData[dateKey] = {
+        date: dateKey,
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        entries: [],
+        temps: []
+      };
+    }
+    
+    dailyData[dateKey].entries.push(entry);
+    dailyData[dateKey].temps.push(entry.main.temp);
+  });
+  
+  // Convert to forecast array (skip today, get next 5 days)
+  const today = new Date().toDateString();
+  const forecast = Object.values(dailyData)
+    .filter((day: any) => day.date !== today)
+    .slice(0, 5)
+    .map((day: any) => {
+      const noonEntry = day.entries.find((entry: any) => {
+        const hour = new Date(entry.dt * 1000).getHours();
+        return hour >= 11 && hour <= 13;
+      }) || day.entries[0];
+      
+      return {
+        day: day.day,
+        date: day.date,
+        icon: getWeatherEmoji(noonEntry.weather[0].icon, noonEntry.weather[0].description),
+        high: Math.round(Math.max(...day.temps)),
+        low: Math.round(Math.min(...day.temps)),
+        description: noonEntry.weather[0].description
+      };
+    });
+  
+  return forecast;
 };
 
 export const fetchWeatherData = async (country?: string): Promise<WeatherData | null> => {
@@ -223,6 +310,9 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
 
     // Get tomorrow's weather
     const tomorrowData = getTomorrowData(forecastData.list);
+    
+    // Get 5-day forecast
+    const fiveDayForecast = getFiveDayForecast(forecastData.list);
 
     const processedData: WeatherData = {
       temperature: Math.round(currentEntry.main.temp),
@@ -234,8 +324,12 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       humidity: currentEntry.main.humidity,
       windSpeed: Math.round(currentEntry.wind.speed * 3.6), // Convert m/s to km/h
       windDirection: getWindDirection(currentEntry.wind.deg || 0),
+      windDirectionFull: getWindDirectionFull(currentEntry.wind.deg || 0),
       uvIndex: Math.round(uvIndex),
+      sunrise: formatTime(forecastData.city.sunrise),
+      sunset: formatTime(forecastData.city.sunset),
       tomorrow: tomorrowData,
+      forecast: fiveDayForecast,
       lastUpdated: new Date().toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit',
