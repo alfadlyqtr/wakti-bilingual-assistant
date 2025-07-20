@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ProfileImageUpload } from "@/components/ProfileImageUpload";
+import { AccountCountrySection } from "@/components/AccountCountrySection";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
@@ -696,6 +697,9 @@ export default function Account() {
                 </form>
               </CardContent>
             </Card>
+
+            {/* Add Country Section */}
+            <AccountCountrySection />
             
             {/* Submit Feedback Section */}
             <Card>
