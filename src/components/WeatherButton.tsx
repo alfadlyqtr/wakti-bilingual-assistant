@@ -6,12 +6,13 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchWeatherData, getUVIndexLabel } from '@/services/weatherService';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Cloud, Loader2, AlertCircle, ArrowRight, X } from 'lucide-react';
+import { Cloud, Loader2, AlertCircle, X } from 'lucide-react';
 
 export function WeatherButton() {
   const { profile } = useUserProfile();
   const { language } = useTheme();
   const [isOpen, setIsOpen] = React.useState(false);
+  const [showTomorrowDetails, setShowTomorrowDetails] = React.useState(false);
 
   const { data: weather, isLoading, error } = useQuery({
     queryKey: ['weather', profile?.country],
@@ -19,6 +20,19 @@ export function WeatherButton() {
     refetchInterval: 60 * 60 * 1000, // Refetch every 60 minutes
     staleTime: 50 * 60 * 1000, // Consider data stale after 50 minutes
   });
+
+  const getDayName = (dayShort: string) => {
+    const dayMap: Record<string, string> = {
+      'Sun': 'Sunday',
+      'Mon': 'Monday', 
+      'Tue': 'Tuesday',
+      'Wed': 'Wednesday',
+      'Thu': 'Thursday',
+      'Fri': 'Friday',
+      'Sat': 'Saturday'
+    };
+    return dayMap[dayShort] || dayShort;
+  };
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -89,26 +103,19 @@ export function WeatherButton() {
               </div>
             ) : (
               <>
-                {/* Current Weather - Hero Section */}
+                {/* Current Weather - Compact Hero */}
                 <div className="text-center space-y-1">
                   <div className="flex items-center justify-center gap-2">
                     <span className="text-2xl">{weather.icon}</span>
-                    <div className="text-2xl font-bold">{weather.temperature}°C</div>
+                    <div className="text-xl font-bold">{weather.temperature}°C</div>
                   </div>
                   <div className="text-sm capitalize">{weather.description}</div>
-                  <div 
-                    className="inline-block px-2 py-1 rounded-full text-xs"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                    }}
-                  >
-                    L {weather.low}°C - H {weather.high}°C
+                  <div className="text-xs text-muted-foreground">
+                    L {weather.low}°C - H {weather.high}°C • Feels like {weather.feelsLike}°C
                   </div>
                 </div>
 
-                {/* 5-Day Forecast */}
+                {/* 5-Day Forecast with Full Day Names */}
                 {weather.forecast && weather.forecast.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">5-Day Forecast</div>
@@ -116,15 +123,15 @@ export function WeatherButton() {
                       {weather.forecast.map((day, index) => (
                         <div
                           key={index}
-                          className="flex-shrink-0 text-center p-2 rounded-lg min-w-[45px]"
+                          className="flex-shrink-0 text-center p-1.5 rounded-lg min-w-[50px]"
                           style={{
                             background: 'rgba(255, 255, 255, 0.05)',
                             backdropFilter: 'blur(10px)',
                             border: '1px solid rgba(255, 255, 255, 0.1)',
                           }}
                         >
-                          <div className="text-xs mb-1">{day.day}</div>
-                          <div className="text-lg mb-1">{day.icon}</div>
+                          <div className="text-xs mb-1">{getDayName(day.day)}</div>
+                          <div className="text-base mb-1">{day.icon}</div>
                           <div className="text-xs space-y-0.5">
                             <div className="font-medium">{day.high}°</div>
                             <div className="text-muted-foreground">{day.low}°</div>
@@ -145,7 +152,7 @@ export function WeatherButton() {
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                     }}
                   >
-                    <div className="text-lg">💧</div>
+                    <div className="text-base">💧</div>
                     <div className="text-xs text-muted-foreground">Humidity</div>
                     <div className="text-sm font-semibold">{weather.humidity}%</div>
                   </div>
@@ -158,9 +165,10 @@ export function WeatherButton() {
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                     }}
                   >
-                    <div className="text-lg">💨</div>
+                    <div className="text-base">💨</div>
                     <div className="text-xs text-muted-foreground">Wind</div>
                     <div className="text-sm font-semibold">{weather.windSpeed} km/h</div>
+                    <div className="text-xs text-muted-foreground">{weather.windDirectionFull}</div>
                   </div>
 
                   <div 
@@ -171,7 +179,7 @@ export function WeatherButton() {
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                     }}
                   >
-                    <div className="text-lg">🌅</div>
+                    <div className="text-base">🌅</div>
                     <div className="text-xs text-muted-foreground">Sunrise</div>
                     <div className="text-sm font-semibold">{weather.sunrise}</div>
                   </div>
@@ -184,7 +192,7 @@ export function WeatherButton() {
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                     }}
                   >
-                    <div className="text-lg">🌇</div>
+                    <div className="text-base">🌇</div>
                     <div className="text-xs text-muted-foreground">Sunset</div>
                     <div className="text-sm font-semibold">{weather.sunset}</div>
                   </div>
@@ -200,24 +208,39 @@ export function WeatherButton() {
                   }}
                 >
                   <div className="text-sm">
-                    <span className="text-lg mr-2">☀️</span>
+                    <span className="text-base mr-2">☀️</span>
                     UV Index: <span className="font-semibold">{weather.uvIndex} - {getUVIndexLabel(weather.uvIndex)}</span>
                   </div>
                 </div>
 
-                {/* Tomorrow Preview */}
+                {/* Tomorrow - Clickable Section */}
                 {weather.tomorrow && (
                   <div 
-                    className="p-2 rounded-lg text-center"
+                    className="p-2 rounded-lg cursor-pointer hover:bg-white/5 transition-colors"
                     style={{
                       background: 'rgba(255, 255, 255, 0.05)',
                       backdropFilter: 'blur(10px)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                     }}
+                    onClick={() => setShowTomorrowDetails(!showTomorrowDetails)}
                   >
-                    <div className="text-sm">
-                      Tomorrow ➜ <span className="text-base">{weather.tomorrow.icon}</span> L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
+                    <div className="text-sm text-center">
+                      Tomorrow - {getDayName(weather.tomorrow.day)} ➜ <span className="text-base">{weather.tomorrow.icon}</span> L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
                     </div>
+                    
+                    {showTomorrowDetails && (
+                      <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>💧 Humidity: {weather.humidity}%</div>
+                          <div>💨 Wind: {weather.windSpeed} km/h {weather.windDirectionFull}</div>
+                          <div>🌅 Sunrise: {weather.sunrise}</div>
+                          <div>🌇 Sunset: {weather.sunset}</div>
+                        </div>
+                        <div className="text-xs text-center">
+                          ☀️ UV Index: {weather.uvIndex} - {getUVIndexLabel(weather.uvIndex)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
