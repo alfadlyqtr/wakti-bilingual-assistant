@@ -35,31 +35,21 @@ export function WeatherButton() {
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-accent-blue/10 to-accent-purple/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="relative z-10 flex flex-col items-center gap-1">
+          <div className="relative z-10 flex items-center gap-2">
             {isLoading ? (
-              <div className="flex items-center gap-2">
+              <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm font-medium">Weather</span>
-              </div>
+              </>
             ) : error || !weather ? (
-              <div className="flex items-center gap-2">
+              <>
                 <AlertCircle className="h-4 w-4" />
                 <span className="text-sm font-medium">Weather</span>
-              </div>
+              </>
             ) : (
               <>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{weather.icon}</span>
-                  <span className="text-sm font-semibold">{weather.temperature}°C</span>
-                </div>
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  <span>📍 {profile?.country || 'Qatar'} • Updated {weather.lastUpdated}</span>
-                </div>
-                {weather.tomorrow && (
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <span>Tomorrow ➜ {weather.tomorrow.icon} L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C</span>
-                  </div>
-                )}
+                <span className="text-lg">{weather.icon}</span>
+                <span className="text-sm font-semibold">{weather.temperature}°C</span>
               </>
             )}
           </div>
@@ -228,18 +218,41 @@ export function WeatherButton() {
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                     }}
                   >
-                    <div className="text-2xl">🕒</div>
-                    <div className="text-xs text-muted-foreground">Last Updated</div>
-                    <div className="text-sm font-semibold">{weather.lastUpdated}</div>
+                    <div className="text-2xl">🌡️</div>
+                    <div className="text-xs text-muted-foreground">Feels Like</div>
+                    <div className="text-lg font-semibold">{weather.feelsLike}°C</div>
                   </div>
                 </div>
 
-                {/* Location */}
-                {profile?.country && (
-                  <div className="text-center text-xs text-muted-foreground pt-2 border-t border-white/10">
-                    📍 {profile.country}
+                {/* Tomorrow Preview */}
+                {weather.tomorrow && (
+                  <div 
+                    className="p-4 rounded-2xl text-center"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      backdropFilter: 'blur(10px)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                    }}
+                  >
+                    <div className="text-sm text-muted-foreground mb-2">Tomorrow</div>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-lg">{weather.tomorrow.icon}</span>
+                      <span className="text-sm font-medium">
+                        L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
+                      </span>
+                    </div>
                   </div>
                 )}
+
+                {/* Location & Last Updated */}
+                <div className="text-center space-y-1 pt-2 border-t border-white/10">
+                  <div className="text-xs text-muted-foreground">
+                    📍 {profile?.country || 'Qatar'}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Updated {weather.lastUpdated}
+                  </div>
+                </div>
               </>
             )}
           </div>
