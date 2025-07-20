@@ -142,7 +142,7 @@ export function WeatherButton() {
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-64 p-0 border-0 shadow-2xl"
+        className="w-80 p-0 border-0 shadow-2xl"
         style={{
           background: 'rgba(255, 255, 255, 0.1)',
           backdropFilter: 'blur(40px)',
@@ -150,6 +150,8 @@ export function WeatherButton() {
           border: '1px solid rgba(255, 255, 255, 0.2)',
           boxShadow: '0 20px 80px rgba(0, 0, 0, 0.2)',
         }}
+        sideOffset={4}
+        avoidCollisions={true}
       >
         <div className={`relative ${language === 'ar' ? 'rtl' : 'ltr'}`}>
           {/* Close Button */}
@@ -170,7 +172,7 @@ export function WeatherButton() {
             </button>
           )}
 
-          <div className="p-3 space-y-2">
+          <div className="p-3 space-y-3">
             {error || !weather ? (
               <div className="text-center py-4">
                 <AlertCircle className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
@@ -217,28 +219,48 @@ export function WeatherButton() {
 
                 {/* 5-Day Forecast - Only show when viewing current weather */}
                 {!selectedDay && weather.forecast && weather.forecast.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground">{t('dayForecast', language)}</div>
-                    <div className="flex gap-1">
-                      {weather.forecast.map((day, index) => (
-                        <div
-                          key={index}
-                          className="flex-1 text-center p-1.5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors"
-                          style={{
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            backdropFilter: 'blur(10px)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                          }}
-                          onClick={() => handleDayClick(day.day)}
-                        >
-                          <div className="text-xs mb-1">{getDayName(day.day)}</div>
-                          <div className="text-base mb-1">{day.icon}</div>
-                          <div className="text-xs space-y-0.5">
-                            <div className="font-medium">{day.high}°</div>
-                            <div className="text-muted-foreground">{day.low}°</div>
-                          </div>
-                        </div>
-                      ))}
+                  <div className="space-y-2">
+                    <div className="text-xs text-muted-foreground font-medium">{t('dayForecast', language)}</div>
+                    <div className="relative">
+                      <div 
+                        className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory pb-1"
+                        style={{
+                          scrollbarWidth: 'none',
+                          msOverflowStyle: 'none',
+                        }}
+                      >
+                        {weather.forecast.map((day, index) => (
+                          <button
+                            key={index}
+                            className="flex-shrink-0 w-20 text-center p-2.5 rounded-xl cursor-pointer transition-all duration-300 snap-start active:scale-95 hover:scale-105"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%)',
+                              backdropFilter: 'blur(15px)',
+                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                            }}
+                            onClick={() => handleDayClick(day.day)}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.4)';
+                              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.1) 100%)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.3)';
+                              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%)';
+                            }}
+                          >
+                            <div className="text-xs font-semibold mb-1 truncate">{getDayName(day.day)}</div>
+                            <div className="text-lg mb-1">{day.icon}</div>
+                            <div className="text-xs space-y-0.5">
+                              <div className="font-bold text-foreground">{day.high}°</div>
+                              <div className="text-muted-foreground">{day.low}°</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      {/* Scroll fade indicators */}
+                      <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-black/20 to-transparent pointer-events-none rounded-l-xl" />
+                      <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-black/20 to-transparent pointer-events-none rounded-r-xl" />
                     </div>
                   </div>
                 )}
@@ -247,11 +269,11 @@ export function WeatherButton() {
                 <div className="space-y-2">
                   {/* Humidity - Single Line */}
                   <div 
-                    className="p-2 rounded-lg text-center"
+                    className="p-2.5 rounded-lg text-center"
                     style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
+                      background: 'rgba(255, 255, 255, 0.08)',
                       backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
                     }}
                   >
                     <div className="text-sm">
@@ -262,11 +284,11 @@ export function WeatherButton() {
 
                   {/* Wind - Single Line with Full Direction */}
                   <div 
-                    className="p-2 rounded-lg text-center"
+                    className="p-2.5 rounded-lg text-center"
                     style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
+                      background: 'rgba(255, 255, 255, 0.08)',
                       backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
                     }}
                   >
                     <div className="text-sm">
@@ -279,11 +301,11 @@ export function WeatherButton() {
 
                   {/* UV Index */}
                   <div 
-                    className="p-2 rounded-lg text-center"
+                    className="p-2.5 rounded-lg text-center"
                     style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
+                      background: 'rgba(255, 255, 255, 0.08)',
                       backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
                     }}
                   >
                     <div className="text-sm">
