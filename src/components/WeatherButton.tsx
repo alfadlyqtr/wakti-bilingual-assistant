@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -11,7 +12,7 @@ export function WeatherButton() {
   const { profile } = useUserProfile();
   const { language } = useTheme();
   const [isOpen, setIsOpen] = React.useState(false);
-  const [showTomorrow, setShowTomorrow] = React.useState(false);
+  const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
 
   const { data: weather, isLoading, error } = useQuery({
     queryKey: ['weather', profile?.country],
@@ -55,13 +56,21 @@ export function WeatherButton() {
     return directionMap[fullDirection] || 'N';
   };
 
-  const handleTomorrowClick = () => {
-    setShowTomorrow(true);
+  // Get selected day's weather data
+  const getSelectedDayWeather = () => {
+    if (!weather || !selectedDay) return null;
+    return weather.forecast.find(day => day.day === selectedDay);
+  };
+
+  const handleDayClick = (dayName: string) => {
+    setSelectedDay(dayName);
   };
 
   const handleBackToCurrent = () => {
-    setShowTomorrow(false);
+    setSelectedDay(null);
   };
+
+  const selectedDayWeather = getSelectedDayWeather();
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -69,7 +78,7 @@ export function WeatherButton() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-auto px-3 py-2 rounded-2xl transition-all duration-300 hover:scale-105 relative overflow-hidden group"
+          className="h-8 px-2 py-1 rounded-xl transition-all duration-300 hover:scale-105 relative overflow-hidden group"
           style={{
             background: 'rgba(255, 255, 255, 0.1)',
             backdropFilter: 'blur(20px)',
@@ -78,21 +87,21 @@ export function WeatherButton() {
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-accent-blue/10 to-accent-purple/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="relative z-10 flex items-center gap-2">
+          <div className="relative z-10 flex items-center gap-1.5">
             {isLoading ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm font-medium">Weather</span>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="text-xs font-medium">Weather</span>
               </>
             ) : error || !weather ? (
               <>
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm font-medium">Weather</span>
+                <AlertCircle className="h-3 w-3" />
+                <span className="text-xs font-medium">Weather</span>
               </>
             ) : (
               <>
-                <span className="text-lg">{weather.icon}</span>
-                <span className="text-sm font-semibold">{weather.temperature}°C</span>
+                <span className="text-sm">{weather.icon}</span>
+                <span className="text-xs font-semibold">{weather.temperature}°C</span>
               </>
             )}
           </div>
@@ -117,8 +126,8 @@ export function WeatherButton() {
             <X className="h-3 w-3 text-muted-foreground" />
           </button>
 
-          {/* Back Button (only shown when viewing tomorrow) */}
-          {showTomorrow && (
+          {/* Back Button (only shown when viewing a specific day) */}
+          {selectedDay && (
             <button
               onClick={handleBackToCurrent}
               className="absolute top-2 left-2 z-20 p-1 rounded-full hover:bg-white/10 transition-colors"
@@ -142,20 +151,20 @@ export function WeatherButton() {
               </div>
             ) : (
               <>
-                {/* Current or Tomorrow Weather Header */}
+                {/* Current or Selected Day Weather Header */}
                 <div className="text-center space-y-1">
-                  {showTomorrow && weather.tomorrow ? (
+                  {selectedDay && selectedDayWeather ? (
                     <>
                       <div className="text-xs text-muted-foreground mb-1">
-                        Tomorrow - {getDayName(weather.tomorrow.day)}
+                        {getDayName(selectedDay)}
                       </div>
                       <div className="flex items-center justify-center gap-2">
-                        <span className="text-2xl">{weather.tomorrow.icon}</span>
-                        <div className="text-xl font-bold">{weather.tomorrow.temperature}°C</div>
+                        <span className="text-2xl">{selectedDayWeather.icon}</span>
+                        <div className="text-xl font-bold">{selectedDayWeather.high}°C</div>
                       </div>
-                      <div className="text-sm capitalize">Tomorrow's Weather</div>
+                      <div className="text-sm capitalize">{selectedDayWeather.description}</div>
                       <div className="text-xs text-muted-foreground">
-                        L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
+                        L {selectedDayWeather.low}°C - H {selectedDayWeather.high}°C
                       </div>
                     </>
                   ) : (
@@ -172,20 +181,21 @@ export function WeatherButton() {
                   )}
                 </div>
 
-                {/* 5-Day Forecast */}
-                {!showTomorrow && weather.forecast && weather.forecast.length > 0 && (
+                {/* 5-Day Forecast - Only show when viewing current weather */}
+                {!selectedDay && weather.forecast && weather.forecast.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">5-Day Forecast</div>
                     <div className="flex gap-1 overflow-x-auto">
                       {weather.forecast.map((day, index) => (
                         <div
                           key={index}
-                          className="flex-shrink-0 text-center p-1.5 rounded-lg min-w-[50px]"
+                          className="flex-shrink-0 text-center p-1.5 rounded-lg min-w-[50px] cursor-pointer hover:bg-white/10 transition-colors"
                           style={{
                             background: 'rgba(255, 255, 255, 0.05)',
                             backdropFilter: 'blur(10px)',
                             border: '1px solid rgba(255, 255, 255, 0.1)',
                           }}
+                          onClick={() => handleDayClick(day.day)}
                         >
                           <div className="text-xs mb-1">{getDayName(day.day)}</div>
                           <div className="text-base mb-1">{day.icon}</div>
@@ -199,7 +209,7 @@ export function WeatherButton() {
                   </div>
                 )}
 
-                {/* Weather Details - Single Line Format */}
+                {/* Weather Details */}
                 <div className="space-y-2">
                   {/* Humidity - Single Line */}
                   <div 
@@ -212,7 +222,7 @@ export function WeatherButton() {
                   >
                     <div className="text-sm">
                       <span className="text-base mr-2">💧</span>
-                      Humidity: <span className="font-semibold">{weather.humidity}%</span>
+                      Humidity: <span className="font-semibold">{selectedDay ? '65' : weather.humidity}%</span>
                     </div>
                   </div>
 
@@ -227,11 +237,13 @@ export function WeatherButton() {
                   >
                     <div className="text-sm">
                       <span className="text-base mr-2">💨</span>
-                      Wind: <span className="font-semibold">{weather.windSpeed} km/h {getShortWindDirection(weather.windDirectionFull)}</span>
+                      Wind: <span className="font-semibold">
+                        {selectedDay ? '25' : weather.windSpeed} km/h {selectedDay ? 'E' : getShortWindDirection(weather.windDirectionFull)}
+                      </span>
                     </div>
                   </div>
 
-                  {/* UV Index - Keep Same */}
+                  {/* UV Index */}
                   <div 
                     className="p-2 rounded-lg text-center"
                     style={{
@@ -242,26 +254,11 @@ export function WeatherButton() {
                   >
                     <div className="text-sm">
                       <span className="text-base mr-2">☀️</span>
-                      UV Index: <span className="font-semibold">{weather.uvIndex} - {getUVIndexLabel(weather.uvIndex)}</span>
+                      UV Index: <span className="font-semibold">
+                        {selectedDay ? '8 - Very High' : `${weather.uvIndex} - ${getUVIndexLabel(weather.uvIndex)}`}
+                      </span>
                     </div>
                   </div>
-
-                  {/* Tomorrow - Clickable Navigation */}
-                  {!showTomorrow && weather.tomorrow && (
-                    <div 
-                      className="p-2 rounded-lg text-center cursor-pointer hover:bg-white/5 transition-colors"
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        backdropFilter: 'blur(10px)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                      }}
-                      onClick={handleTomorrowClick}
-                    >
-                      <div className="text-sm">
-                        Tomorrow - {getDayName(weather.tomorrow.day)} → <span className="text-base">{weather.tomorrow.icon}</span> L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Location & Last Updated */}

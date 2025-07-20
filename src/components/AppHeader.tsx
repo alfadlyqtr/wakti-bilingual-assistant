@@ -180,7 +180,7 @@ export function AppHeader() {
   
   return (
     <div className="bg-background border-b sticky top-0 z-50">
-      <div className="container flex h-16 items-center justify-between py-4">
+      <div className="container flex h-16 items-center justify-between py-3">
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="flex items-center">
             <Logo3D size="sm" />
@@ -194,8 +194,8 @@ export function AppHeader() {
             </div>
           )}
         </div>
-        <div className="flex items-center space-x-4">
-          {/* Weather Button */}
+        <div className="flex items-center space-x-2">
+          {/* Weather Button - Made smaller */}
           <WeatherButton />
           
           {/* Language Toggle Button - always enabled */}
@@ -204,12 +204,12 @@ export function AppHeader() {
               <TooltipTrigger asChild>
                 <Button 
                   variant="ghost" 
-                  size="icon" 
+                  size="sm"
                   onClick={toggleLanguage}
-                  className="rounded-full"
+                  className="rounded-full h-8 w-8 p-0"
                   aria-label={language === 'en' ? 'Switch to Arabic' : 'Switch to English'}
                 >
-                  <Globe className="h-[1.2rem] w-[1.2rem]" />
+                  <Globe className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
             </Tooltip>
@@ -218,28 +218,28 @@ export function AppHeader() {
           {/* Theme Toggle Button - always functional */}
           <Button 
             variant="outline" 
-            size="icon" 
+            size="sm"
             onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            className="rounded-full"
+            className="rounded-full h-8 w-8 p-0"
           >
-            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span className="sr-only">Toggle theme</span>
           </Button>
           
-          {/* User Menu */}
+          {/* User Menu - Made smaller */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 rounded-full relative">
                 <span className="relative">
                   <Avatar 
-                    className="h-8 w-8"
-                    key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`} // Force re-render
+                    className="h-7 w-7"
+                    key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
                   >
                     <AvatarImage src={avatarUrl} />
-                    <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
+                    <AvatarFallback className="text-xs">{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
                   </Avatar>
-                  <UnreadBadge count={unreadTotal} size="sm" className="-right-1 -top-1" />
+                  <UnreadBadge count={unreadTotal} size="sm" className="-right-0.5 -top-0.5" />
                 </span>
               </Button>
             </DropdownMenuTrigger>
