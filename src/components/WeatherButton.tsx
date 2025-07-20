@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchWeatherData, getUVIndexLabel } from '@/services/weatherService';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Cloud, Loader2, AlertCircle } from 'lucide-react';
+import { Cloud, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 
 export function WeatherButton() {
   const { profile } = useUserProfile();
@@ -15,8 +15,8 @@ export function WeatherButton() {
   const { data: weather, isLoading, error } = useQuery({
     queryKey: ['weather', profile?.country],
     queryFn: () => fetchWeatherData(profile?.country || undefined),
-    refetchInterval: 15 * 60 * 1000, // Refetch every 15 minutes
-    staleTime: 10 * 60 * 1000, // Consider data stale after 10 minutes
+    refetchInterval: 60 * 60 * 1000, // Refetch every 60 minutes
+    staleTime: 50 * 60 * 1000, // Consider data stale after 50 minutes
   });
 
   return (
@@ -80,18 +80,41 @@ export function WeatherButton() {
                 </div>
               </div>
 
-              {/* Weather details grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-accent/10 rounded-lg p-3 text-center">
-                  <div className="text-lg mb-1">📊</div>
-                  <div className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'المدى اليومي' : "Today's Range"}
-                  </div>
-                  <div className="font-semibold">
-                    {weather.low}°C - {weather.high}°C
+              {/* Today's temperature range */}
+              <div className="bg-accent/10 rounded-lg p-3 text-center mb-3">
+                <div className="text-sm text-muted-foreground mb-1">
+                  {language === 'ar' ? 'اليوم' : 'Today'}
+                </div>
+                <div className="font-semibold text-lg">
+                  L {weather.low}°C - H {weather.high}°C
+                </div>
+              </div>
+
+              {/* Tomorrow preview */}
+              {weather.tomorrow && (
+                <div className="bg-accent/5 rounded-lg p-3 mb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{weather.tomorrow.icon}</span>
+                      <div>
+                        <div className="text-sm font-medium">
+                          {language === 'ar' ? 'غداً' : 'Tomorrow'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          L {weather.tomorrow.low}°C - H {weather.tomorrow.high}°C
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <span className="text-sm font-medium">{weather.tomorrow.temperature}°C</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </div>
                   </div>
                 </div>
+              )}
 
+              {/* Weather details grid */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="bg-accent/10 rounded-lg p-3 text-center">
                   <div className="text-lg mb-1">💧</div>
                   <div className="text-sm text-muted-foreground">
@@ -105,7 +128,7 @@ export function WeatherButton() {
                   <div className="text-sm text-muted-foreground">
                     {language === 'ar' ? 'الرياح' : 'Wind'}
                   </div>
-                  <div className="font-semibold">{weather.windSpeed} km/h</div>
+                  <div className="font-semibold">{weather.windSpeed} km/h {weather.windDirection}</div>
                 </div>
 
                 <div className="bg-accent/10 rounded-lg p-3 text-center">
@@ -116,6 +139,14 @@ export function WeatherButton() {
                   <div className="font-semibold">
                     {weather.uvIndex} ({getUVIndexLabel(weather.uvIndex)})
                   </div>
+                </div>
+
+                <div className="bg-accent/10 rounded-lg p-3 text-center">
+                  <div className="text-lg mb-1">🕒</div>
+                  <div className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'آخر تحديث' : 'Updated'}
+                  </div>
+                  <div className="font-semibold text-xs">{weather.lastUpdated}</div>
                 </div>
               </div>
 

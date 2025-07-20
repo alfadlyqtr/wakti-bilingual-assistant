@@ -10,24 +10,41 @@ interface WeatherData {
   low: number;
   humidity: number;
   windSpeed: number;
+  windDirection: string;
   uvIndex: number;
+  tomorrow?: {
+    temperature: number;
+    icon: string;
+    high: number;
+    low: number;
+  };
+  lastUpdated: string;
 }
 
-interface WeatherResponse {
-  main: {
-    temp: number;
-    feels_like: number;
-    temp_max: number;
-    temp_min: number;
-    humidity: number;
-  };
-  weather: Array<{
-    main: string;
-    description: string;
-    icon: string;
+interface ForecastResponse {
+  list: Array<{
+    dt: number;
+    main: {
+      temp: number;
+      feels_like: number;
+      temp_max: number;
+      temp_min: number;
+      humidity: number;
+    };
+    weather: Array<{
+      main: string;
+      description: string;
+      icon: string;
+    }>;
+    wind: {
+      speed: number;
+      deg: number;
+    };
+    dt_txt: string;
   }>;
-  wind: {
-    speed: number;
+  city: {
+    name: string;
+    country: string;
   };
 }
 
@@ -35,7 +52,8 @@ interface UVResponse {
   value: number;
 }
 
-const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+const CACHE_DURATION = 60 * 60 * 1000; // 60 minutes
+const FORECAST_CACHE_DURATION = 3 * 60 * 60 * 1000; // 3 hours for forecast data
 
 interface CachedWeatherData {
   data: WeatherData;
@@ -56,6 +74,26 @@ const getWeatherEmoji = (iconCode: string, description: string): string => {
   };
   
   return iconMap[iconCode] || '🌤️';
+};
+
+const getWindDirection = (degrees: number): string => {
+  if (degrees >= 348.75 || degrees < 11.25) return 'N';
+  if (degrees >= 11.25 && degrees < 33.75) return 'NNE';
+  if (degrees >= 33.75 && degrees < 56.25) return 'NE';
+  if (degrees >= 56.25 && degrees < 78.75) return 'ENE';
+  if (degrees >= 78.75 && degrees < 101.25) return 'E';
+  if (degrees >= 101.25 && degrees < 123.75) return 'ESE';
+  if (degrees >= 123.75 && degrees < 146.25) return 'SE';
+  if (degrees >= 146.25 && degrees < 168.75) return 'SSE';
+  if (degrees >= 168.75 && degrees < 191.25) return 'S';
+  if (degrees >= 191.25 && degrees < 213.75) return 'SSW';
+  if (degrees >= 213.75 && degrees < 236.25) return 'SW';
+  if (degrees >= 236.25 && degrees < 258.75) return 'WSW';
+  if (degrees >= 258.75 && degrees < 281.25) return 'W';
+  if (degrees >= 281.25 && degrees < 303.75) return 'WNW';
+  if (degrees >= 303.75 && degrees < 326.25) return 'NW';
+  if (degrees >= 326.25 && degrees < 348.75) return 'NNW';
+  return 'N';
 };
 
 const getLocationFromCountry = async (country: string): Promise<{ lat: number; lon: number } | null> => {
@@ -86,10 +124,41 @@ const getApiKey = async (): Promise<string | null> => {
   }
 };
 
+const getTomorrowData = (forecastList: ForecastResponse['list']) => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(12, 0, 0, 0); // Look for noon tomorrow for best representation
+  
+  // Find the forecast entry closest to noon tomorrow
+  const tomorrowEntries = forecastList.filter(entry => {
+    const entryDate = new Date(entry.dt * 1000);
+    return entryDate.toDateString() === tomorrow.toDateString();
+  });
+  
+  if (tomorrowEntries.length === 0) return null;
+  
+  // Get the entry closest to noon, or first available
+  const noonEntry = tomorrowEntries.find(entry => {
+    const entryHour = new Date(entry.dt * 1000).getHours();
+    return entryHour >= 11 && entryHour <= 13;
+  }) || tomorrowEntries[0];
+  
+  // Calculate min/max for tomorrow from all entries
+  const minTemp = Math.min(...tomorrowEntries.map(e => e.main.temp_min));
+  const maxTemp = Math.max(...tomorrowEntries.map(e => e.main.temp_max));
+  
+  return {
+    temperature: Math.round(noonEntry.main.temp),
+    icon: getWeatherEmoji(noonEntry.weather[0].icon, noonEntry.weather[0].description),
+    high: Math.round(maxTemp),
+    low: Math.round(minTemp)
+  };
+};
+
 export const fetchWeatherData = async (country?: string): Promise<WeatherData | null> => {
   try {
     // Check cache first
-    const cacheKey = `weather_${country || 'default'}`;
+    const cacheKey = `weather_forecast_${country || 'default'}`;
     const cached = localStorage.getItem(cacheKey);
     
     if (cached) {
@@ -113,18 +182,21 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       coords = { lat: 25.3548, lon: 51.1839 };
     }
 
-    // Fetch current weather
-    const weatherResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=metric`
+    // Fetch 5-day forecast (includes current weather data)
+    const forecastResponse = await fetch(
+      `https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=metric`
     );
     
-    if (!weatherResponse.ok) {
-      throw new Error('Weather API failed');
+    if (!forecastResponse.ok) {
+      throw new Error('Weather Forecast API failed');
     }
     
-    const weatherData: WeatherResponse = await weatherResponse.json();
+    const forecastData: ForecastResponse = await forecastResponse.json();
     
-    // Fetch UV index
+    // Get current weather from first forecast entry
+    const currentEntry = forecastData.list[0];
+    
+    // Fetch UV index separately (not available in forecast API)
     const uvResponse = await fetch(
       `https://api.openweathermap.org/data/2.5/uvi?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}`
     );
@@ -135,16 +207,40 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       uvIndex = uvData.value;
     }
 
+    // Get today's min/max from today's forecast entries
+    const today = new Date().toDateString();
+    const todayEntries = forecastData.list.filter(entry => {
+      const entryDate = new Date(entry.dt * 1000);
+      return entryDate.toDateString() === today;
+    });
+    
+    const todayMin = todayEntries.length > 0 
+      ? Math.min(...todayEntries.map(e => e.main.temp_min))
+      : currentEntry.main.temp_min;
+    const todayMax = todayEntries.length > 0 
+      ? Math.max(...todayEntries.map(e => e.main.temp_max))
+      : currentEntry.main.temp_max;
+
+    // Get tomorrow's weather
+    const tomorrowData = getTomorrowData(forecastData.list);
+
     const processedData: WeatherData = {
-      temperature: Math.round(weatherData.main.temp),
-      feelsLike: Math.round(weatherData.main.feels_like),
-      description: weatherData.weather[0].description,
-      icon: getWeatherEmoji(weatherData.weather[0].icon, weatherData.weather[0].description),
-      high: Math.round(weatherData.main.temp_max),
-      low: Math.round(weatherData.main.temp_min),
-      humidity: weatherData.main.humidity,
-      windSpeed: Math.round(weatherData.wind.speed * 3.6), // Convert m/s to km/h
-      uvIndex: Math.round(uvIndex)
+      temperature: Math.round(currentEntry.main.temp),
+      feelsLike: Math.round(currentEntry.main.feels_like),
+      description: currentEntry.weather[0].description,
+      icon: getWeatherEmoji(currentEntry.weather[0].icon, currentEntry.weather[0].description),
+      high: Math.round(todayMax),
+      low: Math.round(todayMin),
+      humidity: currentEntry.main.humidity,
+      windSpeed: Math.round(currentEntry.wind.speed * 3.6), // Convert m/s to km/h
+      windDirection: getWindDirection(currentEntry.wind.deg || 0),
+      uvIndex: Math.round(uvIndex),
+      tomorrow: tomorrowData,
+      lastUpdated: new Date().toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      })
     };
 
     // Cache the result
