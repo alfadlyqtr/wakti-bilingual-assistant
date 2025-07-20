@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -21,6 +22,7 @@ import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOu
 import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { WeatherButton } from "@/components/WeatherButton";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
@@ -193,6 +195,9 @@ export function AppHeader() {
           )}
         </div>
         <div className="flex items-center space-x-4">
+          {/* Weather Button */}
+          <WeatherButton />
+          
           {/* Language Toggle Button - always enabled */}
           <TooltipProvider>
             <Tooltip>
