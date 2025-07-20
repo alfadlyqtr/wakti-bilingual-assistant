@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -143,7 +142,6 @@ export function WeatherButton() {
       </PopoverTrigger>
       <PopoverContent 
         className="w-64 p-0 border-0 shadow-2xl"
-        strategy="fixed"
         sideOffset={8}
         avoidCollisions={true}
         style={{
