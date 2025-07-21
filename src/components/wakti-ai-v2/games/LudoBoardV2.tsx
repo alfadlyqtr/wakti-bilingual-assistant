@@ -54,19 +54,16 @@ export function LudoBoardV2({
     <div
       key={pawn.name}
       className={cn(
-        "pawn absolute w-full h-full flex items-center justify-center rounded-full z-[99] cursor-pointer transition-transform",
+        "pawn absolute w-full h-full flex items-center justify-center rounded-full z-[99] cursor-pointer",
         pawn.name,
-        isHighlighted && "highlight scale-110"
+        isHighlighted && "highlight"
       )}
-      onClick={() => {
-        console.log(`🎯 Pawn clicked: ${pawn.name}`);
-        onPawnClick(pawn);
-      }}
+      onClick={() => onPawnClick(pawn)}
     >
       <img 
         src={`/lovable-uploads/pawn-${pawn.color}.png`} 
         alt={pawn.name}
-        className="w-[90%] pointer-events-none"
+        className="w-[90%]"
       />
     </div>
   );
@@ -76,14 +73,7 @@ export function LudoBoardV2({
     const isSafe = SAFE_POSITIONS.includes(parseInt(cellId.replace('out-', '')));
     
     return (
-      <div 
-        className={cn(
-          "cell flex-shrink-0 border border-[rgb(216,216,216)] relative", 
-          cellId, 
-          additionalClasses, 
-          isSafe && "star"
-        )}
-      >
+      <div className={cn("cell flex-shrink-0 border border-[rgb(216,216,216)] relative", cellId, additionalClasses, isSafe && "star")}>
         {pawns.map((pawn, index) => (
           <div 
             key={pawn.name}
@@ -132,7 +122,7 @@ export function LudoBoardV2({
   const renderPrivateArea = (color: PlayerColor) => {
     return (
       <div className={cn("private flex-shrink-0 flex items-center justify-center", color)}>
-        <div className="cells bg-white flex items-center justify-center grid grid-cols-2 gap-1 p-1">
+        <div className="cells bg-white flex items-center justify-center grid grid-cols-2 gap-2 p-2">
           {[1, 2, 3, 4].map(id => {
             const cellId = `${color}-private-${id}`;
             const pawns = getCellPawns(cellId);
@@ -161,9 +151,9 @@ export function LudoBoardV2({
               const cellId = `green-home-${id}`;
               const pawns = getCellPawns(cellId);
               return (
-                <div key={id} className="cell border-none w-[12px] h-[12px]">
+                <div key={id} className="cell border-none w-[15px] h-[15px]">
                   {pawns.map(pawn => (
-                    <div key={pawn.name} className="pawn transform scale-[1.2]">
+                    <div key={pawn.name} className="pawn transform scale-[1.3]">
                       <img src={`/lovable-uploads/pawn-${pawn.color}.png`} alt={pawn.name} className="w-full" />
                     </div>
                   ))}
@@ -180,9 +170,9 @@ export function LudoBoardV2({
               const cellId = `red-home-${id}`;
               const pawns = getCellPawns(cellId);
               return (
-                <div key={id} className="cell border-none w-[12px] h-[12px]">
+                <div key={id} className="cell border-none w-[15px] h-[15px]">
                   {pawns.map(pawn => (
-                    <div key={pawn.name} className="pawn transform scale-[1.2]">
+                    <div key={pawn.name} className="pawn transform scale-[1.3]">
                       <img src={`/lovable-uploads/pawn-${pawn.color}.png`} alt={pawn.name} className="w-full" />
                     </div>
                   ))}
@@ -199,9 +189,9 @@ export function LudoBoardV2({
               const cellId = `blue-home-${id}`;
               const pawns = getCellPawns(cellId);
               return (
-                <div key={id} className="cell border-none w-[12px] h-[12px]">
+                <div key={id} className="cell border-none w-[15px] h-[15px]">
                   {pawns.map(pawn => (
-                    <div key={pawn.name} className="pawn transform scale-[1.2]">
+                    <div key={pawn.name} className="pawn transform scale-[1.3]">
                       <img src={`/lovable-uploads/pawn-${pawn.color}.png`} alt={pawn.name} className="w-full" />
                     </div>
                   ))}
@@ -218,9 +208,9 @@ export function LudoBoardV2({
               const cellId = `yellow-home-${id}`;
               const pawns = getCellPawns(cellId);
               return (
-                <div key={id} className="cell border-none w-[12px] h-[12px]">
+                <div key={id} className="cell border-none w-[15px] h-[15px]">
                   {pawns.map(pawn => (
-                    <div key={pawn.name} className="pawn transform scale-[1.2]">
+                    <div key={pawn.name} className="pawn transform scale-[1.3]">
                       <img src={`/lovable-uploads/pawn-${pawn.color}.png`} alt={pawn.name} className="w-full" />
                     </div>
                   ))}
@@ -234,12 +224,11 @@ export function LudoBoardV2({
   };
 
   return (
-    <div className={cn("font-['Bangers',cursive] text-white w-full", className)}>
+    <div className={cn("font-['Bangers',cursive] text-white", className)}>
       <style>{`
         .board {
-          --board-width: 100%;
-          --max-board-width: 400px;
-          --cell-width: calc(var(--max-board-width) / 15);
+          --board-width: 650px;
+          --cell-width: calc(var(--board-width) / 15);
           --board-bg: white;
           --red: red;
           --green: #07c107;
@@ -248,13 +237,11 @@ export function LudoBoardV2({
           --cell-border-color: rgb(216, 216, 216);
           
           width: var(--board-width);
-          max-width: var(--max-board-width);
-          height: var(--max-board-width);
+          height: var(--board-width);
           margin: auto;
           background: var(--board-bg);
-          border-radius: 8px;
-          outline: 3px solid white;
-          position: relative;
+          border-radius: 10px;
+          outline: 4px solid white;
         }
         
         .board .red { background-color: var(--red); }
@@ -277,7 +264,8 @@ export function LudoBoardV2({
         .private .cells .cell {
           width: calc(var(--cell-width) * 1);
           height: calc(var(--cell-width) * 1);
-          margin: 2px;
+          margin-left: 10px;
+          margin-right: 10px;
         }
         
         .cells { display: flex; flex-wrap: wrap; }
@@ -301,21 +289,21 @@ export function LudoBoardV2({
         }
         
         .home {
-          width: 32px;
-          height: 56px;
+          width: 40px;
+          height: 70px;
           display: flex;
           align-items: center;
           justify-content: center;
         }
         
         .home.green, .home.blue {
-          height: 32px;
-          width: 56px;
+          height: 40px;
+          width: 70px;
         }
         
         .pawn.highlight {
-          box-shadow: 0px 0px 8px 2px rgb(255, 213, 0);
-          border: 3px dashed rgb(0, 0, 0);
+          box-shadow: 0px 0px 10px 2px rgb(255, 213, 0);
+          border: 4px dashed rgb(0, 0, 0);
           animation: highlightPawn 0.5s infinite alternate-reverse;
         }
         
@@ -325,14 +313,14 @@ export function LudoBoardV2({
         
         .dashboard {
           width: 100%;
-          height: 60px;
-          margin-top: 20px;
-          border-radius: 8px;
-          border: 3px solid white;
+          height: 70px;
+          margin-top: 40px;
+          border-radius: 10px;
+          border: 4px solid white;
           display: flex;
           justify-content: space-around;
           align-items: center;
-          font-size: 20px;
+          font-size: 28px;
           color: white;
           position: relative;
         }
@@ -343,14 +331,14 @@ export function LudoBoardV2({
         .dashboard.yellow { background-color: var(--yellow); }
         
         .dice-section {
-          width: 80px;
-          height: 80px;
-          border-radius: 25px;
+          width: 100px;
+          height: 100px;
+          border-radius: 30px;
           position: absolute;
-          top: -15px;
+          top: -20px;
           left: 50%;
           transform: translateX(-50%);
-          border: 3px solid white;
+          border: 4px solid white;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -366,13 +354,13 @@ export function LudoBoardV2({
         .dice-section.highlight::before {
           content: '';
           display: block;
-          width: 64px;
-          height: 64px;
-          border: 4px dashed rgb(0, 0, 0);
+          width: 80px;
+          height: 80px;
+          border: 5px dashed rgb(0, 0, 0);
           position: absolute;
           top: 0;
           left: 0;
-          border-radius: 80px;
+          border-radius: 100px;
           animation: highlightDice 0.5s ease-out infinite alternate-reverse;
         }
         
@@ -405,24 +393,7 @@ export function LudoBoardV2({
         @keyframes highlightDice {
           to {
             transform: scale(1.2);
-            box-shadow: 0px 0px 24px 5px rgb(255, 213, 0);
-          }
-        }
-
-        @media (max-width: 480px) {
-          .board {
-            --max-board-width: 350px;
-          }
-          
-          .dashboard {
-            height: 50px;
-            font-size: 16px;
-          }
-          
-          .dice-section {
-            width: 60px;
-            height: 60px;
-            top: -12px;
+            box-shadow: 0px 0px 30px 6px rgb(255, 213, 0);
           }
         }
       `}</style>
@@ -557,7 +528,8 @@ export function LudoBoardV2({
         {/* Dashboard */}
         <div className={cn("dashboard", currentPlayer)}>
           <div className="player-name">
-            <span>Dice: {diceValue}</span>
+            <span>{currentPlayer}'s turn</span>
+            {isAIThinking && <span className="ml-2 animate-pulse">Thinking...</span>}
           </div>
           
           <div className={cn("dice-section", currentPlayer, canRoll && "highlight")} onClick={canRoll ? onDiceRoll : undefined}>
@@ -565,7 +537,7 @@ export function LudoBoardV2({
           </div>
           
           <div className="dice-value">
-            <span>Roll!</span>
+            <span>{diceValue}</span>
           </div>
         </div>
       </div>
