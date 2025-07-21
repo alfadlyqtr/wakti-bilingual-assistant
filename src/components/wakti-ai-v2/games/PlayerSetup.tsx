@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTheme } from '@/providers/ThemeProvider';
+import { cn } from '@/lib/utils';
 
 interface PlayerSetupProps {
   gameMode: '1v3' | '2v2' | '3v1' | '4human' | '1v1';
