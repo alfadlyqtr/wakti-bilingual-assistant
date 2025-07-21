@@ -2,9 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Volume2, VolumeX } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { LudoBoard } from './LudoBoard';
+import { LudoBoardV2 } from './LudoBoardV2';
 import { PlayerSetup } from './PlayerSetup';
-import { DiceComponent } from './DiceComponent';
 import { waktiSounds } from '@/services/waktiSounds';
 import { cn } from '@/lib/utils';
 
@@ -62,6 +61,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const [showPlayerSetup, setShowPlayerSetup] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [winner, setWinner] = useState<PlayerColor | null>(null);
+  const [canRoll, setCanRoll] = useState(true);
 
   // Initialize game state
   useEffect(() => {
@@ -132,6 +132,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     setShowSetup(false);
     setShowPlayerSetup(false);
     setWinner(null);
+    setCanRoll(true);
   }, [gameState]);
 
   const playSound = async (soundType: 'chime' | 'beep' | 'ding') => {
@@ -140,14 +141,11 @@ export function LudoGame({ onBack }: LudoGameProps) {
     }
   };
 
-  const getRandomInt = (min: number, max: number) => {
-    return Math.floor(Math.random() * (max - min)) + min;
-  };
-
   const rollDice = useCallback(() => {
-    if (isRolling || winner) return;
+    if (isRolling || winner || !canRoll) return;
     
     setIsRolling(true);
+    setCanRoll(false);
     setHighlightedPawns(new Set());
     playSound('chime');
     
@@ -171,8 +169,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
           }
         }
       }
-    }, 1000);
-  }, [isRolling, currentTurn, gameConfig, gameState, winner]);
+    }, 1200);
+  }, [isRolling, currentTurn, gameConfig, gameState, winner, canRoll]);
 
   const canPlayerMove = (color: PlayerColor, dice: number): boolean => {
     // Check if can move from private (needs 6)
@@ -307,7 +305,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       }
       
       // Check if moving to last line
-      if (currentPos >= endPos - 6 && currentPos <= endPos && nextPos > endPos) {
+      if (currentPos <= endPos && nextPos > endPos) {
         const remaining = nextPos - endPos;
         if (remaining === 6) {
           // Move to home
@@ -370,6 +368,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     if (dice !== 6) {
       setCurrentTurn(prev => (prev + 1) % (gameConfig?.turnOrder.length || 4));
     }
+    setCanRoll(true);
   };
 
   const handlePawnClick = (pawn: Pawn) => {
@@ -474,6 +473,12 @@ export function LudoGame({ onBack }: LudoGameProps) {
             </Button>
           ))}
         </div>
+
+        <div className="mt-8 p-4 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            {language === 'ar' ? 'رمز الدعوة للعب متعدد الأشخاص قريباً!' : 'Invite code for multiplayer coming soon!'}
+          </p>
+        </div>
       </div>
     );
   }
@@ -487,9 +492,17 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const currentPlayerName = gameConfig.playerNames[currentColor] || currentColor;
 
   return (
-    <div className="flex flex-col items-center p-4 space-y-4">
-      {/* Sound Toggle */}
-      <div className="w-full max-w-md flex justify-end">
+    <div className="flex flex-col items-center p-4 space-y-4 min-h-screen bg-gray-100 dark:bg-gray-900">
+      {/* Header */}
+      <div className="w-full max-w-4xl flex justify-between items-center">
+        <Button onClick={onBack} variant="outline">
+          {language === 'ar' ? 'رجوع' : 'Back'}
+        </Button>
+        
+        <h1 className="text-4xl font-bold text-white" style={{ fontFamily: 'Bangers, cursive' }}>
+          Ludo MG
+        </h1>
+        
         <Button
           variant="ghost"
           size="sm"
@@ -501,7 +514,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
 
       {/* Winner Banner */}
       {winner && (
-        <div className="w-full max-w-md p-4 bg-green-100 border border-green-300 rounded-lg text-center">
+        <div className="w-full max-w-4xl p-4 bg-green-100 border border-green-300 rounded-lg text-center">
           <p className="text-lg font-bold text-green-800">
             🏆 {gameConfig.playerNames[winner] || winner} {language === 'ar' ? 'فاز!' : 'Wins!'}
           </p>
@@ -512,56 +525,41 @@ export function LudoGame({ onBack }: LudoGameProps) {
       )}
 
       {/* Game Board */}
-      <LudoBoard
+      <LudoBoardV2
         gameState={gameState}
         highlightedPawns={highlightedPawns}
         onPawnClick={handlePawnClick}
+        currentPlayer={currentColor}
+        diceValue={diceValue}
+        onDiceRoll={rollDice}
+        isRolling={isRolling}
+        canRoll={canRoll && !isCurrentPlayerAI}
       />
 
-      {/* Game Controls */}
-      <div className={cn(
-        "w-full max-w-md p-4 rounded-lg text-white",
-        currentColor === 'blue' && 'bg-blue-600',
-        currentColor === 'red' && 'bg-red-600',
-        currentColor === 'green' && 'bg-green-600',
-        currentColor === 'yellow' && 'bg-yellow-600'
-      )}>
-        <div className="text-center mb-4">
-          <p className="text-lg font-bold">
-            {currentPlayerName}'s Turn {isCurrentPlayerAI ? '(AI)' : ''}
-          </p>
-        </div>
-        
-        <div className="flex items-center justify-center gap-4">
-          <DiceComponent
-            value={diceValue}
-            isRolling={isRolling}
-            onRoll={rollDice}
-            disabled={isCurrentPlayerAI || winner !== null}
-            language={language}
-          />
-        </div>
-      </div>
-
       {/* Game Stats */}
-      <div className="w-full max-w-md p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+      <div className="w-full max-w-4xl p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
         <h3 className="font-bold mb-2 text-slate-700 dark:text-slate-300">
           {language === 'ar' ? 'حالة اللعبة' : 'Game Status'}
         </h3>
-        {gameConfig.turnOrder.map(color => (
-          <div key={color} className="flex justify-between items-center mb-1">
-            <span className={cn(
-              "capitalize",
-              color === currentColor && 'font-bold',
-              "text-slate-600 dark:text-slate-400"
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {gameConfig.turnOrder.map(color => (
+            <div key={color} className={cn(
+              "flex flex-col items-center p-2 rounded-lg border-2",
+              color === currentColor && 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900'
             )}>
-              {gameConfig.playerNames[color] || color} {gameConfig.playerTypes[color] === 'ai' ? '(AI)' : ''}
-            </span>
-            <span className="text-sm text-slate-500 dark:text-slate-400">
-              {language === 'ar' ? 'في المنزل' : 'Home'}: {gameState.homeAreas[color].length}/4
-            </span>
-          </div>
-        ))}
+              <span className={cn(
+                "capitalize font-bold text-sm",
+                color === currentColor && 'text-yellow-800 dark:text-yellow-200'
+              )}>
+                {gameConfig.playerNames[color] || color}
+                {gameConfig.playerTypes[color] === 'ai' && ' (AI)'}
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {language === 'ar' ? 'في المنزل' : 'Home'}: {gameState.homeAreas[color].length}/4
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
