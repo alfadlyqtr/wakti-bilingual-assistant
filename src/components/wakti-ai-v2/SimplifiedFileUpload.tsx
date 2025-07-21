@@ -232,10 +232,10 @@ export function SimplifiedFileUpload({
                       updateFileImageType(file.id, { id: selectedType.id, name: selectedType.name });
                     }
                   }}
-                  className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="flex-1 bg-background text-foreground border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 dark:bg-popover dark:text-popover-foreground"
                 >
                   {imageTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
+                    <option key={type.id} value={type.id} className="bg-background text-foreground dark:bg-popover dark:text-popover-foreground">
                       {type.name} - {type.description}
                     </option>
                   ))}
