@@ -755,6 +755,89 @@ export type Database = {
         }
         Relationships: []
       }
+      ludo_game_players: {
+        Row: {
+          created_at: string
+          id: string
+          is_ready: boolean
+          last_seen: string
+          player_color: string
+          player_name: string
+          player_type: string
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_ready?: boolean
+          last_seen?: string
+          player_color: string
+          player_name: string
+          player_type?: string
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_ready?: boolean
+          last_seen?: string
+          player_color?: string
+          player_name?: string
+          player_type?: string
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ludo_game_players_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "ludo_game_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ludo_game_rooms: {
+        Row: {
+          created_at: string
+          current_players: number
+          game_mode: string
+          game_state: Json
+          host_user_id: string
+          id: string
+          max_players: number
+          room_code: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_players?: number
+          game_mode?: string
+          game_state?: Json
+          host_user_id: string
+          id?: string
+          max_players?: number
+          room_code: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_players?: number
+          game_mode?: string
+          game_state?: Json
+          host_user_id?: string
+          id?: string
+          max_players?: number
+          room_code?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       maw3d_events: {
         Row: {
           auto_delete_enabled: boolean
@@ -2305,6 +2388,10 @@ export type Database = {
         Returns: string
       }
       generate_maw3d_short_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      generate_room_code: {
         Args: Record<PropertyKey, never>
         Returns: string
       }
