@@ -2,6 +2,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { format, addDays, isToday, isTomorrow } from "date-fns";
+import { ar } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { Hand, Calendar, Clock } from "lucide-react";
@@ -57,6 +58,10 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ langu
     return acc;
   }, {} as Record<EntryType, number>);
 
+  // Get formatted day names
+  const todayDayName = format(new Date(), "EEEE", { locale: language === 'ar' ? ar : undefined });
+  const tomorrowDayName = format(addDays(new Date(), 1), "EEEE", { locale: language === 'ar' ? ar : undefined });
+
   return (
     <div className="relative group" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       {/* Liquid Glass Background - Always showing enhanced colors */}
@@ -89,7 +94,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ langu
             <div className="flex gap-3 mb-4">
               <div className="flex-1 p-3 rounded-xl bg-blue-500 text-white text-center relative">
                 <div className="font-bold text-lg">{format(new Date(), "d")}</div>
-                <div className="text-xs opacity-90">{t("today", language)}</div>
+                <div className="text-xs opacity-90">{`${t("today", language)} - ${todayDayName}`}</div>
                 {todayEntries.length > 0 && (
                   <div className="absolute -top-1 -right-1 flex flex-wrap gap-1">
                     {Object.entries(todayByType).map(([type, count]) => (
@@ -106,7 +111,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ langu
               </div>
               <div className="flex-1 p-3 rounded-xl bg-white border border-blue-500/20 text-blue-500 text-center relative">
                 <div className="font-bold text-lg">{format(addDays(new Date(), 1), "d")}</div>
-                <div className="text-xs opacity-90">{t("tomorrow", language)}</div>
+                <div className="text-xs opacity-90">{`${t("tomorrow", language)} - ${tomorrowDayName}`}</div>
                 {tomorrowEntries.length > 0 && (
                   <div className="absolute -top-1 -right-1 flex flex-wrap gap-1">
                     {Object.entries(tomorrowByType).map(([type, count]) => (
