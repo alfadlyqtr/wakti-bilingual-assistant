@@ -17,7 +17,7 @@ interface Pawn {
 
 interface GameState {
   privateAreas: Record<PlayerColor, Pawn[]>;
-  outerPosition: Record<number, Pawn[]>;
+  outerPosition: Record<string, Pawn[]>;
   lastLine: Record<PlayerColor, Record<number, Pawn[]>>;
   homeAreas: Record<PlayerColor, Pawn[]>;
 }
@@ -60,7 +60,7 @@ export function LudoBoardV2({
       )}
       onClick={(e) => {
         e.stopPropagation();
-        console.log('Pawn clicked:', pawn.name);
+        console.log('Pawn clicked:', pawn.name, 'Highlighted:', isHighlighted);
         onPawnClick(pawn);
       }}
     >
@@ -72,9 +72,54 @@ export function LudoBoardV2({
     </div>
   );
 
+  const getCellPawns = (cellId: string): Pawn[] => {
+    console.log(`Getting pawns for cell: ${cellId}`);
+    
+    // Handle outer positions (out-1 to out-52)
+    if (cellId.startsWith('out-')) {
+      const pawns = gameState.outerPosition[cellId] || [];
+      if (pawns.length > 0) {
+        console.log(`Found ${pawns.length} pawns in ${cellId}:`, pawns.map(p => p.name));
+      }
+      return pawns;
+    }
+    
+    // Handle private areas
+    if (cellId.includes('private')) {
+      const color = cellId.split('-')[0] as PlayerColor;
+      const pawns = gameState.privateAreas[color] || [];
+      if (pawns.length > 0) {
+        console.log(`Found ${pawns.length} pawns in ${color} private area:`, pawns.map(p => p.name));
+      }
+      return pawns;
+    }
+    
+    // Handle last lines
+    if (cellId.includes('last-line')) {
+      const [color, , , pos] = cellId.split('-');
+      const pawns = gameState.lastLine[color as PlayerColor]?.[parseInt(pos)] || [];
+      if (pawns.length > 0) {
+        console.log(`Found ${pawns.length} pawns in ${color} last line pos ${pos}:`, pawns.map(p => p.name));
+      }
+      return pawns;
+    }
+    
+    // Handle home areas
+    if (cellId.includes('home')) {
+      const color = cellId.split('-')[0] as PlayerColor;
+      const pawns = gameState.homeAreas[color] || [];
+      if (pawns.length > 0) {
+        console.log(`Found ${pawns.length} pawns in ${color} home:`, pawns.map(p => p.name));
+      }
+      return pawns;
+    }
+    
+    return [];
+  };
+
   const renderCell = (cellId: string, additionalClasses: string = '') => {
     const pawns = getCellPawns(cellId);
-    const isSafe = SAFE_POSITIONS.includes(parseInt(cellId.replace('out-', '')));
+    const isSafe = cellId.startsWith('out-') && SAFE_POSITIONS.includes(parseInt(cellId.replace('out-', '')));
     
     return (
       <div className={cn("cell flex-shrink-0 border border-[rgb(216,216,216)] relative", cellId, additionalClasses, isSafe && "star")}>
@@ -95,34 +140,10 @@ export function LudoBoardV2({
     );
   };
 
-  const getCellPawns = (cellId: string): Pawn[] => {
-    // Handle outer positions
-    if (cellId.startsWith('out-')) {
-      const pos = parseInt(cellId.replace('out-', ''));
-      return gameState.outerPosition[pos] || [];
-    }
-    
-    // Handle private areas
-    if (cellId.includes('private')) {
-      return gameState.privateAreas[cellId.split('-')[0] as PlayerColor] || [];
-    }
-    
-    // Handle last lines
-    if (cellId.includes('last-line')) {
-      const [color, , , pos] = cellId.split('-');
-      return gameState.lastLine[color as PlayerColor]?.[parseInt(pos)] || [];
-    }
-    
-    // Handle home areas
-    if (cellId.includes('home')) {
-      return gameState.homeAreas[cellId.split('-')[0] as PlayerColor] || [];
-    }
-    
-    return [];
-  };
-
   const renderPrivateArea = (color: PlayerColor) => {
     const pawns = gameState.privateAreas[color] || [];
+    console.log(`Rendering private area for ${color}:`, pawns.map(p => p.name));
+    
     return (
       <div className={cn("private flex-shrink-0 flex items-center justify-center", color)}>
         <div className="cells bg-white flex items-center justify-center grid grid-cols-2 gap-1 p-1">
@@ -229,7 +250,7 @@ export function LudoBoardV2({
     <div className={cn("font-['Bangers',cursive] text-white", className)}>
       <style>{`
         .board {
-          --board-width: 350px;
+          --board-width: 300px;
           --cell-width: calc(var(--board-width) / 15);
           --board-bg: white;
           --red: red;
@@ -315,14 +336,14 @@ export function LudoBoardV2({
         
         .dashboard {
           width: 100%;
-          height: 50px;
-          margin-top: 20px;
+          height: 40px;
+          margin-top: 15px;
           border-radius: 8px;
           border: 3px solid white;
           display: flex;
           justify-content: space-around;
           align-items: center;
-          font-size: 18px;
+          font-size: 16px;
           color: white;
           position: relative;
         }
@@ -333,11 +354,11 @@ export function LudoBoardV2({
         .dashboard.yellow { background-color: var(--yellow); }
         
         .dice-section {
-          width: 60px;
-          height: 60px;
-          border-radius: 20px;
+          width: 50px;
+          height: 50px;
+          border-radius: 15px;
           position: absolute;
-          top: -10px;
+          top: -8px;
           left: 50%;
           transform: translateX(-50%);
           border: 3px solid white;
@@ -356,13 +377,13 @@ export function LudoBoardV2({
         .dice-section.highlight::before {
           content: '';
           display: block;
-          width: 50px;
-          height: 50px;
+          width: 40px;
+          height: 40px;
           border: 3px dashed rgb(0, 0, 0);
           position: absolute;
           top: 0;
           left: 0;
-          border-radius: 50px;
+          border-radius: 40px;
           animation: highlightDice 0.5s ease-out infinite alternate-reverse;
         }
         
@@ -527,11 +548,10 @@ export function LudoBoardV2({
           {renderPrivateArea('yellow')}
         </div>
 
-        {/* Dashboard */}
+        {/* Dashboard - REMOVED TURN INDICATOR */}
         <div className={cn("dashboard", currentPlayer)}>
           <div className="player-name">
-            <span>{currentPlayer}'s turn</span>
-            {isAIThinking && <span className="ml-2 animate-pulse">🤔</span>}
+            <span>Roll the dice</span>
           </div>
           
           <div className={cn("dice-section", currentPlayer, canRoll && "highlight")} onClick={canRoll ? onDiceRoll : undefined}>
