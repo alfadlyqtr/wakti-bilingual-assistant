@@ -225,7 +225,7 @@ export function LudoBoardV2({
 
   return (
     <div className={cn("font-['Bangers',cursive] text-white", className)}>
-      <style jsx>{`
+      <style>{`
         .board {
           --board-width: 650px;
           --cell-width: calc(var(--board-width) / 15);
