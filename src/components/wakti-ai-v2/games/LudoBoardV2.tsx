@@ -1,7 +1,5 @@
 
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Dice1, Dice2, Dice3, Dice4, Dice5, Dice6 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type PlayerColor = 'blue' | 'red' | 'green' | 'yellow';
@@ -34,6 +32,7 @@ interface LudoBoardV2Props {
   isRolling: boolean;
   canRoll: boolean;
   isAIThinking?: boolean;
+  className?: string;
 }
 
 const SAFE_POSITIONS = [1, 9, 14, 22, 27, 35, 40, 48];
@@ -47,54 +46,44 @@ export function LudoBoardV2({
   onDiceRoll,
   isRolling,
   canRoll,
-  isAIThinking = false
+  isAIThinking = false,
+  className
 }: LudoBoardV2Props) {
-  const DiceIcon = [Dice1, Dice2, Dice3, Dice4, Dice5, Dice6][diceValue - 1];
 
   const renderPawn = (pawn: Pawn, isHighlighted: boolean = false) => (
     <div
       key={pawn.name}
       className={cn(
-        "absolute w-7 h-7 rounded-full border-2 cursor-pointer transition-all duration-200 z-10",
-        "flex items-center justify-center text-xs font-bold text-white",
-        pawn.color === 'blue' && "bg-blue-600 border-blue-800",
-        pawn.color === 'red' && "bg-red-500 border-red-700",
-        pawn.color === 'green' && "bg-green-500 border-green-700",
-        pawn.color === 'yellow' && "bg-yellow-500 border-yellow-700",
-        isHighlighted && "scale-125 shadow-lg ring-4 ring-yellow-400 border-black border-dashed animate-pulse",
-        "hover:scale-110"
+        "pawn absolute w-full h-full flex items-center justify-center rounded-full z-[99] cursor-pointer",
+        pawn.name,
+        isHighlighted && "highlight"
       )}
       onClick={() => onPawnClick(pawn)}
-      title={`${pawn.color} pawn ${pawn.id}`}
     >
-      {pawn.id}
+      <img 
+        src={`/lovable-uploads/pawn-${pawn.color}.png`} 
+        alt={pawn.name}
+        className="w-[90%]"
+      />
     </div>
   );
 
-  const renderCell = (cellId: string, pawns: Pawn[] = [], isSafe: boolean = false, isStart: boolean = false) => {
+  const renderCell = (cellId: string, additionalClasses: string = '') => {
+    const pawns = getCellPawns(cellId);
+    const isSafe = SAFE_POSITIONS.includes(parseInt(cellId.replace('out-', '')));
+    
     return (
-      <div
-        className={cn(
-          "relative w-full h-full border border-gray-300 flex items-center justify-center",
-          isSafe && "bg-yellow-100",
-          isStart && cellId.includes('out-1') && "bg-blue-200",
-          isStart && cellId.includes('out-14') && "bg-red-200", 
-          isStart && cellId.includes('out-27') && "bg-green-200",
-          isStart && cellId.includes('out-40') && "bg-yellow-200",
-          isSafe && "bg-star bg-center bg-no-repeat bg-contain"
-        )}
-        style={{
-          backgroundImage: isSafe ? "url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTUuMDkgOC4yNkwyMiA5TDE3IDEzLjc0TDE4LjE4IDIyTDEyIDE4Ljc3TDUuODIgMjJMNyAxMy43NEwyIDlMOC45MSA4LjI2TDEyIDJaIiBmaWxsPSIjRkZENzAwIiBzdHJva2U9IiNGQkIwMTgiIHN0cm9rZS13aWR0aD0iMSIvPgo8L3N2Zz4K')" : undefined,
-          backgroundSize: isSafe ? '60%' : undefined
-        }}
-      >
+      <div className={cn("cell flex-shrink-0 border border-[rgb(216,216,216)] relative", cellId, additionalClasses, isSafe && "star")}>
         {pawns.map((pawn, index) => (
-          <div key={pawn.name} style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: `translate(-50%, -50%) translate(${(index % 2) * 8 - 4}px, ${Math.floor(index / 2) * 8 - 4}px)`
-          }}>
+          <div 
+            key={pawn.name}
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: `translate(-50%, -50%) translate(${(index % 2) * 8 - 4}px, ${Math.floor(index / 2) * 8 - 4}px)`
+            }}
+          >
             {renderPawn(pawn, highlightedPawns.has(pawn.name))}
           </div>
         ))}
@@ -102,26 +91,51 @@ export function LudoBoardV2({
     );
   };
 
+  const getCellPawns = (cellId: string): Pawn[] => {
+    // Handle outer positions
+    if (cellId.startsWith('out-')) {
+      const pos = parseInt(cellId.replace('out-', ''));
+      return gameState.outerPosition[pos] || [];
+    }
+    
+    // Handle private areas
+    if (cellId.includes('private')) {
+      const [color] = cellId.split('-');
+      return gameState.privateAreas[color as PlayerColor] || [];
+    }
+    
+    // Handle last lines
+    if (cellId.includes('last-line')) {
+      const [color, , , pos] = cellId.split('-');
+      return gameState.lastLine[color as PlayerColor]?.[parseInt(pos)] || [];
+    }
+    
+    // Handle home areas
+    if (cellId.includes('home')) {
+      const [color] = cellId.split('-');
+      return gameState.homeAreas[color as PlayerColor] || [];
+    }
+    
+    return [];
+  };
+
   const renderPrivateArea = (color: PlayerColor) => {
-    const pawns = gameState.privateAreas[color] || [];
     return (
-      <div className={cn(
-        "w-full h-full flex items-center justify-center p-2",
-        color === 'blue' && "bg-blue-500",
-        color === 'red' && "bg-red-500",
-        color === 'green' && "bg-green-500",
-        color === 'yellow' && "bg-yellow-500"
-      )}>
-        <div className="bg-white w-4/5 h-4/5 rounded grid grid-cols-2 gap-1 p-1">
-          {[0, 1, 2, 3].map(index => (
-            <div key={index} className="relative rounded-full bg-white border border-gray-300 flex items-center justify-center">
-              {pawns[index] && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {renderPawn(pawns[index], highlightedPawns.has(pawns[index].name))}
-                </div>
-              )}
-            </div>
-          ))}
+      <div className={cn("private flex-shrink-0 flex items-center justify-center", color)}>
+        <div className="cells bg-white flex items-center justify-center grid grid-cols-2 gap-2 p-2">
+          {[1, 2, 3, 4].map(id => {
+            const cellId = `${color}-private-${id}`;
+            const pawns = getCellPawns(cellId);
+            return (
+              <div key={id} className="cell relative rounded-full border border-gray-300 flex items-center justify-center">
+                {pawns.map(pawn => (
+                  <div key={pawn.name} className="absolute inset-0 flex items-center justify-center">
+                    {renderPawn(pawn, highlightedPawns.has(pawn.name))}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -129,48 +143,80 @@ export function LudoBoardV2({
 
   const renderHomeArea = () => {
     return (
-      <div className="relative w-full h-full bg-white border border-gray-400">
-        {/* Red home (top triangle) */}
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-16 h-10 flex items-end justify-center">
-          <div className="flex space-x-1">
-            {(gameState.homeAreas.red || []).slice(0, 4).map((pawn, index) => (
-              <div key={pawn.name} className="w-3 h-3">
-                {renderPawn(pawn, highlightedPawns.has(pawn.name))}
-              </div>
-            ))}
+      <div className="homes relative overflow-hidden">
+        {/* Green home (top) */}
+        <div className="home green absolute top-0 left-1/2 transform -translate-x-1/2">
+          <div className="cells flex flex-row">
+            {[1, 2, 3, 4].map(id => {
+              const cellId = `green-home-${id}`;
+              const pawns = getCellPawns(cellId);
+              return (
+                <div key={id} className="cell border-none w-[15px] h-[15px]">
+                  {pawns.map(pawn => (
+                    <div key={pawn.name} className="pawn transform scale-[1.3]">
+                      <img src={`/lovable-uploads/pawn-${pawn.color}.png`} alt={pawn.name} className="w-full" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Green home (left triangle) */}
-        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-10 h-16 flex items-center justify-end">
-          <div className="flex flex-col space-y-1">
-            {(gameState.homeAreas.green || []).slice(0, 4).map((pawn, index) => (
-              <div key={pawn.name} className="w-3 h-3">
-                {renderPawn(pawn, highlightedPawns.has(pawn.name))}
-              </div>
-            ))}
+        {/* Red home (left) */}
+        <div className="home red absolute left-0 top-1/2 transform -translate-y-1/2">
+          <div className="cells flex flex-col">
+            {[1, 2, 3, 4].map(id => {
+              const cellId = `red-home-${id}`;
+              const pawns = getCellPawns(cellId);
+              return (
+                <div key={id} className="cell border-none w-[15px] h-[15px]">
+                  {pawns.map(pawn => (
+                    <div key={pawn.name} className="pawn transform scale-[1.3]">
+                      <img src={`/lovable-uploads/pawn-${pawn.color}.png`} alt={pawn.name} className="w-full" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Blue home (bottom triangle) */}
-        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-10 flex items-start justify-center">
-          <div className="flex space-x-1">
-            {(gameState.homeAreas.blue || []).slice(0, 4).map((pawn, index) => (
-              <div key={pawn.name} className="w-3 h-3">
-                {renderPawn(pawn, highlightedPawns.has(pawn.name))}
-              </div>
-            ))}
+        {/* Blue home (bottom) */}
+        <div className="home blue absolute bottom-0 left-1/2 transform -translate-x-1/2">
+          <div className="cells flex flex-row">
+            {[1, 2, 3, 4].map(id => {
+              const cellId = `blue-home-${id}`;
+              const pawns = getCellPawns(cellId);
+              return (
+                <div key={id} className="cell border-none w-[15px] h-[15px]">
+                  {pawns.map(pawn => (
+                    <div key={pawn.name} className="pawn transform scale-[1.3]">
+                      <img src={`/lovable-uploads/pawn-${pawn.color}.png`} alt={pawn.name} className="w-full" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Yellow home (right triangle) */}
-        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-10 h-16 flex items-center justify-start">
-          <div className="flex flex-col space-y-1">
-            {(gameState.homeAreas.yellow || []).slice(0, 4).map((pawn, index) => (
-              <div key={pawn.name} className="w-3 h-3">
-                {renderPawn(pawn, highlightedPawns.has(pawn.name))}
-              </div>
-            ))}
+        {/* Yellow home (right) */}
+        <div className="home yellow absolute right-0 top-1/2 transform -translate-y-1/2">
+          <div className="cells flex flex-col">
+            {[1, 2, 3, 4].map(id => {
+              const cellId = `yellow-home-${id}`;
+              const pawns = getCellPawns(cellId);
+              return (
+                <div key={id} className="cell border-none w-[15px] h-[15px]">
+                  {pawns.map(pawn => (
+                    <div key={pawn.name} className="pawn transform scale-[1.3]">
+                      <img src={`/lovable-uploads/pawn-${pawn.color}.png`} alt={pawn.name} className="w-full" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -178,161 +224,322 @@ export function LudoBoardV2({
   };
 
   return (
-    <div className="flex flex-col items-center space-y-4 p-4 max-w-lg mx-auto">
-      {/* Current Player Indicator */}
-      <div className="text-center mb-2">
-        <div className={cn(
-          "px-4 py-2 rounded-lg text-white text-lg font-bold",
-          currentPlayer === 'blue' && "bg-blue-500",
-          currentPlayer === 'red' && "bg-red-500",
-          currentPlayer === 'green' && "bg-green-500",
-          currentPlayer === 'yellow' && "bg-yellow-500"
-        )}>
-          {currentPlayer.toUpperCase()}'s Turn
-          {isAIThinking && <span className="ml-2 animate-pulse">Thinking...</span>}
-        </div>
-      </div>
-
-      {/* Game Board - Exact 3-section layout from original */}
-      <div className="bg-white rounded-lg border-4 border-white" style={{ width: '400px', height: '400px' }}>
+    <div className={cn("font-['Bangers',cursive] text-white", className)}>
+      <style jsx>{`
+        .board {
+          --board-width: 650px;
+          --cell-width: calc(var(--board-width) / 15);
+          --board-bg: white;
+          --red: red;
+          --green: #07c107;
+          --yellow: rgb(255, 209, 0);
+          --blue: #2311db;
+          --cell-border-color: rgb(216, 216, 216);
+          
+          width: var(--board-width);
+          height: var(--board-width);
+          margin: auto;
+          background: var(--board-bg);
+          border-radius: 10px;
+          outline: 4px solid white;
+        }
         
+        .board .red { background-color: var(--red); }
+        .board .green { background-color: var(--green); }
+        .board .blue { background-color: var(--blue); }
+        .board .yellow { background-color: var(--yellow); }
+        
+        .section { display: flex; }
+        
+        .private {
+          width: calc(var(--cell-width) * 6);
+          height: calc(var(--cell-width) * 6);
+        }
+        
+        .private .cells {
+          width: calc(var(--cell-width) * 4);
+          height: calc(var(--cell-width) * 4);
+        }
+        
+        .private .cells .cell {
+          width: calc(var(--cell-width) * 1);
+          height: calc(var(--cell-width) * 1);
+          margin-left: 10px;
+          margin-right: 10px;
+        }
+        
+        .cells { display: flex; flex-wrap: wrap; }
+        
+        .cells .cell {
+          width: var(--cell-width);
+          height: var(--cell-width);
+        }
+        
+        .cell.star {
+          background-image: url('/lovable-uploads/star.png');
+          background-size: 80%;
+          background-repeat: no-repeat;
+          background-position: center;
+        }
+        
+        .homes {
+          width: calc(var(--cell-width) * 3);
+          height: calc(var(--cell-width) * 3);
+          flex-shrink: 0;
+        }
+        
+        .home {
+          width: 40px;
+          height: 70px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .home.green, .home.blue {
+          height: 40px;
+          width: 70px;
+        }
+        
+        .pawn.highlight {
+          box-shadow: 0px 0px 10px 2px rgb(255, 213, 0);
+          border: 4px dashed rgb(0, 0, 0);
+          animation: highlightPawn 0.5s infinite alternate-reverse;
+        }
+        
+        @keyframes highlightPawn {
+          to { transform: scale(1.2); }
+        }
+        
+        .dashboard {
+          width: 100%;
+          height: 70px;
+          margin-top: 40px;
+          border-radius: 10px;
+          border: 4px solid white;
+          display: flex;
+          justify-content: space-around;
+          align-items: center;
+          font-size: 28px;
+          color: white;
+          position: relative;
+        }
+        
+        .dashboard.blue { background-color: var(--blue); }
+        .dashboard.red { background-color: var(--red); }
+        .dashboard.green { background-color: var(--green); }
+        .dashboard.yellow { background-color: var(--yellow); }
+        
+        .dice-section {
+          width: 100px;
+          height: 100px;
+          border-radius: 30px;
+          position: absolute;
+          top: -20px;
+          left: 50%;
+          transform: translateX(-50%);
+          border: 4px solid white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .dice-section.blue { background-color: var(--blue); }
+        .dice-section.red { background-color: var(--red); }
+        .dice-section.green { background-color: var(--green); }
+        .dice-section.yellow { background-color: var(--yellow); }
+        
+        .dice-section.highlight::before {
+          content: '';
+          display: block;
+          width: 80px;
+          height: 80px;
+          border: 5px dashed rgb(0, 0, 0);
+          position: absolute;
+          top: 0;
+          left: 0;
+          border-radius: 100px;
+          animation: highlightDice 0.5s ease-out infinite alternate-reverse;
+        }
+        
+        .dice {
+          width: 80%;
+          height: 80%;
+          background-image: url('/lovable-uploads/diceValues.png');
+          background-size: cover;
+        }
+        
+        .dice.face-1 { background-position-x: 0%; }
+        .dice.face-2 { background-position-x: 20%; }
+        .dice.face-3 { background-position-x: 40%; }
+        .dice.face-4 { background-position-x: 60%; }
+        .dice.face-5 { background-position-x: 80%; }
+        .dice.face-6 { background-position-x: 100%; }
+        
+        .dice.rolling {
+          animation: diceRoll 1.2s ease-out;
+        }
+        
+        @keyframes diceRoll {
+          to {
+            background-image: url('/lovable-uploads/diceRoll.png');
+            transform: rotateZ(calc(360deg * 4));
+            filter: blur(2px);
+          }
+        }
+        
+        @keyframes highlightDice {
+          to {
+            transform: scale(1.2);
+            box-shadow: 0px 0px 30px 6px rgb(255, 213, 0);
+          }
+        }
+      `}</style>
+
+      <div className="board">
         {/* Section 1 - Top */}
-        <div className="flex" style={{ height: '160px' }}>
+        <div className="section section-1">
           {/* Red Private Area */}
-          <div style={{ width: '160px', height: '160px' }}>
-            {renderPrivateArea('red')}
-          </div>
-          
+          {renderPrivateArea('red')}
+
           {/* Top Track - 6x3 grid */}
-          <div className="flex-1 grid grid-cols-6 grid-rows-3" style={{ width: '160px' }}>
-            {/* Row 1 */}
-            {renderCell('out-24', gameState.outerPosition[24])}
-            {renderCell('out-25', gameState.outerPosition[25])}
-            {renderCell('out-26', gameState.outerPosition[26])}
-            {renderCell('out-27', gameState.outerPosition[27], false, true)}
-            {renderCell('out-28', gameState.outerPosition[28])}
-            {renderCell('out-29', gameState.outerPosition[29])}
+          <div className="cells">
+            {renderCell('out-24')}
+            {renderCell('out-25')}
+            {renderCell('out-26')}
             
-            {/* Row 2 */}
-            {renderCell('out-23', gameState.outerPosition[23])}
-            {renderCell('green-last-line-1', gameState.lastLine.green?.[1])}
-            {renderCell('green-last-line-2', gameState.lastLine.green?.[2])}
-            {renderCell('green-last-line-3', gameState.lastLine.green?.[3])}
-            {renderCell('green-last-line-4', gameState.lastLine.green?.[4])}
-            {renderCell('out-30', gameState.outerPosition[30])}
+            {renderCell('out-23')}
+            {renderCell('green-last-line-1', 'green')}
+            {renderCell('out-27', 'green')}
             
-            {/* Row 3 */}
-            {renderCell('out-22', gameState.outerPosition[22], SAFE_POSITIONS.includes(22))}
-            {renderCell('green-last-line-5', gameState.lastLine.green?.[5])}
-            {renderCell('out-31', gameState.outerPosition[31])}
-            {renderCell('out-32', gameState.outerPosition[32])}
-            {renderCell('out-33', gameState.outerPosition[33])}
-            {renderCell('out-34', gameState.outerPosition[34])}
+            {renderCell('out-22', 'star')}
+            {renderCell('green-last-line-2', 'green')}
+            {renderCell('out-28')}
+            
+            {renderCell('out-21')}
+            {renderCell('green-last-line-3', 'green')}
+            {renderCell('out-29')}
+            
+            {renderCell('out-20')}
+            {renderCell('green-last-line-4', 'green')}
+            {renderCell('out-30')}
+            
+            {renderCell('out-19')}
+            {renderCell('green-last-line-5', 'green')}
+            {renderCell('out-31')}
           </div>
-          
+
           {/* Green Private Area */}
-          <div style={{ width: '160px', height: '160px' }}>
-            {renderPrivateArea('green')}
-          </div>
+          {renderPrivateArea('green')}
         </div>
 
         {/* Section 2 - Middle */}
-        <div className="flex" style={{ height: '80px' }}>
+        <div className="section section-2">
           {/* Left Track */}
-          <div className="grid grid-cols-6" style={{ width: '160px' }}>
-            {renderCell('out-21', gameState.outerPosition[21])}
-            {renderCell('out-20', gameState.outerPosition[20])}
-            {renderCell('out-19', gameState.outerPosition[19])}
-            {renderCell('out-18', gameState.outerPosition[18])}
-            {renderCell('out-17', gameState.outerPosition[17])}
-            {renderCell('out-16', gameState.outerPosition[16])}
+          <div className="cells">
+            {renderCell('out-13')}
+            {renderCell('out-14', 'red')}
+            {renderCell('out-15')}
+            {renderCell('out-16')}
+            {renderCell('out-17')}
+            {renderCell('out-18')}
+
+            {renderCell('out-12')}
+            {renderCell('red-last-line-1', 'red')}
+            {renderCell('red-last-line-2', 'red')}
+            {renderCell('red-last-line-3', 'red')}
+            {renderCell('red-last-line-4', 'red')}
+            {renderCell('red-last-line-5', 'red')}
+
+            {renderCell('out-11')}
+            {renderCell('out-10')}
+            {renderCell('out-9', 'star')}
+            {renderCell('out-8')}
+            {renderCell('out-7')}
+            {renderCell('out-6')}
           </div>
-          
+
           {/* Center Home Area */}
-          <div style={{ width: '80px', height: '80px' }}>
-            {renderHomeArea()}
-          </div>
-          
+          {renderHomeArea()}
+
           {/* Right Track */}
-          <div className="grid grid-cols-6" style={{ width: '160px' }}>
-            {renderCell('out-35', gameState.outerPosition[35], SAFE_POSITIONS.includes(35))}
-            {renderCell('out-36', gameState.outerPosition[36])}
-            {renderCell('out-37', gameState.outerPosition[37])}
-            {renderCell('out-38', gameState.outerPosition[38])}
-            {renderCell('out-39', gameState.outerPosition[39])}
-            {renderCell('out-40', gameState.outerPosition[40], false, true)}
+          <div className="cells">
+            {renderCell('out-32')}
+            {renderCell('out-33')}
+            {renderCell('out-34')}
+            {renderCell('out-35', 'star')}
+            {renderCell('out-36')}
+            {renderCell('out-37')}
+
+            {renderCell('yellow-last-line-5', 'yellow')}
+            {renderCell('yellow-last-line-4', 'yellow')}
+            {renderCell('yellow-last-line-3', 'yellow')}
+            {renderCell('yellow-last-line-2', 'yellow')}
+            {renderCell('yellow-last-line-1', 'yellow')}
+            {renderCell('out-38')}
+
+            {renderCell('out-44')}
+            {renderCell('out-43')}
+            {renderCell('out-42')}
+            {renderCell('out-41')}
+            {renderCell('out-40', 'yellow')}
+            {renderCell('out-39')}
           </div>
         </div>
 
         {/* Section 3 - Bottom */}
-        <div className="flex" style={{ height: '160px' }}>
+        <div className="section section-3">
           {/* Blue Private Area */}
-          <div style={{ width: '160px', height: '160px' }}>
-            {renderPrivateArea('blue')}
-          </div>
-          
-          {/* Bottom Track - 6x3 grid */}
-          <div className="flex-1 grid grid-cols-6 grid-rows-3" style={{ width: '160px' }}>
-            {/* Row 1 */}
-            {renderCell('out-15', gameState.outerPosition[15])}
-            {renderCell('out-14', gameState.outerPosition[14], false, true)}
-            {renderCell('out-13', gameState.outerPosition[13])}
-            {renderCell('out-12', gameState.outerPosition[12])}
-            {renderCell('out-11', gameState.outerPosition[11])}
-            {renderCell('out-10', gameState.outerPosition[10])}
-            
-            {/* Row 2 - Red last line */}
-            {renderCell('red-last-line-5', gameState.lastLine.red?.[5])}
-            {renderCell('red-last-line-4', gameState.lastLine.red?.[4])}
-            {renderCell('red-last-line-3', gameState.lastLine.red?.[3])}
-            {renderCell('red-last-line-2', gameState.lastLine.red?.[2])}
-            {renderCell('red-last-line-1', gameState.lastLine.red?.[1])}
-            {renderCell('out-9', gameState.outerPosition[9], SAFE_POSITIONS.includes(9))}
-            
-            {/* Row 3 */}
-            {renderCell('out-8', gameState.outerPosition[8])}
-            {renderCell('out-7', gameState.outerPosition[7])}
-            {renderCell('out-6', gameState.outerPosition[6])}
-            {renderCell('out-5', gameState.outerPosition[5])}
-            {renderCell('out-4', gameState.outerPosition[4])}
-            {renderCell('out-3', gameState.outerPosition[3])}
-          </div>
-          
-          {/* Yellow Private Area */}
-          <div style={{ width: '160px', height: '160px' }}>
-            {renderPrivateArea('yellow')}
-          </div>
-        </div>
-      </div>
+          {renderPrivateArea('blue')}
 
-      {/* Dashboard - Exact style from original */}
-      <div className={cn(
-        "w-full max-w-md h-16 rounded-lg border-4 border-white flex items-center justify-around text-white text-xl font-bold relative",
-        currentPlayer === 'blue' && "bg-blue-500",
-        currentPlayer === 'red' && "bg-red-500",
-        currentPlayer === 'green' && "bg-green-500",
-        currentPlayer === 'yellow' && "bg-yellow-500"
-      )}>
-        <span>{currentPlayer.toUpperCase()}'s turn</span>
-        
-        {/* Dice Section - Positioned like original */}
-        <div 
-          className={cn(
-            "absolute -top-6 left-1/2 transform -translate-x-1/2 w-20 h-20 rounded-full border-4 border-white flex items-center justify-center cursor-pointer transition-all",
-            currentPlayer === 'blue' && "bg-blue-500",
-            currentPlayer === 'red' && "bg-red-500",
-            currentPlayer === 'green' && "bg-green-500",
-            currentPlayer === 'yellow' && "bg-yellow-500",
-            canRoll && "hover:scale-110",
-            !canRoll && "opacity-50 cursor-not-allowed",
-            isRolling && "animate-spin"
-          )}
-          onClick={canRoll ? onDiceRoll : undefined}
-        >
-          <DiceIcon className="w-12 h-12 text-white" />
+          {/* Bottom Track - 6x3 grid */}
+          <div className="cells">
+            {renderCell('out-5')}
+            {renderCell('blue-last-line-5', 'blue')}
+            {renderCell('out-45')}
+
+            {renderCell('out-4')}
+            {renderCell('blue-last-line-4', 'blue')}
+            {renderCell('out-46')}
+
+            {renderCell('out-3')}
+            {renderCell('blue-last-line-3', 'blue')}
+            {renderCell('out-47')}
+
+            {renderCell('out-2')}
+            {renderCell('blue-last-line-2', 'blue')}
+            {renderCell('out-48', 'star')}
+
+            {renderCell('out-1', 'blue')}
+            {renderCell('blue-last-line-1', 'blue')}
+            {renderCell('out-49')}
+
+            {renderCell('out-52')}
+            {renderCell('out-51')}
+            {renderCell('out-50')}
+          </div>
+
+          {/* Yellow Private Area */}
+          {renderPrivateArea('yellow')}
         </div>
-        
-        <span>{diceValue}</span>
+
+        {/* Dashboard */}
+        <div className={cn("dashboard", currentPlayer)}>
+          <div className="player-name">
+            <span>{currentPlayer}'s turn</span>
+            {isAIThinking && <span className="ml-2 animate-pulse">Thinking...</span>}
+          </div>
+          
+          <div className={cn("dice-section", currentPlayer, canRoll && "highlight")} onClick={canRoll ? onDiceRoll : undefined}>
+            <div className={cn("dice", `face-${diceValue}`, isRolling && "rolling")} />
+          </div>
+          
+          <div className="dice-value">
+            <span>{diceValue}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
