@@ -53,7 +53,7 @@ export function LudoBoardV2({
     <div
       key={pawn.name}
       className={cn(
-        "w-4 h-4 rounded-full border-2 cursor-pointer transition-all duration-200",
+        "w-3 h-3 rounded-full border cursor-pointer transition-all duration-200",
         pawn.color === 'blue' && "bg-blue-500 border-blue-700",
         pawn.color === 'red' && "bg-red-500 border-red-700",
         pawn.color === 'green' && "bg-green-500 border-green-700",
@@ -66,28 +66,23 @@ export function LudoBoardV2({
     />
   );
 
-  const renderCell = (position: number, type: 'normal' | 'safe' | 'start' = 'normal') => {
+  const renderCell = (position: number, isStart: boolean = false, isSafe: boolean = false) => {
     const pawns = gameState.outerPosition[position] || [];
-    const isSafe = SAFE_POSITIONS.includes(position);
-    const isStart = [1, 14, 27, 40].includes(position);
     
     return (
       <div
-        key={position}
         className={cn(
-          "w-8 h-8 border border-gray-300 flex items-center justify-center relative",
-          isSafe && "bg-green-100",
-          isStart && "bg-yellow-100",
-          type === 'safe' && "bg-green-200",
-          type === 'start' && "bg-yellow-200"
+          "w-6 h-6 border border-gray-400 flex items-center justify-center relative text-xs",
+          isSafe && "bg-yellow-100",
+          isStart && "bg-green-200"
         )}
       >
         {pawns.length > 0 && (
-          <div className="flex flex-wrap gap-0.5">
+          <div className="flex flex-wrap gap-0.5 items-center justify-center">
             {pawns.map(pawn => renderPawn(pawn, highlightedPawns.has(pawn.name)))}
           </div>
         )}
-        <span className="absolute bottom-0 right-0 text-xs text-gray-400">{position}</span>
+        <span className="absolute -bottom-2 -right-1 text-[8px] text-gray-400">{position}</span>
       </div>
     );
   };
@@ -96,35 +91,43 @@ export function LudoBoardV2({
     const pawns = gameState.privateAreas[color] || [];
     return (
       <div className={cn(
-        "w-24 h-24 border-2 rounded-lg flex flex-wrap items-center justify-center gap-1 p-2",
-        color === 'blue' && "bg-blue-100 border-blue-300",
-        color === 'red' && "bg-red-100 border-red-300",
-        color === 'green' && "bg-green-100 border-green-300",
-        color === 'yellow' && "bg-yellow-100 border-yellow-300"
+        "w-20 h-20 border-2 rounded grid grid-cols-2 gap-1 p-1",
+        color === 'blue' && "bg-blue-100 border-blue-400",
+        color === 'red' && "bg-red-100 border-red-400",
+        color === 'green' && "bg-green-100 border-green-400",
+        color === 'yellow' && "bg-yellow-100 border-yellow-400"
       )}>
-        {pawns.map(pawn => renderPawn(pawn, highlightedPawns.has(pawn.name)))}
+        {[0, 1, 2, 3].map(index => (
+          <div key={index} className="w-8 h-8 border border-gray-300 rounded flex items-center justify-center">
+            {pawns[index] && renderPawn(pawns[index], highlightedPawns.has(pawns[index].name))}
+          </div>
+        ))}
       </div>
     );
   };
 
   const renderHomeTriangle = (color: PlayerColor) => {
     const pawns = gameState.homeAreas[color] || [];
+    const triangleStyle = {
+      clipPath: color === 'red' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' :
+               color === 'blue' ? 'polygon(0% 0%, 100% 50%, 0% 100%)' :
+               color === 'yellow' ? 'polygon(0% 0%, 100% 0%, 50% 100%)' :
+               'polygon(100% 0%, 0% 50%, 100% 100%)'
+    };
+
     return (
-      <div className={cn(
-        "w-12 h-12 flex items-center justify-center relative",
-        color === 'blue' && "bg-blue-200",
-        color === 'red' && "bg-red-200",
-        color === 'green' && "bg-green-200",
-        color === 'yellow' && "bg-yellow-200"
-      )}
-      style={{
-        clipPath: color === 'blue' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' :
-                 color === 'red' ? 'polygon(0% 0%, 100% 0%, 50% 100%)' :
-                 color === 'green' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' :
-                 'polygon(0% 0%, 100% 0%, 50% 100%)'
-      }}>
+      <div 
+        className={cn(
+          "w-16 h-16 flex items-center justify-center",
+          color === 'blue' && "bg-blue-300",
+          color === 'red' && "bg-red-300",
+          color === 'green' && "bg-green-300",
+          color === 'yellow' && "bg-yellow-300"
+        )}
+        style={triangleStyle}
+      >
         {pawns.length > 0 && (
-          <div className="flex flex-wrap gap-0.5">
+          <div className="flex flex-wrap gap-0.5 items-center justify-center">
             {pawns.slice(0, 4).map(pawn => renderPawn(pawn, highlightedPawns.has(pawn.name)))}
           </div>
         )}
@@ -135,10 +138,10 @@ export function LudoBoardV2({
   const renderLastLine = (color: PlayerColor) => {
     const cells = [];
     for (let i = 1; i <= 5; i++) {
-      const pawns = gameState.lastLine[color][i] || [];
+      const pawns = gameState.lastLine[color]?.[i] || [];
       cells.push(
         <div key={i} className={cn(
-          "w-8 h-8 border border-gray-300 flex items-center justify-center",
+          "w-6 h-6 border border-gray-400 flex items-center justify-center",
           color === 'blue' && "bg-blue-50",
           color === 'red' && "bg-red-50",
           color === 'green' && "bg-green-50",
@@ -152,11 +155,11 @@ export function LudoBoardV2({
   };
 
   return (
-    <div className="flex flex-col items-center space-y-4 p-4">
+    <div className="flex flex-col items-center space-y-4 p-4 max-w-md mx-auto">
       {/* Current Player Indicator */}
-      <div className="text-center">
+      <div className="text-center mb-2">
         <div className={cn(
-          "px-4 py-2 rounded-lg font-bold text-white mb-2",
+          "px-3 py-1 rounded text-white text-sm font-bold",
           currentPlayer === 'blue' && "bg-blue-500",
           currentPlayer === 'red' && "bg-red-500",
           currentPlayer === 'green' && "bg-green-500",
@@ -166,140 +169,102 @@ export function LudoBoardV2({
         </div>
       </div>
 
-      {/* Game Board */}
-      <div className="grid grid-cols-15 gap-0 border-4 border-gray-800 bg-white p-2">
-        {/* Row 1 - Top */}
-        <div className="col-span-6 grid grid-cols-6">
-          {[7, 8, 9, 10, 11, 12].map(pos => renderCell(pos))}
-        </div>
-        <div className="col-span-3 grid grid-cols-3">
-          <div></div>
-          {renderCell(13)}
-          <div></div>
-        </div>
-        <div className="col-span-6 grid grid-cols-6">
-          {[1, 2, 3, 4, 5, 6].map(pos => renderCell(pos))}
+      {/* Game Board - 3 sections layout */}
+      <div className="flex flex-col items-center gap-0">
+        
+        {/* Top Section */}
+        <div className="flex items-center gap-0">
+          {/* Red Private Area */}
+          <div className="flex flex-col items-center">
+            {renderPrivateArea('red')}
+          </div>
+          
+          {/* Top Track */}
+          <div className="flex flex-col gap-0">
+            <div className="flex gap-0">
+              {[52, 51, 50, 49, 48, 47].map(pos => renderCell(pos, pos === 48, SAFE_POSITIONS.includes(pos)))}
+            </div>
+            <div className="flex gap-0">
+              {renderLastLine('red')}
+            </div>
+          </div>
+          
+          {/* Blue Private Area */}
+          <div className="flex flex-col items-center">
+            {renderPrivateArea('blue')}
+          </div>
         </div>
 
-        {/* Row 2 - Red private area and path */}
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-2">{renderPrivateArea('red')}</div>
-          <div className="col-span-4 grid grid-cols-4">
-            {renderLastLine('red')}
+        {/* Middle Section */}
+        <div className="flex items-center gap-0">
+          {/* Left Track */}
+          <div className="flex flex-col gap-0">
+            {[1, 2, 3, 4, 5, 6].map(pos => renderCell(pos, pos === 1, SAFE_POSITIONS.includes(pos)))}
           </div>
-        </div>
-        <div className="col-span-3 grid grid-cols-3">
-          {renderCell(52)}
-          <div className="bg-gray-100"></div>
-          {renderCell(14)}
-        </div>
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-4 grid grid-cols-4">
-            {renderLastLine('blue').reverse()}
+          
+          {/* Red Last Line */}
+          <div className="flex flex-col gap-0">
+            {renderLastLine('red').reverse()}
           </div>
-          <div className="col-span-2">{renderPrivateArea('blue')}</div>
+          
+          {/* Center Home Area */}
+          <div className="w-16 h-16 relative bg-gray-100 border border-gray-400">
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2">
+              {renderHomeTriangle('red')}
+            </div>
+            <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
+              {renderHomeTriangle('blue')}
+            </div>
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2">
+              {renderHomeTriangle('yellow')}
+            </div>
+            <div className="absolute left-0 top-1/2 transform -translate-y-1/2">
+              {renderHomeTriangle('green')}
+            </div>
+          </div>
+          
+          {/* Blue Last Line */}
+          <div className="flex flex-col gap-0">
+            {renderLastLine('blue')}
+          </div>
+          
+          {/* Right Track */}
+          <div className="flex flex-col gap-0">
+            {[13, 14, 15, 16, 17, 18].map(pos => renderCell(pos, pos === 14, SAFE_POSITIONS.includes(pos)))}
+          </div>
         </div>
 
-        {/* Row 3 - Vertical paths */}
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-2"></div>
-          <div className="col-span-4 grid grid-cols-4">
-            {[51, 50, 49, 48].map(pos => renderCell(pos))}
+        {/* Bottom Section */}
+        <div className="flex items-center gap-0">
+          {/* Green Private Area */}
+          <div className="flex flex-col items-center">
+            {renderPrivateArea('green')}
           </div>
-        </div>
-        <div className="col-span-3 grid grid-cols-3">
-          {renderCell(51)}
-          <div className="bg-gray-100"></div>
-          {renderCell(15)}
-        </div>
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-4 grid grid-cols-4">
-            {[16, 17, 18, 19].map(pos => renderCell(pos))}
+          
+          {/* Bottom Track */}
+          <div className="flex flex-col gap-0">
+            <div className="flex gap-0">
+              {renderLastLine('green')}
+            </div>
+            <div className="flex gap-0">
+              {[19, 20, 21, 22, 23, 24].map(pos => renderCell(pos, pos === 27, SAFE_POSITIONS.includes(pos)))}
+            </div>
           </div>
-          <div className="col-span-2"></div>
-        </div>
-
-        {/* Center Row - Home area */}
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-2"></div>
-          <div className="col-span-4 grid grid-cols-4">
-            {[47, 46, 45, 44].map(pos => renderCell(pos))}
+          
+          {/* Yellow Private Area */}
+          <div className="flex flex-col items-center">
+            {renderPrivateArea('yellow')}
           </div>
-        </div>
-        <div className="col-span-3 grid grid-cols-3 relative">
-          <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
-            <div className="flex items-start justify-center">{renderHomeTriangle('red')}</div>
-            <div className="flex items-start justify-center">{renderHomeTriangle('blue')}</div>
-            <div className="flex items-end justify-center">{renderHomeTriangle('green')}</div>
-            <div className="flex items-end justify-center">{renderHomeTriangle('yellow')}</div>
-          </div>
-        </div>
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-4 grid grid-cols-4">
-            {[20, 21, 22, 23].map(pos => renderCell(pos))}
-          </div>
-          <div className="col-span-2"></div>
-        </div>
-
-        {/* Row 5 - Vertical paths */}
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-2"></div>
-          <div className="col-span-4 grid grid-cols-4">
-            {[43, 42, 41, 40].map(pos => renderCell(pos))}
-          </div>
-        </div>
-        <div className="col-span-3 grid grid-cols-3">
-          {renderCell(26)}
-          <div className="bg-gray-100"></div>
-          {renderCell(24)}
-        </div>
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-4 grid grid-cols-4">
-            {[25, 26, 27, 28].map(pos => renderCell(pos))}
-          </div>
-          <div className="col-span-2"></div>
-        </div>
-
-        {/* Row 6 - Bottom private areas */}
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-2">{renderPrivateArea('green')}</div>
-          <div className="col-span-4 grid grid-cols-4">
-            {renderLastLine('green')}
-          </div>
-        </div>
-        <div className="col-span-3 grid grid-cols-3">
-          {renderCell(39)}
-          <div className="bg-gray-100"></div>
-          {renderCell(27)}
-        </div>
-        <div className="col-span-6 grid grid-cols-6">
-          <div className="col-span-4 grid grid-cols-4">
-            {renderLastLine('yellow').reverse()}
-          </div>
-          <div className="col-span-2">{renderPrivateArea('yellow')}</div>
-        </div>
-
-        {/* Row 7 - Bottom */}
-        <div className="col-span-6 grid grid-cols-6">
-          {[38, 37, 36, 35, 34, 33].map(pos => renderCell(pos))}
-        </div>
-        <div className="col-span-3 grid grid-cols-3">
-          <div></div>
-          {renderCell(40)}
-          <div></div>
-        </div>
-        <div className="col-span-6 grid grid-cols-6">
-          {[32, 31, 30, 29, 28, 27].map(pos => renderCell(pos))}
         </div>
       </div>
 
       {/* Dice Section */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-4 mt-4">
         <Button
           onClick={onDiceRoll}
           disabled={!canRoll || isRolling}
           className={cn(
-            "flex items-center space-x-2 px-6 py-3 text-lg font-bold",
+            "flex items-center space-x-2 px-4 py-2 text-sm font-bold",
             currentPlayer === 'blue' && "bg-blue-500 hover:bg-blue-600",
             currentPlayer === 'red' && "bg-red-500 hover:bg-red-600",
             currentPlayer === 'green' && "bg-green-500 hover:bg-green-600",
@@ -307,8 +272,8 @@ export function LudoBoardV2({
             isRolling && "animate-pulse"
           )}
         >
-          <DiceIcon className="w-6 h-6" />
-          <span>{isRolling ? 'Rolling...' : `Roll Dice (${diceValue})`}</span>
+          <DiceIcon className="w-5 h-5" />
+          <span>{isRolling ? 'Rolling...' : `Roll (${diceValue})`}</span>
         </Button>
       </div>
     </div>

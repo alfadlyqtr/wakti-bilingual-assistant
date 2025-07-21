@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Volume2, VolumeX, Users, Home } from 'lucide-react';
@@ -45,6 +44,14 @@ interface GameConfig {
 const SAFE_POSITIONS = [1, 9, 14, 22, 27, 35, 40, 48];
 const PAWN_NUMBER = 4;
 
+// Correct track positions for each color's starting position
+const TRACK_START_POSITIONS = {
+  blue: 1,
+  red: 14,
+  green: 27,
+  yellow: 40
+};
+
 export function LudoGame({ onBack }: LudoGameProps) {
   const { language } = useTheme();
   const { currentRoom, players, updateGameState } = useLudoMultiplayer();
@@ -70,18 +77,20 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const [winner, setWinner] = useState<PlayerColor | null>(null);
   const [canRoll, setCanRoll] = useState(true);
   const [aiTurnTimeout, setAiTurnTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [isAIThinking, setIsAIThinking] = useState(false);
 
   // Initialize game state
   useEffect(() => {
     const newGameState = { ...gameState };
     
-    // Initialize outer positions
+    // Initialize outer positions (1-52)
     for (let i = 1; i <= 52; i++) {
       newGameState.outerPosition[i] = [];
     }
     
-    // Initialize last lines
+    // Initialize last lines for each color
     for (const color of ['blue', 'red', 'green', 'yellow'] as PlayerColor[]) {
+      newGameState.lastLine[color] = {};
       for (let i = 1; i <= 5; i++) {
         newGameState.lastLine[color][i] = [];
       }
@@ -91,19 +100,15 @@ export function LudoGame({ onBack }: LudoGameProps) {
   }, []);
 
   const createPawn = (id: number, color: PlayerColor): Pawn => {
-    const cellConfig = {
-      blue: { startCell: '1', endCell: '51' },
-      red: { startCell: '14', endCell: '12' },
-      green: { startCell: '27', endCell: '25' },
-      yellow: { startCell: '40', endCell: '38' }
-    };
+    const startPosition = TRACK_START_POSITIONS[color];
+    const endPosition = startPosition === 1 ? 52 : startPosition - 1;
 
     return {
       id,
       name: `${color}-${id}`,
       color,
-      startCell: cellConfig[color].startCell,
-      endCell: cellConfig[color].endCell,
+      startCell: startPosition.toString(),
+      endCell: endPosition.toString(),
       currentCell: `${color}-private-${id}`,
       area: 'private'
     };
@@ -120,6 +125,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     for (const color of ['blue', 'red', 'green', 'yellow'] as PlayerColor[]) {
       newGameState.privateAreas[color] = [];
       newGameState.homeAreas[color] = [];
+      newGameState.lastLine[color] = {};
       for (let i = 1; i <= 5; i++) {
         newGameState.lastLine[color][i] = [];
       }
@@ -142,6 +148,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     setShowMultiplayerSetup(false);
     setWinner(null);
     setCanRoll(true);
+    setIsAIThinking(false);
   }, [gameState]);
 
   const playSound = async (soundType: 'chime' | 'beep' | 'ding') => {
@@ -174,14 +181,22 @@ export function LudoGame({ onBack }: LudoGameProps) {
       if (currentColor) {
         const canMove = canPlayerMove(currentColor, newDiceValue);
         if (!canMove) {
-          nextTurn(newDiceValue);
+          // No moves available, skip turn
+          setTimeout(() => nextTurn(newDiceValue), 1000);
         } else {
-          highlightAvailablePawns(currentColor, newDiceValue);
+          const availablePawns = getAvailablePawns(currentColor, newDiceValue);
+          setHighlightedPawns(new Set(availablePawns.map(p => p.name)));
           
-          // If current player is AI, make move automatically with timeout
+          // If current player is AI, make move automatically
           if (gameConfig?.playerTypes[currentColor] === 'ai') {
-            const timeout = setTimeout(() => makeAIMove(currentColor, newDiceValue), 2000);
+            setIsAIThinking(true);
+            const timeout = setTimeout(() => {
+              makeAIMove(currentColor, newDiceValue);
+              setIsAIThinking(false);
+            }, 2000);
             setAiTurnTimeout(timeout);
+          } else {
+            setCanRoll(false); // Human must make a move first
           }
         }
       }
@@ -189,21 +204,21 @@ export function LudoGame({ onBack }: LudoGameProps) {
   }, [isRolling, currentTurn, gameConfig, gameState, winner, canRoll, aiTurnTimeout]);
 
   const canPlayerMove = (color: PlayerColor, dice: number): boolean => {
-    // Check if can move from private (needs 6)
+    // Can move from private if dice is 6
     if (gameState.privateAreas[color].length > 0 && dice === 6) {
       return true;
     }
     
-    // Check if can move from outer positions
+    // Can move from outer positions
     for (const pos in gameState.outerPosition) {
       if (gameState.outerPosition[pos].some(pawn => pawn.color === color)) {
         return true;
       }
     }
     
-    // Check if can move from last line
+    // Can move from last line
     for (const pos in gameState.lastLine[color]) {
-      if (gameState.lastLine[color][pos].length > 0) {
+      if (gameState.lastLine[color][pos] && gameState.lastLine[color][pos].length > 0) {
         const currentPos = parseInt(pos);
         if (currentPos + dice <= 6) {
           return true;
@@ -214,36 +229,36 @@ export function LudoGame({ onBack }: LudoGameProps) {
     return false;
   };
 
-  const highlightAvailablePawns = (color: PlayerColor, dice: number) => {
-    const highlighted = new Set<string>();
+  const getAvailablePawns = (color: PlayerColor, dice: number): Pawn[] => {
+    const availablePawns: Pawn[] = [];
     
-    // Highlight pawns in private area if dice is 6
+    // Check pawns in private area if dice is 6
     if (dice === 6) {
-      gameState.privateAreas[color].forEach(pawn => {
-        highlighted.add(pawn.name);
-      });
+      availablePawns.push(...gameState.privateAreas[color]);
     }
     
-    // Highlight pawns in outer positions
+    // Check pawns in outer positions
     for (const pos in gameState.outerPosition) {
       gameState.outerPosition[pos].forEach(pawn => {
         if (pawn.color === color) {
-          highlighted.add(pawn.name);
+          availablePawns.push(pawn);
         }
       });
     }
     
-    // Highlight pawns in last line that can move
+    // Check pawns in last line that can move
     for (const pos in gameState.lastLine[color]) {
-      gameState.lastLine[color][pos].forEach(pawn => {
-        const currentPos = parseInt(pos);
-        if (currentPos + dice <= 6) {
-          highlighted.add(pawn.name);
-        }
-      });
+      if (gameState.lastLine[color][pos]) {
+        gameState.lastLine[color][pos].forEach(pawn => {
+          const currentPos = parseInt(pos);
+          if (currentPos + dice <= 6) {
+            availablePawns.push(pawn);
+          }
+        });
+      }
     }
     
-    setHighlightedPawns(highlighted);
+    return availablePawns;
   };
 
   const makeAIMove = (color: PlayerColor, dice: number) => {
@@ -253,104 +268,109 @@ export function LudoGame({ onBack }: LudoGameProps) {
       setAiTurnTimeout(null);
     }
 
-    // Simple AI logic - prioritize: 1) Get pawns out, 2) Move closest to home, 3) Capture opponents
-    let bestMove: { pawn: Pawn; score: number } | null = null;
+    const availablePawns = getAvailablePawns(color, dice);
     
-    // Check pawns in private area
-    if (dice === 6 && gameState.privateAreas[color].length > 0) {
-      const pawn = gameState.privateAreas[color][0];
-      bestMove = { pawn, score: 100 };
-    }
-    
-    // Check pawns in outer positions
-    if (!bestMove) {
-      for (const pos in gameState.outerPosition) {
-        gameState.outerPosition[pos].forEach(pawn => {
-          if (pawn.color === color) {
-            let score = 50;
-            const currentPos = parseInt(pos);
-            const endPos = parseInt(pawn.endCell);
-            const distanceToEnd = Math.abs(currentPos - endPos);
-            score += Math.max(0, 52 - distanceToEnd);
-            
-            if (!bestMove || score > bestMove.score) {
-              bestMove = { pawn, score };
-            }
-          }
-        });
-      }
-    }
-    
-    // Check pawns in last line
-    if (!bestMove) {
-      for (const pos in gameState.lastLine[color]) {
-        gameState.lastLine[color][pos].forEach(pawn => {
-          const currentPos = parseInt(pos);
-          if (currentPos + dice <= 6) {
-            const score = 200 + currentPos;
-            if (!bestMove || score > bestMove.score) {
-              bestMove = { pawn, score };
-            }
-          }
-        });
-      }
-    }
-    
-    if (bestMove) {
-      movePawn(bestMove.pawn, dice);
-    } else {
-      // No valid moves, skip turn
+    if (availablePawns.length === 0) {
+      // No moves available
       nextTurn(dice);
+      return;
     }
+
+    // Simple AI logic - prioritize getting pawns out, then move closest to home
+    let bestMove = availablePawns[0];
+    
+    // Prioritize getting pawns out of private area
+    const privatePawns = availablePawns.filter(p => p.area === 'private');
+    if (privatePawns.length > 0) {
+      bestMove = privatePawns[0];
+    } else {
+      // Choose pawn closest to completing the track
+      bestMove = availablePawns.reduce((best, current) => {
+        if (current.area === 'last-line') return current; // Prioritize last line pawns
+        return best;
+      }, availablePawns[0]);
+    }
+    
+    movePawn(bestMove, dice);
   };
 
   const movePawn = (pawn: Pawn, dice: number) => {
     const newGameState = { ...gameState };
     
-    // Move logic implementation
     if (pawn.area === 'private') {
-      // Move from private to outer
+      // Move from private to outer track
       const pawnIndex = newGameState.privateAreas[pawn.color].findIndex(p => p.name === pawn.name);
       if (pawnIndex !== -1) {
         newGameState.privateAreas[pawn.color].splice(pawnIndex, 1);
-        pawn.currentCell = pawn.startCell;
+        const startPos = TRACK_START_POSITIONS[pawn.color];
+        pawn.currentCell = startPos.toString();
         pawn.area = 'outer';
-        newGameState.outerPosition[parseInt(pawn.startCell)].push(pawn);
+        
+        // Check for capture
+        const existingPawns = newGameState.outerPosition[startPos] || [];
+        const enemyPawns = existingPawns.filter(p => p.color !== pawn.color);
+        enemyPawns.forEach(enemyPawn => {
+          // Send enemy pawn back to private area
+          enemyPawn.area = 'private';
+          enemyPawn.currentCell = `${enemyPawn.color}-private-${enemyPawn.id}`;
+          newGameState.privateAreas[enemyPawn.color].push(enemyPawn);
+        });
+        
+        newGameState.outerPosition[startPos] = [pawn, ...existingPawns.filter(p => p.color === pawn.color)];
       }
     } else if (pawn.area === 'outer') {
-      // Move within outer or to last line
+      // Move within outer track or to last line
       const currentPos = parseInt(pawn.currentCell);
-      const endPos = parseInt(pawn.endCell);
       let nextPos = currentPos + dice;
       
       // Remove from current position
-      const currentPosIndex = newGameState.outerPosition[currentPos].findIndex(p => p.name === pawn.name);
+      const currentPosIndex = newGameState.outerPosition[currentPos]?.findIndex(p => p.name === pawn.name);
       if (currentPosIndex !== -1) {
         newGameState.outerPosition[currentPos].splice(currentPosIndex, 1);
       }
       
-      // Check if moving to last line
+      // Handle wrapping around the track
+      if (nextPos > 52) {
+        nextPos = nextPos - 52;
+      }
+      
+      // Check if reaching the end of the track (entrance to last line)
+      const endPos = parseInt(pawn.endCell);
+      const startPos = TRACK_START_POSITIONS[pawn.color];
+      
       if (currentPos <= endPos && nextPos > endPos) {
-        const remaining = nextPos - endPos;
-        if (remaining === 6) {
+        // Moving into last line
+        const remaining = nextPos - endPos - 1;
+        if (remaining === 0) {
           // Move to home
           pawn.area = 'home';
           pawn.currentCell = '0';
           newGameState.homeAreas[pawn.color].push(pawn);
           playSound('ding');
-        } else {
+        } else if (remaining <= 5) {
           // Move to last line
           pawn.area = 'last-line';
           pawn.currentCell = remaining.toString();
+          if (!newGameState.lastLine[pawn.color][remaining]) {
+            newGameState.lastLine[pawn.color][remaining] = [];
+          }
           newGameState.lastLine[pawn.color][remaining].push(pawn);
         }
       } else {
-        // Stay in outer
-        if (nextPos > 52) {
-          nextPos = nextPos - 52;
-        }
+        // Stay in outer track
         pawn.currentCell = nextPos.toString();
-        newGameState.outerPosition[nextPos].push(pawn);
+        
+        // Check for capture
+        const existingPawns = newGameState.outerPosition[nextPos] || [];
+        const enemyPawns = existingPawns.filter(p => p.color !== pawn.color);
+        enemyPawns.forEach(enemyPawn => {
+          // Send enemy pawn back to private area
+          enemyPawn.area = 'private';
+          enemyPawn.currentCell = `${enemyPawn.color}-private-${enemyPawn.id}`;
+          newGameState.privateAreas[enemyPawn.color].push(enemyPawn);
+        });
+        
+        newGameState.outerPosition[nextPos] = [pawn, ...existingPawns.filter(p => p.color === pawn.color)];
       }
     } else if (pawn.area === 'last-line') {
       // Move within last line or to home
@@ -358,7 +378,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       const nextPos = currentPos + dice;
       
       // Remove from current position
-      const currentPosIndex = newGameState.lastLine[pawn.color][currentPos].findIndex(p => p.name === pawn.name);
+      const currentPosIndex = newGameState.lastLine[pawn.color][currentPos]?.findIndex(p => p.name === pawn.name);
       if (currentPosIndex !== -1) {
         newGameState.lastLine[pawn.color][currentPos].splice(currentPosIndex, 1);
       }
@@ -372,6 +392,9 @@ export function LudoGame({ onBack }: LudoGameProps) {
       } else if (nextPos < 6) {
         // Stay in last line
         pawn.currentCell = nextPos.toString();
+        if (!newGameState.lastLine[pawn.color][nextPos]) {
+          newGameState.lastLine[pawn.color][nextPos] = [];
+        }
         newGameState.lastLine[pawn.color][nextPos].push(pawn);
       }
     }
@@ -379,16 +402,6 @@ export function LudoGame({ onBack }: LudoGameProps) {
     setGameState(newGameState);
     setHighlightedPawns(new Set());
     playSound('beep');
-    
-    // Update multiplayer game state if in multiplayer mode
-    if (gameConfig?.mode === 'multiplayer' && currentRoom) {
-      updateGameState({
-        gameState: newGameState,
-        currentTurn,
-        diceValue,
-        winner
-      });
-    }
     
     // Check for win condition
     if (newGameState.homeAreas[pawn.color].length === 4) {
@@ -485,6 +498,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     setShowMultiplayerSetup(false);
     setSelectedMode(null);
     setGameStarted(false);
+    setIsAIThinking(false);
     if (aiTurnTimeout) {
       clearTimeout(aiTurnTimeout);
       setAiTurnTimeout(null);
@@ -573,11 +587,11 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const currentPlayerName = gameConfig.playerNames[currentColor] || currentColor;
 
   return (
-    <div className="flex flex-col items-center space-y-4 min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+    <div className="flex flex-col items-center space-y-4 min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
       {/* Header */}
-      <div className="w-full max-w-4xl flex justify-between items-center">
-        <Button onClick={onBack} variant="outline">
-          <Home className="w-4 h-4 mr-2" />
+      <div className="w-full max-w-md flex justify-between items-center">
+        <Button onClick={onBack} variant="outline" size="sm">
+          <Home className="w-4 h-4 mr-1" />
           {language === 'ar' ? 'رجوع' : 'Back'}
         </Button>
         
@@ -592,11 +606,11 @@ export function LudoGame({ onBack }: LudoGameProps) {
 
       {/* Winner Banner */}
       {winner && (
-        <div className="w-full max-w-4xl p-4 bg-green-100 border border-green-300 rounded-lg text-center">
+        <div className="w-full max-w-md p-4 bg-green-100 border border-green-300 rounded-lg text-center">
           <p className="text-lg font-bold text-green-800">
             🏆 {gameConfig.playerNames[winner] || winner} {language === 'ar' ? 'فاز!' : 'Wins!'}
           </p>
-          <Button onClick={handlePlayAgain} className="mt-2">
+          <Button onClick={handlePlayAgain} className="mt-2" size="sm">
             {language === 'ar' ? 'العب مرة أخرى' : 'Play Again'}
           </Button>
         </div>
@@ -615,31 +629,31 @@ export function LudoGame({ onBack }: LudoGameProps) {
       />
 
       {/* Player Status */}
-      <div className="w-full max-w-4xl grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="w-full max-w-md grid grid-cols-2 gap-2 text-xs">
         {gameConfig.turnOrder.map(color => (
           <div key={color} className={cn(
-            "flex flex-col items-center p-3 rounded-lg border-2",
-            color === currentColor && 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900'
+            "flex flex-col items-center p-2 rounded border",
+            color === currentColor && 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20'
           )}>
             <div className={cn(
-              "w-6 h-6 rounded-full mb-2",
+              "w-4 h-4 rounded-full mb-1",
               color === 'blue' && "bg-blue-500",
               color === 'red' && "bg-red-500", 
               color === 'green' && "bg-green-500",
               color === 'yellow' && "bg-yellow-500"
             )} />
             <span className={cn(
-              "font-bold text-sm text-center",
+              "font-bold text-xs text-center",
               color === currentColor && 'text-yellow-800 dark:text-yellow-200'
             )}>
               {gameConfig.playerNames[color] || color}
               {gameConfig.playerTypes[color] === 'ai' && ' (AI)'}
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">
               {language === 'ar' ? 'في المنزل' : 'Home'}: {gameState.homeAreas[color].length}/4
             </span>
-            {isCurrentPlayerAI && color === currentColor && (
-              <span className="text-xs text-blue-600 animate-pulse">
+            {isAIThinking && color === currentColor && isCurrentPlayerAI && (
+              <span className="text-[10px] text-blue-600 animate-pulse">
                 {language === 'ar' ? 'يفكر...' : 'Thinking...'}
               </span>
             )}
