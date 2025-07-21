@@ -4,6 +4,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { LudoBoard } from './LudoBoard';
 import { PlayerSetup } from './PlayerSetup';
+import { DiceComponent } from './DiceComponent';
 import { waktiSounds } from '@/services/waktiSounds';
 import { cn } from '@/lib/utils';
 
@@ -532,19 +533,13 @@ export function LudoGame({ onBack }: LudoGameProps) {
         </div>
         
         <div className="flex items-center justify-center gap-4">
-          <Button
-            onClick={rollDice}
-            disabled={isRolling || isCurrentPlayerAI || winner !== null}
-            className="bg-white text-black hover:bg-gray-100 disabled:opacity-50"
-          >
-            {isRolling ? (language === 'ar' ? 'يرمي...' : 'Rolling...') : 
-                        (language === 'ar' ? 'ارمي النرد' : 'Roll Dice')}
-          </Button>
-          
-          <div className="text-center">
-            <div className="text-2xl font-bold">{diceValue}</div>
-            <div className="text-sm">{language === 'ar' ? 'النرد' : 'Dice'}</div>
-          </div>
+          <DiceComponent
+            value={diceValue}
+            isRolling={isRolling}
+            onRoll={rollDice}
+            disabled={isCurrentPlayerAI || winner !== null}
+            language={language}
+          />
         </div>
       </div>
 

@@ -39,19 +39,15 @@ export function LudoBoard({ gameState, highlightedPawns, onPawnClick }: LudoBoar
       >
         <div
           className={cn(
-            "w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-sm",
-            "border-2 border-white shadow-lg",
-            pawn.color === 'blue' && "bg-blue-600",
-            pawn.color === 'red' && "bg-red-600", 
-            pawn.color === 'green' && "bg-green-600",
-            pawn.color === 'yellow' && "bg-yellow-500",
+            "w-7 h-7 rounded-full flex items-center justify-center",
+            "border-2 border-white shadow-lg transition-all duration-200",
             isHighlighted && "ring-4 ring-yellow-400 ring-opacity-75 scale-110"
           )}
         >
           <img 
-            src={`/assets/img/pawn-${pawn.color}.png`} 
+            src={`/lovable-uploads/pawn-${pawn.color}.png`} 
             alt={pawn.name}
-            className="w-5 h-5"
+            className="w-6 h-6 object-contain"
           />
         </div>
       </div>
@@ -88,7 +84,13 @@ export function LudoBoard({ gameState, highlightedPawns, onPawnClick }: LudoBoar
         )}
         
         {isSafe && !isStart && (
-          <div className="absolute top-0 left-0 text-yellow-600 text-xs">⭐</div>
+          <div className="absolute top-0 left-0">
+            <img 
+              src="/lovable-uploads/star.png" 
+              alt="Safe position"
+              className="w-3 h-3 object-contain"
+            />
+          </div>
         )}
       </div>
     );
@@ -185,9 +187,20 @@ export function LudoBoard({ gameState, highlightedPawns, onPawnClick }: LudoBoar
   };
 
   return (
-    <div className="w-full max-w-md mx-auto bg-white rounded-lg shadow-lg p-2">
+    <div className="w-full max-w-md mx-auto rounded-lg shadow-lg p-2 relative overflow-hidden">
+      {/* Background Image */}
+      <div 
+        className="absolute inset-0 rounded-lg"
+        style={{
+          backgroundImage: `url(/lovable-uploads/bg.jpg)`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: 0.3
+        }}
+      />
+      
       {/* Complete 15x15 Ludo Board */}
-      <div className="w-full aspect-square bg-white rounded-lg relative">
+      <div className="w-full aspect-square bg-white/90 rounded-lg relative backdrop-blur-sm">
         {/* Top Section */}
         <div className="absolute top-0 left-0 w-full h-2/5 flex">
           {/* Red Private Area */}
