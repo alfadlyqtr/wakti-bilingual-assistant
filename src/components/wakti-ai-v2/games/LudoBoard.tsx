@@ -21,6 +21,8 @@ interface LudoBoardProps {
   onPawnClick: (pawn: Pawn) => void;
 }
 
+const SAFE_POSITIONS = [1, 9, 14, 22, 27, 35, 40, 48];
+
 export function LudoBoard({ gameState, highlightedPawns, onPawnClick }: LudoBoardProps) {
   const renderPawn = (pawn: Pawn) => {
     const isHighlighted = highlightedPawns.has(pawn.name);
@@ -29,71 +31,86 @@ export function LudoBoard({ gameState, highlightedPawns, onPawnClick }: LudoBoar
       <div
         key={pawn.name}
         className={cn(
-          "w-6 h-6 rounded-full border-2 border-white cursor-pointer transition-all duration-200",
-          "flex items-center justify-center text-xs font-bold text-white",
-          pawn.color === 'blue' && "bg-blue-600",
-          pawn.color === 'red' && "bg-red-600",
-          pawn.color === 'green' && "bg-green-600",
-          pawn.color === 'yellow' && "bg-yellow-500",
-          isHighlighted && "ring-4 ring-yellow-400 ring-opacity-75 animate-pulse scale-110",
-          "hover:scale-110 shadow-lg"
+          "absolute inset-0 w-full h-full flex items-center justify-center cursor-pointer",
+          "transition-all duration-200 z-10",
+          isHighlighted && "animate-pulse"
         )}
         onClick={() => onPawnClick(pawn)}
       >
-        {pawn.id}
+        <div
+          className={cn(
+            "w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-sm",
+            "border-2 border-white shadow-lg",
+            pawn.color === 'blue' && "bg-blue-600",
+            pawn.color === 'red' && "bg-red-600", 
+            pawn.color === 'green' && "bg-green-600",
+            pawn.color === 'yellow' && "bg-yellow-500",
+            isHighlighted && "ring-4 ring-yellow-400 ring-opacity-75 scale-110"
+          )}
+        >
+          <img 
+            src={`/assets/img/pawn-${pawn.color}.png`} 
+            alt={pawn.name}
+            className="w-5 h-5"
+          />
+        </div>
       </div>
     );
   };
 
-  const renderCell = (cellId: string, isStart?: boolean, isSafe?: boolean) => {
-    const pawns = gameState.outerPosition[parseInt(cellId.replace('out-', ''))] || [];
+  const renderCell = (cellNumber: number, isSpecial?: boolean) => {
+    const pawns = gameState.outerPosition[cellNumber] || [];
+    const isSafe = SAFE_POSITIONS.includes(cellNumber);
+    const isStart = cellNumber === 1 || cellNumber === 14 || cellNumber === 27 || cellNumber === 40;
     
     return (
       <div
-        key={cellId}
+        key={cellNumber}
         className={cn(
-          "w-8 h-8 border border-gray-300 flex items-center justify-center relative",
-          "bg-white",
-          isStart && "bg-blue-100",
-          isSafe && "bg-yellow-100",
-          pawns.length > 0 && "bg-gray-50"
+          "w-8 h-8 border border-gray-300 bg-white relative flex items-center justify-center",
+          cellNumber === 1 && "bg-blue-200",
+          cellNumber === 14 && "bg-red-200", 
+          cellNumber === 27 && "bg-green-200",
+          cellNumber === 40 && "bg-yellow-200",
+          isSafe && !isStart && "bg-yellow-100"
         )}
       >
-        {pawns.length > 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            {pawns.length === 1 ? (
-              renderPawn(pawns[0])
-            ) : (
-              <div className="text-xs font-bold text-gray-700">
-                {pawns.length}
-              </div>
-            )}
+        {pawns.map((pawn, index) => (
+          <div key={pawn.name} className={index > 0 ? "hidden" : ""}>
+            {renderPawn(pawn)}
+          </div>
+        ))}
+        
+        {pawns.length > 1 && (
+          <div className="absolute top-0 right-0 bg-black text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+            {pawns.length}
           </div>
         )}
         
-        {isSafe && (
-          <div className="absolute top-0 right-0 text-yellow-600 text-xs">
-            ⭐
-          </div>
+        {isSafe && !isStart && (
+          <div className="absolute top-0 left-0 text-yellow-600 text-xs">⭐</div>
         )}
       </div>
     );
   };
 
-  const renderPrivateArea = (color: string) => {
+  const renderPrivateArea = (color: 'blue' | 'red' | 'green' | 'yellow') => {
     const pawns = gameState.privateAreas[color] || [];
-    const colorClass = {
+    const colorClasses = {
       blue: 'bg-blue-200',
-      red: 'bg-red-200',
+      red: 'bg-red-200', 
       green: 'bg-green-200',
       yellow: 'bg-yellow-200'
     };
 
     return (
-      <div className={cn("w-24 h-24 rounded-lg p-2 border-2", colorClass[color as keyof typeof colorClass])}>
-        <div className="grid grid-cols-2 gap-1 h-full">
+      <div className={cn(
+        "w-48 h-48 rounded-lg p-4 border-2 border-gray-400",
+        colorClasses[color]
+      )}>
+        <div className="bg-white w-32 h-32 mx-auto rounded-lg grid grid-cols-2 gap-2 p-2">
           {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="bg-white rounded-full flex items-center justify-center">
+            <div key={i} className="bg-gray-100 rounded-full aspect-square relative flex items-center justify-center">
               {pawns[i] && renderPawn(pawns[i])}
             </div>
           ))}
@@ -102,39 +119,20 @@ export function LudoBoard({ gameState, highlightedPawns, onPawnClick }: LudoBoar
     );
   };
 
-  const renderHomeArea = (color: string) => {
-    const pawns = gameState.homeAreas[color] || [];
-    const colorClass = {
-      blue: 'bg-blue-300',
-      red: 'bg-red-300',
-      green: 'bg-green-300',
-      yellow: 'bg-yellow-300'
-    };
-
-    return (
-      <div className={cn("w-16 h-16 rounded-lg p-1 border-2", colorClass[color as keyof typeof colorClass])}>
-        <div className="grid grid-cols-2 gap-1 h-full">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="bg-white rounded-full flex items-center justify-center">
-              {pawns[i] && renderPawn(pawns[i])}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderLastLine = (color: string) => {
+  const renderLastLine = (color: 'blue' | 'red' | 'green' | 'yellow', direction: 'horizontal' | 'vertical') => {
     const lastLine = gameState.lastLine[color] || {};
-    const colorClass = {
+    const colorClasses = {
       blue: 'bg-blue-400',
       red: 'bg-red-400',
-      green: 'bg-green-400',
+      green: 'bg-green-400', 
       yellow: 'bg-yellow-400'
     };
 
     return (
-      <div className="flex">
+      <div className={cn(
+        "flex",
+        direction === 'vertical' ? "flex-col" : "flex-row"
+      )}>
         {Array.from({ length: 5 }, (_, i) => {
           const pos = i + 1;
           const pawns = lastLine[pos] || [];
@@ -143,11 +141,15 @@ export function LudoBoard({ gameState, highlightedPawns, onPawnClick }: LudoBoar
             <div
               key={pos}
               className={cn(
-                "w-8 h-8 border border-gray-300 flex items-center justify-center",
-                colorClass[color as keyof typeof colorClass]
+                "w-8 h-8 border border-gray-300 relative flex items-center justify-center",
+                colorClasses[color]
               )}
             >
-              {pawns.length > 0 && renderPawn(pawns[0])}
+              {pawns.map((pawn, index) => (
+                <div key={pawn.name} className={index > 0 ? "hidden" : ""}>
+                  {renderPawn(pawn)}
+                </div>
+              ))}
             </div>
           );
         })}
@@ -155,46 +157,165 @@ export function LudoBoard({ gameState, highlightedPawns, onPawnClick }: LudoBoar
     );
   };
 
+  const renderHomeArea = (color: 'blue' | 'red' | 'green' | 'yellow') => {
+    const pawns = gameState.homeAreas[color] || [];
+    const colorClasses = {
+      blue: 'bg-blue-300',
+      red: 'bg-red-300',
+      green: 'bg-green-300',
+      yellow: 'bg-yellow-300'
+    };
+
+    return (
+      <div className={cn(
+        "w-16 h-16 rounded-lg p-1 border-2 border-gray-400 grid grid-cols-2 gap-1",
+        colorClasses[color]
+      )}>
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="bg-white rounded-full aspect-square relative flex items-center justify-center">
+            {pawns[i] && (
+              <div className="scale-75">
+                {renderPawn(pawns[i])}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <div className="bg-white p-4 rounded-lg shadow-lg">
-      <div className="relative w-80 h-80 mx-auto">
-        {/* Simplified Ludo board layout */}
-        <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 gap-2">
-          {/* Top row */}
-          <div className="flex items-center justify-center">
+    <div className="w-full max-w-md mx-auto bg-white rounded-lg shadow-lg p-2">
+      {/* Complete 15x15 Ludo Board */}
+      <div className="w-full aspect-square bg-white rounded-lg relative">
+        {/* Top Section */}
+        <div className="absolute top-0 left-0 w-full h-2/5 flex">
+          {/* Red Private Area */}
+          <div className="w-2/5 h-full flex items-center justify-center">
             {renderPrivateArea('red')}
           </div>
-          <div className="flex flex-col items-center justify-center">
-            {renderLastLine('red')}
-          </div>
-          <div className="flex items-center justify-center">
-            {renderPrivateArea('green')}
+          
+          {/* Top Track */}
+          <div className="w-1/5 h-full flex flex-col">
+            {/* Cells 24-26 */}
+            <div className="flex h-1/6">
+              {[24, 25, 26].map(num => renderCell(num))}
+            </div>
+            {/* Red last line + Cell 27 */}
+            <div className="flex h-1/6">
+              {renderCell(23)}
+              <div className="w-8 h-8 bg-red-400 border border-gray-300"></div>
+              {renderCell(27)}
+            </div>
+            {/* Continue pattern for remaining rows */}
+            <div className="flex h-1/6">
+              {renderCell(22)}
+              <div className="w-8 h-8 bg-red-400 border border-gray-300"></div>
+              {renderCell(28)}
+            </div>
+            <div className="flex h-1/6">
+              {renderCell(21)}
+              <div className="w-8 h-8 bg-red-400 border border-gray-300"></div>
+              {renderCell(29)}
+            </div>
+            <div className="flex h-1/6">
+              {renderCell(20)}
+              <div className="w-8 h-8 bg-red-400 border border-gray-300"></div>
+              {renderCell(30)}
+            </div>
+            <div className="flex h-1/6">
+              {renderCell(19)}
+              <div className="w-8 h-8 bg-red-400 border border-gray-300"></div>
+              {renderCell(31)}
+            </div>
           </div>
           
-          {/* Middle row */}
-          <div className="flex items-center justify-center">
-            {renderLastLine('blue')}
+          {/* Green Private Area */}
+          <div className="w-2/5 h-full flex items-center justify-center">
+            {renderPrivateArea('green')}
           </div>
-          <div className="flex items-center justify-center">
-            <div className="grid grid-cols-2 grid-rows-2 gap-2">
+        </div>
+
+        {/* Middle Section */}
+        <div className="absolute top-2/5 left-0 w-full h-1/5 flex">
+          {/* Left Track */}
+          <div className="w-2/5 h-full flex flex-col">
+            {/* Row 1 */}
+            <div className="flex h-1/2">
+              {[13, 14, 15, 16, 17, 18].map(num => renderCell(num))}
+            </div>
+            {/* Row 2 */}
+            <div className="flex h-1/2">
+              {[12, 11, 10, 9, 8, 7].map(num => renderCell(num))}
+            </div>
+          </div>
+          
+          {/* Center Home Area */}
+          <div className="w-1/5 h-full flex items-center justify-center bg-gray-100">
+            <div className="grid grid-cols-2 gap-2">
               {renderHomeArea('red')}
               {renderHomeArea('green')}
               {renderHomeArea('blue')}
               {renderHomeArea('yellow')}
             </div>
           </div>
-          <div className="flex items-center justify-center">
-            {renderLastLine('green')}
-          </div>
           
-          {/* Bottom row */}
-          <div className="flex items-center justify-center">
+          {/* Right Track */}
+          <div className="w-2/5 h-full flex flex-col">
+            {/* Row 1 */}
+            <div className="flex h-1/2">
+              {[32, 33, 34, 35, 36, 37].map(num => renderCell(num))}
+            </div>
+            {/* Row 2 */}
+            <div className="flex h-1/2">
+              {[44, 43, 42, 41, 40, 39].map(num => renderCell(num))}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Section */}
+        <div className="absolute bottom-0 left-0 w-full h-2/5 flex">
+          {/* Blue Private Area */}
+          <div className="w-2/5 h-full flex items-center justify-center">
             {renderPrivateArea('blue')}
           </div>
-          <div className="flex flex-col items-center justify-center">
-            {renderLastLine('yellow')}
+          
+          {/* Bottom Track */}
+          <div className="w-1/5 h-full flex flex-col">
+            {/* Bottom track cells */}
+            <div className="flex h-1/6">
+              {renderCell(5)}
+              <div className="w-8 h-8 bg-blue-400 border border-gray-300"></div>
+              {renderCell(45)}
+            </div>
+            {/* Continue pattern */}
+            <div className="flex h-1/6">
+              {renderCell(4)}
+              <div className="w-8 h-8 bg-blue-400 border border-gray-300"></div>
+              {renderCell(46)}
+            </div>
+            <div className="flex h-1/6">
+              {renderCell(3)}
+              <div className="w-8 h-8 bg-blue-400 border border-gray-300"></div>
+              {renderCell(47)}
+            </div>
+            <div className="flex h-1/6">
+              {renderCell(2)}
+              <div className="w-8 h-8 bg-blue-400 border border-gray-300"></div>
+              {renderCell(48)}
+            </div>
+            <div className="flex h-1/6">
+              {renderCell(1)}
+              <div className="w-8 h-8 bg-blue-400 border border-gray-300"></div>
+              {renderCell(49)}
+            </div>
+            <div className="flex h-1/6">
+              {[52, 51, 50].map(num => renderCell(num))}
+            </div>
           </div>
-          <div className="flex items-center justify-center">
+          
+          {/* Yellow Private Area */}
+          <div className="w-2/5 h-full flex items-center justify-center">
             {renderPrivateArea('yellow')}
           </div>
         </div>

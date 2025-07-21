@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, X, RotateCcw, Zap, Play, Pause } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { TicTacToeGame } from './games/TicTacToeGame';
 import { ChessGame } from './games/ChessGame';
@@ -19,12 +19,6 @@ type GameType = 'selection' | 'tic-tac-toe' | 'chess' | 'solitaire' | 'ludo';
 export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
   const { language } = useTheme();
   const [currentGame, setCurrentGame] = useState<GameType>('selection');
-  const [gameStats, setGameStats] = useState({ score: 0, moves: 0, timer: 0 });
-  const [gameActions, setGameActions] = useState<{
-    newGame?: () => void;
-    toggleTimer?: () => void;
-    autoComplete?: () => void;
-  }>({});
 
   const handleClose = () => {
     setCurrentGame('selection');
@@ -99,7 +93,7 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
       case 'chess':
         return <ChessGame onBack={handleBack} />;
       case 'solitaire':
-        return <SolitaireGame onBack={handleBack} onStatsChange={setGameStats} onActionsChange={setGameActions} />;
+        return <SolitaireGame onBack={handleBack} onStatsChange={() => {}} onActionsChange={() => {}} />;
       default:
         return renderGameSelection();
     }
@@ -112,56 +106,27 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
         hideCloseButton={true}
       >
         <DialogHeader className="flex flex-row items-center justify-between">
-          <div className="flex items-center space-x-2">
-            {currentGame !== 'selection' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleBack}
-                className="h-8 w-8 p-0"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            )}
-            <DialogTitle>
-              {currentGame === 'selection' 
-                ? (language === 'ar' ? 'وضع الألعاب' : 'Game Mode')
-                : currentGame === 'ludo'
-                ? (language === 'ar' ? 'لودو' : 'Ludo')
-                : currentGame === 'tic-tac-toe'
-                ? (language === 'ar' ? 'إكس أو' : 'Tic-Tac-Toe')
-                : currentGame === 'chess'
-                ? (language === 'ar' ? 'شطرنج' : 'Chess')
-                : (language === 'ar' ? 'سوليتير' : 'Solitaire')
-              }
-            </DialogTitle>
-          </div>
+          <DialogTitle>
+            {currentGame === 'selection' 
+              ? (language === 'ar' ? 'وضع الألعاب' : 'Game Mode')
+              : currentGame === 'ludo'
+              ? (language === 'ar' ? 'لودو' : 'Ludo')
+              : currentGame === 'tic-tac-toe'
+              ? (language === 'ar' ? 'إكس أو' : 'Tic-Tac-Toe')
+              : currentGame === 'chess'
+              ? (language === 'ar' ? 'شطرنج' : 'Chess')
+              : (language === 'ar' ? 'سوليتير' : 'Solitaire')
+            }
+          </DialogTitle>
           
-          <div className="flex items-center gap-2">
-            {currentGame === 'solitaire' && (
-              <div className="flex items-center gap-2">
-                <Button size="sm" onClick={gameActions.newGame} variant="outline" className="h-8 text-xs">
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  {language === 'ar' ? 'جديدة' : 'New'}
-                </Button>
-                <Button size="sm" onClick={gameActions.toggleTimer} variant="outline" className="h-8 w-8 p-0">
-                  {gameStats.timer ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                </Button>
-                <Button size="sm" onClick={gameActions.autoComplete} variant="outline" className="h-8 text-xs">
-                  <Zap className="h-3 w-3 mr-1" />
-                  {language === 'ar' ? 'تلقائي' : 'Auto'}
-                </Button>
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClose}
-              className="h-8 w-8 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClose}
+            className="h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </DialogHeader>
         
         <div className="mt-4">

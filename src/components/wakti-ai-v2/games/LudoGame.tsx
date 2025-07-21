@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Volume2, VolumeX } from 'lucide-react';
+import { Volume2, VolumeX } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { LudoBoard } from './LudoBoard';
+import { PlayerSetup } from './PlayerSetup';
+import { waktiSounds } from '@/services/waktiSounds';
+import { cn } from '@/lib/utils';
 
 interface LudoGameProps {
   onBack: () => void;
@@ -33,46 +36,50 @@ interface GameConfig {
   mode: '1v3' | '2v2' | '3v1' | '4human' | '1v1';
   playerTypes: Record<PlayerColor, PlayerType>;
   turnOrder: PlayerColor[];
+  playerNames: Record<string, string>;
 }
 
 const SAFE_POSITIONS = [1, 9, 14, 22, 27, 35, 40, 48];
 const PAWN_NUMBER = 4;
 
-const INITIAL_GAME_STATE: GameState = {
-  privateAreas: { blue: [], red: [], green: [], yellow: [] },
-  outerPosition: {},
-  lastLine: {
-    blue: {},
-    red: {},
-    green: {},
-    yellow: {}
-  },
-  homeAreas: { blue: [], red: [], green: [], yellow: [] }
-};
-
-// Initialize positions
-for (let i = 1; i <= 52; i++) {
-  INITIAL_GAME_STATE.outerPosition[i] = [];
-}
-
-for (const color of ['blue', 'red', 'green', 'yellow'] as PlayerColor[]) {
-  for (let i = 1; i <= 5; i++) {
-    INITIAL_GAME_STATE.lastLine[color][i] = [];
-  }
-}
-
 export function LudoGame({ onBack }: LudoGameProps) {
   const { language } = useTheme();
   const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
-  const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
+  const [gameState, setGameState] = useState<GameState>({
+    privateAreas: { blue: [], red: [], green: [], yellow: [] },
+    outerPosition: {},
+    lastLine: { blue: {}, red: {}, green: {}, yellow: {} },
+    homeAreas: { blue: [], red: [], green: [], yellow: [] }
+  });
   const [diceValue, setDiceValue] = useState(6);
   const [currentTurn, setCurrentTurn] = useState(0);
   const [isRolling, setIsRolling] = useState(false);
   const [highlightedPawns, setHighlightedPawns] = useState<Set<string>>(new Set());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSetup, setShowSetup] = useState(true);
+  const [selectedMode, setSelectedMode] = useState<GameConfig['mode'] | null>(null);
+  const [showPlayerSetup, setShowPlayerSetup] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [winner, setWinner] = useState<PlayerColor | null>(null);
+
+  // Initialize game state
+  useEffect(() => {
+    const newGameState = { ...gameState };
+    
+    // Initialize outer positions
+    for (let i = 1; i <= 52; i++) {
+      newGameState.outerPosition[i] = [];
+    }
+    
+    // Initialize last lines
+    for (const color of ['blue', 'red', 'green', 'yellow'] as PlayerColor[]) {
+      for (let i = 1; i <= 5; i++) {
+        newGameState.lastLine[color][i] = [];
+      }
+    }
+    
+    setGameState(newGameState);
+  }, []);
 
   const createPawn = (id: number, color: PlayerColor): Pawn => {
     const cellConfig = {
@@ -94,7 +101,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
   };
 
   const initializeGame = useCallback((config: GameConfig) => {
-    const newGameState = { ...INITIAL_GAME_STATE };
+    const newGameState = { ...gameState };
     
     // Reset all positions
     for (let i = 1; i <= 52; i++) {
@@ -118,11 +125,19 @@ export function LudoGame({ onBack }: LudoGameProps) {
     });
 
     setGameState(newGameState);
+    setGameConfig(config);
     setCurrentTurn(0);
     setGameStarted(true);
     setShowSetup(false);
+    setShowPlayerSetup(false);
     setWinner(null);
-  }, []);
+  }, [gameState]);
+
+  const playSound = async (soundType: 'chime' | 'beep' | 'ding') => {
+    if (soundEnabled) {
+      await waktiSounds.playNotificationSound(soundType);
+    }
+  };
 
   const getRandomInt = (min: number, max: number) => {
     return Math.floor(Math.random() * (max - min)) + min;
@@ -133,9 +148,10 @@ export function LudoGame({ onBack }: LudoGameProps) {
     
     setIsRolling(true);
     setHighlightedPawns(new Set());
+    playSound('chime');
     
     setTimeout(() => {
-      const newDiceValue = getRandomInt(1, 7);
+      const newDiceValue = Math.floor(Math.random() * 6) + 1;
       setDiceValue(newDiceValue);
       setIsRolling(false);
       
@@ -144,10 +160,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
       if (currentColor) {
         const canMove = canPlayerMove(currentColor, newDiceValue);
         if (!canMove) {
-          // Skip turn if no moves available
           nextTurn(newDiceValue);
         } else {
-          // Highlight available pawns
           highlightAvailablePawns(currentColor, newDiceValue);
           
           // If current player is AI, make move automatically
@@ -224,7 +238,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     // Check pawns in private area
     if (dice === 6 && gameState.privateAreas[color].length > 0) {
       const pawn = gameState.privateAreas[color][0];
-      bestMove = { pawn, score: 100 }; // High priority to get pawns out
+      bestMove = { pawn, score: 100 };
     }
     
     // Check pawns in outer positions
@@ -232,9 +246,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       for (const pos in gameState.outerPosition) {
         gameState.outerPosition[pos].forEach(pawn => {
           if (pawn.color === color) {
-            let score = 50; // Base score for moving outer pawns
-            
-            // Bonus for being closer to home
+            let score = 50;
             const currentPos = parseInt(pos);
             const endPos = parseInt(pawn.endCell);
             const distanceToEnd = Math.abs(currentPos - endPos);
@@ -254,7 +266,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
         gameState.lastLine[color][pos].forEach(pawn => {
           const currentPos = parseInt(pos);
           if (currentPos + dice <= 6) {
-            const score = 200 + currentPos; // Very high priority for last line
+            const score = 200 + currentPos;
             if (!bestMove || score > bestMove.score) {
               bestMove = { pawn, score };
             }
@@ -271,6 +283,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const movePawn = (pawn: Pawn, dice: number) => {
     const newGameState = { ...gameState };
     
+    // Move logic implementation
     if (pawn.area === 'private') {
       // Move from private to outer
       const pawnIndex = newGameState.privateAreas[pawn.color].findIndex(p => p.name === pawn.name);
@@ -300,6 +313,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
           pawn.area = 'home';
           pawn.currentCell = '0';
           newGameState.homeAreas[pawn.color].push(pawn);
+          playSound('ding');
         } else {
           // Move to last line
           pawn.area = 'last-line';
@@ -330,6 +344,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
         pawn.area = 'home';
         pawn.currentCell = '0';
         newGameState.homeAreas[pawn.color].push(pawn);
+        playSound('ding');
       } else {
         // Stay in last line
         pawn.currentCell = nextPos.toString();
@@ -339,6 +354,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     
     setGameState(newGameState);
     setHighlightedPawns(new Set());
+    playSound('beep');
     
     // Check for win condition
     if (newGameState.homeAreas[pawn.color].length === 4) {
@@ -363,48 +379,20 @@ export function LudoGame({ onBack }: LudoGameProps) {
     movePawn(pawn, diceValue);
   };
 
-  const handlePlayAgain = () => {
-    setWinner(null);
-    setShowSetup(true);
+  const handleModeSelect = (mode: GameConfig['mode']) => {
+    setSelectedMode(mode);
+    setShowPlayerSetup(true);
   };
 
-  const renderGameSetup = () => {
-    const modes = [
-      { id: '1v3', name: language === 'ar' ? 'أنا ضد 3 ذكاء اصطناعي' : '1 Human vs 3 AI' },
-      { id: '2v2', name: language === 'ar' ? '2 بشر ضد 2 ذكاء اصطناعي' : '2 Humans vs 2 AI' },
-      { id: '3v1', name: language === 'ar' ? '3 بشر ضد 1 ذكاء اصطناعي' : '3 Humans vs 1 AI' },
-      { id: '4human', name: language === 'ar' ? '4 بشر' : '4 Humans' },
-      { id: '1v1', name: language === 'ar' ? '1 ضد 1' : '1 vs 1' }
-    ];
-
-    return (
-      <div className="p-6 text-center">
-        <h2 className="text-2xl font-bold mb-6 text-slate-700 dark:text-slate-300">
-          {language === 'ar' ? 'اختر نمط اللعبة' : 'Choose Game Mode'}
-        </h2>
-        
-        <div className="space-y-4">
-          {modes.map(mode => (
-            <Button
-              key={mode.id}
-              onClick={() => {
-                const config = createGameConfig(mode.id as any);
-                setGameConfig(config);
-                initializeGame(config);
-              }}
-              className="w-full h-16 text-lg"
-              variant="outline"
-            >
-              {mode.name}
-            </Button>
-          ))}
-        </div>
-      </div>
-    );
+  const handlePlayerSetupComplete = (playerNames: Record<string, string>) => {
+    if (!selectedMode) return;
+    
+    const config = createGameConfig(selectedMode, playerNames);
+    initializeGame(config);
   };
 
-  const createGameConfig = (mode: GameConfig['mode']): GameConfig => {
-    const configs: Record<GameConfig['mode'], GameConfig> = {
+  const createGameConfig = (mode: GameConfig['mode'], playerNames: Record<string, string>): GameConfig => {
+    const configs: Record<GameConfig['mode'], Omit<GameConfig, 'playerNames'>> = {
       '1v3': {
         mode: '1v3',
         playerTypes: { blue: 'human', red: 'ai', green: 'ai', yellow: 'ai' },
@@ -432,102 +420,154 @@ export function LudoGame({ onBack }: LudoGameProps) {
       }
     };
 
-    return configs[mode];
+    return { ...configs[mode], playerNames };
   };
 
-  const renderBoard = () => {
-    const currentColor = gameConfig?.turnOrder[currentTurn] || 'blue';
-    const isCurrentPlayerAI = gameConfig?.playerTypes[currentColor] === 'ai';
+  const handlePlayAgain = () => {
+    setWinner(null);
+    setShowSetup(true);
+    setShowPlayerSetup(false);
+    setSelectedMode(null);
+    setGameStarted(false);
+  };
+
+  const handleBackToModeSelection = () => {
+    setShowPlayerSetup(false);
+    setSelectedMode(null);
+  };
+
+  if (showPlayerSetup && selectedMode) {
+    return (
+      <PlayerSetup
+        gameMode={selectedMode}
+        onSetupComplete={handlePlayerSetupComplete}
+        onBack={handleBackToModeSelection}
+      />
+    );
+  }
+
+  if (showSetup) {
+    const modes = [
+      { id: '1v3', name: language === 'ar' ? 'أنا ضد 3 ذكاء اصطناعي' : '1 Human vs 3 AI' },
+      { id: '2v2', name: language === 'ar' ? '2 بشر ضد 2 ذكاء اصطناعي' : '2 Humans vs 2 AI' },
+      { id: '3v1', name: language === 'ar' ? '3 بشر ضد 1 ذكاء اصطناعي' : '3 Humans vs 1 AI' },
+      { id: '4human', name: language === 'ar' ? '4 بشر' : '4 Humans' },
+      { id: '1v1', name: language === 'ar' ? '1 ضد 1' : '1 vs 1' }
+    ];
 
     return (
-      <div className="flex flex-col items-center p-4">
-        {/* Header */}
-        <div className="flex items-center justify-between w-full max-w-2xl mb-4">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            {language === 'ar' ? 'رجوع' : 'Back'}
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-          >
-            {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </Button>
-        </div>
-
-        {/* Winner Banner */}
-        {winner && (
-          <div className="w-full max-w-md mb-4 p-4 bg-green-100 border border-green-300 rounded-lg text-center">
-            <p className="text-lg font-bold text-green-800">
-              🏆 {winner} {language === 'ar' ? 'فاز!' : 'Wins!'}
-            </p>
-            <Button onClick={handlePlayAgain} className="mt-2">
-              {language === 'ar' ? 'العب مرة أخرى' : 'Play Again'}
-            </Button>
-          </div>
-        )}
-
-        {/* Game Board */}
-        <div className="mb-4">
-          <LudoBoard
-            gameState={gameState}
-            highlightedPawns={highlightedPawns}
-            onPawnClick={handlePawnClick}
-          />
-        </div>
-
-        {/* Game Controls */}
-        <div className={`w-full max-w-md p-4 rounded-lg text-white ${
-          currentColor === 'blue' ? 'bg-blue-600' : 
-          currentColor === 'red' ? 'bg-red-600' : 
-          currentColor === 'green' ? 'bg-green-600' : 'bg-yellow-600'
-        }`}>
-          <div className="text-center mb-4">
-            <p className="text-lg font-bold">
-              {currentColor}'s Turn {isCurrentPlayerAI ? '(AI)' : '(Human)'}
-            </p>
-          </div>
-          
-          <div className="flex items-center justify-center gap-4">
+      <div className="p-6 text-center">
+        <h2 className="text-2xl font-bold mb-6 text-slate-700 dark:text-slate-300">
+          {language === 'ar' ? 'اختر نمط اللعبة' : 'Choose Game Mode'}
+        </h2>
+        
+        <div className="space-y-4">
+          {modes.map(mode => (
             <Button
-              onClick={rollDice}
-              disabled={isRolling || isCurrentPlayerAI || winner !== null}
-              className="bg-white text-black hover:bg-gray-100 disabled:opacity-50"
+              key={mode.id}
+              onClick={() => handleModeSelect(mode.id as GameConfig['mode'])}
+              className="w-full h-16 text-lg"
+              variant="outline"
             >
-              {isRolling ? (language === 'ar' ? 'يرمي...' : 'Rolling...') : 
-                          (language === 'ar' ? 'ارمي النرد' : 'Roll Dice')}
+              {mode.name}
             </Button>
-            
-            <div className="text-center">
-              <div className="text-2xl font-bold">{diceValue}</div>
-              <div className="text-sm">{language === 'ar' ? 'النرد' : 'Dice'}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Game Stats */}
-        <div className="w-full max-w-md mt-4 p-4 bg-gray-100 rounded-lg">
-          <h3 className="font-bold mb-2">{language === 'ar' ? 'حالة اللعبة' : 'Game Status'}</h3>
-          {gameConfig?.turnOrder.map(color => (
-            <div key={color} className="flex justify-between items-center mb-1">
-              <span className={`capitalize ${color === currentColor ? 'font-bold' : ''}`}>
-                {color} {gameConfig.playerTypes[color] === 'ai' ? '(AI)' : '(Human)'}
-              </span>
-              <span className="text-sm">
-                {language === 'ar' ? 'في المنزل' : 'Home'}: {gameState.homeAreas[color].length}/4
-              </span>
-            </div>
           ))}
         </div>
       </div>
     );
-  };
-
-  if (showSetup) {
-    return renderGameSetup();
   }
 
-  return renderBoard();
+  if (!gameStarted || !gameConfig) {
+    return null;
+  }
+
+  const currentColor = gameConfig.turnOrder[currentTurn];
+  const isCurrentPlayerAI = gameConfig.playerTypes[currentColor] === 'ai';
+  const currentPlayerName = gameConfig.playerNames[currentColor] || currentColor;
+
+  return (
+    <div className="flex flex-col items-center p-4 space-y-4">
+      {/* Sound Toggle */}
+      <div className="w-full max-w-md flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setSoundEnabled(!soundEnabled)}
+        >
+          {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+        </Button>
+      </div>
+
+      {/* Winner Banner */}
+      {winner && (
+        <div className="w-full max-w-md p-4 bg-green-100 border border-green-300 rounded-lg text-center">
+          <p className="text-lg font-bold text-green-800">
+            🏆 {gameConfig.playerNames[winner] || winner} {language === 'ar' ? 'فاز!' : 'Wins!'}
+          </p>
+          <Button onClick={handlePlayAgain} className="mt-2">
+            {language === 'ar' ? 'العب مرة أخرى' : 'Play Again'}
+          </Button>
+        </div>
+      )}
+
+      {/* Game Board */}
+      <LudoBoard
+        gameState={gameState}
+        highlightedPawns={highlightedPawns}
+        onPawnClick={handlePawnClick}
+      />
+
+      {/* Game Controls */}
+      <div className={cn(
+        "w-full max-w-md p-4 rounded-lg text-white",
+        currentColor === 'blue' && 'bg-blue-600',
+        currentColor === 'red' && 'bg-red-600',
+        currentColor === 'green' && 'bg-green-600',
+        currentColor === 'yellow' && 'bg-yellow-600'
+      )}>
+        <div className="text-center mb-4">
+          <p className="text-lg font-bold">
+            {currentPlayerName}'s Turn {isCurrentPlayerAI ? '(AI)' : ''}
+          </p>
+        </div>
+        
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            onClick={rollDice}
+            disabled={isRolling || isCurrentPlayerAI || winner !== null}
+            className="bg-white text-black hover:bg-gray-100 disabled:opacity-50"
+          >
+            {isRolling ? (language === 'ar' ? 'يرمي...' : 'Rolling...') : 
+                        (language === 'ar' ? 'ارمي النرد' : 'Roll Dice')}
+          </Button>
+          
+          <div className="text-center">
+            <div className="text-2xl font-bold">{diceValue}</div>
+            <div className="text-sm">{language === 'ar' ? 'النرد' : 'Dice'}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Game Stats */}
+      <div className="w-full max-w-md p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+        <h3 className="font-bold mb-2 text-slate-700 dark:text-slate-300">
+          {language === 'ar' ? 'حالة اللعبة' : 'Game Status'}
+        </h3>
+        {gameConfig.turnOrder.map(color => (
+          <div key={color} className="flex justify-between items-center mb-1">
+            <span className={cn(
+              "capitalize",
+              color === currentColor && 'font-bold',
+              "text-slate-600 dark:text-slate-400"
+            )}>
+              {gameConfig.playerNames[color] || color} {gameConfig.playerTypes[color] === 'ai' ? '(AI)' : ''}
+            </span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {language === 'ar' ? 'في المنزل' : 'Home'}: {gameState.homeAreas[color].length}/4
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
