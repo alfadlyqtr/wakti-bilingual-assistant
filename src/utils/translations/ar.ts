@@ -1,3 +1,4 @@
+
 import { authAr } from "./modules/ar/auth";
 import { commonAr } from "./modules/ar/common";
 import { navigationAr } from "./modules/ar/navigation";
@@ -62,4 +63,19 @@ export const ar = {
   conversations: "المحادثات",
   new_conversation: "محادثة جديدة",
   no_conversations: "لا توجد محادثات",
+
+  // MISSING TRANSLATION KEYS FROM BUILD ERRORS:
+  eventTemplate: "قالب الفعالية",
+  basicInformation: "المعلومات الأساسية",
+  allDayEvent: "فعالية يوم كامل",
+  inviteContacts: "دعوة جهات الاتصال",
+  selectUsersToInvite: "اختر المستخدمين للدعوة",
+  eventSettings: "إعدادات الفعالية",
+  anyoneCanViewAndRSVP: "يمكن لأي شخص عرض والرد على الدعوة",
+  displayNumberOfAttendees: "عرض عدد الحاضرين",
+  autoDelete: "حذف تلقائي",
+  deleteEventAfter24Hours: "حذف الفعالية بعد 24 ساعة",
+  by: "بواسطة",
+  background: "الخلفية",
+  textStyle: "نمط النص",
 };

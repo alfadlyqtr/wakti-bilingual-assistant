@@ -1480,4 +1480,19 @@ export type TranslationKey =
   | "weatherLoadError"
   | "tryAgainLater"
   | "kmh"
-  | "mph";
+  | "mph"
+
+  // MISSING TRANSLATION KEYS FROM BUILD ERRORS - NEWLY IDENTIFIED:
+  | "eventTemplate"
+  | "basicInformation"
+  | "allDayEvent"
+  | "inviteContacts"
+  | "selectUsersToInvite"
+  | "eventSettings"
+  | "anyoneCanViewAndRSVP"
+  | "displayNumberOfAttendees"
+  | "autoDelete"
+  | "deleteEventAfter24Hours"
+  | "by"
+  | "background"
+  | "textStyle";

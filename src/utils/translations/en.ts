@@ -1,3 +1,4 @@
+
 import { auth } from "./modules/auth";
 import { common } from "./modules/common";
 import { navigation } from "./modules/navigation";
@@ -62,4 +63,19 @@ export const en = {
   conversations: "Conversations",
   new_conversation: "New Conversation",
   no_conversations: "No conversations",
+
+  // MISSING TRANSLATION KEYS FROM BUILD ERRORS:
+  eventTemplate: "Event Template",
+  basicInformation: "Basic Information",
+  allDayEvent: "All Day Event",
+  inviteContacts: "Invite Contacts",
+  selectUsersToInvite: "Select users to invite",
+  eventSettings: "Event Settings",
+  anyoneCanViewAndRSVP: "Anyone can view and RSVP",
+  displayNumberOfAttendees: "Display number of attendees",
+  autoDelete: "Auto Delete",
+  deleteEventAfter24Hours: "Delete event after 24 hours",
+  by: "by",
+  background: "Background",
+  textStyle: "Text Style",
 };
