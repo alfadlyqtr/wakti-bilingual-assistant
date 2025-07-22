@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Volume2, VolumeX, Users, Home, Copy } from 'lucide-react';
+import { Users, Home, Copy } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { LudoBoardV2 } from './LudoBoardV2';
 import { PlayerSetup } from './PlayerSetup';
-import { waktiSounds } from '@/services/waktiSounds';
 import { cn } from '@/lib/utils';
 
 interface LudoGameProps {
@@ -74,7 +73,6 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const [currentTurn, setCurrentTurn] = useState(0);
   const [isRolling, setIsRolling] = useState(false);
   const [highlightedPawns, setHighlightedPawns] = useState<Set<string>>(new Set());
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSetup, setShowSetup] = useState(true);
   const [selectedMode, setSelectedMode] = useState<GameConfig['mode'] | null>(null);
   const [showPlayerSetup, setShowPlayerSetup] = useState(false);
@@ -87,7 +85,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
 
   // Initialize game state
   useEffect(() => {
-    console.log('Initializing empty game state structure');
+    console.log('🎮 Initializing empty game state structure');
     const newGameState = { ...gameState };
     
     // Initialize outer positions with string keys (out-1 to out-52)
@@ -120,12 +118,12 @@ export function LudoGame({ onBack }: LudoGameProps) {
       area: 'private' as GameArea
     };
     
-    console.log(`Created pawn: ${pawn.name}, currentCell: ${pawn.currentCell}, area: ${pawn.area}`);
+    console.log(`🎯 Created pawn: ${pawn.name}, currentCell: ${pawn.currentCell}, area: ${pawn.area}`);
     return pawn;
   };
 
   const initializeGame = useCallback((config: GameConfig) => {
-    console.log('=== INITIALIZING GAME ===');
+    console.log('🎮 === INITIALIZING GAME ===');
     console.log('Config:', config);
     
     const newGameState: GameState = {
@@ -150,17 +148,18 @@ export function LudoGame({ onBack }: LudoGameProps) {
 
     // Create pawns for active players
     config.turnOrder.forEach(color => {
-      console.log(`Creating pawns for ${color}`);
+      console.log(`🎯 Creating pawns for ${color}`);
       for (let i = 1; i <= PAWN_NUMBER; i++) {
         const pawn = createPawn(i, color);
         newGameState.privateAreas[color].push(pawn);
       }
-      console.log(`${color} private area:`, newGameState.privateAreas[color]);
+      console.log(`📍 ${color} private area:`, newGameState.privateAreas[color].map(p => p.name));
     });
 
-    console.log('=== FINAL INITIAL GAME STATE ===');
-    console.log('Private areas:', newGameState.privateAreas);
-    console.log('Outer positions keys:', Object.keys(newGameState.outerPosition));
+    console.log('🎮 === FINAL INITIAL GAME STATE ===');
+    console.log('Private areas counts:', Object.fromEntries(
+      Object.entries(newGameState.privateAreas).map(([color, pawns]) => [color, pawns.length])
+    ));
     
     setGameState(newGameState);
     setGameConfig(config);
@@ -174,20 +173,14 @@ export function LudoGame({ onBack }: LudoGameProps) {
     setIsAIThinking(false);
   }, []);
 
-  const playSound = async (soundType: 'chime' | 'beep' | 'ding') => {
-    if (soundEnabled) {
-      await waktiSounds.playNotificationSound(soundType);
-    }
-  };
-
   const getAvailablePawns = (color: PlayerColor, dice: number): Pawn[] => {
-    console.log(`=== GETTING AVAILABLE PAWNS FOR ${color} WITH DICE ${dice} ===`);
+    console.log(`🎯 === GETTING AVAILABLE PAWNS FOR ${color} WITH DICE ${dice} ===`);
     const availablePawns: Pawn[] = [];
     
     // Check pawns in private area if dice is 6
     if (dice === 6) {
       const privatePawns = gameState.privateAreas[color] || [];
-      console.log(`Private pawns for ${color}:`, privatePawns);
+      console.log(`🏠 Private pawns for ${color}:`, privatePawns.map(p => p.name));
       availablePawns.push(...privatePawns);
     }
     
@@ -196,7 +189,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       const pawnsInCell = gameState.outerPosition[cellId] || [];
       pawnsInCell.forEach(pawn => {
         if (pawn.color === color) {
-          console.log(`Found pawn ${pawn.name} in outer cell ${cellId}`);
+          console.log(`🔍 Found pawn ${pawn.name} in outer cell ${cellId}`);
           availablePawns.push(pawn);
         }
       });
@@ -208,24 +201,24 @@ export function LudoGame({ onBack }: LudoGameProps) {
       pawnsInPos.forEach(pawn => {
         const currentPos = parseInt(pos);
         if (currentPos + dice <= 6) {
-          console.log(`Found pawn ${pawn.name} in last line pos ${pos}, can move`);
+          console.log(`🏁 Found pawn ${pawn.name} in last line pos ${pos}, can move`);
           availablePawns.push(pawn);
         }
       });
     }
     
-    console.log(`Total available pawns for ${color}:`, availablePawns.map(p => p.name));
+    console.log(`✅ Total available pawns for ${color}:`, availablePawns.map(p => p.name));
     return availablePawns;
   };
 
   const getNextPosition = (pawn: Pawn, dice: number) => {
-    console.log(`=== CALCULATING NEXT POSITION FOR ${pawn.name} ===`);
+    console.log(`🎯 === CALCULATING NEXT POSITION FOR ${pawn.name} ===`);
     console.log(`Current: ${pawn.currentCell}, Area: ${pawn.area}, Dice: ${dice}`);
     
     if (pawn.area === 'private') {
       const startPos = TRACK_START_POSITIONS[pawn.color];
       const nextCell = `out-${startPos}`;
-      console.log(`Moving from private to start: ${nextCell}`);
+      console.log(`🚀 Moving from private to start: ${nextCell}`);
       return {
         cell: nextCell,
         area: 'outer' as GameArea
@@ -237,12 +230,12 @@ export function LudoGame({ onBack }: LudoGameProps) {
       const endPos = TRACK_END_POSITIONS[pawn.color];
       const nextPos = currentPos + dice;
       
-      console.log(`Current outer pos: ${currentPos}, End pos: ${endPos}, Next pos: ${nextPos}`);
+      console.log(`🛤️ Current outer pos: ${currentPos}, End pos: ${endPos}, Next pos: ${nextPos}`);
       
       // Check if entering last line
       if (currentPos <= endPos && nextPos > endPos) {
         const remaining = nextPos - endPos;
-        console.log(`Entering last line, remaining steps: ${remaining}`);
+        console.log(`🏁 Entering last line, remaining steps: ${remaining}`);
         if (remaining <= 5) {
           return {
             cell: remaining.toString(),
@@ -263,7 +256,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       }
       
       const nextCell = `out-${finalPos}`;
-      console.log(`Normal outer movement to: ${nextCell}`);
+      console.log(`➡️ Normal outer movement to: ${nextCell}`);
       return {
         cell: nextCell,
         area: 'outer' as GameArea
@@ -274,7 +267,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       const currentPos = parseInt(pawn.currentCell);
       const nextPos = currentPos + dice;
       
-      console.log(`Last line movement: ${currentPos} + ${dice} = ${nextPos}`);
+      console.log(`🏁 Last line movement: ${currentPos} + ${dice} = ${nextPos}`);
       
       if (nextPos === 6) {
         return {
@@ -289,35 +282,35 @@ export function LudoGame({ onBack }: LudoGameProps) {
       }
     }
     
-    console.log('Invalid move - returning null');
+    console.log('❌ Invalid move - returning null');
     return null;
   };
 
   const movePawn = (pawn: Pawn, dice: number) => {
-    console.log(`=== MOVING PAWN ${pawn.name} WITH DICE ${dice} ===`);
+    console.log(`🎯 === MOVING PAWN ${pawn.name} WITH DICE ${dice} ===`);
     const newGameState = { ...gameState };
     const nextPos = getNextPosition(pawn, dice);
     
     if (!nextPos) {
-      console.log('Invalid move - aborting');
+      console.log('❌ Invalid move - aborting');
       return;
     }
     
-    console.log(`Next position: ${nextPos.cell}, area: ${nextPos.area}`);
+    console.log(`📍 Next position: ${nextPos.cell}, area: ${nextPos.area}`);
     
     // Remove pawn from current position
     if (pawn.area === 'private') {
       const index = newGameState.privateAreas[pawn.color].findIndex(p => p.name === pawn.name);
       if (index !== -1) {
         newGameState.privateAreas[pawn.color].splice(index, 1);
-        console.log(`Removed ${pawn.name} from private area`);
+        console.log(`🏠 Removed ${pawn.name} from private area`);
       }
     } else if (pawn.area === 'outer') {
       const pawnsInCell = newGameState.outerPosition[pawn.currentCell] || [];
       const index = pawnsInCell.findIndex(p => p.name === pawn.name);
       if (index !== -1) {
         pawnsInCell.splice(index, 1);
-        console.log(`Removed ${pawn.name} from outer cell ${pawn.currentCell}`);
+        console.log(`🛤️ Removed ${pawn.name} from outer cell ${pawn.currentCell}`);
       }
     } else if (pawn.area === 'last-line') {
       const currentPos = parseInt(pawn.currentCell);
@@ -325,14 +318,14 @@ export function LudoGame({ onBack }: LudoGameProps) {
       const index = pawnsInPos.findIndex(p => p.name === pawn.name);
       if (index !== -1) {
         pawnsInPos.splice(index, 1);
-        console.log(`Removed ${pawn.name} from last line pos ${currentPos}`);
+        console.log(`🏁 Removed ${pawn.name} from last line pos ${currentPos}`);
       }
     }
     
     // Update pawn position
     pawn.currentCell = nextPos.cell;
     pawn.area = nextPos.area;
-    console.log(`Updated ${pawn.name} to: ${pawn.currentCell}, area: ${pawn.area}`);
+    console.log(`✅ Updated ${pawn.name} to: ${pawn.currentCell}, area: ${pawn.area}`);
     
     // Place pawn in new position
     if (nextPos.area === 'outer') {
@@ -346,7 +339,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       
       // Send enemy pawns back to private
       enemyPawns.forEach(enemyPawn => {
-        console.log(`Capturing ${enemyPawn.name}`);
+        console.log(`💥 Capturing ${enemyPawn.name}`);
         enemyPawn.area = 'private';
         enemyPawn.currentCell = `${enemyPawn.color}-private-${enemyPawn.id}`;
         newGameState.privateAreas[enemyPawn.color].push(enemyPawn);
@@ -354,7 +347,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       
       // Keep only same color pawns and add current pawn
       newGameState.outerPosition[nextPos.cell] = [pawn, ...existingPawns.filter(p => p.color === pawn.color)];
-      console.log(`Placed ${pawn.name} in outer cell ${nextPos.cell}`);
+      console.log(`📍 Placed ${pawn.name} in outer cell ${nextPos.cell}`);
       
     } else if (nextPos.area === 'last-line') {
       const pos = parseInt(nextPos.cell);
@@ -362,22 +355,26 @@ export function LudoGame({ onBack }: LudoGameProps) {
         newGameState.lastLine[pawn.color][pos] = [];
       }
       newGameState.lastLine[pawn.color][pos].push(pawn);
-      console.log(`Placed ${pawn.name} in last line pos ${pos}`);
+      console.log(`🏁 Placed ${pawn.name} in last line pos ${pos}`);
       
     } else if (nextPos.area === 'home') {
       newGameState.homeAreas[pawn.color].push(pawn);
-      console.log(`${pawn.name} reached home!`);
-      playSound('ding');
+      console.log(`🏆 ${pawn.name} reached home!`);
     }
     
-    console.log('=== UPDATED GAME STATE ===');
-    console.log('Private areas:', newGameState.privateAreas);
-    console.log('Outer positions sample:', Object.fromEntries(Object.entries(newGameState.outerPosition).filter(([k, v]) => v.length > 0)));
-    console.log('Home areas:', newGameState.homeAreas);
+    console.log('🎮 === UPDATED GAME STATE ===');
+    console.log('Private areas counts:', Object.fromEntries(
+      Object.entries(newGameState.privateAreas).map(([color, pawns]) => [color, pawns.length])
+    ));
+    console.log('Outer positions with pawns:', Object.fromEntries(
+      Object.entries(newGameState.outerPosition).filter(([k, v]) => v.length > 0)
+    ));
+    console.log('Home areas counts:', Object.fromEntries(
+      Object.entries(newGameState.homeAreas).map(([color, pawns]) => [color, pawns.length])
+    ));
     
     setGameState(newGameState);
     setHighlightedPawns(new Set());
-    playSound('beep');
     
     // Check for win condition
     if (newGameState.homeAreas[pawn.color].length === 4) {
@@ -391,15 +388,14 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const rollDice = useCallback(() => {
     if (isRolling || winner || !canRoll) return;
     
-    console.log('=== ROLLING DICE ===');
+    console.log('🎲 === ROLLING DICE ===');
     setIsRolling(true);
     setCanRoll(false);
     setHighlightedPawns(new Set());
-    playSound('chime');
     
     setTimeout(() => {
       const newDiceValue = Math.floor(Math.random() * 6) + 1;
-      console.log('Dice result:', newDiceValue);
+      console.log('🎲 Dice result:', newDiceValue);
       setDiceValue(newDiceValue);
       setIsRolling(false);
       
@@ -408,27 +404,27 @@ export function LudoGame({ onBack }: LudoGameProps) {
         const availablePawns = getAvailablePawns(currentColor, newDiceValue);
         
         if (availablePawns.length === 0) {
-          console.log('No available moves - skipping turn');
+          console.log('⏭️ No available moves - skipping turn');
           setTimeout(() => nextTurn(newDiceValue), 1000);
         } else {
           // Highlight available pawns
           const highlighted = new Set<string>();
           availablePawns.forEach(pawn => highlighted.add(pawn.name));
           setHighlightedPawns(highlighted);
-          console.log('Highlighted pawns:', Array.from(highlighted));
+          console.log('✨ Highlighted pawns:', Array.from(highlighted));
           
           // If current player is AI, make move automatically
           if (gameConfig?.playerTypes[currentColor] === 'ai') {
             setIsAIThinking(true);
             setTimeout(() => {
               const bestPawn = availablePawns[0]; // Simple AI - pick first available
-              console.log(`AI moving pawn: ${bestPawn.name}`);
+              console.log(`🤖 AI moving pawn: ${bestPawn.name}`);
               movePawn(bestPawn, newDiceValue);
               setIsAIThinking(false);
             }, 1500);
           } else {
             setCanRoll(false); // Human must make a move first
-            console.log('Waiting for human player to select pawn');
+            console.log('👤 Waiting for human player to select pawn');
           }
         }
       }
@@ -436,7 +432,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
   }, [isRolling, currentTurn, gameConfig, gameState, winner, canRoll]);
 
   const nextTurn = (dice: number) => {
-    console.log(`=== NEXT TURN (dice was ${dice}) ===`);
+    console.log(`⏭️ === NEXT TURN (dice was ${dice}) ===`);
     if (dice !== 6) {
       setCurrentTurn(prev => (prev + 1) % (gameConfig?.turnOrder.length || 4));
     }
@@ -444,25 +440,25 @@ export function LudoGame({ onBack }: LudoGameProps) {
   };
 
   const handlePawnClick = (pawn: Pawn) => {
-    console.log(`=== PAWN CLICKED: ${pawn.name} ===`);
+    console.log(`🖱️ === PAWN CLICKED: ${pawn.name} ===`);
     console.log('Is highlighted:', highlightedPawns.has(pawn.name));
     console.log('Is AI:', gameConfig?.playerTypes[pawn.color] === 'ai');
     console.log('Winner:', winner);
     
     if (!highlightedPawns.has(pawn.name)) {
-      console.log('Pawn not highlighted - ignoring click');
+      console.log('❌ Pawn not highlighted - ignoring click');
       return;
     }
     if (gameConfig?.playerTypes[pawn.color] === 'ai') {
-      console.log('AI pawn - ignoring human click');
+      console.log('❌ AI pawn - ignoring human click');
       return;
     }
     if (winner) {
-      console.log('Game over - ignoring click');
+      console.log('❌ Game over - ignoring click');
       return;
     }
     
-    console.log('Moving pawn via click');
+    console.log('✅ Moving pawn via click');
     movePawn(pawn, diceValue);
   };
 
@@ -475,7 +471,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     
     if (isAI && canRoll && !isRolling) {
       const timer = setTimeout(() => {
-        console.log(`Auto-rolling for AI player: ${currentColor}`);
+        console.log(`🤖 Auto-rolling for AI player: ${currentColor}`);
         rollDice();
       }, 2000);
       
@@ -578,18 +574,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
 
   if (showMultiplayerJoin) {
     return (
-      <div 
-        className="min-h-screen p-4 text-center text-white font-['Bangers',cursive]"
-        style={{ 
-          backgroundColor: 'rgb(206, 206, 206)',
-          backgroundImage: 'url(/lovable-uploads/bg.jpg)',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center center',
-          backgroundAttachment: 'fixed',
-          backgroundSize: 'cover'
-        }}
-      >
-        <h1 className="text-center mt-4 mb-6 tracking-[10px] text-4xl">Ludo MG</h1>
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 p-4 text-center text-white">
+        <h1 className="text-center mt-4 mb-6 text-4xl font-bold">Ludo Game</h1>
         
         <div className="max-w-md mx-auto space-y-6">
           <h2 className="text-2xl font-bold mb-4">
@@ -652,18 +638,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
     ];
 
     return (
-      <div 
-        className="min-h-screen p-4 text-center text-white font-['Bangers',cursive]"
-        style={{ 
-          backgroundColor: 'rgb(206, 206, 206)',
-          backgroundImage: 'url(/lovable-uploads/bg.jpg)',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center center',
-          backgroundAttachment: 'fixed',
-          backgroundSize: 'cover'
-        }}
-      >
-        <h1 className="text-center mt-4 mb-6 tracking-[10px] text-4xl">Ludo MG</h1>
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 p-4 text-center text-white">
+        <h1 className="text-center mt-4 mb-6 text-4xl font-bold">Ludo Game</h1>
         
         <div className="flex items-center justify-between mb-6 max-w-md mx-auto">
           <Button onClick={onBack} variant="outline" className="bg-white/20 border-white text-white">
@@ -674,15 +650,6 @@ export function LudoGame({ onBack }: LudoGameProps) {
           <h2 className="text-xl font-bold">
             {language === 'ar' ? 'اختر نمط اللعبة' : 'Choose Game Mode'}
           </h2>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className="text-white"
-          >
-            {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </Button>
         </div>
         
         <div className="space-y-3 max-w-md mx-auto">
@@ -711,18 +678,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const currentPlayerName = gameConfig.playerNames[currentColor] || currentColor;
 
   return (
-    <div 
-      className="min-h-screen p-2 font-['Bangers',cursive] text-white"
-      style={{ 
-        backgroundColor: 'rgb(206, 206, 206)',
-        backgroundImage: 'url(/lovable-uploads/bg.jpg)',
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'center center',
-        backgroundAttachment: 'fixed',
-        backgroundSize: 'cover'
-      }}
-    >
-      <h1 className="text-center mt-2 mb-4 tracking-[8px] text-3xl">Ludo MG</h1>
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 p-2 text-white">
+      <h1 className="text-center mt-2 mb-4 text-3xl font-bold">Ludo Game</h1>
       
       {/* Header */}
       <div className="w-full max-w-sm mx-auto flex justify-between items-center mb-2">
@@ -739,15 +696,6 @@ export function LudoGame({ onBack }: LudoGameProps) {
             </Button>
           </div>
         )}
-        
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setSoundEnabled(!soundEnabled)}
-          className="text-white p-1"
-        >
-          {soundEnabled ? <Volume2 className="h-3 w-3" /> : <VolumeX className="h-3 w-3" />}
-        </Button>
       </div>
 
       {/* Winner Banner */}
@@ -762,8 +710,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
         </div>
       )}
 
-      {/* Current Player Turn Indicator */}
-      <div className="w-full max-w-sm mx-auto mb-2">
+      {/* Current Player Turn Indicator - Repositioned above board */}
+      <div className="w-full max-w-sm mx-auto mb-4">
         <div className={cn(
           "text-center py-2 px-4 rounded-lg font-bold text-white text-sm",
           currentColor === 'blue' && "bg-blue-600",
@@ -787,7 +735,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
         isRolling={isRolling}
         canRoll={canRoll && !isCurrentPlayerAI}
         isAIThinking={isAIThinking}
-        className="mb-2"
+        className="mb-4"
       />
 
       {/* Player Status */}

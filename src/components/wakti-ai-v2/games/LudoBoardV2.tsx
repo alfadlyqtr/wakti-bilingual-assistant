@@ -50,47 +50,51 @@ export function LudoBoardV2({
   className
 }: LudoBoardV2Props) {
 
-  const renderPawn = (pawn: Pawn, isHighlighted: boolean = false) => (
-    <div
-      key={pawn.name}
-      className={cn(
-        "pawn absolute w-full h-full flex items-center justify-center rounded-full z-[99] cursor-pointer",
-        pawn.name,
-        isHighlighted && "highlight"
-      )}
-      onClick={(e) => {
-        e.stopPropagation();
-        console.log('Pawn clicked:', pawn.name, 'Highlighted:', isHighlighted);
-        onPawnClick(pawn);
-      }}
-    >
-      <img 
-        src={`/lovable-uploads/pawn-${pawn.color}.png`} 
-        alt={pawn.name}
-        className="w-[90%]"
-      />
-    </div>
-  );
+  const renderPawn = (pawn: Pawn, isHighlighted: boolean = false) => {
+    console.log(`🎨 Rendering pawn: ${pawn.name}, highlighted: ${isHighlighted}, area: ${pawn.area}, cell: ${pawn.currentCell}`);
+    return (
+      <div
+        key={pawn.name}
+        className={cn(
+          "pawn absolute w-full h-full flex items-center justify-center rounded-full z-[99] cursor-pointer",
+          pawn.name,
+          isHighlighted && "highlight"
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          console.log('🖱️ Pawn clicked:', pawn.name, 'Highlighted:', isHighlighted);
+          onPawnClick(pawn);
+        }}
+      >
+        <img 
+          src={`/lovable-uploads/pawn-${pawn.color}.png`} 
+          alt={pawn.name}
+          className="w-[90%]"
+        />
+      </div>
+    );
+  };
 
   const getCellPawns = (cellId: string): Pawn[] => {
-    console.log(`Getting pawns for cell: ${cellId}`);
+    console.log(`🔍 Getting pawns for cell: ${cellId}`);
     
     // Handle outer positions (out-1 to out-52)
     if (cellId.startsWith('out-')) {
       const pawns = gameState.outerPosition[cellId] || [];
       if (pawns.length > 0) {
-        console.log(`Found ${pawns.length} pawns in ${cellId}:`, pawns.map(p => p.name));
+        console.log(`📍 Found ${pawns.length} pawns in ${cellId}:`, pawns.map(p => `${p.name}(${p.area})`));
       }
       return pawns;
     }
     
-    // Handle private areas
+    // Handle private areas - match the cell pattern exactly
     if (cellId.includes('private')) {
       const color = cellId.split('-')[0] as PlayerColor;
       const pawns = gameState.privateAreas[color] || [];
       if (pawns.length > 0) {
-        console.log(`Found ${pawns.length} pawns in ${color} private area:`, pawns.map(p => p.name));
+        console.log(`🏠 Found ${pawns.length} pawns in ${color} private area:`, pawns.map(p => `${p.name}(${p.currentCell})`));
       }
+      // For private areas, show all pawns since they're displayed in a grid
       return pawns;
     }
     
@@ -99,7 +103,7 @@ export function LudoBoardV2({
       const [color, , , pos] = cellId.split('-');
       const pawns = gameState.lastLine[color as PlayerColor]?.[parseInt(pos)] || [];
       if (pawns.length > 0) {
-        console.log(`Found ${pawns.length} pawns in ${color} last line pos ${pos}:`, pawns.map(p => p.name));
+        console.log(`🏁 Found ${pawns.length} pawns in ${color} last line pos ${pos}:`, pawns.map(p => p.name));
       }
       return pawns;
     }
@@ -109,7 +113,7 @@ export function LudoBoardV2({
       const color = cellId.split('-')[0] as PlayerColor;
       const pawns = gameState.homeAreas[color] || [];
       if (pawns.length > 0) {
-        console.log(`Found ${pawns.length} pawns in ${color} home:`, pawns.map(p => p.name));
+        console.log(`🏆 Found ${pawns.length} pawns in ${color} home:`, pawns.map(p => p.name));
       }
       return pawns;
     }
@@ -142,7 +146,7 @@ export function LudoBoardV2({
 
   const renderPrivateArea = (color: PlayerColor) => {
     const pawns = gameState.privateAreas[color] || [];
-    console.log(`Rendering private area for ${color}:`, pawns.map(p => p.name));
+    console.log(`🏠 Rendering private area for ${color}:`, pawns.map(p => `${p.name}(${p.currentCell})`));
     
     return (
       <div className={cn("private flex-shrink-0 flex items-center justify-center", color)}>
@@ -247,10 +251,10 @@ export function LudoBoardV2({
   };
 
   return (
-    <div className={cn("font-['Bangers',cursive] text-white", className)}>
+    <div className={cn("text-white", className)}>
       <style>{`
         .board {
-          --board-width: 300px;
+          --board-width: 280px;
           --cell-width: calc(var(--board-width) / 15);
           --board-bg: white;
           --red: red;
@@ -548,7 +552,7 @@ export function LudoBoardV2({
           {renderPrivateArea('yellow')}
         </div>
 
-        {/* Dashboard - REMOVED TURN INDICATOR */}
+        {/* Dashboard */}
         <div className={cn("dashboard", currentPlayer)}>
           <div className="player-name">
             <span>Roll the dice</span>
