@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
@@ -282,40 +281,52 @@ export default function Maw3dCreate() {
 
   return (
     <div className="min-h-screen bg-gradient-background">
-      {/* Enhanced Header with Liquid Glass Effect */}
-      <div className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border/50 shadow-soft">
-        <div className="container mx-auto px-4 py-4">
+      {/* Enhanced Header with Better Organization */}
+      <div className="sticky top-0 z-50 backdrop-blur-xl bg-background/90 border-b border-border/30 shadow-vibrant">
+        <div className="container mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            {/* Left Section - Back Button */}
+            <div className="flex-1">
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={() => navigate('/maw3d')}
-                className="hover:bg-accent/20 backdrop-blur-sm transition-all duration-300 hover:scale-105"
+                className="group hover:bg-accent/20 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-soft"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                {t('back', language)}
+                <ArrowLeft className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:-translate-x-1" />
+                <span className="font-medium">{t('back', language)}</span>
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+            </div>
+
+            {/* Center Section - Enhanced Title */}
+            <div className="flex-2 text-center px-4">
+              <div className="space-y-1">
+                <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent leading-tight">
                   {t('createEvent', language)}
                 </h1>
-                <p className="text-muted-foreground">{t('createAndManageEvents', language)}</p>
+                <p className="text-sm text-muted-foreground/80 font-medium">
+                  {t('createAndManageEvents', language)}
+                </p>
               </div>
             </div>
-            <Button 
-              type="submit" 
-              form="event-form"
-              disabled={isLoading}
-              className="px-6 bg-gradient-primary hover:scale-105 transition-all duration-300 shadow-glow"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              {isLoading ? t('creating', language) : t('createEvent', language)}
-            </Button>
+
+            {/* Right Section - Create Button */}
+            <div className="flex-1 flex justify-end">
+              <Button 
+                type="submit" 
+                form="event-form"
+                disabled={isLoading}
+                className="group px-6 py-2.5 bg-gradient-primary hover:shadow-glow transition-all duration-300 hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:rotate-90" />
+                <span>{isLoading ? t('creating', language) : t('createEvent', language)}</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Main Content */}
       <div className="container mx-auto px-4 py-6 max-w-4xl">
         <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Enhanced Event Templates Section */}
