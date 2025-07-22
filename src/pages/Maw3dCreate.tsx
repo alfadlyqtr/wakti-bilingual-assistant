@@ -24,14 +24,6 @@ import TextStyleCustomizer from '@/components/maw3d/TextStyleCustomizer';
 import BackgroundCustomizer from '@/components/events/BackgroundCustomizer';
 import { t } from '@/utils/translations';
 
-interface User {
-  id: string;
-  display_name?: string;
-  first_name?: string;
-  last_name?: string;
-  avatar_url?: string;
-}
-
 const templates = [
   {
     id: 'blank',
@@ -118,8 +110,6 @@ export default function Maw3dCreate() {
   
   // Form state
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
   // Collapsible states
@@ -167,7 +157,7 @@ export default function Maw3dCreate() {
       end_time: "20:00",
       is_all_day: false,
       is_public: true,
-      show_attending_count: true,
+      show_attending_count: false, // Changed default to false
       auto_delete_enabled: true,
       background_type: 'color',
       background_value: '#3b82f6',
@@ -195,36 +185,6 @@ export default function Maw3dCreate() {
       setTextStyle(selectedTemplate.text_style);
     }
   }, [selectedTemplate, setValue]);
-
-  // Fetch available users for invitations
-  useEffect(() => {
-    const fetchUsers = async () => {
-      if (!user) return;
-      
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id, display_name, first_name, last_name, avatar_url')
-          .neq('id', user.id)
-          .order('display_name', { ascending: true });
-
-        if (error) {
-          console.error("Error fetching users:", error);
-          toast.error("Failed to fetch users");
-        } else {
-          setAvailableUsers(data || []);
-        }
-      } catch (error) {
-        console.error("Unexpected error fetching users:", error);
-        toast.error("Unexpected error occurred while fetching users");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, [user]);
 
   const onSubmit = async (data: CreateEventFormData) => {
     if (!user) {
@@ -272,23 +232,6 @@ export default function Maw3dCreate() {
         return;
       }
 
-      // Create invitations if users are selected
-      if (selectedUsers.length > 0 && createdEvent) {
-        const invitations = selectedUsers.map(userId => ({
-          event_id: createdEvent.id,
-          invited_user_id: userId
-        }));
-
-        const { error: inviteError } = await supabase
-          .from('maw3d_invitations')
-          .insert(invitations);
-
-        if (inviteError) {
-          console.error("Error creating invitations:", inviteError);
-          toast.error("Event created but failed to send some invitations");
-        }
-      }
-
       toast.success("Event created successfully!");
       navigate("/maw3d");
       
@@ -317,13 +260,6 @@ export default function Maw3dCreate() {
     setValue('background_value', value);
   };
 
-  const getUserDisplayName = (user: User) => {
-    if (user.display_name) return user.display_name;
-    if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
-    if (user.first_name) return user.first_name;
-    return 'Unknown User';
-  };
-
   // Preview styles
   const previewStyle = {
     background: backgroundType === 'image' && backgroundImage 
@@ -345,18 +281,25 @@ export default function Maw3dCreate() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+    <div className="min-h-screen bg-gradient-background">
+      {/* Enhanced Header with Liquid Glass Effect */}
+      <div className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border/50 shadow-soft">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/maw3d')}>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => navigate('/maw3d')}
+                className="hover:bg-accent/20 backdrop-blur-sm transition-all duration-300 hover:scale-105"
+              >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 {t('back', language)}
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">{t('createEvent', language)}</h1>
+                <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+                  {t('createEvent', language)}
+                </h1>
                 <p className="text-muted-foreground">{t('createAndManageEvents', language)}</p>
               </div>
             </div>
@@ -364,7 +307,7 @@ export default function Maw3dCreate() {
               type="submit" 
               form="event-form"
               disabled={isLoading}
-              className="px-6"
+              className="px-6 bg-gradient-primary hover:scale-105 transition-all duration-300 shadow-glow"
             >
               <Plus className="w-4 h-4 mr-2" />
               {isLoading ? t('creating', language) : t('createEvent', language)}
@@ -374,36 +317,44 @@ export default function Maw3dCreate() {
       </div>
 
       <div className="container mx-auto px-4 py-6 max-w-4xl">
-        <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Event Templates Section */}
+        <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Enhanced Event Templates Section */}
           <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
-            <Card>
+            <Card className="backdrop-blur-xl bg-gradient-card border-border/50 shadow-vibrant hover:shadow-glow transition-all duration-500">
               <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardHeader className="cursor-pointer hover:bg-accent/10 transition-all duration-300 rounded-t-xl">
                   <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Folder className="w-5 h-5" />
-                      {t('eventTemplate', language)}
+                    <div className="flex items-center gap-3">
+                      <Folder className="w-5 h-5 text-accent-purple drop-shadow-glow-purple" />
+                      <span className="bg-gradient-primary bg-clip-text text-transparent">
+                        {t('eventTemplate', language)}
+                      </span>
                     </div>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${templatesOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${templatesOpen ? 'rotate-180' : ''}`} />
                   </CardTitle>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent>
+                <CardContent className="backdrop-blur-sm">
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">{t('chooseTemplate', language)} ({t('optional', language)})</h3>
+                    <h3 className="text-lg font-semibold text-enhanced-heading">
+                      {t('chooseTemplate', language)} ({t('optional', language)})
+                    </h3>
                     
                     <div className="grid grid-cols-2 gap-4">
                       {templates.map((template) => (
                         <Card 
                           key={template.id}
-                          className={`cursor-pointer border-2 ${selectedTemplate?.id === template.id ? 'border-primary' : 'border-border'}`}
+                          className={`cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-lg ${
+                            selectedTemplate?.id === template.id 
+                              ? 'border-primary shadow-glow-blue bg-gradient-vibrant/10' 
+                              : 'border-border/50 hover:border-primary/50 bg-gradient-card'
+                          }`}
                           onClick={() => setSelectedTemplate(template)}
                         >
                           <CardContent className="p-4 text-center">
                             <div 
-                              className="w-full h-24 rounded-md mb-2 flex items-center justify-center"
+                              className="w-full h-24 rounded-md mb-2 flex items-center justify-center backdrop-blur-sm"
                               style={{
                                 background: template.background_type === 'gradient' 
                                   ? template.background_value 
@@ -430,24 +381,26 @@ export default function Maw3dCreate() {
             </Card>
           </Collapsible>
 
-          {/* Event Details Section */}
+          {/* Enhanced Event Details Section */}
           <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <Card>
+            <Card className="backdrop-blur-xl bg-gradient-card border-border/50 shadow-vibrant hover:shadow-glow transition-all duration-500">
               <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardHeader className="cursor-pointer hover:bg-accent/10 transition-all duration-300 rounded-t-xl">
                   <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-5 h-5" />
-                      {t('basicInformation', language)}
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-5 h-5 text-accent-blue drop-shadow-glow-blue" />
+                      <span className="bg-gradient-primary bg-clip-text text-transparent">
+                        {t('basicInformation', language)}
+                      </span>
                     </div>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${detailsOpen ? 'rotate-180' : ''}`} />
                   </CardTitle>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 backdrop-blur-sm">
                   <div>
-                    <Label htmlFor="title">{t('eventTitle', language)} *</Label>
+                    <Label htmlFor="title" className="text-enhanced-heading">{t('eventTitle', language)} *</Label>
                     <Controller
                       name="title"
                       control={control}
@@ -456,6 +409,7 @@ export default function Maw3dCreate() {
                         <Input 
                           id="title" 
                           placeholder={t('enterEventTitle', language)}
+                          className="input-enhanced backdrop-blur-sm"
                           {...field} 
                         />
                       )}
@@ -464,7 +418,7 @@ export default function Maw3dCreate() {
                   </div>
 
                   <div>
-                    <Label htmlFor="description">{t('description', language)}</Label>
+                    <Label htmlFor="description" className="text-enhanced-heading">{t('description', language)}</Label>
                     <Controller
                       name="description"
                       control={control}
@@ -473,6 +427,7 @@ export default function Maw3dCreate() {
                           id="description" 
                           placeholder={t('enterEventDescription', language)}
                           rows={3}
+                          className="input-enhanced backdrop-blur-sm"
                           {...field}
                         />
                       )}
@@ -480,7 +435,7 @@ export default function Maw3dCreate() {
                   </div>
 
                   <div>
-                    <Label htmlFor="organizer">{t('organizer', language)}</Label>
+                    <Label htmlFor="organizer" className="text-enhanced-heading">{t('organizer', language)}</Label>
                     <Controller
                       name="organizer"
                       control={control}
@@ -488,6 +443,7 @@ export default function Maw3dCreate() {
                         <Input 
                           id="organizer" 
                           placeholder={t('enterOrganizerName', language)}
+                          className="input-enhanced backdrop-blur-sm"
                           {...field}
                         />
                       )}
@@ -495,7 +451,7 @@ export default function Maw3dCreate() {
                   </div>
 
                   <div>
-                    <Label htmlFor="event_date">{t('eventDate', language)} *</Label>
+                    <Label htmlFor="event_date" className="text-enhanced-heading">{t('eventDate', language)} *</Label>
                     <Controller
                       name="event_date"
                       control={control}
@@ -504,6 +460,7 @@ export default function Maw3dCreate() {
                         <Input 
                           id="event_date" 
                           type="date"
+                          className="input-enhanced backdrop-blur-sm"
                           {...field}
                         />
                       )}
@@ -520,16 +477,17 @@ export default function Maw3dCreate() {
                           checked={field.value}
                           onCheckedChange={field.onChange}
                           id="is_all_day"
+                          className="data-[state=checked]:bg-gradient-primary"
                         />
                       )}
                     />
-                    <Label htmlFor="is_all_day">{t('allDayEvent', language)}</Label>
+                    <Label htmlFor="is_all_day" className="text-enhanced-heading">{t('allDayEvent', language)}</Label>
                   </div>
 
                   {!watchedValues.is_all_day && (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="start_time">{t('startTime', language)}</Label>
+                        <Label htmlFor="start_time" className="text-enhanced-heading">{t('startTime', language)}</Label>
                         <Controller
                           name="start_time"
                           control={control}
@@ -537,13 +495,14 @@ export default function Maw3dCreate() {
                             <Input 
                               id="start_time" 
                               type="time"
+                              className="input-enhanced backdrop-blur-sm"
                               {...field}
                             />
                           )}
                         />
                       </div>
                       <div>
-                        <Label htmlFor="end_time">{t('endTime', language)}</Label>
+                        <Label htmlFor="end_time" className="text-enhanced-heading">{t('endTime', language)}</Label>
                         <Controller
                           name="end_time"
                           control={control}
@@ -551,6 +510,7 @@ export default function Maw3dCreate() {
                             <Input 
                               id="end_time" 
                               type="time"
+                              className="input-enhanced backdrop-blur-sm"
                               {...field}
                             />
                           )}
@@ -560,7 +520,7 @@ export default function Maw3dCreate() {
                   )}
 
                   <div>
-                    <Label htmlFor="location">{t('eventLocation', language)}</Label>
+                    <Label htmlFor="location" className="text-enhanced-heading">{t('eventLocation', language)}</Label>
                     <Controller
                       name="location"
                       control={control}
@@ -568,6 +528,7 @@ export default function Maw3dCreate() {
                         <Input 
                           id="location" 
                           placeholder={t('enterLocation', language)}
+                          className="input-enhanced backdrop-blur-sm"
                           {...field}
                         />
                       )}
@@ -575,7 +536,7 @@ export default function Maw3dCreate() {
                   </div>
 
                   <div>
-                    <Label htmlFor="google_maps_link">{t('googleMapsLink', language)}</Label>
+                    <Label htmlFor="google_maps_link" className="text-enhanced-heading">{t('googleMapsLink', language)}</Label>
                     <Controller
                       name="google_maps_link"
                       control={control}
@@ -583,6 +544,7 @@ export default function Maw3dCreate() {
                         <Input 
                           id="google_maps_link" 
                           placeholder="https://maps.google.com/..."
+                          className="input-enhanced backdrop-blur-sm"
                           {...field}
                         />
                       )}
@@ -593,22 +555,24 @@ export default function Maw3dCreate() {
             </Card>
           </Collapsible>
 
-          {/* Text Styling Section */}
+          {/* Enhanced Text Styling Section */}
           <Collapsible open={textStylingOpen} onOpenChange={setTextStylingOpen}>
-            <Card>
+            <Card className="backdrop-blur-xl bg-gradient-card border-border/50 shadow-vibrant hover:shadow-glow transition-all duration-500">
               <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardHeader className="cursor-pointer hover:bg-accent/10 transition-all duration-300 rounded-t-xl">
                   <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Type className="w-5 h-5" />
-                      {t('textStyle', language)}
+                    <div className="flex items-center gap-3">
+                      <Type className="w-5 h-5 text-accent-green drop-shadow-glow-green" />
+                      <span className="bg-gradient-primary bg-clip-text text-transparent">
+                        {t('textStyle', language)}
+                      </span>
                     </div>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${textStylingOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${textStylingOpen ? 'rotate-180' : ''}`} />
                   </CardTitle>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent>
+                <CardContent className="backdrop-blur-sm">
                   <TextStyleCustomizer
                     textStyle={textStyle}
                     onTextStyleChange={handleTextStyleChange}
@@ -619,30 +583,32 @@ export default function Maw3dCreate() {
             </Card>
           </Collapsible>
 
-          {/* Background Customization Section */}
+          {/* Enhanced Background Customization Section */}
           <Collapsible open={backgroundOpen} onOpenChange={setBackgroundOpen}>
-            <Card>
+            <Card className="backdrop-blur-xl bg-gradient-card border-border/50 shadow-vibrant hover:shadow-glow transition-all duration-500">
               <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardHeader className="cursor-pointer hover:bg-accent/10 transition-all duration-300 rounded-t-xl">
                   <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Image className="w-5 h-5" />
-                      {t('background', language)}
+                    <div className="flex items-center gap-3">
+                      <Image className="w-5 h-5 text-accent-orange drop-shadow-glow-orange" />
+                      <span className="bg-gradient-primary bg-clip-text text-transparent">
+                        {t('background', language)}
+                      </span>
                     </div>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${backgroundOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${backgroundOpen ? 'rotate-180' : ''}`} />
                   </CardTitle>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 backdrop-blur-sm">
                   {/* Event Preview integrated within background section */}
                   <div className="space-y-2">
-                    <h3 className="text-lg font-semibold">Preview</h3>
+                    <h3 className="text-lg font-semibold text-enhanced-heading">Preview</h3>
                     <div 
-                      className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden"
+                      className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden backdrop-blur-lg border border-border/30 shadow-vibrant"
                       style={previewStyle}
                     >
-                      <div className="text-center space-y-2">
+                      <div className="text-center space-y-2 relative z-10">
                         <h2 className="font-bold leading-tight">
                           {watchedValues.title || t('eventTitle', language)}
                         </h2>
@@ -663,7 +629,7 @@ export default function Maw3dCreate() {
                     </p>
                   </div>
 
-                  <Separator />
+                  <Separator className="bg-gradient-to-r from-transparent via-border to-transparent" />
 
                   <BackgroundCustomizer
                     backgroundColor={backgroundColor}
@@ -678,25 +644,27 @@ export default function Maw3dCreate() {
             </Card>
           </Collapsible>
 
-          {/* Privacy Settings Section */}
+          {/* Enhanced Privacy Settings Section */}
           <Collapsible open={privacyOpen} onOpenChange={setPrivacyOpen}>
-            <Card>
+            <Card className="backdrop-blur-xl bg-gradient-card border-border/50 shadow-vibrant hover:shadow-glow transition-all duration-500">
               <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardHeader className="cursor-pointer hover:bg-accent/10 transition-all duration-300 rounded-t-xl">
                   <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Lock className="w-5 h-5" />
-                      {t('eventSettings', language)}
+                    <div className="flex items-center gap-3">
+                      <Lock className="w-5 h-5 text-accent-cyan drop-shadow-glow-cyan" />
+                      <span className="bg-gradient-primary bg-clip-text text-transparent">
+                        {t('eventSettings', language)}
+                      </span>
                     </div>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${privacyOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${privacyOpen ? 'rotate-180' : ''}`} />
                   </CardTitle>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between">
+                <CardContent className="space-y-6 backdrop-blur-sm">
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-card border border-border/30 backdrop-blur-sm">
                     <div>
-                      <Label htmlFor="is_public">{t('publicEvent', language)}</Label>
+                      <Label htmlFor="is_public" className="text-enhanced-heading">{t('publicEvent', language)}</Label>
                       <p className="text-sm text-muted-foreground">{t('anyoneCanViewAndRSVP', language)}</p>
                     </div>
                     <Controller
@@ -707,14 +675,15 @@ export default function Maw3dCreate() {
                           checked={field.value}
                           onCheckedChange={field.onChange}
                           id="is_public"
+                          className="data-[state=checked]:bg-gradient-primary"
                         />
                       )}
                     />
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-card border border-border/30 backdrop-blur-sm">
                     <div>
-                      <Label htmlFor="show_attending_count">{t('showAttendingCount', language)}</Label>
+                      <Label htmlFor="show_attending_count" className="text-enhanced-heading">{t('showAttendingCount', language)}</Label>
                       <p className="text-sm text-muted-foreground">{t('displayNumberOfAttendees', language)}</p>
                     </div>
                     <Controller
@@ -725,15 +694,16 @@ export default function Maw3dCreate() {
                           checked={field.value}
                           onCheckedChange={field.onChange}
                           id="show_attending_count"
+                          className="data-[state=checked]:bg-gradient-primary"
                         />
                       )}
                     />
                   </div>
 
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-card border border-border/30 backdrop-blur-sm">
                       <div>
-                        <Label htmlFor="auto_delete_enabled">{t('autoDelete', language)}</Label>
+                        <Label htmlFor="auto_delete_enabled" className="text-enhanced-heading">{t('autoDelete', language)}</Label>
                         <p className="text-sm text-muted-foreground">{t('deleteEventAfter24Hours', language)}</p>
                       </div>
                       <Controller
@@ -744,17 +714,18 @@ export default function Maw3dCreate() {
                             checked={field.value}
                             onCheckedChange={field.onChange}
                             id="auto_delete_enabled"
+                            className="data-[state=checked]:bg-gradient-primary"
                           />
                         )}
                       />
                     </div>
 
                     {watchedValues.auto_delete_enabled && (
-                      <div className="flex items-start gap-3 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                        <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-orange-50/80 to-orange-100/80 dark:from-orange-950/50 dark:to-orange-900/50 border border-orange-200/50 dark:border-orange-800/50 rounded-lg backdrop-blur-sm">
+                        <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
                         <div className="text-sm">
-                          <p className="font-medium text-orange-800">Auto-delete Warning</p>
-                          <p className="text-orange-700 mt-1">
+                          <p className="font-medium text-orange-800 dark:text-orange-200">Auto-delete Warning</p>
+                          <p className="text-orange-700 dark:text-orange-300 mt-1">
                             This event will be automatically deleted 24 hours after the event date passes. 
                             All associated data including RSVPs and messages will be permanently removed.
                           </p>
@@ -763,58 +734,10 @@ export default function Maw3dCreate() {
                     )}
                   </div>
 
-                  <Separator />
+                  <Separator className="bg-gradient-to-r from-transparent via-border to-transparent" />
 
-                  <div className="space-y-4">
-                    <h3 className="font-medium flex items-center gap-2">
-                      <Users className="w-4 h-4" />
-                      {t('inviteContacts', language)}
-                    </h3>
-                    
-                    <div className="flex flex-wrap gap-2">
-                      {selectedUsers.map(userId => {
-                        const selectedUser = availableUsers.find(u => u.id === userId);
-                        return selectedUser ? (
-                          <Badge key={userId} variant="secondary" className="flex items-center gap-1">
-                            {getUserDisplayName(selectedUser)}
-                            <button
-                              type="button"
-                              onClick={() => setSelectedUsers(prev => prev.filter(id => id !== userId))}
-                              className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ) : null;
-                      })}
-                    </div>
-                    
-                    <Select onValueChange={(userId) => {
-                      if (userId && !selectedUsers.includes(userId)) {
-                        setSelectedUsers(prev => [...prev, userId]);
-                      }
-                    }}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t('selectUsersToInvite', language)} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <ScrollArea className="h-48">
-                          {availableUsers
-                            .filter(user => !selectedUsers.includes(user.id))
-                            .map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
-                                {getUserDisplayName(user)}
-                              </SelectItem>
-                            ))}
-                        </ScrollArea>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Shareable Link</h4>
+                  <div className="space-y-2 p-4 rounded-lg bg-gradient-card border border-border/30 backdrop-blur-sm">
+                    <h4 className="font-medium text-enhanced-heading">Shareable Link</h4>
                     <p className="text-sm text-muted-foreground">
                       Once created, your event will have a unique shareable link that you can send to others. 
                       The link will allow people to view and RSVP to your event based on your privacy settings.
