@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
-import { Plus, ArrowLeft, Calendar, MapPin, Users, Palette, Type, Settings } from 'lucide-react';
+import { Plus, ArrowLeft, Calendar, MapPin, Users, Palette, Type, Settings, ChevronDown, Folder, FileText, Brush, Image, Lock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,6 +44,13 @@ export default function Maw3dCreate() {
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Collapsible states
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [textStylingOpen, setTextStylingOpen] = useState(false);
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   
   // Event styling state
   const [backgroundType, setBackgroundType] = useState<'color' | 'gradient' | 'image' | 'ai'>('color');
@@ -287,19 +296,52 @@ export default function Maw3dCreate() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Form Section */}
-          <div className="space-y-6">
-            <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {/* Template Selection */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Palette className="w-5 h-5" />
-                    {t('eventTemplate', language)}
+      <div className="container mx-auto px-4 py-6 max-w-4xl">
+        {/* Event Preview Card - Top */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>{t('preview', language)}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div 
+              className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden"
+              style={previewStyle}
+            >
+              <div className="text-center space-y-2">
+                <h2 className="font-bold leading-tight">
+                  {watchedValues.title || t('eventTitle', language)}
+                </h2>
+                {watchedValues.description && (
+                  <p className="text-sm opacity-90 line-clamp-2">
+                    {watchedValues.description}
+                  </p>
+                )}
+                {watchedValues.organizer && (
+                  <p className="text-xs opacity-75">
+                    {t('by', language)} {watchedValues.organizer}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Event Templates Section */}
+          <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Folder className="w-5 h-5" />
+                      {t('eventTemplate', language)}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${templatesOpen ? 'rotate-180' : ''}`} />
                   </CardTitle>
                 </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
                 <CardContent>
                   <EventTemplates 
                     onSelectTemplate={setSelectedTemplate}
@@ -307,16 +349,25 @@ export default function Maw3dCreate() {
                     language={language}
                   />
                 </CardContent>
-              </Card>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
-              {/* Basic Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    {t('basicInformation', language)}
+          {/* Event Details Section */}
+          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-5 h-5" />
+                      {t('basicInformation', language)}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
                   </CardTitle>
                 </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
                 <CardContent className="space-y-4">
                   <div>
                     <Label htmlFor="title">{t('eventTitle', language)} *</Label>
@@ -365,18 +416,7 @@ export default function Maw3dCreate() {
                       )}
                     />
                   </div>
-                </CardContent>
-              </Card>
 
-              {/* Date & Time */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    {t('dateTime', language)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
                   <div>
                     <Label htmlFor="event_date">{t('eventDate', language)} *</Label>
                     <Controller
@@ -441,18 +481,7 @@ export default function Maw3dCreate() {
                       </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
 
-              {/* Location */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MapPin className="w-5 h-5" />
-                    {t('location', language)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
                   <div>
                     <Label htmlFor="location">{t('eventLocation', language)}</Label>
                     <Controller
@@ -483,68 +512,80 @@ export default function Maw3dCreate() {
                     />
                   </div>
                 </CardContent>
-              </Card>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
-              {/* Invitations */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    {t('inviteContacts', language)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
-                      {selectedUsers.map(userId => {
-                        const selectedUser = availableUsers.find(u => u.id === userId);
-                        return selectedUser ? (
-                          <Badge key={userId} variant="secondary" className="flex items-center gap-1">
-                            {getUserDisplayName(selectedUser)}
-                            <button
-                              type="button"
-                              onClick={() => setSelectedUsers(prev => prev.filter(id => id !== userId))}
-                              className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ) : null;
-                      })}
+          {/* Text Styling Section */}
+          <Collapsible open={textStylingOpen} onOpenChange={setTextStylingOpen}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Type className="w-5 h-5" />
+                      {t('textStyle', language)}
                     </div>
-                    
-                    <Select onValueChange={(userId) => {
-                      if (userId && !selectedUsers.includes(userId)) {
-                        setSelectedUsers(prev => [...prev, userId]);
-                      }
-                    }}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t('selectUsersToInvite', language)} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <ScrollArea className="h-48">
-                          {availableUsers
-                            .filter(user => !selectedUsers.includes(user.id))
-                            .map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
-                                {getUserDisplayName(user)}
-                              </SelectItem>
-                            ))}
-                        </ScrollArea>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Settings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="w-5 h-5" />
-                    {t('eventSettings', language)}
+                    <ChevronDown className={`w-4 h-4 transition-transform ${textStylingOpen ? 'rotate-180' : ''}`} />
                   </CardTitle>
                 </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <TextStyleCustomizer
+                    textStyle={textStyle}
+                    onTextStyleChange={handleTextStyleChange}
+                    language={language}
+                  />
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Background Customization Section */}
+          <Collapsible open={backgroundOpen} onOpenChange={setBackgroundOpen}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Image className="w-5 h-5" />
+                      {t('background', language)}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${backgroundOpen ? 'rotate-180' : ''}`} />
+                  </CardTitle>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <BackgroundCustomizer
+                    backgroundColor={backgroundColor}
+                    backgroundImage={backgroundImage}
+                    imageBlur={imageBlur}
+                    onBackgroundColorChange={(color) => handleBackgroundChange('color', color)}
+                    onBackgroundImageChange={(image) => handleBackgroundChange('image', image || '')}
+                    onImageBlurChange={setImageBlur}
+                  />
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Privacy Settings Section */}
+          <Collapsible open={privacyOpen} onOpenChange={setPrivacyOpen}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-5 h-5" />
+                      {t('eventSettings', language)}
+                    </div>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${privacyOpen ? 'rotate-180' : ''}`} />
+                  </CardTitle>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -599,80 +640,57 @@ export default function Maw3dCreate() {
                       )}
                     />
                   </div>
-                </CardContent>
-              </Card>
-            </form>
-          </div>
 
-          {/* Preview & Styling Section */}
-          <div className="space-y-6">
-            {/* Preview */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('preview', language)}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div 
-                  className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden"
-                  style={previewStyle}
-                >
-                  <div className="text-center space-y-2">
-                    <h2 className="font-bold leading-tight">
-                      {watchedValues.title || t('eventTitle', language)}
-                    </h2>
-                    {watchedValues.description && (
-                      <p className="text-sm opacity-90 line-clamp-2">
-                        {watchedValues.description}
-                      </p>
-                    )}
-                    {watchedValues.organizer && (
-                      <p className="text-xs opacity-75">
-                        {t('by', language)} {watchedValues.organizer}
-                      </p>
-                    )}
+                  <div className="space-y-4">
+                    <h3 className="font-medium flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      {t('inviteContacts', language)}
+                    </h3>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {selectedUsers.map(userId => {
+                        const selectedUser = availableUsers.find(u => u.id === userId);
+                        return selectedUser ? (
+                          <Badge key={userId} variant="secondary" className="flex items-center gap-1">
+                            {getUserDisplayName(selectedUser)}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUsers(prev => prev.filter(id => id !== userId))}
+                              className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
+                    
+                    <Select onValueChange={(userId) => {
+                      if (userId && !selectedUsers.includes(userId)) {
+                        setSelectedUsers(prev => [...prev, userId]);
+                      }
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('selectUsersToInvite', language)} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <ScrollArea className="h-48">
+                          {availableUsers
+                            .filter(user => !selectedUsers.includes(user.id))
+                            .map((user) => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {getUserDisplayName(user)}
+                              </SelectItem>
+                            ))}
+                        </ScrollArea>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </div>
-              </CardContent>
+                </CardContent>
+              </CollapsibleContent>
             </Card>
-
-            {/* Styling Options */}
-            <Tabs defaultValue="background" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="background">{t('background', language)}</TabsTrigger>
-                <TabsTrigger value="text">{t('textStyle', language)}</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="background" className="space-y-4">
-                <BackgroundCustomizer
-                  backgroundColor={backgroundColor}
-                  backgroundImage={backgroundImage}
-                  imageBlur={imageBlur}
-                  onBackgroundColorChange={(color) => handleBackgroundChange('color', color)}
-                  onBackgroundImageChange={(image) => handleBackgroundChange('image', image || '')}
-                  onImageBlurChange={setImageBlur}
-                />
-              </TabsContent>
-              
-              <TabsContent value="text" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Type className="w-4 h-4" />
-                      {t('textStyling', language)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <TextStyleCustomizer
-                      textStyle={textStyle}
-                      onTextStyleChange={handleTextStyleChange}
-                      language={language}
-                    />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
+          </Collapsible>
+        </form>
       </div>
     </div>
   );
