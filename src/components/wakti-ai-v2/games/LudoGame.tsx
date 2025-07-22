@@ -19,15 +19,15 @@ interface Pawn {
   id: number;
   name: string;
   color: PlayerColor;
-  startCell: string;
-  endCell: string;
-  currentCell: string;
+  startCell: number;
+  endCell: number;
+  currentCell: string; // This will be like "blue-private-1" or "3" for outer positions
   area: GameArea;
 }
 
 interface GameState {
   privateAreas: Record<PlayerColor, Pawn[]>;
-  outerPosition: Record<string, Pawn[]>;
+  outerPosition: Record<number, Pawn[]>; // CRITICAL: Store as numbers like original
   lastLine: Record<PlayerColor, Record<number, Pawn[]>>;
   homeAreas: Record<PlayerColor, Pawn[]>;
 }
@@ -42,7 +42,7 @@ interface GameConfig {
 const SAFE_POSITIONS = [1, 9, 14, 22, 27, 35, 40, 48];
 const PAWN_NUMBER = 4;
 
-// Starting positions matching original game
+// Starting positions matching original game - EXACT NUMBERS
 const TRACK_START_POSITIONS = {
   blue: 1,
   red: 14,
@@ -50,7 +50,7 @@ const TRACK_START_POSITIONS = {
   yellow: 40
 };
 
-// End positions (where pawns enter last line)
+// End positions (where pawns enter last line) - EXACT NUMBERS
 const TRACK_END_POSITIONS = {
   blue: 51,
   red: 12,
@@ -83,14 +83,14 @@ export function LudoGame({ onBack }: LudoGameProps) {
   const [canRoll, setCanRoll] = useState(true);
   const [isAIThinking, setIsAIThinking] = useState(false);
 
-  // Initialize game state
+  // Initialize game state - MATCHING ORIGINAL STRUCTURE
   useEffect(() => {
-    console.log('🎮 === INITIALIZING GAME STATE STRUCTURE ===');
+    console.log('🎮 === INITIALIZING GAME STATE (ORIGINAL STRUCTURE) ===');
     const newGameState = { ...gameState };
     
-    // Initialize outer positions with string keys (out-1 to out-52) - MATCHING VISUAL BOARD
+    // Initialize outer positions with NUMBERS (1-52) like original
     for (let i = 1; i <= 52; i++) {
-      newGameState.outerPosition[`out-${i}`] = [];
+      newGameState.outerPosition[i] = [];
     }
     
     // Initialize last lines for each color
@@ -101,7 +101,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       }
     }
     
-    console.log('✅ Game state structure initialized');
+    console.log('✅ Game state structure initialized (ORIGINAL FORMAT)');
     setGameState(newGameState);
   }, []);
 
@@ -113,18 +113,18 @@ export function LudoGame({ onBack }: LudoGameProps) {
       id,
       name: `${color}-${id}`,
       color,
-      startCell: `out-${startPosition}`, // CRITICAL FIX: Use out- prefix for consistency
-      endCell: `out-${endPosition}`,     // CRITICAL FIX: Use out- prefix for consistency
-      currentCell: `${color}-private-${id}`,
+      startCell: startPosition, // STORE AS NUMBER like original
+      endCell: endPosition,     // STORE AS NUMBER like original
+      currentCell: `${color}-private-${id}`, // Private area format
       area: 'private' as GameArea
     };
     
-    console.log(`🎯 Created pawn: ${pawn.name}, currentCell: ${pawn.currentCell}, area: ${pawn.area}`);
+    console.log(`🎯 Created pawn (ORIGINAL FORMAT): ${pawn.name}, currentCell: ${pawn.currentCell}, startCell: ${pawn.startCell}`);
     return pawn;
   };
 
   const initializeGame = useCallback((config: GameConfig) => {
-    console.log('🎮 === INITIALIZING GAME ===');
+    console.log('🎮 === INITIALIZING GAME (ORIGINAL STRUCTURE) ===');
     console.log('Config:', config);
     
     const newGameState: GameState = {
@@ -134,9 +134,9 @@ export function LudoGame({ onBack }: LudoGameProps) {
       homeAreas: { blue: [], red: [], green: [], yellow: [] }
     };
     
-    // Initialize outer positions with string keys - MATCHING VISUAL BOARD FORMAT
+    // Initialize outer positions with NUMBERS like original
     for (let i = 1; i <= 52; i++) {
-      newGameState.outerPosition[`out-${i}`] = [];
+      newGameState.outerPosition[i] = [];
     }
     
     // Initialize last lines
@@ -157,7 +157,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       console.log(`📍 ${color} private area:`, newGameState.privateAreas[color].map(p => `${p.name}(${p.currentCell})`));
     });
 
-    console.log('🎮 === FINAL INITIAL GAME STATE ===');
+    console.log('🎮 === FINAL INITIAL GAME STATE (ORIGINAL) ===');
     console.log('Private areas:', Object.fromEntries(
       Object.entries(newGameState.privateAreas).map(([color, pawns]) => [color, pawns.map(p => `${p.name}(${p.currentCell})`)])
     ));
@@ -185,12 +185,13 @@ export function LudoGame({ onBack }: LudoGameProps) {
       availablePawns.push(...privatePawns);
     }
     
-    // Check pawns in outer positions
-    for (const cellId in gameState.outerPosition) {
-      const pawnsInCell = gameState.outerPosition[cellId] || [];
+    // Check pawns in outer positions - USING NUMBERS like original
+    for (const position in gameState.outerPosition) {
+      const pos = parseInt(position);
+      const pawnsInCell = gameState.outerPosition[pos] || [];
       pawnsInCell.forEach(pawn => {
         if (pawn.color === color) {
-          console.log(`🔍 Found pawn ${pawn.name} in outer cell ${cellId}, current: ${pawn.currentCell}`);
+          console.log(`🔍 Found pawn ${pawn.name} in outer position ${pos}`);
           availablePawns.push(pawn);
         }
       });
@@ -200,7 +201,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     for (const pos in gameState.lastLine[color]) {
       const pawnsInPos = gameState.lastLine[color][pos] || [];
       pawnsInPos.forEach(pawn => {
-        const currentPos = parseInt(pos);
+        const currentPos = parseInt(pawn.currentCell);
         if (currentPos + dice <= 6) {
           console.log(`🏁 Found pawn ${pawn.name} in last line pos ${pos}, can move`);
           availablePawns.push(pawn);
@@ -213,40 +214,38 @@ export function LudoGame({ onBack }: LudoGameProps) {
   };
 
   const getNextPosition = (pawn: Pawn, dice: number) => {
-    console.log(`🎯 === CALCULATING NEXT POSITION FOR ${pawn.name} ===`);
+    console.log(`🎯 === CALCULATING NEXT POSITION FOR ${pawn.name} (ORIGINAL LOGIC) ===`);
     console.log(`Current: ${pawn.currentCell}, Area: ${pawn.area}, Dice: ${dice}`);
     
     if (pawn.area === 'private') {
-      const startPos = TRACK_START_POSITIONS[pawn.color];
-      const nextCell = `out-${startPos}`;
-      console.log(`🚀 Moving from private to start: ${nextCell}`);
+      const startPos = pawn.startCell; // Already a number
+      console.log(`🚀 Moving from private to start position: ${startPos}`);
       return {
-        cell: nextCell,
+        cell: startPos,
         area: 'outer' as GameArea
       };
     }
     
     if (pawn.area === 'outer') {
-      // Extract number from out-X format
-      const currentPos = parseInt(pawn.currentCell.replace('out-', ''));
-      const endPos = parseInt(pawn.endCell.replace('out-', ''));
+      const currentPos = parseInt(pawn.currentCell);
+      const endPos = pawn.endCell;
       const nextPos = currentPos + dice;
       
       console.log(`🛤️ Current outer pos: ${currentPos}, End pos: ${endPos}, Next pos: ${nextPos}`);
       
-      // Check if entering last line
-      if (currentPos <= endPos && nextPos > endPos) {
+      // Check if entering last line (using original logic)
+      if ((currentPos >= endPos - 6 && currentPos <= endPos) && nextPos > endPos) {
         const remaining = nextPos - endPos;
         console.log(`🏁 Entering last line, remaining steps: ${remaining}`);
-        if (remaining <= 5) {
+        if (remaining === 6) {
           return {
-            cell: remaining.toString(),
-            area: 'last-line' as GameArea
-          };
-        } else if (remaining === 6) {
-          return {
-            cell: '0',
+            cell: 0,
             area: 'home' as GameArea
+          };
+        } else {
+          return {
+            cell: remaining,
+            area: 'last-line' as GameArea
           };
         }
       }
@@ -257,10 +256,9 @@ export function LudoGame({ onBack }: LudoGameProps) {
         finalPos = finalPos - 52;
       }
       
-      const nextCell = `out-${finalPos}`;
-      console.log(`➡️ Normal outer movement to: ${nextCell}`);
+      console.log(`➡️ Normal outer movement to: ${finalPos}`);
       return {
-        cell: nextCell,
+        cell: finalPos,
         area: 'outer' as GameArea
       };
     }
@@ -273,12 +271,12 @@ export function LudoGame({ onBack }: LudoGameProps) {
       
       if (nextPos === 6) {
         return {
-          cell: '0',
+          cell: 0,
           area: 'home' as GameArea
         };
       } else if (nextPos < 6) {
         return {
-          cell: nextPos.toString(),
+          cell: nextPos,
           area: 'last-line' as GameArea
         };
       }
@@ -289,7 +287,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
   };
 
   const movePawn = (pawn: Pawn, dice: number) => {
-    console.log(`🎯 === MOVING PAWN ${pawn.name} WITH DICE ${dice} ===`);
+    console.log(`🎯 === MOVING PAWN ${pawn.name} WITH DICE ${dice} (ORIGINAL LOGIC) ===`);
     console.log(`Before move - Current: ${pawn.currentCell}, Area: ${pawn.area}`);
     
     const newGameState = { ...gameState };
@@ -302,7 +300,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     
     console.log(`📍 Next position: ${nextPos.cell}, area: ${nextPos.area}`);
     
-    // Remove pawn from current position - CRITICAL FIX
+    // Remove pawn from current position
     if (pawn.area === 'private') {
       const index = newGameState.privateAreas[pawn.color].findIndex(p => p.name === pawn.name);
       if (index !== -1) {
@@ -310,11 +308,12 @@ export function LudoGame({ onBack }: LudoGameProps) {
         console.log(`🏠 Removed ${pawn.name} from private area`);
       }
     } else if (pawn.area === 'outer') {
-      const pawnsInCell = newGameState.outerPosition[pawn.currentCell] || [];
+      const currentPos = parseInt(pawn.currentCell);
+      const pawnsInCell = newGameState.outerPosition[currentPos] || [];
       const index = pawnsInCell.findIndex(p => p.name === pawn.name);
       if (index !== -1) {
         pawnsInCell.splice(index, 1);
-        console.log(`🛤️ Removed ${pawn.name} from outer cell ${pawn.currentCell}`);
+        console.log(`🛤️ Removed ${pawn.name} from outer position ${currentPos}`);
       }
     } else if (pawn.area === 'last-line') {
       const currentPos = parseInt(pawn.currentCell);
@@ -326,19 +325,20 @@ export function LudoGame({ onBack }: LudoGameProps) {
       }
     }
     
-    // Update pawn position - CRITICAL FIX: Ensure exact cell ID match
-    pawn.currentCell = nextPos.cell;
+    // Update pawn position - STORE AS SIMPLE VALUES like original
+    pawn.currentCell = nextPos.cell.toString();
     pawn.area = nextPos.area;
     console.log(`✅ Updated ${pawn.name} to: ${pawn.currentCell}, area: ${pawn.area}`);
     
-    // Place pawn in new position - ENSURE VISUAL BOARD MATCH
+    // Place pawn in new position
     if (nextPos.area === 'outer') {
+      const pos = nextPos.cell as number;
       // Handle captures
-      if (!newGameState.outerPosition[nextPos.cell]) {
-        newGameState.outerPosition[nextPos.cell] = [];
+      if (!newGameState.outerPosition[pos]) {
+        newGameState.outerPosition[pos] = [];
       }
       
-      const existingPawns = newGameState.outerPosition[nextPos.cell];
+      const existingPawns = newGameState.outerPosition[pos];
       const enemyPawns = existingPawns.filter(p => p.color !== pawn.color);
       
       // Send enemy pawns back to private
@@ -350,11 +350,11 @@ export function LudoGame({ onBack }: LudoGameProps) {
       });
       
       // Keep only same color pawns and add current pawn
-      newGameState.outerPosition[nextPos.cell] = [pawn, ...existingPawns.filter(p => p.color === pawn.color)];
-      console.log(`📍 Placed ${pawn.name} in outer cell ${nextPos.cell} - VISUAL BOARD MATCH`);
+      newGameState.outerPosition[pos] = [pawn, ...existingPawns.filter(p => p.color === pawn.color)];
+      console.log(`📍 Placed ${pawn.name} in outer position ${pos}`);
       
     } else if (nextPos.area === 'last-line') {
-      const pos = parseInt(nextPos.cell);
+      const pos = nextPos.cell as number;
       if (!newGameState.lastLine[pawn.color][pos]) {
         newGameState.lastLine[pawn.color][pos] = [];
       }
@@ -366,22 +366,11 @@ export function LudoGame({ onBack }: LudoGameProps) {
       console.log(`🏆 ${pawn.name} reached home!`);
     }
     
-    // DETAILED STATE LOGGING - CRITICAL FOR DEBUGGING
-    console.log('🎮 === UPDATED GAME STATE (VISUAL BOARD VERIFICATION) ===');
-    console.log('Private areas:', Object.fromEntries(
-      Object.entries(newGameState.privateAreas).map(([color, pawns]) => 
-        [color, pawns.map(p => `${p.name}(${p.currentCell})`)]
-      )
-    ));
+    console.log('🎮 === UPDATED GAME STATE (ORIGINAL FORMAT) ===');
     console.log('Outer positions with pawns:', Object.fromEntries(
       Object.entries(newGameState.outerPosition)
         .filter(([k, v]) => v.length > 0)
         .map(([k, v]) => [k, v.map(p => `${p.name}(${p.currentCell})`)])
-    ));
-    console.log('Home areas:', Object.fromEntries(
-      Object.entries(newGameState.homeAreas).map(([color, pawns]) => 
-        [color, pawns.map(p => `${p.name}(${p.currentCell})`)]
-      )
     ));
     
     setGameState(newGameState);
@@ -734,20 +723,6 @@ export function LudoGame({ onBack }: LudoGameProps) {
         isAIThinking={isAIThinking}
         className="mb-3"
       />
-
-      {/* Turn Indicator - REPOSITIONED BETWEEN BOARD AND GAME STATUS */}
-      <div className="w-full max-w-sm mx-auto mb-3">
-        <div className={cn(
-          "text-center py-2 px-4 rounded-lg font-bold text-white text-base border-2 border-white",
-          currentColor === 'blue' && "bg-blue-600",
-          currentColor === 'red' && "bg-red-600",
-          currentColor === 'green' && "bg-green-600",
-          currentColor === 'yellow' && "bg-yellow-500"
-        )}>
-          {currentPlayerName}'s Turn
-          {isAIThinking && <span className="ml-2 animate-pulse">🤔</span>}
-        </div>
-      </div>
 
       {/* Player Status */}
       <div className="w-full max-w-sm mx-auto grid grid-cols-2 gap-1 text-xs">

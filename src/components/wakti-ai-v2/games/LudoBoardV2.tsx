@@ -9,15 +9,15 @@ interface Pawn {
   id: number;
   name: string;
   color: PlayerColor;
-  startCell: string;
-  endCell: string;
+  startCell: number;
+  endCell: number;
   currentCell: string;
   area: GameArea;
 }
 
 interface GameState {
   privateAreas: Record<PlayerColor, Pawn[]>;
-  outerPosition: Record<string, Pawn[]>;
+  outerPosition: Record<number, Pawn[]>; // Store as numbers like original
   lastLine: Record<PlayerColor, Record<number, Pawn[]>>;
   homeAreas: Record<PlayerColor, Pawn[]>;
 }
@@ -76,17 +76,18 @@ export function LudoBoardV2({
   };
 
   const getCellPawns = (cellId: string): Pawn[] => {
-    console.log(`🔍 === GETTING PAWNS FOR CELL: ${cellId} ===`);
+    console.log(`🔍 === GETTING PAWNS FOR CELL: ${cellId} (ORIGINAL LOGIC) ===`);
     
-    // Handle outer positions (out-1 to out-52) - EXACT MATCH REQUIRED
+    // Handle outer positions (out-1 to out-52) - Convert to number for lookup
     if (cellId.startsWith('out-')) {
-      const pawns = gameState.outerPosition[cellId] || [];
+      const position = parseInt(cellId.replace('out-', ''));
+      const pawns = gameState.outerPosition[position] || [];
       if (pawns.length > 0) {
-        console.log(`📍 Found ${pawns.length} pawns in ${cellId}:`, pawns.map(p => `${p.name}(current:${p.currentCell})`));
-        // CRITICAL: Verify exact cell ID match
-        const validPawns = pawns.filter(p => p.currentCell === cellId);
+        console.log(`📍 Found ${pawns.length} pawns in position ${position}:`, pawns.map(p => `${p.name}(current:${p.currentCell})`));
+        // Filter to only pawns that are actually in outer area and at this position
+        const validPawns = pawns.filter(p => p.area === 'outer' && parseInt(p.currentCell) === position);
         if (validPawns.length !== pawns.length) {
-          console.warn(`⚠️ Cell ID mismatch in ${cellId}! Expected ${pawns.length} pawns, found ${validPawns.length} with matching currentCell`);
+          console.warn(`⚠️ Position mismatch! Expected ${pawns.length} pawns, found ${validPawns.length} with matching area/position`);
         }
         return validPawns;
       }
@@ -558,7 +559,7 @@ export function LudoBoardV2({
           {renderPrivateArea('yellow')}
         </div>
 
-        {/* Dashboard - REMOVED FROM BOARD, NOW HANDLED IN MAIN COMPONENT */}
+        {/* Dashboard - RESTORED TO ORIGINAL POSITION INSIDE BOARD */}
         <div className={cn("dashboard", currentPlayer)}>
           <div className="player-name">
             <span>Roll the dice</span>
