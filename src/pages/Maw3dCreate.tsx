@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
 import { DateRange } from "react-day-picker";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -59,7 +59,6 @@ interface EventFormValues {
 
 export default function Maw3dCreate() {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { language } = useTheme();
   const { user } = useAuth();
   const [editorContent, setEditorContent] = useState('');
@@ -114,21 +113,13 @@ export default function Maw3dCreate() {
 
         if (error) {
           console.error("Error fetching users:", error);
-          toast({
-            title: "Error",
-            description: "Failed to fetch users.",
-            variant: "destructive",
-          });
+          toast.error("Failed to fetch users.");
         } else {
           setAvailableUsers(data || []);
         }
       } catch (error) {
         console.error("Unexpected error fetching users:", error);
-        toast({
-          title: "Error",
-          description: "Unexpected error occurred while fetching users.",
-          variant: "destructive",
-        });
+        toast.error("Unexpected error occurred while fetching users.");
       } finally {
         setIsLoading(false);
       }
@@ -137,15 +128,11 @@ export default function Maw3dCreate() {
     if (user) {
       fetchUsers();
     }
-  }, [user, toast]);
+  }, [user]);
 
   const onSubmit = async (data: EventFormValues) => {
     if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to create an event.",
-        variant: "destructive",
-      });
+      toast.error("You must be logged in to create an event.");
       return;
     }
 
@@ -168,25 +155,14 @@ export default function Maw3dCreate() {
 
       if (error) {
         console.error("Error creating event:", error);
-        toast({
-          title: "Error",
-          description: "Failed to create event.",
-          variant: "destructive",
-        });
+        toast.error("Failed to create event.");
       } else {
-        toast({
-          title: "Success",
-          description: "Event created successfully!",
-        });
+        toast.success("Event created successfully!");
         navigate("/maw3d");
       }
     } catch (error) {
       console.error("Unexpected error creating event:", error);
-      toast({
-        title: "Error",
-        description: "Unexpected error occurred while creating the event.",
-        variant: "destructive",
-      });
+      toast.error("Unexpected error occurred while creating the event.");
     }
   };
 
