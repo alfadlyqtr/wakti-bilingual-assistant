@@ -88,7 +88,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     console.log('🎮 === INITIALIZING GAME STATE STRUCTURE ===');
     const newGameState = { ...gameState };
     
-    // Initialize outer positions with string keys (out-1 to out-52)
+    // Initialize outer positions with string keys (out-1 to out-52) - MATCHING VISUAL BOARD
     for (let i = 1; i <= 52; i++) {
       newGameState.outerPosition[`out-${i}`] = [];
     }
@@ -113,8 +113,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
       id,
       name: `${color}-${id}`,
       color,
-      startCell: `out-${startPosition}`,
-      endCell: `out-${endPosition}`,
+      startCell: `out-${startPosition}`, // CRITICAL FIX: Use out- prefix for consistency
+      endCell: `out-${endPosition}`,     // CRITICAL FIX: Use out- prefix for consistency
       currentCell: `${color}-private-${id}`,
       area: 'private' as GameArea
     };
@@ -134,7 +134,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       homeAreas: { blue: [], red: [], green: [], yellow: [] }
     };
     
-    // Initialize outer positions with string keys
+    // Initialize outer positions with string keys - MATCHING VISUAL BOARD FORMAT
     for (let i = 1; i <= 52; i++) {
       newGameState.outerPosition[`out-${i}`] = [];
     }
@@ -227,8 +227,9 @@ export function LudoGame({ onBack }: LudoGameProps) {
     }
     
     if (pawn.area === 'outer') {
+      // Extract number from out-X format
       const currentPos = parseInt(pawn.currentCell.replace('out-', ''));
-      const endPos = TRACK_END_POSITIONS[pawn.color];
+      const endPos = parseInt(pawn.endCell.replace('out-', ''));
       const nextPos = currentPos + dice;
       
       console.log(`🛤️ Current outer pos: ${currentPos}, End pos: ${endPos}, Next pos: ${nextPos}`);
@@ -301,7 +302,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
     
     console.log(`📍 Next position: ${nextPos.cell}, area: ${nextPos.area}`);
     
-    // Remove pawn from current position
+    // Remove pawn from current position - CRITICAL FIX
     if (pawn.area === 'private') {
       const index = newGameState.privateAreas[pawn.color].findIndex(p => p.name === pawn.name);
       if (index !== -1) {
@@ -325,12 +326,12 @@ export function LudoGame({ onBack }: LudoGameProps) {
       }
     }
     
-    // Update pawn position - CRITICAL FIX: Ensure cell ID consistency
+    // Update pawn position - CRITICAL FIX: Ensure exact cell ID match
     pawn.currentCell = nextPos.cell;
     pawn.area = nextPos.area;
     console.log(`✅ Updated ${pawn.name} to: ${pawn.currentCell}, area: ${pawn.area}`);
     
-    // Place pawn in new position
+    // Place pawn in new position - ENSURE VISUAL BOARD MATCH
     if (nextPos.area === 'outer') {
       // Handle captures
       if (!newGameState.outerPosition[nextPos.cell]) {
@@ -350,7 +351,7 @@ export function LudoGame({ onBack }: LudoGameProps) {
       
       // Keep only same color pawns and add current pawn
       newGameState.outerPosition[nextPos.cell] = [pawn, ...existingPawns.filter(p => p.color === pawn.color)];
-      console.log(`📍 Placed ${pawn.name} in outer cell ${nextPos.cell}`);
+      console.log(`📍 Placed ${pawn.name} in outer cell ${nextPos.cell} - VISUAL BOARD MATCH`);
       
     } else if (nextPos.area === 'last-line') {
       const pos = parseInt(nextPos.cell);
@@ -365,8 +366,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
       console.log(`🏆 ${pawn.name} reached home!`);
     }
     
-    // Comprehensive state logging for debugging
-    console.log('🎮 === UPDATED GAME STATE ===');
+    // DETAILED STATE LOGGING - CRITICAL FOR DEBUGGING
+    console.log('🎮 === UPDATED GAME STATE (VISUAL BOARD VERIFICATION) ===');
     console.log('Private areas:', Object.fromEntries(
       Object.entries(newGameState.privateAreas).map(([color, pawns]) => 
         [color, pawns.map(p => `${p.name}(${p.currentCell})`)]
@@ -720,20 +721,6 @@ export function LudoGame({ onBack }: LudoGameProps) {
         </div>
       )}
 
-      {/* Current Player Turn Indicator - MOVED HIGHER UP */}
-      <div className="w-full max-w-sm mx-auto mb-2">
-        <div className={cn(
-          "text-center py-1.5 px-3 rounded-lg font-bold text-white text-sm",
-          currentColor === 'blue' && "bg-blue-600",
-          currentColor === 'red' && "bg-red-600",
-          currentColor === 'green' && "bg-green-600",
-          currentColor === 'yellow' && "bg-yellow-500"
-        )}>
-          {currentPlayerName}'s Turn
-          {isAIThinking && <span className="ml-2 animate-pulse">🤔</span>}
-        </div>
-      </div>
-
       {/* Game Board */}
       <LudoBoardV2
         gameState={gameState}
@@ -745,8 +732,22 @@ export function LudoGame({ onBack }: LudoGameProps) {
         isRolling={isRolling}
         canRoll={canRoll && !isCurrentPlayerAI}
         isAIThinking={isAIThinking}
-        className="mb-2"
+        className="mb-3"
       />
+
+      {/* Turn Indicator - REPOSITIONED BETWEEN BOARD AND GAME STATUS */}
+      <div className="w-full max-w-sm mx-auto mb-3">
+        <div className={cn(
+          "text-center py-2 px-4 rounded-lg font-bold text-white text-base border-2 border-white",
+          currentColor === 'blue' && "bg-blue-600",
+          currentColor === 'red' && "bg-red-600",
+          currentColor === 'green' && "bg-green-600",
+          currentColor === 'yellow' && "bg-yellow-500"
+        )}>
+          {currentPlayerName}'s Turn
+          {isAIThinking && <span className="ml-2 animate-pulse">🤔</span>}
+        </div>
+      </div>
 
       {/* Player Status */}
       <div className="w-full max-w-sm mx-auto grid grid-cols-2 gap-1 text-xs">

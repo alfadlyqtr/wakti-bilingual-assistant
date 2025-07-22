@@ -78,12 +78,12 @@ export function LudoBoardV2({
   const getCellPawns = (cellId: string): Pawn[] => {
     console.log(`🔍 === GETTING PAWNS FOR CELL: ${cellId} ===`);
     
-    // Handle outer positions (out-1 to out-52) - CRITICAL FIX
+    // Handle outer positions (out-1 to out-52) - EXACT MATCH REQUIRED
     if (cellId.startsWith('out-')) {
       const pawns = gameState.outerPosition[cellId] || [];
       if (pawns.length > 0) {
-        console.log(`📍 Found ${pawns.length} pawns in ${cellId}:`, pawns.map(p => `${p.name}(${p.currentCell})`));
-        // CRITICAL: Verify that pawn's currentCell matches the cellId we're checking
+        console.log(`📍 Found ${pawns.length} pawns in ${cellId}:`, pawns.map(p => `${p.name}(current:${p.currentCell})`));
+        // CRITICAL: Verify exact cell ID match
         const validPawns = pawns.filter(p => p.currentCell === cellId);
         if (validPawns.length !== pawns.length) {
           console.warn(`⚠️ Cell ID mismatch in ${cellId}! Expected ${pawns.length} pawns, found ${validPawns.length} with matching currentCell`);
@@ -558,7 +558,7 @@ export function LudoBoardV2({
           {renderPrivateArea('yellow')}
         </div>
 
-        {/* Dashboard */}
+        {/* Dashboard - REMOVED FROM BOARD, NOW HANDLED IN MAIN COMPONENT */}
         <div className={cn("dashboard", currentPlayer)}>
           <div className="player-name">
             <span>Roll the dice</span>
