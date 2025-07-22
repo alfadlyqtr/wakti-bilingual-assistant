@@ -76,15 +76,21 @@ export function LudoBoardV2({
   };
 
   const getCellPawns = (cellId: string): Pawn[] => {
-    console.log(`🔍 Getting pawns for cell: ${cellId}`);
+    console.log(`🔍 === GETTING PAWNS FOR CELL: ${cellId} ===`);
     
-    // Handle outer positions (out-1 to out-52)
+    // Handle outer positions (out-1 to out-52) - CRITICAL FIX
     if (cellId.startsWith('out-')) {
       const pawns = gameState.outerPosition[cellId] || [];
       if (pawns.length > 0) {
-        console.log(`📍 Found ${pawns.length} pawns in ${cellId}:`, pawns.map(p => `${p.name}(${p.area})`));
+        console.log(`📍 Found ${pawns.length} pawns in ${cellId}:`, pawns.map(p => `${p.name}(${p.currentCell})`));
+        // CRITICAL: Verify that pawn's currentCell matches the cellId we're checking
+        const validPawns = pawns.filter(p => p.currentCell === cellId);
+        if (validPawns.length !== pawns.length) {
+          console.warn(`⚠️ Cell ID mismatch in ${cellId}! Expected ${pawns.length} pawns, found ${validPawns.length} with matching currentCell`);
+        }
+        return validPawns;
       }
-      return pawns;
+      return [];
     }
     
     // Handle private areas - match the cell pattern exactly
