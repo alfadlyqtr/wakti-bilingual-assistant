@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
-import { Plus, ArrowLeft, Calendar, MapPin, Users, Palette, Type, Settings, ChevronDown, Folder, FileText, Brush, Image, Lock } from 'lucide-react';
+import { Plus, ArrowLeft, Calendar, MapPin, Users, Palette, Type, Settings, ChevronDown, Folder, FileText, Brush, Image, Lock, AlertTriangle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,14 +14,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { CreateEventFormData, TextStyle } from '@/types/maw3d';
-import { EventTemplates } from '@/components/maw3d/EventTemplates';
 import TextStyleCustomizer from '@/components/maw3d/TextStyleCustomizer';
 import BackgroundCustomizer from '@/components/events/BackgroundCustomizer';
 import { t } from '@/utils/translations';
@@ -33,6 +31,85 @@ interface User {
   last_name?: string;
   avatar_url?: string;
 }
+
+const templates = [
+  {
+    id: 'blank',
+    name: 'Blank Template',
+    title: 'Event Title',
+    description: '',
+    background_type: 'color' as const,
+    background_value: '#3b82f6',
+    text_style: {
+      fontFamily: 'Inter',
+      fontSize: 24,
+      color: '#ffffff',
+      isBold: true,
+      isItalic: false,
+      isUnderline: false,
+      alignment: 'center' as const,
+      hasShadow: true,
+      shadowIntensity: 5
+    }
+  },
+  {
+    id: 'birthday',
+    name: 'Birthday',
+    title: 'Happy Birthday!',
+    description: 'Join us for a birthday celebration',
+    background_type: 'gradient' as const,
+    background_value: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    text_style: {
+      fontFamily: 'Arial',
+      fontSize: 24,
+      color: '#ffffff',
+      isBold: true,
+      isItalic: false,
+      isUnderline: false,
+      alignment: 'center' as const,
+      hasShadow: true,
+      shadowIntensity: 5
+    }
+  },
+  {
+    id: 'meeting',
+    name: 'Meeting',
+    title: 'Team Meeting',
+    description: 'Important team discussion',
+    background_type: 'color' as const,
+    background_value: '#1e40af',
+    text_style: {
+      fontFamily: 'Arial',
+      fontSize: 18,
+      color: '#ffffff',
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
+      alignment: 'left' as const,
+      hasShadow: false,
+      shadowIntensity: 0
+    }
+  },
+  {
+    id: 'gathering',
+    name: 'Gathering',
+    title: 'Friends Gathering',
+    description: 'Come and join us for a fun time',
+    background_type: 'gradient' as const,
+    background_value: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    text_style: {
+      fontFamily: 'Arial',
+      fontSize: 20,
+      color: '#ffffff',
+      isBold: true,
+      isItalic: false,
+      isUnderline: false,
+      alignment: 'center' as const,
+      hasShadow: true,
+      shadowIntensity: 3
+    }
+  }
+];
 
 export default function Maw3dCreate() {
   const navigate = useNavigate();
@@ -297,35 +374,6 @@ export default function Maw3dCreate() {
       </div>
 
       <div className="container mx-auto px-4 py-6 max-w-4xl">
-        {/* Event Preview Card - Top */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>{t('preview', language)}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div 
-              className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden"
-              style={previewStyle}
-            >
-              <div className="text-center space-y-2">
-                <h2 className="font-bold leading-tight">
-                  {watchedValues.title || t('eventTitle', language)}
-                </h2>
-                {watchedValues.description && (
-                  <p className="text-sm opacity-90 line-clamp-2">
-                    {watchedValues.description}
-                  </p>
-                )}
-                {watchedValues.organizer && (
-                  <p className="text-xs opacity-75">
-                    {t('by', language)} {watchedValues.organizer}
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Event Templates Section */}
           <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
@@ -343,11 +391,40 @@ export default function Maw3dCreate() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent>
-                  <EventTemplates 
-                    onSelectTemplate={setSelectedTemplate}
-                    selectedTemplate={selectedTemplate}
-                    language={language}
-                  />
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">{t('chooseTemplate', language)} ({t('optional', language)})</h3>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      {templates.map((template) => (
+                        <Card 
+                          key={template.id}
+                          className={`cursor-pointer border-2 ${selectedTemplate?.id === template.id ? 'border-primary' : 'border-border'}`}
+                          onClick={() => setSelectedTemplate(template)}
+                        >
+                          <CardContent className="p-4 text-center">
+                            <div 
+                              className="w-full h-24 rounded-md mb-2 flex items-center justify-center"
+                              style={{
+                                background: template.background_type === 'gradient' 
+                                  ? template.background_value 
+                                  : template.background_value,
+                                color: template.text_style.color,
+                                fontSize: `${Math.max(template.text_style.fontSize - 8, 12)}px`,
+                                fontWeight: template.text_style.isBold ? 'bold' : 'normal',
+                                fontStyle: template.text_style.isItalic ? 'italic' : 'normal',
+                                textDecoration: template.text_style.isUnderline ? 'underline' : 'none',
+                                textShadow: template.text_style.hasShadow ? `2px 2px 4px rgba(0,0,0,${(template.text_style.shadowIntensity || 5) / 10})` : 'none',
+                                textAlign: template.text_style.alignment
+                              }}
+                            >
+                              {template.id === 'blank' ? 'Start from scratch' : template.title}
+                            </div>
+                            <h4 className="font-medium">{template.name}</h4>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
                 </CardContent>
               </CollapsibleContent>
             </Card>
@@ -557,7 +634,37 @@ export default function Maw3dCreate() {
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  {/* Event Preview integrated within background section */}
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold">Preview</h3>
+                    <div 
+                      className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden"
+                      style={previewStyle}
+                    >
+                      <div className="text-center space-y-2">
+                        <h2 className="font-bold leading-tight">
+                          {watchedValues.title || t('eventTitle', language)}
+                        </h2>
+                        {watchedValues.description && (
+                          <p className="text-sm opacity-90 line-clamp-2">
+                            {watchedValues.description}
+                          </p>
+                        )}
+                        {watchedValues.organizer && (
+                          <p className="text-xs opacity-75">
+                            {t('by', language)} {watchedValues.organizer}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Preview with current blur settings, {imageBlur}px
+                    </p>
+                  </div>
+
+                  <Separator />
+
                   <BackgroundCustomizer
                     backgroundColor={backgroundColor}
                     backgroundImage={backgroundImage}
@@ -586,7 +693,7 @@ export default function Maw3dCreate() {
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="is_public">{t('publicEvent', language)}</Label>
@@ -623,23 +730,40 @@ export default function Maw3dCreate() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="auto_delete_enabled">{t('autoDelete', language)}</Label>
-                      <p className="text-sm text-muted-foreground">{t('deleteEventAfter24Hours', language)}</p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="auto_delete_enabled">{t('autoDelete', language)}</Label>
+                        <p className="text-sm text-muted-foreground">{t('deleteEventAfter24Hours', language)}</p>
+                      </div>
+                      <Controller
+                        name="auto_delete_enabled"
+                        control={control}
+                        render={({ field }) => (
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            id="auto_delete_enabled"
+                          />
+                        )}
+                      />
                     </div>
-                    <Controller
-                      name="auto_delete_enabled"
-                      control={control}
-                      render={({ field }) => (
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          id="auto_delete_enabled"
-                        />
-                      )}
-                    />
+
+                    {watchedValues.auto_delete_enabled && (
+                      <div className="flex items-start gap-3 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                        <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm">
+                          <p className="font-medium text-orange-800">Auto-delete Warning</p>
+                          <p className="text-orange-700 mt-1">
+                            This event will be automatically deleted 24 hours after the event date passes. 
+                            All associated data including RSVPs and messages will be permanently removed.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  <Separator />
 
                   <div className="space-y-4">
                     <h3 className="font-medium flex items-center gap-2">
@@ -685,6 +809,16 @@ export default function Maw3dCreate() {
                         </ScrollArea>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Shareable Link</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Once created, your event will have a unique shareable link that you can send to others. 
+                      The link will allow people to view and RSVP to your event based on your privacy settings.
+                    </p>
                   </div>
                 </CardContent>
               </CollapsibleContent>
