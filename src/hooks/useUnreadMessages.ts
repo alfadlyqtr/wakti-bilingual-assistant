@@ -108,15 +108,6 @@ export function useUnreadMessages() {
           fetchUnreadCounts();
         }
       })
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'maw3d_events'
-      }, () => {
-        // When events are deleted, refresh counts
-        console.log('🗑️ Event deleted, refreshing counts');
-        fetchUnreadCounts();
-      })
       .subscribe();
 
     const sharedTaskChannel = supabase
@@ -208,7 +199,7 @@ export function useUnreadMessages() {
         .eq('contact_id', user.id)
         .eq('status', 'pending');
 
-      // Maw3d event RSVPs count (events user created) - Only count events that still exist
+      // Maw3d event RSVPs count (events user created)
       const { count: eventRsvpCount } = await supabase
         .from('maw3d_rsvps')
         .select(`
@@ -248,22 +239,6 @@ export function useUnreadMessages() {
     }
   };
 
-  // Manual refresh function to reset badges
-  const resetBadges = async () => {
-    console.log('🔄 Manually resetting notification badges');
-    await fetchUnreadCounts();
-  };
-
-  // Mark event notifications as read
-  const markEventNotificationsAsRead = async (eventId?: string) => {
-    if (eventId) {
-      console.log('✅ Marking event notifications as read for event:', eventId);
-      // In a real implementation, you'd mark specific notifications as read
-      // For now, we'll just refresh the counts
-      await fetchUnreadCounts();
-    }
-  };
-
   return {
     unreadTotal,
     contactCount,
@@ -271,8 +246,6 @@ export function useUnreadMessages() {
     taskCount,
     sharedTaskCount,
     perContactUnread,
-    refetch: fetchUnreadCounts,
-    resetBadges,
-    markEventNotificationsAsRead
+    refetch: fetchUnreadCounts
   };
 }
