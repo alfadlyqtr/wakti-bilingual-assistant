@@ -1,10 +1,15 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, RotateCcw } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
+
+interface LudoBoardV2Props {
+  gameMode: 'single' | 'multiplayer';
+  onGameEnd?: (winner: string) => void;
+  className?: string;
+}
 
 interface GameState {
   currentPlayer: 'blue' | 'red' | 'green' | 'yellow';
@@ -27,18 +32,13 @@ interface GameState {
   };
 }
 
-interface LudoBoardV2Props {
-  gameMode: 'single' | 'multiplayer';
-  onGameEnd?: (winner: string) => void;
-}
-
 const DiceIcon = ({ value }: { value: number }) => {
   const icons = [Dice1, Dice2, Dice3, Dice4, Dice5, Dice6];
   const Icon = icons[value - 1] || Dice1;
   return <Icon className="w-8 h-8" />;
 };
 
-export function LudoBoardV2({ gameMode, onGameEnd }: LudoBoardV2Props) {
+export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props) {
   const { language } = useTheme();
   
   const [gameState, setGameState] = useState<GameState>({
@@ -312,7 +312,7 @@ export function LudoBoardV2({ gameMode, onGameEnd }: LudoBoardV2Props) {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className={`p-6 space-y-6 ${className || ''}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="px-3 py-1">
