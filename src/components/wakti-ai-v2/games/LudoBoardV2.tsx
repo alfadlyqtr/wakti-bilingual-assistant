@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -5,43 +6,35 @@ import { Badge } from '@/components/ui/badge';
 import { Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, RotateCcw } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 
+type PlayerColor = 'blue' | 'red' | 'green' | 'yellow';
+type PlayerType = 'human' | 'ai';
+type GameArea = 'private' | 'outer' | 'last-line' | 'home';
+
 interface Pawn {
-  id: string;
-  player: string;
-  position: number;
-  isHome: boolean;
-  isFinished: boolean;
+  id: number;
+  name: string;
+  color: PlayerColor;
+  startCell: number;
+  endCell: number;
+  currentCell: string;
+  area: GameArea;
 }
 
 interface GameState {
-  currentPlayer: 'blue' | 'red' | 'green' | 'yellow';
-  diceValue: number;
-  canRoll: boolean;
-  gamePhase: 'setup' | 'playing' | 'finished';
-  winner: string | null;
-  lastMove: string;
-  playerPositions: {
-    blue: number[];
-    red: number[];
-    green: number[];
-    yellow: number[];
-  };
-  outerPosition: {
-    blue: number[];
-    red: number[];
-    green: number[];
-    yellow: number[];
-  };
+  privateAreas: Record<PlayerColor, Pawn[]>;
+  outerPosition: Record<number, Pawn[]>;
+  lastLine: Record<PlayerColor, Record<number, Pawn[]>>;
+  homeAreas: Record<PlayerColor, Pawn[]>;
 }
 
 interface LudoBoardV2Props {
-  gameMode: 'single' | 'multiplayer';
+  gameMode?: 'single' | 'multiplayer';
   onGameEnd?: (winner: string) => void;
   className?: string;
   gameState?: GameState;
   highlightedPawns?: Set<string>;
   onPawnClick?: (pawn: Pawn) => void;
-  currentPlayer?: string;
+  currentPlayer?: PlayerColor;
   diceValue?: number;
   onDiceRoll?: () => void;
   isRolling?: boolean;
@@ -56,77 +49,64 @@ const DiceIcon = ({ value }: { value: number }) => {
 };
 
 export function LudoBoardV2({ 
-  gameMode, 
+  gameMode = 'single', 
   onGameEnd, 
   className,
-  gameState: externalGameState,
+  gameState,
   highlightedPawns = new Set(),
   onPawnClick,
-  currentPlayer: externalCurrentPlayer,
-  diceValue: externalDiceValue,
+  currentPlayer = 'blue',
+  diceValue = 1,
   onDiceRoll,
   isRolling = false,
-  canRoll: externalCanRoll,
+  canRoll = true,
   isAIThinking = false
 }: LudoBoardV2Props) {
   const { language } = useTheme();
   
-  const [internalGameState, setInternalGameState] = useState<GameState>({
-    currentPlayer: 'blue',
-    diceValue: 1,
-    canRoll: true,
-    gamePhase: 'setup',
-    winner: null,
-    lastMove: '',
-    playerPositions: {
-      blue: [0, 0, 0, 0],
-      red: [0, 0, 0, 0],
-      green: [0, 0, 0, 0],
-      yellow: [0, 0, 0, 0]
-    },
-    outerPosition: {
-      blue: [1, 2, 0, 0],
-      red: [0, 0, 0, 0],
-      green: [0, 0, 0, 0],
-      yellow: [0, 0, 0, 0]
-    }
-  });
+  // Default game state for standalone usage
+  const defaultGameState: GameState = {
+    privateAreas: { blue: [], red: [], green: [], yellow: [] },
+    outerPosition: {},
+    lastLine: { blue: {}, red: {}, green: {}, yellow: {} },
+    homeAreas: { blue: [], red: [], green: [], yellow: [] }
+  };
+
+  const [internalGameState, setInternalGameState] = useState<GameState>(defaultGameState);
+  const [boardSquares, setBoardSquares] = useState<Array<{ color: string; pawns: Pawn[] }>>([]);
 
   // Use external state if provided, otherwise use internal state
-  const gameState = externalGameState || internalGameState;
-  const currentPlayer = externalCurrentPlayer || gameState.currentPlayer;
-  const diceValue = externalDiceValue || gameState.diceValue;
-  const canRoll = externalCanRoll !== undefined ? externalCanRoll : gameState.canRoll;
-
-  const [boardSquares, setBoardSquares] = useState<Array<{ color: string; pawns: string[] }>>([]);
+  const currentGameState = gameState || internalGameState;
 
   // Initialize board squares
   useEffect(() => {
     const squares = Array(52).fill(null).map((_, index) => ({
       color: getSquareColor(index),
-      pawns: [] as string[]
+      pawns: [] as Pawn[]
     }));
     
-    // Place initial pawns on the board
-    if (gameState.outerPosition.blue[0] > 0) {
-      squares[0].pawns.push('blue');
-    }
-    if (gameState.outerPosition.blue[1] > 0) {
-      squares[1].pawns.push('blue');
-    }
+    // Place pawns from outer positions
+    Object.entries(currentGameState.outerPosition).forEach(([position, pawns]) => {
+      const pos = parseInt(position);
+      if (pos >= 1 && pos <= 52) {
+        squares[pos - 1].pawns = pawns;
+      }
+    });
     
     setBoardSquares(squares);
-  }, [gameState.outerPosition]);
+  }, [currentGameState.outerPosition]);
 
   const getSquareColor = (index: number): string => {
+    const position = index + 1;
+    
     // Starting positions for each color
-    if (index === 0) return 'blue';
-    if (index === 13) return 'red';
-    if (index === 26) return 'green';
-    if (index === 39) return 'yellow';
+    if (position === 1) return 'blue';
+    if (position === 14) return 'red';
+    if (position === 27) return 'green';
+    if (position === 40) return 'yellow';
     
     // Safe zones
-    if ([8, 21, 34, 47].includes(index)) return 'safe';
+    if ([9, 22, 35, 48].includes(position)) return 'safe';
     
     return 'normal';
   };
@@ -142,95 +122,13 @@ export function LudoBoardV2({
     const newDiceValue = Math.floor(Math.random() * 6) + 1;
     console.log('🎲 Dice rolled:', newDiceValue);
     
-    setInternalGameState(prev => ({
-      ...prev,
-      diceValue: newDiceValue,
-      canRoll: false,
-      lastMove: `${prev.currentPlayer} rolled ${newDiceValue}`
-    }));
-
-    if (internalGameState.gamePhase === 'setup') {
+    // Update internal state if not using external state
+    if (!gameState) {
       setInternalGameState(prev => ({
         ...prev,
-        gamePhase: 'playing'
+        // Add any internal state updates here if needed
       }));
     }
-
-    if (gameMode === 'single' && internalGameState.currentPlayer !== 'blue') {
-      handleAITurn(newDiceValue);
-    }
-  };
-
-  const handleAITurn = (diceValue: number) => {
-    const setAiThinking = (value: boolean) => {};
-    setAiThinking(true);
-    
-    setTimeout(() => {
-      // Simple AI logic - move first available pawn
-      const currentColor = gameState.currentPlayer;
-      const positions = gameState.playerPositions[currentColor];
-      
-      let moveIndex = -1;
-      for (let i = 0; i < positions.length; i++) {
-        if (positions[i] > 0 && positions[i] + diceValue <= 52) {
-          moveIndex = i;
-          break;
-        }
-      }
-
-      if (moveIndex >= 0) {
-        const newPositions = [...positions];
-        newPositions[moveIndex] += diceValue;
-        
-        setInternalGameState(prev => ({
-          ...prev,
-          playerPositions: {
-            ...prev.playerPositions,
-            [currentColor]: newPositions
-          },
-          lastMove: `${currentColor} moved pawn ${moveIndex + 1} to position ${newPositions[moveIndex]}`
-        }));
-      }
-
-      // Switch to next player
-      nextPlayer();
-      setAiThinking(false);
-    }, 1000);
-  };
-
-  const nextPlayer = () => {
-    const players = ['blue', 'red', 'green', 'yellow'];
-    const currentIndex = players.indexOf(gameState.currentPlayer);
-    const nextIndex = (currentIndex + 1) % players.length;
-    
-    setInternalGameState(prev => ({
-      ...prev,
-      currentPlayer: players[nextIndex] as 'blue' | 'red' | 'green' | 'yellow',
-      canRoll: true
-    }));
-  };
-
-  const resetGame = () => {
-    setInternalGameState({
-      currentPlayer: 'blue',
-      diceValue: 1,
-      canRoll: true,
-      gamePhase: 'setup',
-      winner: null,
-      lastMove: '',
-      playerPositions: {
-        blue: [0, 0, 0, 0],
-        red: [0, 0, 0, 0],
-        green: [0, 0, 0, 0],
-        yellow: [0, 0, 0, 0]
-      },
-      outerPosition: {
-        blue: [1, 2, 0, 0],
-        red: [0, 0, 0, 0],
-        green: [0, 0, 0, 0],
-        yellow: [0, 0, 0, 0]
-      }
-    });
   };
 
   const handlePawnClick = (pawn: Pawn) => {
@@ -239,7 +137,7 @@ export function LudoBoardV2({
     }
   };
 
-  const renderPawn = (color: string, position: number) => {
+  const renderPawn = (pawn: Pawn, stackIndex: number = 0) => {
     const colorClasses = {
       blue: 'bg-blue-500 border-blue-700',
       red: 'bg-red-500 border-red-700',
@@ -247,17 +145,23 @@ export function LudoBoardV2({
       yellow: 'bg-yellow-500 border-yellow-700'
     };
 
+    const isHighlighted = highlightedPawns.has(pawn.name);
+    const offset = stackIndex * 2;
+
     return (
       <div
-        key={`${color}-${position}`}
-        className={`w-4 h-4 rounded-full border-2 ${colorClasses[color as keyof typeof colorClasses]} shadow-sm`}
+        key={pawn.name}
+        className={`w-4 h-4 rounded-full border-2 cursor-pointer transition-all ${
+          colorClasses[pawn.color]
+        } ${isHighlighted ? 'ring-2 ring-yellow-400 ring-opacity-75 animate-pulse' : ''}`}
         style={{
           position: 'absolute',
-          top: '50%',
-          left: '50%',
+          top: `calc(50% + ${offset}px)`,
+          left: `calc(50% + ${offset}px)`,
           transform: 'translate(-50%, -50%)',
-          zIndex: 10
+          zIndex: 10 + stackIndex
         }}
+        onClick={() => handlePawnClick(pawn)}
       />
     );
   };
@@ -289,8 +193,8 @@ export function LudoBoardV2({
                 }}
               >
                 {/* Render pawns on this square */}
-                {square.pawns.map((pawnColor, pawnIndex) => 
-                  renderPawn(pawnColor, pawnIndex)
+                {square.pawns.map((pawn, pawnIndex) => 
+                  renderPawn(pawn, pawnIndex)
                 )}
               </div>
             );
@@ -301,9 +205,9 @@ export function LudoBoardV2({
         <div className="absolute top-4 left-4 w-24 h-24 bg-blue-200 border-2 border-blue-400 rounded-lg">
           <div className="p-2 text-xs font-bold text-blue-800">Blue Home</div>
           <div className="grid grid-cols-2 gap-1 p-1">
-            {gameState.playerPositions.blue.map((pos, index) => (
-              <div key={index} className="w-4 h-4 bg-blue-100 border border-blue-300 rounded-full">
-                {pos === 0 && renderPawn('blue', index)}
+            {currentGameState.privateAreas.blue.map((pawn, index) => (
+              <div key={index} className="w-4 h-4 bg-blue-100 border border-blue-300 rounded-full relative">
+                {renderPawn(pawn)}
               </div>
             ))}
           </div>
@@ -312,9 +216,9 @@ export function LudoBoardV2({
         <div className="absolute top-4 right-4 w-24 h-24 bg-red-200 border-2 border-red-400 rounded-lg">
           <div className="p-2 text-xs font-bold text-red-800">Red Home</div>
           <div className="grid grid-cols-2 gap-1 p-1">
-            {gameState.playerPositions.red.map((pos, index) => (
-              <div key={index} className="w-4 h-4 bg-red-100 border border-red-300 rounded-full">
-                {pos === 0 && renderPawn('red', index)}
+            {currentGameState.privateAreas.red.map((pawn, index) => (
+              <div key={index} className="w-4 h-4 bg-red-100 border border-red-300 rounded-full relative">
+                {renderPawn(pawn)}
               </div>
             ))}
           </div>
@@ -323,9 +227,9 @@ export function LudoBoardV2({
         <div className="absolute bottom-4 left-4 w-24 h-24 bg-green-200 border-2 border-green-400 rounded-lg">
           <div className="p-2 text-xs font-bold text-green-800">Green Home</div>
           <div className="grid grid-cols-2 gap-1 p-1">
-            {gameState.playerPositions.green.map((pos, index) => (
-              <div key={index} className="w-4 h-4 bg-green-100 border border-green-300 rounded-full">
-                {pos === 0 && renderPawn('green', index)}
+            {currentGameState.privateAreas.green.map((pawn, index) => (
+              <div key={index} className="w-4 h-4 bg-green-100 border border-green-300 rounded-full relative">
+                {renderPawn(pawn)}
               </div>
             ))}
           </div>
@@ -334,10 +238,47 @@ export function LudoBoardV2({
         <div className="absolute bottom-4 right-4 w-24 h-24 bg-yellow-200 border-2 border-yellow-400 rounded-lg">
           <div className="p-2 text-xs font-bold text-yellow-800">Yellow Home</div>
           <div className="grid grid-cols-2 gap-1 p-1">
-            {gameState.playerPositions.yellow.map((pos, index) => (
-              <div key={index} className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded-full">
-                {pos === 0 && renderPawn('yellow', index)}
+            {currentGameState.privateAreas.yellow.map((pawn, index) => (
+              <div key={index} className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded-full relative">
+                {renderPawn(pawn)}
               </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Finished pawns areas */}
+        <div className="absolute top-1/2 left-1/3 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-blue-300 border border-blue-500 rounded">
+          <div className="text-xs text-center p-1">Blue Finish</div>
+          <div className="grid grid-cols-2 gap-1 p-1">
+            {currentGameState.homeAreas.blue.map((pawn, index) => (
+              <div key={index} className="w-2 h-2 bg-blue-600 rounded-full" />
+            ))}
+          </div>
+        </div>
+
+        <div className="absolute top-1/3 right-1/2 transform translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-red-300 border border-red-500 rounded">
+          <div className="text-xs text-center p-1">Red Finish</div>
+          <div className="grid grid-cols-2 gap-1 p-1">
+            {currentGameState.homeAreas.red.map((pawn, index) => (
+              <div key={index} className="w-2 h-2 bg-red-600 rounded-full" />
+            ))}
+          </div>
+        </div>
+
+        <div className="absolute bottom-1/2 left-1/3 transform -translate-x-1/2 translate-y-1/2 w-16 h-16 bg-green-300 border border-green-500 rounded">
+          <div className="text-xs text-center p-1">Green Finish</div>
+          <div className="grid grid-cols-2 gap-1 p-1">
+            {currentGameState.homeAreas.green.map((pawn, index) => (
+              <div key={index} className="w-2 h-2 bg-green-600 rounded-full" />
+            ))}
+          </div>
+        </div>
+
+        <div className="absolute bottom-1/3 right-1/2 transform translate-x-1/2 translate-y-1/2 w-16 h-16 bg-yellow-300 border border-yellow-500 rounded">
+          <div className="text-xs text-center p-1">Yellow Finish</div>
+          <div className="grid grid-cols-2 gap-1 p-1">
+            {currentGameState.homeAreas.yellow.map((pawn, index) => (
+              <div key={index} className="w-2 h-2 bg-yellow-600 rounded-full" />
             ))}
           </div>
         </div>
@@ -347,12 +288,16 @@ export function LudoBoardV2({
           <div className="text-center">
             <div className="text-2xl font-bold">LUDO</div>
             <div className="text-sm text-gray-600">
-              {gameState.gamePhase === 'setup' ? 'Roll to Start' : `${gameState.currentPlayer}'s Turn`}
+              {currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}'s Turn
             </div>
           </div>
         </div>
       </div>
     );
+  };
+
+  const resetGame = () => {
+    setInternalGameState(defaultGameState);
   };
 
   return (
@@ -394,14 +339,8 @@ export function LudoBoardV2({
         </Button>
       </div>
 
-      {gameState.lastMove && (
-        <div className="text-center text-sm text-muted-foreground bg-muted p-2 rounded">
-          {gameState.lastMove}
-        </div>
-      )}
-
       <div className="text-center text-xs text-muted-foreground">
-        Debug: Blue pawns on board - Position 1: {gameState.outerPosition.blue[0]}, Position 2: {gameState.outerPosition.blue[1]}
+        Debug: Pawns in private areas - Blue: {currentGameState.privateAreas.blue.length}, Red: {currentGameState.privateAreas.red.length}, Green: {currentGameState.privateAreas.green.length}, Yellow: {currentGameState.privateAreas.yellow.length}
       </div>
     </div>
   );
