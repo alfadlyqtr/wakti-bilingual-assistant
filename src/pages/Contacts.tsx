@@ -7,36 +7,15 @@ import { ContactList } from "@/components/contacts/ContactList";
 import { BlockedUsers } from "@/components/contacts/BlockedUsers";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Contact, Bell, ShieldCheck } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
-// Create a client
-const queryClient = new QueryClient();
-
 export default function Contacts() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState("contacts");
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ContactsContent language={language} activeTab={activeTab} setActiveTab={setActiveTab} />
-    </QueryClientProvider>
-  );
-}
-
-// Separate component to use React Query hooks
-function ContactsContent({ 
-  language, 
-  activeTab, 
-  setActiveTab 
-}: { 
-  language: string; 
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-}) {
-  // Use unified unread messages system instead of separate query
+  
+  // Use unified unread messages system
   const { contactCount } = useUnreadMessages();
   
   // Handler for unblock success
