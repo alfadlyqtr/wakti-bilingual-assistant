@@ -5,10 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, RotateCcw } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 
-interface LudoBoardV2Props {
-  gameMode: 'single' | 'multiplayer';
-  onGameEnd?: (winner: string) => void;
-  className?: string;
+interface Pawn {
+  id: string;
+  player: string;
+  position: number;
+  isHome: boolean;
+  isFinished: boolean;
 }
 
 interface GameState {
@@ -32,16 +34,44 @@ interface GameState {
   };
 }
 
+interface LudoBoardV2Props {
+  gameMode: 'single' | 'multiplayer';
+  onGameEnd?: (winner: string) => void;
+  className?: string;
+  gameState?: GameState;
+  highlightedPawns?: Set<string>;
+  onPawnClick?: (pawn: Pawn) => void;
+  currentPlayer?: string;
+  diceValue?: number;
+  onDiceRoll?: () => void;
+  isRolling?: boolean;
+  canRoll?: boolean;
+  isAIThinking?: boolean;
+}
+
 const DiceIcon = ({ value }: { value: number }) => {
   const icons = [Dice1, Dice2, Dice3, Dice4, Dice5, Dice6];
   const Icon = icons[value - 1] || Dice1;
   return <Icon className="w-8 h-8" />;
 };
 
-export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props) {
+export function LudoBoardV2({ 
+  gameMode, 
+  onGameEnd, 
+  className,
+  gameState: externalGameState,
+  highlightedPawns = new Set(),
+  onPawnClick,
+  currentPlayer: externalCurrentPlayer,
+  diceValue: externalDiceValue,
+  onDiceRoll,
+  isRolling = false,
+  canRoll: externalCanRoll,
+  isAIThinking = false
+}: LudoBoardV2Props) {
   const { language } = useTheme();
   
-  const [gameState, setGameState] = useState<GameState>({
+  const [internalGameState, setInternalGameState] = useState<GameState>({
     currentPlayer: 'blue',
     diceValue: 1,
     canRoll: true,
@@ -55,14 +85,19 @@ export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props
       yellow: [0, 0, 0, 0]
     },
     outerPosition: {
-      blue: [1, 2, 0, 0], // Two pawns start on the board for blue player
+      blue: [1, 2, 0, 0],
       red: [0, 0, 0, 0],
       green: [0, 0, 0, 0],
       yellow: [0, 0, 0, 0]
     }
   });
 
-  const [aiThinking, setAiThinking] = useState(false);
+  // Use external state if provided, otherwise use internal state
+  const gameState = externalGameState || internalGameState;
+  const currentPlayer = externalCurrentPlayer || gameState.currentPlayer;
+  const diceValue = externalDiceValue || gameState.diceValue;
+  const canRoll = externalCanRoll !== undefined ? externalCanRoll : gameState.canRoll;
+
   const [boardSquares, setBoardSquares] = useState<Array<{ color: string; pawns: string[] }>>([]);
 
   // Initialize board squares
@@ -97,33 +132,37 @@ export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props
   };
 
   const rollDice = () => {
-    if (!gameState.canRoll) return;
+    if (onDiceRoll) {
+      onDiceRoll();
+      return;
+    }
+
+    if (!canRoll) return;
     
     const newDiceValue = Math.floor(Math.random() * 6) + 1;
     console.log('🎲 Dice rolled:', newDiceValue);
     
-    setGameState(prev => ({
+    setInternalGameState(prev => ({
       ...prev,
       diceValue: newDiceValue,
       canRoll: false,
       lastMove: `${prev.currentPlayer} rolled ${newDiceValue}`
     }));
 
-    // Start game if in setup phase
-    if (gameState.gamePhase === 'setup') {
-      setGameState(prev => ({
+    if (internalGameState.gamePhase === 'setup') {
+      setInternalGameState(prev => ({
         ...prev,
         gamePhase: 'playing'
       }));
     }
 
-    // Handle AI turn if playing against AI
-    if (gameMode === 'single' && gameState.currentPlayer !== 'blue') {
+    if (gameMode === 'single' && internalGameState.currentPlayer !== 'blue') {
       handleAITurn(newDiceValue);
     }
   };
 
   const handleAITurn = (diceValue: number) => {
+    const setAiThinking = (value: boolean) => {};
     setAiThinking(true);
     
     setTimeout(() => {
@@ -143,7 +182,7 @@ export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props
         const newPositions = [...positions];
         newPositions[moveIndex] += diceValue;
         
-        setGameState(prev => ({
+        setInternalGameState(prev => ({
           ...prev,
           playerPositions: {
             ...prev.playerPositions,
@@ -164,7 +203,7 @@ export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props
     const currentIndex = players.indexOf(gameState.currentPlayer);
     const nextIndex = (currentIndex + 1) % players.length;
     
-    setGameState(prev => ({
+    setInternalGameState(prev => ({
       ...prev,
       currentPlayer: players[nextIndex] as 'blue' | 'red' | 'green' | 'yellow',
       canRoll: true
@@ -172,7 +211,7 @@ export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props
   };
 
   const resetGame = () => {
-    setGameState({
+    setInternalGameState({
       currentPlayer: 'blue',
       diceValue: 1,
       canRoll: true,
@@ -186,13 +225,18 @@ export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props
         yellow: [0, 0, 0, 0]
       },
       outerPosition: {
-        blue: [1, 2, 0, 0], // Reset with two pawns on board
+        blue: [1, 2, 0, 0],
         red: [0, 0, 0, 0],
         green: [0, 0, 0, 0],
         yellow: [0, 0, 0, 0]
       }
     });
-    setAiThinking(false);
+  };
+
+  const handlePawnClick = (pawn: Pawn) => {
+    if (onPawnClick) {
+      onPawnClick(pawn);
+    }
   };
 
   const renderPawn = (color: string, position: number) => {
@@ -316,9 +360,9 @@ export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="px-3 py-1">
-            {gameState.currentPlayer.charAt(0).toUpperCase() + gameState.currentPlayer.slice(1)} Player
+            {currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} Player
           </Badge>
-          {aiThinking && (
+          {isAIThinking && (
             <Badge variant="secondary" className="px-3 py-1">
               AI Thinking...
             </Badge>
@@ -342,11 +386,11 @@ export function LudoBoardV2({ gameMode, onGameEnd, className }: LudoBoardV2Props
       <div className="flex items-center justify-center gap-4">
         <Button
           onClick={rollDice}
-          disabled={!gameState.canRoll || aiThinking}
+          disabled={!canRoll || isRolling || isAIThinking}
           className="flex items-center gap-2"
         >
-          <DiceIcon value={gameState.diceValue} />
-          {gameState.canRoll ? 'Roll Dice' : 'Make Move'}
+          <DiceIcon value={diceValue} />
+          {isRolling ? 'Rolling...' : canRoll ? 'Roll Dice' : 'Make Move'}
         </Button>
       </div>
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,8 +14,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 interface TextGeneratorPopupProps {
+  isOpen: boolean;
   onClose: () => void;
-  onInsertText: (text: string) => void;
+  onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
 }
 
 const contentTypes = [
@@ -36,7 +36,7 @@ const lengthOptions = [
   { value: 'custom', label: 'Custom word count' }
 ];
 
-export function TextGeneratorPopup({ onClose, onInsertText }: TextGeneratorPopupProps) {
+export function TextGeneratorPopup({ isOpen, onClose, onTextGenerated }: TextGeneratorPopupProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   
@@ -98,20 +98,24 @@ CONTENT TYPE: ${contentType}`;
     }
 
     prompt += `\n\nIMPORTANT REQUIREMENTS:
-- Strictly follow the specified tone: ${tone}
-- Ensure content matches the ${contentType} format
-- Avoid marketing buzzwords and clichés
-- Write naturally and authentically
+- Strictly follow the specified topic: ${topic}
+- Maintain the exact tone: ${tone}
+- Follow the ${contentType} format precisely
 - Respect the specified length: ${length === 'custom' ? `${customWordCount} words` : length}
-- Stay focused on the topic: ${topic}`;
+- Avoid marketing buzzwords, clichés, and generic phrases
+- Write naturally and authentically
+- Stay focused and relevant to the topic
+- Do not deviate from user specifications`;
 
     if (keyPoints.trim()) {
-      prompt += `\n- Address all key points mentioned: ${keyPoints}`;
+      prompt += `\n- Must include these key points: ${keyPoints}`;
     }
 
     if (originalMessage.trim()) {
-      prompt += `\n- This is a reply to: ${originalMessage}`;
+      prompt += `\n- This is a direct reply to: ${originalMessage}`;
     }
+
+    prompt += `\n- Avoid phrases like "revolutionize", "game-changer", "cutting-edge", "leverage", "synergy", "paradigm shift", "disruptive", "scalable solution", "best practices", "low-hanging fruit", "circle back", "think outside the box", "move the needle", "deep dive", "touch base", "value-add", "actionable insights"`;
 
     return prompt;
   };
@@ -165,7 +169,7 @@ CONTENT TYPE: ${contentType}`;
   };
 
   const insertText = () => {
-    onInsertText(generatedText);
+    onTextGenerated(generatedText, originalMessage.trim() ? 'reply' : 'compose', true);
     onClose();
   };
 
@@ -180,6 +184,8 @@ CONTENT TYPE: ${contentType}`;
     setGeneratedText('');
     setError('');
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
