@@ -23,17 +23,32 @@ export function useVoiceRecording() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const { showError } = useToastHelper();
+  const { showError, showSuccess } = useToastHelper();
   
   // Get voice quota information with refresh function
   const { 
     totalAvailableCharacters, 
     canUseVoice, 
-    refreshVoiceQuota 
+    refreshVoiceQuota,
+    voiceQuotaError,
+    isLoadingVoiceQuota
   } = useExtendedQuotaManagement();
 
   const startRecording = useCallback(async () => {
     try {
+      // Check if voice quota is available before starting
+      if (!canUseVoice && !isLoadingVoiceQuota) {
+        setState(prev => ({ ...prev, error: 'Voice quota exhausted' }));
+        showError('Voice quota exhausted. Please purchase more credits.');
+        return;
+      }
+
+      if (voiceQuotaError) {
+        setState(prev => ({ ...prev, error: voiceQuotaError }));
+        showError(`Voice quota error: ${voiceQuotaError}`);
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -70,7 +85,7 @@ export function useVoiceRecording() {
       setState(prev => ({ ...prev, error: 'Failed to start recording' }));
       showError('Failed to access microphone');
     }
-  }, [showError]);
+  }, [canUseVoice, isLoadingVoiceQuota, voiceQuotaError, showError]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && state.isRecording) {
@@ -87,21 +102,27 @@ export function useVoiceRecording() {
       });
 
       if (error) {
+        console.error('Transcription error:', error);
         throw error;
       }
 
-      setState(prev => ({ 
-        ...prev, 
-        transcript: data.text,
-        isProcessing: false,
-        error: null
-      }));
+      if (data && data.text) {
+        setState(prev => ({ 
+          ...prev, 
+          transcript: data.text,
+          isProcessing: false,
+          error: null
+        }));
 
-      // Refresh voice quota after transcription to show updated usage
-      console.log('🔄 Refreshing voice quota after transcription usage...');
-      await refreshVoiceQuota();
-
-      return data.text;
+        // Refresh voice quota after transcription to show updated usage
+        console.log('🔄 Refreshing voice quota after transcription usage...');
+        await refreshVoiceQuota();
+        
+        showSuccess('Audio transcribed successfully');
+        return data.text;
+      } else {
+        throw new Error('No transcription received');
+      }
     } catch (error) {
       console.error('Error transcribing audio:', error);
       setState(prev => ({ 
@@ -109,9 +130,10 @@ export function useVoiceRecording() {
         error: 'Failed to transcribe audio',
         isProcessing: false
       }));
+      showError('Failed to transcribe audio');
       return null;
     }
-  }, [refreshVoiceQuota]);
+  }, [refreshVoiceQuota, showError, showSuccess]);
 
   const clearRecording = useCallback(() => {
     if (state.audioUrl) {
@@ -132,6 +154,8 @@ export function useVoiceRecording() {
     stopRecording,
     clearRecording,
     totalAvailableCharacters,
-    canUseVoice
+    canUseVoice,
+    voiceQuotaError,
+    isLoadingVoiceQuota
   };
 }

@@ -2677,6 +2677,10 @@ export type Database = {
         Args: { p_user_id: string; p_admin_id: string; p_reason?: string }
         Returns: boolean
       }
+      test_user_voice_quota_access: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       unsuspend_user: {
         Args: { p_user_id: string }
         Returns: boolean

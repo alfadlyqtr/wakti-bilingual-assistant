@@ -16,18 +16,20 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   
   const [userVoiceQuota, setUserVoiceQuota] = useState<UserVoiceQuota>({
     characters_used: 0,
-    characters_limit: 6000, // Updated: Use consistent 6000 characters
+    characters_limit: 6000,
     extra_characters: 0
   });
   
   const [isLoadingVoiceQuota, setIsLoadingVoiceQuota] = useState(false);
+  const [voiceQuotaError, setVoiceQuotaError] = useState<string | null>(null);
 
-  // Voice quota loading
+  // Enhanced voice quota loading with better error handling
   const loadUserVoiceQuota = useCallback(async () => {
     if (!user) return;
     
     try {
       setIsLoadingVoiceQuota(true);
+      setVoiceQuotaError(null);
       
       console.log('🔄 Loading user voice quota for user:', user.id);
       
@@ -37,6 +39,34 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
       if (error) {
         console.error('❌ Error loading user voice quota:', error);
+        setVoiceQuotaError(error.message);
+        
+        // Try the diagnostic function to get more details
+        try {
+          const { data: testData, error: testError } = await supabase.rpc('test_user_voice_quota_access', {
+            p_user_id: user.id
+          });
+          
+          if (testError) {
+            console.error('❌ Diagnostic test also failed:', testError);
+          } else {
+            console.log('✅ Diagnostic test result:', testData);
+            if (testData && testData.success) {
+              // If diagnostic test succeeds, use its data
+              setUserVoiceQuota({
+                characters_used: testData.characters_used || 0,
+                characters_limit: testData.characters_limit || 6000,
+                extra_characters: testData.extra_characters || 0,
+                purchase_date: testData.purchase_date
+              });
+              setVoiceQuotaError(null);
+              return;
+            }
+          }
+        } catch (testError) {
+          console.error('❌ Could not run diagnostic test:', testError);
+        }
+        
         return;
       }
 
@@ -45,27 +75,30 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         console.log('✅ User voice quota loaded successfully:', quota);
         setUserVoiceQuota({
           characters_used: quota.characters_used || 0,
-          characters_limit: quota.characters_limit || 6000, // Updated: Use consistent 6000
+          characters_limit: quota.characters_limit || 6000,
           extra_characters: quota.extra_characters || 0,
           purchase_date: quota.purchase_date
         });
+        setVoiceQuotaError(null);
+      } else {
+        console.warn('⚠️ No voice quota data returned');
+        setVoiceQuotaError('No voice quota data available');
       }
     } catch (error) {
       console.error('❌ Unexpected error loading user voice quota:', error);
+      setVoiceQuotaError(error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsLoadingVoiceQuota(false);
     }
   }, [user]);
 
-  // Voice purchase function - now properly handles the purchase flow
+  // Voice purchase function with enhanced error handling
   const purchaseExtraVoiceCredits = useCallback(async (characters: number = 6000) => {
     if (!user) return false;
 
     try {
       console.log('💰 Initiating voice credits purchase:', { userId: user.id, characters });
       
-      // For now, we'll simulate the purchase process
-      // In production, this would integrate with the PayPal webhook
       const { data, error } = await supabase.rpc('purchase_extra_voice_credits', {
         p_user_id: user.id,
         p_characters: characters
@@ -73,6 +106,11 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
       if (error) {
         console.error('❌ Database error during voice credits purchase:', error);
+        toast({
+          title: "Purchase Failed",
+          description: "Failed to purchase voice credits. Please try again.",
+          variant: "destructive"
+        });
         return false;
       }
 
@@ -87,6 +125,12 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
             purchase_date: new Date().toISOString()
           }));
           
+          toast({
+            title: "Purchase Successful",
+            description: `Added ${characters} voice characters to your account.`,
+            variant: "default"
+          });
+          
           await loadUserVoiceQuota();
           return true;
         }
@@ -95,6 +139,11 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       return false;
     } catch (error) {
       console.error('❌ Unexpected error purchasing extra voice credits:', error);
+      toast({
+        title: "Purchase Error",
+        description: "An unexpected error occurred during purchase.",
+        variant: "destructive"
+      });
       return false;
     }
   }, [user, loadUserVoiceQuota]);
@@ -127,6 +176,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   return {
     userVoiceQuota,
     isLoadingVoiceQuota,
+    voiceQuotaError,
     loadUserVoiceQuota,
     purchaseExtraVoiceCredits,
     refreshVoiceQuota,
