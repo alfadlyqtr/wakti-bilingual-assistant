@@ -27,7 +27,7 @@ interface EventData {
 }
 
 export default function Maw3dEdit() {
-  const { eventId } = useParams<{ eventId: string }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { language } = useTheme();
   const { user } = useAuth();
@@ -37,17 +37,17 @@ export default function Maw3dEdit() {
   const [event, setEvent] = useState<EventData | null>(null);
 
   useEffect(() => {
-    if (eventId) {
+    if (id) {
       fetchEvent();
     }
-  }, [eventId]);
+  }, [id]);
 
   const fetchEvent = async () => {
     try {
       const { data, error } = await supabase
         .from('maw3d_events')
         .select('*')
-        .eq('id', eventId)
+        .eq('id', id)
         .single();
 
       if (error) throw error;
@@ -86,12 +86,12 @@ export default function Maw3dEdit() {
           requires_approval: event.requires_approval,
           updated_at: new Date().toISOString()
         })
-        .eq('id', eventId);
+        .eq('id', id);
 
       if (error) throw error;
 
       toast.success(language === 'ar' ? 'تم تحديث الحدث بنجاح' : 'Event updated successfully');
-      navigate(`/maw3d/event/${eventId}`);
+      navigate(`/maw3d/event/${id}`);
     } catch (error) {
       console.error('Error updating event:', error);
       toast.error(language === 'ar' ? 'فشل في تحديث الحدث' : 'Failed to update event');
@@ -111,13 +111,13 @@ export default function Maw3dEdit() {
       await supabase
         .from('maw3d_rsvps')
         .delete()
-        .eq('event_id', eventId);
+        .eq('event_id', id);
 
       // Delete the event
       const { error } = await supabase
         .from('maw3d_events')
         .delete()
-        .eq('id', eventId);
+        .eq('id', id);
 
       if (error) throw error;
 
