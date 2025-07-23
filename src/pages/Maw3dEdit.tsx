@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Users, Save, Trash2 } from 'lucide-react';
@@ -17,13 +18,23 @@ interface EventData {
   id: string;
   title: string;
   description: string;
-  event_date: string;
-  event_time: string;
   location: string;
-  max_attendees: number;
+  google_maps_link?: string;
+  organizer?: string;
+  event_date: string;
+  start_time?: string;
+  end_time?: string;
+  is_all_day: boolean;
   is_public: boolean;
-  requires_approval: boolean;
+  background_type: string;
+  background_value: string;
+  text_style: any;
+  template_type?: string;
   created_by: string;
+  show_attending_count: boolean;
+  auto_delete_enabled: boolean;
+  image_blur: number;
+  language: string;
 }
 
 export default function Maw3dEdit() {
@@ -78,12 +89,20 @@ export default function Maw3dEdit() {
         .update({
           title: event.title,
           description: event.description,
-          event_date: event.event_date,
-          event_time: event.event_time,
           location: event.location,
-          max_attendees: event.max_attendees,
+          google_maps_link: event.google_maps_link,
+          organizer: event.organizer,
+          event_date: event.event_date,
+          start_time: event.start_time,
+          end_time: event.end_time,
+          is_all_day: event.is_all_day,
           is_public: event.is_public,
-          requires_approval: event.requires_approval,
+          background_type: event.background_type,
+          background_value: event.background_value,
+          text_style: event.text_style,
+          show_attending_count: event.show_attending_count,
+          auto_delete_enabled: event.auto_delete_enabled,
+          image_blur: event.image_blur,
           updated_at: new Date().toISOString()
         })
         .eq('id', id);
@@ -219,33 +238,79 @@ export default function Maw3dEdit() {
               />
             </div>
 
-            {/* Date and Time */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="date" className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  {language === 'ar' ? 'التاريخ' : 'Date'}
-                </Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={event.event_date}
-                  onChange={(e) => updateEvent('event_date', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="time" className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  {language === 'ar' ? 'الوقت' : 'Time'}
-                </Label>
-                <Input
-                  id="time"
-                  type="time"
-                  value={event.event_time}
-                  onChange={(e) => updateEvent('event_time', e.target.value)}
-                />
-              </div>
+            {/* Organizer */}
+            <div className="space-y-2">
+              <Label htmlFor="organizer">
+                {language === 'ar' ? 'المنظم' : 'Organizer'}
+              </Label>
+              <Input
+                id="organizer"
+                value={event.organizer || ''}
+                onChange={(e) => updateEvent('organizer', e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل اسم المنظم' : 'Enter organizer name'}
+              />
             </div>
+
+            {/* Date */}
+            <div className="space-y-2">
+              <Label htmlFor="date" className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                {language === 'ar' ? 'التاريخ' : 'Date'}
+              </Label>
+              <Input
+                id="date"
+                type="date"
+                value={event.event_date}
+                onChange={(e) => updateEvent('event_date', e.target.value)}
+              />
+            </div>
+
+            {/* All Day Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="isAllDay">
+                  {language === 'ar' ? 'طوال اليوم' : 'All Day'}
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'حدث لطوال اليوم' : 'Event lasts all day'}
+                </p>
+              </div>
+              <Switch
+                id="isAllDay"
+                checked={event.is_all_day}
+                onCheckedChange={(checked) => updateEvent('is_all_day', checked)}
+              />
+            </div>
+
+            {/* Time Fields - Only show if not all day */}
+            {!event.is_all_day && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startTime" className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    {language === 'ar' ? 'وقت البداية' : 'Start Time'}
+                  </Label>
+                  <Input
+                    id="startTime"
+                    type="time"
+                    value={event.start_time || ''}
+                    onChange={(e) => updateEvent('start_time', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endTime" className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    {language === 'ar' ? 'وقت النهاية' : 'End Time'}
+                  </Label>
+                  <Input
+                    id="endTime"
+                    type="time"
+                    value={event.end_time || ''}
+                    onChange={(e) => updateEvent('end_time', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Location */}
             <div className="space-y-2">
@@ -261,18 +326,16 @@ export default function Maw3dEdit() {
               />
             </div>
 
-            {/* Max Attendees */}
+            {/* Google Maps Link */}
             <div className="space-y-2">
-              <Label htmlFor="maxAttendees" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                {language === 'ar' ? 'الحد الأقصى للحضور' : 'Maximum Attendees'}
+              <Label htmlFor="googleMapsLink">
+                {language === 'ar' ? 'رابط خرائط جوجل' : 'Google Maps Link'}
               </Label>
               <Input
-                id="maxAttendees"
-                type="number"
-                min="1"
-                value={event.max_attendees}
-                onChange={(e) => updateEvent('max_attendees', parseInt(e.target.value) || 1)}
+                id="googleMapsLink"
+                value={event.google_maps_link || ''}
+                onChange={(e) => updateEvent('google_maps_link', e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل رابط خرائط جوجل' : 'Enter Google Maps link'}
               />
             </div>
 
@@ -300,17 +363,33 @@ export default function Maw3dEdit() {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="requiresApproval">
-                    {language === 'ar' ? 'يتطلب موافقة' : 'Requires Approval'}
+                  <Label htmlFor="showAttendingCount">
+                    {language === 'ar' ? 'عرض عدد الحضور' : 'Show Attending Count'}
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'يجب الموافقة على طلبات الحضور' : 'Attendance requests must be approved'}
+                    {language === 'ar' ? 'عرض عدد الأشخاص المؤكدين للحضور' : 'Display number of confirmed attendees'}
                   </p>
                 </div>
                 <Switch
-                  id="requiresApproval"
-                  checked={event.requires_approval}
-                  onCheckedChange={(checked) => updateEvent('requires_approval', checked)}
+                  id="showAttendingCount"
+                  checked={event.show_attending_count}
+                  onCheckedChange={(checked) => updateEvent('show_attending_count', checked)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="autoDelete">
+                    {language === 'ar' ? 'حذف تلقائي' : 'Auto Delete'}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'حذف الحدث تلقائياً بعد انتهائه' : 'Automatically delete event after it ends'}
+                  </p>
+                </div>
+                <Switch
+                  id="autoDelete"
+                  checked={event.auto_delete_enabled}
+                  onCheckedChange={(checked) => updateEvent('auto_delete_enabled', checked)}
                 />
               </div>
             </div>
