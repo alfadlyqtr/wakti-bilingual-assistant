@@ -284,31 +284,33 @@ export default function Maw3dCreate() {
       {/* Simplified Header */}
       <div className="bg-background/95 backdrop-blur-sm border-b border-border/30">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => navigate('/maw3d')}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              {t('back', language)}
-            </Button>
-
-            <h1 className="text-xl font-semibold">
+          <div className="space-y-3">
+            <h1 className="text-xl font-semibold text-center">
               {t('createEvent', language)}
             </h1>
+            
+            <div className="flex items-center justify-between">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate('/maw3d')}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {t('back', language)}
+              </Button>
 
-            <Button 
-              type="submit" 
-              form="event-form"
-              disabled={isLoading}
-              size="sm"
-              className="flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              {isLoading ? t('creating', language) : t('createEvent', language)}
-            </Button>
+              <Button 
+                type="submit" 
+                form="event-form"
+                disabled={isLoading}
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                {isLoading ? t('creating', language) : t('createEvent', language)}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
