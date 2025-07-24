@@ -11,13 +11,14 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, session, isLoading, isTokenRefreshing } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const location = useLocation();
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     isSubscribed: boolean;
     isLoading: boolean;
     error?: string;
     needsPayment: boolean;
+    subscriptionDetails?: any;
   }>({ isSubscribed: false, isLoading: true, needsPayment: false });
 
   // Owner accounts that bypass all restrictions
@@ -26,13 +27,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   useEffect(() => {
     console.log("ProtectedRoute: Current auth state:", {
       isLoading,
-      isTokenRefreshing,
       hasUser: !!user,
       hasSession: !!session,
       currentPath: location.pathname,
       userEmail: user?.email,
+      userId: user?.id
     });
-  }, [isLoading, isTokenRefreshing, user, session, location.pathname]);
+  }, [isLoading, user, session, location.pathname]);
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
@@ -59,26 +60,27 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         return;
       }
 
-      // Don't check subscription if token is refreshing
-      if (isTokenRefreshing) {
-        console.log('ProtectedRoute: Token is refreshing, skipping subscription check');
-        return;
-      }
-
       try {
         console.log("ProtectedRoute: Fetching subscription status from database...");
         
-        // Simple delay to let auth stabilize
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Add delay to prevent rapid requests after login
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('is_subscribed, subscription_status, next_billing_date')
+          .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name')
           .eq('id', user.id)
           .maybeSingle();
 
         if (error) {
           console.error('ProtectedRoute: Error fetching subscription status:', error);
+          // Handle rate limiting gracefully
+          if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+            console.log('⚠️ Rate limited, will retry subscription check');
+            setTimeout(() => checkSubscriptionStatus(), 5000);
+            return;
+          }
+          
           setSubscriptionStatus({ 
             isSubscribed: false, 
             isLoading: false, 
@@ -88,7 +90,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           return;
         }
 
-        console.log('ProtectedRoute: Profile data:', profile);
+        console.log('ProtectedRoute: Raw profile data:', profile);
 
         if (!profile) {
           console.log('ProtectedRoute: No profile found, user needs subscription');
@@ -100,19 +102,56 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           return;
         }
 
-        // Simple subscription check
-        const isValidSubscription = profile.is_subscribed === true && profile.subscription_status === 'active';
+        // Check if subscription is active and valid
+        const now = new Date();
+        let isValidSubscription = false;
+        let needsPayment = true;
+
+        // Basic subscription check
+        const hasActiveSubscription = profile.is_subscribed === true && profile.subscription_status === 'active';
         
-        console.log('ProtectedRoute: Subscription evaluation:', {
+        if (hasActiveSubscription && profile.next_billing_date) {
+          const nextBillingDate = new Date(profile.next_billing_date);
+          const gracePeriodDays = 1; // 1 day grace period after due date
+          const gracePeriodEnd = new Date(nextBillingDate);
+          gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays);
+          
+          // Subscription is valid if we haven't passed the grace period
+          isValidSubscription = now <= gracePeriodEnd;
+          needsPayment = now > nextBillingDate; // Payment needed if past due date
+          
+          console.log('ProtectedRoute: Date-based subscription check:', {
+            now: now.toISOString(),
+            nextBillingDate: nextBillingDate.toISOString(),
+            gracePeriodEnd: gracePeriodEnd.toISOString(),
+            isValidSubscription,
+            needsPayment,
+            daysUntilDue: Math.ceil((nextBillingDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+            daysOverdue: needsPayment ? Math.ceil((now.getTime() - nextBillingDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
+          });
+        } else if (hasActiveSubscription && !profile.next_billing_date) {
+          // Active subscription without billing date (like admin gifts) - consider valid
+          isValidSubscription = true;
+          needsPayment = false;
+          console.log('ProtectedRoute: Active subscription without billing date (admin gift/special case)');
+        }
+
+        console.log('ProtectedRoute: Final subscription evaluation:', {
+          profileExists: !!profile,
           isSubscribed: profile.is_subscribed,
           subscriptionStatus: profile.subscription_status,
-          isValidSubscription
+          nextBillingDate: profile.next_billing_date,
+          planName: profile.plan_name,
+          hasActiveSubscription,
+          isValidSubscription,
+          needsPayment
         });
 
         setSubscriptionStatus({ 
           isSubscribed: isValidSubscription, 
           isLoading: false,
-          needsPayment: !isValidSubscription
+          needsPayment: needsPayment && !isValidSubscription,
+          subscriptionDetails: profile
         });
       } catch (error) {
         console.error('ProtectedRoute: Exception during subscription check:', error);
@@ -125,46 +164,51 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       }
     };
 
-    // Only run subscription check when we have stable auth state
-    if (!isLoading && !isTokenRefreshing && user && session) {
-      console.log("ProtectedRoute: Auth stable, checking subscription");
-      checkSubscriptionStatus();
+    // Only run subscription check when we have a user and auth is not loading
+    // Add additional delay for recently signed in users
+    if (!isLoading && user && session) {
+      console.log("ProtectedRoute: Auth loaded, scheduling subscription check");
+      const delay = Date.now() - new Date(session.user.last_sign_in_at || 0).getTime() < 10000 ? 3000 : 1000;
+      setTimeout(() => {
+        checkSubscriptionStatus();
+      }, delay);
     } else if (!isLoading && !user) {
-      console.log("ProtectedRoute: Auth stable but no user, setting needs payment");
+      console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
       setSubscriptionStatus({ 
         isSubscribed: false, 
         isLoading: false, 
         needsPayment: true 
       });
     }
-  }, [user, session, isLoading, isTokenRefreshing]);
+  }, [user, session, isLoading]);
 
-  // Show loading while auth or subscription status is loading, or token is refreshing
-  if (isLoading || isTokenRefreshing || subscriptionStatus.isLoading) {
-    console.log("ProtectedRoute: Still loading - auth:", isLoading, "token refresh:", isTokenRefreshing, "subscription:", subscriptionStatus.isLoading);
+  // Show loading while auth or subscription status is loading
+  if (isLoading || subscriptionStatus.isLoading) {
+    console.log("ProtectedRoute: Still loading - auth:", isLoading, "subscription:", subscriptionStatus.isLoading);
     return <Loading />;
   }
 
-  // Redirect to login if not authenticated
+  // Proper authentication check - redirect to login if not authenticated
   if (!user || !session) {
     console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Show payment overlay if no valid subscription
+  // STRICT ENFORCEMENT: Block access if no valid subscription
   if (!subscriptionStatus.isSubscribed || subscriptionStatus.needsPayment) {
-    console.log("ProtectedRoute: User needs subscription:", {
+    console.log("ProtectedRoute: User blocked - no valid subscription:", {
       email: user.email,
       isSubscribed: subscriptionStatus.isSubscribed,
       needsPayment: subscriptionStatus.needsPayment
     });
     
+    // Show Fawran payment overlay
     return (
       <FawranPaymentOverlay 
         userEmail={user.email || ''} 
         onClose={() => {
-          console.log('Payment overlay closed, rechecking subscription...');
-          setSubscriptionStatus(prev => ({ ...prev, isLoading: true }));
+          // Refresh the page to re-check subscription status
+          window.location.reload();
         }}
       />
     );

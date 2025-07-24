@@ -9,7 +9,6 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isLoading: boolean; // Alias for loading
-  isTokenRefreshing: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -38,74 +37,53 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isTokenRefreshing, setIsTokenRefreshing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    let tokenRefreshTimeout: NodeJS.Timeout;
-
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔐 Initial session check:', !!session);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes with rate limiting protection
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state changed:', event, session?.user?.email);
+      console.log('Auth state changed:', event, session?.user?.id);
       
-      // Handle token refresh events
-      if (event === 'TOKEN_REFRESHED') {
-        console.log('🔄 Token refreshed, setting refresh state');
-        setIsTokenRefreshing(true);
-        
-        // Clear existing timeout
-        if (tokenRefreshTimeout) {
-          clearTimeout(tokenRefreshTimeout);
-        }
-        
-        // Reset refresh flag after delay
-        tokenRefreshTimeout = setTimeout(() => {
-          setIsTokenRefreshing(false);
-          console.log('✅ Token refresh state cleared');
-        }, 3000);
-        
-        // Update session but don't change loading state during refresh
-        setSession(session);
-        setUser(session?.user ?? null);
+      // Prevent rapid state changes during token refresh
+      if (event === 'TOKEN_REFRESHED' && isRefreshing) {
+        console.log('⚠️ Token refresh already in progress, skipping...');
         return;
       }
       
-      // Handle other auth events normally
+      if (event === 'TOKEN_REFRESHED') {
+        setIsRefreshing(true);
+        // Reset refresh flag after a delay
+        setTimeout(() => setIsRefreshing(false), 2000);
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
 
       if (event === 'SIGNED_IN' && session?.user) {
-        console.log('✅ User signed in successfully:', session.user.email);
+        console.log('User signed in, services will initialize after delay');
+        // Services will be initialized by useUnreadMessages with a delay
       }
 
       if (event === 'SIGNED_OUT') {
-        console.log('👋 User signed out');
+        console.log('User signed out, cleaning up...');
         setUser(null);
         setSession(null);
-        setIsTokenRefreshing(false);
-        if (tokenRefreshTimeout) {
-          clearTimeout(tokenRefreshTimeout);
-        }
+        setIsRefreshing(false);
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-      if (tokenRefreshTimeout) {
-        clearTimeout(tokenRefreshTimeout);
-      }
-    };
-  }, []);
+    return () => subscription.unsubscribe();
+  }, [isRefreshing]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -202,7 +180,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     session,
     loading,
     isLoading: loading, // Alias for loading
-    isTokenRefreshing,
     signIn,
     signUp,
     signOut,
