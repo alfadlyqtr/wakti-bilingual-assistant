@@ -487,6 +487,9 @@ const WaktiAIV2 = () => {
           return newMessages;
         });
 
+        // FIXED: Clear the typing indicator after streaming completes
+        setIsLoading(false);
+
         // Save updated messages to memory
         const currentMessages = sessionMessages.slice(0, -1); // Remove placeholder
         const finalMessages = [...currentMessages, ...newMessages.slice(-1)]; // Add updated message
