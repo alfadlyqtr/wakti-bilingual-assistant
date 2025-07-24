@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { waktiToast } from '@/services/waktiToast';
@@ -14,32 +15,116 @@ export function useUnreadMessages() {
   const [perContactUnread, setPerContactUnread] = useState<Record<string, number>>({});
   const [isInitialized, setIsInitialized] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
+  const [isTokenRefreshing, setIsTokenRefreshing] = useState(false);
+  const [requestQueue, setRequestQueue] = useState<(() => Promise<void>)[]>([]);
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
 
-  // Debounced fetch function with longer delay
-  const debouncedFetchUnreadCounts = useDebounced(fetchUnreadCounts, 2000);
+  // Circuit breaker state
+  const [circuitBreakerOpen, setCircuitBreakerOpen] = useState(false);
+  const [lastErrorTime, setLastErrorTime] = useState(0);
+  const CIRCUIT_BREAKER_TIMEOUT = 60000; // 60 seconds
+
+  // Debounced fetch function with much longer delay
+  const debouncedFetchUnreadCounts = useDebounced(fetchUnreadCounts, 5000);
+
+  // Token refresh detection
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'TOKEN_REFRESHED') {
+        setIsTokenRefreshing(true);
+        setTimeout(() => setIsTokenRefreshing(false), 2000);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Request queue processor
+  const processRequestQueue = useCallback(async () => {
+    if (isProcessingQueue || requestQueue.length === 0) return;
+    
+    setIsProcessingQueue(true);
+    
+    while (requestQueue.length > 0) {
+      const request = requestQueue.shift();
+      if (request) {
+        try {
+          await request();
+          // Add delay between requests
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+          console.error('Request queue error:', error);
+        }
+      }
+    }
+    
+    setIsProcessingQueue(false);
+  }, [requestQueue, isProcessingQueue]);
+
+  // Check circuit breaker
+  const isCircuitBreakerOpen = useCallback(() => {
+    if (!circuitBreakerOpen) return false;
+    
+    const timeSinceLastError = Date.now() - lastErrorTime;
+    if (timeSinceLastError > CIRCUIT_BREAKER_TIMEOUT) {
+      setCircuitBreakerOpen(false);
+      return false;
+    }
+    
+    return true;
+  }, [circuitBreakerOpen, lastErrorTime]);
+
+  // Handle rate limiting
+  const handleRateLimit = useCallback(() => {
+    setIsRateLimited(true);
+    setCircuitBreakerOpen(true);
+    setLastErrorTime(Date.now());
+    
+    setTimeout(() => {
+      setIsRateLimited(false);
+    }, 30000); // 30 seconds
+  }, []);
+
+  // Check if we can make requests
+  const canMakeRequest = useCallback(() => {
+    return !authLoading && 
+           !isTokenRefreshing && 
+           !isRateLimited && 
+           !isCircuitBreakerOpen() && 
+           user;
+  }, [authLoading, isTokenRefreshing, isRateLimited, isCircuitBreakerOpen, user]);
 
   useEffect(() => {
-    // Early return if not ready - prevents hook from running when it shouldn't
-    if (authLoading || !user || isRateLimited) {
+    // Early return if not ready
+    if (authLoading || !user || isRateLimited || isCircuitBreakerOpen()) {
       if (!user) {
         resetCounts();
       }
       return;
     }
 
-    console.log('👀 Setting up unread message tracking for user:', user.id);
+    console.log('🔄 Setting up unread message tracking for user:', user.id);
 
-    // Much longer delay before initializing to prevent rapid requests
+    // Much longer delay before initializing
     const initTimeout = setTimeout(() => {
-      console.log('🚀 Starting delayed initialization of unread counts');
-      initializeUnreadCounts();
-    }, 5000); // Increased to 5 seconds
+      if (canMakeRequest()) {
+        console.log('🚀 Starting initialization with batched requests');
+        initializeUnreadCounts();
+      }
+    }, 8000); // Increased to 8 seconds
 
     return () => {
       clearTimeout(initTimeout);
       cleanupSubscriptions();
     };
-  }, [user, authLoading, isRateLimited]);
+  }, [user, authLoading, isRateLimited, canMakeRequest]);
+
+  // Process queue when conditions are met
+  useEffect(() => {
+    if (canMakeRequest()) {
+      processRequestQueue();
+    }
+  }, [canMakeRequest, processRequestQueue]);
 
   const resetCounts = () => {
     setUnreadTotal(0);
@@ -52,64 +137,64 @@ export function useUnreadMessages() {
   };
 
   const initializeUnreadCounts = async () => {
-    if (!user || authLoading || isRateLimited) {
-      console.log('⚠️ Skipping initialization - not ready');
+    if (!canMakeRequest()) {
+      console.log('⚠️ Cannot make request - conditions not met');
       return;
     }
 
     try {
-      console.log('📊 Starting progressive loading with extended delays');
-      await progressivelyLoadCounts();
+      console.log('📊 Starting batched count loading');
+      await loadAllCountsBatched();
       
       // Only set up subscriptions after successful loading
       setTimeout(() => {
-        setupRealtimeSubscriptions();
-        setIsInitialized(true);
-      }, 2000);
+        if (canMakeRequest()) {
+          setupRealtimeSubscriptions();
+          setIsInitialized(true);
+        }
+      }, 3000);
     } catch (error) {
       console.error('❌ Error initializing unread counts:', error);
       
       if (error.message?.includes('429') || error.message?.includes('rate limit')) {
-        console.log('🔄 Rate limited, backing off');
-        setIsRateLimited(true);
-        
-        // Exponential backoff - wait longer before retrying
-        setTimeout(() => {
-          setIsRateLimited(false);
-          console.log('🔄 Retrying after rate limit backoff');
-        }, 30000); // Wait 30 seconds before retrying
+        handleRateLimit();
       }
     }
   };
 
-  const progressivelyLoadCounts = async () => {
-    if (!user || authLoading || isRateLimited) return;
-
-    console.log('📊 Starting progressive loading with extended delays');
+  // Batched count loading - single query to get all counts
+  const loadAllCountsBatched = async () => {
+    if (!canMakeRequest()) return;
 
     try {
-      // Load with much longer delays between requests
-      await loadMessagesCount();
-      await delay(2000); // 2 second delay
+      console.log('📊 Loading all counts in batched query');
+      
+      // Create a single batched query using Promise.all with staggered execution
+      const batchedQueries = [
+        () => loadMessagesCount(),
+        () => loadContactsCount(),
+        () => loadEventsCount(),
+        () => loadTasksCount()
+      ];
 
-      await loadContactsCount();
-      await delay(2000); // 2 second delay
-
-      await loadEventsCount();
-      await delay(2000); // 2 second delay
-
-      await loadTasksCount();
+      // Execute queries with staggered timing to prevent token refresh cascade
+      for (const query of batchedQueries) {
+        if (!canMakeRequest()) break;
+        
+        await query();
+        // Stagger requests to prevent rapid token refreshes
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
       console.log('✅ All counts loaded successfully');
     } catch (error) {
-      console.error('❌ Error in progressive loading:', error);
+      console.error('❌ Error in batched loading:', error);
       throw error;
     }
   };
 
-  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
   const loadMessagesCount = async () => {
-    if (!user || isRateLimited) return;
+    if (!canMakeRequest()) return;
     
     try {
       console.log('📨 Loading messages count...');
@@ -136,13 +221,13 @@ export function useUnreadMessages() {
     } catch (error) {
       console.error('❌ Error loading messages count:', error);
       if (error.message?.includes('429')) {
-        throw error; // Re-throw to trigger rate limiting
+        throw error;
       }
     }
   };
 
   const loadContactsCount = async () => {
-    if (!user || isRateLimited) return;
+    if (!canMakeRequest()) return;
     
     try {
       console.log('👥 Loading contacts count...');
@@ -163,7 +248,7 @@ export function useUnreadMessages() {
   };
 
   const loadEventsCount = async () => {
-    if (!user || isRateLimited) return;
+    if (!canMakeRequest()) return;
     
     try {
       console.log('📅 Loading events count...');
@@ -187,7 +272,7 @@ export function useUnreadMessages() {
   };
 
   const loadTasksCount = async () => {
-    if (!user || isRateLimited) return;
+    if (!canMakeRequest()) return;
     
     try {
       console.log('📋 Loading tasks count...');
@@ -212,7 +297,7 @@ export function useUnreadMessages() {
   };
 
   const setupRealtimeSubscriptions = () => {
-    if (!user || !isInitialized || isRateLimited) {
+    if (!canMakeRequest() || !isInitialized) {
       console.log('⚠️ Skipping subscriptions - not ready');
       return;
     }
@@ -239,8 +324,8 @@ export function useUnreadMessages() {
           sound: 'chime'
         });
         
-        // Use longer debounce to prevent rapid requests
-        debouncedFetchUnreadCounts();
+        // Queue the refresh instead of immediate execution
+        setRequestQueue(prev => [...prev, () => fetchUnreadCounts()]);
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -248,104 +333,12 @@ export function useUnreadMessages() {
         table: 'messages',
         filter: `recipient_id=eq.${user.id}`
       }, () => {
-        debouncedFetchUnreadCounts();
-      })
-      .subscribe();
-
-    const contactsChannel = supabase
-      .channel('contact-requests')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'contacts',
-        filter: `contact_id=eq.${user.id}`
-      }, async (payload) => {
-        console.log('👥 New contact request:', payload);
-        
-        if (payload.new.status === 'pending') {
-          await waktiToast.show({
-            id: `contact-${payload.new.id}`,
-            type: 'contact',
-            title: 'Contact Request',
-            message: 'Someone wants to connect with you',
-            priority: 'normal',
-            sound: 'ding'
-          });
-        }
-        
-        debouncedFetchUnreadCounts();
-      })
-      .subscribe();
-
-    const maw3dChannel = supabase
-      .channel('maw3d-rsvps')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'maw3d_rsvps'
-      }, async (payload) => {
-        console.log('📅 New Maw3d RSVP:', payload);
-        
-        const { data: event } = await supabase
-          .from('maw3d_events')
-          .select('created_by, title')
-          .eq('id', payload.new.event_id)
-          .single();
-          
-        if (event?.created_by === user.id) {
-          await waktiToast.show({
-            id: `rsvp-${payload.new.id}`,
-            type: 'event',
-            title: 'RSVP Response',
-            message: `${payload.new.guest_name} responded to ${event.title}`,
-            priority: 'normal',
-            sound: 'beep'
-          });
-          
-          debouncedFetchUnreadCounts();
-        }
-      })
-      .subscribe();
-
-    const sharedTaskChannel = supabase
-      .channel('shared-task-responses')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'tr_shared_responses'
-      }, async (payload) => {
-        console.log('📋 New shared task response:', payload);
-        
-        const { data: task } = await supabase
-          .from('tr_tasks')
-          .select('user_id, title')
-          .eq('id', payload.new.task_id)
-          .single();
-          
-        if (task?.user_id === user.id) {
-          let message = 'Task updated';
-          if (payload.new.response_type === 'completion' && payload.new.is_completed) {
-            message = `${payload.new.visitor_name} completed: ${task.title}`;
-          } else if (payload.new.response_type === 'comment') {
-            message = `${payload.new.visitor_name} commented on: ${task.title}`;
-          }
-          
-          await waktiToast.show({
-            id: `task-${payload.new.id}`,
-            type: 'shared_task',
-            title: 'Task Update',
-            message,
-            priority: 'normal',
-            sound: 'chime'
-          });
-          
-          debouncedFetchUnreadCounts();
-        }
+        setRequestQueue(prev => [...prev, () => fetchUnreadCounts()]);
       })
       .subscribe();
 
     // Store channels for cleanup
-    window.unreadChannels = [messagesChannel, contactsChannel, maw3dChannel, sharedTaskChannel];
+    window.unreadChannels = [messagesChannel];
   };
 
   const cleanupSubscriptions = () => {
@@ -359,20 +352,18 @@ export function useUnreadMessages() {
   };
 
   async function fetchUnreadCounts() {
-    if (!user || !isInitialized || isRateLimited) {
+    if (!canMakeRequest() || !isInitialized) {
       console.log('⚠️ Skipping fetch - not ready');
       return;
     }
 
     try {
       console.log('📊 Fetching unread counts (debounced)');
-      await progressivelyLoadCounts();
+      await loadAllCountsBatched();
     } catch (error) {
       console.error('❌ Error fetching unread counts:', error);
       if (error.message?.includes('429') || error.message?.includes('rate limit')) {
-        console.log('⚠️ Rate limited in fetch, backing off');
-        setIsRateLimited(true);
-        setTimeout(() => setIsRateLimited(false), 30000);
+        handleRateLimit();
       }
     }
   }

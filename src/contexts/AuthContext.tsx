@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,6 +9,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isLoading: boolean; // Alias for loading
+  isTokenRefreshing: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -36,10 +38,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isTokenRefreshing, setIsTokenRefreshing] = useState(false);
 
   useEffect(() => {
     let isInitialLoad = true;
+    let tokenRefreshTimeout: NodeJS.Timeout;
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -54,50 +57,69 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     });
 
-    // Listen for auth changes with better rate limiting protection
+    // Listen for auth changes with improved token refresh handling
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 Auth state changed:', event, session?.user?.email);
       
-      // Prevent rapid state changes during token refresh
+      // Handle token refresh events
       if (event === 'TOKEN_REFRESHED') {
-        if (isRefreshing) {
-          console.log('⚠️ Token refresh already in progress, skipping...');
-          return;
+        console.log('🔄 Token refreshed, setting refresh state');
+        setIsTokenRefreshing(true);
+        
+        // Clear existing timeout
+        if (tokenRefreshTimeout) {
+          clearTimeout(tokenRefreshTimeout);
         }
-        setIsRefreshing(true);
-        // Reset refresh flag after longer delay
-        setTimeout(() => setIsRefreshing(false), 5000);
-      }
-      
-      // Only update state if not currently refreshing
-      if (!isRefreshing || event !== 'TOKEN_REFRESHED') {
+        
+        // Reset refresh flag after delay
+        tokenRefreshTimeout = setTimeout(() => {
+          setIsTokenRefreshing(false);
+          console.log('✅ Token refresh state cleared');
+        }, 3000);
+        
+        // Update session but don't change loading state during refresh
         setSession(session);
         setUser(session?.user ?? null);
+        return;
       }
       
-      // Always set loading to false after auth events
-      setLoading(false);
+      // Handle other auth events normally
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      // Always set loading to false after auth events (except token refresh)
+      if (event !== 'TOKEN_REFRESHED') {
+        setLoading(false);
+      }
 
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('✅ User signed in successfully:', session.user.email);
-        // Let other systems know user is ready after a longer delay
+        // Longer delay for services to initialize after login
         setTimeout(() => {
           console.log('🚀 User session stabilized, services can initialize');
-        }, 3000);
+        }, 5000);
       }
 
       if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');
         setUser(null);
         setSession(null);
-        setIsRefreshing(false);
+        setIsTokenRefreshing(false);
+        if (tokenRefreshTimeout) {
+          clearTimeout(tokenRefreshTimeout);
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [isRefreshing]);
+    return () => {
+      subscription.unsubscribe();
+      if (tokenRefreshTimeout) {
+        clearTimeout(tokenRefreshTimeout);
+      }
+    };
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -194,6 +216,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     session,
     loading,
     isLoading: loading, // Alias for loading
+    isTokenRefreshing,
     signIn,
     signUp,
     signOut,

@@ -11,7 +11,7 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, session, isLoading } = useAuth();
+  const { user, session, isLoading, isTokenRefreshing } = useAuth();
   const location = useLocation();
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     isSubscribed: boolean;
@@ -27,13 +27,14 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   useEffect(() => {
     console.log("ProtectedRoute: Current auth state:", {
       isLoading,
+      isTokenRefreshing,
       hasUser: !!user,
       hasSession: !!session,
       currentPath: location.pathname,
       userEmail: user?.email,
       userId: user?.id
     });
-  }, [isLoading, user, session, location.pathname]);
+  }, [isLoading, isTokenRefreshing, user, session, location.pathname]);
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
@@ -60,16 +61,45 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         return;
       }
 
+      // Don't check subscription if token is refreshing
+      if (isTokenRefreshing) {
+        console.log('ProtectedRoute: Token is refreshing, skipping subscription check');
+        return;
+      }
+
       try {
         console.log("ProtectedRoute: Fetching subscription status from database...");
         
-        // Add longer delay to prevent rapid requests after login
+        // Calculate delay based on login time with circuit breaker
         const loginTime = session.user.last_sign_in_at ? new Date(session.user.last_sign_in_at).getTime() : 0;
         const timeSinceLogin = Date.now() - loginTime;
-        const delay = timeSinceLogin < 30000 ? 8000 : 3000; // 8 seconds for recent logins, 3 seconds otherwise
+        
+        // Progressive delay: longer for recent logins
+        let delay = 10000; // Default 10 seconds
+        if (timeSinceLogin < 30000) { // Less than 30 seconds since login
+          delay = 15000; // 15 seconds
+        } else if (timeSinceLogin < 60000) { // Less than 1 minute since login
+          delay = 12000; // 12 seconds
+        }
         
         console.log(`⏳ Waiting ${delay}ms before subscription check (login was ${Math.round(timeSinceLogin/1000)}s ago)`);
+        
+        // Check if token is still refreshing during delay
+        const checkInterval = setInterval(() => {
+          if (isTokenRefreshing) {
+            console.log('⚠️ Token refresh detected during delay, extending wait...');
+            delay += 5000; // Add 5 more seconds
+          }
+        }, 1000);
+        
         await new Promise(resolve => setTimeout(resolve, delay));
+        clearInterval(checkInterval);
+        
+        // Final check before making request
+        if (isTokenRefreshing) {
+          console.log('⚠️ Token still refreshing, skipping subscription check');
+          return;
+        }
         
         const { data: profile, error } = await supabase
           .from('profiles')
@@ -79,13 +109,19 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
         if (error) {
           console.error('ProtectedRoute: Error fetching subscription status:', error);
-          // Handle rate limiting with exponential backoff
-          if (error.message?.includes('429') || error.message?.includes('rate limit')) {
-            console.log('⚠️ Rate limited, will retry subscription check with exponential backoff');
+          
+          // Enhanced rate limiting detection and handling
+          if (error.message?.includes('429') || 
+              error.message?.includes('rate limit') || 
+              error.message?.includes('too many requests')) {
+            console.log('⚠️ Rate limited, implementing exponential backoff');
+            
+            // Don't update subscription status on rate limit
+            // Let the user stay on current screen
             setTimeout(() => {
-              console.log('🔄 Retrying subscription check after backoff');
+              console.log('🔄 Retrying subscription check after rate limit backoff');
               checkSubscriptionStatus();
-            }, 15000); // Wait 15 seconds before retry
+            }, 30000); // Wait 30 seconds before retry
             return;
           }
           
@@ -172,9 +208,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       }
     };
 
-    // Only run subscription check when we have stable auth state
-    if (!isLoading && user && session) {
-      console.log("ProtectedRoute: Auth stable, scheduling subscription check");
+    // Only run subscription check when we have stable auth state and no token refresh
+    if (!isLoading && !isTokenRefreshing && user && session) {
+      console.log("ProtectedRoute: Auth stable and no token refresh, scheduling subscription check");
       checkSubscriptionStatus();
     } else if (!isLoading && !user) {
       console.log("ProtectedRoute: Auth stable but no user, setting needs payment");
@@ -184,11 +220,11 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         needsPayment: true 
       });
     }
-  }, [user, session, isLoading]);
+  }, [user, session, isLoading, isTokenRefreshing]);
 
-  // Show loading while auth or subscription status is loading
-  if (isLoading || subscriptionStatus.isLoading) {
-    console.log("ProtectedRoute: Still loading - auth:", isLoading, "subscription:", subscriptionStatus.isLoading);
+  // Show loading while auth or subscription status is loading, or token is refreshing
+  if (isLoading || isTokenRefreshing || subscriptionStatus.isLoading) {
+    console.log("ProtectedRoute: Still loading - auth:", isLoading, "token refresh:", isTokenRefreshing, "subscription:", subscriptionStatus.isLoading);
     return <Loading />;
   }
 
@@ -206,13 +242,26 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       needsPayment: subscriptionStatus.needsPayment
     });
     
-    // Show Fawran payment overlay
+    // Show Fawran payment overlay with improved onClose handling
     return (
       <FawranPaymentOverlay 
         userEmail={user.email || ''} 
         onClose={() => {
-          // Refresh the page to re-check subscription status
-          window.location.reload();
+          // Instead of reloading, trigger a new subscription check
+          console.log('Payment overlay closed, rechecking subscription...');
+          setSubscriptionStatus(prev => ({ ...prev, isLoading: true }));
+          
+          // Recheck subscription after a delay
+          setTimeout(() => {
+            if (user && session && !isTokenRefreshing) {
+              // Trigger subscription recheck by updating a dependency
+              setSubscriptionStatus(prev => ({ 
+                ...prev, 
+                isLoading: false,
+                needsPayment: true // Reset to trigger new check
+              }));
+            }
+          }, 2000);
         }}
       />
     );
