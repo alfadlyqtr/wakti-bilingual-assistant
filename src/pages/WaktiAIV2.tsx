@@ -467,24 +467,29 @@ const WaktiAIV2 = () => {
           throw new Error(aiResponse.error);
         }
         
-        // FIXED: Safe property access for streaming responses
-        const assistantMessage: AIMessage = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: aiResponse.response || 'Response received',
-          timestamp: new Date(),
-          intent: aiResponse.intent || undefined,
-          confidence: (aiResponse.confidence as 'high' | 'medium' | 'low') || undefined,
-          actionTaken: aiResponse.actionTaken || undefined,
-          imageUrl: aiResponse.imageUrl || undefined,
-          browsingUsed: aiResponse.browsingUsed || undefined,
-          browsingData: aiResponse.browsingData || undefined
-        };
+        // FIXED: Update existing placeholder message with metadata instead of creating new one
+        setSessionMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            // Keep the streamed content, just add metadata
+            lastMessage.intent = aiResponse.intent || undefined;
+            lastMessage.confidence = (aiResponse.confidence as 'high' | 'medium' | 'low') || undefined;
+            lastMessage.actionTaken = aiResponse.actionTaken || undefined;
+            lastMessage.imageUrl = aiResponse.imageUrl || undefined;
+            lastMessage.browsingUsed = aiResponse.browsingUsed || undefined;
+            lastMessage.browsingData = aiResponse.browsingData || undefined;
+            // Update final content if different from streamed content
+            if (aiResponse.response && aiResponse.response !== lastMessage.content) {
+              lastMessage.content = aiResponse.response;
+            }
+          }
+          return newMessages;
+        });
 
-        // Update final message with complete response
-        const finalMessages = [...newMessages, assistantMessage];
-        setSessionMessages(finalMessages);
-        
+        // Save updated messages to memory
+        const currentMessages = sessionMessages.slice(0, -1); // Remove placeholder
+        const finalMessages = [...currentMessages, ...newMessages.slice(-1)]; // Add updated message
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
 
         // FIXED: Safe task form handling
