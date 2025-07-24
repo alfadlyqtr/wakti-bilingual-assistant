@@ -41,7 +41,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isTokenRefreshing, setIsTokenRefreshing] = useState(false);
 
   useEffect(() => {
-    let isInitialLoad = true;
     let tokenRefreshTimeout: NodeJS.Timeout;
 
     // Get initial session
@@ -49,15 +48,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('🔐 Initial session check:', !!session);
       setSession(session);
       setUser(session?.user ?? null);
-      
-      // Only set loading to false after initial load
-      if (isInitialLoad) {
-        setLoading(false);
-        isInitialLoad = false;
-      }
+      setLoading(false);
     });
 
-    // Listen for auth changes with improved token refresh handling
+    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -88,18 +82,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Handle other auth events normally
       setSession(session);
       setUser(session?.user ?? null);
-      
-      // Always set loading to false after auth events (except token refresh)
-      if (event !== 'TOKEN_REFRESHED') {
-        setLoading(false);
-      }
+      setLoading(false);
 
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('✅ User signed in successfully:', session.user.email);
-        // Longer delay for services to initialize after login
-        setTimeout(() => {
-          console.log('🚀 User session stabilized, services can initialize');
-        }, 5000);
       }
 
       if (event === 'SIGNED_OUT') {
