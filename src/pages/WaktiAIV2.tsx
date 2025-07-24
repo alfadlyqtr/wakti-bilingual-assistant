@@ -487,8 +487,12 @@ const WaktiAIV2 = () => {
           return newMessages;
         });
 
-        // FIXED: Clear the typing indicator after streaming completes
-        setIsLoading(false);
+        // FIXED: Clear the typing indicator after streaming completes with proper debugging
+        console.log('🔄 STREAMING: Setting isLoading to false');
+        setTimeout(() => {
+          setIsLoading(false);
+          console.log('✅ STREAMING: Loading state cleared');
+        }, 100); // Small delay to avoid React batching issues
 
         // Save updated messages to memory
         const currentMessages = sessionMessages.slice(0, -1); // Remove placeholder
