@@ -313,17 +313,6 @@ const WaktiAIV2 = () => {
       // Save to frontend memory
       EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
 
-      // Add placeholder assistant message for streaming
-      const placeholderAssistantMessage: AIMessage = {
-        id: `assistant-streaming-${Date.now()}`,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date()
-      };
-
-      const messagesWithPlaceholder = [...newMessages, placeholderAssistantMessage];
-      setSessionMessages(messagesWithPlaceholder);
-
       if (routingMode === 'image') {
         console.log('🎨 FRONTEND BOSS: Processing image generation');
         
@@ -393,7 +382,7 @@ const WaktiAIV2 = () => {
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
         
       } else {
-        // CHAT MODE OR EXPLICIT TASK COMMANDS (INCLUDING VISION WITH STREAMING)
+        // CHAT MODE OR EXPLICIT TASK COMMANDS - NO STREAMING
         if (isExplicitTaskCommand(messageContent)) {
           console.log('🎯 FRONTEND BOSS: Processing explicit task command');
           
@@ -432,82 +421,58 @@ const WaktiAIV2 = () => {
 
           EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
 
-          setIsLoading(false);
-          return;
-        }
+        } else {
+          // DEFAULT CHAT MODE - NO STREAMING, DIRECT RESPONSE
+          console.log('💬 FRONTEND BOSS: Processing chat mode with direct response (no streaming)');
+          
+          const aiResponse = await WaktiAIV2Service.sendMessage(
+            messageContent,
+            userProfile?.id,
+            language,
+            workingConversationId,
+            finalInputType,
+            newMessages,
+            false,
+            'chat',
+            '',
+            processedAttachedFiles || []
+            // No streaming callback - direct response only
+          );
 
-        // DEFAULT CHAT MODE - INCLUDING VISION WITH STREAMING
-        console.log('💬 FRONTEND BOSS: Processing chat mode with streaming');
-        
-        const aiResponse = await WaktiAIV2Service.sendMessage(
-          messageContent,
-          userProfile?.id,
-          language,
-          workingConversationId,
-          finalInputType,
-          newMessages,
-          false,
-          'chat',
-          '',
-          processedAttachedFiles || [],
-          (streamingText: string) => {
-            // Update the placeholder message in real-time during streaming
-            setSessionMessages(prev => {
-              const newMessages = [...prev];
-              const lastMessage = newMessages[newMessages.length - 1];
-              if (lastMessage && lastMessage.role === 'assistant') {
-                lastMessage.content = streamingText;
-              }
-              return newMessages;
-            });
+          if (aiResponse.error) {
+            throw new Error(aiResponse.error);
           }
-        );
+          
+          // Create single assistant message with complete response
+          const assistantMessage: AIMessage = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: aiResponse.response || 'Response received',
+            timestamp: new Date(),
+            intent: aiResponse.intent || undefined,
+            confidence: (aiResponse.confidence as 'high' | 'medium' | 'low') || undefined,
+            actionTaken: aiResponse.actionTaken || undefined,
+            imageUrl: aiResponse.imageUrl || undefined,
+            browsingUsed: aiResponse.browsingUsed || undefined,
+            browsingData: aiResponse.browsingData || undefined
+          };
 
-        if (aiResponse.error) {
-          throw new Error(aiResponse.error);
-        }
-        
-        // FIXED: Update existing placeholder message with metadata instead of creating new one
-        setSessionMessages(prev => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage && lastMessage.role === 'assistant') {
-            // Keep the streamed content, just add metadata
-            lastMessage.intent = aiResponse.intent || undefined;
-            lastMessage.confidence = (aiResponse.confidence as 'high' | 'medium' | 'low') || undefined;
-            lastMessage.actionTaken = aiResponse.actionTaken || undefined;
-            lastMessage.imageUrl = aiResponse.imageUrl || undefined;
-            lastMessage.browsingUsed = aiResponse.browsingUsed || undefined;
-            lastMessage.browsingData = aiResponse.browsingData || undefined;
-            // Update final content if different from streamed content
-            if (aiResponse.response && aiResponse.response !== lastMessage.content) {
-              lastMessage.content = aiResponse.response;
-            }
+          const finalMessages = [...newMessages, assistantMessage];
+          setSessionMessages(finalMessages);
+
+          // Save to memory
+          EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
+
+          // Handle task form
+          if (aiResponse.showTaskForm && aiResponse.taskData) {
+            setPendingTaskData(aiResponse.taskData);
+            setShowTaskConfirmation(true);
           }
-          return newMessages;
-        });
 
-        // FIXED: Clear the typing indicator after streaming completes with proper debugging
-        console.log('🔄 STREAMING: Setting isLoading to false');
-        setTimeout(() => {
-          setIsLoading(false);
-          console.log('✅ STREAMING: Loading state cleared');
-        }, 100); // Small delay to avoid React batching issues
-
-        // Save updated messages to memory
-        const currentMessages = sessionMessages.slice(0, -1); // Remove placeholder
-        const finalMessages = [...currentMessages, ...newMessages.slice(-1)]; // Add updated message
-        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
-
-        // FIXED: Safe task form handling
-        if (aiResponse.showTaskForm && aiResponse.taskData) {
-          setPendingTaskData(aiResponse.taskData);
-          setShowTaskConfirmation(true);
-        }
-
-        // FIXED: Safe reminder handling
-        if (aiResponse.reminderCreated && aiResponse.reminderData) {
-          showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
+          // Handle reminder
+          if (aiResponse.reminderCreated && aiResponse.reminderData) {
+            showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
+          }
         }
       }
       
@@ -532,8 +497,6 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => {
         const newMessages = [...prevMessages];
-        // Remove placeholder message and add error message
-        newMessages.pop();
         newMessages.push({
           id: `assistant-error-${Date.now()}`,
           role: 'assistant',
