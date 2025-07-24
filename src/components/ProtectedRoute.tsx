@@ -165,13 +165,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
 
     // Only run subscription check when we have a user and auth is not loading
-    // Add additional delay for recently signed in users
+    // FIXED: Removed token refresh blocking - let users access immediately
     if (!isLoading && user && session) {
-      console.log("ProtectedRoute: Auth loaded, scheduling subscription check");
-      const delay = Date.now() - new Date(session.user.last_sign_in_at || 0).getTime() < 10000 ? 3000 : 1000;
-      setTimeout(() => {
-        checkSubscriptionStatus();
-      }, delay);
+      console.log("ProtectedRoute: Auth loaded, checking subscription");
+      checkSubscriptionStatus();
     } else if (!isLoading && !user) {
       console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
       setSubscriptionStatus({ 
@@ -202,13 +199,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       needsPayment: subscriptionStatus.needsPayment
     });
     
-    // Show Fawran payment overlay
+    // Show Fawran payment overlay - FIXED: Don't use window.location.reload()
     return (
       <FawranPaymentOverlay 
         userEmail={user.email || ''} 
         onClose={() => {
-          // Refresh the page to re-check subscription status
-          window.location.reload();
+          // Instead of window.location.reload(), trigger subscription recheck
+          setSubscriptionStatus(prev => ({ ...prev, isLoading: true }));
         }}
       />
     );

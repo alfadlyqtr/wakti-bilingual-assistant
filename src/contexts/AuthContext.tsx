@@ -37,7 +37,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     // Get initial session
@@ -47,23 +46,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false);
     });
 
-    // Listen for auth changes with rate limiting protection
+    // Listen for auth changes - FIXED: Removed isRefreshing dependency to prevent loops
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.id);
-      
-      // Prevent rapid state changes during token refresh
-      if (event === 'TOKEN_REFRESHED' && isRefreshing) {
-        console.log('⚠️ Token refresh already in progress, skipping...');
-        return;
-      }
-      
-      if (event === 'TOKEN_REFRESHED') {
-        setIsRefreshing(true);
-        // Reset refresh flag after a delay
-        setTimeout(() => setIsRefreshing(false), 2000);
-      }
       
       setSession(session);
       setUser(session?.user ?? null);
@@ -78,12 +65,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log('User signed out, cleaning up...');
         setUser(null);
         setSession(null);
-        setIsRefreshing(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [isRefreshing]);
+  }, []); // FIXED: Removed isRefreshing dependency that was causing infinite loops
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

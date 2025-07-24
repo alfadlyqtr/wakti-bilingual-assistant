@@ -51,7 +51,7 @@ export function useOptimizedCalendarData() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Optimized data fetching with caching
+  // BATCHED calendar data fetching - combines 3 API calls into 1 Promise.all
   const fetchData = useCallback(async (force = false) => {
     if (fetchingRef.current && !force) {
       console.log('🔄 Calendar request already in progress, skipping...');
@@ -72,7 +72,9 @@ export function useOptimizedCalendarData() {
       fetchingRef.current = true;
       setLoading(true);
       
-      console.log('🔄 Fetching fresh calendar data from API');
+      console.log('🔄 Fetching fresh calendar data with batched API calls');
+      
+      // BATCHED API CALLS - Combines 3 separate calls into 1 Promise.all
       const [maw3d, tasksData, reminderData] = await Promise.all([
         Maw3dService.getUserEvents(),
         TRService.getTasks(),
@@ -93,9 +95,13 @@ export function useOptimizedCalendarData() {
       setTasks(tasksData || []);
       setReminders(reminderData || []);
       
-      console.log('✅ Calendar data fetched and cached');
+      console.log('✅ Batched calendar data fetched and cached:', {
+        eventsCount: maw3d?.length || 0,
+        tasksCount: tasksData?.length || 0,
+        remindersCount: reminderData?.length || 0
+      });
     } catch (error) {
-      console.error('❌ Error fetching calendar data:', error);
+      console.error('❌ Error fetching batched calendar data:', error);
     } finally {
       if (mountedRef.current) {
         setLoading(false);

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,8 +52,8 @@ export function useUnreadMessages() {
     if (!user) return;
 
     try {
-      // Progressive loading with delays between requests
-      await progressivelyLoadCounts();
+      // Use batched loading instead of progressive loading
+      await batchLoadUnreadCounts();
       setupRealtimeSubscriptions();
     } catch (error) {
       console.error('❌ Error initializing unread counts:', error);
@@ -66,105 +67,87 @@ export function useUnreadMessages() {
     }
   };
 
-  const progressivelyLoadCounts = async () => {
+  // BATCHED API CALLS - Combines 4 separate API calls into 1 Promise.all
+  const batchLoadUnreadCounts = async () => {
     if (!user) return;
 
-    console.log('📊 Starting progressive loading of unread counts');
+    console.log('📊 Starting batched loading of unread counts');
 
-    // Load messages first
-    await loadMessagesCount();
-    await delay(500);
-
-    // Load contacts
-    await loadContactsCount();
-    await delay(500);
-
-    // Load events
-    await loadEventsCount();
-    await delay(500);
-
-    // Load tasks
-    await loadTasksCount();
-  };
-
-  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-  const loadMessagesCount = async () => {
     try {
-      const { count: messageCount } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('recipient_id', user.id)
-        .eq('is_read', false);
+      // Batch all unread count queries into single Promise.all
+      const [
+        { count: messageCount },
+        { data: perContactData },
+        { count: contactRequestCount },
+        { count: eventRsvpCount },
+        { count: sharedTaskResponseCount }
+      ] = await Promise.all([
+        // Messages count
+        supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('recipient_id', user.id)
+          .eq('is_read', false),
+        
+        // Per-contact message breakdown
+        supabase
+          .from('messages')
+          .select('sender_id')
+          .eq('recipient_id', user.id)
+          .eq('is_read', false),
+        
+        // Contact requests
+        supabase
+          .from('contacts')
+          .select('*', { count: 'exact', head: true })
+          .eq('contact_id', user.id)
+          .eq('status', 'pending'),
+        
+        // Event RSVPs
+        supabase
+          .from('maw3d_rsvps')
+          .select(`
+            *,
+            maw3d_events!inner(created_by)
+          `, { count: 'exact', head: true })
+          .eq('maw3d_events.created_by', user.id)
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+        
+        // Shared task responses
+        supabase
+          .from('tr_shared_responses')
+          .select(`
+            *,
+            tr_tasks!inner(user_id)
+          `, { count: 'exact', head: true })
+          .eq('tr_tasks.user_id', user.id)
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      ]);
 
-      const { data: perContactData } = await supabase
-        .from('messages')
-        .select('sender_id')
-        .eq('recipient_id', user.id)
-        .eq('is_read', false);
-
+      // Process per-contact unread counts
       const perContactCounts: Record<string, number> = {};
       perContactData?.forEach(msg => {
         perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
       });
 
+      // Update all states at once
       setUnreadTotal(messageCount || 0);
       setPerContactUnread(perContactCounts);
-      console.log('📨 Messages loaded:', messageCount);
-    } catch (error) {
-      console.error('❌ Error loading messages count:', error);
-    }
-  };
-
-  const loadContactsCount = async () => {
-    try {
-      const { count: contactRequestCount } = await supabase
-        .from('contacts')
-        .select('*', { count: 'exact', head: true })
-        .eq('contact_id', user.id)
-        .eq('status', 'pending');
-
       setContactCount(contactRequestCount || 0);
-      console.log('👥 Contacts loaded:', contactRequestCount);
-    } catch (error) {
-      console.error('❌ Error loading contacts count:', error);
-    }
-  };
-
-  const loadEventsCount = async () => {
-    try {
-      const { count: eventRsvpCount } = await supabase
-        .from('maw3d_rsvps')
-        .select(`
-          *,
-          maw3d_events!inner(created_by)
-        `, { count: 'exact', head: true })
-        .eq('maw3d_events.created_by', user.id)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
       setMaw3dEventCount(eventRsvpCount || 0);
-      console.log('📅 Events loaded:', eventRsvpCount);
-    } catch (error) {
-      console.error('❌ Error loading events count:', error);
-    }
-  };
-
-  const loadTasksCount = async () => {
-    try {
-      const { count: sharedTaskResponseCount } = await supabase
-        .from('tr_shared_responses')
-        .select(`
-          *,
-          tr_tasks!inner(user_id)
-        `, { count: 'exact', head: true })
-        .eq('tr_tasks.user_id', user.id)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
       setSharedTaskCount(sharedTaskResponseCount || 0);
       setTaskCount(0);
-      console.log('📋 Tasks loaded:', sharedTaskResponseCount);
+
+      console.log('✅ Batched unread counts loaded:', {
+        messages: messageCount,
+        contacts: contactRequestCount,
+        events: eventRsvpCount,
+        tasks: sharedTaskResponseCount
+      });
+
     } catch (error) {
-      console.error('❌ Error loading tasks count:', error);
+      console.error('❌ Error in batched loading:', error);
+      throw error;
     }
   };
 
@@ -318,7 +301,7 @@ export function useUnreadMessages() {
 
     try {
       console.log('📊 Fetching unread counts for user:', user.id);
-      await progressivelyLoadCounts();
+      await batchLoadUnreadCounts();
     } catch (error) {
       console.error('❌ Error fetching unread counts:', error);
       // Handle rate limiting gracefully

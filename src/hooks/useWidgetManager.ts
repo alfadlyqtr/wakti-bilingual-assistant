@@ -2,8 +2,7 @@
 import { useState, useEffect } from "react";
 import { TranslationKey } from "@/utils/translationTypes";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useBatchedUserData } from "@/hooks/useBatchedUserData";
 import React from "react";
 
 type WidgetType = {
@@ -16,49 +15,15 @@ type WidgetType = {
 export const useWidgetManager = (
   language: "en" | "ar"
 ) => {
-  const { user } = useAuth();
   const [widgets, setWidgets] = useState<WidgetType[]>([]);
-  const [widgetSettings, setWidgetSettings] = useState({
-    showCalendarWidget: true,
-    showTasksWidget: true,
-    showTRWidget: true,
-    showMaw3dWidget: true,
-    showQuoteWidget: true,
-  });
-
-  // Load widget settings from database - optimized with error handling
-  const loadWidgetSettings = async () => {
-    if (!user) return;
-
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('id', user.id)
-        .single();
-
-      if (profile?.settings?.widgets) {
-        const dbSettings = profile.settings.widgets;
-        setWidgetSettings({
-          showCalendarWidget: dbSettings.showCalendarWidget !== false,
-          showTasksWidget: dbSettings.showTasksWidget !== false,
-          showTRWidget: dbSettings.showTRWidget !== false,
-          showMaw3dWidget: dbSettings.showMaw3dWidget !== false,
-          showQuoteWidget: dbSettings.showQuoteWidget !== false,
-        });
-      }
-    } catch (error) {
-      console.error('Error loading widget settings:', error);
-    }
-  };
+  
+  // Use batched user data instead of separate API calls
+  const { widgetSettings, loading: userDataLoading } = useBatchedUserData();
 
   // Initialize widgets with proper visibility and memoization
   useEffect(() => {
     const initializeWidgets = async () => {
-      if (!user) return;
-
-      // Load settings first
-      await loadWidgetSettings();
+      if (userDataLoading) return;
 
       // Get current order
       const currentOrder = getWidgetOrder();
@@ -115,23 +80,12 @@ export const useWidgetManager = (
         .map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets])
         .filter(Boolean);
 
-      console.log('Widgets initialized with settings:', widgetSettings);
+      console.log('✅ Widgets initialized with batched settings:', widgetSettings);
       setWidgets(orderedWidgets);
     };
 
     initializeWidgets();
-  }, [language, user, widgetSettings.showCalendarWidget, widgetSettings.showTasksWidget, widgetSettings.showTRWidget, widgetSettings.showMaw3dWidget, widgetSettings.showQuoteWidget]);
-
-  // Load widget settings on mount and user change - debounced
-  useEffect(() => {
-    if (user) {
-      const timeoutId = setTimeout(() => {
-        loadWidgetSettings();
-      }, 100); // Small delay to prevent rapid calls
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [user]);
+  }, [language, widgetSettings, userDataLoading]);
 
   // Simple widget order management - localStorage only
   const getWidgetOrder = () => {
