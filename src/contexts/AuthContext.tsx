@@ -37,6 +37,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     // Get initial session
@@ -46,34 +47,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes with rate limiting protection
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.id);
+      
+      // Prevent rapid state changes during token refresh
+      if (event === 'TOKEN_REFRESHED' && isRefreshing) {
+        console.log('⚠️ Token refresh already in progress, skipping...');
+        return;
+      }
+      
+      if (event === 'TOKEN_REFRESHED') {
+        setIsRefreshing(true);
+        // Reset refresh flag after a delay
+        setTimeout(() => setIsRefreshing(false), 2000);
+      }
       
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
 
       if (event === 'SIGNED_IN' && session?.user) {
-        console.log('User signed in, initializing services...');
-        // Services will be initialized by useUnreadMessages in AppLayout
+        console.log('User signed in, services will initialize after delay');
+        // Services will be initialized by useUnreadMessages with a delay
       }
 
       if (event === 'SIGNED_OUT') {
         console.log('User signed out, cleaning up...');
         setUser(null);
         setSession(null);
-      }
-
-      if (event === 'TOKEN_REFRESHED') {
-        console.log('Token refreshed for user:', session?.user?.id);
+        setIsRefreshing(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [isRefreshing]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

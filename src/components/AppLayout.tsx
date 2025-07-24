@@ -4,14 +4,22 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  // Initialize the unified notification system
-  useUnreadMessages();
+  const { user, isLoading } = useAuth();
+  
+  // Only initialize unread messages when user is authenticated and not loading
+  const shouldInitializeUnreadMessages = user && !isLoading;
+  
+  // Initialize the unified notification system only when ready
+  if (shouldInitializeUnreadMessages) {
+    useUnreadMessages();
+  }
 
   return (
     <ProtectedRoute>

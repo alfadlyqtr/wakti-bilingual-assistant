@@ -39,8 +39,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     const checkSubscriptionStatus = async () => {
       console.log("ProtectedRoute: Starting subscription check for user:", user?.email);
       
-      if (!user) {
-        console.log("ProtectedRoute: No user, setting not subscribed");
+      if (!user || !session) {
+        console.log("ProtectedRoute: No user or session, setting not subscribed");
         setSubscriptionStatus({ 
           isSubscribed: false, 
           isLoading: false, 
@@ -63,6 +63,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       try {
         console.log("ProtectedRoute: Fetching subscription status from database...");
         
+        // Add delay to prevent rapid requests after login
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name')
@@ -71,6 +74,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
         if (error) {
           console.error('ProtectedRoute: Error fetching subscription status:', error);
+          // Handle rate limiting gracefully
+          if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+            console.log('⚠️ Rate limited, will retry subscription check');
+            setTimeout(() => checkSubscriptionStatus(), 5000);
+            return;
+          }
+          
           setSubscriptionStatus({ 
             isSubscribed: false, 
             isLoading: false, 
@@ -155,9 +165,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
 
     // Only run subscription check when we have a user and auth is not loading
-    if (!isLoading && user) {
-      console.log("ProtectedRoute: Auth loaded, starting subscription check");
-      checkSubscriptionStatus();
+    // Add additional delay for recently signed in users
+    if (!isLoading && user && session) {
+      console.log("ProtectedRoute: Auth loaded, scheduling subscription check");
+      const delay = Date.now() - new Date(session.user.last_sign_in_at || 0).getTime() < 10000 ? 3000 : 1000;
+      setTimeout(() => {
+        checkSubscriptionStatus();
+      }, delay);
     } else if (!isLoading && !user) {
       console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
       setSubscriptionStatus({ 
@@ -166,7 +180,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         needsPayment: true 
       });
     }
-  }, [user, isLoading]);
+  }, [user, session, isLoading]);
 
   // Show loading while auth or subscription status is loading
   if (isLoading || subscriptionStatus.isLoading) {

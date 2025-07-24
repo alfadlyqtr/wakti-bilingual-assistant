@@ -1,8 +1,8 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { waktiToast } from '@/services/waktiToast';
+import { useDebounced } from '@/hooks/useDebounced';
 
 export function useUnreadMessages() {
   const { user } = useAuth();
@@ -12,16 +12,168 @@ export function useUnreadMessages() {
   const [taskCount, setTaskCount] = useState(0);
   const [sharedTaskCount, setSharedTaskCount] = useState(0);
   const [perContactUnread, setPerContactUnread] = useState<Record<string, number>>({});
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Debounced fetch function to prevent rapid requests
+  const debouncedFetchUnreadCounts = useDebounced(fetchUnreadCounts, 1000);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      resetCounts();
+      return;
+    }
 
     console.log('👀 Setting up unread message tracking for user:', user.id);
 
-    // Get initial counts
-    fetchUnreadCounts();
+    // Add a delay before initializing to prevent immediate token refresh
+    const initTimeout = setTimeout(() => {
+      initializeUnreadCounts();
+      setIsInitialized(true);
+    }, 2000); // 2 second delay after login
 
-    // Set up real-time subscriptions
+    return () => {
+      clearTimeout(initTimeout);
+      cleanupSubscriptions();
+    };
+  }, [user]);
+
+  const resetCounts = () => {
+    setUnreadTotal(0);
+    setContactCount(0);
+    setMaw3dEventCount(0);
+    setTaskCount(0);
+    setSharedTaskCount(0);
+    setPerContactUnread({});
+    setIsInitialized(false);
+  };
+
+  const initializeUnreadCounts = async () => {
+    if (!user) return;
+
+    try {
+      // Progressive loading with delays between requests
+      await progressivelyLoadCounts();
+      setupRealtimeSubscriptions();
+    } catch (error) {
+      console.error('❌ Error initializing unread counts:', error);
+      // If rate limited, retry with exponential backoff
+      if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+        setTimeout(() => {
+          console.log('🔄 Retrying unread counts initialization after rate limit');
+          initializeUnreadCounts();
+        }, 5000);
+      }
+    }
+  };
+
+  const progressivelyLoadCounts = async () => {
+    if (!user) return;
+
+    console.log('📊 Starting progressive loading of unread counts');
+
+    // Load messages first
+    await loadMessagesCount();
+    await delay(500);
+
+    // Load contacts
+    await loadContactsCount();
+    await delay(500);
+
+    // Load events
+    await loadEventsCount();
+    await delay(500);
+
+    // Load tasks
+    await loadTasksCount();
+  };
+
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const loadMessagesCount = async () => {
+    try {
+      const { count: messageCount } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('recipient_id', user.id)
+        .eq('is_read', false);
+
+      const { data: perContactData } = await supabase
+        .from('messages')
+        .select('sender_id')
+        .eq('recipient_id', user.id)
+        .eq('is_read', false);
+
+      const perContactCounts: Record<string, number> = {};
+      perContactData?.forEach(msg => {
+        perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
+      });
+
+      setUnreadTotal(messageCount || 0);
+      setPerContactUnread(perContactCounts);
+      console.log('📨 Messages loaded:', messageCount);
+    } catch (error) {
+      console.error('❌ Error loading messages count:', error);
+    }
+  };
+
+  const loadContactsCount = async () => {
+    try {
+      const { count: contactRequestCount } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', user.id)
+        .eq('status', 'pending');
+
+      setContactCount(contactRequestCount || 0);
+      console.log('👥 Contacts loaded:', contactRequestCount);
+    } catch (error) {
+      console.error('❌ Error loading contacts count:', error);
+    }
+  };
+
+  const loadEventsCount = async () => {
+    try {
+      const { count: eventRsvpCount } = await supabase
+        .from('maw3d_rsvps')
+        .select(`
+          *,
+          maw3d_events!inner(created_by)
+        `, { count: 'exact', head: true })
+        .eq('maw3d_events.created_by', user.id)
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+      setMaw3dEventCount(eventRsvpCount || 0);
+      console.log('📅 Events loaded:', eventRsvpCount);
+    } catch (error) {
+      console.error('❌ Error loading events count:', error);
+    }
+  };
+
+  const loadTasksCount = async () => {
+    try {
+      const { count: sharedTaskResponseCount } = await supabase
+        .from('tr_shared_responses')
+        .select(`
+          *,
+          tr_tasks!inner(user_id)
+        `, { count: 'exact', head: true })
+        .eq('tr_tasks.user_id', user.id)
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+      setSharedTaskCount(sharedTaskResponseCount || 0);
+      setTaskCount(0);
+      console.log('📋 Tasks loaded:', sharedTaskResponseCount);
+    } catch (error) {
+      console.error('❌ Error loading tasks count:', error);
+    }
+  };
+
+  const setupRealtimeSubscriptions = () => {
+    if (!user || !isInitialized) return;
+
+    console.log('🔄 Setting up real-time subscriptions');
+
+    // Messages subscription
     const messagesChannel = supabase
       .channel('unread-messages')
       .on('postgres_changes', {
@@ -32,7 +184,6 @@ export function useUnreadMessages() {
       }, async (payload) => {
         console.log('📨 New message received:', payload);
         
-        // Show notification
         await waktiToast.show({
           id: `message-${payload.new.id}`,
           type: 'message',
@@ -42,7 +193,7 @@ export function useUnreadMessages() {
           sound: 'chime'
         });
         
-        fetchUnreadCounts();
+        debouncedFetchUnreadCounts();
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -50,7 +201,7 @@ export function useUnreadMessages() {
         table: 'messages',
         filter: `recipient_id=eq.${user.id}`
       }, () => {
-        fetchUnreadCounts();
+        debouncedFetchUnreadCounts();
       })
       .subscribe();
 
@@ -75,7 +226,7 @@ export function useUnreadMessages() {
           });
         }
         
-        fetchUnreadCounts();
+        debouncedFetchUnreadCounts();
       })
       .subscribe();
 
@@ -105,7 +256,7 @@ export function useUnreadMessages() {
             sound: 'beep'
           });
           
-          fetchUnreadCounts();
+          debouncedFetchUnreadCounts();
         }
       })
       .subscribe();
@@ -143,101 +294,40 @@ export function useUnreadMessages() {
             sound: 'chime'
           });
           
-          fetchUnreadCounts();
+          debouncedFetchUnreadCounts();
         }
       })
       .subscribe();
 
-    return () => {
-      console.log('🧹 Cleaning up unread message subscriptions');
-      supabase.removeChannel(messagesChannel);
-      supabase.removeChannel(contactsChannel);
-      supabase.removeChannel(maw3dChannel);
-      supabase.removeChannel(sharedTaskChannel);
-    };
-  }, [user]);
+    // Store channels for cleanup
+    window.unreadChannels = [messagesChannel, contactsChannel, maw3dChannel, sharedTaskChannel];
+  };
 
-  const fetchUnreadCounts = async () => {
-    if (!user) return;
+  const cleanupSubscriptions = () => {
+    console.log('🧹 Cleaning up unread message subscriptions');
+    if (window.unreadChannels) {
+      window.unreadChannels.forEach(channel => {
+        supabase.removeChannel(channel);
+      });
+      window.unreadChannels = [];
+    }
+  };
+
+  async function fetchUnreadCounts() {
+    if (!user || !isInitialized) return;
 
     try {
       console.log('📊 Fetching unread counts for user:', user.id);
-      
-      // Messages count
-      const { count: messageCount } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('recipient_id', user.id)
-        .eq('is_read', false);
-
-      console.log('📨 Total unread messages:', messageCount);
-
-      // Per-contact unread counts with detailed logging
-      const { data: perContactData, error: perContactError } = await supabase
-        .from('messages')
-        .select('sender_id')
-        .eq('recipient_id', user.id)
-        .eq('is_read', false);
-
-      if (perContactError) {
-        console.error('❌ Error fetching per-contact unread:', perContactError);
-      }
-
-      console.log('📊 Per-contact unread data:', perContactData);
-
-      const perContactCounts: Record<string, number> = {};
-      perContactData?.forEach(msg => {
-        perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
-      });
-
-      console.log('📊 Per-contact unread counts:', perContactCounts);
-
-      // Contact requests count
-      const { count: contactRequestCount } = await supabase
-        .from('contacts')
-        .select('*', { count: 'exact', head: true })
-        .eq('contact_id', user.id)
-        .eq('status', 'pending');
-
-      // Maw3d event RSVPs count (events user created)
-      const { count: eventRsvpCount } = await supabase
-        .from('maw3d_rsvps')
-        .select(`
-          *,
-          maw3d_events!inner(created_by)
-        `, { count: 'exact', head: true })
-        .eq('maw3d_events.created_by', user.id)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-      // Shared task responses count
-      const { count: sharedTaskResponseCount } = await supabase
-        .from('tr_shared_responses')
-        .select(`
-          *,
-          tr_tasks!inner(user_id)
-        `, { count: 'exact', head: true })
-        .eq('tr_tasks.user_id', user.id)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-      setUnreadTotal(messageCount || 0);
-      setContactCount(contactRequestCount || 0);
-      setMaw3dEventCount(eventRsvpCount || 0);
-      setSharedTaskCount(sharedTaskResponseCount || 0);
-      setTaskCount(0); // Regular task count if needed
-      setPerContactUnread(perContactCounts);
-
-      console.log('📊 Final unread counts updated:', {
-        messages: messageCount,
-        contacts: contactRequestCount,
-        events: eventRsvpCount,
-        sharedTasks: sharedTaskResponseCount,
-        perContact: perContactCounts
-      });
-
+      await progressivelyLoadCounts();
     } catch (error) {
       console.error('❌ Error fetching unread counts:', error);
+      // Handle rate limiting gracefully
+      if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+        console.log('⚠️ Rate limited, will retry later');
+        return;
+      }
     }
-  };
+  }
 
   return {
     unreadTotal,
@@ -246,6 +336,6 @@ export function useUnreadMessages() {
     taskCount,
     sharedTaskCount,
     perContactUnread,
-    refetch: fetchUnreadCounts
+    refetch: debouncedFetchUnreadCounts
   };
 }
