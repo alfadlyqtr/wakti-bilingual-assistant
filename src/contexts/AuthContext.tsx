@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,42 +39,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
+    let isInitialLoad = true;
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔐 Initial session check:', !!session);
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
+      
+      // Only set loading to false after initial load
+      if (isInitialLoad) {
+        setLoading(false);
+        isInitialLoad = false;
+      }
     });
 
-    // Listen for auth changes with rate limiting protection
+    // Listen for auth changes with better rate limiting protection
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id);
+      console.log('🔄 Auth state changed:', event, session?.user?.email);
       
       // Prevent rapid state changes during token refresh
-      if (event === 'TOKEN_REFRESHED' && isRefreshing) {
-        console.log('⚠️ Token refresh already in progress, skipping...');
-        return;
-      }
-      
       if (event === 'TOKEN_REFRESHED') {
+        if (isRefreshing) {
+          console.log('⚠️ Token refresh already in progress, skipping...');
+          return;
+        }
         setIsRefreshing(true);
-        // Reset refresh flag after a delay
-        setTimeout(() => setIsRefreshing(false), 2000);
+        // Reset refresh flag after longer delay
+        setTimeout(() => setIsRefreshing(false), 5000);
       }
       
-      setSession(session);
-      setUser(session?.user ?? null);
+      // Only update state if not currently refreshing
+      if (!isRefreshing || event !== 'TOKEN_REFRESHED') {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
+      
+      // Always set loading to false after auth events
       setLoading(false);
 
       if (event === 'SIGNED_IN' && session?.user) {
-        console.log('User signed in, services will initialize after delay');
-        // Services will be initialized by useUnreadMessages with a delay
+        console.log('✅ User signed in successfully:', session.user.email);
+        // Let other systems know user is ready after a longer delay
+        setTimeout(() => {
+          console.log('🚀 User session stabilized, services can initialize');
+        }, 3000);
       }
 
       if (event === 'SIGNED_OUT') {
-        console.log('User signed out, cleaning up...');
+        console.log('👋 User signed out');
         setUser(null);
         setSession(null);
         setIsRefreshing(false);
