@@ -297,23 +297,35 @@ const WaktiAIV2 = () => {
         setIsNewConversation(false);
       }
 
+      // Add user message to the conversation
+      const tempUserMessage: AIMessage = {
+        id: `user-temp-${Date.now()}`,
+        role: 'user',
+        content: messageContent,
+        timestamp: new Date(),
+        inputType: finalInputType,
+        attachedFiles: processedAttachedFiles
+      };
+
+      const newMessages = [...sessionMessages, tempUserMessage];
+      setSessionMessages(newMessages);
+
+      // Save to frontend memory
+      EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+
+      // Add placeholder assistant message for streaming
+      const placeholderAssistantMessage: AIMessage = {
+        id: `assistant-streaming-${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date()
+      };
+
+      const messagesWithPlaceholder = [...newMessages, placeholderAssistantMessage];
+      setSessionMessages(messagesWithPlaceholder);
+
       if (routingMode === 'image') {
         console.log('🎨 FRONTEND BOSS: Processing image generation');
-        
-        const tempUserMessage: AIMessage = {
-          id: `user-temp-${Date.now()}`,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          inputType: finalInputType,
-          attachedFiles: processedAttachedFiles
-        };
-        
-        const newMessages = [...sessionMessages, tempUserMessage];
-        setSessionMessages(newMessages);
-        
-        // Save to frontend memory
-        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
         
         const imageResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -349,20 +361,6 @@ const WaktiAIV2 = () => {
       } else if (routingMode === 'search') {
         console.log('🔍 FRONTEND BOSS: Processing search');
         
-        const tempUserMessage: AIMessage = {
-          id: `user-temp-${Date.now()}`,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          inputType: finalInputType,
-          attachedFiles: processedAttachedFiles
-        };
-        
-        const newMessages = [...sessionMessages, tempUserMessage];
-        setSessionMessages(newMessages);
-        
-        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
-        
         const searchResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,
@@ -395,7 +393,7 @@ const WaktiAIV2 = () => {
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
         
       } else {
-        // CHAT MODE OR EXPLICIT TASK COMMANDS (INCLUDING VISION)
+        // CHAT MODE OR EXPLICIT TASK COMMANDS (INCLUDING VISION WITH STREAMING)
         if (isExplicitTaskCommand(messageContent)) {
           console.log('🎯 FRONTEND BOSS: Processing explicit task command');
           
@@ -415,15 +413,6 @@ const WaktiAIV2 = () => {
 
           const taskData = taskResponse.data;
 
-          const tempUserMessage: AIMessage = {
-            id: `user-temp-${Date.now()}`,
-            role: 'user',
-            content: messageContent,
-            timestamp: new Date(),
-            inputType: finalInputType,
-            attachedFiles: processedAttachedFiles
-          };
-
           const taskMessage: AIMessage = {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
@@ -431,7 +420,7 @@ const WaktiAIV2 = () => {
             timestamp: new Date()
           };
 
-          const finalMessages = [...sessionMessages, tempUserMessage, taskMessage];
+          const finalMessages = [...newMessages, taskMessage];
           setSessionMessages(finalMessages);
 
           if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
@@ -447,22 +436,8 @@ const WaktiAIV2 = () => {
           return;
         }
 
-        // DEFAULT CHAT MODE - INCLUDING VISION WITH CLAUDE WAY
-        console.log('💬 FRONTEND BOSS: Processing chat mode (including Claude Way vision)');
-        
-        const tempUserMessage: AIMessage = {
-          id: `user-temp-${Date.now()}`,
-          role: 'user',
-          content: messageContent,
-          timestamp: new Date(),
-          inputType: finalInputType,
-          attachedFiles: processedAttachedFiles
-        };
-        
-        const newMessages = [...sessionMessages, tempUserMessage];
-        setSessionMessages(newMessages);
-        
-        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+        // DEFAULT CHAT MODE - INCLUDING VISION WITH STREAMING
+        console.log('💬 FRONTEND BOSS: Processing chat mode with streaming');
         
         const aiResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -474,14 +449,25 @@ const WaktiAIV2 = () => {
           false,
           'chat',
           '',
-          processedAttachedFiles || []
+          processedAttachedFiles || [],
+          (streamingText: string) => {
+            // Update the placeholder message in real-time during streaming
+            setSessionMessages(prev => {
+              const newMessages = [...prev];
+              const lastMessage = newMessages[newMessages.length - 1];
+              if (lastMessage && lastMessage.role === 'assistant') {
+                lastMessage.content = streamingText;
+              }
+              return newMessages;
+            });
+          }
         );
 
         if (aiResponse.error) {
           throw new Error(aiResponse.error);
         }
         
-        // FIXED: Safe property access for vision responses
+        // FIXED: Safe property access for streaming responses
         const assistantMessage: AIMessage = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
@@ -495,6 +481,12 @@ const WaktiAIV2 = () => {
           browsingData: aiResponse.browsingData || undefined
         };
 
+        // Update final message with complete response
+        const finalMessages = [...newMessages, assistantMessage];
+        setSessionMessages(finalMessages);
+        
+        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
+
         // FIXED: Safe task form handling
         if (aiResponse.showTaskForm && aiResponse.taskData) {
           setPendingTaskData(aiResponse.taskData);
@@ -505,11 +497,6 @@ const WaktiAIV2 = () => {
         if (aiResponse.reminderCreated && aiResponse.reminderData) {
           showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
         }
-        
-        const finalMessages = [...newMessages, assistantMessage];
-        setSessionMessages(finalMessages);
-        
-        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
       }
       
       const totalTime = Date.now() - startTime;
@@ -533,6 +520,7 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => {
         const newMessages = [...prevMessages];
+        // Remove placeholder message and add error message
         newMessages.pop();
         newMessages.push({
           id: `assistant-error-${Date.now()}`,

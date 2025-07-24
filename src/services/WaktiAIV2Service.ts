@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -40,7 +41,8 @@ class WaktiAIV2ServiceClass {
     skipContextLoad: boolean = false,
     activeTrigger: string = 'chat',
     conversationSummary: string = '',
-    attachedFiles: any[] = []
+    attachedFiles: any[] = [],
+    onStreamUpdate?: (text: string) => void
   ) {
     try {
       if (!userId) {
@@ -106,6 +108,13 @@ class WaktiAIV2ServiceClass {
         throw error;
       }
 
+      // Handle streaming for chat/vision modes
+      if (activeTrigger !== 'image' && activeTrigger !== 'search') {
+        console.log('🌊 BACKEND WORKER: Handling streaming response');
+        return await this.handleStreamingResponse(data, onStreamUpdate);
+      }
+
+      // Handle JSON response for image/search modes
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -130,6 +139,68 @@ class WaktiAIV2ServiceClass {
     } catch (error: any) {
       console.error('❌ BACKEND WORKER: Claude processing failed:', error);
       throw new Error(error.message || 'Backend worker failed');
+    }
+  }
+
+  private async handleStreamingResponse(response: any, onStreamUpdate?: (text: string) => void) {
+    // If response is not a stream (fallback to regular response)
+    if (!response || typeof response.arrayBuffer !== 'function') {
+      console.log('📄 BACKEND WORKER: Non-streaming response received');
+      return {
+        response: response?.response || 'Response received',
+        success: true,
+        conversationId: null,
+        intent: 'chat'
+      };
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedText = '';
+
+    if (!reader) {
+      throw new Error('No stream reader available');
+    }
+
+    try {
+      console.log('🌊 BACKEND WORKER: Starting to read streaming response');
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonStr = line.slice(6).trim();
+              if (jsonStr === '[DONE]') continue;
+              
+              const data = JSON.parse(jsonStr);
+              
+              if (data.delta?.text) {
+                accumulatedText += data.delta.text;
+                onStreamUpdate?.(accumulatedText);
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+              continue;
+            }
+          }
+        }
+      }
+
+      console.log('✅ BACKEND WORKER: Streaming response completed');
+      return {
+        response: accumulatedText,
+        success: true,
+        conversationId: null,
+        intent: 'chat'
+      };
+    } finally {
+      reader.releaseLock();
     }
   }
 
