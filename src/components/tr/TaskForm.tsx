@@ -22,13 +22,13 @@ interface TaskFormProps {
 }
 
 export function TaskForm({ isOpen, task, onClose, onTaskSaved }: TaskFormProps) {
+  // Early return BEFORE any hooks are called
+  if (!isOpen || !task) return null;
+
   const { user } = useAuth();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
   
-  // Don't render if not open or task is null
-  if (!isOpen || !task) return null;
-
   const [formData, setFormData] = useState({
     title: task.title || '',
     description: task.description || '',
