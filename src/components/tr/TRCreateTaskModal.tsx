@@ -9,18 +9,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { Plus, X } from 'lucide-react';
 
 interface TRCreateTaskModalProps {
-  isOpen: boolean;
   onClose: () => void;
-  onTaskSaved: () => void;
+  onTaskCreated: () => void;
 }
 
-export function TRCreateTaskModal({ isOpen, onClose, onTaskSaved }: TRCreateTaskModalProps) {
+export function TRCreateTaskModal({ onClose, onTaskCreated }: TRCreateTaskModalProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { language } = useTheme();
@@ -29,8 +28,9 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskSaved }: TRCreateTask
     title: '',
     description: '',
     due_date: '',
-    priority: 'medium',
-    type: 'one-time',
+    due_time: '',
+    priority: 'normal',
+    task_type: 'one-time',
     is_shared: false
   });
 
@@ -58,23 +58,24 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskSaved }: TRCreateTask
 
     try {
       setLoading(true);
-      await TRService.createTask(formData, user.id);
+      
+      const taskData = {
+        title: formData.title,
+        description: formData.description,
+        due_date: formData.due_date,
+        due_time: formData.due_time || undefined,
+        priority: formData.priority as 'normal' | 'high' | 'urgent',
+        task_type: formData.task_type as 'one-time' | 'repeated',
+        is_shared: formData.is_shared
+      };
+
+      await TRService.createTask(taskData, user.id);
       toast({
         title: t('success', language),
         description: t('taskCreated', language)
       });
-      onTaskSaved();
+      onTaskCreated();
       onClose();
-      
-      // Reset form
-      setFormData({
-        title: '',
-        description: '',
-        due_date: '',
-        priority: 'medium',
-        type: 'one-time',
-        is_shared: false
-      });
     } catch (error) {
       console.error('Error creating task:', error);
       toast({
@@ -86,8 +87,6 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskSaved }: TRCreateTask
       setLoading(false);
     }
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -139,31 +138,42 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskSaved }: TRCreateTask
                 />
               </div>
               <div>
+                <Label htmlFor="due_time">{t('dueTime', language)}</Label>
+                <Input
+                  id="due_time"
+                  type="time"
+                  value={formData.due_time}
+                  onChange={(e) => setFormData({ ...formData, due_time: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
                 <Label htmlFor="priority">{t('priority', language)}</Label>
                 <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">{t('low', language)}</SelectItem>
-                    <SelectItem value="medium">{t('medium', language)}</SelectItem>
+                    <SelectItem value="normal">{t('normal', language)}</SelectItem>
                     <SelectItem value="high">{t('high', language)}</SelectItem>
+                    <SelectItem value="urgent">{t('urgent', language)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div>
-              <Label htmlFor="type">{t('type', language)}</Label>
-              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="one-time">{t('oneTime', language)}</SelectItem>
-                  <SelectItem value="repeated">{t('repeated', language)}</SelectItem>
-                </SelectContent>
-              </Select>
+              <div>
+                <Label htmlFor="task_type">{t('type', language)}</Label>
+                <Select value={formData.task_type} onValueChange={(value) => setFormData({ ...formData, task_type: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="one-time">{t('oneTime', language)}</SelectItem>
+                    <SelectItem value="repeated">{t('repeated', language)}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="flex items-center justify-between">
@@ -177,7 +187,7 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskSaved }: TRCreateTask
 
             <div className="flex gap-2 pt-4">
               <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? t('creating', language) : t('create', language)}
+                {loading ? t('creating', language) : t('createTask', language)}
               </Button>
               <Button type="button" variant="outline" onClick={onClose}>
                 {t('cancel', language)}

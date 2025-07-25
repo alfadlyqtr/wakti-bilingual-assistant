@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { TRService, TRReminder } from '@/services/trService';
 import { Button } from '@/components/ui/button';
@@ -7,48 +7,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { CalendarDays, Clock, Bell, Trash2 } from 'lucide-react';
+import { Edit, X, Trash2 } from 'lucide-react';
 
 interface ReminderFormProps {
-  isOpen: boolean;
+  reminder?: TRReminder;
   onClose: () => void;
-  reminder?: TRReminder | null;
   onReminderSaved: () => void;
 }
 
-export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: ReminderFormProps) {
+export function ReminderForm({ reminder, onClose, onReminderSaved }: ReminderFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    due_date: '',
-    due_time: ''
+    title: reminder?.title || '',
+    description: reminder?.description || '',
+    due_date: reminder?.due_date || '',
+    due_time: reminder?.due_time || ''
   });
-
-  useEffect(() => {
-    if (reminder) {
-      setFormData({
-        title: reminder.title,
-        description: reminder.description || '',
-        due_date: reminder.due_date,
-        due_time: reminder.due_time || ''
-      });
-    } else {
-      setFormData({
-        title: '',
-        description: '',
-        due_date: '',
-        due_time: ''
-      });
-    }
-  }, [reminder]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,20 +55,27 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
     try {
       setLoading(true);
       
+      const reminderData = {
+        title: formData.title,
+        description: formData.description,
+        due_date: formData.due_date,
+        due_time: formData.due_time || null
+      };
+
       if (reminder) {
-        await TRService.updateReminder(reminder.id, formData);
+        await TRService.updateReminder(reminder.id, reminderData);
         toast({
           title: t('success', language),
           description: t('reminderUpdated', language)
         });
       } else {
-        await TRService.createReminder(formData, user.id);
+        await TRService.createReminder(reminderData, user.id);
         toast({
           title: t('success', language),
           description: t('reminderCreated', language)
         });
       }
-
+      
       onReminderSaved();
       onClose();
     } catch (error) {
@@ -105,9 +92,6 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
 
   const handleDelete = async () => {
     if (!reminder) return;
-
-    const confirmed = window.confirm(t('confirmDeleteReminder', language));
-    if (!confirmed) return;
 
     try {
       setLoading(true);
@@ -130,15 +114,18 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            {reminder ? t('editReminder', language) : t('createReminder', language)}
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              {reminder ? t('editReminder', language) : t('createReminder', language)}
+            </span>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -195,8 +182,14 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
                 {t('cancel', language)}
               </Button>
               {reminder && (
-                <Button type="button" variant="destructive" onClick={handleDelete}>
-                  <Trash2 className="h-4 w-4" />
+                <Button 
+                  type="button" 
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={loading}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  {t('delete', language)}
                 </Button>
               )}
             </div>

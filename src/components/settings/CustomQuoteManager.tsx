@@ -1,54 +1,40 @@
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Trash2, Plus, Edit } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { Quote, Plus, Trash2, Edit2 } from 'lucide-react';
-
-interface CustomQuote {
-  id: string;
-  text: string;
-  category: string;
-  created_at: string;
-}
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function CustomQuoteManager() {
   const { user } = useAuth();
-  const { language } = useTheme();
   const { toast } = useToast();
-  const [quotes, setQuotes] = useState<CustomQuote[]>([]);
+  const { language } = useTheme();
+  const [quotes, setQuotes] = useState([]);
   const [newQuote, setNewQuote] = useState('');
-  const [newCategory, setNewCategory] = useState('');
-  const [editingQuote, setEditingQuote] = useState<CustomQuote | null>(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editingText, setEditingText] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchCustomQuotes();
-    }
-  }, [user]);
-
-  const fetchCustomQuotes = async () => {
+  const loadQuotes = async () => {
     if (!user) return;
-
+    
     try {
-      const { data, error } = await supabase
-        .from('custom_quotes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('id', user.id)
+        .single();
 
-      if (error) throw error;
-      setQuotes(data || []);
+      const customQuotes = profile?.settings?.customQuotes || [];
+      setQuotes(customQuotes);
     } catch (error) {
-      console.error('Error fetching custom quotes:', error);
+      console.error('Error loading quotes:', error);
       toast({
         title: t('error', language),
         description: t('errorLoadingQuotes', language),
@@ -57,29 +43,43 @@ export function CustomQuoteManager() {
     }
   };
 
-  const handleAddQuote = async () => {
-    if (!user || !newQuote.trim()) return;
+  useEffect(() => {
+    loadQuotes();
+  }, [user]);
 
+  const addQuote = async () => {
+    if (!newQuote.trim() || !user) return;
+    
     try {
       setLoading(true);
-      const { error } = await supabase
-        .from('custom_quotes')
-        .insert({
-          user_id: user.id,
-          text: newQuote.trim(),
-          category: newCategory.trim() || 'general'
-        });
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('id', user.id)
+        .single();
 
-      if (error) throw error;
+      const currentSettings = profile?.settings || {};
+      const currentQuotes = currentSettings.customQuotes || [];
+      const updatedQuotes = [...currentQuotes, { id: Date.now(), text: newQuote.trim() }];
 
+      await supabase
+        .from('profiles')
+        .update({ 
+          settings: { 
+            ...currentSettings, 
+            customQuotes: updatedQuotes 
+          } 
+        })
+        .eq('id', user.id);
+
+      setQuotes(updatedQuotes);
+      setNewQuote('');
+      
       toast({
         title: t('success', language),
         description: t('quoteAdded', language)
       });
-
-      setNewQuote('');
-      setNewCategory('');
-      fetchCustomQuotes();
     } catch (error) {
       console.error('Error adding quote:', error);
       toast({
@@ -92,24 +92,38 @@ export function CustomQuoteManager() {
     }
   };
 
-  const handleDeleteQuote = async (quoteId: string) => {
+  const deleteQuote = async (id) => {
     if (!user) return;
-
+    
     try {
-      const { error } = await supabase
-        .from('custom_quotes')
-        .delete()
-        .eq('id', quoteId)
-        .eq('user_id', user.id);
+      setLoading(true);
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('id', user.id)
+        .single();
 
-      if (error) throw error;
+      const currentSettings = profile?.settings || {};
+      const currentQuotes = currentSettings.customQuotes || [];
+      const updatedQuotes = currentQuotes.filter(quote => quote.id !== id);
 
+      await supabase
+        .from('profiles')
+        .update({ 
+          settings: { 
+            ...currentSettings, 
+            customQuotes: updatedQuotes 
+          } 
+        })
+        .eq('id', user.id);
+
+      setQuotes(updatedQuotes);
+      
       toast({
         title: t('success', language),
         description: t('quoteDeleted', language)
       });
-
-      fetchCustomQuotes();
     } catch (error) {
       console.error('Error deleting quote:', error);
       toast({
@@ -117,32 +131,47 @@ export function CustomQuoteManager() {
         description: t('errorDeletingQuote', language),
         variant: 'destructive'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUpdateQuote = async () => {
-    if (!user || !editingQuote) return;
-
+  const updateQuote = async (id, newText) => {
+    if (!newText.trim() || !user) return;
+    
     try {
       setLoading(true);
-      const { error } = await supabase
-        .from('custom_quotes')
-        .update({
-          text: editingQuote.text,
-          category: editingQuote.category
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('id', user.id)
+        .single();
+
+      const currentSettings = profile?.settings || {};
+      const currentQuotes = currentSettings.customQuotes || [];
+      const updatedQuotes = currentQuotes.map(quote => 
+        quote.id === id ? { ...quote, text: newText.trim() } : quote
+      );
+
+      await supabase
+        .from('profiles')
+        .update({ 
+          settings: { 
+            ...currentSettings, 
+            customQuotes: updatedQuotes 
+          } 
         })
-        .eq('id', editingQuote.id)
-        .eq('user_id', user.id);
+        .eq('id', user.id);
 
-      if (error) throw error;
-
+      setQuotes(updatedQuotes);
+      setEditingId(null);
+      setEditingText('');
+      
       toast({
         title: t('success', language),
         description: t('quoteUpdated', language)
       });
-
-      setEditingQuote(null);
-      fetchCustomQuotes();
     } catch (error) {
       console.error('Error updating quote:', error);
       toast({
@@ -158,100 +187,89 @@ export function CustomQuoteManager() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Quote className="h-5 w-5" />
-          {t('customQuotes', language)}
-        </CardTitle>
+        <CardTitle>{t('customQuotes', language)}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="new-quote">{t('addNewQuote', language)}</Label>
+        <div className="flex gap-2">
           <Input
-            id="new-quote"
+            placeholder={t('addNewQuote', language)}
             value={newQuote}
             onChange={(e) => setNewQuote(e.target.value)}
-            placeholder={t('enterQuoteText', language)}
+            onKeyPress={(e) => e.key === 'Enter' && addQuote()}
           />
-          <div className="flex gap-2">
-            <Input
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              placeholder={t('category', language)}
-              className="flex-1"
-            />
-            <Button
-              onClick={handleAddQuote}
-              disabled={!newQuote.trim() || loading}
-              size="sm"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              {t('add', language)}
-            </Button>
-          </div>
+          <Button onClick={addQuote} disabled={!newQuote.trim() || loading}>
+            <Plus className="h-4 w-4" />
+            {t('enterQuoteText', language)}
+          </Button>
         </div>
 
-        <div className="space-y-2">
-          <Label>{t('yourQuotes', language)} ({quotes.length})</Label>
-          {quotes.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              {t('noCustomQuotes', language)}
-            </p>
-          ) : (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {quotes.map((quote) => (
-                <div key={quote.id} className="p-3 border rounded-lg">
-                  {editingQuote?.id === quote.id ? (
-                    <div className="space-y-2">
-                      <Input
-                        value={editingQuote.text}
-                        onChange={(e) => setEditingQuote({ ...editingQuote, text: e.target.value })}
-                      />
-                      <div className="flex gap-2">
-                        <Input
-                          value={editingQuote.category}
-                          onChange={(e) => setEditingQuote({ ...editingQuote, category: e.target.value })}
-                          placeholder={t('category', language)}
-                          className="flex-1"
-                        />
-                        <Button size="sm" onClick={handleUpdateQuote} disabled={loading}>
-                          {t('save', language)}
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setEditingQuote(null)}>
-                          {t('cancel', language)}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="text-sm">{quote.text}</p>
-                        <Badge variant="outline" className="mt-1">
-                          {quote.category}
-                        </Badge>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setEditingQuote(quote)}
-                        >
-                          <Edit2 className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteQuote(quote.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {quotes.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="font-medium">{t('yourQuotes', language)}</h4>
+            {quotes.map((quote) => (
+              <div key={quote.id} className="flex items-center gap-2 p-2 border rounded">
+                {editingId === quote.id ? (
+                  <>
+                    <Input
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          updateQuote(quote.id, editingText);
+                        }
+                      }}
+                    />
+                    <Button 
+                      size="sm" 
+                      onClick={() => updateQuote(quote.id, editingText)}
+                      disabled={loading}
+                    >
+                      {t('save', language)}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditingText('');
+                      }}
+                    >
+                      {t('cancel', language)}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1">{quote.text}</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingId(quote.id);
+                        setEditingText(quote.text);
+                      }}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => deleteQuote(quote.id)}
+                      disabled={loading}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {quotes.length === 0 && (
+          <p className="text-muted-foreground text-center py-4">
+            {t('noCustomQuotes', language)}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

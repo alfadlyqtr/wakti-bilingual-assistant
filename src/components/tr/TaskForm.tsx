@@ -9,13 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { Edit, X, RotateCcw, Check } from 'lucide-react';
 
 interface TaskFormProps {
-  task: TRTask;
+  task: TRTask | null;
   onClose: () => void;
   onTaskSaved: () => void;
 }
@@ -25,18 +25,26 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
   const { toast } = useToast();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
+  
+  // If task is null, show error and close
+  if (!task) {
+    console.error('TaskForm: task is null');
+    onClose();
+    return null;
+  }
+
   const [formData, setFormData] = useState({
-    title: task.title,
+    title: task.title || '',
     description: task.description || '',
-    due_date: task.due_date,
-    priority: task.priority,
-    type: task.type,
+    due_date: task.due_date || '',
+    priority: task.priority || 'normal',
+    type: task.task_type || 'one-time',
     is_shared: task.is_shared || false
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !task) return;
 
     if (!formData.title.trim()) {
       toast({
@@ -59,7 +67,16 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
     try {
       setLoading(true);
       
-      await TRService.updateTask(task.id, formData);
+      const updateData = {
+        title: formData.title,
+        description: formData.description,
+        due_date: formData.due_date,
+        priority: formData.priority as 'normal' | 'high' | 'urgent',
+        task_type: formData.type as 'one-time' | 'repeated',
+        is_shared: formData.is_shared
+      };
+
+      await TRService.updateTask(task.id, updateData);
       toast({
         title: t('success', language),
         description: t('taskUpdated', language)
@@ -79,22 +96,21 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
   };
 
   const handleToggleComplete = async () => {
+    if (!task) return;
+    
     try {
       setLoading(true);
       
-      if (task.completed) {
-        await TRService.reopenTask(task.id);
-        toast({
-          title: t('success', language),
-          description: t('taskReopened', language)
-        });
-      } else {
-        await TRService.completeTask(task.id);
-        toast({
-          title: t('success', language),
-          description: t('taskCompleted', language)
-        });
-      }
+      const updateData = {
+        completed: !task.completed,
+        completed_at: !task.completed ? new Date().toISOString() : null
+      };
+
+      await TRService.updateTask(task.id, updateData);
+      toast({
+        title: t('success', language),
+        description: task.completed ? t('taskReopened', language) : t('taskCompleted', language)
+      });
       
       onTaskSaved();
       onClose();
@@ -166,9 +182,9 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">{t('low', language)}</SelectItem>
-                    <SelectItem value="medium">{t('medium', language)}</SelectItem>
+                    <SelectItem value="normal">{t('normal', language)}</SelectItem>
                     <SelectItem value="high">{t('high', language)}</SelectItem>
+                    <SelectItem value="urgent">{t('urgent', language)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
