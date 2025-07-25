@@ -3,18 +3,12 @@ import React from "react";
 import { ArrowRight, ArrowLeft, ArrowLeftRight } from "lucide-react";
 
 interface ContactRelationshipIndicatorProps {
-  status?: "mutual" | "you-added-them" | "they-added-you";
-  userId?: string;
-  contactId?: string;
+  status: "mutual" | "you-added-them" | "they-added-you";
 }
 
 export function ContactRelationshipIndicator({
   status,
-  userId,
-  contactId,
 }: ContactRelationshipIndicatorProps) {
-  if (!status) return null;
-
   let icon;
   let color = "text-muted-foreground";
   let label = "";

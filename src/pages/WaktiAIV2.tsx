@@ -297,24 +297,23 @@ const WaktiAIV2 = () => {
         setIsNewConversation(false);
       }
 
-      // Add user message to the conversation
-      const tempUserMessage: AIMessage = {
-        id: `user-temp-${Date.now()}`,
-        role: 'user',
-        content: messageContent,
-        timestamp: new Date(),
-        inputType: finalInputType,
-        attachedFiles: processedAttachedFiles
-      };
-
-      const newMessages = [...sessionMessages, tempUserMessage];
-      setSessionMessages(newMessages);
-
-      // Save to frontend memory
-      EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
-
       if (routingMode === 'image') {
         console.log('🎨 FRONTEND BOSS: Processing image generation');
+        
+        const tempUserMessage: AIMessage = {
+          id: `user-temp-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: finalInputType,
+          attachedFiles: processedAttachedFiles
+        };
+        
+        const newMessages = [...sessionMessages, tempUserMessage];
+        setSessionMessages(newMessages);
+        
+        // Save to frontend memory
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
         
         const imageResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -350,6 +349,20 @@ const WaktiAIV2 = () => {
       } else if (routingMode === 'search') {
         console.log('🔍 FRONTEND BOSS: Processing search');
         
+        const tempUserMessage: AIMessage = {
+          id: `user-temp-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: finalInputType,
+          attachedFiles: processedAttachedFiles
+        };
+        
+        const newMessages = [...sessionMessages, tempUserMessage];
+        setSessionMessages(newMessages);
+        
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+        
         const searchResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,
@@ -382,7 +395,7 @@ const WaktiAIV2 = () => {
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
         
       } else {
-        // CHAT MODE OR EXPLICIT TASK COMMANDS - NO STREAMING
+        // CHAT MODE OR EXPLICIT TASK COMMANDS (INCLUDING VISION)
         if (isExplicitTaskCommand(messageContent)) {
           console.log('🎯 FRONTEND BOSS: Processing explicit task command');
           
@@ -402,6 +415,15 @@ const WaktiAIV2 = () => {
 
           const taskData = taskResponse.data;
 
+          const tempUserMessage: AIMessage = {
+            id: `user-temp-${Date.now()}`,
+            role: 'user',
+            content: messageContent,
+            timestamp: new Date(),
+            inputType: finalInputType,
+            attachedFiles: processedAttachedFiles
+          };
+
           const taskMessage: AIMessage = {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
@@ -409,7 +431,7 @@ const WaktiAIV2 = () => {
             timestamp: new Date()
           };
 
-          const finalMessages = [...newMessages, taskMessage];
+          const finalMessages = [...sessionMessages, tempUserMessage, taskMessage];
           setSessionMessages(finalMessages);
 
           if (taskData.intent === 'parse_task' && taskData.intentData?.pendingTask) {
@@ -421,59 +443,73 @@ const WaktiAIV2 = () => {
 
           EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
 
-        } else {
-          // DEFAULT CHAT MODE - NO STREAMING, DIRECT RESPONSE
-          console.log('💬 FRONTEND BOSS: Processing chat mode with direct response (no streaming)');
-          
-          const aiResponse = await WaktiAIV2Service.sendMessage(
-            messageContent,
-            userProfile?.id,
-            language,
-            workingConversationId,
-            finalInputType,
-            newMessages,
-            false,
-            'chat',
-            '',
-            processedAttachedFiles || []
-            // No streaming callback - direct response only
-          );
-
-          if (aiResponse.error) {
-            throw new Error(aiResponse.error);
-          }
-          
-          // Create single assistant message with complete response
-          const assistantMessage: AIMessage = {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
-            content: aiResponse.response || 'Response received',
-            timestamp: new Date(),
-            intent: aiResponse.intent || undefined,
-            confidence: (aiResponse.confidence as 'high' | 'medium' | 'low') || undefined,
-            actionTaken: aiResponse.actionTaken || undefined,
-            imageUrl: aiResponse.imageUrl || undefined,
-            browsingUsed: aiResponse.browsingUsed || undefined,
-            browsingData: aiResponse.browsingData || undefined
-          };
-
-          const finalMessages = [...newMessages, assistantMessage];
-          setSessionMessages(finalMessages);
-
-          // Save to memory
-          EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
-
-          // Handle task form
-          if (aiResponse.showTaskForm && aiResponse.taskData) {
-            setPendingTaskData(aiResponse.taskData);
-            setShowTaskConfirmation(true);
-          }
-
-          // Handle reminder
-          if (aiResponse.reminderCreated && aiResponse.reminderData) {
-            showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
-          }
+          setIsLoading(false);
+          return;
         }
+
+        // DEFAULT CHAT MODE - INCLUDING VISION WITH CLAUDE WAY
+        console.log('💬 FRONTEND BOSS: Processing chat mode (including Claude Way vision)');
+        
+        const tempUserMessage: AIMessage = {
+          id: `user-temp-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: finalInputType,
+          attachedFiles: processedAttachedFiles
+        };
+        
+        const newMessages = [...sessionMessages, tempUserMessage];
+        setSessionMessages(newMessages);
+        
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+        
+        const aiResponse = await WaktiAIV2Service.sendMessage(
+          messageContent,
+          userProfile?.id,
+          language,
+          workingConversationId,
+          finalInputType,
+          newMessages,
+          false,
+          'chat',
+          '',
+          processedAttachedFiles || []
+        );
+
+        if (aiResponse.error) {
+          throw new Error(aiResponse.error);
+        }
+        
+        // FIXED: Safe property access for vision responses
+        const assistantMessage: AIMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: aiResponse.response || 'Response received',
+          timestamp: new Date(),
+          intent: aiResponse.intent || undefined,
+          confidence: (aiResponse.confidence as 'high' | 'medium' | 'low') || undefined,
+          actionTaken: aiResponse.actionTaken || undefined,
+          imageUrl: aiResponse.imageUrl || undefined,
+          browsingUsed: aiResponse.browsingUsed || undefined,
+          browsingData: aiResponse.browsingData || undefined
+        };
+
+        // FIXED: Safe task form handling
+        if (aiResponse.showTaskForm && aiResponse.taskData) {
+          setPendingTaskData(aiResponse.taskData);
+          setShowTaskConfirmation(true);
+        }
+
+        // FIXED: Safe reminder handling
+        if (aiResponse.reminderCreated && aiResponse.reminderData) {
+          showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
+        }
+        
+        const finalMessages = [...newMessages, assistantMessage];
+        setSessionMessages(finalMessages);
+        
+        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
       }
       
       const totalTime = Date.now() - startTime;
@@ -497,6 +533,7 @@ const WaktiAIV2 = () => {
       
       setSessionMessages(prevMessages => {
         const newMessages = [...prevMessages];
+        newMessages.pop();
         newMessages.push({
           id: `assistant-error-${Date.now()}`,
           role: 'assistant',

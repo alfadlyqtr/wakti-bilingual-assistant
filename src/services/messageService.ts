@@ -22,10 +22,13 @@ export interface DirectMessage {
 }
 
 // Get messages between current user and a contact
-export async function getMessages(contactId: string, userId: string): Promise<DirectMessage[]> {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function getMessages(contactId: string): Promise<DirectMessage[]> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
   
   console.log("🔍 Fetching messages between:", { userId, contactId });
 
@@ -103,7 +106,7 @@ export async function getMessages(contactId: string, userId: string): Promise<Di
 
   // Mark messages as read (only messages received by current user)
   try {
-    await markAsRead(contactId, userId);
+    await markAsRead(contactId);
   } catch (error) {
     console.error("⚠️ Error marking messages as read:", error);
   }
@@ -112,8 +115,11 @@ export async function getMessages(contactId: string, userId: string): Promise<Di
 }
 
 // Get unread messages for notification indicator
-export async function getUnreadMessages(contactId: string, userId: string): Promise<number> {
-  if (!userId) return 0;
+export async function getUnreadMessages(contactId: string): Promise<number> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) return 0;
+
+  const userId = session.session.user.id;
 
   const { count, error } = await supabase
     .from("messages")
@@ -131,11 +137,7 @@ export async function getUnreadMessages(contactId: string, userId: string): Prom
 }
 
 // Mark messages as read
-export async function markAsRead(senderId: string, userId: string): Promise<void> {
-  if (!userId) {
-    throw new Error("User ID is required");
-  }
-
+export async function markAsRead(senderId: string): Promise<void> {
   try {
     const { error } = await supabase.rpc('mark_messages_as_read', {
       other_user_id: senderId
@@ -148,10 +150,13 @@ export async function markAsRead(senderId: string, userId: string): Promise<void
 }
 
 // Validate if users can message each other
-async function validateCanMessage(recipientId: string, userId: string): Promise<boolean> {
-  if (!userId) {
-    throw new Error("User ID is required");
+async function validateCanMessage(recipientId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
   
   try {
     const { data, error } = await supabase.rpc('can_users_message', {
@@ -172,11 +177,13 @@ async function validateCanMessage(recipientId: string, userId: string): Promise<
 }
 
 // Upload message attachment (images, voice, or PDF)
-export async function uploadMessageAttachment(file: File, type: 'image' | 'voice' | 'pdf', userId: string): Promise<string> {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function uploadMessageAttachment(file: File, type: 'image' | 'voice' | 'pdf'): Promise<string> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
 
+  const userId = session.session.user.id;
   const fileExt = file.name.split('.').pop();
   const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
@@ -210,14 +217,17 @@ export async function sendMessage(recipientId: string, messageData: {
   media_type?: string;
   voice_duration?: number;
   file_size?: number;
-}, userId: string): Promise<DirectMessage> {
-  if (!userId) {
-    throw new Error("User ID is required");
+}): Promise<DirectMessage> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
   
   console.log("📤 Sending message:", { recipientId, messageData, userId });
   
-  const canMessage = await validateCanMessage(recipientId, userId);
+  const canMessage = await validateCanMessage(recipientId);
   if (!canMessage) {
     throw new Error("You cannot send messages to this user. Make sure you are both in each other's contact lists.");
   }
@@ -247,10 +257,13 @@ export async function sendMessage(recipientId: string, messageData: {
 }
 
 // Check if a contact is blocked
-export async function getBlockStatus(contactId: string, userId: string): Promise<{ isBlocked: boolean; isBlockedBy: boolean }> {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function getBlockStatus(contactId: string): Promise<{ isBlocked: boolean; isBlockedBy: boolean }> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
   
   const { data: blockedByMe } = await supabase
     .from("contacts")

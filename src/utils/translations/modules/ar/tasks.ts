@@ -71,18 +71,5 @@ export const tasksAr = {
   errorCopyingLink: "خطأ في نسخ الرابط",
   dueOn: "مستحق في",
   hideSubtasks: "إخفاء",
-  showSubtasks: "إظهار",
-  
-  // New additions
-  dueDateRequired: "تاريخ الاستحقاق مطلوب",
-  taskCreated: "تم إنشاء المهمة بنجاح",
-  errorCreatingTask: "فشل في إنشاء المهمة",
-  type: "النوع",
-  makeShared: "جعل مشترك",
-  taskUpdated: "تم تحديث المهمة بنجاح",
-  errorSavingTask: "فشل في حفظ المهمة",
-  taskReopened: "تم إعادة فتح المهمة بنجاح",
-  saving: "جاري الحفظ...",
-  reopen: "إعادة فتح",
-  complete: "مكتمل"
+  showSubtasks: "إظهار"
 };

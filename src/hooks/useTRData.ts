@@ -1,57 +1,51 @@
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { TRService } from '@/services/trService';
+import { TRService, TRTask, TRReminder } from '@/services/trService';
 
-export function useTRData() {
-  const { user } = useAuth();
-  const [tasks, setTasks] = useState([]);
-  const [reminders, setReminders] = useState([]);
+export const useTRData = () => {
+  const [tasks, setTasks] = useState<TRTask[]>([]);
+  const [reminders, setReminders] = useState<TRReminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchData();
-    }
-  }, [user?.id]);
-
   const fetchData = async () => {
-    if (!user?.id) return;
-
+    console.log('useTRData: Starting data fetch');
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      setError(null);
-      
       const [tasksData, remindersData] = await Promise.all([
-        TRService.getTasks(user.id),
-        TRService.getReminders(user.id),
+        TRService.getTasks(),
+        TRService.getReminders()
       ]);
-
+      
+      console.log('useTRData: Data fetched successfully:', {
+        tasksCount: tasksData.length,
+        remindersCount: remindersData.length
+      });
+      
       setTasks(tasksData);
       setReminders(remindersData);
-    } catch (err) {
-      console.error('Error fetching TR data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch data');
+    } catch (error) {
+      console.error('useTRData: Error fetching data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
+      setError(errorMessage);
+      setTasks([]);
+      setReminders([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const refetch = () => {
+  useEffect(() => {
     fetchData();
-  };
+  }, []);
 
-  const refresh = () => {
-    fetchData();
+  return { 
+    tasks, 
+    reminders, 
+    loading, 
+    error, 
+    refresh: fetchData 
   };
-
-  return {
-    tasks,
-    reminders,
-    loading,
-    error,
-    refetch,
-    refresh,
-  };
-}
+};

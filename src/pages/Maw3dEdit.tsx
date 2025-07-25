@@ -1,46 +1,33 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Users, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { TextStyle } from '@/types/maw3d';
-import TextStyleCustomizer from '@/components/maw3d/TextStyleCustomizer';
 
 interface EventData {
   id: string;
   title: string;
   description: string;
-  location: string;
-  google_maps_link?: string;
-  organizer?: string;
   event_date: string;
-  start_time?: string;
-  end_time?: string;
-  is_all_day: boolean;
+  event_time: string;
+  location: string;
+  max_attendees: number;
   is_public: boolean;
-  background_type: string;
-  background_value: string;
-  text_style: TextStyle;
-  template_type?: string;
+  requires_approval: boolean;
   created_by: string;
-  show_attending_count: boolean;
-  auto_delete_enabled: boolean;
-  image_blur: number;
-  language: string;
 }
 
 export default function Maw3dEdit() {
-  const { id } = useParams<{ id: string }>();
+  const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
   const { language } = useTheme();
   const { user } = useAuth();
@@ -48,25 +35,19 @@ export default function Maw3dEdit() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [event, setEvent] = useState<EventData | null>(null);
-  
-  // Collapsible sections state
-  const [basicInfoOpen, setBasicInfoOpen] = useState(true);
-  const [textStyleOpen, setTextStyleOpen] = useState(false);
-  const [backgroundOpen, setBackgroundOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (id) {
+    if (eventId) {
       fetchEvent();
     }
-  }, [id]);
+  }, [eventId]);
 
   const fetchEvent = async () => {
     try {
       const { data, error } = await supabase
         .from('maw3d_events')
         .select('*')
-        .eq('id', id)
+        .eq('id', eventId)
         .single();
 
       if (error) throw error;
@@ -97,28 +78,20 @@ export default function Maw3dEdit() {
         .update({
           title: event.title,
           description: event.description,
-          location: event.location,
-          google_maps_link: event.google_maps_link,
-          organizer: event.organizer,
           event_date: event.event_date,
-          start_time: event.start_time,
-          end_time: event.end_time,
-          is_all_day: event.is_all_day,
+          event_time: event.event_time,
+          location: event.location,
+          max_attendees: event.max_attendees,
           is_public: event.is_public,
-          background_type: event.background_type,
-          background_value: event.background_value,
-          text_style: event.text_style,
-          show_attending_count: event.show_attending_count,
-          auto_delete_enabled: event.auto_delete_enabled,
-          image_blur: event.image_blur,
+          requires_approval: event.requires_approval,
           updated_at: new Date().toISOString()
         })
-        .eq('id', id);
+        .eq('id', eventId);
 
       if (error) throw error;
 
       toast.success(language === 'ar' ? 'تم تحديث الحدث بنجاح' : 'Event updated successfully');
-      navigate(`/maw3d/event/${id}`);
+      navigate(`/maw3d/event/${eventId}`);
     } catch (error) {
       console.error('Error updating event:', error);
       toast.error(language === 'ar' ? 'فشل في تحديث الحدث' : 'Failed to update event');
@@ -138,13 +111,13 @@ export default function Maw3dEdit() {
       await supabase
         .from('maw3d_rsvps')
         .delete()
-        .eq('event_id', id);
+        .eq('event_id', eventId);
 
       // Delete the event
       const { error } = await supabase
         .from('maw3d_events')
         .delete()
-        .eq('id', id);
+        .eq('id', eventId);
 
       if (error) throw error;
 
@@ -161,15 +134,6 @@ export default function Maw3dEdit() {
   const updateEvent = (field: keyof EventData, value: any) => {
     if (event) {
       setEvent({ ...event, [field]: value });
-    }
-  };
-
-  const handleTextStyleChange = (updates: Partial<TextStyle>) => {
-    if (event) {
-      setEvent({
-        ...event,
-        text_style: { ...event.text_style, ...updates }
-      });
     }
   };
 
@@ -202,297 +166,183 @@ export default function Maw3dEdit() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background/90">
-      <div className="container mx-auto p-4 max-w-4xl">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto p-4 max-w-2xl">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+        <div className="flex items-center gap-4 mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/maw3d')}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {language === 'ar' ? 'العودة' : 'Back'}
+          </Button>
+          <h1 className="text-2xl font-bold text-foreground">
             {language === 'ar' ? 'تعديل الحدث' : 'Edit Event'}
           </h1>
-          <div className="flex items-center justify-center gap-4">
-            <Button
-              variant="outline"
-              onClick={() => navigate('/maw3d')}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              {language === 'ar' ? 'العودة' : 'Back'}
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? 
-                (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') :
-                (language === 'ar' ? 'حفظ التغييرات' : 'Save Changes')
-              }
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="flex items-center gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              {deleting ? 
-                (language === 'ar' ? 'جاري الحذف...' : 'Deleting...') :
-                (language === 'ar' ? 'حذف الحدث' : 'Delete Event')
-              }
-            </Button>
-          </div>
         </div>
 
-        <div className="space-y-6">
-          {/* Basic Information */}
-          <Card className="overflow-hidden">
-            <Collapsible open={basicInfoOpen} onOpenChange={setBasicInfoOpen}>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{language === 'ar' ? 'المعلومات الأساسية' : 'Basic Information'}</span>
-                    {basicInfoOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </CardTitle>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="title">
-                      {language === 'ar' ? 'عنوان الحدث' : 'Event Title'}
-                    </Label>
-                    <Input
-                      id="title"
-                      value={event.title}
-                      onChange={(e) => updateEvent('title', e.target.value)}
-                      placeholder={language === 'ar' ? 'أدخل عنوان الحدث' : 'Enter event title'}
-                    />
-                  </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              {language === 'ar' ? 'تفاصيل الحدث' : 'Event Details'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Title */}
+            <div className="space-y-2">
+              <Label htmlFor="title">
+                {language === 'ar' ? 'عنوان الحدث' : 'Event Title'}
+              </Label>
+              <Input
+                id="title"
+                value={event.title}
+                onChange={(e) => updateEvent('title', e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل عنوان الحدث' : 'Enter event title'}
+              />
+            </div>
 
-                  <div>
-                    <Label htmlFor="description">
-                      {language === 'ar' ? 'وصف الحدث' : 'Event Description'}
-                    </Label>
-                    <Textarea
-                      id="description"
-                      value={event.description}
-                      onChange={(e) => updateEvent('description', e.target.value)}
-                      placeholder={language === 'ar' ? 'أدخل وصف الحدث' : 'Enter event description'}
-                      rows={4}
-                    />
-                  </div>
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">
+                {language === 'ar' ? 'وصف الحدث' : 'Event Description'}
+              </Label>
+              <Textarea
+                id="description"
+                value={event.description}
+                onChange={(e) => updateEvent('description', e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل وصف الحدث' : 'Enter event description'}
+                rows={4}
+              />
+            </div>
 
-                  <div>
-                    <Label htmlFor="organizer">
-                      {language === 'ar' ? 'المنظم' : 'Organizer'}
-                    </Label>
-                    <Input
-                      id="organizer"
-                      value={event.organizer || ''}
-                      onChange={(e) => updateEvent('organizer', e.target.value)}
-                      placeholder={language === 'ar' ? 'أدخل اسم المنظم' : 'Enter organizer name'}
-                    />
-                  </div>
+            {/* Date and Time */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date" className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  {language === 'ar' ? 'التاريخ' : 'Date'}
+                </Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={event.event_date}
+                  onChange={(e) => updateEvent('event_date', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="time" className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  {language === 'ar' ? 'الوقت' : 'Time'}
+                </Label>
+                <Input
+                  id="time"
+                  type="time"
+                  value={event.event_time}
+                  onChange={(e) => updateEvent('event_time', e.target.value)}
+                />
+              </div>
+            </div>
 
-                  <div>
-                    <Label htmlFor="date">
-                      {language === 'ar' ? 'التاريخ' : 'Date'}
-                    </Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      value={event.event_date}
-                      onChange={(e) => updateEvent('event_date', e.target.value)}
-                    />
-                  </div>
+            {/* Location */}
+            <div className="space-y-2">
+              <Label htmlFor="location" className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                {language === 'ar' ? 'الموقع' : 'Location'}
+              </Label>
+              <Input
+                id="location"
+                value={event.location}
+                onChange={(e) => updateEvent('location', e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل موقع الحدث' : 'Enter event location'}
+              />
+            </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="isAllDay">
-                        {language === 'ar' ? 'طوال اليوم' : 'All Day'}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        {language === 'ar' ? 'حدث لطوال اليوم' : 'Event lasts all day'}
-                      </p>
-                    </div>
-                    <Switch
-                      id="isAllDay"
-                      checked={event.is_all_day}
-                      onCheckedChange={(checked) => updateEvent('is_all_day', checked)}
-                    />
-                  </div>
+            {/* Max Attendees */}
+            <div className="space-y-2">
+              <Label htmlFor="maxAttendees" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                {language === 'ar' ? 'الحد الأقصى للحضور' : 'Maximum Attendees'}
+              </Label>
+              <Input
+                id="maxAttendees"
+                type="number"
+                min="1"
+                value={event.max_attendees}
+                onChange={(e) => updateEvent('max_attendees', parseInt(e.target.value) || 1)}
+              />
+            </div>
 
-                  {!event.is_all_day && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="startTime">
-                          {language === 'ar' ? 'وقت البداية' : 'Start Time'}
-                        </Label>
-                        <Input
-                          id="startTime"
-                          type="time"
-                          value={event.start_time || ''}
-                          onChange={(e) => updateEvent('start_time', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="endTime">
-                          {language === 'ar' ? 'وقت النهاية' : 'End Time'}
-                        </Label>
-                        <Input
-                          id="endTime"
-                          type="time"
-                          value={event.end_time || ''}
-                          onChange={(e) => updateEvent('end_time', e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
+            {/* Settings */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">
+                {language === 'ar' ? 'إعدادات الحدث' : 'Event Settings'}
+              </h3>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="isPublic">
+                    {language === 'ar' ? 'حدث عام' : 'Public Event'}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'يمكن لأي شخص رؤية هذا الحدث' : 'Anyone can see this event'}
+                  </p>
+                </div>
+                <Switch
+                  id="isPublic"
+                  checked={event.is_public}
+                  onCheckedChange={(checked) => updateEvent('is_public', checked)}
+                />
+              </div>
 
-                  <div>
-                    <Label htmlFor="location">
-                      {language === 'ar' ? 'الموقع' : 'Location'}
-                    </Label>
-                    <Input
-                      id="location"
-                      value={event.location}
-                      onChange={(e) => updateEvent('location', e.target.value)}
-                      placeholder={language === 'ar' ? 'أدخل موقع الحدث' : 'Enter event location'}
-                    />
-                  </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="requiresApproval">
+                    {language === 'ar' ? 'يتطلب موافقة' : 'Requires Approval'}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'يجب الموافقة على طلبات الحضور' : 'Attendance requests must be approved'}
+                  </p>
+                </div>
+                <Switch
+                  id="requiresApproval"
+                  checked={event.requires_approval}
+                  onCheckedChange={(checked) => updateEvent('requires_approval', checked)}
+                />
+              </div>
+            </div>
 
-                  <div>
-                    <Label htmlFor="googleMapsLink">
-                      {language === 'ar' ? 'رابط خرائط جوجل' : 'Google Maps Link'}
-                    </Label>
-                    <Input
-                      id="googleMapsLink"
-                      value={event.google_maps_link || ''}
-                      onChange={(e) => updateEvent('google_maps_link', e.target.value)}
-                      placeholder={language === 'ar' ? 'أدخل رابط خرائط جوجل' : 'Enter Google Maps link'}
-                    />
-                  </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Collapsible>
-          </Card>
-
-          {/* Text Style */}
-          <Card className="overflow-hidden">
-            <Collapsible open={textStyleOpen} onOpenChange={setTextStyleOpen}>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{language === 'ar' ? 'نمط النص' : 'Text Style'}</span>
-                    {textStyleOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </CardTitle>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent>
-                  <TextStyleCustomizer
-                    textStyle={event.text_style}
-                    onTextStyleChange={handleTextStyleChange}
-                    language={language}
-                  />
-                </CardContent>
-              </CollapsibleContent>
-            </Collapsible>
-          </Card>
-
-          {/* Background */}
-          <Card className="overflow-hidden">
-            <Collapsible open={backgroundOpen} onOpenChange={setBackgroundOpen}>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{language === 'ar' ? 'الخلفية' : 'Background'}</span>
-                    {backgroundOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </CardTitle>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label>{language === 'ar' ? 'لون الخلفية' : 'Background Color'}</Label>
-                    <input
-                      type="color"
-                      value={event.background_value}
-                      onChange={(e) => updateEvent('background_value', e.target.value)}
-                      className="w-full h-10 rounded border mt-2"
-                    />
-                  </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Collapsible>
-          </Card>
-
-          {/* Event Settings */}
-          <Card className="overflow-hidden">
-            <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{language === 'ar' ? 'إعدادات الحدث' : 'Event Settings'}</span>
-                    {settingsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </CardTitle>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="isPublic">
-                        {language === 'ar' ? 'حدث عام' : 'Public Event'}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        {language === 'ar' ? 'يمكن لأي شخص رؤية هذا الحدث' : 'Anyone can see this event'}
-                      </p>
-                    </div>
-                    <Switch
-                      id="isPublic"
-                      checked={event.is_public}
-                      onCheckedChange={(checked) => updateEvent('is_public', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="showAttendingCount">
-                        {language === 'ar' ? 'عرض عدد الحضور' : 'Show Attending Count'}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        {language === 'ar' ? 'عرض عدد الأشخاص المؤكدين للحضور' : 'Display number of confirmed attendees'}
-                      </p>
-                    </div>
-                    <Switch
-                      id="showAttendingCount"
-                      checked={event.show_attending_count}
-                      onCheckedChange={(checked) => updateEvent('show_attending_count', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="autoDelete">
-                        {language === 'ar' ? 'حذف تلقائي' : 'Auto Delete'}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        {language === 'ar' ? 'حذف الحدث تلقائياً بعد انتهائه' : 'Automatically delete event after it ends'}
-                      </p>
-                    </div>
-                    <Switch
-                      id="autoDelete"
-                      checked={event.auto_delete_enabled}
-                      onCheckedChange={(checked) => updateEvent('auto_delete_enabled', checked)}
-                    />
-                  </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Collapsible>
-          </Card>
-        </div>
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-6">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 flex-1"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? 
+                  (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') :
+                  (language === 'ar' ? 'حفظ التغييرات' : 'Save Changes')
+                }
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? 
+                  (language === 'ar' ? 'جاري الحذف...' : 'Deleting...') :
+                  (language === 'ar' ? 'حذف الحدث' : 'Delete Event')
+                }
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

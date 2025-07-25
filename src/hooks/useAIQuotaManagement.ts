@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface AIQuota {
   chat_characters_used: number;
@@ -16,14 +15,14 @@ let quotaCache: { [userId: string]: { data: AIQuota; timestamp: number } } = {};
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export function useAIQuotaManagement() {
-  const { user } = useAuth();
   const [quota, setQuota] = useState<AIQuota | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchQuota = async (forceRefresh = false) => {
-    if (!user?.id) return;
-
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       // Check simple cache first unless forced refresh
       if (!forceRefresh && quotaCache[user.id]) {
         const cached = quotaCache[user.id];
@@ -72,9 +71,10 @@ export function useAIQuotaManagement() {
   };
 
   const updateQuota = async (updates: Partial<Pick<AIQuota, 'chat_characters_used' | 'search_characters_used' | 'image_prompts_used'>>) => {
-    if (!user?.id) return;
-
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { error } = await supabase
         .from('ai_quota_management')
         .upsert({
@@ -101,7 +101,7 @@ export function useAIQuotaManagement() {
 
   useEffect(() => {
     fetchQuota();
-  }, [user?.id]);
+  }, []);
 
   return {
     quota,

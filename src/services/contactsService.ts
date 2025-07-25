@@ -39,10 +39,13 @@ export interface UserSearchResult {
 }
 
 // Get all approved contacts for the current user
-export async function getContacts(userId: string) {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function getContacts() {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
   
   // 1. Get all contacts you added
   const { data: youAddedRows, error: error1 } = await supabase
@@ -88,6 +91,8 @@ export async function getContacts(userId: string) {
     if (reciprocalUserSet.has(contact.contact_id)) {
       relationship = "mutual";
     }
+    // In this context, 'they-added-you' (where you haven't added them) is not possible,
+    // since we're only getting contacts YOU added, but we'll return either mutual or you-added-them.
     return {
       id: contact.id,
       contact_id: contact.contact_id,
@@ -101,10 +106,13 @@ export async function getContacts(userId: string) {
 }
 
 // Get all pending contact requests for the current user
-export async function getContactRequests(userId: string) {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function getContactRequests() {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
 
   // Step 1: Get user IDs of people who sent requests
   const { data: rows, error: err1 } = await supabase
@@ -159,10 +167,13 @@ export async function getContactRequests(userId: string) {
 }
 
 // Get all blocked contacts for the current user
-export async function getBlockedContacts(userId: string) {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function getBlockedContacts() {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
 
   // Step 1: Get IDs of blocked contacts
   const { data: rows, error: err1 } = await supabase
@@ -210,10 +221,13 @@ export async function getBlockedContacts(userId: string) {
 }
 
 // Search for users to add as contacts
-export async function searchUsers(query: string, userId: string): Promise<UserSearchResult[]> {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function searchUsers(query: string): Promise<UserSearchResult[]> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
 
   // Search by username, display_name or email
   const { data: users, error } = await supabase
@@ -238,10 +252,13 @@ export async function searchUsers(query: string, userId: string): Promise<UserSe
 }
 
 // Check if a user is already in contacts
-export async function checkIfUserInContacts(userId: string, currentUserId: string): Promise<boolean> {
-  if (!currentUserId) {
-    throw new Error("Current user ID is required");
+export async function checkIfUserInContacts(userId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const currentUserId = session.session.user.id;
   
   // Check if this user is already in the contacts list with any status
   const { data, error } = await supabase
@@ -261,10 +278,13 @@ export async function checkIfUserInContacts(userId: string, currentUserId: strin
 }
 
 // Send a contact request
-export async function sendContactRequest(contactId: string, userId: string) {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function sendContactRequest(contactId: string) {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
   
   // First check if contact already exists
   const { data: existingContact, error: checkError } = await supabase
@@ -344,10 +364,13 @@ export async function sendContactRequest(contactId: string, userId: string) {
 }
 
 // Accept a contact request and ensure bi-directional relationship
-export async function acceptContactRequest(requestId: string, currentUserId: string): Promise<{ original: any, reciprocal: any }> {
-  if (!currentUserId) {
-    throw new Error("Current user ID is required");
+export async function acceptContactRequest(requestId: string): Promise<{ original: any, reciprocal: any }> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const currentUserId = session.session.user.id;
 
   // First, get the request details to identify the requester
   const { data: requestData, error: requestError } = await supabase
@@ -439,6 +462,11 @@ export async function acceptContactRequest(requestId: string, currentUserId: str
 
 // Reject a contact request
 export async function rejectContactRequest(requestId: string) {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+
   const { error } = await supabase
     .from("contacts")
     .delete()
@@ -453,10 +481,13 @@ export async function rejectContactRequest(requestId: string) {
 }
 
 // Block a contact
-export async function blockContact(contactId: string, userId: string) {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function blockContact(contactId: string) {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
 
   // First check if contact exists
   const { data: existingContact, error: checkError } = await supabase
@@ -513,10 +544,13 @@ export async function blockContact(contactId: string, userId: string) {
 }
 
 // Unblock a contact
-export async function unblockContact(contactId: string, userId: string) {
-  if (!userId) {
-    throw new Error("User ID is required");
+export async function unblockContact(contactId: string) {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const userId = session.session.user.id;
 
   // Get the contact record before deleting it (for logging)
   const { data: contactRecord } = await supabase
@@ -571,39 +605,57 @@ export async function getUserProfile(userId: string) {
 }
 
 // Get current user profile
-export async function getCurrentUserProfile(userId: string) {
-  if (!userId) {
-    throw new Error("User ID is required");
-  }
+export async function getCurrentUserProfile() {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) {
+      throw new Error("User not authenticated");
+    }
 
-  return getUserProfile(userId);
+    return getUserProfile(session.session.user.id);
+  } catch (error) {
+    console.error("Error in getCurrentUserProfile:", error);
+    throw error;
+  }
 }
 
 // Update user auto-approve contacts setting
-export async function updateAutoApproveContacts(autoApprove: boolean, userId: string) {
-  if (!userId) {
-    throw new Error("User ID is required");
-  }
+export async function updateAutoApproveContacts(autoApprove: boolean) {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) {
+      throw new Error("User not authenticated");
+    }
 
-  console.log("Updating auto-approve setting to:", autoApprove);
+    const userId = session.session.user.id;
+    console.log("Updating auto-approve setting to:", autoApprove);
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .update({ auto_approve_contacts: autoApprove })
-    .eq("id", userId)
-    .select("auto_approve_contacts");
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ auto_approve_contacts: autoApprove })
+      .eq("id", userId)
+      .select("auto_approve_contacts");
 
-  if (error) {
-    console.error("Error updating auto-approve setting:", error);
+    if (error) {
+      console.error("Error updating auto-approve setting:", error);
+      throw error;
+    }
+
+    console.log("Auto-approve setting updated successfully:", data);
+    return data[0];
+  } catch (error) {
+    console.error("Error in updateAutoApproveContacts:", error);
     throw error;
   }
-
-  console.log("Auto-approve setting updated successfully:", data);
-  return data[0];
 }
 
 // Delete a contact
 export async function deleteContact(contactId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+  
   console.log('Deleting contact with ID:', contactId);
   
   // Delete the contact record directly using its ID
@@ -621,10 +673,13 @@ export async function deleteContact(contactId: string): Promise<boolean> {
 }
 
 // Check if a user is blocked
-export async function isUserBlocked(userId: string, currentUserId: string): Promise<boolean> {
-  if (!currentUserId) {
-    throw new Error("Current user ID is required");
+export async function isUserBlocked(userId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const currentUserId = session.session.user.id;
   
   // Check if the current user has blocked this user
   const { data, error } = await supabase
@@ -644,10 +699,13 @@ export async function isUserBlocked(userId: string, currentUserId: string): Prom
 }
 
 // Check if current user is blocked by another user
-export async function isBlockedByUser(userId: string, currentUserId: string): Promise<boolean> {
-  if (!currentUserId) {
-    throw new Error("Current user ID is required");
+export async function isBlockedByUser(userId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
   }
+
+  const currentUserId = session.session.user.id;
   
   // Check if this user has blocked the current user
   const { data, error } = await supabase
@@ -667,13 +725,13 @@ export async function isBlockedByUser(userId: string, currentUserId: string): Pr
 }
 
 // Check both directions of blocking
-export async function getBlockStatus(userId: string, currentUserId: string): Promise<{
+export async function getBlockStatus(userId: string): Promise<{
   isBlocked: boolean;
   isBlockedBy: boolean;
 }> {
   const [isBlocked, isBlockedBy] = await Promise.all([
-    isUserBlocked(userId, currentUserId),
-    isBlockedByUser(userId, currentUserId)
+    isUserBlocked(userId),
+    isBlockedByUser(userId)
   ]);
   
   return { isBlocked, isBlockedBy };
@@ -685,6 +743,9 @@ export async function getBlockStatus(userId: string, currentUserId: string): Pro
  * @param isFav    New favorite state (true/false)
  */
 export async function toggleContactFavorite(contactId: string, isFav: boolean) {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) throw new Error("User not authenticated");
+
   const { data, error } = await supabase
     .from("contacts")
     .update({ is_favorite: isFav })

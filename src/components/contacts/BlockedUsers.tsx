@@ -1,157 +1,163 @@
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Trash2, Shield } from 'lucide-react';
-import { toast } from 'sonner';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useState } from "react";
+import { UserPlus, UserX } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getBlockedContacts, unblockContact, sendContactRequest } from "@/services/contactsService";
+import { LoadingSpinner } from "@/components/ui/loading";
+import { toast } from "sonner";
 
-interface BlockedUser {
+type UserProfile = {
+  display_name?: string;
+  username?: string;
+  avatar_url?: string;
+  [key: string]: any;
+};
+
+type BlockedUserType = {
   id: string;
-  user_id: string;
-  blocked_user_id: string;
-  blocked_at: string;
-  blocked_user: {
-    id: string;
-    username: string;
-    display_name: string;
-    avatar_url: string;
-  };
+  contact_id: string;
+  profiles?: UserProfile;
+  [key: string]: any;
+};
+
+interface BlockedUsersProps {
+  onUnblockSuccess?: () => void;
 }
 
-export function BlockedUsers() {
-  const { user } = useAuth();
+export function BlockedUsers({ onUnblockSuccess }: BlockedUsersProps) {
   const { language } = useTheme();
-  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  
+  // Fetch blocked contacts
+  const { data: blockedUsers, isLoading, isError, error } = useQuery({
+    queryKey: ['blockedContacts'],
+    queryFn: getBlockedContacts,
+  });
 
-  const t = {
-    en: {
-      blockedUsers: "Blocked Users",
-      noBlockedUsers: "No blocked users",
-      unblock: "Unblock",
-      blockedAt: "Blocked at",
+  // Unblock contact mutation
+  const unblockContactMutation = useMutation({
+    mutationFn: (contactId: string) => unblockContact(contactId),
+    onSuccess: (result, contactId) => {
+      // Show success message
+      toast.success(t("contactUnblocked", language));
+      
+      // After unblocking, automatically send a contact request to add them back to contacts
+      addToContactsMutation.mutate(contactId);
+      
+      // Invalidate both blocked contacts and regular contacts queries
+      queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
     },
-    ar: {
-      blockedUsers: "المستخدمون المحظورون",
-      noBlockedUsers: "لا توجد مستخدمون محظورون",
-      unblock: "إلغاء الحظر",
-      blockedAt: "تم الحظر في",
+    onError: (error) => {
+      console.error("Error unblocking contact:", error);
+      toast.error(t("errorUnblockingContact", language));
     }
-  }[language];
+  });
 
-  useEffect(() => {
-    if (user) {
-      fetchBlockedUsers();
+  // Add to contacts mutation
+  const addToContactsMutation = useMutation({
+    mutationFn: (contactId: string) => sendContactRequest(contactId),
+    onSuccess: () => {
+      toast.success(t("userUnblockedDescription", language));
+      
+      // Invalidate contacts query to show the updated list
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      
+      // Switch to contacts tab after successful unblock
+      if (onUnblockSuccess) {
+        onUnblockSuccess();
+      }
+    },
+    onError: (error) => {
+      console.error("Error adding contact after unblock:", error);
+      // Even if adding back to contacts fails, we still switch tabs because the unblock was successful
+      if (onUnblockSuccess) {
+        onUnblockSuccess();
+      }
     }
-  }, [user]);
+  });
 
-  const fetchBlockedUsers = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('blocked_users')
-        .select(`
-          *,
-          blocked_user:profiles!blocked_users_blocked_user_id_fkey(
-            id,
-            username,
-            display_name,
-            avatar_url
-          )
-        `)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-      setBlockedUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching blocked users:', error);
-      toast.error('Failed to fetch blocked users');
-    } finally {
-      setLoading(false);
-    }
+  const handleUnblock = (contactId: string) => {
+    unblockContactMutation.mutate(contactId);
   };
 
-  const handleUnblock = async (blockedUserId: string) => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('blocked_users')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('blocked_user_id', blockedUserId);
-
-      if (error) throw error;
-
-      setBlockedUsers(prev => prev.filter(b => b.blocked_user_id !== blockedUserId));
-      toast.success('User unblocked successfully');
-    } catch (error) {
-      console.error('Error unblocking user:', error);
-      toast.error('Failed to unblock user');
-    }
+  const getInitials = (name: string) => {
+    if (!name) return "??";
+    return name.substring(0, 2).toUpperCase();
   };
 
-  if (loading) {
-    return <div className="text-center py-8">Loading blocked users...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center p-10">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className="p-6 text-center text-muted-foreground">
+        <p>{t("errorLoadingBlockedUsers", language)}</p>
+        <p className="text-sm mt-2">{(error as Error)?.message}</p>
+      </Card>
+    );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Shield className="h-5 w-5" />
-          {t.blockedUsers}
-        </CardTitle>
-        <CardDescription>
-          Manage users you have blocked
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {blockedUsers.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            {t.noBlockedUsers}
+    <div className="space-y-3">
+      {!blockedUsers || blockedUsers.length === 0 ? (
+        <Card className="p-6">
+          <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
+            <UserX className="h-12 w-12 opacity-50" />
+            <p className="font-medium text-lg">{t("noBlockedUsers", language)}</p>
+            <p className="text-sm">{t("noBlockedUsersDescription", language)}</p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {blockedUsers.map((blockedUser) => (
-              <div key={blockedUser.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarImage src={blockedUser.blocked_user.avatar_url} />
-                    <AvatarFallback>
-                      {blockedUser.blocked_user.display_name?.charAt(0) || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="font-medium">{blockedUser.blocked_user.display_name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      @{blockedUser.blocked_user.username}
+        </Card>
+      ) : (
+        blockedUsers.map((user: BlockedUserType) => {
+          const userProfile = user.profiles || {} as UserProfile;
+          const displayName = userProfile.display_name || userProfile.username || "Unknown User";
+          const username = userProfile.username || "user";
+          
+          return (
+            <Card key={user.id} className="overflow-hidden border-destructive/30">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage src={userProfile.avatar_url || ""} />
+                      <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{displayName}</p>
+                      <p className="text-sm text-muted-foreground">@{username}</p>
                     </div>
-                    <Badge variant="secondary" className="text-xs">
-                      {t.blockedAt} {new Date(blockedUser.blocked_at).toLocaleDateString()}
-                    </Badge>
                   </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleUnblock(user.contact_id)}
+                    disabled={unblockContactMutation.isPending || addToContactsMutation.isPending}
+                    className="flex gap-1"
+                  >
+                    {(unblockContactMutation.isPending || addToContactsMutation.isPending) ? (
+                      <LoadingSpinner size="sm" className="mr-2" />
+                    ) : (
+                      <UserPlus className="h-4 w-4 mr-1" />
+                    )}
+                    {t("unblock", language)}
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleUnblock(blockedUser.blocked_user_id)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  {t.unblock}
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
+    </div>
   );
 }

@@ -1,179 +1,225 @@
 
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { TRService, TRReminder } from '@/services/trService';
+import React, { useState, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { Edit, X, Trash2 } from 'lucide-react';
+import { TRService, TRReminder } from '@/services/trService';
+import { toast } from 'sonner';
+
+// Updated schema to make due_date optional
+const reminderSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
+  due_date: z.string().optional(), // Made optional
+  due_time: z.string().optional(),
+});
+
+type ReminderFormData = z.infer<typeof reminderSchema>;
 
 interface ReminderFormProps {
   isOpen: boolean;
-  reminder?: TRReminder;
   onClose: () => void;
+  reminder?: TRReminder | null;
   onReminderSaved: () => void;
 }
 
-export function ReminderForm({ isOpen, reminder, onClose, onReminderSaved }: ReminderFormProps) {
-  const { user } = useAuth();
+export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: ReminderFormProps) {
   const { language } = useTheme();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    title: reminder?.title || '',
-    description: reminder?.description || '',
-    due_date: reminder?.due_date || '',
-    due_time: reminder?.due_time || ''
+  const [isLoading, setIsLoading] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<ReminderFormData>({
+    resolver: zodResolver(reminderSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      due_date: '',
+      due_time: '',
+    },
   });
 
-  // Don't render if not open
-  if (!isOpen) return null;
+  const watchedDueDate = watch('due_date');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    if (!formData.title.trim()) {
-      toast.error(t('titleRequired', language));
-      return;
+  useEffect(() => {
+    if (reminder) {
+      reset({
+        title: reminder.title,
+        description: reminder.description || '',
+        due_date: reminder.due_date || '',
+        due_time: reminder.due_time || '',
+      });
+    } else {
+      reset({
+        title: '',
+        description: '',
+        due_date: '',
+        due_time: '',
+      });
     }
+  }, [reminder, reset]);
 
-    if (!formData.due_date) {
-      toast.error(t('dueDateRequired', language));
-      return;
+  useEffect(() => {
+    if (!isOpen) {
+      reset();
     }
+  }, [isOpen, reset]);
 
+  const onSubmit = async (data: ReminderFormData) => {
+    setIsLoading(true);
     try {
-      setLoading(true);
-      
+      // Prepare data for service - ensure title is always provided
       const reminderData = {
-        title: formData.title,
-        description: formData.description,
-        due_date: formData.due_date,
-        due_time: formData.due_time || null
+        title: data.title, // Required field
+        description: data.description || undefined,
+        due_date: data.due_date || undefined,
+        due_time: data.due_time || undefined,
       };
 
       if (reminder) {
         await TRService.updateReminder(reminder.id, reminderData);
-        toast.success(t('reminderUpdated', language));
+        toast.success(t('reminderUpdatedSuccessfully', language));
       } else {
-        await TRService.createReminder(reminderData, user.id);
-        toast.success(t('reminderCreated', language));
+        await TRService.createReminder(reminderData);
+        toast.success(t('reminderCreatedSuccessfully', language));
       }
       
       onReminderSaved();
       onClose();
     } catch (error) {
       console.error('Error saving reminder:', error);
-      toast.error(t('errorSavingReminder', language));
+      toast.error(reminder ? t('failedToUpdateReminder', language) : t('failedToCreateReminder', language));
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!reminder) return;
-
-    try {
-      setLoading(true);
-      await TRService.deleteReminder(reminder.id);
-      toast.success(t('reminderDeleted', language));
-      onReminderSaved();
-      onClose();
-    } catch (error) {
-      console.error('Error deleting reminder:', error);
-      toast.error(t('errorDeletingReminder', language));
-    } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Edit className="h-5 w-5" />
-              {reminder ? t('editReminder', language) : t('createReminder', language)}
-            </span>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="title">{t('title', language)} *</Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder={t('enterReminderTitle', language)}
-                required
-              />
-            </div>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {reminder ? t('editReminder', language) : t('createReminder', language)}
+          </DialogTitle>
+        </DialogHeader>
 
-            <div>
-              <Label htmlFor="description">{t('description', language)}</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder={t('enterReminderDescription', language)}
-                rows={3}
-              />
-            </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Title */}
+          <div className="space-y-2">
+            <Label htmlFor="title">{t('title', language)} *</Label>
+            <Input
+              id="title"
+              {...register('title')}
+              placeholder={t('enterReminderTitle', language)}
+              className={errors.title ? 'border-destructive' : ''}
+            />
+            {errors.title && (
+              <p className="text-sm text-destructive">{errors.title.message}</p>
+            )}
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="due_date">{t('dueDate', language)} *</Label>
-                <Input
-                  id="due_date"
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="due_time">{t('dueTime', language)}</Label>
-                <Input
-                  id="due_time"
-                  type="time"
-                  value={formData.due_time}
-                  onChange={(e) => setFormData({ ...formData, due_time: e.target.value })}
-                />
-              </div>
-            </div>
+          {/* Description */}
+          <div className="space-y-2">
+            <Label htmlFor="description">{t('description', language)}</Label>
+            <Textarea
+              id="description"
+              {...register('description')}
+              placeholder={t('enterReminderDescription', language)}
+              rows={3}
+            />
+          </div>
 
-            <div className="flex gap-2 pt-4">
-              <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? t('saving', language) : (reminder ? t('update', language) : t('create', language))}
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
-                {t('cancel', language)}
-              </Button>
-              {reminder && (
-                <Button 
-                  type="button" 
-                  variant="destructive"
-                  onClick={handleDelete}
-                  disabled={loading}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  {t('delete', language)}
-                </Button>
+          {/* Due Date - Now Optional */}
+          <div className="space-y-2">
+            <Label htmlFor="due_date">{t('dueDate', language)} {language === 'ar' ? '(اختياري)' : '(optional)'}</Label>
+            <Controller
+              name="due_date"
+              control={control}
+              render={({ field }) => (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {field.value ? (
+                        format(new Date(field.value), "PPP")
+                      ) : (
+                        <span>{t('selectDate', language)}</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value ? new Date(field.value) : undefined}
+                      onSelect={(date) => {
+                        field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               )}
+            />
+          </div>
+
+          {/* Due Time - Only show if date is selected */}
+          {watchedDueDate && (
+            <div className="space-y-2">
+              <Label htmlFor="due_time">{t('dueTime', language)}</Label>
+              <Input
+                id="due_time"
+                type="time"
+                {...register('due_time')}
+              />
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          )}
+
+          {/* Form Actions */}
+          <div className="flex gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1"
+            >
+              {t('cancel', language)}
+            </Button>
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1"
+            >
+              {isLoading 
+                ? (reminder ? t('updating', language) : t('creating', language))
+                : (reminder ? t('update', language) : t('create', language))
+              }
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

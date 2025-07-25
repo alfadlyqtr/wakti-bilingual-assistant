@@ -1,249 +1,173 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trash2, Plus, Edit } from 'lucide-react';
-import { toast } from 'sonner';
+import { Card } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
-import { t } from '@/utils/translations';
-import { supabase } from '@/integrations/supabase/client';
+import { getCustomQuotes, saveCustomQuotes } from '@/utils/quoteService';
+import { toast } from 'sonner';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/AuthContext';
+import { getCurrentUserProfile } from '@/services/contactsService';
+import { useQuery } from '@tanstack/react-query';
 
-export function CustomQuoteManager() {
-  const { user } = useAuth();
+interface CustomQuoteManagerProps {
+  onUpdate?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate, open, onOpenChange }) => {
   const { language } = useTheme();
-  const [quotes, setQuotes] = useState([]);
+  const { user } = useAuth();
+  const userId = user?.id ?? "";
+  const [customQuotes, setCustomQuotes] = useState<string[]>(getCustomQuotes(userId));
   const [newQuote, setNewQuote] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editingText, setEditingText] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState('');
+  const MAX_QUOTES = 5;
+  const MAX_CHARS = 30;
 
-  const loadQuotes = async () => {
-    if (!user) return;
-    
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('id', user.id)
-        .single();
+  // Get user profile to display the correct username
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: getCurrentUserProfile,
+    enabled: !!user
+  });
 
-      const customQuotes = profile?.settings?.customQuotes || [];
-      setQuotes(customQuotes);
-    } catch (error) {
-      console.error('Error loading quotes:', error);
-      toast.error(t('errorLoadingQuotes', language));
-    }
-  };
-
+  // Set username when profile is loaded
   useEffect(() => {
-    loadQuotes();
-  }, [user]);
-
-  const addQuote = async () => {
-    if (!newQuote.trim() || !user) return;
-    
-    try {
-      setLoading(true);
-      
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('id', user.id)
-        .single();
-
-      const currentSettings = profile?.settings || {};
-      const currentQuotes = currentSettings.customQuotes || [];
-      const updatedQuotes = [...currentQuotes, { id: Date.now(), text: newQuote.trim() }];
-
-      await supabase
-        .from('profiles')
-        .update({ 
-          settings: { 
-            ...currentSettings, 
-            customQuotes: updatedQuotes 
-          } 
-        })
-        .eq('id', user.id);
-
-      setQuotes(updatedQuotes);
-      setNewQuote('');
-      
-      toast.success(t('quoteAdded', language));
-    } catch (error) {
-      console.error('Error adding quote:', error);
-      toast.error(t('errorAddingQuote', language));
-    } finally {
-      setLoading(false);
+    if (userProfile?.username) {
+      setUsername(userProfile.username);
+    } else if (user?.email) {
+      // Fallback to email username if profile username is not available
+      setUsername(user.email.split('@')[0]);
     }
-  };
+  }, [userProfile, user]);
 
-  const deleteQuote = async (id) => {
-    if (!user) return;
-    
-    try {
-      setLoading(true);
-      
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('id', user.id)
-        .single();
+  // Update customQuotes whenever userId changes
+  useEffect(() => {
+    setCustomQuotes(getCustomQuotes(userId));
+  }, [userId]);
 
-      const currentSettings = profile?.settings || {};
-      const currentQuotes = currentSettings.customQuotes || [];
-      const updatedQuotes = currentQuotes.filter(quote => quote.id !== id);
-
-      await supabase
-        .from('profiles')
-        .update({ 
-          settings: { 
-            ...currentSettings, 
-            customQuotes: updatedQuotes 
-          } 
-        })
-        .eq('id', user.id);
-
-      setQuotes(updatedQuotes);
-      
-      toast.success(t('quoteDeleted', language));
-    } catch (error) {
-      console.error('Error deleting quote:', error);
-      toast.error(t('errorDeletingQuote', language));
-    } finally {
-      setLoading(false);
+  const handleAddQuote = () => {
+    if (!newQuote.trim()) {
+      toast.error(language === 'ar' ? 'الرجاء إدخال اقتباس صالح' : 'Please enter a valid quote');
+      return;
     }
-  };
-
-  const updateQuote = async (id, newText) => {
-    if (!newText.trim() || !user) return;
     
-    try {
-      setLoading(true);
-      
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('id', user.id)
-        .single();
-
-      const currentSettings = profile?.settings || {};
-      const currentQuotes = currentSettings.customQuotes || [];
-      const updatedQuotes = currentQuotes.map(quote => 
-        quote.id === id ? { ...quote, text: newText.trim() } : quote
+    if (customQuotes.length >= MAX_QUOTES) {
+      toast.error(
+        language === 'ar' 
+          ? `يمكنك إضافة ${MAX_QUOTES} اقتباسات كحد أقصى. الرجاء حذف بعض الاقتباسات أولاً.`
+          : `You can add maximum ${MAX_QUOTES} quotes. Please delete some quotes first.`
       );
-
-      await supabase
-        .from('profiles')
-        .update({ 
-          settings: { 
-            ...currentSettings, 
-            customQuotes: updatedQuotes 
-          } 
-        })
-        .eq('id', user.id);
-
-      setQuotes(updatedQuotes);
-      setEditingId(null);
-      setEditingText('');
-      
-      toast.success(t('quoteUpdated', language));
-    } catch (error) {
-      console.error('Error updating quote:', error);
-      toast.error(t('errorUpdatingQuote', language));
-    } finally {
-      setLoading(false);
+      return;
     }
+    
+    const formattedQuote = `${newQuote.trim()} - @${username}`;
+    const updatedQuotes = [...customQuotes, formattedQuote];
+    
+    setCustomQuotes(updatedQuotes);
+    saveCustomQuotes(updatedQuotes, userId);
+    setNewQuote('');
+    
+    if (onUpdate) onUpdate();
+    
+    toast.success(
+      language === 'ar' 
+        ? 'تمت إضافة الاقتباس بنجاح'
+        : 'Quote added successfully'
+    );
   };
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('customQuotes', language)}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex gap-2">
-          <Input
-            placeholder={t('addNewQuote', language)}
+  // Standalone component content (for Settings page)
+  const quoteManagerContent = (
+    <Card className="p-4">
+      <h3 className="font-medium text-lg mb-4">
+        {language === 'ar' ? 'الاقتباسات المخصصة' : 'Custom Quotes'}
+      </h3>
+      
+      <div className="space-y-4">
+        <div>
+          <Textarea
+            placeholder={language === 'ar' ? 'اكتب الاقتباس الخاص بك هنا' : 'Type your quote here'}
             value={newQuote}
             onChange={(e) => setNewQuote(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && addQuote()}
+            className="mb-2"
+            maxLength={MAX_CHARS}
           />
-          <Button onClick={addQuote} disabled={!newQuote.trim() || loading}>
-            <Plus className="h-4 w-4" />
+          <div className="text-xs text-muted-foreground text-right mb-2">
+            {newQuote.length}/{MAX_CHARS}
+          </div>
+          
+          <div className="mb-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              {language === 'ar' ? 'سيتم إضافة اقتباسك باسم:' : 'Your quote will be added as:'}
+            </p>
+            <div className="text-sm bg-muted/30 p-2 rounded-md">
+              @{username}
+            </div>
+          </div>
+          
+          <Button 
+            onClick={handleAddQuote}
+            disabled={!newQuote.trim() || customQuotes.length >= MAX_QUOTES}
+            className="w-full"
+          >
+            {language === 'ar' ? 'إضافة اقتباس' : 'Add Quote'}
           </Button>
+          
+          <p className="text-xs text-muted-foreground mt-2">
+            {language === 'ar' 
+              ? `${customQuotes.length}/${MAX_QUOTES} اقتباسات مضافة`
+              : `${customQuotes.length}/${MAX_QUOTES} quotes added`}
+          </p>
         </div>
-
-        {quotes.length > 0 && (
+        
+        {customQuotes.length > 0 && (
           <div className="space-y-2">
-            <h4 className="font-medium">{t('yourQuotes', language)}</h4>
-            {quotes.map((quote) => (
-              <div key={quote.id} className="flex items-center gap-2 p-2 border rounded">
-                {editingId === quote.id ? (
-                  <>
-                    <Input
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          updateQuote(quote.id, editingText);
-                        }
-                      }}
-                    />
-                    <Button 
-                      size="sm" 
-                      onClick={() => updateQuote(quote.id, editingText)}
-                      disabled={loading}
-                    >
-                      {t('save', language)}
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => {
-                        setEditingId(null);
-                        setEditingText('');
-                      }}
-                    >
-                      {t('cancel', language)}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <span className="flex-1">{quote.text}</span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setEditingId(quote.id);
-                        setEditingText(quote.text);
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteQuote(quote.id)}
-                      disabled={loading}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
+            <h4 className="text-sm font-medium">
+              {language === 'ar' ? 'الاقتباسات المخصصة الحالية' : 'Current Custom Quotes'}
+            </h4>
+            {customQuotes.map((quote, index) => (
+              <div key={index} className="flex justify-between items-center p-2 bg-secondary/20 rounded-md">
+                <p className="text-sm">{quote}</p>
+                {/* No delete button here; quotes are read-only for the user */}
               </div>
             ))}
           </div>
         )}
-
-        {quotes.length === 0 && (
-          <p className="text-muted-foreground text-center py-4">
-            {t('noCustomQuotes', language)}
-          </p>
-        )}
-      </CardContent>
+      </div>
     </Card>
   );
-}
+
+  // If used as a dialog, wrap in Dialog components
+  if (typeof open !== 'undefined') {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {language === 'ar' ? 'إدارة الاقتباسات المخصصة' : 'Manage Custom Quotes'}
+            </DialogTitle>
+            <DialogDescription>
+              {language === 'ar' 
+                ? 'أضف ما يصل إلى 5 اقتباسات مخصصة لعرضها في الاقتباس اليومي الخاص بك'
+                : 'Add up to 5 custom quotes to display in your daily quote widget'}
+            </DialogDescription>
+          </DialogHeader>
+          {quoteManagerContent}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Return standalone component
+  return quoteManagerContent;
+};

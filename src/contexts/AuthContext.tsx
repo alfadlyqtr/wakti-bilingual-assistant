@@ -37,7 +37,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
     // Get initial session
@@ -45,43 +44,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-      setHasInitialized(true);
     });
 
-    // Listen for auth changes - FIXED: Ignore TOKEN_REFRESHED for initialization
+    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.id);
       
-      if (event === 'SIGNED_IN') {
-        console.log('User signed in');
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-        setHasInitialized(true);
-      } else if (event === 'TOKEN_REFRESHED') {
-        console.log('Token refreshed - updating user only');
-        // Only update user/session, don't trigger re-initialization
-        setSession(session);
-        setUser(session?.user ?? null);
-        // Don't set hasInitialized again - prevents loops
-      } else if (event === 'SIGNED_OUT') {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('User signed in, initializing services...');
+        // Services will be initialized by useUnreadMessages in AppLayout
+      }
+
+      if (event === 'SIGNED_OUT') {
         console.log('User signed out, cleaning up...');
         setUser(null);
         setSession(null);
-        setLoading(false);
-        setHasInitialized(false);
-      } else {
-        // Handle other events without re-initialization
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+      }
+
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('Token refreshed for user:', session?.user?.id);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []); // No dependencies to prevent re-running
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

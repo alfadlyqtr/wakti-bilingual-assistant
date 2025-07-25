@@ -13,22 +13,12 @@ export const reminders = {
   reminderCreatedSuccessfully: "Reminder created successfully",
   failedToUpdateReminder: "Failed to update reminder",
   failedToCreateReminder: "Failed to create reminder",
+  
+  // New additions for current fixes
   loadingReminders: "Loading reminders...",
   snoozeReminder: "Snooze reminder for 1 day",
   errorSnoozing: "Failed to snooze reminder",
   errorDeleting: "Failed to delete reminder",
   confirmDeleteReminder: "Are you sure you want to delete this reminder?",
-  overdue: "Overdue",
-  errorLoadingReminders: "Error loading reminders",
-  
-  // New additions
-  dueDateRequired: "Due date is required",
-  reminderUpdated: "Reminder updated successfully",
-  reminderCreated: "Reminder created successfully",
-  errorSavingReminder: "Failed to save reminder",
-  errorDeletingReminder: "Failed to delete reminder",
-  reminderSnoozed: "Reminder snoozed successfully",
-  errorSnoozingReminder: "Failed to snooze reminder",
-  createFirstReminder: "Create your first reminder",
-  snoozed: "Snoozed"
+  overdue: "Overdue"
 };

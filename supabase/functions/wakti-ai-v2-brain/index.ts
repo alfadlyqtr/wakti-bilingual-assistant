@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -216,13 +217,6 @@ serve(async (req) => {
       );
     }
 
-    // For streaming modes (Claude chat/vision), return the stream directly
-    if (activeTrigger !== 'image' && activeTrigger !== 'search' && result.stream) {
-      console.log(`🌊 BACKEND WORKER: Returning streaming response for ${activeTrigger} mode`);
-      return result.stream;
-    }
-
-    // For non-streaming modes (image/search), return JSON
     const finalResponse = {
       response: result.response || 'Response received',
       conversationId: finalConversationId,
@@ -448,8 +442,7 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
         max_tokens: detectedMode === 'vision' ? 3000 : 2000,
         temperature: 0.7,
         system: systemPrompt,
-        messages: messages,
-        stream: true
+        messages: messages
       })
     });
 
@@ -459,21 +452,18 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
       throw new Error(`Claude API error: ${claudeResponse.status}`);
     }
 
-    console.log(`🌊 BACKEND WORKER: Claude streaming response initiated for ${detectedMode} mode`);
+    const claudeData = await claudeResponse.json();
+    const responseText = claudeData.content?.[0]?.text || (responseLanguage === 'ar' ? 'أعتذر، واجهت مشكلة في معالجة طلبك.' : 'I apologize, but I encountered an issue processing your request.');
 
-    // Return streaming response
+    console.log(`✅ BACKEND WORKER: Claude response completed for ${detectedMode} mode`);
+
+    console.log('🤖 BACKEND WORKER: Skipping database save - Frontend Boss handles persistence');
+
     return {
-      stream: new Response(claudeResponse.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-        }
-      }),
+      response: responseText,
       success: true,
       model: 'claude-3-5-sonnet-20241022',
+      usage: claudeData.usage,
       mode: detectedMode,
       intent: detectedMode
     };

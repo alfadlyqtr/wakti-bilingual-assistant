@@ -3,14 +3,6 @@ import { en } from "./translations/en";
 import { ar } from "./translations/ar";
 import { legal as legalEn } from "./translations/modules/legal";
 import { legal as legalAr } from "./translations/modules/ar/legal";
-import { reminders as remindersEn } from "./translations/modules/reminders";
-import { remindersAr } from "./translations/modules/ar/reminders";
-import { tasks as tasksEn } from "./translations/modules/tasks";
-import { tasksAr } from "./translations/modules/ar/tasks";
-import { settings as settingsEn } from "./translations/modules/settings";
-import { settingsAr } from "./translations/modules/ar/settings";
-import { account as accountEn } from "./translations/modules/account";
-import { accountAr } from "./translations/modules/ar/account";
 import { TranslationKey, SupportedLanguage } from "./translationTypes";
 
 export type Translation = {
@@ -19,23 +11,8 @@ export type Translation = {
 };
 
 // Combined translation objects
-const enTranslations = { 
-  ...en, 
-  ...legalEn, 
-  ...remindersEn, 
-  ...tasksEn, 
-  ...settingsEn, 
-  ...accountEn 
-};
-
-const arTranslations = { 
-  ...ar, 
-  ...legalAr, 
-  ...remindersAr, 
-  ...tasksAr, 
-  ...settingsAr, 
-  ...accountAr 
-};
+const enTranslations = { ...en, ...legalEn };
+const arTranslations = { ...ar, ...legalAr };
 
 // This function gets the translation for the given key and language
 export const t = (key: TranslationKey, language: SupportedLanguage | string): string => {

@@ -1,155 +1,236 @@
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { TRReminder, TRService } from '@/services/trService';
-import { format, parseISO, isAfter } from 'date-fns';
-import { Timer, Edit, Trash2, Plus } from 'lucide-react';
-import { toast } from 'sonner';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MoreVertical, Calendar, Clock, Edit, Trash2, Pause } from 'lucide-react';
+import { format, isPast, parseISO } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { TRService, TRReminder } from '@/services/trService';
+import { ReminderForm } from './ReminderForm';
+import { toast } from 'sonner';
 
 interface ReminderListProps {
-  reminders: TRReminder[];
-  onReminderEdit: (reminder: TRReminder) => void;
-  onRemindersChanged: () => void;
+  reminders?: TRReminder[];
+  onReminderEdit?: (reminder: TRReminder) => void;
+  onRemindersChanged?: () => void;
+  onReminderUpdate?: () => void;
 }
 
-export function ReminderList({ reminders, onReminderEdit, onRemindersChanged }: ReminderListProps) {
+export const ReminderList: React.FC<ReminderListProps> = ({ 
+  reminders: propReminders, 
+  onReminderEdit, 
+  onRemindersChanged, 
+  onReminderUpdate 
+}) => {
   const { language } = useTheme();
+  const [reminders, setReminders] = useState<TRReminder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingReminder, setEditingReminder] = useState<TRReminder | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const handleSnooze = async (reminder: TRReminder) => {
+  useEffect(() => {
+    if (propReminders) {
+      console.log('ReminderList - Using prop reminders:', propReminders.length);
+      // Filter out snoozed reminders if using prop reminders
+      const now = new Date();
+      const activeReminders = propReminders.filter(reminder => {
+        if (!reminder.snoozed_until) return true;
+        return parseISO(reminder.snoozed_until) <= now;
+      });
+      setReminders(activeReminders);
+      setLoading(false);
+    } else {
+      console.log('ReminderList - Loading own reminders');
+      loadReminders();
+    }
+  }, [propReminders]);
+
+  const loadReminders = async () => {
     try {
-      await TRService.snoozeReminder(reminder.id);
-      toast.success(t('reminderSnoozed', language));
-      onRemindersChanged();
+      setLoading(true);
+      console.log('ReminderList - Fetching reminders from service');
+      const data = await TRService.getReminders();
+      
+      console.log('ReminderList - Fetched reminders:', data.length);
+      
+      // Filter out snoozed reminders
+      const now = new Date();
+      const activeReminders = data.filter(reminder => {
+        if (!reminder.snoozed_until) return true;
+        return parseISO(reminder.snoozed_until) <= now;
+      });
+      
+      console.log('ReminderList - Active reminders after filtering:', activeReminders.length);
+      setReminders(activeReminders);
     } catch (error) {
-      console.error('Error snoozing reminder:', error);
-      toast.error(t('errorSnoozingReminder', language));
+      console.error('ReminderList - Error loading reminders:', error);
+      toast.error(t('errorLoadingReminders', language));
+      setReminders([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDelete = async (reminder: TRReminder) => {
-    if (!confirm(t('confirmDeleteReminder', language))) return;
-    
-    try {
-      await TRService.deleteReminder(reminder.id);
-      toast.success(t('reminderDeleted', language));
-      onRemindersChanged();
-    } catch (error) {
-      console.error('Error deleting reminder:', error);
-      toast.error(t('errorDeletingReminder', language));
+  const handleEditReminder = (reminder: TRReminder) => {
+    if (onReminderEdit) {
+      onReminderEdit(reminder);
+    } else {
+      setEditingReminder(reminder);
+      setIsFormOpen(true);
     }
+  };
+
+  const handleSnoozeReminder = async (reminder: TRReminder) => {
+    try {
+      console.log('ReminderList - Snoozing reminder:', reminder.id);
+      await TRService.snoozeReminder(reminder.id);
+      toast.success(t('snoozeReminder', language));
+      if (onRemindersChanged) {
+        onRemindersChanged();
+      } else {
+        loadReminders();
+      }
+      onReminderUpdate?.();
+    } catch (error) {
+      console.error('ReminderList - Error snoozing reminder:', error);
+      toast.error(t('errorSnoozing', language));
+    }
+  };
+
+  const handleDeleteReminder = async (reminder: TRReminder) => {
+    if (window.confirm(t('confirmDeleteReminder', language))) {
+      try {
+        console.log('ReminderList - Deleting reminder:', reminder.id);
+        await TRService.deleteReminder(reminder.id);
+        toast.success(t('reminderDeleted', language));
+        if (onRemindersChanged) {
+          onRemindersChanged();
+        } else {
+          loadReminders();
+        }
+        onReminderUpdate?.();
+      } catch (error) {
+        console.error('ReminderList - Error deleting reminder:', error);
+        toast.error(t('errorDeleting', language));
+      }
+    }
+  };
+
+  const handleFormClose = () => {
+    setIsFormOpen(false);
+    setEditingReminder(null);
+  };
+
+  const handleReminderSaved = () => {
+    console.log('ReminderList - Reminder saved, refreshing data');
+    if (onRemindersChanged) {
+      onRemindersChanged();
+    } else {
+      loadReminders();
+    }
+    onReminderUpdate?.();
   };
 
   const isOverdue = (reminder: TRReminder) => {
-    const now = new Date();
-    const dueDateTime = reminder.due_time 
-      ? parseISO(`${reminder.due_date}T${reminder.due_time}`)
-      : parseISO(`${reminder.due_date}T23:59:59`);
-    return isAfter(now, dueDateTime);
+    const reminderDate = parseISO(reminder.due_date);
+    if (reminder.due_time) {
+      const [hours, minutes] = reminder.due_time.split(':');
+      reminderDate.setHours(parseInt(hours), parseInt(minutes));
+    }
+    return isPast(reminderDate);
   };
 
-  const isSnoozed = (reminder: TRReminder) => {
-    if (!reminder.snoozed_until) return false;
-    const now = new Date();
-    const snoozeUntil = parseISO(reminder.snoozed_until);
-    return isAfter(snoozeUntil, now);
-  };
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+        <p className="text-sm text-muted-foreground mt-2">{t('loading', language)}</p>
+      </div>
+    );
+  }
 
-  const activeReminders = reminders.filter(r => !isSnoozed(r));
-  const snoozedReminders = reminders.filter(r => isSnoozed(r));
-
-  if (activeReminders.length === 0) {
+  if (reminders.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        <Timer className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
         <p>{t('noReminders', language)}</p>
-        <p className="text-sm mt-2">{t('createFirstReminder', language)}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {activeReminders.map((reminder) => (
-        <div key={reminder.id} className="border rounded-lg p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <h3 className="font-semibold">{reminder.title}</h3>
-              {reminder.description && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  {reminder.description}
-                </p>
-              )}
-              <div className="flex items-center gap-2 mt-2">
-                <Badge variant={isOverdue(reminder) ? 'destructive' : 'secondary'}>
-                  {isOverdue(reminder) ? t('overdue', language) : t('upcoming', language)}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {format(parseISO(reminder.due_date), 'MMM dd, yyyy')}
-                  {reminder.due_time && ` at ${reminder.due_time}`}
-                </span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleSnooze(reminder)}
-              >
-                <Timer className="h-4 w-4 mr-1" />
-                {t('snooze', language)}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => onReminderEdit(reminder)}
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleDelete(reminder)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {snoozedReminders.length > 0 && (
-        <div className="mt-8">
-          <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <Timer className="h-5 w-5" />
-            {t('snoozed', language)} ({snoozedReminders.length})
-          </h3>
-          <div className="space-y-2">
-            {snoozedReminders.map((reminder) => (
-              <div key={reminder.id} className="border rounded-lg p-3 opacity-60">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium">{reminder.title}</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Snoozed until: {format(parseISO(reminder.snoozed_until!), 'MMM dd, yyyy')}
+    <>
+      <div className="space-y-3">
+        {reminders.map((reminder) => (
+          <Card key={reminder.id} className={`transition-all hover:shadow-md ${isOverdue(reminder) ? 'border-red-200 bg-red-50/50' : ''}`}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <h3 className={`font-medium text-sm ${isOverdue(reminder) ? 'text-red-700' : ''}`}>
+                    {reminder.title}
+                  </h3>
+                  {reminder.description && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {reminder.description}
                     </p>
+                  )}
+                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      <span>{format(parseISO(reminder.due_date), 'MMM dd, yyyy')}</span>
+                    </div>
+                    {reminder.due_time && (
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        <span>{reminder.due_time}</span>
+                      </div>
+                    )}
+                    {isOverdue(reminder) && (
+                      <span className="text-red-600 font-medium">{t('overdue', language)}</span>
+                    )}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onReminderEdit(reminder)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
                 </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleEditReminder(reminder)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      {t('edit', language)}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSnoozeReminder(reminder)}>
+                      <Pause className="h-4 w-4 mr-2" />
+                      {t('snooze', language)}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => handleDeleteReminder(reminder)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {t('delete', language)}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            ))}
-          </div>
-        </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {!onReminderEdit && (
+        <ReminderForm
+          isOpen={isFormOpen}
+          onClose={handleFormClose}
+          reminder={editingReminder}
+          onReminderSaved={handleReminderSaved}
+        />
       )}
-    </div>
+    </>
   );
-}
+};

@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -28,7 +27,7 @@ class WaktiAIV2ServiceClass {
   private personalTouchCache: any = null;
 
   constructor() {
-    console.log('🤖 WAKTI AI SERVICE: Initialized with Direct Fetch Streaming Support');
+    console.log('🤖 WAKTI AI SERVICE: Initialized as Backend Worker (Frontend Boss mode)');
   }
 
   async sendMessage(
@@ -41,8 +40,7 @@ class WaktiAIV2ServiceClass {
     skipContextLoad: boolean = false,
     activeTrigger: string = 'chat',
     conversationSummary: string = '',
-    attachedFiles: any[] = [],
-    onStreamUpdate?: (text: string) => void
+    attachedFiles: any[] = []
   ) {
     try {
       if (!userId) {
@@ -51,7 +49,7 @@ class WaktiAIV2ServiceClass {
         userId = user.id;
       }
 
-      console.log('🤖 BACKEND WORKER: Processing message in', activeTrigger, 'mode for conversation', conversationId);
+      console.log('🤖 BACKEND WORKER: Processing message in', activeTrigger, 'mode for frontend conversation', conversationId);
 
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
@@ -64,221 +62,74 @@ class WaktiAIV2ServiceClass {
 
       const personalTouch = this.getPersonalTouch();
 
-      // Determine if this is a streaming mode (chat/vision) or non-streaming (image/search)
-      const isStreamingMode = activeTrigger === 'chat' || activeTrigger === 'vision' || (activeTrigger === 'general' && inputType === 'vision');
+      // VISION TIMEOUT FIX: Determine timeout based on request type
+      const isVisionRequest = inputType === 'vision' || (attachedFiles && attachedFiles.length > 0);
+      const timeoutDuration = isVisionRequest ? 30000 : 10000; // 30s for vision, 10s for chat
+      
+      console.log(`⏱️ BACKEND WORKER: Using ${timeoutDuration/1000}s timeout for ${isVisionRequest ? 'VISION' : 'CHAT'} request`);
 
-      if (isStreamingMode) {
-        console.log('🌊 STREAMING MODE: Using direct fetch for real-time streaming');
-        return await this.handleStreamingRequest(
-          message,
-          userId,
-          language,
-          conversationId,
-          inputType,
-          recentMessages,
-          activeTrigger,
-          attachedFiles,
-          personalTouch,
-          onStreamUpdate
-        );
-      } else {
-        console.log('📦 NON-STREAMING MODE: Using supabase.functions.invoke');
-        return await this.handleNonStreamingRequest(
-          message,
-          userId,
-          language,
-          conversationId,
-          inputType,
-          recentMessages,
-          activeTrigger,
-          attachedFiles,
-          personalTouch
-        );
-      }
-
-    } catch (error: any) {
-      console.error('❌ BACKEND WORKER: Message processing failed:', error);
-      throw new Error(error.message || 'Backend worker failed');
-    }
-  }
-
-  private async handleStreamingRequest(
-    message: string,
-    userId: string,
-    language: string,
-    conversationId: string | null,
-    inputType: 'text' | 'voice' | 'vision',
-    recentMessages: AIMessage[],
-    activeTrigger: string,
-    attachedFiles: any[],
-    personalTouch: any,
-    onStreamUpdate?: (text: string) => void
-  ) {
-    try {
-      // Get auth session for manual authentication
-      const { data: { session }, error: authError } = await supabase.auth.getSession();
-      if (authError || !session) {
-        throw new Error('Authentication required for streaming');
-      }
-
-      // Prepare request payload
-      const requestPayload = {
-        message,
-        userId,
-        language,
-        conversationId,
-        inputType,
-        activeTrigger,
-        attachedFiles,
-        conversationSummary: '',
-        recentMessages,
-        personalTouch,
-        customSystemPrompt: '',
-        maxTokens: 4096,
-        userStyle: 'detailed',
-        userTone: 'neutral',
-        speedOptimized: true,
-        aggressiveOptimization: false,
-        hasTaskIntent: false,
-        personalityEnabled: true,
-        enableTaskCreation: true,
-        enablePersonality: true,
-        memoryEnabled: true,
-        integratedContext: null
-      };
-
-      // Use direct fetch to Edge Function for streaming
-      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': session.access_token
-        },
-        body: JSON.stringify(requestPayload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Streaming request failed: ${response.status}`);
-      }
-
-      console.log('🌊 STREAMING: Processing real-time response');
-      return await this.handleStreamingResponse(response, onStreamUpdate);
-
-    } catch (error: any) {
-      console.error('❌ STREAMING ERROR:', error);
-      throw error;
-    }
-  }
-
-  private async handleNonStreamingRequest(
-    message: string,
-    userId: string,
-    language: string,
-    conversationId: string | null,
-    inputType: 'text' | 'voice' | 'vision',
-    recentMessages: AIMessage[],
-    activeTrigger: string,
-    attachedFiles: any[],
-    personalTouch: any
-  ) {
-    try {
-      // Use supabase.functions.invoke for non-streaming modes (image/search)
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          userId,
-          language,
-          conversationId,
-          inputType,
-          activeTrigger,
-          attachedFiles,
-          conversationSummary: '',
-          recentMessages,
-          personalTouch,
-          customSystemPrompt: '',
-          maxTokens: 4096,
-          userStyle: 'detailed',
-          userTone: 'neutral',
-          speedOptimized: true,
-          aggressiveOptimization: false,
-          hasTaskIntent: false,
-          personalityEnabled: true,
-          enableTaskCreation: true,
-          enablePersonality: true,
-          memoryEnabled: true,
-          integratedContext: null
-        }
-      });
+      // BACKEND WORKER: Pure Claude processing, no conversation management
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('wakti-ai-v2-brain', {
+          body: {
+            message,
+            userId,
+            language,
+            conversationId: conversationId, // Accept frontend ID without validation
+            inputType,
+            activeTrigger,
+            attachedFiles,
+            conversationSummary: '',
+            recentMessages: recentMessages, // Use frontend-provided conversation history
+            personalTouch: personalTouch,
+            customSystemPrompt: '',
+            maxTokens: 4096,
+            userStyle: 'detailed',
+            userTone: 'neutral',
+            speedOptimized: true,
+            aggressiveOptimization: false,
+            hasTaskIntent: false,
+            personalityEnabled: true,
+            enableTaskCreation: true,
+            enablePersonality: true,
+            memoryEnabled: true,
+            integratedContext: null
+          }
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Backend timeout - ${isVisionRequest ? 'Vision' : 'Chat'} processing took too long (>${timeoutDuration/1000}s)`)), timeoutDuration)
+        )
+      ]) as any;
 
       if (error) {
-        console.error('❌ NON-STREAMING ERROR:', error);
+        console.error('❌ BACKEND WORKER: Claude processing error:', error);
         throw error;
       }
 
-      console.log('✅ NON-STREAMING: Response received');
+      const assistantMessage: AIMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: data.response || 'I apologize, but I encountered an issue processing your request.',
+        timestamp: new Date(),
+        intent: data.intent,
+        confidence: data.confidence as 'high' | 'medium' | 'low',
+        actionTaken: data.actionTaken,
+        imageUrl: data.imageUrl,
+        browsingUsed: data.browsingUsed,
+        browsingData: data.browsingData
+      };
+
+      console.log('✅ BACKEND WORKER: Claude processing complete, returning to frontend boss');
+
       return {
         ...data,
-        conversationId: conversationId,
-        response: data.response || 'Response received'
+        conversationId: conversationId, // Return frontend-provided ID unchanged
+        response: assistantMessage.content
       };
 
     } catch (error: any) {
-      console.error('❌ NON-STREAMING ERROR:', error);
-      throw error;
-    }
-  }
-
-  private async handleStreamingResponse(response: Response, onStreamUpdate?: (text: string) => void) {
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let accumulatedText = '';
-
-    if (!reader) {
-      throw new Error('No stream reader available');
-    }
-
-    try {
-      console.log('🌊 STREAMING: Starting to read real-time response');
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const jsonStr = line.slice(6).trim();
-              if (jsonStr === '[DONE]') continue;
-              
-              const data = JSON.parse(jsonStr);
-              
-              // Handle Claude's streaming format
-              if (data.delta?.text) {
-                accumulatedText += data.delta.text;
-                console.log('📝 STREAMING CHUNK:', data.delta.text);
-                onStreamUpdate?.(accumulatedText);
-              }
-            } catch (e) {
-              // Skip invalid JSON lines
-              continue;
-            }
-          }
-        }
-      }
-
-      console.log('✅ STREAMING: Complete response received');
-      return {
-        response: accumulatedText,
-        success: true,
-        conversationId: null,
-        intent: 'chat'
-      };
-    } finally {
-      reader.releaseLock();
+      console.error('❌ BACKEND WORKER: Claude processing failed:', error);
+      throw new Error(error.message || 'Backend worker failed');
     }
   }
 

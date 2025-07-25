@@ -281,34 +281,45 @@ export default function Maw3dCreate() {
 
   return (
     <div className="min-h-screen bg-gradient-background">
-      {/* Simplified Header */}
-      <div className="bg-background/95 backdrop-blur-sm border-b border-border/30">
-        <div className="container mx-auto px-4 py-4">
-          <div className="space-y-3">
-            <h1 className="text-xl font-semibold text-center">
-              {t('createEvent', language)}
-            </h1>
-            
-            <div className="flex items-center justify-between">
+      {/* Enhanced Header with Better Organization */}
+      <div className="sticky top-0 z-50 backdrop-blur-xl bg-background/90 border-b border-border/30 shadow-vibrant">
+        <div className="container mx-auto px-6 py-5">
+          <div className="flex items-center justify-between">
+            {/* Left Section - Back Button */}
+            <div className="flex-1">
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm" 
                 onClick={() => navigate('/maw3d')}
-                className="flex items-center gap-2"
+                className="group hover:bg-accent/20 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-soft"
               >
-                <ArrowLeft className="w-4 h-4" />
-                {t('back', language)}
+                <ArrowLeft className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:-translate-x-1" />
+                <span className="font-medium">{t('back', language)}</span>
               </Button>
+            </div>
 
+            {/* Center Section - Enhanced Title */}
+            <div className="flex-2 text-center px-4">
+              <div className="space-y-1">
+                <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent leading-tight">
+                  {t('createEvent', language)}
+                </h1>
+                <p className="text-sm text-muted-foreground/80 font-medium">
+                  {t('createAndManageEvents', language)}
+                </p>
+              </div>
+            </div>
+
+            {/* Right Section - Create Button */}
+            <div className="flex-1 flex justify-end">
               <Button 
                 type="submit" 
                 form="event-form"
                 disabled={isLoading}
-                size="sm"
-                className="flex items-center gap-2"
+                className="group px-6 py-2.5 bg-gradient-primary hover:shadow-glow transition-all duration-300 hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Plus className="w-4 h-4" />
-                {isLoading ? t('creating', language) : t('createEvent', language)}
+                <Plus className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:rotate-90" />
+                <span>{isLoading ? t('creating', language) : t('createEvent', language)}</span>
               </Button>
             </div>
           </div>

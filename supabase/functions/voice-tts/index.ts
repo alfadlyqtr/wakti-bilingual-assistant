@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
@@ -11,16 +10,11 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
 console.log("🎵 VOICE TTS: Function loaded");
 console.log("🎵 ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
-console.log("🎵 Service Role Key available:", !!SUPABASE_SERVICE_ROLE_KEY);
 
-// Create client with service role for database operations
-const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-// Create client with anon key for user authentication
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Updated voice style configurations with corrected mappings for eleven_multilingual_v2
@@ -47,32 +41,17 @@ serve(async (req) => {
       throw new Error('ElevenLabs API key not configured');
     }
 
-    if (!SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('🎵 SUPABASE_SERVICE_ROLE_KEY not found in environment');
-      throw new Error('Service role key not configured');
-    }
-
     // Get user authentication
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '') || '';
     
-    console.log(`🎵 Auth header present: ${!!authHeader}`);
-    console.log(`🎵 Token length: ${token.length}`);
-
-    // Verify user with anon client
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-
-    if (userError) {
-      console.error('🎵 User authentication error:', userError);
-      throw new Error(`Authentication failed: ${userError.message}`);
-    }
+    const { data: { user } } = await supabase.auth.getUser(token);
 
     if (!user) {
-      console.error('🎵 No user found in token');
       throw new Error('Unauthorized - user not authenticated');
     }
 
-    console.log(`🎵 Authenticated user: ${user.id} (${user.email})`);
+    console.log(`🎵 Authenticated user: ${user.id}`);
 
     // Get request data
     const requestBody = await req.json();
@@ -93,73 +72,18 @@ serve(async (req) => {
     const voiceSettings = VOICE_STYLES[style as keyof typeof VOICE_STYLES] || VOICE_STYLES.neutral;
     console.log(`🎵 Using voice settings for style "${style}":`, voiceSettings);
 
-    // Check user's voice quota using service role client with proper authentication context
+    // Check user's voice quota before proceeding
     console.log(`🎵 Checking voice quota for user: ${user.id}`);
-    
-    // First, set the auth context for the service role client
-    const { error: setAuthError } = await supabaseService.auth.setSession({
-      access_token: token,
-      refresh_token: ''
+    const { data: quotaData, error: quotaError } = await supabase.rpc('get_or_create_user_voice_quota', {
+      p_user_id: user.id
     });
-
-    if (setAuthError) {
-      console.error('🎵 Failed to set auth context:', setAuthError);
-      // Continue without setting auth context - use direct RPC call with user_id
-    }
-
-    let quotaData;
-    let quotaError;
-
-    try {
-      // Try with service role client first
-      const { data, error } = await supabaseService.rpc('get_or_create_user_voice_quota', {
-        p_user_id: user.id
-      });
-      quotaData = data;
-      quotaError = error;
-    } catch (serviceError) {
-      console.error('🎵 Service role RPC failed:', serviceError);
-      
-      // Fallback: Direct database query with service role
-      try {
-        const { data: directData, error: directError } = await supabaseService
-          .from('user_voice_usage')
-          .select('characters_used, characters_limit, extra_characters, purchase_date')
-          .eq('user_id', user.id)
-          .single();
-
-        if (directError && directError.code === 'PGRST116') {
-          // No record found, create one
-          const { data: insertData, error: insertError } = await supabaseService
-            .from('user_voice_usage')
-            .insert({
-              user_id: user.id,
-              characters_used: 0,
-              characters_limit: 6000,
-              extra_characters: 0
-            })
-            .select('characters_used, characters_limit, extra_characters, purchase_date')
-            .single();
-
-          quotaData = insertData ? [insertData] : null;
-          quotaError = insertError;
-        } else {
-          quotaData = directData ? [directData] : null;
-          quotaError = directError;
-        }
-      } catch (fallbackError) {
-        console.error('🎵 Fallback quota check failed:', fallbackError);
-        quotaError = fallbackError;
-      }
-    }
 
     if (quotaError) {
       console.error('🎵 Error checking voice quota:', quotaError);
-      throw new Error(`Failed to check voice quota: ${quotaError.message}`);
+      throw new Error('Failed to check voice quota');
     }
 
     if (!quotaData || quotaData.length === 0) {
-      console.error('🎵 No quota data returned');
       throw new Error('No quota data found');
     }
 
@@ -168,7 +92,6 @@ serve(async (req) => {
     const totalAvailable = remainingChars + quota.extra_characters;
     
     console.log(`🎵 Voice quota check:`, {
-      user_id: user.id,
       used: quota.characters_used,
       limit: quota.characters_limit,
       extra: quota.extra_characters,
@@ -178,7 +101,7 @@ serve(async (req) => {
     });
 
     if (text.length > totalAvailable) {
-      throw new Error(`Text length (${text.length}) exceeds available quota (${totalAvailable}). You need ${text.length - totalAvailable} more characters.`);
+      throw new Error(`Text length (${text.length}) exceeds available quota (${totalAvailable})`);
     }
 
     console.log(`🎵 Calling ElevenLabs TTS API with eleven_multilingual_v2 model...`);
@@ -199,12 +122,13 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         text: text,
-        model_id: 'eleven_multilingual_v2',
+        model_id: 'eleven_multilingual_v2', // Updated: Use the latest model
         voice_settings: voiceSettings
       }),
     });
 
     console.log(`🎵 ElevenLabs API response status: ${elevenLabsResponse.status}`);
+    console.log(`🎵 ElevenLabs API response headers:`, Object.fromEntries(elevenLabsResponse.headers.entries()));
 
     if (!elevenLabsResponse.ok) {
       const errorText = await elevenLabsResponse.text();
@@ -216,6 +140,7 @@ serve(async (req) => {
         model: 'eleven_multilingual_v2'
       });
       
+      // More specific error handling
       if (elevenLabsResponse.status === 401) {
         throw new Error('ElevenLabs API authentication failed - check API key');
       } else if (elevenLabsResponse.status === 404) {
@@ -239,27 +164,21 @@ serve(async (req) => {
       throw new Error('Received empty audio data from ElevenLabs API');
     }
 
-    // Update user's voice usage using service role client
+    // Update user's voice usage
     console.log(`🎵 Updating voice usage for user: ${user.id}`);
-    
-    try {
-      const { error: updateError } = await supabaseService
-        .from('user_voice_usage')
-        .update({
-          characters_used: (quota.characters_used || 0) + text.length,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
+    const { error: updateError } = await supabase
+      .from('user_voice_usage')
+      .upsert({
+        user_id: user.id,
+        characters_used: (quota.characters_used || 0) + text.length,
+        updated_at: new Date().toISOString()
+      });
 
-      if (updateError) {
-        console.error('🎵 Error updating voice usage:', updateError);
-        // Continue anyway - don't fail the TTS generation
-      } else {
-        console.log(`🎵 Voice usage updated: +${text.length} characters`);
-      }
-    } catch (updateError) {
-      console.error('🎵 Failed to update voice usage:', updateError);
+    if (updateError) {
+      console.error('🎵 Error updating voice usage:', updateError);
       // Continue anyway - don't fail the TTS generation
+    } else {
+      console.log(`🎵 Voice usage updated: +${text.length} characters`);
     }
 
     return new Response(audioBuffer, {

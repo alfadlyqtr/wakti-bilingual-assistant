@@ -25,7 +25,7 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   const tomorrowEvents = events.filter(event => isTomorrow(parseISO(event.event_date)));
 
   const handleNavigateToMaw3d = () => {
-    navigate('/maw3d');
+    navigate('/maw3d-events');
   };
 
   return (

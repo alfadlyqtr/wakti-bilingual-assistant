@@ -1,159 +1,280 @@
-
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { TRService, TRTask } from '@/services/trService';
+import React, { useState, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { CalendarIcon, X, Plus, Trash2, Copy, ExternalLink } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { Edit, X, RotateCcw, Check } from 'lucide-react';
+import { TRService, TRTask } from '@/services/trService';
+import { toast } from 'sonner';
+
+// PHASE 2 FIX: Updated schema to make due_date truly optional
+const taskSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
+  due_date: z.string().optional().nullable(), // PHASE 2 FIX: Made nullable
+  due_time: z.string().optional().nullable(), // PHASE 2 FIX: Made nullable
+  priority: z.enum(['normal', 'high', 'urgent']),
+  task_type: z.enum(['one-time', 'repeated']),
+  is_shared: z.boolean().default(false),
+});
+
+type TaskFormData = z.infer<typeof taskSchema>;
 
 interface TaskFormProps {
   isOpen: boolean;
-  task: TRTask | null;
   onClose: () => void;
+  task?: TRTask | null;
   onTaskSaved: () => void;
 }
 
-export function TaskForm({ isOpen, task, onClose, onTaskSaved }: TaskFormProps) {
-  // Early return BEFORE any hooks are called
-  if (!isOpen || !task) return null;
-
-  const { user } = useAuth();
+export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) {
   const { language } = useTheme();
-  const [loading, setLoading] = useState(false);
-  
-  const [formData, setFormData] = useState({
-    title: task.title || '',
-    description: task.description || '',
-    due_date: task.due_date || '',
-    priority: task.priority || 'normal',
-    type: task.task_type || 'one-time',
-    is_shared: task.is_shared || false
+  const [isLoading, setIsLoading] = useState(false);
+  const [subtasks, setSubtasks] = useState<string[]>([]);
+  const [newSubtask, setNewSubtask] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<TaskFormData>({
+    resolver: zodResolver(taskSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      due_date: null, // PHASE 2 FIX: Default to null
+      due_time: null, // PHASE 2 FIX: Default to null
+      priority: 'normal',
+      task_type: 'one-time',
+      is_shared: false,
+    },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !task) return;
+  const watchedDueDate = watch('due_date');
+  const watchedIsShared = watch('is_shared');
 
-    if (!formData.title.trim()) {
-      toast.error(t('titleRequired', language));
-      return;
+  useEffect(() => {
+    if (task) {
+      reset({
+        title: task.title,
+        description: task.description || '',
+        due_date: task.due_date || null, // PHASE 2 FIX: Handle null dates
+        due_time: task.due_time || null, // PHASE 2 FIX: Handle null times
+        priority: task.priority,
+        task_type: task.task_type,
+        is_shared: task.is_shared,
+      });
+    } else {
+      reset({
+        title: '',
+        description: '',
+        due_date: null, // PHASE 2 FIX: Default to null
+        due_time: null, // PHASE 2 FIX: Default to null
+        priority: 'normal',
+        task_type: 'one-time',
+        is_shared: false,
+      });
+      setSubtasks([]);
     }
+  }, [task, reset]);
 
-    if (!formData.due_date) {
-      toast.error(t('dueDateRequired', language));
-      return;
+  useEffect(() => {
+    if (!isOpen) {
+      reset();
+      setSubtasks([]);
+      setNewSubtask('');
     }
+  }, [isOpen, reset]);
 
+  const onSubmit = async (data: TaskFormData) => {
+    console.log('TaskForm.onSubmit: Starting form submission');
+    console.log('TaskForm.onSubmit: Form data:', data);
+    
+    setIsLoading(true);
     try {
-      setLoading(true);
-      
-      const updateData = {
-        title: formData.title,
-        description: formData.description,
-        due_date: formData.due_date,
-        priority: formData.priority as 'normal' | 'high' | 'urgent',
-        task_type: formData.type as 'one-time' | 'repeated',
-        is_shared: formData.is_shared
+      // PHASE 2 FIX: Prepare data for service - handle null values properly
+      const taskData = {
+        title: data.title, // Required field
+        description: data.description || undefined,
+        due_date: data.due_date || undefined, // PHASE 2 FIX: Convert null to undefined
+        due_time: data.due_time || undefined, // PHASE 2 FIX: Convert null to undefined
+        priority: data.priority,
+        task_type: data.task_type,
+        is_shared: data.is_shared,
       };
 
-      await TRService.updateTask(task.id, updateData);
-      toast.success(t('taskUpdated', language));
+      if (task) {
+        console.log('TaskForm.onSubmit: Updating existing task');
+        await TRService.updateTask(task.id, taskData);
+        toast.success(t('taskUpdatedSuccessfully', language));
+      } else {
+        console.log('TaskForm.onSubmit: Creating new task');
+        const newTask = await TRService.createTask(taskData);
+        console.log('TaskForm.onSubmit: Task created:', newTask);
+        
+        // Create subtasks if any
+        if (subtasks.length > 0) {
+          console.log('TaskForm.onSubmit: Creating subtasks:', subtasks);
+          for (let i = 0; i < subtasks.length; i++) {
+            await TRService.createSubtask({
+              task_id: newTask.id,
+              title: subtasks[i],
+              completed: false,
+              order_index: i,
+            });
+          }
+        }
+        
+        toast.success(t('taskCreatedSuccessfully', language));
+      }
+      
       onTaskSaved();
       onClose();
     } catch (error) {
-      console.error('Error updating task:', error);
-      toast.error(t('errorSavingTask', language));
+      console.error('TaskForm.onSubmit: Error saving task:', error);
+      toast.error(task ? t('failedToUpdateTask', language) : t('failedToCreateTask', language));
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleToggleComplete = async () => {
-    if (!task) return;
-    
-    try {
-      setLoading(true);
-      
-      const updateData = {
-        completed: !task.completed,
-        completed_at: !task.completed ? new Date().toISOString() : null
-      };
+  const addSubtask = () => {
+    if (newSubtask.trim()) {
+      setSubtasks([...subtasks, newSubtask.trim()]);
+      setNewSubtask('');
+    }
+  };
 
-      await TRService.updateTask(task.id, updateData);
-      toast.success(task.completed ? t('taskReopened', language) : t('taskCompleted', language));
-      
-      onTaskSaved();
-      onClose();
-    } catch (error) {
-      console.error('Error toggling task completion:', error);
-      toast.error(t('errorUpdatingTask', language));
-    } finally {
-      setLoading(false);
+  const removeSubtask = (index: number) => {
+    setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
+
+  const copyShareLink = async () => {
+    if (task?.share_link) {
+      const shareUrl = `${window.location.origin}/shared-task/${task.share_link}`;
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(t('linkCopied', language));
+      } catch (error) {
+        console.error('Error copying to clipboard:', error);
+        toast.error('Error copying link');
+      }
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Edit className="h-5 w-5" />
-              {t('editTask', language)}
-            </span>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="title">{t('title', language)} *</Label>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {task ? t('editTask', language) : t('createTask', language)}
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Title */}
+          <div className="space-y-2">
+            <Label htmlFor="title">{t('title', language)} *</Label>
+            <Input
+              id="title"
+              {...register('title')}
+              placeholder={t('enterTaskTitle', language)}
+              className={errors.title ? 'border-destructive' : ''}
+            />
+            {errors.title && (
+              <p className="text-sm text-destructive">{errors.title.message}</p>
+            )}
+          </div>
+
+          {/* Description */}
+          <div className="space-y-2">
+            <Label htmlFor="description">{t('description', language)}</Label>
+            <Textarea
+              id="description"
+              {...register('description')}
+              placeholder={t('enterTaskDescription', language)}
+              rows={3}
+            />
+          </div>
+
+          {/* Due Date - PHASE 2 FIX: Truly optional */}
+          <div className="space-y-2">
+            <Label htmlFor="due_date">{t('dueDate', language)} {language === 'ar' ? '(اختياري)' : '(optional)'}</Label>
+            <Controller
+              name="due_date"
+              control={control}
+              render={({ field }) => (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {field.value ? (
+                        format(new Date(field.value), "PPP")
+                      ) : (
+                        <span>{t('selectDate', language)}</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value ? new Date(field.value) : undefined}
+                      onSelect={(date) => {
+                        // PHASE 2 FIX: Handle null dates properly
+                        field.onChange(date ? format(date, 'yyyy-MM-dd') : null);
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
+            />
+          </div>
+
+          {/* Due Time - Only show if date is selected */}
+          {watchedDueDate && (
+            <div className="space-y-2">
+              <Label htmlFor="due_time">{t('dueTime', language)}</Label>
               <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder={t('enterTaskTitle', language)}
-                required
+                id="due_time"
+                type="time"
+                {...register('due_time')}
               />
             </div>
+          )}
 
-            <div>
-              <Label htmlFor="description">{t('description', language)}</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder={t('enterTaskDescription', language)}
-                rows={3}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="due_date">{t('dueDate', language)} *</Label>
-                <Input
-                  id="due_date"
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="priority">{t('priority', language)}</Label>
-                <Select value={formData.priority} onValueChange={(value: 'normal' | 'high' | 'urgent') => setFormData({ ...formData, priority: value })}>
+          {/* Priority */}
+          <div className="space-y-2">
+            <Label>{t('priority', language)}</Label>
+            <Controller
+              name="priority"
+              control={control}
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} value={field.value}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={t('selectPriority', language)} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="normal">{t('normal', language)}</SelectItem>
@@ -161,60 +282,162 @@ export function TaskForm({ isOpen, task, onClose, onTaskSaved }: TaskFormProps) 
                     <SelectItem value="urgent">{t('urgent', language)}</SelectItem>
                   </SelectContent>
                 </Select>
+              )}
+            />
+          </div>
+
+          {/* Task Type */}
+          <div className="space-y-2">
+            <Label>{t('taskType', language)}</Label>
+            <Controller
+              name="task_type"
+              control={control}
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('selectTaskType', language)} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="one-time">{t('oneTime', language)}</SelectItem>
+                    <SelectItem value="repeated">{t('repeated', language)}</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+
+          {/* Subtasks (only for new tasks) */}
+          {!task && (
+            <div className="space-y-2">
+              <Label>{t('subtasks', language)}</Label>
+              <div className="space-y-2">
+                {subtasks.map((subtask, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input value={subtask} readOnly className="flex-1" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeSubtask(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <Input
+                    value={newSubtask}
+                    onChange={(e) => setNewSubtask(e.target.value)}
+                    placeholder={t('addSubtask', language)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addSubtask();
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addSubtask}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
+          )}
 
-            <div>
-              <Label htmlFor="type">{t('taskType', language)}</Label>
-              <Select value={formData.type} onValueChange={(value: 'one-time' | 'repeated') => setFormData({ ...formData, type: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="one-time">{t('oneTime', language)}</SelectItem>
-                  <SelectItem value="repeated">{t('repeated', language)}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
+          {/* Enhanced Sharing Section */}
+          <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
             <div className="flex items-center justify-between">
-              <Label htmlFor="is_shared">{t('makeShared', language)}</Label>
-              <Switch
-                id="is_shared"
-                checked={formData.is_shared}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_shared: checked })}
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">
+                  {language === 'ar' ? 'مشاركة خارجية' : 'External Sharing'}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {language === 'ar' 
+                    ? 'مشاركة المهمة عبر رابط خارجي فقط. لن تظهر المهمة للمستخدمين الآخرين في التطبيق.'
+                    : 'Share task via external link only. Task will not be visible to other app users.'
+                  }
+                </p>
+              </div>
+              <Controller
+                name="is_shared"
+                control={control}
+                render={({ field }) => (
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
               />
             </div>
 
-            <div className="flex gap-2 pt-4">
-              <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? t('saving', language) : t('update', language)}
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
-                {t('cancel', language)}
-              </Button>
-              <Button 
-                type="button" 
-                variant={task.completed ? "secondary" : "default"}
-                onClick={handleToggleComplete}
-                disabled={loading}
-              >
-                {task.completed ? (
-                  <>
-                    <RotateCcw className="h-4 w-4 mr-1" />
-                    {t('reopen', language)}
-                  </>
-                ) : (
-                  <>
-                    <Check className="h-4 w-4 mr-1" />
-                    {t('complete', language)}
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+            {/* Show share link for existing shared tasks */}
+            {task?.is_shared && task?.share_link && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">
+                  {language === 'ar' ? 'رابط المشاركة:' : 'Share Link:'}
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={`${window.location.origin}/shared-task/${task.share_link}`}
+                    readOnly 
+                    className="text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={copyShareLink}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`/shared-task/${task.share_link}`, '_blank')}
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Warning for new shared tasks */}
+            {watchedIsShared && !task && (
+              <div className="p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded text-xs">
+                <p className="text-blue-800 dark:text-blue-200">
+                  {language === 'ar'
+                    ? '⚠️ سيتم إنشاء رابط مشاركة خارجي بعد حفظ المهمة.'
+                    : '⚠️ External share link will be generated after saving the task.'
+                  }
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Form Actions */}
+          <div className="flex gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1"
+            >
+              {t('cancel', language)}
+            </Button>
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1"
+            >
+              {isLoading 
+                ? (task ? t('updating', language) : t('creating', language))
+                : (task ? t('update', language) : t('create', language))
+              }
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

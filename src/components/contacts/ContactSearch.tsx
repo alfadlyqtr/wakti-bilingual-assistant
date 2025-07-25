@@ -1,269 +1,232 @@
-
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Search, UserPlus, Check, X } from 'lucide-react';
-import { toast } from 'sonner';
-import { useTheme } from '@/providers/ThemeProvider';
-
-interface UserProfile {
-  id: string;
-  username: string;
-  display_name: string;
-  avatar_url: string;
-  relationship_status?: 'none' | 'pending_sent' | 'pending_received' | 'accepted' | 'blocked';
-}
+import { useState, useRef, useEffect } from "react";
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
+import { toast } from "sonner";
+import { searchUsers, sendContactRequest, checkIfUserInContacts } from "@/services/contactsService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { LoadingSpinner } from "@/components/ui/loading";
+import { Badge } from "@/components/ui/badge";
 
 export function ContactSearch() {
-  const { user } = useAuth();
   const { language } = useTheme();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [contactStatus, setContactStatus] = useState<Record<string, boolean>>({});
 
-  const t = {
-    en: {
-      findContacts: "Find Contacts",
-      searchPlaceholder: "Search by username or display name",
-      noResults: "No users found",
-      connect: "Connect",
-      pending: "Pending",
-      connected: "Connected",
-      blocked: "Blocked",
-      cancel: "Cancel",
-    },
-    ar: {
-      findContacts: "البحث عن جهات الاتصال",
-      searchPlaceholder: "البحث بالاسم أو اسم المستخدم",
-      noResults: "لم يتم العثور على مستخدمين",
-      connect: "اتصال",
-      pending: "معلق",
-      connected: "متصل",
-      blocked: "محظور",
-      cancel: "إلغاء",
-    }
-  }[language];
+  // Search users query
+  const { 
+    data: searchResults, 
+    refetch: performSearch, 
+    isLoading: isSearchLoading
+  } = useQuery({
+    queryKey: ['searchUsers', searchQuery],
+    queryFn: () => searchUsers(searchQuery),
+    enabled: false,
+  });
 
-  useEffect(() => {
-    if (searchTerm.trim()) {
-      const timeoutId = setTimeout(() => {
-        searchUsers();
-      }, 300);
-      return () => clearTimeout(timeoutId);
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchTerm]);
-
-  const searchUsers = async () => {
-    if (!user || !searchTerm.trim()) return;
-
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, username, display_name, avatar_url')
-        .neq('id', user.id)
-        .or(`username.ilike.%${searchTerm}%,display_name.ilike.%${searchTerm}%`)
-        .limit(10);
-
-      if (error) throw error;
-
-      // Check relationship status for each user
-      const usersWithStatus = await Promise.all(
-        (data || []).map(async (profile) => {
-          const { data: contactData } = await supabase
-            .from('contacts')
-            .select('status')
-            .or(`and(user_id.eq.${user.id},contact_id.eq.${profile.id}),and(user_id.eq.${profile.id},contact_id.eq.${user.id})`)
-            .single();
-
-          const { data: blockedData } = await supabase
-            .from('blocked_users')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('blocked_user_id', profile.id)
-            .single();
-
-          let relationshipStatus: UserProfile['relationship_status'] = 'none';
-          
-          if (blockedData) {
-            relationshipStatus = 'blocked';
-          } else if (contactData) {
-            if (contactData.status === 'accepted') {
-              relationshipStatus = 'accepted';
-            } else if (contactData.status === 'pending') {
-              relationshipStatus = 'pending_sent';
+  // Send contact request mutation
+  const sendRequestMutation = useMutation({
+    mutationFn: (userId: string) => sendContactRequest(userId),
+    onSuccess: () => {
+      toast.success(t("requestSent", language));
+      
+      // Invalidate queries that might be affected
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
+      
+      // Update contact status for this user
+      setContactStatus(prev => {
+        const updatedStatus = { ...prev };
+        // Set the status to true for the user that was just added
+        if (searchResults) {
+          searchResults.forEach(user => {
+            if (sendRequestMutation.variables === user.id) {
+              updatedStatus[user.id] = true;
             }
+          });
+        }
+        return updatedStatus;
+      });
+    },
+    onError: (error) => {
+      console.error("Error sending contact request:", error);
+      toast.error(t("errorSendingRequest", language));
+    }
+  });
+
+  const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    if (value.length >= 3) {
+      setIsSearching(true);
+      await performSearch();
+    } else {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchSubmit = async () => {
+    if (searchQuery.length >= 3) {
+      setIsSearching(true);
+      await performSearch();
+      
+      // Reset contact status
+      setContactStatus({});
+      
+      // Check contact status for each search result
+      if (searchResults) {
+        const statusChecks = searchResults.map(async (user) => {
+          try {
+            const isContact = await checkIfUserInContacts(user.id);
+            setContactStatus(prev => ({
+              ...prev,
+              [user.id]: isContact
+            }));
+          } catch (err) {
+            console.error(`Error checking contact status for ${user.id}:`, err);
           }
-
-          return {
-            ...profile,
-            relationship_status: relationshipStatus
-          };
-        })
-      );
-
-      setSearchResults(usersWithStatus);
-    } catch (error) {
-      console.error('Error searching users:', error);
-      toast.error('Failed to search users');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendRequest = async (contactId: string) => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('contacts')
-        .insert({
-          user_id: user.id,
-          contact_id: contactId,
-          status: 'pending'
         });
-
-      if (error) throw error;
-
-      setSearchResults(prev => 
-        prev.map(result => 
-          result.id === contactId 
-            ? { ...result, relationship_status: 'pending_sent' }
-            : result
-        )
-      );
-      toast.success('Contact request sent');
-    } catch (error) {
-      console.error('Error sending request:', error);
-      toast.error('Failed to send request');
+        
+        await Promise.all(statusChecks);
+      }
+    } else if (searchQuery.length > 0) {
+      toast.info(t("enterAtLeastThreeCharacters", language));
     }
   };
 
-  const handleCancelRequest = async (contactId: string) => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('contacts')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('contact_id', contactId)
-        .eq('status', 'pending');
-
-      if (error) throw error;
-
-      setSearchResults(prev => 
-        prev.map(result => 
-          result.id === contactId 
-            ? { ...result, relationship_status: 'none' }
-            : result
-        )
-      );
-      toast.success('Contact request cancelled');
-    } catch (error) {
-      console.error('Error cancelling request:', error);
-      toast.error('Failed to cancel request');
+  // Check contact status when search results are updated
+  useEffect(() => {
+    const checkContactsStatus = async () => {
+      if (!searchResults) return;
+      
+      for (const user of searchResults) {
+        try {
+          const isContact = await checkIfUserInContacts(user.id);
+          setContactStatus(prev => ({
+            ...prev,
+            [user.id]: isContact
+          }));
+        } catch (err) {
+          console.error(`Error checking contact status for ${user.id}:`, err);
+        }
+      }
+    };
+    
+    if (searchResults && searchResults.length > 0) {
+      checkContactsStatus();
     }
+  }, [searchResults]);
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSearchSubmit();
+    }
+  };
+
+  const handleSendRequest = (userId: string) => {
+    sendRequestMutation.mutate(userId);
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return "??";
+    return name.substring(0, 2).toUpperCase();
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Search className="h-5 w-5" />
-          {t.findContacts}
-        </CardTitle>
-        <CardDescription>
-          Search for users to connect with
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={t.searchPlaceholder}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+    <Card className="p-4">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t("searchContacts", language)}
+            className="pl-9"
+            value={searchQuery}
+            onChange={handleSearch}
+            onKeyPress={handleKeyPress}
+            ref={inputRef}
+          />
+        </div>
+        <Button 
+          onClick={handleSearchSubmit}
+          disabled={searchQuery.length < 1}
+          size="sm"
+        >
+          {t("search", language)}
+        </Button>
+      </div>
 
-          {loading && (
-            <div className="text-center py-4">Searching...</div>
-          )}
+      {/* Informational note */}
+      <p className="text-xs text-muted-foreground mt-2 text-center">
+        {language === 'ar' 
+          ? 'يجب أن يكون كلا المستخدمين في قائمة جهات الاتصال لدى الآخر لتبادل الرسائل'
+          : 'Both users must be in each other\'s contact list to exchange messages'
+        }
+      </p>
 
-          {searchResults.length === 0 && searchTerm.trim() && !loading && (
-            <div className="text-center py-8 text-muted-foreground">
-              {t.noResults}
-            </div>
-          )}
+      {isSearching && isSearchLoading && (
+        <div className="flex justify-center items-center py-8">
+          <LoadingSpinner size="md" />
+        </div>
+      )}
 
-          {searchResults.length > 0 && (
-            <div className="space-y-4">
-              {searchResults.map((result) => (
-                <div key={result.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={result.avatar_url} />
-                      <AvatarFallback>
-                        {result.display_name?.charAt(0) || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">{result.display_name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        @{result.username}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {result.relationship_status === 'none' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSendRequest(result.id)}
-                      >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        {t.connect}
-                      </Button>
-                    )}
-                    {result.relationship_status === 'pending_sent' && (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{t.pending}</Badge>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCancelRequest(result.id)}
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          {t.cancel}
-                        </Button>
-                      </div>
-                    )}
-                    {result.relationship_status === 'accepted' && (
-                      <Badge variant="default" className="text-green-600">
-                        <Check className="h-4 w-4 mr-1" />
-                        {t.connected}
-                      </Badge>
-                    )}
-                    {result.relationship_status === 'blocked' && (
-                      <Badge variant="destructive">{t.blocked}</Badge>
+      {isSearching && !isSearchLoading && searchResults && searchResults.length > 0 && (
+        <div className="mt-4">
+          <Separator className="my-2" />
+          <p className="text-sm text-muted-foreground mb-2">{t("searchResults", language)}</p>
+          <div className="space-y-2">
+            {searchResults.map((user) => (
+              <div key={user.id} className="flex items-center justify-between p-2 hover:bg-muted rounded-md">
+                <div className="flex items-center gap-2">
+                  <Avatar>
+                    <AvatarImage src={user.avatar_url || ""} />
+                    <AvatarFallback>{getInitials(user.display_name || user.username)}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{user.display_name}</p>
+                    <p className="text-xs text-muted-foreground">@{user.username}</p>
+                    {/* Check if email exists before rendering it */}
+                    {user.email && (
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+                {contactStatus[user.id] ? (
+                  <Badge variant="secondary" className="px-3 py-1">
+                    {t("alreadyInContacts", language)}
+                  </Badge>
+                ) : (
+                  <Button 
+                    onClick={() => handleSendRequest(user.id)}
+                    disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
+                    size="sm"
+                  >
+                    {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
+                      <LoadingSpinner size="sm" className="mr-2" />
+                    ) : null}
+                    {t("sendRequest", language)}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-      </CardContent>
+      )}
+
+      {isSearching && !isSearchLoading && searchResults && searchResults.length === 0 && (
+        <div className="mt-4 text-center text-muted-foreground p-4">
+          <p>{t("noUsersFound", language)}</p>
+        </div>
+      )}
     </Card>
   );
 }

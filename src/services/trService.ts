@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { TRServiceCache } from "./trServiceCache";
 
@@ -69,13 +68,8 @@ export class TRService {
   }
 
   // Task operations - Updated with caching for instant loading
-  static async getTasks(userId: string): Promise<TRTask[]> {
+  static async getTasks(): Promise<TRTask[]> {
     console.log('TRService.getTasks: Starting to fetch tasks');
-    
-    if (!userId) {
-      console.error('TRService.getTasks: No user ID provided');
-      throw new Error('User ID is required.');
-    }
     
     // Try to get cached data first for instant loading
     const cachedTasks = TRServiceCache.getTasks();
@@ -83,17 +77,29 @@ export class TRService {
       console.log('TRService.getTasks: Returning cached tasks:', cachedTasks.length);
       
       // Still fetch fresh data in background and update cache
-      this.refreshTasksInBackground(userId);
+      this.refreshTasksInBackground();
       
       return cachedTasks;
     }
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('TRService.getTasks: Authentication error:', authError);
+      throw new Error('Authentication failed. Please log in again.');
+    }
+    
+    if (!user) {
+      console.error('TRService.getTasks: No user found');
+      throw new Error('User not authenticated. Please log in.');
+    }
 
-    console.log('TRService.getTasks: Fetching tasks for user:', userId);
+    console.log('TRService.getTasks: Fetching tasks for user:', user.id);
 
     const { data, error } = await supabase
       .from('tr_tasks')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -111,14 +117,15 @@ export class TRService {
   }
 
   // Background refresh for cached data
-  private static async refreshTasksInBackground(userId: string): Promise<void> {
+  private static async refreshTasksInBackground(): Promise<void> {
     try {
-      if (!userId) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
       const { data, error } = await supabase
         .from('tr_tasks')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       
       if (!error && data) {
@@ -130,20 +137,27 @@ export class TRService {
     }
   }
 
-  static async createTask(task: Omit<TRTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'share_link' | 'completed' | 'completed_at' | 'snoozed_until'>, userId: string): Promise<TRTask> {
+  static async createTask(task: Omit<TRTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'share_link' | 'completed' | 'completed_at' | 'snoozed_until'>): Promise<TRTask> {
     console.log('TRService.createTask: Starting task creation');
     console.log('TRService.createTask: Raw input data:', task);
     
-    if (!userId) {
-      console.error('TRService.createTask: No user ID provided');
-      throw new Error('User ID is required.');
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('TRService.createTask: Authentication error:', authError);
+      throw new Error('Authentication failed. Please log in again.');
+    }
+    
+    if (!user) {
+      console.error('TRService.createTask: No user found');
+      throw new Error('User not authenticated. Please log in.');
     }
 
-    console.log('TRService.createTask: User ID:', userId);
+    console.log('TRService.createTask: User authenticated:', user.id);
 
     const taskData = { 
       ...task, 
-      user_id: userId, 
+      user_id: user.id, 
       completed: false 
     };
 
@@ -275,13 +289,8 @@ export class TRService {
   }
 
   // Reminder operations - Updated with caching for instant loading
-  static async getReminders(userId: string): Promise<TRReminder[]> {
+  static async getReminders(): Promise<TRReminder[]> {
     console.log('TRService.getReminders: Starting to fetch reminders');
-    
-    if (!userId) {
-      console.error('TRService.getReminders: No user ID provided');
-      throw new Error('User ID is required.');
-    }
     
     // Try to get cached data first for instant loading
     const cachedReminders = TRServiceCache.getReminders();
@@ -289,17 +298,29 @@ export class TRService {
       console.log('TRService.getReminders: Returning cached reminders:', cachedReminders.length);
       
       // Still fetch fresh data in background and update cache
-      this.refreshRemindersInBackground(userId);
+      this.refreshRemindersInBackground();
       
       return cachedReminders;
     }
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('TRService.getReminders: Authentication error:', authError);
+      throw new Error('Authentication failed. Please log in again.');
+    }
+    
+    if (!user) {
+      console.error('TRService.getReminders: No user found');
+      throw new Error('User not authenticated. Please log in.');
+    }
 
-    console.log('TRService.getReminders: Fetching reminders for user:', userId);
+    console.log('TRService.getReminders: Fetching reminders for user:', user.id);
 
     const { data, error } = await supabase
       .from('tr_reminders')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .order('due_date', { ascending: true });
     
     if (error) {
@@ -317,14 +338,15 @@ export class TRService {
   }
 
   // Background refresh for cached reminders
-  private static async refreshRemindersInBackground(userId: string): Promise<void> {
+  private static async refreshRemindersInBackground(): Promise<void> {
     try {
-      if (!userId) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
       const { data, error } = await supabase
         .from('tr_reminders')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .order('due_date', { ascending: true });
       
       if (!error && data) {
@@ -336,14 +358,15 @@ export class TRService {
     }
   }
 
-  static async createReminder(reminder: Omit<TRReminder, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'snoozed_until'>, userId: string): Promise<TRReminder> {
-    if (!userId) throw new Error('User ID is required');
+  static async createReminder(reminder: Omit<TRReminder, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'snoozed_until'>): Promise<TRReminder> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
 
     const sanitizedReminder = this.sanitizeTaskData(reminder);
 
     const { data, error } = await supabase
       .from('tr_reminders')
-      .insert([{ ...sanitizedReminder, user_id: userId }])
+      .insert([{ ...sanitizedReminder, user_id: user.id }])
       .select()
       .single();
     
@@ -407,13 +430,15 @@ export class TRService {
   }
 
   // Shared access operations
-  static async recordSharedAccess(taskId: string, viewerName?: string, userId?: string): Promise<void> {
+  static async recordSharedAccess(taskId: string, viewerName?: string): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const { error } = await supabase
       .from('tr_shared_access')
       .insert([{
         task_id: taskId,
-        viewer_id: userId || null,
-        viewer_name: viewerName || 'Guest'
+        viewer_id: user?.id || null,
+        viewer_name: viewerName || (user?.user_metadata?.full_name || user?.email || 'Guest')
       }]);
     
     if (error) throw error;

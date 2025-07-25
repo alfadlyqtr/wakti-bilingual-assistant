@@ -22,7 +22,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   
   const [isLoadingVoiceQuota, setIsLoadingVoiceQuota] = useState(false);
 
-  // Voice quota loading with improved error handling
+  // Voice quota loading
   const loadUserVoiceQuota = useCallback(async () => {
     if (!user) return;
     
@@ -37,67 +37,6 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
       if (error) {
         console.error('❌ Error loading user voice quota:', error);
-        
-        // Fallback: Try direct database query
-        console.log('🔄 Attempting fallback quota loading...');
-        
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('user_voice_usage')
-          .select('characters_used, characters_limit, extra_characters, purchase_date')
-          .eq('user_id', user.id)
-          .single();
-
-        if (fallbackError) {
-          if (fallbackError.code === 'PGRST116') {
-            // No record found, create one
-            console.log('🔄 Creating new voice quota record...');
-            
-            const { data: insertData, error: insertError } = await supabase
-              .from('user_voice_usage')
-              .insert({
-                user_id: user.id,
-                characters_used: 0,
-                characters_limit: 6000,
-                extra_characters: 0
-              })
-              .select('characters_used, characters_limit, extra_characters, purchase_date')
-              .single();
-
-            if (insertError) {
-              console.error('❌ Failed to create voice quota record:', insertError);
-              toast({
-                title: "Voice Quota Error",
-                description: "Failed to initialize voice quota. Please try again.",
-                variant: "destructive"
-              });
-              return;
-            }
-
-            console.log('✅ Created new voice quota record:', insertData);
-            setUserVoiceQuota({
-              characters_used: insertData.characters_used || 0,
-              characters_limit: insertData.characters_limit || 6000,
-              extra_characters: insertData.extra_characters || 0,
-              purchase_date: insertData.purchase_date
-            });
-          } else {
-            console.error('❌ Fallback quota loading failed:', fallbackError);
-            toast({
-              title: "Voice Quota Error",
-              description: "Failed to load voice quota. Please refresh the page.",
-              variant: "destructive"
-            });
-          }
-          return;
-        }
-
-        console.log('✅ Fallback quota loading successful:', fallbackData);
-        setUserVoiceQuota({
-          characters_used: fallbackData.characters_used || 0,
-          characters_limit: fallbackData.characters_limit || 6000,
-          extra_characters: fallbackData.extra_characters || 0,
-          purchase_date: fallbackData.purchase_date
-        });
         return;
       }
 
@@ -106,26 +45,13 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         console.log('✅ User voice quota loaded successfully:', quota);
         setUserVoiceQuota({
           characters_used: quota.characters_used || 0,
-          characters_limit: quota.characters_limit || 6000,
+          characters_limit: quota.characters_limit || 6000, // Updated: Use consistent 6000
           extra_characters: quota.extra_characters || 0,
           purchase_date: quota.purchase_date
-        });
-      } else {
-        console.warn('⚠️ No voice quota data returned from RPC');
-        // Set default values
-        setUserVoiceQuota({
-          characters_used: 0,
-          characters_limit: 6000,
-          extra_characters: 0
         });
       }
     } catch (error) {
       console.error('❌ Unexpected error loading user voice quota:', error);
-      toast({
-        title: "Voice Quota Error",
-        description: "An unexpected error occurred while loading voice quota.",
-        variant: "destructive"
-      });
     } finally {
       setIsLoadingVoiceQuota(false);
     }
@@ -138,6 +64,8 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     try {
       console.log('💰 Initiating voice credits purchase:', { userId: user.id, characters });
       
+      // For now, we'll simulate the purchase process
+      // In production, this would integrate with the PayPal webhook
       const { data, error } = await supabase.rpc('purchase_extra_voice_credits', {
         p_user_id: user.id,
         p_characters: characters
