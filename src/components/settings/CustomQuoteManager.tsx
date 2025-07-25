@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trash2, Plus, Edit } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,7 +13,6 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export function CustomQuoteManager() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const { language } = useTheme();
   const [quotes, setQuotes] = useState([]);
   const [newQuote, setNewQuote] = useState('');
@@ -35,11 +34,7 @@ export function CustomQuoteManager() {
       setQuotes(customQuotes);
     } catch (error) {
       console.error('Error loading quotes:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorLoadingQuotes', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorLoadingQuotes', language));
     }
   };
 
@@ -76,17 +71,10 @@ export function CustomQuoteManager() {
       setQuotes(updatedQuotes);
       setNewQuote('');
       
-      toast({
-        title: t('success', language),
-        description: t('quoteAdded', language)
-      });
+      toast.success(t('quoteAdded', language));
     } catch (error) {
       console.error('Error adding quote:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorAddingQuote', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorAddingQuote', language));
     } finally {
       setLoading(false);
     }
@@ -120,17 +108,10 @@ export function CustomQuoteManager() {
 
       setQuotes(updatedQuotes);
       
-      toast({
-        title: t('success', language),
-        description: t('quoteDeleted', language)
-      });
+      toast.success(t('quoteDeleted', language));
     } catch (error) {
       console.error('Error deleting quote:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorDeletingQuote', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorDeletingQuote', language));
     } finally {
       setLoading(false);
     }
@@ -168,17 +149,10 @@ export function CustomQuoteManager() {
       setEditingId(null);
       setEditingText('');
       
-      toast({
-        title: t('success', language),
-        description: t('quoteUpdated', language)
-      });
+      toast.success(t('quoteUpdated', language));
     } catch (error) {
       console.error('Error updating quote:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorUpdatingQuote', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorUpdatingQuote', language));
     } finally {
       setLoading(false);
     }
@@ -199,7 +173,6 @@ export function CustomQuoteManager() {
           />
           <Button onClick={addQuote} disabled={!newQuote.trim() || loading}>
             <Plus className="h-4 w-4" />
-            {t('enterQuoteText', language)}
           </Button>
         </div>
 

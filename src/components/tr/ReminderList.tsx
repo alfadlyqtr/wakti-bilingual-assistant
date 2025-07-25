@@ -7,7 +7,7 @@ import { TRReminder, TRService } from '@/services/trService';
 import { ReminderForm } from './ReminderForm';
 import { format, parseISO, isAfter } from 'date-fns';
 import { Timer, Edit, Trash2, Plus } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 
@@ -17,7 +17,6 @@ interface ReminderListProps {
 }
 
 export function ReminderList({ reminders, onRemindersUpdated }: ReminderListProps) {
-  const { toast } = useToast();
   const { language } = useTheme();
   const [editingReminder, setEditingReminder] = useState<TRReminder | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -25,18 +24,11 @@ export function ReminderList({ reminders, onRemindersUpdated }: ReminderListProp
   const handleSnooze = async (reminder: TRReminder) => {
     try {
       await TRService.snoozeReminder(reminder.id);
-      toast({
-        title: t('success', language),
-        description: t('reminderSnoozed', language)
-      });
+      toast.success(t('reminderSnoozed', language));
       onRemindersUpdated();
     } catch (error) {
       console.error('Error snoozing reminder:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorSnoozingReminder', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorSnoozingReminder', language));
     }
   };
 
@@ -45,18 +37,11 @@ export function ReminderList({ reminders, onRemindersUpdated }: ReminderListProp
     
     try {
       await TRService.deleteReminder(reminder.id);
-      toast({
-        title: t('success', language),
-        description: t('reminderDeleted', language)
-      });
+      toast.success(t('reminderDeleted', language));
       onRemindersUpdated();
     } catch (error) {
       console.error('Error deleting reminder:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorDeletingReminder', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorDeletingReminder', language));
     }
   };
 
@@ -168,7 +153,7 @@ export function ReminderList({ reminders, onRemindersUpdated }: ReminderListProp
                       <div>
                         <h4 className="font-medium">{reminder.title}</h4>
                         <p className="text-sm text-muted-foreground">
-                          {t('snoozedUntil', language)}: {format(parseISO(reminder.snoozed_until!), 'MMM dd, yyyy')}
+                          Snoozed until: {format(parseISO(reminder.snoozed_until!), 'MMM dd, yyyy')}
                         </p>
                       </div>
                       <Button

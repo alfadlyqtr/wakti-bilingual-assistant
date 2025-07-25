@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { Edit, X, Trash2 } from 'lucide-react';
@@ -20,7 +20,6 @@ interface ReminderFormProps {
 
 export function ReminderForm({ reminder, onClose, onReminderSaved }: ReminderFormProps) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -35,20 +34,12 @@ export function ReminderForm({ reminder, onClose, onReminderSaved }: ReminderFor
     if (!user) return;
 
     if (!formData.title.trim()) {
-      toast({
-        title: t('error', language),
-        description: t('titleRequired', language),
-        variant: 'destructive'
-      });
+      toast.error(t('titleRequired', language));
       return;
     }
 
     if (!formData.due_date) {
-      toast({
-        title: t('error', language),
-        description: t('dueDateRequired', language),
-        variant: 'destructive'
-      });
+      toast.error(t('dueDateRequired', language));
       return;
     }
 
@@ -64,27 +55,17 @@ export function ReminderForm({ reminder, onClose, onReminderSaved }: ReminderFor
 
       if (reminder) {
         await TRService.updateReminder(reminder.id, reminderData);
-        toast({
-          title: t('success', language),
-          description: t('reminderUpdated', language)
-        });
+        toast.success(t('reminderUpdated', language));
       } else {
         await TRService.createReminder(reminderData, user.id);
-        toast({
-          title: t('success', language),
-          description: t('reminderCreated', language)
-        });
+        toast.success(t('reminderCreated', language));
       }
       
       onReminderSaved();
       onClose();
     } catch (error) {
       console.error('Error saving reminder:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorSavingReminder', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorSavingReminder', language));
     } finally {
       setLoading(false);
     }
@@ -96,19 +77,12 @@ export function ReminderForm({ reminder, onClose, onReminderSaved }: ReminderFor
     try {
       setLoading(true);
       await TRService.deleteReminder(reminder.id);
-      toast({
-        title: t('success', language),
-        description: t('reminderDeleted', language)
-      });
+      toast.success(t('reminderDeleted', language));
       onReminderSaved();
       onClose();
     } catch (error) {
       console.error('Error deleting reminder:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorDeletingReminder', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorDeletingReminder', language));
     } finally {
       setLoading(false);
     }

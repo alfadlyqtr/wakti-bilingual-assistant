@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { TRService, TRTask } from '@/services/trService';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { Edit, X, RotateCcw, Check } from 'lucide-react';
@@ -22,7 +22,6 @@ interface TaskFormProps {
 
 export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
   
@@ -47,20 +46,12 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
     if (!user || !task) return;
 
     if (!formData.title.trim()) {
-      toast({
-        title: t('error', language),
-        description: t('titleRequired', language),
-        variant: 'destructive'
-      });
+      toast.error(t('titleRequired', language));
       return;
     }
 
     if (!formData.due_date) {
-      toast({
-        title: t('error', language),
-        description: t('dueDateRequired', language),
-        variant: 'destructive'
-      });
+      toast.error(t('dueDateRequired', language));
       return;
     }
 
@@ -77,19 +68,12 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
       };
 
       await TRService.updateTask(task.id, updateData);
-      toast({
-        title: t('success', language),
-        description: t('taskUpdated', language)
-      });
+      toast.success(t('taskUpdated', language));
       onTaskSaved();
       onClose();
     } catch (error) {
       console.error('Error updating task:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorSavingTask', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorSavingTask', language));
     } finally {
       setLoading(false);
     }
@@ -107,20 +91,13 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
       };
 
       await TRService.updateTask(task.id, updateData);
-      toast({
-        title: t('success', language),
-        description: task.completed ? t('taskReopened', language) : t('taskCompleted', language)
-      });
+      toast.success(task.completed ? t('taskReopened', language) : t('taskCompleted', language));
       
       onTaskSaved();
       onClose();
     } catch (error) {
       console.error('Error toggling task completion:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorUpdatingTask', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorUpdatingTask', language));
     } finally {
       setLoading(false);
     }
@@ -177,7 +154,7 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
               </div>
               <div>
                 <Label htmlFor="priority">{t('priority', language)}</Label>
-                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                <Select value={formData.priority} onValueChange={(value: 'normal' | 'high' | 'urgent') => setFormData({ ...formData, priority: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -191,8 +168,8 @@ export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
             </div>
 
             <div>
-              <Label htmlFor="type">{t('type', language)}</Label>
-              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+              <Label htmlFor="type">{t('taskType', language)}</Label>
+              <Select value={formData.type} onValueChange={(value: 'one-time' | 'repeated') => setFormData({ ...formData, type: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

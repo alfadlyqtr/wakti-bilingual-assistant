@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { Plus, X } from 'lucide-react';
@@ -21,7 +21,6 @@ interface TRCreateTaskModalProps {
 
 export function TRCreateTaskModal({ onClose, onTaskCreated }: TRCreateTaskModalProps) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -39,20 +38,12 @@ export function TRCreateTaskModal({ onClose, onTaskCreated }: TRCreateTaskModalP
     if (!user) return;
 
     if (!formData.title.trim()) {
-      toast({
-        title: t('error', language),
-        description: t('titleRequired', language),
-        variant: 'destructive'
-      });
+      toast.error(t('titleRequired', language));
       return;
     }
 
     if (!formData.due_date) {
-      toast({
-        title: t('error', language),
-        description: t('dueDateRequired', language),
-        variant: 'destructive'
-      });
+      toast.error(t('dueDateRequired', language));
       return;
     }
 
@@ -70,19 +61,12 @@ export function TRCreateTaskModal({ onClose, onTaskCreated }: TRCreateTaskModalP
       };
 
       await TRService.createTask(taskData, user.id);
-      toast({
-        title: t('success', language),
-        description: t('taskCreated', language)
-      });
+      toast.success(t('taskCreated', language));
       onTaskCreated();
       onClose();
     } catch (error) {
       console.error('Error creating task:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorCreatingTask', language),
-        variant: 'destructive'
-      });
+      toast.error(t('errorCreatingTask', language));
     } finally {
       setLoading(false);
     }
@@ -163,7 +147,7 @@ export function TRCreateTaskModal({ onClose, onTaskCreated }: TRCreateTaskModalP
                 </Select>
               </div>
               <div>
-                <Label htmlFor="task_type">{t('type', language)}</Label>
+                <Label htmlFor="task_type">{t('taskType', language)}</Label>
                 <Select value={formData.task_type} onValueChange={(value) => setFormData({ ...formData, task_type: value })}>
                   <SelectTrigger>
                     <SelectValue />
