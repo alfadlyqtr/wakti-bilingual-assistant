@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { trService } from '@/services/trService';
+import { TRService } from '@/services/trService';
 
 export function useCalendarData() {
   const { user } = useAuth();
@@ -25,8 +25,8 @@ export function useCalendarData() {
       setError(null);
       
       const [tasksData, remindersData] = await Promise.all([
-        trService.getTasks(user.id),
-        trService.getReminders(user.id),
+        TRService.getTasks(user.id),
+        TRService.getReminders(user.id),
       ]);
 
       setTasks(tasksData);

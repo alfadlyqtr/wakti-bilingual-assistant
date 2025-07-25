@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { contactsService } from '@/services/contactsService';
+import { getContacts } from '@/services/contactsService';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -46,7 +45,7 @@ export function ContactsSelector({
 
     try {
       setLoading(true);
-      const contactsData = await contactsService.getContacts(user.id);
+      const contactsData = await getContacts(user.id);
       setContacts(contactsData);
     } catch (error) {
       console.error('Error fetching contacts:', error);

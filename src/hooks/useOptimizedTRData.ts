@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { trService } from '@/services/trService';
+import { TRService } from '@/services/trService';
 
 export function useOptimizedTRData() {
   const { user } = useAuth();
@@ -24,8 +24,8 @@ export function useOptimizedTRData() {
       setError(null);
       
       // Sequential loading to prevent auth stampede  
-      const tasksData = await trService.getTasks(user.id);
-      const remindersData = await trService.getReminders(user.id);
+      const tasksData = await TRService.getTasks(user.id);
+      const remindersData = await TRService.getReminders(user.id);
 
       setTasks(tasksData);
       setReminders(remindersData);

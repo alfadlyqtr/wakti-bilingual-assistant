@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { trService } from '@/services/trService';
+import { TRService } from '@/services/trService';
 
 export function useTRData() {
   const { user } = useAuth();
@@ -24,8 +24,8 @@ export function useTRData() {
       setError(null);
       
       const [tasksData, remindersData] = await Promise.all([
-        trService.getTasks(user.id),
-        trService.getReminders(user.id),
+        TRService.getTasks(user.id),
+        TRService.getReminders(user.id),
       ]);
 
       setTasks(tasksData);
@@ -42,11 +42,16 @@ export function useTRData() {
     fetchData();
   };
 
+  const refresh = () => {
+    fetchData();
+  };
+
   return {
     tasks,
     reminders,
     loading,
     error,
     refetch,
+    refresh,
   };
 }
