@@ -1,6 +1,7 @@
+
 export const settingsAr = {
   settings: "الإعدادات",
-  theme: "المظهر",
+  theme: "النمط",
   language: "اللغة",
   notifications: "الإشعارات",
   privacy: "الخصوصية",
@@ -8,10 +9,10 @@ export const settingsAr = {
   about: "حول",
   appearance: "المظهر",
   appearanceSettings: "إعدادات المظهر",
-  lightMode: "الوضع الفاتح",
-  darkMode: "الوضع المظلم",
+  lightMode: "النمط الفاتح",
+  darkMode: "النمط المظلم",
   arabic: "العربية",
-  english: "الإنجليزية",
+  english: "English",
   settingsUpdated: "تم تحديث الإعدادات بنجاح",
   contactSettingsUpdated: "تم تحديث إعدادات جهات الاتصال بنجاح",
   errorUpdatingSettings: "خطأ في تحديث الإعدادات",
@@ -20,7 +21,7 @@ export const settingsAr = {
   saveAllSettingsConfirmation: "تم حفظ جميع الإعدادات بنجاح",
   allSettingsSaved: "تم حفظ جميع الإعدادات",
   contactsSettings: "إعدادات جهات الاتصال",
-  contactsSettingsDescription: "إدارة كيفية تواصل الآخرين معك",
+  contactsSettingsDescription: "إدارة كيفية اتصال الآخرين بك",
   autoApproveRequests: "الموافقة التلقائية على الطلبات",
   autoApproveExplanation: "قبول طلبات الاتصال تلقائياً",
   dailyQuoteSettings: "إعدادات الاقتباس اليومي",
@@ -29,7 +30,7 @@ export const settingsAr = {
   twiceDaily: "مرتين يومياً",
   fourTimesDaily: "أربع مرات يومياً",
   sixTimesDaily: "ست مرات يومياً",
-  everyAppStart: "عند كل بدء للتطبيق",
+  everyAppStart: "عند كل بداية تطبيق",
   manageCustomQuotes: "إدارة الاقتباسات المخصصة",
   notificationPreferences: "تفضيلات الإشعارات",
   pushNotifications: "الإشعارات الفورية",
@@ -39,5 +40,18 @@ export const settingsAr = {
   profileVisibility: "رؤية الملف الشخصي",
   activityStatus: "حالة النشاط",
   saveAllSettings: "حفظ جميع الإعدادات",
-  loadingActivity: "جاري تحميل النشاط..."
+  
+  // Quote management
+  customQuotes: "الاقتباسات المخصصة",
+  addNewQuote: "إضافة اقتباس جديد",
+  enterQuoteText: "أدخل نص الاقتباس",
+  yourQuotes: "اقتباساتك",
+  noCustomQuotes: "لا توجد اقتباسات مخصصة بعد",
+  quoteAdded: "تم إضافة الاقتباس بنجاح",
+  quoteDeleted: "تم حذف الاقتباس بنجاح",
+  quoteUpdated: "تم تحديث الاقتباس بنجاح",
+  errorAddingQuote: "خطأ في إضافة الاقتباس",
+  errorDeletingQuote: "خطأ في حذف الاقتباس",
+  errorUpdatingQuote: "خطأ في تحديث الاقتباس",
+  errorLoadingQuotes: "خطأ في تحميل الاقتباسات"
 };

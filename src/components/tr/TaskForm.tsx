@@ -6,61 +6,33 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { CheckSquare, X } from 'lucide-react';
+import { Edit, X, RotateCcw, Check } from 'lucide-react';
 
 interface TaskFormProps {
-  isOpen: boolean;
+  task: TRTask;
   onClose: () => void;
-  task?: TRTask | null;
   onTaskSaved: () => void;
 }
 
-export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) {
+export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    due_date: '',
-    due_time: '',
-    priority: 'normal' as 'normal' | 'high' | 'urgent',
-    task_type: 'one-time' as 'one-time' | 'repeated',
-    is_shared: false,
-    status: 'incomplete' as 'incomplete' | 'complete'
+    title: task.title,
+    description: task.description || '',
+    due_date: task.due_date,
+    priority: task.priority,
+    type: task.type,
+    is_shared: task.is_shared || false
   });
-
-  useEffect(() => {
-    if (task) {
-      setFormData({
-        title: task.title,
-        description: task.description || '',
-        due_date: task.due_date,
-        due_time: task.due_time || '',
-        priority: task.priority,
-        task_type: task.task_type,
-        is_shared: task.is_shared,
-        status: task.status
-      });
-    } else {
-      setFormData({
-        title: '',
-        description: '',
-        due_date: '',
-        due_time: '',
-        priority: 'normal',
-        task_type: 'one-time',
-        is_shared: false,
-        status: 'incomplete'
-      });
-    }
-  }, [task]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,24 +59,15 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     try {
       setLoading(true);
       
-      if (task) {
-        await TRService.updateTask(task.id, formData);
-        toast({
-          title: t('success', language),
-          description: t('taskUpdated', language)
-        });
-      } else {
-        await TRService.createTask(formData, user.id);
-        toast({
-          title: t('success', language),
-          description: t('taskCreated', language)
-        });
-      }
-
+      await TRService.updateTask(task.id, formData);
+      toast({
+        title: t('success', language),
+        description: t('taskUpdated', language)
+      });
       onTaskSaved();
       onClose();
     } catch (error) {
-      console.error('Error saving task:', error);
+      console.error('Error updating task:', error);
       toast({
         title: t('error', language),
         description: t('errorSavingTask', language),
@@ -115,20 +78,28 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     }
   };
 
-  const handleReopenTask = async () => {
-    if (!task) return;
-
+  const handleToggleComplete = async () => {
     try {
       setLoading(true);
-      await TRService.updateTask(task.id, { status: 'incomplete' });
-      toast({
-        title: t('success', language),
-        description: t('taskReopened', language)
-      });
+      
+      if (task.completed) {
+        await TRService.reopenTask(task.id);
+        toast({
+          title: t('success', language),
+          description: t('taskReopened', language)
+        });
+      } else {
+        await TRService.completeTask(task.id);
+        toast({
+          title: t('success', language),
+          description: t('taskCompleted', language)
+        });
+      }
+      
       onTaskSaved();
       onClose();
     } catch (error) {
-      console.error('Error reopening task:', error);
+      console.error('Error toggling task completion:', error);
       toast({
         title: t('error', language),
         description: t('errorUpdatingTask', language),
@@ -139,17 +110,15 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckSquare className="h-5 w-5" />
-              {task ? t('editTask', language) : t('createTask', language)}
-            </div>
+            <span className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              {t('editTask', language)}
+            </span>
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
@@ -191,75 +160,67 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                 />
               </div>
               <div>
-                <Label htmlFor="due_time">{t('dueTime', language)}</Label>
-                <Input
-                  id="due_time"
-                  type="time"
-                  value={formData.due_time}
-                  onChange={(e) => setFormData({ ...formData, due_time: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
                 <Label htmlFor="priority">{t('priority', language)}</Label>
-                <select
-                  id="priority"
-                  value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value as 'normal' | 'high' | 'urgent' })}
-                  className="w-full px-3 py-2 border rounded-md"
-                >
-                  <option value="normal">{t('normal', language)}</option>
-                  <option value="high">{t('high', language)}</option>
-                  <option value="urgent">{t('urgent', language)}</option>
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="task_type">{t('type', language)}</Label>
-                <select
-                  id="task_type"
-                  value={formData.task_type}
-                  onChange={(e) => setFormData({ ...formData, task_type: e.target.value as 'one-time' | 'repeated' })}
-                  className="w-full px-3 py-2 border rounded-md"
-                >
-                  <option value="one-time">{t('oneTime', language)}</option>
-                  <option value="repeated">{t('repeated', language)}</option>
-                </select>
+                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">{t('low', language)}</SelectItem>
+                    <SelectItem value="medium">{t('medium', language)}</SelectItem>
+                    <SelectItem value="high">{t('high', language)}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
+            <div>
+              <Label htmlFor="type">{t('type', language)}</Label>
+              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="one-time">{t('oneTime', language)}</SelectItem>
+                  <SelectItem value="repeated">{t('repeated', language)}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Label htmlFor="is_shared">{t('makeShared', language)}</Label>
+              <Switch
                 id="is_shared"
                 checked={formData.is_shared}
-                onChange={(e) => setFormData({ ...formData, is_shared: e.target.checked })}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_shared: checked })}
               />
-              <Label htmlFor="is_shared">{t('makeShared', language)}</Label>
             </div>
 
             <div className="flex gap-2 pt-4">
               <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? t('saving', language) : (task ? t('update', language) : t('create', language))}
+                {loading ? t('saving', language) : t('update', language)}
               </Button>
               <Button type="button" variant="outline" onClick={onClose}>
                 {t('cancel', language)}
               </Button>
-              {task && task.status === 'complete' && (
-                <Button type="button" variant="outline" onClick={handleReopenTask}>
-                  {t('reopen', language)}
-                </Button>
-              )}
-              {task && task.status === 'incomplete' && (
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setFormData({...formData, status: 'complete'})}
-                >
-                  {t('complete', language)}
-                </Button>
-              )}
+              <Button 
+                type="button" 
+                variant={task.completed ? "secondary" : "default"}
+                onClick={handleToggleComplete}
+                disabled={loading}
+              >
+                {task.completed ? (
+                  <>
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    {t('reopen', language)}
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-1" />
+                    {t('complete', language)}
+                  </>
+                )}
+              </Button>
             </div>
           </form>
         </CardContent>

@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -15,10 +17,10 @@ import { Plus, X } from 'lucide-react';
 interface TRCreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onTaskCreated: () => void;
+  onTaskSaved: () => void;
 }
 
-export function TRCreateTaskModal({ isOpen, onClose, onTaskCreated }: TRCreateTaskModalProps) {
+export function TRCreateTaskModal({ isOpen, onClose, onTaskSaved }: TRCreateTaskModalProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { language } = useTheme();
@@ -27,9 +29,8 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskCreated }: TRCreateTa
     title: '',
     description: '',
     due_date: '',
-    due_time: '',
-    priority: 'normal' as 'normal' | 'high' | 'urgent',
-    task_type: 'one-time' as 'one-time' | 'repeated',
+    priority: 'medium',
+    type: 'one-time',
     is_shared: false
   });
 
@@ -62,16 +63,16 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskCreated }: TRCreateTa
         title: t('success', language),
         description: t('taskCreated', language)
       });
-      onTaskCreated();
+      onTaskSaved();
       onClose();
+      
       // Reset form
       setFormData({
         title: '',
         description: '',
         due_date: '',
-        due_time: '',
-        priority: 'normal',
-        task_type: 'one-time',
+        priority: 'medium',
+        type: 'one-time',
         is_shared: false
       });
     } catch (error) {
@@ -90,13 +91,13 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskCreated }: TRCreateTa
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <span className="flex items-center gap-2">
               <Plus className="h-5 w-5" />
               {t('createTask', language)}
-            </div>
+            </span>
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
@@ -138,52 +139,40 @@ export function TRCreateTaskModal({ isOpen, onClose, onTaskCreated }: TRCreateTa
                 />
               </div>
               <div>
-                <Label htmlFor="due_time">{t('dueTime', language)}</Label>
-                <Input
-                  id="due_time"
-                  type="time"
-                  value={formData.due_time}
-                  onChange={(e) => setFormData({ ...formData, due_time: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
                 <Label htmlFor="priority">{t('priority', language)}</Label>
-                <select
-                  id="priority"
-                  value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value as 'normal' | 'high' | 'urgent' })}
-                  className="w-full px-3 py-2 border rounded-md"
-                >
-                  <option value="normal">{t('normal', language)}</option>
-                  <option value="high">{t('high', language)}</option>
-                  <option value="urgent">{t('urgent', language)}</option>
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="task_type">{t('type', language)}</Label>
-                <select
-                  id="task_type"
-                  value={formData.task_type}
-                  onChange={(e) => setFormData({ ...formData, task_type: e.target.value as 'one-time' | 'repeated' })}
-                  className="w-full px-3 py-2 border rounded-md"
-                >
-                  <option value="one-time">{t('oneTime', language)}</option>
-                  <option value="repeated">{t('repeated', language)}</option>
-                </select>
+                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">{t('low', language)}</SelectItem>
+                    <SelectItem value="medium">{t('medium', language)}</SelectItem>
+                    <SelectItem value="high">{t('high', language)}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
+            <div>
+              <Label htmlFor="type">{t('type', language)}</Label>
+              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="one-time">{t('oneTime', language)}</SelectItem>
+                  <SelectItem value="repeated">{t('repeated', language)}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Label htmlFor="is_shared">{t('makeShared', language)}</Label>
+              <Switch
                 id="is_shared"
                 checked={formData.is_shared}
-                onChange={(e) => setFormData({ ...formData, is_shared: e.target.checked })}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_shared: checked })}
               />
-              <Label htmlFor="is_shared">{t('makeShared', language)}</Label>
             </div>
 
             <div className="flex gap-2 pt-4">

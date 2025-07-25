@@ -39,5 +39,19 @@ export const settings = {
   privacyControls: "Privacy Controls",
   profileVisibility: "Profile Visibility",
   activityStatus: "Activity Status",
-  saveAllSettings: "Save All Settings"
+  saveAllSettings: "Save All Settings",
+  
+  // Quote management
+  customQuotes: "Custom Quotes",
+  addNewQuote: "Add New Quote",
+  enterQuoteText: "Enter quote text",
+  yourQuotes: "Your Quotes",
+  noCustomQuotes: "No custom quotes yet",
+  quoteAdded: "Quote added successfully",
+  quoteDeleted: "Quote deleted successfully",
+  quoteUpdated: "Quote updated successfully",
+  errorAddingQuote: "Error adding quote",
+  errorDeletingQuote: "Error deleting quote",
+  errorUpdatingQuote: "Error updating quote",
+  errorLoadingQuotes: "Error loading quotes"
 };
