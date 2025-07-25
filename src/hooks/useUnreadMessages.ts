@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { waktiToast } from '@/services/waktiToast';
-import { useDebounced } from '@/hooks/useDebounced';
 
 export function useUnreadMessages() {
   const { user } = useAuth();
@@ -13,10 +12,9 @@ export function useUnreadMessages() {
   const [taskCount, setTaskCount] = useState(0);
   const [sharedTaskCount, setSharedTaskCount] = useState(0);
   const [perContactUnread, setPerContactUnread] = useState<Record<string, number>>({});
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Debounced fetch function to prevent rapid requests
-  const debouncedFetchUnreadCounts = useDebounced(fetchUnreadCounts, 1000);
+  
+  // FIXED: Add initialization flag to prevent multiple runs
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -24,19 +22,20 @@ export function useUnreadMessages() {
       return;
     }
 
-    console.log('👀 Setting up unread message tracking for user:', user.id);
-
-    // Add a delay before initializing to prevent immediate token refresh
-    const initTimeout = setTimeout(() => {
+    // FIXED: Only initialize once when user is ready
+    if (user && !hasInitialized) {
+      console.log('👀 Setting up unread message tracking for user:', user.id);
       initializeUnreadCounts();
-      setIsInitialized(true);
-    }, 2000); // 2 second delay after login
+      setHasInitialized(true);
+    }
 
     return () => {
-      clearTimeout(initTimeout);
-      cleanupSubscriptions();
+      if (hasInitialized) {
+        console.log('🧹 Cleaning up unread message subscriptions');
+        cleanupSubscriptions();
+      }
     };
-  }, [user]);
+  }, [user, hasInitialized]);
 
   const resetCounts = () => {
     setUnreadTotal(0);
@@ -45,7 +44,7 @@ export function useUnreadMessages() {
     setTaskCount(0);
     setSharedTaskCount(0);
     setPerContactUnread({});
-    setIsInitialized(false);
+    setHasInitialized(false);
   };
 
   const initializeUnreadCounts = async () => {
@@ -57,13 +56,6 @@ export function useUnreadMessages() {
       setupRealtimeSubscriptions();
     } catch (error) {
       console.error('❌ Error initializing unread counts:', error);
-      // If rate limited, retry with exponential backoff
-      if (error.message?.includes('429') || error.message?.includes('rate limit')) {
-        setTimeout(() => {
-          console.log('🔄 Retrying unread counts initialization after rate limit');
-          initializeUnreadCounts();
-        }, 5000);
-      }
     }
   };
 
@@ -144,7 +136,7 @@ export function useUnreadMessages() {
   };
 
   const setupRealtimeSubscriptions = () => {
-    if (!user?.id || !isInitialized) return;
+    if (!user?.id || !hasInitialized) return;
 
     console.log('🔄 Setting up real-time subscriptions');
 
@@ -168,7 +160,7 @@ export function useUnreadMessages() {
           sound: 'chime'
         });
         
-        debouncedFetchUnreadCounts();
+        fetchUnreadCounts();
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -176,7 +168,7 @@ export function useUnreadMessages() {
         table: 'messages',
         filter: `recipient_id=eq.${user.id}`
       }, () => {
-        debouncedFetchUnreadCounts();
+        fetchUnreadCounts();
       })
       .subscribe();
 
@@ -201,7 +193,7 @@ export function useUnreadMessages() {
           });
         }
         
-        debouncedFetchUnreadCounts();
+        fetchUnreadCounts();
       })
       .subscribe();
 
@@ -231,7 +223,7 @@ export function useUnreadMessages() {
             sound: 'beep'
           });
           
-          debouncedFetchUnreadCounts();
+          fetchUnreadCounts();
         }
       })
       .subscribe();
@@ -269,7 +261,7 @@ export function useUnreadMessages() {
             sound: 'chime'
           });
           
-          debouncedFetchUnreadCounts();
+          fetchUnreadCounts();
         }
       })
       .subscribe();
@@ -289,18 +281,13 @@ export function useUnreadMessages() {
   };
 
   async function fetchUnreadCounts() {
-    if (!user?.id || !isInitialized) return;
+    if (!user?.id || !hasInitialized) return;
 
     try {
       console.log('📊 Fetching unread counts for user:', user.id);
       await sequentialLoadUnreadCounts();
     } catch (error) {
       console.error('❌ Error fetching unread counts:', error);
-      // Handle rate limiting gracefully
-      if (error.message?.includes('429') || error.message?.includes('rate limit')) {
-        console.log('⚠️ Rate limited, will retry later');
-        return;
-      }
     }
   }
 
@@ -311,6 +298,6 @@ export function useUnreadMessages() {
     taskCount,
     sharedTaskCount,
     perContactUnread,
-    refetch: debouncedFetchUnreadCounts
+    refetch: fetchUnreadCounts
   };
 }

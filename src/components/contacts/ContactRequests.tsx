@@ -1,168 +1,204 @@
 
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Check, X, Shield } from "lucide-react";
-import { 
-  getContactRequests, 
-  acceptContactRequest, 
-  rejectContactRequest, 
-  blockContact 
-} from "@/services/contactsService";
-import { useAuth } from "@/contexts/AuthContext";
-import { useTranslation } from "@/utils/translations";
-import { toast } from "sonner";
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Check, X, UserPlus } from 'lucide-react';
+import { toast } from 'sonner';
+import { useTheme } from '@/providers/ThemeProvider';
+
+interface ContactRequest {
+  id: string;
+  user_id: string;
+  contact_id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  user: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string;
+  };
+}
 
 export function ContactRequests() {
   const { user } = useAuth();
-  const { t } = useTranslation();
-  const [requests, setRequests] = useState([]);
+  const { language } = useTheme();
+  const [requests, setRequests] = useState<ContactRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const t = {
+    en: {
+      contactRequests: "Contact Requests",
+      noRequests: "No pending requests",
+      accept: "Accept",
+      reject: "Reject",
+      from: "From",
+      requestedAt: "Requested",
+    },
+    ar: {
+      contactRequests: "طلبات الاتصال",
+      noRequests: "لا توجد طلبات معلقة",
+      accept: "قبول",
+      reject: "رفض",
+      from: "من",
+      requestedAt: "طُلب في",
+    }
+  }[language];
+
+  useEffect(() => {
+    if (user) {
+      fetchRequests();
+    }
+  }, [user]);
+
   const fetchRequests = async () => {
-    if (!user?.id) return;
+    if (!user) return;
 
     try {
-      setLoading(true);
-      const requestsData = await getContactRequests(user.id);
-      setRequests(requestsData);
+      const { data, error } = await supabase
+        .from('contacts')
+        .select(`
+          *,
+          user:profiles!contacts_user_id_fkey(
+            id,
+            username,
+            display_name,
+            avatar_url
+          )
+        `)
+        .eq('contact_id', user.id)
+        .eq('status', 'pending');
+
+      if (error) throw error;
+      setRequests(data || []);
     } catch (error) {
-      console.error("Error fetching contact requests:", error);
-      toast.error(t("contacts.errorLoadingRequests"));
+      console.error('Error fetching requests:', error);
+      toast.error('Failed to fetch contact requests');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchRequests();
-  }, [user?.id]);
-
-  const handleAcceptRequest = async (requestId: string) => {
-    if (!user?.id) return;
+  const handleAcceptRequest = async (requestId: string, userId: string) => {
+    if (!user) return;
 
     try {
-      await acceptContactRequest(requestId, user.id);
-      toast.success(t("contacts.requestAccepted"));
-      fetchRequests();
+      // Update the request status
+      const { error: updateError } = await supabase
+        .from('contacts')
+        .update({ status: 'accepted' })
+        .eq('id', requestId);
+
+      if (updateError) throw updateError;
+
+      // Create the reverse relationship
+      const { error: insertError } = await supabase
+        .from('contacts')
+        .insert({
+          user_id: user.id,
+          contact_id: userId,
+          status: 'accepted'
+        });
+
+      if (insertError) throw insertError;
+
+      setRequests(prev => prev.filter(r => r.id !== requestId));
+      toast.success('Contact request accepted');
     } catch (error) {
-      console.error("Error accepting request:", error);
-      toast.error(t("contacts.errorAcceptingRequest"));
+      console.error('Error accepting request:', error);
+      toast.error('Failed to accept request');
     }
   };
 
   const handleRejectRequest = async (requestId: string) => {
-    try {
-      await rejectContactRequest(requestId);
-      toast.success(t("contacts.requestRejected"));
-      fetchRequests();
-    } catch (error) {
-      console.error("Error rejecting request:", error);
-      toast.error(t("contacts.errorRejectingRequest"));
-    }
-  };
-
-  const handleBlockUser = async (requestId: string, userId: string) => {
-    if (!user?.id) return;
+    if (!user) return;
 
     try {
-      await rejectContactRequest(requestId);
-      await blockContact(userId, user.id);
-      toast.success(t("contacts.userBlocked"));
-      fetchRequests();
+      const { error } = await supabase
+        .from('contacts')
+        .update({ status: 'rejected' })
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      setRequests(prev => prev.filter(r => r.id !== requestId));
+      toast.success('Contact request rejected');
     } catch (error) {
-      console.error("Error blocking user:", error);
-      toast.error(t("contacts.errorBlockingUser"));
+      console.error('Error rejecting request:', error);
+      toast.error('Failed to reject request');
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <div className="text-center py-8">Loading requests...</div>;
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 mb-6">
-        <h2 className="text-xl font-semibold">{t("contacts.contactRequests")}</h2>
-        {requests.length > 0 && (
-          <Badge variant="secondary">{requests.length}</Badge>
-        )}
-      </div>
-
-      {requests.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground text-lg">{t("contacts.noContactRequests")}</p>
-          <p className="text-sm text-muted-foreground mt-2">{t("contacts.waitingForRequests")}</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {requests.map((request: any) => (
-            <Card key={request.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage src={request.profiles?.avatar_url} alt={request.profiles?.display_name} />
-                      <AvatarFallback>
-                        {request.profiles?.display_name?.charAt(0)?.toUpperCase() || request.profiles?.username?.charAt(0)?.toUpperCase() || "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h3 className="font-semibold text-sm">
-                        {request.profiles?.display_name || request.profiles?.username || "Unknown User"}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        @{request.profiles?.username || "unknown"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(request.created_at).toLocaleDateString()}
-                      </p>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UserPlus className="h-5 w-5" />
+          {t.contactRequests}
+        </CardTitle>
+        <CardDescription>
+          Pending contact requests
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {requests.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            {t.noRequests}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {requests.map((request) => (
+              <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Avatar>
+                    <AvatarImage src={request.user.avatar_url} />
+                    <AvatarFallback>
+                      {request.user.display_name?.charAt(0) || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="font-medium">{request.user.display_name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      @{request.user.username}
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAcceptRequest(request.id)}
-                      className="text-green-600 hover:text-green-700"
-                    >
-                      <Check className="h-4 w-4 mr-1" />
-                      {t("common.accept")}
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRejectRequest(request.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      {t("common.reject")}
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleBlockUser(request.id, request.user_id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Shield className="h-4 w-4 mr-1" />
-                      {t("contacts.blockUser")}
-                    </Button>
+                    <Badge variant="secondary" className="text-xs">
+                      {t.requestedAt} {new Date(request.created_at).toLocaleDateString()}
+                    </Badge>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAcceptRequest(request.id, request.user_id)}
+                    className="text-green-600 hover:text-green-700"
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    {t.accept}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRejectRequest(request.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    {t.reject}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

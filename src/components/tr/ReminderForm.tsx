@@ -1,225 +1,202 @@
 
-import React, { useState, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import React, { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { useTheme } from '@/providers/ThemeProvider';
-import { t } from '@/utils/translations';
-import { TRService, TRReminder } from '@/services/trService';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Calendar, Clock, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Updated schema to make due_date optional
-const reminderSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
-  due_date: z.string().optional(), // Made optional
-  due_time: z.string().optional(),
-});
-
-type ReminderFormData = z.infer<typeof reminderSchema>;
+import { trService } from '@/services/trService';
 
 interface ReminderFormProps {
-  isOpen: boolean;
-  onClose: () => void;
-  reminder?: TRReminder | null;
-  onReminderSaved: () => void;
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
-export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: ReminderFormProps) {
-  const { language } = useTheme();
-  const [isLoading, setIsLoading] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    control,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm<ReminderFormData>({
-    resolver: zodResolver(reminderSchema),
-    defaultValues: {
-      title: '',
-      description: '',
-      due_date: '',
-      due_time: '',
-    },
+export function ReminderForm({ onSuccess, onCancel }: ReminderFormProps) {
+  const { user } = useAuth();
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    reminder_time: '',
+    reminder_date: '',
+    is_recurring: false,
+    recurrence_pattern: 'daily',
+    is_active: true,
   });
+  const [loading, setLoading] = useState(false);
 
-  const watchedDueDate = watch('due_date');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
 
-  useEffect(() => {
-    if (reminder) {
-      reset({
-        title: reminder.title,
-        description: reminder.description || '',
-        due_date: reminder.due_date || '',
-        due_time: reminder.due_time || '',
-      });
-    } else {
-      reset({
-        title: '',
-        description: '',
-        due_date: '',
-        due_time: '',
-      });
+    if (!formData.title.trim()) {
+      toast.error('Please enter a title');
+      return;
     }
-  }, [reminder, reset]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      reset();
+    if (!formData.reminder_date || !formData.reminder_time) {
+      toast.error('Please select date and time');
+      return;
     }
-  }, [isOpen, reset]);
 
-  const onSubmit = async (data: ReminderFormData) => {
-    setIsLoading(true);
     try {
-      // Prepare data for service - ensure title is always provided
+      setLoading(true);
+      
+      // Combine date and time
+      const reminderDateTime = `${formData.reminder_date}T${formData.reminder_time}:00`;
+      
       const reminderData = {
-        title: data.title, // Required field
-        description: data.description || undefined,
-        due_date: data.due_date || undefined,
-        due_time: data.due_time || undefined,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        reminder_time: reminderDateTime,
+        is_recurring: formData.is_recurring,
+        recurrence_pattern: formData.is_recurring ? formData.recurrence_pattern : null,
+        is_active: formData.is_active,
       };
 
-      if (reminder) {
-        await TRService.updateReminder(reminder.id, reminderData);
-        toast.success(t('reminderUpdatedSuccessfully', language));
-      } else {
-        await TRService.createReminder(reminderData);
-        toast.success(t('reminderCreatedSuccessfully', language));
-      }
+      await trService.createReminder(user.id, reminderData);
       
-      onReminderSaved();
-      onClose();
+      toast.success('Reminder created successfully');
+      
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        reminder_time: '',
+        reminder_date: '',
+        is_recurring: false,
+        recurrence_pattern: 'daily',
+        is_active: true,
+      });
+      
+      onSuccess?.();
     } catch (error) {
-      console.error('Error saving reminder:', error);
-      toast.error(reminder ? t('failedToUpdateReminder', language) : t('failedToCreateReminder', language));
+      console.error('Error creating reminder:', error);
+      toast.error('Failed to create reminder');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {reminder ? t('editReminder', language) : t('createReminder', language)}
-          </DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Title */}
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Plus className="h-5 w-5" />
+          New Reminder
+        </CardTitle>
+        <CardDescription>
+          Create a new reminder to keep track of important events
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="title">{t('title', language)} *</Label>
+            <Label htmlFor="title">Title *</Label>
             <Input
               id="title"
-              {...register('title')}
-              placeholder={t('enterReminderTitle', language)}
-              className={errors.title ? 'border-destructive' : ''}
+              placeholder="Enter reminder title"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              required
             />
-            {errors.title && (
-              <p className="text-sm text-destructive">{errors.title.message}</p>
-            )}
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">{t('description', language)}</Label>
+            <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
-              {...register('description')}
-              placeholder={t('enterReminderDescription', language)}
+              placeholder="Enter reminder description (optional)"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
             />
           </div>
 
-          {/* Due Date - Now Optional */}
-          <div className="space-y-2">
-            <Label htmlFor="due_date">{t('dueDate', language)} {language === 'ar' ? '(اختياري)' : '(optional)'}</Label>
-            <Controller
-              name="due_date"
-              control={control}
-              render={({ field }) => (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? (
-                        format(new Date(field.value), "PPP")
-                      ) : (
-                        <span>{t('selectDate', language)}</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value ? new Date(field.value) : undefined}
-                      onSelect={(date) => {
-                        field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              )}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="reminder_date">Date *</Label>
+              <Input
+                id="reminder_date"
+                type="date"
+                value={formData.reminder_date}
+                onChange={(e) => setFormData(prev => ({ ...prev, reminder_date: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reminder_time">Time *</Label>
+              <Input
+                id="reminder_time"
+                type="time"
+                value={formData.reminder_time}
+                onChange={(e) => setFormData(prev => ({ ...prev, reminder_time: e.target.value }))}
+                required
+              />
+            </div>
           </div>
 
-          {/* Due Time - Only show if date is selected */}
-          {watchedDueDate && (
-            <div className="space-y-2">
-              <Label htmlFor="due_time">{t('dueTime', language)}</Label>
-              <Input
-                id="due_time"
-                type="time"
-                {...register('due_time')}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="is_recurring"
+                checked={formData.is_recurring}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_recurring: checked }))}
               />
+              <Label htmlFor="is_recurring">Recurring reminder</Label>
+            </div>
+          </div>
+
+          {formData.is_recurring && (
+            <div className="space-y-2">
+              <Label htmlFor="recurrence_pattern">Recurrence Pattern</Label>
+              <Select
+                value={formData.recurrence_pattern}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, recurrence_pattern: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select recurrence pattern" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           )}
 
-          {/* Form Actions */}
-          <div className="flex gap-2 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-            >
-              {t('cancel', language)}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="is_active"
+                checked={formData.is_active}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
+              />
+              <Label htmlFor="is_active">Active reminder</Label>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={loading} className="flex-1">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Reminder
             </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="flex-1"
-            >
-              {isLoading 
-                ? (reminder ? t('updating', language) : t('creating', language))
-                : (reminder ? t('update', language) : t('create', language))
-              }
-            </Button>
+            {onCancel && (
+              <Button type="button" variant="outline" onClick={onCancel}>
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            )}
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </CardContent>
+    </Card>
   );
 }
