@@ -1,162 +1,121 @@
 
-import { useState } from "react";
-import { UserPlus, UserX } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getBlockedContacts, unblockContact, sendContactRequest } from "@/services/contactsService";
-import { LoadingSpinner } from "@/components/ui/loading";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { ShieldOff, Shield } from "lucide-react";
+import { 
+  getBlockedContacts, 
+  unblockContact 
+} from "@/services/contactsService";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/utils/translations";
 import { toast } from "sonner";
 
-type UserProfile = {
-  display_name?: string;
-  username?: string;
-  avatar_url?: string;
-  [key: string]: any;
-};
+export function BlockedUsers() {
+  const { user } = useAuth();
+  const { t } = useTranslation();
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-type BlockedUserType = {
-  id: string;
-  contact_id: string;
-  profiles?: UserProfile;
-  [key: string]: any;
-};
+  const fetchBlockedUsers = async () => {
+    if (!user?.id) return;
 
-interface BlockedUsersProps {
-  onUnblockSuccess?: () => void;
-}
+    try {
+      setLoading(true);
+      const blockedData = await getBlockedContacts(user.id);
+      setBlockedUsers(blockedData);
+    } catch (error) {
+      console.error("Error fetching blocked users:", error);
+      toast.error(t("contacts.errorLoadingBlockedUsers"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-export function BlockedUsers({ onUnblockSuccess }: BlockedUsersProps) {
-  const { language } = useTheme();
-  const queryClient = useQueryClient();
-  
-  // Fetch blocked contacts
-  const { data: blockedUsers, isLoading, isError, error } = useQuery({
-    queryKey: ['blockedContacts'],
-    queryFn: getBlockedContacts,
-  });
+  useEffect(() => {
+    fetchBlockedUsers();
+  }, [user?.id]);
 
-  // Unblock contact mutation
-  const unblockContactMutation = useMutation({
-    mutationFn: (contactId: string) => unblockContact(contactId),
-    onSuccess: (result, contactId) => {
-      // Show success message
-      toast.success(t("contactUnblocked", language));
-      
-      // After unblocking, automatically send a contact request to add them back to contacts
-      addToContactsMutation.mutate(contactId);
-      
-      // Invalidate both blocked contacts and regular contacts queries
-      queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-    },
-    onError: (error) => {
+  const handleUnblockUser = async (contactId: string) => {
+    if (!user?.id) return;
+
+    try {
+      await unblockContact(contactId, user.id);
+      toast.success(t("contacts.contactUnblocked"));
+      fetchBlockedUsers();
+    } catch (error) {
       console.error("Error unblocking contact:", error);
-      toast.error(t("errorUnblockingContact", language));
+      toast.error(t("contacts.errorUnblockingContact"));
     }
-  });
-
-  // Add to contacts mutation
-  const addToContactsMutation = useMutation({
-    mutationFn: (contactId: string) => sendContactRequest(contactId),
-    onSuccess: () => {
-      toast.success(t("userUnblockedDescription", language));
-      
-      // Invalidate contacts query to show the updated list
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      
-      // Switch to contacts tab after successful unblock
-      if (onUnblockSuccess) {
-        onUnblockSuccess();
-      }
-    },
-    onError: (error) => {
-      console.error("Error adding contact after unblock:", error);
-      // Even if adding back to contacts fails, we still switch tabs because the unblock was successful
-      if (onUnblockSuccess) {
-        onUnblockSuccess();
-      }
-    }
-  });
-
-  const handleUnblock = (contactId: string) => {
-    unblockContactMutation.mutate(contactId);
   };
 
-  const getInitials = (name: string) => {
-    if (!name) return "??";
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="flex justify-center items-center p-10">
-        <LoadingSpinner size="lg" />
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
 
-  if (isError) {
-    return (
-      <Card className="p-6 text-center text-muted-foreground">
-        <p>{t("errorLoadingBlockedUsers", language)}</p>
-        <p className="text-sm mt-2">{(error as Error)?.message}</p>
-      </Card>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      {!blockedUsers || blockedUsers.length === 0 ? (
-        <Card className="p-6">
-          <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
-            <UserX className="h-12 w-12 opacity-50" />
-            <p className="font-medium text-lg">{t("noBlockedUsers", language)}</p>
-            <p className="text-sm">{t("noBlockedUsersDescription", language)}</p>
-          </div>
-        </Card>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 mb-6">
+        <Shield className="h-5 w-5" />
+        <h2 className="text-xl font-semibold">المستخدمون المحظورون</h2>
+        {blockedUsers.length > 0 && (
+          <Badge variant="destructive">{blockedUsers.length}</Badge>
+        )}
+      </div>
+
+      {blockedUsers.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground text-lg">{t("contacts.noBlockedUsers")}</p>
+          <p className="text-sm text-muted-foreground mt-2">{t("contacts.noBlockedUsersDescription")}</p>
+        </div>
       ) : (
-        blockedUsers.map((user: BlockedUserType) => {
-          const userProfile = user.profiles || {} as UserProfile;
-          const displayName = userProfile.display_name || userProfile.username || "Unknown User";
-          const username = userProfile.username || "user";
-          
-          return (
-            <Card key={user.id} className="overflow-hidden border-destructive/30">
+        <div className="space-y-4">
+          {blockedUsers.map((user: any) => (
+            <Card key={user.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={userProfile.avatar_url || ""} />
-                      <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+                  <div className="flex items-center space-x-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={user.profiles?.avatar_url} alt={user.profiles?.display_name} />
+                      <AvatarFallback>
+                        {user.profiles?.display_name?.charAt(0)?.toUpperCase() || user.profiles?.username?.charAt(0)?.toUpperCase() || "?"}
+                      </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{displayName}</p>
-                      <p className="text-sm text-muted-foreground">@{username}</p>
+                      <h3 className="font-semibold text-sm">
+                        {user.profiles?.display_name || user.profiles?.username || "Unknown User"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        @{user.profiles?.username || "unknown"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        محظور في {new Date(user.created_at).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => handleUnblock(user.contact_id)}
-                    disabled={unblockContactMutation.isPending || addToContactsMutation.isPending}
-                    className="flex gap-1"
-                  >
-                    {(unblockContactMutation.isPending || addToContactsMutation.isPending) ? (
-                      <LoadingSpinner size="sm" className="mr-2" />
-                    ) : (
-                      <UserPlus className="h-4 w-4 mr-1" />
-                    )}
-                    {t("unblock", language)}
-                  </Button>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleUnblockUser(user.contact_id)}
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      <ShieldOff className="h-4 w-4 mr-1" />
+                      {t("contacts.unblockUser")}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          );
-        })
+          ))}
+        </div>
       )}
     </div>
   );

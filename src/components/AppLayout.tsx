@@ -13,13 +13,9 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, isLoading } = useAuth();
   
-  // Only initialize unread messages when user is authenticated and not loading
-  const shouldInitializeUnreadMessages = user && !isLoading;
-  
-  // Initialize the unified notification system only when ready
-  if (shouldInitializeUnreadMessages) {
-    useUnreadMessages();
-  }
+  // Initialize the unified notification system when user is ready
+  // This prevents the conditional hooks issue
+  const unreadMessages = useUnreadMessages();
 
   return (
     <ProtectedRoute>

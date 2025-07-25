@@ -1,232 +1,161 @@
-import { useState, useRef, useEffect } from "react";
-import { Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
-import { toast } from "sonner";
-import { searchUsers, sendContactRequest, checkIfUserInContacts } from "@/services/contactsService";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { LoadingSpinner } from "@/components/ui/loading";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Search, UserPlus, UserCheck } from "lucide-react";
+import { 
+  searchUsers, 
+  checkIfUserInContacts, 
+  sendContactRequest 
+} from "@/services/contactsService";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/utils/translations";
+import { toast } from "sonner";
 
 export function ContactSearch() {
-  const { language } = useTheme();
+  const { user } = useAuth();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const queryClient = useQueryClient();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [contactStatus, setContactStatus] = useState<Record<string, boolean>>({});
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [contactStatuses, setContactStatuses] = useState<{[key: string]: boolean}>({});
 
-  // Search users query
-  const { 
-    data: searchResults, 
-    refetch: performSearch, 
-    isLoading: isSearchLoading
-  } = useQuery({
-    queryKey: ['searchUsers', searchQuery],
-    queryFn: () => searchUsers(searchQuery),
-    enabled: false,
-  });
+  const handleSearch = async () => {
+    if (!user?.id) return;
+    
+    if (searchQuery.trim().length < 3) {
+      toast.error(t("contacts.enterAtLeastThreeCharacters"));
+      return;
+    }
 
-  // Send contact request mutation
-  const sendRequestMutation = useMutation({
-    mutationFn: (userId: string) => sendContactRequest(userId),
-    onSuccess: () => {
-      toast.success(t("requestSent", language));
+    try {
+      setLoading(true);
+      const results = await searchUsers(searchQuery.trim(), user.id);
+      setSearchResults(results);
+
+      // Check contact status for each result
+      const statuses: {[key: string]: boolean} = {};
+      for (const result of results) {
+        const isInContacts = await checkIfUserInContacts(result.id, user.id);
+        statuses[result.id] = isInContacts;
+      }
+      setContactStatuses(statuses);
+    } catch (error) {
+      console.error("Error searching users:", error);
+      toast.error("خطأ في البحث");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendRequest = async (userId: string) => {
+    if (!user?.id) return;
+
+    try {
+      await sendContactRequest(userId, user.id);
+      toast.success(t("contacts.requestSent"));
       
-      // Invalidate queries that might be affected
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
-      
-      // Update contact status for this user
-      setContactStatus(prev => {
-        const updatedStatus = { ...prev };
-        // Set the status to true for the user that was just added
-        if (searchResults) {
-          searchResults.forEach(user => {
-            if (sendRequestMutation.variables === user.id) {
-              updatedStatus[user.id] = true;
-            }
-          });
-        }
-        return updatedStatus;
-      });
-    },
-    onError: (error) => {
+      // Update the contact status
+      setContactStatuses(prev => ({
+        ...prev,
+        [userId]: true
+      }));
+    } catch (error) {
       console.error("Error sending contact request:", error);
-      toast.error(t("errorSendingRequest", language));
+      toast.error(t("contacts.errorSendingRequest"));
     }
-  });
-
-  const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-    
-    if (value.length >= 3) {
-      setIsSearching(true);
-      await performSearch();
-    } else {
-      setIsSearching(false);
-    }
-  };
-
-  const handleSearchSubmit = async () => {
-    if (searchQuery.length >= 3) {
-      setIsSearching(true);
-      await performSearch();
-      
-      // Reset contact status
-      setContactStatus({});
-      
-      // Check contact status for each search result
-      if (searchResults) {
-        const statusChecks = searchResults.map(async (user) => {
-          try {
-            const isContact = await checkIfUserInContacts(user.id);
-            setContactStatus(prev => ({
-              ...prev,
-              [user.id]: isContact
-            }));
-          } catch (err) {
-            console.error(`Error checking contact status for ${user.id}:`, err);
-          }
-        });
-        
-        await Promise.all(statusChecks);
-      }
-    } else if (searchQuery.length > 0) {
-      toast.info(t("enterAtLeastThreeCharacters", language));
-    }
-  };
-
-  // Check contact status when search results are updated
-  useEffect(() => {
-    const checkContactsStatus = async () => {
-      if (!searchResults) return;
-      
-      for (const user of searchResults) {
-        try {
-          const isContact = await checkIfUserInContacts(user.id);
-          setContactStatus(prev => ({
-            ...prev,
-            [user.id]: isContact
-          }));
-        } catch (err) {
-          console.error(`Error checking contact status for ${user.id}:`, err);
-        }
-      }
-    };
-    
-    if (searchResults && searchResults.length > 0) {
-      checkContactsStatus();
-    }
-  }, [searchResults]);
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSearchSubmit();
-    }
-  };
-
-  const handleSendRequest = (userId: string) => {
-    sendRequestMutation.mutate(userId);
-  };
-
-  const getInitials = (name: string) => {
-    if (!name) return "??";
-    return name.substring(0, 2).toUpperCase();
   };
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={t("searchContacts", language)}
-            className="pl-9"
-            value={searchQuery}
-            onChange={handleSearch}
-            onKeyPress={handleKeyPress}
-            ref={inputRef}
-          />
-        </div>
-        <Button 
-          onClick={handleSearchSubmit}
-          disabled={searchQuery.length < 1}
-          size="sm"
-        >
-          {t("search", language)}
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            {t("contacts.searchContacts")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Input
+              placeholder={t("contacts.searchContacts")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            />
+            <Button onClick={handleSearch} disabled={loading}>
+              {loading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Informational note */}
-      <p className="text-xs text-muted-foreground mt-2 text-center">
-        {language === 'ar' 
-          ? 'يجب أن يكون كلا المستخدمين في قائمة جهات الاتصال لدى الآخر لتبادل الرسائل'
-          : 'Both users must be in each other\'s contact list to exchange messages'
-        }
-      </p>
-
-      {isSearching && isSearchLoading && (
-        <div className="flex justify-center items-center py-8">
-          <LoadingSpinner size="md" />
-        </div>
-      )}
-
-      {isSearching && !isSearchLoading && searchResults && searchResults.length > 0 && (
-        <div className="mt-4">
-          <Separator className="my-2" />
-          <p className="text-sm text-muted-foreground mb-2">{t("searchResults", language)}</p>
-          <div className="space-y-2">
-            {searchResults.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-2 hover:bg-muted rounded-md">
-                <div className="flex items-center gap-2">
-                  <Avatar>
-                    <AvatarImage src={user.avatar_url || ""} />
-                    <AvatarFallback>{getInitials(user.display_name || user.username)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{user.display_name}</p>
-                    <p className="text-xs text-muted-foreground">@{user.username}</p>
-                    {/* Check if email exists before rendering it */}
-                    {user.email && (
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
+      {searchResults.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="font-semibold">{t("contacts.searchResults")}</h3>
+          {searchResults.map((user: any) => (
+            <Card key={user.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={user.avatar_url} alt={user.display_name} />
+                      <AvatarFallback>
+                        {user.display_name?.charAt(0)?.toUpperCase() || user.username?.charAt(0)?.toUpperCase() || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="font-semibold text-sm">
+                        {user.display_name || user.username || "Unknown User"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        @{user.username || "unknown"}
+                      </p>
+                      {user.email && (
+                        <p className="text-xs text-muted-foreground">
+                          {user.email}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {contactStatuses[user.id] ? (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <UserCheck className="h-3 w-3" />
+                        {t("contacts.alreadyInContacts")}
+                      </Badge>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSendRequest(user.id)}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        <UserPlus className="h-4 w-4 mr-1" />
+                        {t("contacts.sendRequest")}
+                      </Button>
                     )}
                   </div>
                 </div>
-                {contactStatus[user.id] ? (
-                  <Badge variant="secondary" className="px-3 py-1">
-                    {t("alreadyInContacts", language)}
-                  </Badge>
-                ) : (
-                  <Button 
-                    onClick={() => handleSendRequest(user.id)}
-                    disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
-                    size="sm"
-                  >
-                    {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
-                      <LoadingSpinner size="sm" className="mr-2" />
-                    ) : null}
-                    {t("sendRequest", language)}
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      {isSearching && !isSearchLoading && searchResults && searchResults.length === 0 && (
-        <div className="mt-4 text-center text-muted-foreground p-4">
-          <p>{t("noUsersFound", language)}</p>
+      {searchQuery.trim().length >= 3 && searchResults.length === 0 && !loading && (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">{t("contacts.noUsersFound")}</p>
         </div>
       )}
-    </Card>
+    </div>
   );
 }

@@ -49,11 +49,11 @@ export function useUnreadMessages() {
   };
 
   const initializeUnreadCounts = async () => {
-    if (!user) return;
+    if (!user?.id) return;
 
     try {
-      // Use batched loading instead of progressive loading
-      await batchLoadUnreadCounts();
+      // Use sequential loading instead of batched loading
+      await sequentialLoadUnreadCounts();
       setupRealtimeSubscriptions();
     } catch (error) {
       console.error('❌ Error initializing unread counts:', error);
@@ -67,62 +67,54 @@ export function useUnreadMessages() {
     }
   };
 
-  // BATCHED API CALLS - Combines 4 separate API calls into 1 Promise.all
-  const batchLoadUnreadCounts = async () => {
-    if (!user) return;
+  // SEQUENTIAL API CALLS - Converts 5 simultaneous calls to sequential calls
+  const sequentialLoadUnreadCounts = async () => {
+    if (!user?.id) return;
 
-    console.log('📊 Starting batched loading of unread counts');
+    console.log('📊 Starting sequential loading of unread counts');
 
     try {
-      // Batch all unread count queries into single Promise.all
-      const [
-        { count: messageCount },
-        { data: perContactData },
-        { count: contactRequestCount },
-        { count: eventRsvpCount },
-        { count: sharedTaskResponseCount }
-      ] = await Promise.all([
-        // Messages count
-        supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('recipient_id', user.id)
-          .eq('is_read', false),
-        
-        // Per-contact message breakdown
-        supabase
-          .from('messages')
-          .select('sender_id')
-          .eq('recipient_id', user.id)
-          .eq('is_read', false),
-        
-        // Contact requests
-        supabase
-          .from('contacts')
-          .select('*', { count: 'exact', head: true })
-          .eq('contact_id', user.id)
-          .eq('status', 'pending'),
-        
-        // Event RSVPs
-        supabase
-          .from('maw3d_rsvps')
-          .select(`
-            *,
-            maw3d_events!inner(created_by)
-          `, { count: 'exact', head: true })
-          .eq('maw3d_events.created_by', user.id)
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
-        
-        // Shared task responses
-        supabase
-          .from('tr_shared_responses')
-          .select(`
-            *,
-            tr_tasks!inner(user_id)
-          `, { count: 'exact', head: true })
-          .eq('tr_tasks.user_id', user.id)
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-      ]);
+      // Load counts one by one to prevent auth request stampede
+      console.log('🔄 Loading messages count...');
+      const { count: messageCount } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('recipient_id', user.id)
+        .eq('is_read', false);
+
+      console.log('🔄 Loading per-contact breakdown...');
+      const { data: perContactData } = await supabase
+        .from('messages')
+        .select('sender_id')
+        .eq('recipient_id', user.id)
+        .eq('is_read', false);
+
+      console.log('🔄 Loading contact requests...');
+      const { count: contactRequestCount } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', user.id)
+        .eq('status', 'pending');
+
+      console.log('🔄 Loading event RSVPs...');
+      const { count: eventRsvpCount } = await supabase
+        .from('maw3d_rsvps')
+        .select(`
+          *,
+          maw3d_events!inner(created_by)
+        `, { count: 'exact', head: true })
+        .eq('maw3d_events.created_by', user.id)
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+      console.log('🔄 Loading shared task responses...');
+      const { count: sharedTaskResponseCount } = await supabase
+        .from('tr_shared_responses')
+        .select(`
+          *,
+          tr_tasks!inner(user_id)
+        `, { count: 'exact', head: true })
+        .eq('tr_tasks.user_id', user.id)
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
       // Process per-contact unread counts
       const perContactCounts: Record<string, number> = {};
@@ -138,7 +130,7 @@ export function useUnreadMessages() {
       setSharedTaskCount(sharedTaskResponseCount || 0);
       setTaskCount(0);
 
-      console.log('✅ Batched unread counts loaded:', {
+      console.log('✅ Sequential unread counts loaded:', {
         messages: messageCount,
         contacts: contactRequestCount,
         events: eventRsvpCount,
@@ -146,13 +138,13 @@ export function useUnreadMessages() {
       });
 
     } catch (error) {
-      console.error('❌ Error in batched loading:', error);
+      console.error('❌ Error in sequential loading:', error);
       throw error;
     }
   };
 
   const setupRealtimeSubscriptions = () => {
-    if (!user || !isInitialized) return;
+    if (!user?.id || !isInitialized) return;
 
     console.log('🔄 Setting up real-time subscriptions');
 
@@ -297,11 +289,11 @@ export function useUnreadMessages() {
   };
 
   async function fetchUnreadCounts() {
-    if (!user || !isInitialized) return;
+    if (!user?.id || !isInitialized) return;
 
     try {
       console.log('📊 Fetching unread counts for user:', user.id);
-      await batchLoadUnreadCounts();
+      await sequentialLoadUnreadCounts();
     } catch (error) {
       console.error('❌ Error fetching unread counts:', error);
       // Handle rate limiting gracefully

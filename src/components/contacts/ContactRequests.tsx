@@ -1,281 +1,167 @@
 
-import { useState, useEffect } from "react";
-import { Check, X, User, UserCog } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getContactRequests, acceptContactRequest, rejectContactRequest, blockContact } from "@/services/contactsService";
-import { LoadingSpinner } from "@/components/ui/loading";
-import { formatDistanceToNow } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
+import { Check, X, Shield } from "lucide-react";
+import { 
+  getContactRequests, 
+  acceptContactRequest, 
+  rejectContactRequest, 
+  blockContact 
+} from "@/services/contactsService";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "@/utils/translations";
 import { toast } from "sonner";
 
 export function ContactRequests() {
-  const { language } = useTheme();
-  const queryClient = useQueryClient();
-  
-  // Fetch contact requests with refetch enabled and staleTime set to 0 to always fetch fresh data
-  const { data: requests, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['contactRequests'],
-    queryFn: getContactRequests,
-    staleTime: 0, // Consider data immediately stale to force refetch
-    refetchOnMount: true, // Always refetch on mount
-  });
+  const { user } = useAuth();
+  const { t } = useTranslation();
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Force refetch on mount to ensure we have fresh data
-  useEffect(() => {
-    console.log("ContactRequests mounted - forcing data refresh");
-    refetch();
-  }, [refetch]);
+  const fetchRequests = async () => {
+    if (!user?.id) return;
 
-  // Debug log the requests data whenever it changes
-  useEffect(() => {
-    console.log("Current requests data:", requests);
-    if (requests?.length) {
-      requests.forEach((req, index) => {
-        console.log(`Request ${index + 1}:`, {
-          id: req.id, 
-          user_id: req.user_id,
-          status: req.status,
-          created_at: req.created_at,
-          profiles: req.profiles
-        });
-      });
-    }
-  }, [requests]);
-
-  // Accept contact request mutation
-  const acceptRequestMutation = useMutation({
-    mutationFn: (requestId: string) => {
-      // Add validation and debug logging
-      if (!requestId) {
-        console.error("Attempted to accept with undefined requestId");
-        throw new Error("Request ID is undefined");
-      }
-      
-      console.log("Accepting request with ID:", requestId);
-      return acceptContactRequest(requestId);
-    },
-    onSuccess: (data) => {
-      console.log("Accept request succeeded:", data);
-      
-      // Show a success toast with auto-dismiss after 2 seconds
-      toast.success(t("requestAccepted", language), { 
-        duration: 2000,
-        position: 'bottom-center'
-      });
-      
-      // Invalidate queries to refresh the contacts list and requests list
-      queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-    },
-    onError: (error) => {
-      console.error("Error accepting request:", error);
-      toast.error(`${t("errorAcceptingRequest", language)}: ${error.message || 'Unknown error'}`);
-    }
-  });
-
-  // Reject contact request mutation
-  const rejectRequestMutation = useMutation({
-    mutationFn: (requestId: string) => {
-      if (!requestId) {
-        console.error("Attempted to reject with undefined requestId");
-        throw new Error("Request ID is undefined");
-      }
-      
-      console.log("Rejecting request with ID:", requestId);
-      return rejectContactRequest(requestId);
-    },
-    onSuccess: () => {
-      toast.success(t("requestRejected", language), { 
-        duration: 2000,
-        position: 'bottom-center'
-      });
-      queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
-    },
-    onError: (error) => {
-      console.error("Error rejecting request:", error);
-      toast.error(`${t("errorRejectingRequest", language)}: ${error.message || 'Unknown error'}`);
-    }
-  });
-
-  // Block user mutation
-  const blockUserMutation = useMutation({
-    mutationFn: (userId: string) => {
-      if (!userId) {
-        console.error("Attempted to block with undefined userId");
-        throw new Error("User ID is undefined");
-      }
-      
-      console.log("Blocking user with ID:", userId);
-      return blockContact(userId);
-    },
-    onSuccess: () => {
-      toast.success(t("contactBlocked", language), { 
-        duration: 2000,
-        position: 'bottom-center'
-      });
-      queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
-      queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
-    },
-    onError: (error) => {
-      console.error("Error blocking user:", error);
-      toast.error(`${t("errorBlockingUser", language)}: ${error.message || 'Unknown error'}`);
-    }
-  });
-
-  const handleAccept = (requestId: string | undefined) => {
-    // Added safety check
-    if (!requestId) {
-      console.error("Cannot accept request: requestId is undefined");
-      toast.error(t("errorAcceptingRequest", language));
-      return;
-    }
-
-    console.log("Accept button clicked with requestId:", requestId);
-    acceptRequestMutation.mutate(requestId);
-  };
-
-  const handleReject = (requestId: string | undefined) => {
-    // Added safety check
-    if (!requestId) {
-      console.error("Cannot reject request: requestId is undefined");
-      toast.error(t("errorRejectingRequest", language));
-      return;
-    }
-
-    console.log("Reject button clicked with requestId:", requestId);
-    rejectRequestMutation.mutate(requestId);
-  };
-
-  const handleBlock = (userId: string | undefined) => {
-    // Added safety check
-    if (!userId) {
-      console.error("Cannot block user: userId is undefined");
-      toast.error(t("errorBlockingUser", language));
-      return;
-    }
-
-    console.log("Block button clicked with userId:", userId);
-    blockUserMutation.mutate(userId);
-  };
-
-  const getInitials = (name: string) => {
-    if (!name) return "??";
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  const formatTime = (dateString: string) => {
     try {
-      const date = new Date(dateString);
-      return formatDistanceToNow(date, { 
-        addSuffix: true,
-        locale: language === 'ar' ? ar : enUS
-      });
+      setLoading(true);
+      const requestsData = await getContactRequests(user.id);
+      setRequests(requestsData);
     } catch (error) {
-      return dateString;
+      console.error("Error fetching contact requests:", error);
+      toast.error(t("contacts.errorLoadingRequests"));
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (isLoading) {
+  useEffect(() => {
+    fetchRequests();
+  }, [user?.id]);
+
+  const handleAcceptRequest = async (requestId: string) => {
+    if (!user?.id) return;
+
+    try {
+      await acceptContactRequest(requestId, user.id);
+      toast.success(t("contacts.requestAccepted"));
+      fetchRequests();
+    } catch (error) {
+      console.error("Error accepting request:", error);
+      toast.error(t("contacts.errorAcceptingRequest"));
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      await rejectContactRequest(requestId);
+      toast.success(t("contacts.requestRejected"));
+      fetchRequests();
+    } catch (error) {
+      console.error("Error rejecting request:", error);
+      toast.error(t("contacts.errorRejectingRequest"));
+    }
+  };
+
+  const handleBlockUser = async (requestId: string, userId: string) => {
+    if (!user?.id) return;
+
+    try {
+      await rejectContactRequest(requestId);
+      await blockContact(userId, user.id);
+      toast.success(t("contacts.userBlocked"));
+      fetchRequests();
+    } catch (error) {
+      console.error("Error blocking user:", error);
+      toast.error(t("contacts.errorBlockingUser"));
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="flex justify-center items-center p-10">
-        <LoadingSpinner size="lg" />
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
 
-  if (isError) {
-    return (
-      <Card className="p-6 text-center text-muted-foreground">
-        <p>{t("errorLoadingRequests", language)}</p>
-        <p className="text-sm mt-2">{(error as Error)?.message}</p>
-      </Card>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      {!requests || requests.length === 0 ? (
-        <Card className="p-6">
-          <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
-            <UserCog className="h-12 w-12 opacity-50" />
-            <p className="font-medium text-lg">{t("noContactRequests", language)}</p>
-            <p className="text-sm">{t("waitingForRequests", language)}</p>
-          </div>
-        </Card>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 mb-6">
+        <h2 className="text-xl font-semibold">{t("contacts.contactRequests")}</h2>
+        {requests.length > 0 && (
+          <Badge variant="secondary">{requests.length}</Badge>
+        )}
+      </div>
+
+      {requests.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground text-lg">{t("contacts.noContactRequests")}</p>
+          <p className="text-sm text-muted-foreground mt-2">{t("contacts.waitingForRequests")}</p>
+        </div>
       ) : (
-        requests.map(request => {
-          console.log("Rendering request card for request:", request);
-          
-          const userProfile = request.profiles || {};
-          const displayName = ((userProfile as any).display_name as string) || ((userProfile as any).username as string) || "Unknown User";
-          const username = ((userProfile as any).username as string) || "user";
-          
-          return (
-            <Card key={request.id || `request-${Math.random()}`} className="overflow-hidden">
+        <div className="space-y-4">
+          {requests.map((request: any) => (
+            <Card key={request.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={((userProfile as any).avatar_url as string) || ""} />
-                      <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+                  <div className="flex items-center space-x-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={request.profiles?.avatar_url} alt={request.profiles?.display_name} />
+                      <AvatarFallback>
+                        {request.profiles?.display_name?.charAt(0)?.toUpperCase() || request.profiles?.username?.charAt(0)?.toUpperCase() || "?"}
+                      </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{displayName}</p>
-                      <p className="text-sm text-muted-foreground">@{username}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Request ID: {request.id ? request.id.substring(0, 8) + '...' : 'missing'}
+                      <h3 className="font-semibold text-sm">
+                        {request.profiles?.display_name || request.profiles?.username || "Unknown User"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        @{request.profiles?.username || "unknown"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(request.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
+                  
                   <div className="flex items-center gap-2">
-                    <Button 
-                      size="icon" 
+                    <Button
                       variant="outline"
-                      className="h-8 w-8 rounded-full border-green-500/50 hover:border-green-500 hover:bg-green-500/10"
-                      onClick={() => handleAccept(request.id)}
-                      disabled={acceptRequestMutation.isPending || !request.id}
+                      size="sm"
+                      onClick={() => handleAcceptRequest(request.id)}
+                      className="text-green-600 hover:text-green-700"
                     >
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-4 w-4 mr-1" />
+                      {t("common.accept")}
                     </Button>
-                    <Button 
-                      size="icon" 
+                    
+                    <Button
                       variant="outline"
-                      className="h-8 w-8 rounded-full border-red-500/50 hover:border-red-500 hover:bg-red-500/10"
-                      onClick={() => handleReject(request.id)}
-                      disabled={rejectRequestMutation.isPending || !request.id}
+                      size="sm"
+                      onClick={() => handleRejectRequest(request.id)}
+                      className="text-red-600 hover:text-red-700"
                     >
-                      <X className="h-4 w-4 text-red-500" />
+                      <X className="h-4 w-4 mr-1" />
+                      {t("common.reject")}
                     </Button>
-                    <Button 
-                      size="icon" 
+                    
+                    <Button
                       variant="outline"
-                      className="h-8 w-8 rounded-full"
-                      onClick={() => handleBlock(request.user_id)}
-                      disabled={blockUserMutation.isPending || !request.user_id}
+                      size="sm"
+                      onClick={() => handleBlockUser(request.id, request.user_id)}
+                      className="text-red-600 hover:text-red-700"
                     >
-                      <User className="h-4 w-4" />
+                      <Shield className="h-4 w-4 mr-1" />
+                      {t("contacts.blockUser")}
                     </Button>
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground mt-2">
-                  {request.created_at ? (
-                    <Badge variant="secondary">
-                      {formatTime(request.created_at)}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">Unknown date</Badge>
-                  )}
-                </div>
               </CardContent>
             </Card>
-          );
-        })
+          ))}
+        </div>
       )}
     </div>
   );
