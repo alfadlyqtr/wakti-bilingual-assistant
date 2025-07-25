@@ -13,12 +13,13 @@ import { t } from '@/utils/translations';
 import { Edit, X, Trash2 } from 'lucide-react';
 
 interface ReminderFormProps {
+  isOpen: boolean;
   reminder?: TRReminder;
   onClose: () => void;
   onReminderSaved: () => void;
 }
 
-export function ReminderForm({ reminder, onClose, onReminderSaved }: ReminderFormProps) {
+export function ReminderForm({ isOpen, reminder, onClose, onReminderSaved }: ReminderFormProps) {
   const { user } = useAuth();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
@@ -28,6 +29,9 @@ export function ReminderForm({ reminder, onClose, onReminderSaved }: ReminderFor
     due_date: reminder?.due_date || '',
     due_time: reminder?.due_time || ''
   });
+
+  // Don't render if not open
+  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

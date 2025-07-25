@@ -159,7 +159,7 @@ export default function TasksReminders() {
           </TabsContent>
         </Tabs>
 
-        {/* Forms */}
+        {/* Forms - now with proper conditional rendering */}
         <TaskForm
           isOpen={taskFormOpen}
           onClose={handleTaskFormClose}

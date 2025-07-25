@@ -15,22 +15,19 @@ import { t } from '@/utils/translations';
 import { Edit, X, RotateCcw, Check } from 'lucide-react';
 
 interface TaskFormProps {
+  isOpen: boolean;
   task: TRTask | null;
   onClose: () => void;
   onTaskSaved: () => void;
 }
 
-export function TaskForm({ task, onClose, onTaskSaved }: TaskFormProps) {
+export function TaskForm({ isOpen, task, onClose, onTaskSaved }: TaskFormProps) {
   const { user } = useAuth();
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
   
-  // If task is null, show error and close
-  if (!task) {
-    console.error('TaskForm: task is null');
-    onClose();
-    return null;
-  }
+  // Don't render if not open or task is null
+  if (!isOpen || !task) return null;
 
   const [formData, setFormData] = useState({
     title: task.title || '',
