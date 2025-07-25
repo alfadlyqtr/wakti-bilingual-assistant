@@ -46,7 +46,16 @@ export function ContactsSelector({
     try {
       setLoading(true);
       const contactsData = await getContacts(user.id);
-      setContacts(contactsData);
+      
+      // Transform the data to match Contact interface
+      const transformedContacts = contactsData.map((contact: any) => ({
+        id: contact.contact_id,
+        username: contact.profile?.username || 'unknown',
+        display_name: contact.profile?.display_name || 'Unknown User',
+        avatar_url: contact.profile?.avatar_url || ''
+      }));
+      
+      setContacts(transformedContacts);
     } catch (error) {
       console.error('Error fetching contacts:', error);
     } finally {

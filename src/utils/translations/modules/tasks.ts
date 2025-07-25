@@ -62,8 +62,6 @@ export const tasks = {
   snoozeRequests: "Snooze Requests",
   reason: "Reason",
   noSnoozeRequests: "No snooze requests",
-  
-  // New additions for current fixes
   loadingTasks: "Loading tasks...",
   confirmDeleteTask: "Are you sure you want to delete this task?",
   taskSnoozedUntilTomorrow: "Task snoozed until tomorrow",
@@ -73,5 +71,18 @@ export const tasks = {
   errorCopyingLink: "Error copying link",
   dueOn: "Due on",
   hideSubtasks: "Hide",
-  showSubtasks: "Show"
+  showSubtasks: "Show",
+  
+  // New additions
+  dueDateRequired: "Due date is required",
+  taskCreated: "Task created successfully",
+  errorCreatingTask: "Failed to create task",
+  type: "Type",
+  makeShared: "Make Shared",
+  taskUpdated: "Task updated successfully",
+  errorSavingTask: "Failed to save task",
+  taskReopened: "Task reopened successfully",
+  saving: "Saving...",
+  reopen: "Reopen",
+  complete: "Complete"
 };

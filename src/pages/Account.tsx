@@ -40,7 +40,16 @@ export default function Account() {
 
     try {
       setLoading(true);
-      const profileData = await getCurrentUserProfile(user.id);
+      
+      // Get full profile from profiles table
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+
       setProfile(profileData);
       setFormData({
         display_name: profileData?.display_name || '',
@@ -143,8 +152,6 @@ export default function Account() {
           <CardTitle>{t('account', language)}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <ProfileImageUpload currentImageUrl={profile?.avatar_url} />
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="display_name">{t('displayName', language)}</Label>

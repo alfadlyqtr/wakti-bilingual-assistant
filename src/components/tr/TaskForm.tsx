@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { CheckSquare, Trash2, Share2, Clock, Calendar } from 'lucide-react';
+import { CheckSquare, X } from 'lucide-react';
 
 interface TaskFormProps {
   isOpen: boolean;
@@ -32,7 +32,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     due_time: '',
     priority: 'normal' as 'normal' | 'high' | 'urgent',
     task_type: 'one-time' as 'one-time' | 'repeated',
-    is_shared: false
+    is_shared: false,
+    status: 'incomplete' as 'incomplete' | 'complete'
   });
 
   useEffect(() => {
@@ -44,7 +45,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         due_time: task.due_time || '',
         priority: task.priority,
         task_type: task.task_type,
-        is_shared: task.is_shared
+        is_shared: task.is_shared,
+        status: task.status
       });
     } else {
       setFormData({
@@ -54,7 +56,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         due_time: '',
         priority: 'normal',
         task_type: 'one-time',
-        is_shared: false
+        is_shared: false,
+        status: 'incomplete'
       });
     }
   }, [task]);
@@ -112,49 +115,20 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     }
   };
 
-  const handleDelete = async () => {
+  const handleReopenTask = async () => {
     if (!task) return;
-
-    const confirmed = window.confirm(t('confirmDeleteTask', language));
-    if (!confirmed) return;
 
     try {
       setLoading(true);
-      await TRService.deleteTask(task.id);
+      await TRService.updateTask(task.id, { status: 'incomplete' });
       toast({
         title: t('success', language),
-        description: t('taskDeleted', language)
+        description: t('taskReopened', language)
       });
       onTaskSaved();
       onClose();
     } catch (error) {
-      console.error('Error deleting task:', error);
-      toast({
-        title: t('error', language),
-        description: t('errorDeletingTask', language),
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleComplete = async () => {
-    if (!task) return;
-
-    try {
-      setLoading(true);
-      await TRService.updateTask(task.id, { 
-        completed: !task.completed,
-        completed_at: !task.completed ? new Date().toISOString() : null
-      });
-      toast({
-        title: t('success', language),
-        description: task.completed ? t('taskReopened', language) : t('taskCompleted', language)
-      });
-      onTaskSaved();
-    } catch (error) {
-      console.error('Error updating task:', error);
+      console.error('Error reopening task:', error);
       toast({
         title: t('error', language),
         description: t('errorUpdatingTask', language),
@@ -171,26 +145,15 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckSquare className="h-5 w-5" />
-            {task ? t('editTask', language) : t('createTask', language)}
-          </CardTitle>
-          {task && (
+          <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Badge variant={task.completed ? 'default' : 'secondary'}>
-                {task.completed ? t('completed', language) : t('pending', language)}
-              </Badge>
-              <Badge variant={task.priority === 'urgent' ? 'destructive' : task.priority === 'high' ? 'default' : 'secondary'}>
-                {t(task.priority, language)}
-              </Badge>
-              {task.is_shared && (
-                <Badge variant="outline">
-                  <Share2 className="h-3 w-3 mr-1" />
-                  {t('shared', language)}
-                </Badge>
-              )}
+              <CheckSquare className="h-5 w-5" />
+              {task ? t('editTask', language) : t('createTask', language)}
             </div>
-          )}
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -283,20 +246,19 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
               <Button type="button" variant="outline" onClick={onClose}>
                 {t('cancel', language)}
               </Button>
-              {task && (
-                <>
-                  <Button 
-                    type="button" 
-                    variant={task.completed ? 'outline' : 'default'} 
-                    onClick={toggleComplete}
-                    disabled={loading}
-                  >
-                    {task.completed ? t('reopen', language) : t('complete', language)}
-                  </Button>
-                  <Button type="button" variant="destructive" onClick={handleDelete} disabled={loading}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </>
+              {task && task.status === 'complete' && (
+                <Button type="button" variant="outline" onClick={handleReopenTask}>
+                  {t('reopen', language)}
+                </Button>
+              )}
+              {task && task.status === 'incomplete' && (
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setFormData({...formData, status: 'complete'})}
+                >
+                  {t('complete', language)}
+                </Button>
               )}
             </div>
           </form>

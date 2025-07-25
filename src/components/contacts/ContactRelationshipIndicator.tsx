@@ -4,10 +4,14 @@ import { ArrowRight, ArrowLeft, ArrowLeftRight } from "lucide-react";
 
 interface ContactRelationshipIndicatorProps {
   status: "mutual" | "you-added-them" | "they-added-you";
+  userId?: string;
+  contactId?: string;
 }
 
 export function ContactRelationshipIndicator({
   status,
+  userId,
+  contactId,
 }: ContactRelationshipIndicatorProps) {
   let icon;
   let color = "text-muted-foreground";

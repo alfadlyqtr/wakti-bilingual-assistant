@@ -19,5 +19,16 @@ export const remindersAr = {
   errorDeleting: "فشل في حذف التذكير",
   confirmDeleteReminder: "هل أنت متأكد من أنك تريد حذف هذا التذكير؟",
   overdue: "متأخر",
-  errorLoadingReminders: "خطأ في تحميل التذكيرات"
+  errorLoadingReminders: "خطأ في تحميل التذكيرات",
+  
+  // New additions
+  dueDateRequired: "تاريخ الاستحقاق مطلوب",
+  reminderUpdated: "تم تحديث التذكير بنجاح",
+  reminderCreated: "تم إنشاء التذكير بنجاح",
+  errorSavingReminder: "فشل في حفظ التذكير",
+  errorDeletingReminder: "فشل في حذف التذكير",
+  reminderSnoozed: "تم تأجيل التذكير بنجاح",
+  errorSnoozingReminder: "فشل في تأجيل التذكير",
+  createFirstReminder: "إنشاء أول تذكير",
+  snoozed: "مؤجل"
 };

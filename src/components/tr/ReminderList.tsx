@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { TRService, TRReminder } from '@/services/trService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { Bell, Clock, Calendar, Snooze, Trash2, Edit, Check } from 'lucide-react';
+import { Bell, Clock, Calendar, Timer, Trash2, Edit, Check } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ReminderListProps {
@@ -125,7 +124,7 @@ export function ReminderList({ reminders, onReminderEdit, onRemindersChanged }: 
                   <h3 className="font-medium">{reminder.title}</h3>
                   {isSnoozed(reminder) && (
                     <Badge variant="secondary" className="text-xs">
-                      <Snooze className="h-3 w-3 mr-1" />
+                      <Timer className="h-3 w-3 mr-1" />
                       {t('snoozed', language)}
                     </Badge>
                   )}
@@ -169,7 +168,7 @@ export function ReminderList({ reminders, onReminderEdit, onRemindersChanged }: 
                   onClick={() => handleSnooze(reminder)}
                   disabled={loading === reminder.id}
                 >
-                  <Snooze className="h-4 w-4" />
+                  <Timer className="h-4 w-4" />
                 </Button>
                 <Button
                   variant="ghost"
