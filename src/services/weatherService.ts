@@ -67,11 +67,12 @@ interface UVResponse {
 }
 
 const CACHE_DURATION = 60 * 60 * 1000; // 60 minutes
-const FORECAST_CACHE_DURATION = 3 * 60 * 60 * 1000; // 3 hours for forecast data
+const CACHE_VERSION = '1.2'; // Increment to invalidate old cache
 
 interface CachedWeatherData {
   data: WeatherData;
   timestamp: number;
+  version: string;
 }
 
 const getWeatherEmoji = (iconCode: string, description: string): string => {
@@ -166,6 +167,97 @@ const formatTime = (timestamp: number): string => {
   });
 };
 
+// Calculate UV index based on solar position, time of day, and weather conditions
+const calculateFallbackUVIndex = (
+  lat: number,
+  weatherCondition: string,
+  cloudCover: number = 0
+): number => {
+  const now = new Date();
+  const hour = now.getHours();
+  
+  // UV is highest between 10 AM and 4 PM
+  if (hour < 6 || hour > 18) return 0;
+  
+  // Base UV calculation based on time and latitude
+  let baseUV = 0;
+  if (hour >= 10 && hour <= 14) {
+    // Peak hours - higher UV
+    baseUV = Math.abs(lat) < 30 ? 8 : 6; // Higher UV closer to equator
+  } else if (hour >= 8 && hour <= 16) {
+    // Moderate hours
+    baseUV = Math.abs(lat) < 30 ? 5 : 3;
+  } else {
+    // Early morning/late afternoon
+    baseUV = Math.abs(lat) < 30 ? 2 : 1;
+  }
+  
+  // Adjust for weather conditions
+  const condition = weatherCondition.toLowerCase();
+  if (condition.includes('cloud') || condition.includes('overcast')) {
+    baseUV *= 0.6; // Clouds reduce UV by ~40%
+  } else if (condition.includes('rain') || condition.includes('storm')) {
+    baseUV *= 0.3; // Rain/storms reduce UV significantly
+  }
+  
+  // Adjust for cloud cover if available
+  if (cloudCover > 0) {
+    baseUV *= (1 - cloudCover / 100 * 0.6);
+  }
+  
+  return Math.round(Math.max(0, Math.min(15, baseUV)));
+};
+
+// Validate UV index values
+const validateUVIndex = (uvIndex: number): boolean => {
+  return typeof uvIndex === 'number' && 
+         !isNaN(uvIndex) && 
+         uvIndex >= 0 && 
+         uvIndex <= 15;
+};
+
+// Enhanced UV index fetching with retry logic
+const fetchUVIndex = async (
+  lat: number, 
+  lon: number, 
+  apiKey: string,
+  weatherCondition: string,
+  maxRetries: number = 2
+): Promise<number> => {
+  console.log('🌞 Fetching UV index for coordinates:', { lat, lon });
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const uvResponse = await fetch(
+        `https://api.openweathermap.org/data/2.5/uvi?lat=${lat}&lon=${lon}&appid=${apiKey}`
+      );
+      
+      console.log(`🌞 UV API attempt ${attempt} status:`, uvResponse.status);
+      
+      if (uvResponse.ok) {
+        const uvData: UVResponse = await uvResponse.json();
+        console.log('🌞 UV API raw response:', uvData);
+        
+        if (validateUVIndex(uvData.value)) {
+          console.log('🌞 Valid UV index received:', uvData.value);
+          return Math.round(uvData.value);
+        } else {
+          console.warn('🌞 Invalid UV index from API:', uvData.value);
+        }
+      } else {
+        console.warn(`🌞 UV API failed with status ${uvResponse.status} on attempt ${attempt}`);
+      }
+    } catch (error) {
+      console.error(`🌞 UV API error on attempt ${attempt}:`, error);
+    }
+  }
+  
+  // Fallback calculation
+  const fallbackUV = calculateFallbackUVIndex(lat, weatherCondition);
+  console.log('🌞 Using fallback UV calculation:', fallbackUV);
+  return fallbackUV;
+};
+
 const getTomorrowData = (forecastList: ForecastResponse['list']) => {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -244,20 +336,35 @@ const getFiveDayForecast = (forecastList: ForecastResponse['list']) => {
 
 export const fetchWeatherData = async (country?: string): Promise<WeatherData | null> => {
   try {
-    // Check cache first
+    console.log('🌤️ Starting weather data fetch for country:', country);
+    
+    // Check cache first with version validation
     const cacheKey = `weather_forecast_${country || 'default'}`;
     const cached = localStorage.getItem(cacheKey);
     
     if (cached) {
-      const parsedCache: CachedWeatherData = JSON.parse(cached);
-      if (Date.now() - parsedCache.timestamp < CACHE_DURATION) {
-        return parsedCache.data;
+      try {
+        const parsedCache: CachedWeatherData = JSON.parse(cached);
+        const isCacheValid = parsedCache.version === CACHE_VERSION &&
+                           Date.now() - parsedCache.timestamp < CACHE_DURATION;
+        
+        if (isCacheValid) {
+          console.log('🌤️ Using valid cached weather data');
+          return parsedCache.data;
+        } else {
+          console.log('🌤️ Cache expired or version mismatch, clearing cache');
+          localStorage.removeItem(cacheKey);
+        }
+      } catch (cacheError) {
+        console.warn('🌤️ Cache parse error, clearing cache:', cacheError);
+        localStorage.removeItem(cacheKey);
       }
     }
 
     // Get API key from Supabase secrets
     const apiKey = await getApiKey();
     if (!apiKey) {
+      console.error('🌤️ Weather API key not available');
       throw new Error('Weather API key not available');
     }
 
@@ -269,30 +376,32 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       coords = { lat: 25.3548, lon: 51.1839 };
     }
 
+    console.log('🌤️ Using coordinates:', coords);
+
     // Fetch 5-day forecast (includes current weather data)
     const forecastResponse = await fetch(
       `https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=metric`
     );
     
     if (!forecastResponse.ok) {
+      console.error('🌤️ Weather Forecast API failed with status:', forecastResponse.status);
       throw new Error('Weather Forecast API failed');
     }
     
     const forecastData: ForecastResponse = await forecastResponse.json();
+    console.log('🌤️ Forecast API success, entries:', forecastData.list.length);
     
     // Get current weather from first forecast entry
     const currentEntry = forecastData.list[0];
+    console.log('🌤️ Current weather condition:', currentEntry.weather[0].description);
     
-    // Fetch UV index separately (not available in forecast API)
-    const uvResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/uvi?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}`
+    // Fetch UV index with enhanced error handling and fallback
+    const uvIndex = await fetchUVIndex(
+      coords.lat, 
+      coords.lon, 
+      apiKey, 
+      currentEntry.weather[0].description
     );
-    
-    let uvIndex = 0;
-    if (uvResponse.ok) {
-      const uvData: UVResponse = await uvResponse.json();
-      uvIndex = uvData.value;
-    }
 
     // Get today's min/max from today's forecast entries
     const today = new Date().toDateString();
@@ -325,7 +434,7 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       windSpeed: Math.round(currentEntry.wind.speed * 3.6), // Convert m/s to km/h
       windDirection: getWindDirection(currentEntry.wind.deg || 0),
       windDirectionFull: getWindDirectionFull(currentEntry.wind.deg || 0),
-      uvIndex: Math.round(uvIndex),
+      uvIndex: uvIndex,
       sunrise: formatTime(forecastData.city.sunrise),
       sunset: formatTime(forecastData.city.sunset),
       tomorrow: tomorrowData,
@@ -337,16 +446,23 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       })
     };
 
-    // Cache the result
+    console.log('🌤️ Final processed weather data:', {
+      temperature: processedData.temperature,
+      uvIndex: processedData.uvIndex,
+      description: processedData.description
+    });
+
+    // Cache the result with version
     const cacheData: CachedWeatherData = {
       data: processedData,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      version: CACHE_VERSION
     };
     localStorage.setItem(cacheKey, JSON.stringify(cacheData));
 
     return processedData;
   } catch (error) {
-    console.error('Error fetching weather data:', error);
+    console.error('🌤️ Error fetching weather data:', error);
     return null;
   }
 };
