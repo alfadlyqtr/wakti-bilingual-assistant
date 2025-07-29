@@ -101,7 +101,7 @@ export function WeatherButton() {
     return {
       humidity: Math.max(20, Math.min(80, weather.humidity + variation)),
       windSpeed: Math.max(5, Math.min(40, weather.windSpeed + variation)),
-      uvIndex: Math.max(0, Math.min(12, weather.uvIndex + Math.floor(variation / 2)))
+      uvIndex: Math.max(0, weather.uvIndex + Math.floor(variation / 2))
     };
   };
 
