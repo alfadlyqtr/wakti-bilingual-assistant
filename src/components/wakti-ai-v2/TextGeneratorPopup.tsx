@@ -207,26 +207,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     }
   };
 
-  const handleUseText = () => {
-    onTextGenerated(generatedText, activeTab as 'compose' | 'reply');
-    onClose();
-    
-    // Reset form
-    setComposePrompt('');
-    setKeywords('');
-    setOriginalMessage('');
-    setContentType('');
-    setTone('');
-    setReplyTone('');
-    setLength('');
-    setReplyLength('');
-    setToAddress('');
-    setFromAddress('');
-    setGeneratedText('');
-  };
 
   const handleRegenerate = () => {
     setGeneratedText('');
+    setLastError('');
+    setIsCopied(false);
     generateText();
   };
 
@@ -489,13 +474,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   <div className="prose prose-sm max-w-none text-sm leading-relaxed whitespace-pre-wrap">
                     {generatedText}
                   </div>
-                </div>
-                
-                <div className="flex justify-end">
-                  <Button onClick={handleUseText} className="flex items-center gap-2">
-                    <Wand2 className="w-4 h-4" />
-                    {language === 'ar' ? 'استخدام النص' : 'Use Text'}
-                  </Button>
                 </div>
               </div>
             ) : (

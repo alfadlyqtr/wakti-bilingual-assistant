@@ -180,6 +180,8 @@ function getSystemPrompt(language: string): string {
 المبادئ التوجيهية:
 - اكتب نصاً واضحاً ومباشراً
 - تجنب استخدام النجوم (*) للتنسيق
+- لا تستخدم أبداً شرطة إم الطويلة (—) أو أي رموز شرطة طويلة
+- استخدم الشرطة العادية (-) فقط
 - اتبع النبرة والطول المطلوبين
 - حافظ على الاتساق في الأسلوب
 - قدم محتوى مفيداً وذا صلة
@@ -189,6 +191,8 @@ function getSystemPrompt(language: string): string {
 Guidelines:
 - Write clear and direct text
 - Do not use asterisks (*) for formatting
+- NEVER use em-dashes (—) or any long dash symbols
+- Use only regular hyphens (-) when needed
 - Follow the requested tone and length
 - Maintain consistency in style
 - Provide helpful and relevant content
