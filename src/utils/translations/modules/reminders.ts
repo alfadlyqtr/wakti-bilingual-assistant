@@ -20,5 +20,7 @@ export const reminders = {
   errorSnoozing: "Failed to snooze reminder",
   errorDeleting: "Failed to delete reminder",
   confirmDeleteReminder: "Are you sure you want to delete this reminder?",
-  overdue: "Overdue"
+  overdue: "Overdue",
+  errorLoadingReminders: "Error loading reminders",
+  retry: "Retry"
 };

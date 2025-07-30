@@ -19,5 +19,6 @@ export const remindersAr = {
   errorDeleting: "فشل في حذف التذكير",
   confirmDeleteReminder: "هل أنت متأكد من أنك تريد حذف هذا التذكير؟",
   overdue: "متأخر",
-  errorLoadingReminders: "خطأ في تحميل التذكيرات"
+  errorLoadingReminders: "خطأ في تحميل التذكيرات",
+  retry: "إعادة المحاولة"
 };

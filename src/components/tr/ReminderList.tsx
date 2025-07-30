@@ -29,6 +29,9 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   const [loading, setLoading] = useState(true);
   const [editingReminder, setEditingReminder] = useState<TRReminder | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [error, setError] = useState<string>('');
+
+  console.log('ReminderList - Rendered with propReminders:', propReminders?.length);
 
   useEffect(() => {
     if (propReminders) {
@@ -41,6 +44,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       });
       setReminders(activeReminders);
       setLoading(false);
+      setError('');
     } else {
       console.log('ReminderList - Loading own reminders');
       loadReminders();
@@ -50,7 +54,9 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   const loadReminders = async () => {
     try {
       setLoading(true);
+      setError('');
       console.log('ReminderList - Fetching reminders from service');
+      
       const data = await TRService.getReminders();
       
       console.log('ReminderList - Fetched reminders:', data.length);
@@ -66,6 +72,8 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       setReminders(activeReminders);
     } catch (error) {
       console.error('ReminderList - Error loading reminders:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load reminders';
+      setError(errorMessage);
       toast.error(t('errorLoadingReminders', language));
       setReminders([]);
     } finally {
@@ -74,6 +82,8 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   };
 
   const handleEditReminder = (reminder: TRReminder) => {
+    console.log('ReminderList - Edit reminder clicked:', reminder.id);
+    
     if (onReminderEdit) {
       onReminderEdit(reminder);
     } else {
@@ -87,6 +97,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       console.log('ReminderList - Snoozing reminder:', reminder.id);
       await TRService.snoozeReminder(reminder.id);
       toast.success(t('snoozeReminder', language));
+      
       if (onRemindersChanged) {
         onRemindersChanged();
       } else {
@@ -105,6 +116,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
         console.log('ReminderList - Deleting reminder:', reminder.id);
         await TRService.deleteReminder(reminder.id);
         toast.success(t('reminderDeleted', language));
+        
         if (onRemindersChanged) {
           onRemindersChanged();
         } else {
@@ -119,12 +131,14 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   };
 
   const handleFormClose = () => {
+    console.log('ReminderList - Form closed');
     setIsFormOpen(false);
     setEditingReminder(null);
   };
 
   const handleReminderSaved = () => {
     console.log('ReminderList - Reminder saved, refreshing data');
+    
     if (onRemindersChanged) {
       onRemindersChanged();
     } else {
@@ -134,19 +148,48 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   };
 
   const isOverdue = (reminder: TRReminder) => {
-    const reminderDate = parseISO(reminder.due_date);
-    if (reminder.due_time) {
-      const [hours, minutes] = reminder.due_time.split(':');
-      reminderDate.setHours(parseInt(hours), parseInt(minutes));
+    if (!reminder.due_date) return false;
+    
+    try {
+      const reminderDate = parseISO(reminder.due_date);
+      if (reminder.due_time) {
+        const [hours, minutes] = reminder.due_time.split(':');
+        reminderDate.setHours(parseInt(hours), parseInt(minutes));
+      }
+      return isPast(reminderDate);
+    } catch (error) {
+      console.error('ReminderList - Error checking overdue status:', error);
+      return false;
     }
-    return isPast(reminderDate);
   };
+
+  // Error boundary effect
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error('ReminderList - Global error caught:', event.error);
+      setError('An unexpected error occurred. Please try again.');
+    };
+
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-red-500 mb-4">{error}</div>
+        <Button onClick={loadReminders} variant="outline" size="sm">
+          {t('retry', language)}
+        </Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="text-sm text-muted-foreground mt-2">{t('loading', language)}</p>
+        <p className="text-sm text-muted-foreground mt-2">{t('loadingReminders', language)}</p>
       </div>
     );
   }
@@ -176,21 +219,23 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                       {reminder.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      <span>{format(parseISO(reminder.due_date), 'MMM dd, yyyy')}</span>
-                    </div>
-                    {reminder.due_time && (
+                  {reminder.due_date && (
+                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        <span>{reminder.due_time}</span>
+                        <Calendar className="h-3 w-3" />
+                        <span>{format(parseISO(reminder.due_date), 'MMM dd, yyyy')}</span>
                       </div>
-                    )}
-                    {isOverdue(reminder) && (
-                      <span className="text-red-600 font-medium">{t('overdue', language)}</span>
-                    )}
-                  </div>
+                      {reminder.due_time && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span>{reminder.due_time}</span>
+                        </div>
+                      )}
+                      {isOverdue(reminder) && (
+                        <span className="text-red-600 font-medium">{t('overdue', language)}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <DropdownMenu>
@@ -199,7 +244,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" className="z-50">
                     <DropdownMenuItem onClick={() => handleEditReminder(reminder)}>
                       <Edit className="h-4 w-4 mr-2" />
                       {t('edit', language)}
