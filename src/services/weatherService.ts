@@ -149,12 +149,14 @@ const getApiKey = async (): Promise<string | null> => {
   try {
     const { data, error } = await supabase.functions.invoke('get-weather-api-key');
     if (error) {
-      console.error('Error getting API key:', error);
+      console.error('❌ Error getting API key:', error);
       return null;
     }
-    return data?.apiKey || null;
+    const apiKey = data?.apiKey || null;
+    console.log('🔑 Weather API key retrieved:', apiKey ? 'SUCCESS' : 'FAILED');
+    return apiKey;
   } catch (error) {
-    console.error('Error calling edge function:', error);
+    console.error('❌ Error calling edge function:', error);
     return null;
   }
 };
@@ -205,7 +207,7 @@ const calculateFallbackUVIndex = (
     baseUV *= (1 - cloudCover / 100 * 0.6);
   }
   
-  return Math.round(Math.max(0, Math.min(15, baseUV)));
+  return Math.floor(Math.max(0, Math.min(15, baseUV)));
 };
 
 // Validate UV index values
@@ -216,7 +218,7 @@ const validateUVIndex = (uvIndex: number): boolean => {
          uvIndex <= 15;
 };
 
-// Enhanced UV index fetching with retry logic
+// Enhanced UV index fetching with retry logic and detailed logging
 const fetchUVIndex = async (
   lat: number, 
   lon: number, 
@@ -224,37 +226,53 @@ const fetchUVIndex = async (
   weatherCondition: string,
   maxRetries: number = 2
 ): Promise<number> => {
-  console.log('🌞 Fetching UV index for coordinates:', { lat, lon });
+  console.log('🌞 Starting UV Index fetch for coordinates:', { lat, lon });
+  console.log('🌞 Weather condition for UV context:', weatherCondition);
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const uvResponse = await fetch(
-        `https://api.openweathermap.org/data/2.5/uvi?lat=${lat}&lon=${lon}&appid=${apiKey}`
-      );
+      const uvUrl = `https://api.openweathermap.org/data/2.5/uvi?lat=${lat}&lon=${lon}&appid=${apiKey}`;
+      console.log(`🌞 UV API attempt ${attempt} URL:`, uvUrl);
       
-      console.log(`🌞 UV API attempt ${attempt} status:`, uvResponse.status);
+      const uvResponse = await fetch(uvUrl);
+      const responseStatus = uvResponse.status;
+      console.log(`🌞 UV API attempt ${attempt} - Status: ${responseStatus}`);
       
       if (uvResponse.ok) {
         const uvData: UVResponse = await uvResponse.json();
-        console.log('🌞 UV API raw response:', uvData);
+        console.log('🌞 Raw UV API response:', JSON.stringify(uvData, null, 2));
         
         if (validateUVIndex(uvData.value)) {
-          console.log('🌞 Valid UV index received:', uvData.value);
-          return Math.round(uvData.value);
+          const rawUVValue = uvData.value;
+          // Use Math.floor instead of Math.round to match OpenWeather website behavior
+          const flooredUV = Math.floor(rawUVValue);
+          console.log('🌞 UV Index processing:', {
+            rawValue: rawUVValue,
+            flooredValue: flooredUV,
+            wouldRoundTo: Math.round(rawUVValue)
+          });
+          console.log('✅ Valid UV index received from API:', flooredUV);
+          return flooredUV;
         } else {
-          console.warn('🌞 Invalid UV index from API:', uvData.value);
+          console.warn('⚠️ Invalid UV index from API:', uvData.value, 'Raw response:', uvData);
         }
       } else {
-        console.warn(`🌞 UV API failed with status ${uvResponse.status} on attempt ${attempt}`);
+        const errorText = await uvResponse.text();
+        console.error(`❌ UV API failed with status ${responseStatus} on attempt ${attempt}:`, errorText);
       }
     } catch (error) {
-      console.error(`🌞 UV API error on attempt ${attempt}:`, error);
+      console.error(`❌ UV API network error on attempt ${attempt}:`, error);
     }
   }
   
-  // Fallback calculation
+  // Fallback calculation with clear warning
   const fallbackUV = calculateFallbackUVIndex(lat, weatherCondition);
-  console.log('🌞 Using fallback UV calculation:', fallbackUV);
+  console.warn('⚠️ UV API failed - using FALLBACK calculation:', {
+    fallbackValue: fallbackUV,
+    reason: 'API_FAILED',
+    weatherCondition: weatherCondition,
+    coordinates: { lat, lon }
+  });
   return fallbackUV;
 };
 
@@ -446,10 +464,11 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       })
     };
 
-    console.log('🌤️ Final processed weather data:', {
+    console.log('✅ Final processed weather data:', {
       temperature: processedData.temperature,
       uvIndex: processedData.uvIndex,
-      description: processedData.description
+      description: processedData.description,
+      uvSource: uvIndex === calculateFallbackUVIndex(coords.lat, currentEntry.weather[0].description) ? 'FALLBACK' : 'API'
     });
 
     // Cache the result with version
