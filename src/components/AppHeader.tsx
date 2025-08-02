@@ -166,7 +166,7 @@ export function AppHeader() {
 
     if (path.startsWith('/maw3d/create')) {
       return {
-        title: t("createEvent", language),
+        title: language === 'ar' ? 'إنشاء حدث' : 'Create Event',
         icon: CalendarClock,
         colorClass: 'nav-icon-maw3d'
       };
