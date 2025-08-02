@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -25,7 +24,7 @@ export const Maw3dWidget: React.FC<Maw3dWidgetProps> = ({ language }) => {
   const tomorrowEvents = events.filter(event => isTomorrow(parseISO(event.event_date)));
 
   const handleNavigateToMaw3d = () => {
-    navigate('/maw3d-events');
+    navigate('/maw3d');
   };
 
   return (
