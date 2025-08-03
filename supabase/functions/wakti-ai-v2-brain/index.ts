@@ -136,7 +136,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🤖 BACKEND WORKER: Processing Claude request from Frontend Boss");
+    console.log("🤖 BACKEND WORKER: Pure Claude processing - no database operations");
     
     const contentType = req.headers.get('content-type') || '';
     let requestData;
@@ -160,20 +160,15 @@ serve(async (req) => {
     const { 
       message, 
       conversationId,
-      userId, 
       language = 'en',
       files = [],
       attachedFiles: requestAttachedFiles = [],
       activeTrigger = 'general',
       recentMessages = [],
-      conversationSummary = '',
       personalTouch = null
     } = requestData;
 
-    const actualUserId = userId || personalTouch?.userId || requestData.user_id || 'default_user';
-    console.log(`🤖 BACKEND WORKER: Processing ${activeTrigger} mode for conversation ${conversationId || 'new'}`);
-
-    const finalConversationId = conversationId;
+    console.log(`🤖 BACKEND WORKER: Processing ${activeTrigger} mode - pure Claude request`);
 
     let attachedFiles = [];
     
@@ -194,32 +189,30 @@ serve(async (req) => {
     
     if (activeTrigger === 'image') {
       console.log('🎨 BACKEND WORKER: Processing image generation');
-      result = await generateImageWithRunware(message, actualUserId, language);
+      result = await generateImageWithRunware(message, 'worker_user', language);
       result.mode = 'image';
       result.intent = 'image';
     } else if (activeTrigger === 'search') {
       console.log('🔍 BACKEND WORKER: Processing search request');
-      result = await performSearchWithTavily(message, actualUserId, language);
+      result = await performSearchWithTavily(message, 'worker_user', language);
       result.mode = 'search';
       result.intent = 'search';
     } else {
       console.log('🤖 BACKEND WORKER: Processing Claude chat/vision request');
       result = await callClaude35API(
         message,
-        finalConversationId,
-        actualUserId,
+        conversationId,
         language,
         attachedFiles,
         activeTrigger,
         recentMessages,
-        conversationSummary,
         personalTouch
       );
     }
 
     const finalResponse = {
       response: result.response || 'Response received',
-      conversationId: finalConversationId,
+      conversationId: conversationId,
       intent: result.intent || activeTrigger,
       confidence: 'high',
       actionTaken: null,
@@ -267,7 +260,7 @@ serve(async (req) => {
   }
 });
 
-async function callClaude35API(message, conversationId, userId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], conversationSummary = '', personalTouch = null) {
+async function callClaude35API(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null) {
   try {
     if (!ANTHROPIC_API_KEY) {
       throw new Error('Anthropic API key not configured');

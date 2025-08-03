@@ -42,95 +42,117 @@ class WaktiAIV2ServiceClass {
     conversationSummary: string = '',
     attachedFiles: any[] = []
   ) {
-    try {
-      if (!userId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Authentication required');
-        userId = user.id;
-      }
+    const maxRetries = 2;
+    let lastError: any = null;
 
-      console.log('🤖 BACKEND WORKER: Processing message in', activeTrigger, 'mode for frontend conversation', conversationId);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (!userId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error('Authentication required');
+          userId = user.id;
+        }
 
-      const userMessage: AIMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: message,
-        timestamp: new Date(),
-        inputType: inputType,
-        attachedFiles: attachedFiles
-      };
+        console.log(`🤖 FRONTEND BOSS: Attempt ${attempt}/${maxRetries} - Sending to backend worker for ${activeTrigger} mode`);
 
-      const personalTouch = this.getPersonalTouch();
+        const personalTouch = this.getPersonalTouch();
 
-      // VISION TIMEOUT FIX: Determine timeout based on request type
-      const isVisionRequest = inputType === 'vision' || (attachedFiles && attachedFiles.length > 0);
-      const timeoutDuration = isVisionRequest ? 30000 : 10000; // 30s for vision, 10s for chat
-      
-      console.log(`⏱️ BACKEND WORKER: Using ${timeoutDuration/1000}s timeout for ${isVisionRequest ? 'VISION' : 'CHAT'} request`);
+        // Simplified timeout - backend worker handles processing
+        const timeoutDuration = 20000; // 20s for all requests
+        
+        console.log(`⏱️ FRONTEND BOSS: Using ${timeoutDuration/1000}s timeout for backend communication`);
 
-      // BACKEND WORKER: Pure Claude processing, no conversation management
-      const { data, error } = await Promise.race([
-        supabase.functions.invoke('wakti-ai-v2-brain', {
-          body: {
-            message,
-            userId,
-            language,
-            conversationId: conversationId, // Accept frontend ID without validation
-            inputType,
-            activeTrigger,
-            attachedFiles,
-            conversationSummary: '',
-            recentMessages: recentMessages, // Use frontend-provided conversation history
-            personalTouch: personalTouch,
-            customSystemPrompt: '',
-            maxTokens: 4096,
-            userStyle: 'detailed',
-            userTone: 'neutral',
-            speedOptimized: true,
-            aggressiveOptimization: false,
-            hasTaskIntent: false,
-            personalityEnabled: true,
-            enableTaskCreation: true,
-            enablePersonality: true,
-            memoryEnabled: true,
-            integratedContext: null
+        // FRONTEND BOSS: Send to backend worker with minimal payload
+        const { data, error } = await Promise.race([
+          supabase.functions.invoke('wakti-ai-v2-brain', {
+            body: {
+              message,
+              language,
+              conversationId: conversationId,
+              inputType,
+              activeTrigger,
+              attachedFiles,
+              recentMessages: recentMessages.slice(-6), // Send last 6 messages for context
+              personalTouch: personalTouch
+            }
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Frontend timeout - Backend worker took too long (>${timeoutDuration/1000}s)`)), timeoutDuration)
+          )
+        ]) as any;
+
+        if (error) {
+          console.error(`❌ FRONTEND BOSS: Attempt ${attempt} failed:`, error);
+          lastError = error;
+          
+          // Don't retry on specific errors
+          if (error.message?.includes('Authentication') || 
+              error.message?.includes('API key') ||
+              error.message?.includes('Invalid image')) {
+            throw error;
           }
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`Backend timeout - ${isVisionRequest ? 'Vision' : 'Chat'} processing took too long (>${timeoutDuration/1000}s)`)), timeoutDuration)
-        )
-      ]) as any;
+          
+          if (attempt < maxRetries) {
+            console.log(`🔄 FRONTEND BOSS: Retrying in ${attempt}s...`);
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+            continue;
+          }
+          
+          throw error;
+        }
 
-      if (error) {
-        console.error('❌ BACKEND WORKER: Claude processing error:', error);
-        throw error;
+        // Success - create response message
+        const assistantMessage: AIMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: data.response || 'I apologize, but I encountered an issue processing your request.',
+          timestamp: new Date(),
+          intent: data.intent,
+          confidence: data.confidence as 'high' | 'medium' | 'low',
+          actionTaken: data.actionTaken,
+          imageUrl: data.imageUrl,
+          browsingUsed: data.browsingUsed,
+          browsingData: data.browsingData
+        };
+
+        console.log(`✅ FRONTEND BOSS: Successfully received response from backend worker`);
+
+        return {
+          ...data,
+          conversationId: conversationId,
+          response: assistantMessage.content
+        };
+
+      } catch (error: any) {
+        lastError = error;
+        console.error(`❌ FRONTEND BOSS: Attempt ${attempt} failed:`, error);
+        
+        if (attempt === maxRetries) {
+          break;
+        }
       }
-
-      const assistantMessage: AIMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: data.response || 'I apologize, but I encountered an issue processing your request.',
-        timestamp: new Date(),
-        intent: data.intent,
-        confidence: data.confidence as 'high' | 'medium' | 'low',
-        actionTaken: data.actionTaken,
-        imageUrl: data.imageUrl,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData
-      };
-
-      console.log('✅ BACKEND WORKER: Claude processing complete, returning to frontend boss');
-
-      return {
-        ...data,
-        conversationId: conversationId, // Return frontend-provided ID unchanged
-        response: assistantMessage.content
-      };
-
-    } catch (error: any) {
-      console.error('❌ BACKEND WORKER: Claude processing failed:', error);
-      throw new Error(error.message || 'Backend worker failed');
     }
+
+    // All attempts failed
+    console.error('❌ FRONTEND BOSS: All attempts failed, returning error');
+    
+    // Provide specific error messages based on error type
+    let errorMessage = 'I apologize, but I encountered an issue processing your request.';
+    if (language === 'ar') {
+      errorMessage = 'أعتذر، واجهت مشكلة في معالجة طلبك.';
+    }
+    
+    if (lastError?.message?.includes('timeout')) {
+      errorMessage = language === 'ar' 
+        ? 'أعتذر، استغرق الطلب وقتاً أطول من المتوقع. يرجى المحاولة مرة أخرى.'
+        : 'I apologize, the request took longer than expected. Please try again.';
+    } else if (lastError?.message?.includes('network') || lastError?.message?.includes('fetch')) {
+      errorMessage = language === 'ar'
+        ? 'أعتذر، حدثت مشكلة في الاتصال. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.'
+        : 'I apologize, there was a connection issue. Please check your internet connection and try again.';
+    }
+
+    throw new Error(errorMessage);
   }
 
   private getPersonalTouch() {
