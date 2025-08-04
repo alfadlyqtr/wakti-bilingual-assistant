@@ -287,10 +287,17 @@ export function LudoGame({ onBack }: LudoGameProps) {
   };
 
   const movePawn = (pawn: Pawn, dice: number) => {
-    console.log(`🎯 === MOVING PAWN ${pawn.name} WITH DICE ${dice} (ORIGINAL LOGIC) ===`);
+    console.log(`🎯 === MOVING PAWN ${pawn.name} WITH DICE ${dice} (FIXED LOGIC) ===`);
     console.log(`Before move - Current: ${pawn.currentCell}, Area: ${pawn.area}`);
     
-    const newGameState = { ...gameState };
+    // DEEP COPY of game state to prevent mutation issues
+    const newGameState: GameState = {
+      privateAreas: JSON.parse(JSON.stringify(gameState.privateAreas)),
+      outerPosition: JSON.parse(JSON.stringify(gameState.outerPosition)),
+      lastLine: JSON.parse(JSON.stringify(gameState.lastLine)),
+      homeAreas: JSON.parse(JSON.stringify(gameState.homeAreas))
+    };
+    
     const nextPos = getNextPosition(pawn, dice);
     
     if (!nextPos) {
@@ -300,73 +307,111 @@ export function LudoGame({ onBack }: LudoGameProps) {
     
     console.log(`📍 Next position: ${nextPos.cell}, area: ${nextPos.area}`);
     
-    // Remove pawn from current position
+    // Find and clone the pawn to avoid reference issues
+    let movingPawn: Pawn | null = null;
+    
+    // Remove pawn from current position with safety checks
     if (pawn.area === 'private') {
-      const index = newGameState.privateAreas[pawn.color].findIndex(p => p.name === pawn.name);
+      const privateArray = newGameState.privateAreas[pawn.color];
+      const index = privateArray.findIndex(p => p.id === pawn.id && p.color === pawn.color);
       if (index !== -1) {
-        newGameState.privateAreas[pawn.color].splice(index, 1);
-        console.log(`🏠 Removed ${pawn.name} from private area`);
+        movingPawn = { ...privateArray[index] };
+        privateArray.splice(index, 1);
+        console.log(`🏠 Removed ${pawn.name} from private area (index ${index})`);
+      } else {
+        console.error(`❌ Pawn ${pawn.name} not found in private area!`);
+        return;
       }
     } else if (pawn.area === 'outer') {
       const currentPos = parseInt(pawn.currentCell);
-      const pawnsInCell = newGameState.outerPosition[currentPos] || [];
-      const index = pawnsInCell.findIndex(p => p.name === pawn.name);
-      if (index !== -1) {
-        pawnsInCell.splice(index, 1);
-        console.log(`🛤️ Removed ${pawn.name} from outer position ${currentPos}`);
+      if (newGameState.outerPosition[currentPos]) {
+        const pawnsInCell = newGameState.outerPosition[currentPos];
+        const index = pawnsInCell.findIndex(p => p.id === pawn.id && p.color === pawn.color);
+        if (index !== -1) {
+          movingPawn = { ...pawnsInCell[index] };
+          pawnsInCell.splice(index, 1);
+          console.log(`🛤️ Removed ${pawn.name} from outer position ${currentPos} (index ${index})`);
+        } else {
+          console.error(`❌ Pawn ${pawn.name} not found in outer position ${currentPos}!`);
+          return;
+        }
       }
     } else if (pawn.area === 'last-line') {
       const currentPos = parseInt(pawn.currentCell);
-      const pawnsInPos = newGameState.lastLine[pawn.color][currentPos] || [];
-      const index = pawnsInPos.findIndex(p => p.name === pawn.name);
-      if (index !== -1) {
-        pawnsInPos.splice(index, 1);
-        console.log(`🏁 Removed ${pawn.name} from last line pos ${currentPos}`);
+      if (newGameState.lastLine[pawn.color][currentPos]) {
+        const pawnsInPos = newGameState.lastLine[pawn.color][currentPos];
+        const index = pawnsInPos.findIndex(p => p.id === pawn.id && p.color === pawn.color);
+        if (index !== -1) {
+          movingPawn = { ...pawnsInPos[index] };
+          pawnsInPos.splice(index, 1);
+          console.log(`🏁 Removed ${pawn.name} from last line pos ${currentPos} (index ${index})`);
+        } else {
+          console.error(`❌ Pawn ${pawn.name} not found in last line position ${currentPos}!`);
+          return;
+        }
       }
     }
     
-    // Update pawn position - STORE AS SIMPLE VALUES like original
-    pawn.currentCell = nextPos.cell.toString();
-    pawn.area = nextPos.area;
-    console.log(`✅ Updated ${pawn.name} to: ${pawn.currentCell}, area: ${pawn.area}`);
+    if (!movingPawn) {
+      console.error(`❌ Failed to find and remove pawn ${pawn.name}!`);
+      return;
+    }
+    
+    // Update pawn position
+    movingPawn.currentCell = nextPos.cell.toString();
+    movingPawn.area = nextPos.area;
+    console.log(`✅ Updated ${movingPawn.name} to: ${movingPawn.currentCell}, area: ${movingPawn.area}`);
     
     // Place pawn in new position
     if (nextPos.area === 'outer') {
       const pos = nextPos.cell as number;
-      // Handle captures
+      // Initialize array if it doesn't exist
       if (!newGameState.outerPosition[pos]) {
         newGameState.outerPosition[pos] = [];
       }
       
-      const existingPawns = newGameState.outerPosition[pos];
-      const enemyPawns = existingPawns.filter(p => p.color !== pawn.color);
+      const existingPawns = [...newGameState.outerPosition[pos]]; // Clone array
+      const enemyPawns = existingPawns.filter(p => p.color !== movingPawn.color);
       
-      // Send enemy pawns back to private
+      // Send enemy pawns back to private with deep cloning
       enemyPawns.forEach(enemyPawn => {
         console.log(`💥 Capturing ${enemyPawn.name}`);
-        enemyPawn.area = 'private';
-        enemyPawn.currentCell = `${enemyPawn.color}-private-${enemyPawn.id}`;
-        newGameState.privateAreas[enemyPawn.color].push(enemyPawn);
+        const capturedPawn = { ...enemyPawn };
+        capturedPawn.area = 'private';
+        capturedPawn.currentCell = `${capturedPawn.color}-private-${capturedPawn.id}`;
+        newGameState.privateAreas[capturedPawn.color].push(capturedPawn);
       });
       
       // Keep only same color pawns and add current pawn
-      newGameState.outerPosition[pos] = [pawn, ...existingPawns.filter(p => p.color === pawn.color)];
-      console.log(`📍 Placed ${pawn.name} in outer position ${pos}`);
+      const samePawns = existingPawns.filter(p => p.color === movingPawn.color);
+      newGameState.outerPosition[pos] = [movingPawn, ...samePawns];
+      console.log(`📍 Placed ${movingPawn.name} in outer position ${pos} with ${samePawns.length} allies`);
       
     } else if (nextPos.area === 'last-line') {
       const pos = nextPos.cell as number;
-      if (!newGameState.lastLine[pawn.color][pos]) {
-        newGameState.lastLine[pawn.color][pos] = [];
+      if (!newGameState.lastLine[movingPawn.color][pos]) {
+        newGameState.lastLine[movingPawn.color][pos] = [];
       }
-      newGameState.lastLine[pawn.color][pos].push(pawn);
-      console.log(`🏁 Placed ${pawn.name} in last line pos ${pos}`);
+      newGameState.lastLine[movingPawn.color][pos].push(movingPawn);
+      console.log(`🏁 Placed ${movingPawn.name} in last line pos ${pos}`);
       
     } else if (nextPos.area === 'home') {
-      newGameState.homeAreas[pawn.color].push(pawn);
-      console.log(`🏆 ${pawn.name} reached home!`);
+      newGameState.homeAreas[movingPawn.color].push(movingPawn);
+      console.log(`🏆 ${movingPawn.name} reached home!`);
     }
     
-    console.log('🎮 === UPDATED GAME STATE (ORIGINAL FORMAT) ===');
+    // Validate state before setting
+    const totalPawns = Object.values(newGameState.privateAreas).flat().length +
+      Object.values(newGameState.outerPosition).flat().length +
+      Object.values(newGameState.lastLine).flatMap(color => Object.values(color).flat()).length +
+      Object.values(newGameState.homeAreas).flat().length;
+    
+    console.log(`🎮 Total pawns after move: ${totalPawns} (should be ${gameConfig?.turnOrder.length * 4})`);
+    
+    console.log('🎮 === UPDATED GAME STATE (FIXED FORMAT) ===');
+    console.log('Private areas:', Object.fromEntries(
+      Object.entries(newGameState.privateAreas).map(([color, pawns]) => [color, pawns.map(p => `${p.name}(${p.currentCell})`)])
+    ));
     console.log('Outer positions with pawns:', Object.fromEntries(
       Object.entries(newGameState.outerPosition)
         .filter(([k, v]) => v.length > 0)
@@ -377,8 +422,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
     setHighlightedPawns(new Set());
     
     // Check for win condition
-    if (newGameState.homeAreas[pawn.color].length === 4) {
-      setWinner(pawn.color);
+    if (newGameState.homeAreas[movingPawn.color].length === 4) {
+      setWinner(movingPawn.color);
       return;
     }
     
