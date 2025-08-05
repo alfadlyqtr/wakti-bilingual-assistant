@@ -183,10 +183,10 @@ export function ChatMessages({
         return '🎨 Image';
       }
       
-      // Check for video generation keywords
-      if (content.includes('generate video') || content.includes('create video') || content.includes('make video')) {
-        return '🎬 Video';
-      }
+      // Check for video generation keywords - Feature temporarily disabled
+      // if (content.includes('generate video') || content.includes('create video') || content.includes('make video')) {
+      //   return '🎬 Video';
+      // }
       
       // Check for explicit search keywords
       if (content.includes('search for') || content.includes('find information') || content.includes('look up') || content.includes('what is')) {
@@ -207,7 +207,7 @@ export function ChatMessages({
       if (currentActiveTrigger === 'image') return '🎨 Image';
       if (currentActiveTrigger === 'search') return '🔍 Search';
       if (currentActiveTrigger === 'vision') return '👁️ Vision';
-      if (currentActiveTrigger === 'video') return '🎬 Video';
+      // if (currentActiveTrigger === 'video') return '🎬 Video'; // Video temporarily disabled
       
       return '💬 Chat';
     }
@@ -216,7 +216,7 @@ export function ChatMessages({
     if (message.intent === 'vision') return '👁️ Vision';
     if (message.intent === 'search') return '🔍 Search';
     if (message.intent === 'image') return '🎨 Image';
-    if (message.intent === 'video') return '🎬 Video';
+    // if (message.intent === 'video') return '🎬 Video'; // Video temporarily disabled
     if (message.intent === 'parse_task') return '🎯 Task';
     
     // Detect from content for assistant messages
@@ -224,9 +224,10 @@ export function ChatMessages({
     if (content.includes('image generated') || content.includes('here is the image') || message.imageUrl) {
       return '🎨 Image';
     }
-    if (content.includes('video generat') || content.includes('🎬') || content.includes('<video')) {
-      return '🎬 Video';
-    }
+    // Video generation temporarily disabled
+    // if (content.includes('video generat') || content.includes('🎬') || content.includes('<video')) {
+    //   return '🎬 Video';
+    // }
     if (content.includes('search results') || content.includes('found the following')) {
       return '🔍 Search';
     }

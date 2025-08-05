@@ -2204,69 +2204,6 @@ export type Database = {
         }
         Relationships: []
       }
-      video_generation_tasks: {
-        Row: {
-          aspect_ratio: string | null
-          bgm: boolean | null
-          created_at: string
-          duration: number | null
-          error_message: string | null
-          id: string
-          images: string[]
-          mode: string | null
-          movement_amplitude: string | null
-          prompt: string | null
-          resolution: string | null
-          seed: number | null
-          status: string | null
-          task_id: string
-          template: string | null
-          updated_at: string
-          user_id: string
-          video_url: string | null
-        }
-        Insert: {
-          aspect_ratio?: string | null
-          bgm?: boolean | null
-          created_at?: string
-          duration?: number | null
-          error_message?: string | null
-          id?: string
-          images: string[]
-          mode?: string | null
-          movement_amplitude?: string | null
-          prompt?: string | null
-          resolution?: string | null
-          seed?: number | null
-          status?: string | null
-          task_id: string
-          template?: string | null
-          updated_at?: string
-          user_id: string
-          video_url?: string | null
-        }
-        Update: {
-          aspect_ratio?: string | null
-          bgm?: boolean | null
-          created_at?: string
-          duration?: number | null
-          error_message?: string | null
-          id?: string
-          images?: string[]
-          mode?: string | null
-          movement_amplitude?: string | null
-          prompt?: string | null
-          resolution?: string | null
-          seed?: number | null
-          status?: string | null
-          task_id?: string
-          template?: string | null
-          updated_at?: string
-          user_id?: string
-          video_url?: string | null
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
