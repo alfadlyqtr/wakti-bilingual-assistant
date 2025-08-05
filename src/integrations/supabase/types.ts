@@ -1025,57 +1025,6 @@ export type Database = {
         }
         Relationships: []
       }
-      my_tasks: {
-        Row: {
-          created_at: string
-          description: string | null
-          due_date: string | null
-          id: string
-          is_repeated: boolean
-          is_shared: boolean
-          priority: string
-          short_id: string | null
-          status: string
-          subtasks: Json | null
-          task_type: string
-          title: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          due_date?: string | null
-          id?: string
-          is_repeated?: boolean
-          is_shared?: boolean
-          priority?: string
-          short_id?: string | null
-          status?: string
-          subtasks?: Json | null
-          task_type?: string
-          title: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          due_date?: string | null
-          id?: string
-          is_repeated?: boolean
-          is_shared?: boolean
-          priority?: string
-          short_id?: string | null
-          status?: string
-          subtasks?: Json | null
-          task_type?: string
-          title?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       notification_history: {
         Row: {
           body: string
@@ -1405,15 +1354,7 @@ export type Database = {
           subtask_index?: number | null
           task_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "shared_task_completions_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "my_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       subscriptions: {
         Row: {
@@ -1480,41 +1421,6 @@ export type Database = {
           },
         ]
       }
-      subtasks: {
-        Row: {
-          created_at: string
-          id: string
-          is_completed: boolean
-          task_id: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          is_completed?: boolean
-          task_id: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          is_completed?: boolean
-          task_id?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subtasks_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       tasjeel_records: {
         Row: {
           created_at: string | null
@@ -1556,83 +1462,6 @@ export type Database = {
           title?: string | null
           transcription?: string | null
           updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      task_shares: {
-        Row: {
-          created_at: string
-          id: string
-          shared_with: string
-          task_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          shared_with: string
-          task_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          shared_with?: string
-          task_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "task_shares_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tasks: {
-        Row: {
-          created_at: string
-          description: string | null
-          due_date: string | null
-          id: string
-          is_recurring: boolean
-          priority: string
-          recurrence_pattern: string | null
-          status: string
-          subtask_group_title: string | null
-          title: string
-          type: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          due_date?: string | null
-          id?: string
-          is_recurring?: boolean
-          priority?: string
-          recurrence_pattern?: string | null
-          status?: string
-          subtask_group_title?: string | null
-          title: string
-          type: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          due_date?: string | null
-          id?: string
-          is_recurring?: boolean
-          priority?: string
-          recurrence_pattern?: string | null
-          status?: string
-          subtask_group_title?: string | null
-          title?: string
-          type?: string
-          updated_at?: string
           user_id?: string
         }
         Relationships: []
