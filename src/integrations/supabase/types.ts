@@ -2437,11 +2437,12 @@ export type Database = {
         }[]
       }
       get_or_create_ai_quota: {
-        Args: { p_user_id: string }
+        Args: { input_user_id: string }
         Returns: {
+          id: string
+          user_id: string
           chat_characters_used: number
-          search_characters_used: number
-          image_prompts_used: number
+          chat_characters_limit: number
           created_at: string
           updated_at: string
         }[]
@@ -2676,6 +2677,10 @@ export type Database = {
       suspend_user: {
         Args: { p_user_id: string; p_admin_id: string; p_reason?: string }
         Returns: boolean
+      }
+      test_user_voice_quota_access: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
       unsuspend_user: {
         Args: { p_user_id: string }
