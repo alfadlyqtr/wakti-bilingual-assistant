@@ -7,7 +7,7 @@ import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-rea
 import TextGeneratorPopup from './TextGeneratorPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { GameModeModal } from './GameModeModal';
-import { IsolatedVideoDialog } from './IsolatedVideoDialog';
+
 
 interface QuickActionsProps {
   onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
@@ -28,7 +28,7 @@ export function QuickActionsPanel({
   const [showTextGen, setShowTextGen] = useState(false);
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
-  const [showVideoDialog, setShowVideoDialog] = useState(false);
+  
   
   const triggerModes = [{
     id: 'chat',
@@ -77,14 +77,6 @@ export function QuickActionsPanel({
     action: () => setShowGameMode(true),
     color: 'bg-red-500',
     disabled: false
-  }, {
-    icon: <Image className="h-5 w-5" />,
-    label: language === 'ar' ? 'إنشاء فيديو' : 'Create Video',
-    description: language === 'ar' ? 'حول صورتك إلى فيديو متحرك' : 'Turn your image into an animated video',
-    action: () => {},
-    color: 'bg-blue-500',
-    disabled: true,
-    comingSoon: true
   }];
   
   const handleTriggerSelect = (triggerId: string) => {
@@ -157,11 +149,6 @@ export function QuickActionsPanel({
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium text-sm text-slate-700 dark:text-slate-300">{action.label}</h3>
-                        {action.comingSoon && (
-                          <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                            {language === 'ar' ? 'قريباً' : 'Coming Soon'}
-                          </Badge>
-                        )}
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400">{action.description}</p>
                     </div>
@@ -179,11 +166,6 @@ export function QuickActionsPanel({
           onTextGenerated={onTextGenerated} 
         />
 
-        {/* Isolated Video Dialog */}
-        <IsolatedVideoDialog 
-          open={showVideoDialog} 
-          onOpenChange={setShowVideoDialog} 
-        />
 
         {/* Voice Clone Popup */}
         <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />

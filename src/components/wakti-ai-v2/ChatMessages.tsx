@@ -6,7 +6,7 @@ import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
-import { VideoCountdownTimer } from './VideoCountdownTimer';
+
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,113 +52,8 @@ export function ChatMessages({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
-  const [videoPollingStates, setVideoPollingStates] = useState<Record<string, { isPolling: boolean; taskId?: string }>>({});
+  
 
-  // ENHANCED: Real-time video updates subscription with better error handling
-  useEffect(() => {
-    if (!userProfile?.id) return;
-
-    console.log('🎬 CHAT: Setting up video updates subscription for user:', userProfile.id);
-
-    const channel = supabase
-      .channel('video-updates-' + userProfile.id)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'video_generation_tasks',
-          filter: `user_id=eq.${userProfile.id}`
-        },
-        (payload) => {
-          console.log('🎬 CHAT: Video update received:', payload);
-          
-          const { new: newRecord } = payload;
-          
-          if (newRecord.status === 'completed' && newRecord.video_url) {
-            console.log('🎬 CHAT: Video completed, URL:', newRecord.video_url);
-            
-            // Create video content with proper HTML5 video tag
-            const videoContent = `🎬 **Video generation completed!**\n\nYour video is ready:\n\n<video controls width="400" class="video-player">\n<source src="${newRecord.video_url}" type="video/mp4">\nYour browser does not support the video tag.\n</video>\n\n✨ Template: ${newRecord.template}\n⏱️ Duration: ${newRecord.duration}s\n📐 Resolution: ${newRecord.resolution}`;
-            
-            // Dispatch custom event for message update
-            window.dispatchEvent(new CustomEvent('updateVideoMessage', {
-              detail: {
-                taskId: newRecord.task_id,
-                videoUrl: newRecord.video_url,
-                status: newRecord.status,
-                content: videoContent,
-                template: newRecord.template
-              }
-            }));
-            
-          } else if (newRecord.status === 'failed') {
-            console.log('🎬 CHAT: Video generation failed');
-            
-            const errorContent = `❌ **Video generation failed**\n\nSorry, there was an issue generating your video. Please try again with different images or template.\n\n🔄 You can try:\n• Different image angles or lighting\n• Another template style\n• Reducing image file sizes`;
-            
-            window.dispatchEvent(new CustomEvent('updateVideoMessage', {
-              detail: {
-                taskId: newRecord.task_id,
-                status: newRecord.status,
-                error: 'Video generation failed',
-                content: errorContent
-              }
-            }));
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('🎬 CHAT: Subscription status:', status);
-      });
-
-    return () => {
-      console.log('🎬 CHAT: Cleaning up video updates subscription');
-      supabase.removeChannel(channel);
-    };
-  }, [userProfile?.id]);
-
-  // Handle video update events
-  useEffect(() => {
-    const handleVideoUpdate = (event: CustomEvent) => {
-      console.log('🎬 CHAT UPDATE: Received video update event', event.detail);
-      
-      const { taskId, videoUrl, status, error, content, template } = event.detail;
-      
-      // Find messages that mention video generation and update them
-      if (onUpdateMessage) {
-        // Look for recent video generation messages
-        const recentVideoMessage = sessionMessages
-          .slice()
-          .reverse()
-          .find(msg => 
-            msg.content?.includes('Video generation started') || 
-            msg.content?.includes('🎬') ||
-            msg.intent === 'video'
-          );
-        
-        if (recentVideoMessage) {
-          console.log('🎬 CHAT UPDATE: Updating message', recentVideoMessage.id);
-          onUpdateMessage(recentVideoMessage.id, content);
-        }
-      }
-
-      // Clear polling state for this task
-      setVideoPollingStates(prev => {
-        const newState = { ...prev };
-        delete newState[taskId];
-        return newState;
-      });
-    };
-    
-    // Listen for video update events
-    window.addEventListener('updateVideoMessage', handleVideoUpdate as EventListener);
-    
-    // Cleanup listener
-    return () => {
-      window.removeEventListener('updateVideoMessage', handleVideoUpdate as EventListener);
-    };
-  }, [sessionMessages, onUpdateMessage]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -210,26 +105,6 @@ export function ChatMessages({
     speechSynthesis.speak(utterance);
   };
 
-  // Check if message is a video generation message that needs countdown
-  const isVideoGenerationMessage = (message: AIMessage): { isVideo: boolean; taskId?: string } => {
-    if (message.role !== 'assistant') return { isVideo: false };
-    
-    const content = message.content?.toLowerCase() || '';
-    if (!content.includes('🎬') || !content.includes('video generation started')) {
-      return { isVideo: false };
-    }
-
-    // Try to extract task ID from imageUrl field (where it's stored temporarily)
-    const taskId = message.imageUrl;
-    return { isVideo: true, taskId };
-  };
-
-  const handlePollingStart = (messageId: string, taskId: string) => {
-    setVideoPollingStates(prev => ({
-      ...prev,
-      [messageId]: { isPolling: true, taskId }
-    }));
-  };
 
   // FIXED: Show welcome message for new conversations
   const renderWelcomeMessage = () => {
@@ -255,8 +130,8 @@ export function ChatMessages({
             
             <div className="text-sm leading-relaxed">
               {language === 'ar' 
-                ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🎬 **إنشاء الفيديوهات** - ارفع صورك وسأحولها لفيديوهات مذهلة\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
-                : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🎬 **Generate Videos** - Upload your photos and I'll turn them into amazing videos\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
+                 ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
+                : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
               }
             </div>
             
@@ -266,8 +141,8 @@ export function ChatMessages({
                 {/* Copy Button */}
                 <button
                   onClick={() => navigator.clipboard.writeText(language === 'ar' 
-                    ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🎬 **إنشاء الفيديوهات** - ارفع صورك وسأحولها لفيديوهات مذهلة\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
-                    : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🎬 **Generate Videos** - Upload your photos and I'll turn them into amazing videos\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
+                     ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
+                     : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`
                   )}
                   className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
@@ -277,9 +152,9 @@ export function ChatMessages({
                 
                 {/* Native TTS Button */}
                 <button
-                  onClick={() => handleSpeak(language === 'ar' 
-                    ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، إنشاء الفيديوهات، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
-                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, generate videos, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome'
+                   onClick={() => handleSpeak(language === 'ar' 
+                     ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
+                     : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome'
                   )}
                   className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice'}
@@ -441,10 +316,7 @@ export function ChatMessages({
           {renderWelcomeMessage()}
           
           {/* Chat Messages with FIXED badge logic and enhanced video display */}
-          {sessionMessages.map((message, index) => {
-            const videoInfo = isVideoGenerationMessage(message);
-            
-            return (
+          {sessionMessages.map((message, index) => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
                 <div className="flex gap-3 max-w-[80%]">
                   {message.role === 'assistant' && (
@@ -471,15 +343,6 @@ export function ChatMessages({
                       {renderMessageContent(message)}
                     </div>
                     
-                    {/* Video Countdown Timer - Only for video generation messages */}
-                    {videoInfo.isVideo && videoInfo.taskId && userProfile?.id && !videoPollingStates[message.id]?.isPolling && (
-                      <VideoCountdownTimer
-                        messageId={message.id}
-                        taskId={videoInfo.taskId}
-                        userId={userProfile.id}
-                        onPollingStart={() => handlePollingStart(message.id, videoInfo.taskId!)}
-                      />
-                    )}
                     
                     {/* Image Preview in Chat Messages */}
                     {message.attachedFiles && message.attachedFiles.length > 0 && (
@@ -539,8 +402,7 @@ export function ChatMessages({
                   )}
                 </div>
               </div>
-            );
-          })}
+           ))}
           
           {/* Loading Indicator with proper TypingIndicator */}
           {isLoading && <TypingIndicator />}

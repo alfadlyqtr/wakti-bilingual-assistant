@@ -13,7 +13,7 @@ import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
-import { useVideoStatusPoller } from '@/hooks/useVideoStatusPoller';
+
 
 const useDebounceCallback = (callback: Function, delay: number) => {
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -86,7 +86,7 @@ const WaktiAIV2 = () => {
   const { canTranslate, refreshTranslationQuota } = useQuotaManagement();
   const { canUseVoice, refreshVoiceQuota } = useExtendedQuotaManagement();
   const { quota, fetchQuota } = useAIQuotaManagement();
-  const { addTask: addVideoTask } = useVideoStatusPoller();
+  
 
   const loadUserProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
