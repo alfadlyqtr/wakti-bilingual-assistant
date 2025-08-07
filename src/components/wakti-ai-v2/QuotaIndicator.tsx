@@ -65,8 +65,8 @@ export function QuotaIndicator() {
         <Mic className="h-3 w-3" />
         <span className="font-medium">
           {language === 'ar' 
-            ? `${Math.floor(remainingVoiceCharacters/1000)}ك حرف`
-            : `${Math.floor(remainingVoiceCharacters/1000)}k chars`
+            ? `${Math.floor(remainingVoiceCharacters/1000)}ك حرف شهري`
+            : `${Math.floor(remainingVoiceCharacters/1000)}k monthly`
           }
         </span>
         {userVoiceQuota.extra_characters > 0 && (

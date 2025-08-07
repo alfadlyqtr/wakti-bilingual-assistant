@@ -16,7 +16,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   
   const [userVoiceQuota, setUserVoiceQuota] = useState<UserVoiceQuota>({
     characters_used: 0,
-    characters_limit: 6000, // Updated: Use consistent 6000 characters
+    characters_limit: 6000, // Monthly limit: 6000 characters per month
     extra_characters: 0
   });
   
@@ -45,7 +45,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         console.log('✅ User voice quota loaded successfully:', quota);
         setUserVoiceQuota({
           characters_used: quota.characters_used || 0,
-          characters_limit: quota.characters_limit || 6000, // Updated: Use consistent 6000
+          characters_limit: quota.characters_limit || 6000, // Monthly limit: 6000 characters
           extra_characters: quota.extra_characters || 0,
           purchase_date: quota.purchase_date
         });
