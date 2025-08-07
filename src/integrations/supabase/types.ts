@@ -2007,6 +2007,8 @@ export type Database = {
           created_at: string
           extra_characters: number
           id: string
+          monthly_period: string | null
+          monthly_reset_date: string | null
           purchase_date: string | null
           updated_at: string
           user_id: string
@@ -2017,6 +2019,8 @@ export type Database = {
           created_at?: string
           extra_characters?: number
           id?: string
+          monthly_period?: string | null
+          monthly_reset_date?: string | null
           purchase_date?: string | null
           updated_at?: string
           user_id: string
@@ -2027,6 +2031,8 @@ export type Database = {
           created_at?: string
           extra_characters?: number
           id?: string
+          monthly_period?: string | null
+          monthly_reset_date?: string | null
           purchase_date?: string | null
           updated_at?: string
           user_id?: string
@@ -2402,6 +2408,10 @@ export type Database = {
           p_current_message_count: number
         }
         Returns: boolean
+      }
+      reset_monthly_voice_quotas: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       resolve_duplicate_subscription: {
         Args: {

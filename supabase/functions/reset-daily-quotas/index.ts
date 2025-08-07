@@ -45,6 +45,24 @@ serve(async (req) => {
 
     console.log('✅ Daily quotas reset successfully for Qatar timezone');
 
+    // Check if it's the 1st of the month - if so, also reset voice quotas
+    const isFirstOfMonth = qatarTime.getDate() === 1;
+    
+    let voiceResetResult = null;
+    if (isFirstOfMonth) {
+      console.log('🗓️ First day of month detected - resetting voice quotas too...');
+      
+      const { data: voiceReset, error: voiceError } = await supabase.rpc('reset_monthly_voice_quotas');
+      
+      if (voiceError) {
+        console.error('❌ Error resetting voice quotas:', voiceError);
+        throw voiceError;
+      }
+      
+      voiceResetResult = voiceReset;
+      console.log('✅ Voice quotas also reset:', voiceReset);
+    }
+
     // Clean up expired extra translations (older than 30 days) - no rollover
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -70,7 +88,9 @@ serve(async (req) => {
         success: true, 
         message: 'Daily quota reset completed for Qatar timezone',
         resetCount: resetData?.length || 0,
-        cleanupCount: cleanupData?.length || 0
+        cleanupCount: cleanupData?.length || 0,
+        voiceQuotaReset: voiceResetResult,
+        isFirstOfMonth: isFirstOfMonth
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
