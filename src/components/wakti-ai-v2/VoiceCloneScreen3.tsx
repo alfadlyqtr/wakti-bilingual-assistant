@@ -627,7 +627,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </Select>
         </div>
 
-        {/* Text Input - 100 characters max for translation */}
+        {/* Text Input - 200 characters max for translation */}
         <div className="space-y-2">
           <label className="text-sm font-medium">
             {language === 'ar' ? 'النص للترجمة' : 'Text to Translate'}
@@ -641,10 +641,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             }
             className="min-h-20 resize-none"
             dir="auto"
-            maxLength={100}
+            maxLength={200}
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{translationText.length} / 100 {language === 'ar' ? 'حرف' : 'characters'}</span>
+            <span>{translationText.length} / 200 {language === 'ar' ? 'حرف' : 'characters'}</span>
           </div>
         </div>
 
