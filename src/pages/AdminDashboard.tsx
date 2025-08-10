@@ -68,7 +68,7 @@ export default function AdminDashboard() {
       </AdminHeader>
 
       {/* Main Content */}
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 sm:space-y-8">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 space-y-6 sm:space-y-8">
         {/* Recent Activity - MOVED TO TOP */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
