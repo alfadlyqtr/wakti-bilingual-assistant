@@ -135,7 +135,7 @@ export default function AdminMessages() {
       {/* Main Content */}
       <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
             <CardHeader className="pb-3">
               <CardTitle className="text-enhanced-heading flex items-center text-sm">
