@@ -313,20 +313,29 @@ export default function Account() {
     setIsSubmittingFeedback(true);
     
     try {
-      // In a real app, this would send to your backend
-      console.log("Submitting feedback:", {
-        type: feedbackType,
-        title: feedbackTitle,
-        message: feedbackMessage,
-        userId: user?.id
+      const { data, error } = await supabase.functions.invoke('submit-contact-form', {
+        body: {
+          name: user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Anonymous',
+          email: user?.email || '',
+          subject: `${feedbackType === 'bug' ? 'Bug Report' : feedbackType === 'feature' ? 'Feature Request' : 'General Feedback'}: ${feedbackTitle}`,
+          message: feedbackMessage,
+          submissionType: 'feedback'
+        }
       });
-      
+
+      if (error) {
+        console.error('Error submitting feedback:', error);
+        throw error;
+      }
+
+      console.log('Feedback submitted successfully:', data);
       toast.success(t("feedbackSubmitted", language));
       setIsFeedbackDialogOpen(false);
       setFeedbackType("");
       setFeedbackTitle("");
       setFeedbackMessage("");
     } catch (error) {
+      console.error('Failed to submit feedback:', error);
       toast.error(t("errorSubmittingFeedback", language));
     } finally {
       setIsSubmittingFeedback(false);
