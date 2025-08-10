@@ -51,6 +51,64 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
 
       const session = JSON.parse(adminSession);
       
+      // First, find the user profile by email to get their user_id
+      const { data: userProfile, error: userError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', message.email)
+        .single();
+
+      if (userError) {
+        console.error('Error finding user:', userError);
+        toast.error("User not found. Unable to send direct message.");
+        return;
+      }
+
+      // Create/ensure WAKTI SUPPORT system contact exists
+      const WAKTI_SUPPORT_ID = '00000000-0000-0000-0000-000000000001';
+      
+      // Create system profile if it doesn't exist
+      await supabase
+        .from('profiles')
+        .upsert({
+          id: WAKTI_SUPPORT_ID,
+          display_name: 'WAKTI SUPPORT',
+          email: 'support@wakti.app',
+          avatar_url: '/lovable-uploads/logo.png', // Wakti logo
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+
+      // Add WAKTI SUPPORT to user's contacts if not already added
+      await supabase
+        .from('contacts')
+        .upsert({
+          user_id: userProfile.id,
+          contact_id: WAKTI_SUPPORT_ID,
+          status: 'accepted',
+          is_favorite: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,contact_id' });
+
+      // Send the admin response as a direct message from WAKTI SUPPORT
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: WAKTI_SUPPORT_ID,
+          recipient_id: userProfile.id,
+          message_type: 'text',
+          content: `Re: ${message.subject || 'Your Message'}\n\n${response.trim()}`,
+          created_at: new Date().toISOString(),
+          is_read: false
+        });
+
+      if (messageError) {
+        console.error('Error sending direct message:', messageError);
+        toast.error("Failed to send direct message");
+        return;
+      }
+
       // Update the contact submission with admin response
       const { error } = await supabase
         .from('contact_submissions')
@@ -64,12 +122,12 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
         .eq('id', message.id);
 
       if (error) {
-        console.error('Error sending response:', error);
-        toast.error("Failed to send response");
+        console.error('Error updating submission:', error);
+        toast.error("Failed to update submission status");
         return;
       }
 
-      toast.success(`Response sent to ${message.name}`);
+      toast.success(`Response sent to ${message.name} via direct message`);
       setResponse("");
       onResponded();
     } catch (error) {

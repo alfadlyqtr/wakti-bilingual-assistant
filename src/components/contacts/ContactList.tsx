@@ -247,50 +247,68 @@ export function ContactList() {
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5 flex-shrink-0">
-                      <Button 
-                        size="icon" 
-                        variant="ghost"
-                        onClick={() => handleToggleFavorite(contact.id, isFavorite)}
-                        disabled={favoriteMutation.isPending}
-                        className="h-8 w-8 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
-                        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                      >
-                        <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
-                      </Button>
-                      <ContactRelationshipIndicator status={relationshipStatus} />
-                      <div className="relative">
-                        <Button 
-                          size="icon" 
-                          variant="ghost"
-                          onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
-                          className={`h-8 w-8 relative transition-colors ${
-                            unreadCount > 0 
-                              ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                              : 'hover:bg-blue-50 hover:text-blue-600'
-                          }`}
-                        >
-                          <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-600'} ${unreadCount ? 'animate-blink' : ''}`} />
-                          <UnreadBadge count={unreadCount} blink={!!unreadCount} />
-                        </Button>
-                      </div>
-                      <Button 
-                        size="icon" 
-                        variant="ghost"
-                        onClick={() => handleBlock(contact.contact_id)}
-                        disabled={blockContactMutation.isPending}
-                        className="h-8 w-8 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                      >
-                        <UserX className="h-4 w-4 text-orange-600" />
-                      </Button>
-                      <Button 
-                        size="icon" 
-                        variant="ghost"
-                        onClick={() => handleDeleteClick(contact, displayName)}
-                        disabled={deleteContactMutation.isPending}
-                        className="h-8 w-8 hover:bg-red-50 hover:text-red-600 transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
+                      {contact.contact_id === '00000000-0000-0000-0000-000000000001' ? (
+                        // WAKTI SUPPORT - only show message button with special styling
+                        <div className="relative">
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
+                            className={`h-8 w-8 relative transition-colors bg-primary text-primary-foreground hover:bg-primary/90`}
+                          >
+                            <MessageSquare className="h-4 w-4 text-white" />
+                            <UnreadBadge count={unreadCount} blink={!!unreadCount} />
+                          </Button>
+                        </div>
+                      ) : (
+                        // Regular contacts - show all actions
+                        <>
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            onClick={() => handleToggleFavorite(contact.id, isFavorite)}
+                            disabled={favoriteMutation.isPending}
+                            className="h-8 w-8 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
+                            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
+                          </Button>
+                          <ContactRelationshipIndicator status={relationshipStatus} />
+                          <div className="relative">
+                            <Button 
+                              size="icon" 
+                              variant="ghost"
+                              onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
+                              className={`h-8 w-8 relative transition-colors ${
+                                unreadCount > 0 
+                                  ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                                  : 'hover:bg-blue-50 hover:text-blue-600'
+                              }`}
+                            >
+                              <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-600'} ${unreadCount ? 'animate-blink' : ''}`} />
+                              <UnreadBadge count={unreadCount} blink={!!unreadCount} />
+                            </Button>
+                          </div>
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            onClick={() => handleBlock(contact.contact_id)}
+                            disabled={blockContactMutation.isPending}
+                            className="h-8 w-8 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                          >
+                            <UserX className="h-4 w-4 text-orange-600" />
+                          </Button>
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            onClick={() => handleDeleteClick(contact, displayName)}
+                            disabled={deleteContactMutation.isPending}
+                            className="h-8 w-8 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </CardContent>
