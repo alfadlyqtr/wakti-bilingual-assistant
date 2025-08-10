@@ -21,6 +21,7 @@ interface ContactSubmission {
   subject?: string;
   message: string;
   status: string;
+  submission_type: string;
   created_at: string;
   updated_at: string;
   admin_response?: string;
@@ -34,6 +35,7 @@ export default function AdminMessages() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterType, setFilterType] = useState("all");
   const [selectedMessage, setSelectedMessage] = useState<ContactSubmission | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
 
@@ -102,7 +104,10 @@ export default function AdminMessages() {
       (filterStatus === "read" && message.status === 'read') ||
       (filterStatus === "responded" && message.status === 'responded');
     
-    return matchesSearch && matchesFilter;
+    const matchesType = filterType === "all" || 
+      message.submission_type === filterType;
+    
+    return matchesSearch && matchesFilter && matchesType;
   });
 
   if (isLoading) {
@@ -130,7 +135,7 @@ export default function AdminMessages() {
       {/* Main Content */}
       <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
             <CardHeader className="pb-3">
               <CardTitle className="text-enhanced-heading flex items-center text-sm">
@@ -184,6 +189,20 @@ export default function AdminMessages() {
               </div>
             </CardContent>
           </Card>
+          
+          <Card className="bg-gradient-card border-border/50 hover:border-red-500/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Shield className="h-4 w-4 mr-2 text-red-500" />
+                Abuse Reports
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-500">
+                {messages.filter(m => m.submission_type === 'abuse').length}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Enhanced Search and Filter Controls */}
@@ -211,10 +230,24 @@ export default function AdminMessages() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Messages</SelectItem>
+                    <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="unread">Unread</SelectItem>
                     <SelectItem value="read">Read</SelectItem>
                     <SelectItem value="responded">Responded</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full lg:w-48">
+                <Label>Filter by Type</Label>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="mt-1 bg-background/50 border-border/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="contact">Contact</SelectItem>
+                    <SelectItem value="feedback">Feedback</SelectItem>
+                    <SelectItem value="abuse">Abuse Report</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -235,15 +268,28 @@ export default function AdminMessages() {
                             {message.email}
                           </div>
                         </div>
-                        <Badge 
-                          variant={
-                            message.status === 'unread' ? 'destructive' :
-                            message.status === 'responded' ? 'default' : 'secondary'
-                          }
-                          className="text-xs"
-                        >
-                          {message.status}
-                        </Badge>
+                        <div className="flex gap-2">
+                          <Badge 
+                            variant={
+                              message.submission_type === 'abuse' ? 'destructive' :
+                              message.submission_type === 'feedback' ? 'secondary' : 'outline'
+                            }
+                            className="text-xs"
+                          >
+                            {message.submission_type === 'contact' ? 'Contact' : 
+                             message.submission_type === 'feedback' ? 'Feedback' : 
+                             'Abuse Report'}
+                          </Badge>
+                          <Badge 
+                            variant={
+                              message.status === 'unread' ? 'destructive' :
+                              message.status === 'responded' ? 'default' : 'secondary'
+                            }
+                            className="text-xs"
+                          >
+                            {message.status}
+                          </Badge>
+                        </div>
                       </div>
                       
                       {message.subject && (
