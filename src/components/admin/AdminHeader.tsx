@@ -19,16 +19,16 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
   };
 
   return (
-    <header className="sticky top-0 z-30 backdrop-blur-md bg-[#0c0f14]/70 border-b border-white/5 px-4 sm:px-6 lg:px-8 py-3">
+    <header className="sticky top-0 z-30 backdrop-blur-md bg-background/70 border-b border-border px-4 sm:px-6 lg:px-8 py-3">
       <div className="space-y-3">
         {/* Top Line: Title + Subtitle + Theme Toggle */}
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold leading-none text-white/90 flex items-center gap-2">
+          <h1 className="text-lg font-semibold leading-none text-foreground flex items-center gap-2">
             {title}
             {subtitle && (
               <>
-                <span className="text-white/50">•</span>
-                <span className="text-sm text-white/70 font-normal">{subtitle}</span>
+                <span className="text-muted-foreground">•</span>
+                <span className="text-sm text-muted-foreground font-normal">{subtitle}</span>
               </>
             )}
           </h1>
@@ -42,7 +42,7 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
               variant="ghost"
               size="sm"
               onClick={handleBackToAdmin}
-              className="rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 font-medium text-xs px-3 py-1.5"
+              className="rounded-full border border-border bg-background/50 text-foreground hover:bg-accent font-medium text-xs px-3 py-1.5"
             >
               AD
             </Button>
