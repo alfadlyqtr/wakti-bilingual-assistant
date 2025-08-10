@@ -60,7 +60,7 @@ export default function AdminDashboard() {
             <TrendingUp className="h-3 w-3" />
             Live Updates
           </span>
-          <Button onClick={refetch} variant="outline" size="sm" className="h-8 px-2 sm:px-3 text-xs">
+          <Button onClick={refetch} variant="outline" size="sm" className="h-8 px-2 sm:px-3 text-xs bg-white/5 border-white/20 text-white/80 hover:bg-white/10 hover:text-white">
             <RefreshCw className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Refresh</span>
           </Button>

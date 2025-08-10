@@ -33,10 +33,9 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
           <div className="flex items-center gap-2">
             {icon}
             <div>
-              <h1 className="text-lg font-semibold leading-none text-white/90">{title}</h1>
-              {subtitle && (
-                <p className="text-sm text-white/70 mt-0.5">{subtitle}</p>
-              )}
+              <h1 className="text-lg font-semibold leading-none text-white/90">
+                {title} {subtitle && <span className="text-sm text-white/70 font-normal">• {subtitle}</span>}
+              </h1>
             </div>
           </div>
         </div>
