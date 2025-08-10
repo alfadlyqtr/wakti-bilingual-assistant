@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Search } from "lucide-react";
+import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Search, Trash2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -90,6 +90,24 @@ export default function AdminMessages() {
     loadMessages();
     setShowMessageModal(false);
     setSelectedMessage(null);
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('contact_submissions')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) throw error;
+      toast.success('Message deleted successfully');
+      loadMessages();
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error('Failed to delete message');
+    }
   };
 
   const filteredMessages = messages.filter(message => {
@@ -256,69 +274,94 @@ export default function AdminMessages() {
             {/* Enhanced Messages List */}
             <div className="space-y-4">
               {filteredMessages.map((message) => (
-                <div key={message.id} className="bg-gradient-card border border-border/30 rounded-xl p-6 hover:border-border/50 transition-all duration-300">
-                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                    <div className="flex-1 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-enhanced-heading">
-                            {message.name}
-                          </div>
-                          <div className="text-sm text-muted-foreground break-all">
-                            {message.email}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Badge 
-                            variant={
-                              message.submission_type === 'abuse' ? 'destructive' :
-                              message.submission_type === 'feedback' ? 'secondary' : 'outline'
-                            }
-                            className="text-xs"
-                          >
-                            {message.submission_type === 'contact' ? 'Contact' : 
-                             message.submission_type === 'feedback' ? 'Feedback' : 
-                             'Abuse Report'}
-                          </Badge>
-                          <Badge 
-                            variant={
-                              message.status === 'unread' ? 'destructive' :
-                              message.status === 'responded' ? 'default' : 'secondary'
-                            }
-                            className="text-xs"
-                          >
-                            {message.status}
-                          </Badge>
+                <Card key={message.id} className="bg-gradient-card border-border/50 hover:border-border/70 transition-all duration-300">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      {/* Avatar */}
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-white font-semibold text-lg">
+                          {message.name.charAt(0).toUpperCase()}
                         </div>
                       </div>
                       
-                      {message.subject && (
-                        <div className="font-medium text-accent-blue">
-                          {message.subject}
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h3 className="text-enhanced-heading font-semibold text-base mb-1">
+                              {message.name}
+                            </h3>
+                            <a 
+                              href={`mailto:${message.email}`}
+                              className="text-accent-blue text-sm hover:underline flex items-center gap-1"
+                            >
+                              <Mail className="h-3 w-3" />
+                              {message.email}
+                            </a>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Badge 
+                              variant={
+                                message.submission_type === 'abuse' ? 'destructive' :
+                                message.submission_type === 'feedback' ? 'secondary' : 'outline'
+                              }
+                              className="text-xs"
+                            >
+                              {message.submission_type === 'contact' ? 'Contact' : 
+                               message.submission_type === 'feedback' ? 'Feedback' : 
+                               'Abuse Report'}
+                            </Badge>
+                            <Badge 
+                              variant={
+                                message.status === 'unread' ? 'destructive' :
+                                message.status === 'responded' ? 'default' : 'secondary'
+                              }
+                              className="text-xs"
+                            >
+                              {message.status}
+                            </Badge>
+                          </div>
                         </div>
-                      )}
-                      
-                      <div className="text-muted-foreground line-clamp-2">
-                        {message.message}
-                      </div>
-                      
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(message.created_at).toLocaleString()}
+                        
+                        {message.subject && (
+                          <div className="mb-2">
+                            <span className="text-sm text-muted-foreground">Subject: </span>
+                            <span className="text-sm font-medium text-enhanced-heading">{message.subject}</span>
+                          </div>
+                        )}
+                        
+                        <div className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                          {message.message}
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(message.created_at).toLocaleString()}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleDeleteMessage(message.id)}
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50/10"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleViewMessage(message)}
+                              className="btn-enhanced hover:shadow-glow"
+                            >
+                              <Eye className="h-3 w-3 mr-1" />
+                              View & Respond
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    
-                    <div className="flex justify-end">
-                      <Button 
-                        size="sm" 
-                        onClick={() => handleViewMessage(message)}
-                        className="btn-enhanced hover:shadow-glow"
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View & Respond
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           </CardContent>
