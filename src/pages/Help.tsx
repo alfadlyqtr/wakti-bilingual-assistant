@@ -293,32 +293,129 @@ export default function Help() {
             </TabsList>
 
             <TabsContent value="guides" className="space-y-6">
-              {/* Need Help Card */}
+              {/* Collapsible Navigation Tips - Moved to Top */}
               <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                <CardHeader>
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
-                      <HelpCircle className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
-                        {language === 'ar' ? 'تحتاج مساعدة؟' : 'Need Help?'}
-                      </CardTitle>
-                      <CardDescription>
-                        {language === 'ar' ? 'لا تجد ما تبحث عنه؟ تواصل مع فريق الدعم' : "Can't find what you're looking for? Contact our support team"}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Button 
-                    onClick={() => setShowTicketModal(true)}
-                    className="w-full bg-gradient-primary hover:bg-gradient-primary/90"
-                  >
-                    <Ticket className="h-4 w-4 mr-2" />
-                    {language === 'ar' ? 'فتح تذكرة دعم' : 'Open Support Ticket'}
-                  </Button>
-                </CardContent>
+                <Collapsible 
+                  open={openSections.includes('navigation')}
+                  onOpenChange={() => toggleSection('navigation')}
+                >
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
+                            <Navigation className="h-5 w-5 text-blue-500" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                              {language === 'ar' ? 'نصائح التنقّل' : 'Navigation Tips'}
+                            </CardTitle>
+                            <CardDescription>
+                              {language === 'ar' ? 'كيفية التنقل في التطبيق' : 'How to navigate the app'}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <ChevronRight 
+                          className={cn(
+                            "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
+                            openSections.includes('navigation') ? 'rotate-90' : ''
+                          )} 
+                        />
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent>
+                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                        <div className="space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                              <span className="text-sm font-semibold text-blue-400">1</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground/90">
+                              {language === 'ar' 
+                                ? 'استخدم شريط التنقل السفلي للانتقال بين الأقسام الرئيسية'
+                                : 'Use the bottom navigation bar to move between main sections'
+                              }
+                            </p>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                              <span className="text-sm font-semibold text-blue-400">2</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground/90">
+                              {language === 'ar' 
+                                ? 'اضغط على صورة الملف الشخصي في الأعلى للوصول للإعدادات والرسائل'
+                                : 'Tap your profile picture at the top to access settings and messages'
+                              }
+                            </p>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                              <span className="text-sm font-semibold text-blue-400">3</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground/90">
+                              {language === 'ar' 
+                                ? 'اسحب لأسفل في أي صفحة لتحديث المحتوى'
+                                : 'Pull down on any page to refresh content'
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+
+              {/* Collapsible Tips & Best Practices - Moved to Top */}
+              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                <Collapsible 
+                  open={openSections.includes('tips')}
+                  onOpenChange={() => toggleSection('tips')}
+                >
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
+                            <Lightbulb className="h-5 w-5 text-amber-500" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                              {language === 'ar' ? 'نصائح وأفضل الممارسات' : 'Tips & Best Practices'}
+                            </CardTitle>
+                            <CardDescription>
+                              {language === 'ar' ? 'نصائح وحيل لاستخدام أفضل لـ WAKTI' : 'Tips and tricks for better WAKTI usage'}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <ChevronRight 
+                          className={cn(
+                            "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
+                            openSections.includes('tips') ? 'rotate-90' : ''
+                          )} 
+                        />
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent>
+                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                        <div className="space-y-4">
+                          {tips.map((tip, index) => (
+                            <div key={index} className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                                <span className="text-sm font-semibold text-amber-400">💡</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground/90">{tip}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
               </Card>
 
               {/* Main Sections */}
@@ -366,100 +463,6 @@ export default function Help() {
                 ))}
               </div>
 
-              {/* Collapsible Navigation Tips */}
-              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                <Collapsible 
-                  open={openSections.includes('navigation')}
-                  onOpenChange={() => toggleSection('navigation')}
-                >
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
-                            <Navigation className="h-5 w-5 text-blue-500" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
-                              {language === 'ar' ? 'نصائح التنقّل' : 'Navigation Tips'}
-                            </CardTitle>
-                            <CardDescription>
-                              {language === 'ar' ? 'كيفية التنقل في التطبيق' : 'How to navigate the app'}
-                            </CardDescription>
-                          </div>
-                        </div>
-                        <ChevronRight 
-                          className={cn(
-                            "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
-                            openSections.includes('navigation') ? 'rotate-90' : ''
-                          )} 
-                        />
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent>
-                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
-                        <ul className="space-y-3">
-                          <li className="text-sm text-muted-foreground/90">• {t('mobileNav', language)}</li>
-                          <li className="text-sm text-muted-foreground/90">• {t('userMenu', language)}</li>
-                          <li className="text-sm text-muted-foreground/90">• {t('backButtons', language)}</li>
-                        </ul>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
-
-              {/* Collapsible Tips & Best Practices */}
-              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                <Collapsible 
-                  open={openSections.includes('tips')}
-                  onOpenChange={() => toggleSection('tips')}
-                >
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
-                            <Lightbulb className="h-5 w-5 text-amber-500" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
-                              {language === 'ar' ? 'نصائح وأفضل الممارسات' : 'Tips & Best Practices'}
-                            </CardTitle>
-                            <CardDescription>
-                              {language === 'ar' ? 'نصائح وحيل لاستخدام أفضل لـ WAKTI' : 'Tips and tricks for better WAKTI usage'}
-                            </CardDescription>
-                          </div>
-                        </div>
-                        <ChevronRight 
-                          className={cn(
-                            "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
-                            openSections.includes('tips') ? 'rotate-90' : ''
-                          )} 
-                        />
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent>
-                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
-                        <ul className="space-y-3">
-                          {tips.map((tip, index) => (
-                            <li key={index} className="flex items-start gap-3">
-                              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-primary/20 flex items-center justify-center text-xs font-semibold text-primary mt-0.5">
-                                {index + 1}
-                              </div>
-                              <span className="text-sm text-muted-foreground/90">{tip}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
             </TabsContent>
 
             <TabsContent value="support" className="space-y-6">
