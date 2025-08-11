@@ -59,32 +59,59 @@ export function AdminSupportTab() {
     loadTickets();
   }, []);
 
+  const getAdminSessionToken = () => {
+    const storedSession = localStorage.getItem('admin_session');
+    if (!storedSession) return null;
+    
+    try {
+      const session = JSON.parse(storedSession);
+      return session.session_token;
+    } catch {
+      return null;
+    }
+  };
+
+  const invokeAdminGateway = async (action: string, payload: any) => {
+    const sessionToken = getAdminSessionToken();
+    if (!sessionToken) {
+      toast.error('Admin session not found');
+      return null;
+    }
+
+    const { data, error } = await supabase.functions.invoke('admin-support-gateway', {
+      body: { action, ...payload, session_token: sessionToken },
+      headers: { 'x-admin-session': sessionToken }
+    });
+
+    if (error) {
+      console.error('Gateway error:', error);
+      toast.error('Gateway error: ' + error.message);
+      return null;
+    }
+
+    if (!data?.ok) {
+      console.error('API error:', data?.error);
+      toast.error('API error: ' + (data?.error?.message || 'Unknown error'));
+      return null;
+    }
+
+    return data;
+  };
+
   const loadTickets = async () => {
     try {
       setIsLoading(true);
       
-      // Check if user is staff first
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error('Authentication required');
-        return;
-      }
+      const result = await invokeAdminGateway('list_tickets', { 
+        status: filterStatus === 'all' ? undefined : filterStatus,
+        type: filterType === 'all' ? undefined : filterType,
+        page: 1,
+        limit: 100
+      });
 
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .select(`
-          *,
-          profiles (display_name, email)
-        `)
-        .order('last_activity_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading tickets:', error);
-        toast.error('Failed to load support tickets: ' + error.message);
-        return;
+      if (result) {
+        setTickets(result.tickets || []);
       }
-      
-      setTickets(data || []);
     } catch (error) {
       console.error('Error loading tickets:', error);
       toast.error('Failed to load support tickets');
@@ -95,17 +122,10 @@ export function AdminSupportTab() {
 
   const loadMessages = async (ticketId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('support_messages')
-        .select(`
-          *,
-          profiles (display_name)
-        `)
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
+      const result = await invokeAdminGateway('get_ticket', { ticket_id: ticketId });
+      if (result) {
+        setMessages(result.messages || []);
+      }
     } catch (error) {
       console.error('Error loading messages:', error);
       toast.error('Failed to load messages');
@@ -123,41 +143,18 @@ export function AdminSupportTab() {
 
     setIsSending(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const result = await invokeAdminGateway('reply_ticket', {
+        ticket_id: selectedTicket.id,
+        body: newMessage.trim(),
+        attachments: []
+      });
 
-      const { error } = await supabase
-        .from('support_messages')
-        .insert({
-          ticket_id: selectedTicket.id,
-          sender_id: user.id,
-          role: 'staff',
-          body: newMessage.trim(),
-          attachments: []
-        });
-
-      if (error) throw error;
-
-      // Update ticket status to pending if it was open
-      if (selectedTicket.status === 'open') {
-        await supabase
-          .from('support_tickets')
-          .update({ 
-            status: 'pending',
-            last_activity_at: new Date().toISOString() 
-          })
-          .eq('id', selectedTicket.id);
-      } else {
-        await supabase
-          .from('support_tickets')
-          .update({ last_activity_at: new Date().toISOString() })
-          .eq('id', selectedTicket.id);
+      if (result) {
+        setNewMessage('');
+        loadMessages(selectedTicket.id);
+        loadTickets();
+        toast.success('Reply sent successfully');
       }
-
-      setNewMessage('');
-      loadMessages(selectedTicket.id);
-      loadTickets();
-      toast.success('Reply sent successfully');
     } catch (error) {
       console.error('Error sending reply:', error);
       toast.error('Failed to send reply');
@@ -175,19 +172,16 @@ export function AdminSupportTab() {
 
     setIsClosing(true);
     try {
-      const { error } = await supabase.functions.invoke('support-ticket-maintenance', {
-        body: {
-          action: 'close_now',
-          ticket_id: selectedTicket.id
-        }
+      const result = await invokeAdminGateway('close_ticket', {
+        ticket_id: selectedTicket.id
       });
 
-      if (error) throw error;
-
-      toast.success('Ticket closed successfully');
-      setShowTicketModal(false);
-      setSelectedTicket(null);
-      loadTickets();
+      if (result) {
+        toast.success(`Ticket closed successfully. Deleted ${result.deletedFiles} file(s).`);
+        setShowTicketModal(false);
+        setSelectedTicket(null);
+        loadTickets();
+      }
     } catch (error) {
       console.error('Error closing ticket:', error);
       toast.error('Failed to close ticket');

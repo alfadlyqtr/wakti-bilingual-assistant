@@ -39,7 +39,11 @@ serve(async (req) => {
       });
     }
 
-    const { type, body, attachments = [] } = await req.json();
+    const { type: rawType, body, attachments = [] } = await req.json();
+
+    // Normalize type to lowercase for defensive handling
+    const rawTypeStr = (rawType ?? '').toString();
+    const type = rawTypeStr.toLowerCase();
 
     // Validation
     if (!type || !body) {
