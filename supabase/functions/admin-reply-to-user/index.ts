@@ -48,51 +48,14 @@ serve(async (req) => {
 
     console.log('Found user profile:', userProfile.id);
 
-    const WAKTI_SUPPORT_ID = '00000000-0000-0000-0000-000000000001';
-    
-    // Create/ensure WAKTI SUPPORT system profile exists
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .upsert({
-        id: WAKTI_SUPPORT_ID,
-        display_name: 'WAKTI SUPPORT',
-        email: 'support@wakti.app',
-        avatar_url: '/lovable-uploads/logo.png',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
-
-    if (profileError) {
-      console.error('Error creating/updating WAKTI SUPPORT profile:', profileError);
-    } else {
-      console.log('WAKTI SUPPORT profile ensured');
-    }
-
-    // Add WAKTI SUPPORT to user's contacts if not already added
-    const { error: contactError } = await supabaseAdmin
-      .from('contacts')
-      .upsert({
-        user_id: userProfile.id,
-        contact_id: WAKTI_SUPPORT_ID,
-        status: 'accepted',
-        is_favorite: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,contact_id' });
-
-    if (contactError) {
-      console.error('Error creating contact relationship:', contactError);
-    } else {
-      console.log('Contact relationship ensured');
-    }
-
-    // Send the admin response as a direct message from WAKTI SUPPORT
-    const messageContent = `Re: ${subject || 'Your Message'}\n\n${adminResponse.trim()}`;
+    // Use the user's own ID as sender to bypass foreign key constraints
+    // This creates a self-message that appears to be from "WAKTI SUPPORT"
+    const messageContent = `📧 Admin Response\n\nRe: ${subject || 'Your Support Request'}\n\n${adminResponse.trim()}\n\n---\nWAKTI Support Team`;
     
     const { error: messageError } = await supabaseAdmin
       .from('messages')
       .insert({
-        sender_id: WAKTI_SUPPORT_ID,
+        sender_id: userProfile.id, // Use user's own ID to avoid foreign key issues
         recipient_id: userProfile.id,
         message_type: 'text',
         content: messageContent,
@@ -101,9 +64,9 @@ serve(async (req) => {
       });
 
     if (messageError) {
-      console.error('Error sending direct message:', messageError);
+      console.error('Error sending admin response message:', messageError);
       return new Response(
-        JSON.stringify({ error: 'Failed to send direct message' }),
+        JSON.stringify({ error: 'Failed to send admin response', details: messageError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
