@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { 
   Ticket, MessageCircle, Clock, CheckCircle, X, 
   Loader2, Paperclip, Eye, RefreshCw, Search,
-  AlertCircle, User, Mail, Calendar
+  AlertCircle, User, Mail, Calendar, Shield
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -62,6 +62,14 @@ export function AdminSupportTab() {
   const loadTickets = async () => {
     try {
       setIsLoading(true);
+      
+      // Check if user is staff first
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Authentication required');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('support_tickets')
         .select(`
@@ -70,7 +78,12 @@ export function AdminSupportTab() {
         `)
         .order('last_activity_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading tickets:', error);
+        toast.error('Failed to load support tickets: ' + error.message);
+        return;
+      }
+      
       setTickets(data || []);
     } catch (error) {
       console.error('Error loading tickets:', error);
@@ -233,13 +246,13 @@ export function AdminSupportTab() {
 
   return (
     <>
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <Card className="bg-gradient-card border-border/50">
+      {/* Stats Cards - Match Messages Tab Style */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
           <CardHeader className="pb-3">
             <CardTitle className="text-enhanced-heading flex items-center text-sm">
               <Ticket className="h-4 w-4 mr-2 text-accent-blue" />
-              Total
+              Total Messages
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -247,59 +260,60 @@ export function AdminSupportTab() {
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-card border-border/50">
+        <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300">
           <CardHeader className="pb-3">
             <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <AlertCircle className="h-4 w-4 mr-2 text-green-500" />
-              Open
+              <AlertCircle className="h-4 w-4 mr-2 text-accent-orange" />
+              Unread
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{ticketCounts.open}</div>
+            <div className="text-2xl font-bold text-accent-orange">{ticketCounts.open}</div>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-card border-border/50">
+        <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300">
           <CardHeader className="pb-3">
             <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <Clock className="h-4 w-4 mr-2 text-yellow-500" />
-              Pending
+              <Eye className="h-4 w-4 mr-2 text-accent-green" />
+              Read
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-500">{ticketCounts.pending}</div>
+            <div className="text-2xl font-bold text-accent-green">{ticketCounts.pending}</div>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-card border-border/50">
+        <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
           <CardHeader className="pb-3">
             <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <CheckCircle className="h-4 w-4 mr-2 text-blue-500" />
-              Solved
+              <CheckCircle className="h-4 w-4 mr-2 text-accent-purple" />
+              Responded
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-500">{ticketCounts.solved}</div>
+            <div className="text-2xl font-bold text-accent-purple">{ticketCounts.solved}</div>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-card border-border/50">
+        <Card className="bg-gradient-card border-border/50 hover:border-red-500/30 transition-all duration-300">
           <CardHeader className="pb-3">
             <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <X className="h-4 w-4 mr-2 text-gray-500" />
-              Closed
+              <Shield className="h-4 w-4 mr-2 text-red-500" />
+              Abuse Reports
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-500">{ticketCounts.closed}</div>
+            <div className="text-2xl font-bold text-red-500">{tickets.filter(t => t.type === 'abuse').length}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Enhanced Search and Filter Controls */}
       <Card className="bg-gradient-card border-border/50 mb-6">
         <CardHeader>
           <CardTitle className="text-enhanced-heading">Support Ticket Management</CardTitle>
+          <CardDescription>Contact forms, feedback, and support requests</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col lg:flex-row gap-4 mb-6">
