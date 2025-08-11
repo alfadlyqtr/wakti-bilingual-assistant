@@ -1,20 +1,17 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Search, Trash2, Mail, Ticket } from "lucide-react";
+import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Trash2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminMessageModal } from "@/components/admin/AdminMessageModal";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
-import { AdminSupportTab } from "@/components/admin/AdminSupportTab";
 
 interface ContactSubmission {
   id: string;
@@ -40,7 +37,6 @@ export default function AdminMessages() {
   const [filterType, setFilterType] = useState("all");
   const [selectedMessage, setSelectedMessage] = useState<ContactSubmission | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
-  const [activeTab, setActiveTab] = useState("messages");
 
   useEffect(() => {
     validateAdminSession();
@@ -155,21 +151,7 @@ export default function AdminMessages() {
 
       {/* Main Content */}
       <div className="p-4 space-y-6">
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 bg-gradient-card/50 backdrop-blur-sm">
-            <TabsTrigger value="messages" className="data-[state=active]:bg-primary/20">
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Messages
-            </TabsTrigger>
-            <TabsTrigger value="support" className="data-[state=active]:bg-primary/20">
-              <Ticket className="h-4 w-4 mr-2" />
-              Support
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="messages" className="space-y-6">
-            {/* Enhanced Stats Cards */}
+        {/* Enhanced Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
             <CardHeader className="pb-3">
@@ -282,6 +264,7 @@ export default function AdminMessages() {
                     <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="contact">Contact</SelectItem>
                     <SelectItem value="feedback">Feedback</SelectItem>
+                    <SelectItem value="support">Support</SelectItem>
                     <SelectItem value="abuse">Abuse Report</SelectItem>
                   </SelectContent>
                 </Select>
@@ -326,6 +309,7 @@ export default function AdminMessages() {
                             >
                               {message.submission_type === 'contact' ? 'Contact' : 
                                message.submission_type === 'feedback' ? 'Feedback' : 
+                               message.submission_type === 'support' ? 'Support' :
                                'Abuse Report'}
                             </Badge>
                             <Badge 
@@ -383,12 +367,6 @@ export default function AdminMessages() {
             </div>
           </CardContent>
         </Card>
-          </TabsContent>
-
-          <TabsContent value="support">
-            <AdminSupportTab />
-          </TabsContent>
-        </Tabs>
       </div>
 
       {/* Message Modal */}
