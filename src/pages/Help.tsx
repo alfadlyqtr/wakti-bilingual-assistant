@@ -1,18 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronRight, 
   LayoutDashboard, Calendar, CalendarClock, ListTodo, Sparkles, Mic, 
-  Users, Settings, Lightbulb, Navigation, MessageCircle } from 'lucide-react';
+  Users, Settings, Lightbulb, Navigation, MessageCircle, HelpCircle, Ticket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { AppLayout } from '@/components/AppLayout';
+import { SupportTicketModal } from '@/components/support/SupportTicketModal';
+import { UserTicketList } from '@/components/support/UserTicketList';
 
 export default function Help() {
   const { language } = useTheme();
-  const [openSections, setOpenSections] = useState<string[]>(['dashboard']);
+  const [openSections, setOpenSections] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState('guides');
+  const [showTicketModal, setShowTicketModal] = useState(false);
 
   const toggleSection = (sectionId: string) => {
     setOpenSections(prev => 
@@ -67,18 +72,6 @@ export default function Help() {
             <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'ارفع الصور لتحليل الذكاء الاصطناعي، استخراج النص، أو الوصف التفصيلي.' : 'Upload images for AI analysis, text extraction, or detailed description.'}</p>
           </div>
           <div>
-            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'مولد النصوص' : 'Text Generator'}</h4>
-            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'أنشئ نصوص مخصصة للرسائل، المقالات، أو أي محتوى نصي تحتاجه بمساعدة الذكاء الاصطناعي.' : 'Generate custom texts for messages, articles, or any written content you need with AI assistance.'}</p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'المترجم الصوتي' : 'Voice Translator'}</h4>
-            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'ترجم النصوص أو الصوت بين اللغات المختلفة مع إمكانية التحويل إلى كلام.' : 'Translate text or voice between different languages with text-to-speech conversion.'}</p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}</h4>
-            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'أنشئ نسخة صوتية مخصصة من صوتك لاستخدامها في الردود الصوتية والتفاعلات.' : 'Create a personalized voice clone of your voice for use in voice responses and interactions.'}</p>
-          </div>
-          <div>
             <h4 className="font-medium mb-1 text-orange-400">{t('voiceFeatures', language)}</h4>
             <p className="text-sm text-muted-foreground/80">{t('voiceFeaturesDesc', language)}</p>
           </div>
@@ -97,11 +90,10 @@ export default function Help() {
           <div>
             <h4 className="font-medium mb-2 text-cyan-400">{t('recordingSteps', language)}</h4>
             <ul className="text-sm space-y-1">
-              <li>1. {language === 'ar' ? 'اضغط على زر التسجيل لبدء التسجيل' : 'Tap the record button to start recording'}</li>
-              <li>2. {language === 'ar' ? 'اضغط على إيقاف عند الانتهاء' : 'Tap stop when finished'}</li>
-              <li>3. {language === 'ar' ? 'سيقوم الذكاء الاصطناعي بالنسخ والتلخيص تلقائياً - اقرأ بعناية يمكنك التعديل في حالة الحاجة!' : 'AI will transcribe and summarize automatically - read carefully you can edit just in case!'}</li>
-              <li>4. {language === 'ar' ? 'اختر صوت ذكر أو أنثى ثم اضغط على إنشاء' : 'Choose male or female voice press generate'}</li>
-              <li>5. {language === 'ar' ? 'احفظ، توجه إلى علامة تبويب المحفوظات حيث يمكنك التصدير أو حذف التسجيلات حسب الحاجة أو تشغيل الصوت وتحميل الصوت' : 'Save, head over to saved tab you can export, or delete recordings as needed or play audio download audio'}</li>
+              <li>1. {t('step1Record', language)}</li>
+              <li>2. {t('step2Stop', language)}</li>
+              <li>3. {t('step3Transcribe', language)}</li>
+              <li>4. {t('step4Save', language)}</li>
             </ul>
           </div>
           <p className="text-sm text-muted-foreground/80">{t('autoDeleteFeature', language)}</p>
@@ -120,18 +112,18 @@ export default function Help() {
           <div>
             <h4 className="font-medium mb-2 text-purple-400">{t('createEvent', language)}</h4>
             <ul className="text-sm space-y-1">
-              <li>1. {language === 'ar' ? 'اذهب إلى صفحة أحداث Maw3d' : 'Go to Maw3d Events page'}</li>
-              <li>2. {language === 'ar' ? 'اضغط على "إنشاء حدث جديد"' : "Tap 'Create New Event'"}</li>
-              <li>3. {language === 'ar' ? 'املأ تفاصيل الحدث وخصص التصميم' : 'Fill in event details and customize design'}</li>
-              <li>4. {language === 'ar' ? 'رابط المشاركة تشغيل - إيقاف، إظهار الحضور تشغيل - إيقاف' : 'Share link on - off, show attendees on - off'}</li>
-              <li>5. {language === 'ar' ? 'رابط المشاركة للدعوات - رسائل WAKTI أو منصات التواصل الاجتماعي الأخرى' : 'Share link invitations - WAKTI messages or other social media platforms'}</li>
+              <li>{t('eventStep1', language)}</li>
+              <li>{t('eventStep2', language)}</li>
+              <li>{t('eventStep3', language)}</li>
+              <li>{t('eventStep4', language)}</li>
+              <li>{t('eventStep5', language)}</li>
             </ul>
           </div>
           <div>
             <h4 className="font-medium mb-2 text-purple-400">{t('manageEvent', language)}</h4>
             <ul className="text-sm space-y-1">
-              <li>• {language === 'ar' ? 'عرض من استجاب (الحضور، الرفض)' : 'View who has responded (attending, declined)'}</li>
-              <li>• {language === 'ar' ? 'تخصيص الحدث - تعديل' : 'Event Customization - edit'}</li>
+              <li>• {t('checkAttendance', language)}</li>
+              <li>• {t('eventCustomization', language)}</li>
             </ul>
           </div>
         </div>
@@ -269,185 +261,235 @@ export default function Help() {
     t('tip5', language)
   ];
 
+  const refreshTickets = () => {
+    setActiveTab('support');
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto p-4 pb-28 scrollbar-hide bg-gradient-background min-h-screen">
-      <div className="max-w-2xl mx-auto space-y-8">
-        {/* Header - Enhanced 3D Liquid Glass Effect */}
-        <div className="text-center relative">
-          <div className="absolute inset-0 bg-gradient-primary rounded-3xl blur-2xl opacity-20 scale-110"></div>
-          <div className="absolute inset-0 bg-gradient-card rounded-3xl blur-xl opacity-40 scale-105"></div>
-          <div className="relative bg-gradient-card/30 backdrop-blur-2xl border border-border/30 rounded-3xl p-10 shadow-2xl transform perspective-1000 hover:rotate-x-2 transition-all duration-700 hover:shadow-colored">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 rounded-3xl"></div>
-            <div className="relative z-10">
-              <h1 className="text-4xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent animate-shimmer drop-shadow-lg">
+    <AppLayout>
+      <div className="flex-1 overflow-y-auto p-4 pb-8 scrollbar-hide bg-gradient-background min-h-screen">
+        <div className="max-w-2xl mx-auto space-y-8">
+          {/* Header */}
+          <div className="text-center relative">
+            <div className="absolute inset-0 bg-gradient-primary rounded-3xl blur-2xl opacity-20 scale-110"></div>
+            <div className="absolute inset-0 bg-gradient-card rounded-3xl blur-xl opacity-40 scale-105"></div>
+            <div className="relative bg-gradient-card/30 backdrop-blur-2xl border border-border/30 rounded-3xl p-10 shadow-2xl">
+              <h1 className="text-4xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
                 {t('howToUseWakti', language)}
               </h1>
               <p className="text-muted-foreground/90 text-xl font-medium">{t('helpAndGuides', language)}</p>
             </div>
           </div>
-        </div>
 
-        {/* Main Sections - Enhanced 3D Glass */}
-        <div className="space-y-6">
-          {sections.map((section) => (
-            <div key={section.id} className="relative group">
-              <div className={cn(
-                "absolute inset-0 rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-700 scale-110",
-                section.glowClass
-              )}></div>
-              <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-30 group-hover:opacity-50 transition-all duration-500 scale-105"></div>
-              <Card className={cn(
-                "overflow-hidden relative bg-gradient-card/40 backdrop-blur-2xl border-border/40",
-                "hover:bg-gradient-card/50 hover:border-border/60 hover:shadow-2xl",
-                "transform hover:-translate-y-2 hover:scale-[1.01] transition-all duration-700",
-                "shadow-xl hover:shadow-colored perspective-1000"
-              )}>
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2 bg-gradient-card/50 backdrop-blur-sm">
+              <TabsTrigger value="guides" className="data-[state=active]:bg-primary/20">
+                {language === 'ar' ? 'الأدلة' : 'Guides'}
+              </TabsTrigger>
+              <TabsTrigger value="support" className="data-[state=active]:bg-primary/20">
+                {language === 'ar' ? 'الدعم' : 'Support'}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="guides" className="space-y-6">
+              {/* Need Help Card */}
+              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                <CardHeader>
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
+                      <HelpCircle className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                        {language === 'ar' ? 'تحتاج مساعدة؟' : 'Need Help?'}
+                      </CardTitle>
+                      <CardDescription>
+                        {language === 'ar' ? 'لا تجد ما تبحث عنه؟ تواصل مع فريق الدعم' : "Can't find what you're looking for? Contact our support team"}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => setShowTicketModal(true)}
+                    className="w-full bg-gradient-primary hover:bg-gradient-primary/90"
+                  >
+                    <Ticket className="h-4 w-4 mr-2" />
+                    {language === 'ar' ? 'فتح تذكرة دعم' : 'Open Support Ticket'}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Main Sections */}
+              <div className="space-y-6">
+                {sections.map((section) => (
+                  <Card key={section.id} className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                    <Collapsible 
+                      open={openSections.includes(section.id)}
+                      onOpenChange={() => toggleSection(section.id)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className={cn("p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40", section.colorClass)}>
+                                {section.icon}
+                              </div>
+                              <div>
+                                <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                                  {section.title}
+                                </CardTitle>
+                                <CardDescription>
+                                  {section.description}
+                                </CardDescription>
+                              </div>
+                            </div>
+                            <ChevronRight 
+                              className={cn(
+                                "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
+                                openSections.includes(section.id) ? 'rotate-90' : ''
+                              )} 
+                            />
+                          </div>
+                        </CardHeader>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <CardContent>
+                          <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                            {section.content}
+                          </div>
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Collapsible Navigation Tips */}
+              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
                 <Collapsible 
-                  open={openSections.includes(section.id)}
-                  onOpenChange={() => toggleSection(section.id)}
+                  open={openSections.includes('navigation')}
+                  onOpenChange={() => toggleSection('navigation')}
                 >
                   <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500 group/header">
+                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-5">
-                          <div className={cn(
-                            "p-4 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40",
-                            "group-hover/header:scale-110 transition-all duration-500 shadow-lg",
-                            "group-hover/header:shadow-2xl group-hover/header:rotate-3",
-                            section.colorClass
-                          )}>
-                            {section.icon}
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
+                            <Navigation className="h-5 w-5 text-blue-500" />
                           </div>
-                          <div className="text-left">
-                            <CardTitle className={cn(
-                              "text-2xl bg-gradient-primary bg-clip-text text-transparent font-bold",
-                              "group-hover/header:animate-shimmer drop-shadow-sm"
-                            )}>
-                              {section.title}
+                          <div>
+                            <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                              {language === 'ar' ? 'نصائح التنقّل' : 'Navigation Tips'}
                             </CardTitle>
-                            <CardDescription className="text-base text-muted-foreground/80 font-medium">
-                              {section.description}
+                            <CardDescription>
+                              {language === 'ar' ? 'كيفية التنقل في التطبيق' : 'How to navigate the app'}
                             </CardDescription>
                           </div>
                         </div>
                         <ChevronRight 
                           className={cn(
-                            "h-7 w-7 transition-all duration-500 text-muted-foreground/60",
-                            "group-hover/header:text-foreground group-hover/header:scale-125",
-                            openSections.includes(section.id) ? 'rotate-90' : ''
+                            "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
+                            openSections.includes('navigation') ? 'rotate-90' : ''
                           )} 
                         />
                       </div>
                     </CardHeader>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <CardContent className="pt-0 pb-8">
-                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30 shadow-inner">
-                        {section.content}
+                    <CardContent>
+                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                        <ul className="space-y-3">
+                          <li className="text-sm text-muted-foreground/90">• {t('mobileNav', language)}</li>
+                          <li className="text-sm text-muted-foreground/90">• {t('userMenu', language)}</li>
+                          <li className="text-sm text-muted-foreground/90">• {t('backButtons', language)}</li>
+                        </ul>
                       </div>
                     </CardContent>
                   </CollapsibleContent>
                 </Collapsible>
               </Card>
-            </div>
-          ))}
+
+              {/* Collapsible Tips & Best Practices */}
+              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                <Collapsible 
+                  open={openSections.includes('tips')}
+                  onOpenChange={() => toggleSection('tips')}
+                >
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
+                            <Lightbulb className="h-5 w-5 text-amber-500" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                              {language === 'ar' ? 'نصائح وأفضل الممارسات' : 'Tips & Best Practices'}
+                            </CardTitle>
+                            <CardDescription>
+                              {language === 'ar' ? 'نصائح وحيل لاستخدام أفضل لـ WAKTI' : 'Tips and tricks for better WAKTI usage'}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <ChevronRight 
+                          className={cn(
+                            "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
+                            openSections.includes('tips') ? 'rotate-90' : ''
+                          )} 
+                        />
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent>
+                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                        <ul className="space-y-3">
+                          {tips.map((tip, index) => (
+                            <li key={index} className="flex items-start gap-3">
+                              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-primary/20 flex items-center justify-center text-xs font-semibold text-primary mt-0.5">
+                                {index + 1}
+                              </div>
+                              <span className="text-sm text-muted-foreground/90">{tip}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="support" className="space-y-6">
+              {/* Open Support Ticket Button */}
+              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                <CardContent className="p-6">
+                  <Button 
+                    onClick={() => setShowTicketModal(true)}
+                    size="lg"
+                    className="w-full bg-gradient-primary hover:bg-gradient-primary/90"
+                  >
+                    <Ticket className="h-5 w-5 mr-2" />
+                    {language === 'ar' ? 'فتح تذكرة دعم' : 'Open Support Ticket'}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* User Ticket List */}
+              <UserTicketList key={activeTab} />
+            </TabsContent>
+          </Tabs>
         </div>
 
-        {/* Tips Section - Enhanced 3D Glass Effect with Stronger Shadow Behind Title */}
-        <div className="relative group">
-          <div className="absolute inset-0 bg-gradient-warm rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-700 scale-110"></div>
-          <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-40 group-hover:opacity-60 transition-all duration-500 scale-105"></div>
-          <Card className="relative bg-gradient-card/40 backdrop-blur-2xl border-border/40 hover:bg-gradient-card/50 hover:border-border/60 transition-all duration-700 hover:shadow-2xl transform hover:-translate-y-2 hover:scale-[1.01] shadow-xl perspective-1000">
-            <CardHeader className="relative">
-              {/* Enhanced shadow behind title */}
-              <div className="absolute -inset-4 bg-gradient-warm/60 rounded-3xl blur-2xl opacity-80 scale-125"></div>
-              <div className="absolute -inset-2 bg-black/40 rounded-2xl blur-lg opacity-60 scale-110"></div>
-              <CardTitle className="flex items-center gap-4 text-2xl relative z-10">
-                <div className="p-3 rounded-2xl bg-gradient-warm/50 backdrop-blur-sm border border-border/40 shadow-lg hover:scale-110 hover:rotate-3 transition-all duration-500">
-                  <Lightbulb className="h-7 w-7 text-yellow-400" />
-                </div>
-                <span className="bg-gradient-warm bg-clip-text text-transparent font-bold drop-shadow-2xl shadow-black/80">
-                  {t('tipsTitle', language)}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30 shadow-inner">
-                <ul className="space-y-4">
-                  {tips.map((tip, index) => (
-                    <li key={index} className="text-sm flex items-start gap-4 group/tip">
-                      <span className="text-yellow-400 font-bold text-lg bg-gradient-warm/40 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center border border-yellow-400/40 group-hover/tip:scale-110 group-hover/tip:rotate-12 transition-all duration-500 shadow-lg">
-                        {index + 1}
-                      </span>
-                      <span className="text-muted-foreground/90 group-hover/tip:text-foreground transition-colors duration-500 font-medium leading-relaxed">
-                        {tip}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Navigation Tips - Enhanced 3D Glass Effect with Stronger Shadow Behind Title */}
-        <div className="relative group">
-          <div className="absolute inset-0 bg-gradient-cool rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-700 scale-110"></div>
-          <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-40 group-hover:opacity-60 transition-all duration-500 scale-105"></div>
-          <Card className="relative bg-gradient-card/40 backdrop-blur-2xl border-border/40 hover:bg-gradient-card/50 hover:border-border/60 transition-all duration-700 hover:shadow-2xl transform hover:-translate-y-2 hover:scale-[1.01] shadow-xl perspective-1000">
-            <CardHeader className="relative">
-              {/* Enhanced shadow behind title */}
-              <div className="absolute -inset-4 bg-gradient-cool/60 rounded-3xl blur-2xl opacity-80 scale-125"></div>
-              <div className="absolute -inset-2 bg-black/40 rounded-2xl blur-lg opacity-60 scale-110"></div>
-              <CardTitle className="flex items-center gap-4 text-2xl relative z-10">
-                <div className="p-3 rounded-2xl bg-gradient-cool/50 backdrop-blur-sm border border-border/40 shadow-lg hover:scale-110 hover:rotate-3 transition-all duration-500">
-                  <Navigation className="h-7 w-7 text-blue-400" />
-                </div>
-                <span className="bg-gradient-cool bg-clip-text text-transparent font-bold drop-shadow-2xl shadow-black/80">
-                  {t('navigationTitle', language)}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30 shadow-inner">
-                <ul className="space-y-3 text-base">
-                  <li className="text-muted-foreground/90 font-medium">• {t('mobileNav', language)}</li>
-                  <li className="text-muted-foreground/90 font-medium">• {t('userMenu', language)}</li>
-                  <li className="text-muted-foreground/90 font-medium">• {t('backButtons', language)}</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Support Section - Premium 3D Glass Effect */}
-        <div className="relative group">
-          <div className="absolute inset-0 bg-gradient-vibrant rounded-3xl blur-2xl opacity-0 group-hover:opacity-50 transition-all duration-700 scale-110"></div>
-          <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-50 group-hover:opacity-70 transition-all duration-500 scale-105"></div>
-          <Card className="relative bg-gradient-vibrant/30 backdrop-blur-2xl border-primary/40 hover:bg-gradient-vibrant/40 hover:border-primary/60 transition-all duration-700 hover:shadow-2xl transform hover:-translate-y-3 hover:scale-[1.02] shadow-xl perspective-1000">
-            <CardContent className="text-center p-12">
-              <div className="mb-6">
-                <div className="inline-flex p-6 rounded-3xl bg-gradient-primary/30 backdrop-blur-lg border border-primary/40 shadow-2xl hover:scale-110 hover:rotate-3 transition-all duration-700">
-                  <MessageCircle className="h-10 w-10 text-primary animate-pulse-color" />
-                </div>
-              </div>
-              <h3 className="font-bold text-3xl mb-4 bg-gradient-primary bg-clip-text text-transparent drop-shadow-lg">
-                {t('needHelp', language)}
-              </h3>
-              <p className="text-base text-muted-foreground/90 mb-8 leading-relaxed font-medium max-w-md mx-auto">
-                {t('contactSupport', language)}
-              </p>
-              <Button 
-                variant="outline" 
-                size="lg"
-                className="bg-gradient-card/50 backdrop-blur-lg border-primary/40 hover:bg-gradient-primary/30 hover:border-primary/60 hover:shadow-2xl transition-all duration-500 hover:scale-110 hover:rotate-1 text-lg px-8 py-3 font-semibold"
-              >
-                {t('contact', language)}
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Support Ticket Modal */}
+        <SupportTicketModal
+          isOpen={showTicketModal}
+          onClose={() => setShowTicketModal(false)}
+          onSubmitted={refreshTickets}
+        />
       </div>
-    </div>
+    </AppLayout>
   );
 }

@@ -1359,6 +1359,18 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_users: {
+        Row: {
+          id: string
+        }
+        Insert: {
+          id: string
+        }
+        Update: {
+          id?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           billing_amount: number
@@ -1423,6 +1435,80 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      support_messages: {
+        Row: {
+          attachments: Json
+          body: string
+          created_at: string
+          id: string
+          role: string
+          sender_id: string
+          ticket_id: string
+        }
+        Insert: {
+          attachments?: Json
+          body: string
+          created_at?: string
+          id?: string
+          role: string
+          sender_id: string
+          ticket_id: string
+        }
+        Update: {
+          attachments?: Json
+          body?: string
+          created_at?: string
+          id?: string
+          role?: string
+          sender_id?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          id: string
+          last_activity_at: string
+          status: string
+          subject: string | null
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          last_activity_at?: string
+          status?: string
+          subject?: string | null
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          last_activity_at?: string
+          status?: string
+          subject?: string | null
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       tasjeel_records: {
         Row: {
@@ -2316,6 +2402,10 @@ export type Database = {
           translation_count: number
           extra_translations: number
         }[]
+      }
+      is_staff: {
+        Args: { uid: string }
+        Returns: boolean
       }
       log_ai_usage: {
         Args: {
