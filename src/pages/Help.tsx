@@ -293,36 +293,6 @@ export default function Help() {
             </TabsList>
 
             <TabsContent value="guides" className="space-y-6">
-              {/* Need Help? Card */}
-              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                <CardHeader>
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
-                      <HelpCircle className="h-5 w-5 text-blue-500" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
-                        {language === 'ar' ? 'هل تحتاج مساعدة؟' : 'Need Help?'}
-                      </CardTitle>
-                      <CardDescription>
-                        {language === 'ar' ? 'تواصل مع فريق الدعم' : 'Contact our support team'}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground/90 mb-4">
-                    {language === 'ar' 
-                      ? 'إذا كان لديك أي أسئلة أو تحتاج مساعدة، لا تتردد في التواصل معنا'
-                      : 'If you have any questions or need assistance, don\'t hesitate to reach out to us'
-                    }
-                  </p>
-                  <Button onClick={() => setShowTicketModal(true)} className="w-full">
-                    <Ticket className="h-4 w-4 mr-2" />
-                    {language === 'ar' ? 'فتح تذكرة دعم' : 'Open Support Ticket'}
-                  </Button>
-                </CardContent>
-              </Card>
 
               {/* Collapsible Navigation Tips - Moved to Top */}
               <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
