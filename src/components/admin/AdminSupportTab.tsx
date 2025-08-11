@@ -61,7 +61,7 @@ export function AdminSupportTab() {
     loadTickets();
   }, []);
 
-  const validateAdminSession = () => {
+  const validateAdminSession = async () => {
     const storedSession = localStorage.getItem('admin_session');
     if (!storedSession) {
       toast.error('Admin session not found');
@@ -83,23 +83,24 @@ export function AdminSupportTab() {
   };
 
   const loadTickets = async () => {
-    if (!validateAdminSession()) return;
+    if (!await validateAdminSession()) return;
     
     try {
       setIsLoading(true);
       
-      const storedSession = localStorage.getItem('admin_session');
-      const session = JSON.parse(storedSession!);
-      
-      const { data, error } = await supabase.functions.invoke('admin-support-gateway', {
-        body: {
-          action: 'list_tickets',
-          session_token: session.session_token
-        }
-      });
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select(`
+          *,
+          profiles:user_id (
+            display_name,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTickets(data.tickets || []);
+      setTickets(data || []);
     } catch (error) {
       console.error('Error loading tickets:', error);
       toast.error('Failed to load support tickets');
@@ -110,19 +111,19 @@ export function AdminSupportTab() {
 
   const loadMessages = async (ticketId: string) => {
     try {
-      const storedSession = localStorage.getItem('admin_session');
-      const session = JSON.parse(storedSession!);
-      
-      const { data, error } = await supabase.functions.invoke('admin-support-gateway', {
-        body: {
-          action: 'get_ticket',
-          session_token: session.session_token,
-          ticket_id: ticketId
-        }
-      });
+      const { data, error } = await supabase
+        .from('support_messages')
+        .select(`
+          *,
+          profiles:sender_id (
+            display_name
+          )
+        `)
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
       
       if (error) throw error;
-      setMessages(data.messages || []);
+      setMessages(data || []);
     } catch (error) {
       console.error('Error loading messages:', error);
       toast.error('Failed to load messages');
@@ -137,23 +138,36 @@ export function AdminSupportTab() {
 
   const sendStaffReply = async () => {
     if (!selectedTicket || !newMessage.trim()) return;
-    if (!validateAdminSession()) return;
+    if (!await validateAdminSession()) return;
 
     setIsSending(true);
     try {
       const storedSession = localStorage.getItem('admin_session');
       const session = JSON.parse(storedSession!);
       
-      const { error } = await supabase.functions.invoke('admin-support-gateway', {
-        body: {
-          action: 'reply_ticket',
-          session_token: session.session_token,
+      // Insert the staff reply message
+      const { error: messageError } = await supabase
+        .from('support_messages')
+        .insert({
           ticket_id: selectedTicket.id,
-          message: newMessage.trim()
-        }
-      });
+          sender_id: session.admin_id,
+          sender_role: 'staff',
+          body: newMessage.trim(),
+          attachments: []
+        });
 
-      if (error) throw error;
+      if (messageError) throw messageError;
+
+      // Update ticket status to 'responded'
+      const { error: ticketError } = await supabase
+        .from('support_tickets')
+        .update({ 
+          status: 'responded',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedTicket.id);
+
+      if (ticketError) throw ticketError;
 
       setNewMessage('');
       loadMessages(selectedTicket.id);
@@ -169,7 +183,7 @@ export function AdminSupportTab() {
 
   const closeTicket = async () => {
     if (!selectedTicket) return;
-    if (!validateAdminSession()) return;
+    if (!await validateAdminSession()) return;
 
     if (!confirm('Are you sure you want to close this ticket?')) {
       return;
@@ -177,18 +191,21 @@ export function AdminSupportTab() {
 
     setIsClosing(true);
     try {
-      const storedSession = localStorage.getItem('admin_session');
-      const session = JSON.parse(storedSession!);
-      
-      const { error } = await supabase.functions.invoke('admin-support-gateway', {
-        body: {
-          action: 'close_ticket',
-          session_token: session.session_token,
-          ticket_id: selectedTicket.id
-        }
-      });
+      // Delete all messages for this ticket first
+      const { error: messagesError } = await supabase
+        .from('support_messages')
+        .delete()
+        .eq('ticket_id', selectedTicket.id);
 
-      if (error) throw error;
+      if (messagesError) throw messagesError;
+
+      // Delete the ticket
+      const { error: ticketError } = await supabase
+        .from('support_tickets')
+        .delete()
+        .eq('id', selectedTicket.id);
+
+      if (ticketError) throw ticketError;
 
       toast.success('Ticket closed successfully');
       setShowTicketModal(false);
