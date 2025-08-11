@@ -156,33 +156,67 @@ export function SupportTicketModal({ isOpen, onClose, onSubmitted }: SupportTick
     setIsSubmitting(true);
 
     try {
-      // First submit the ticket
-      const { data, error } = await supabase.functions.invoke('support-ticket-submit', {
-        body: {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('You must be logged in to submit a ticket');
+      }
+
+      // Check rate limits - no more than 1 ticket per 10 minutes
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { data: recentTickets } = await supabase
+        .from('support_tickets')
+        .select('id')
+        .eq('user_id', user.id)
+        .gte('created_at', tenMinutesAgo);
+
+      if (recentTickets && recentTickets.length > 0) {
+        throw new Error('Please wait 10 minutes before creating another ticket');
+      }
+
+      // Check open tickets limit - max 3 open tickets
+      const { data: openTickets } = await supabase
+        .from('support_tickets')
+        .select('id')
+        .eq('user_id', user.id)
+        .in('status', ['open', 'pending']);
+
+      if (openTickets && openTickets.length >= 3) {
+        throw new Error('You have reached the maximum of 3 open tickets');
+      }
+
+      // Create ticket
+      const { data: ticket, error: ticketError } = await supabase
+        .from('support_tickets')
+        .insert({
+          user_id: user.id,
           type: formData.type,
-          body: formData.message,
-          attachments: [] // Will be updated after upload
-        }
-      });
+          status: 'open',
+          subject: `${formData.type.charAt(0).toUpperCase() + formData.type.slice(1)} Request`,
+          last_activity_at: new Date().toISOString()
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
-
-      const ticketId = data.ticket_id;
+      if (ticketError) throw ticketError;
 
       // Upload attachments if any
       let attachmentData = [];
       if (attachments.length > 0) {
-        attachmentData = await uploadAttachments(ticketId);
-        
-        // Update the message with attachment data
-        if (attachmentData.length > 0) {
-          await supabase
-            .from('support_messages')
-            .update({ attachments: attachmentData })
-            .eq('ticket_id', ticketId)
-            .eq('role', 'user');
-        }
+        attachmentData = await uploadAttachments(ticket.id);
       }
+
+      // Create first message
+      const { error: messageError } = await supabase
+        .from('support_messages')
+        .insert({
+          ticket_id: ticket.id,
+          sender_id: user.id,
+          role: 'user',
+          body: formData.message,
+          attachments: attachmentData
+        });
+
+      if (messageError) throw messageError;
 
       toast.success(language === 'ar' ? 'تم إرسال التذكرة بنجاح' : 'Ticket submitted successfully');
       
