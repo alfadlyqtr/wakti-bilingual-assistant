@@ -94,8 +94,7 @@ export function AdminSupportTab() {
       const { data, error } = await supabase.functions.invoke('admin-support-gateway', {
         body: {
           action: 'list_tickets',
-          payload: {},
-          adminToken: session.session_token
+          session_token: session.session_token
         }
       });
 
@@ -117,8 +116,8 @@ export function AdminSupportTab() {
       const { data, error } = await supabase.functions.invoke('admin-support-gateway', {
         body: {
           action: 'get_ticket',
-          payload: { ticket_id: ticketId },
-          adminToken: session.session_token
+          session_token: session.session_token,
+          ticket_id: ticketId
         }
       });
       
@@ -148,11 +147,9 @@ export function AdminSupportTab() {
       const { error } = await supabase.functions.invoke('admin-support-gateway', {
         body: {
           action: 'reply_ticket',
-          payload: { 
-            ticket_id: selectedTicket.id,
-            message: newMessage.trim()
-          },
-          adminToken: session.session_token
+          session_token: session.session_token,
+          ticket_id: selectedTicket.id,
+          message: newMessage.trim()
         }
       });
 
@@ -186,8 +183,8 @@ export function AdminSupportTab() {
       const { error } = await supabase.functions.invoke('admin-support-gateway', {
         body: {
           action: 'close_ticket',
-          payload: { ticket_id: selectedTicket.id },
-          adminToken: session.session_token
+          session_token: session.session_token,
+          ticket_id: selectedTicket.id
         }
       });
 
