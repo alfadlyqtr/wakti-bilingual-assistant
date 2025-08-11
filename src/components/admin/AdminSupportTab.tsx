@@ -32,8 +32,9 @@ interface SupportTicket {
 
 interface SupportMessage {
   id: string;
+  ticket_id: string;
   sender_id: string;
-  role: string;
+  sender_role: string;
   body: string;
   attachments: any[];
   created_at: string;
@@ -56,62 +57,44 @@ export function AdminSupportTab() {
   const [filterType, setFilterType] = useState('all');
 
   useEffect(() => {
+    validateAdminSession();
     loadTickets();
   }, []);
 
-  const getAdminSessionToken = () => {
+  const validateAdminSession = () => {
     const storedSession = localStorage.getItem('admin_session');
-    if (!storedSession) return null;
+    if (!storedSession) {
+      toast.error('Admin session not found');
+      return false;
+    }
     
     try {
       const session = JSON.parse(storedSession);
-      return session.session_token;
+      if (new Date(session.expires_at) < new Date()) {
+        localStorage.removeItem('admin_session');
+        toast.error('Admin session expired');
+        return false;
+      }
+      return true;
     } catch {
-      return null;
+      toast.error('Invalid admin session');
+      return false;
     }
-  };
-
-  const invokeAdminGateway = async (action: string, payload: any) => {
-    const sessionToken = getAdminSessionToken();
-    if (!sessionToken) {
-      toast.error('Admin session not found');
-      return null;
-    }
-
-    const { data, error } = await supabase.functions.invoke('admin-support-gateway', {
-      body: { action, ...payload, session_token: sessionToken },
-      headers: { 'x-admin-session': sessionToken }
-    });
-
-    if (error) {
-      console.error('Gateway error:', error);
-      toast.error('Gateway error: ' + error.message);
-      return null;
-    }
-
-    if (!data?.ok) {
-      console.error('API error:', data?.error);
-      toast.error('API error: ' + (data?.error?.message || 'Unknown error'));
-      return null;
-    }
-
-    return data;
   };
 
   const loadTickets = async () => {
+    if (!validateAdminSession()) return;
+    
     try {
       setIsLoading(true);
       
-      const result = await invokeAdminGateway('list_tickets', { 
-        status: filterStatus === 'all' ? undefined : filterStatus,
-        type: filterType === 'all' ? undefined : filterType,
-        page: 1,
-        limit: 100
-      });
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (result) {
-        setTickets(result.tickets || []);
-      }
+      if (error) throw error;
+      setTickets(data || []);
     } catch (error) {
       console.error('Error loading tickets:', error);
       toast.error('Failed to load support tickets');
@@ -122,10 +105,14 @@ export function AdminSupportTab() {
 
   const loadMessages = async (ticketId: string) => {
     try {
-      const result = await invokeAdminGateway('get_ticket', { ticket_id: ticketId });
-      if (result) {
-        setMessages(result.messages || []);
-      }
+      const { data, error } = await supabase
+        .from('support_messages')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      setMessages(data || []);
     } catch (error) {
       console.error('Error loading messages:', error);
       toast.error('Failed to load messages');
@@ -140,21 +127,35 @@ export function AdminSupportTab() {
 
   const sendStaffReply = async () => {
     if (!selectedTicket || !newMessage.trim()) return;
+    if (!validateAdminSession()) return;
 
     setIsSending(true);
     try {
-      const result = await invokeAdminGateway('reply_ticket', {
-        ticket_id: selectedTicket.id,
-        body: newMessage.trim(),
-        attachments: []
-      });
+      const { error } = await supabase
+        .from('support_messages')
+        .insert({
+          ticket_id: selectedTicket.id,
+          sender_id: '00000000-0000-0000-0000-000000000001', // System/admin ID
+          sender_role: 'staff',
+          body: newMessage.trim(),
+          attachments: []
+        });
 
-      if (result) {
-        setNewMessage('');
-        loadMessages(selectedTicket.id);
-        loadTickets();
-        toast.success('Reply sent successfully');
-      }
+      if (error) throw error;
+
+      // Update ticket status to 'responded'
+      await supabase
+        .from('support_tickets')
+        .update({ 
+          status: 'responded',
+          last_activity_at: new Date().toISOString()
+        })
+        .eq('id', selectedTicket.id);
+
+      setNewMessage('');
+      loadMessages(selectedTicket.id);
+      loadTickets();
+      toast.success('Reply sent successfully');
     } catch (error) {
       console.error('Error sending reply:', error);
       toast.error('Failed to send reply');
@@ -165,23 +166,25 @@ export function AdminSupportTab() {
 
   const closeTicket = async () => {
     if (!selectedTicket) return;
+    if (!validateAdminSession()) return;
 
-    if (!confirm('Are you sure you want to close this ticket? All messages and attachments will be permanently deleted.')) {
+    if (!confirm('Are you sure you want to close this ticket?')) {
       return;
     }
 
     setIsClosing(true);
     try {
-      const result = await invokeAdminGateway('close_ticket', {
-        ticket_id: selectedTicket.id
-      });
+      const { error } = await supabase
+        .from('support_tickets')
+        .update({ status: 'closed' })
+        .eq('id', selectedTicket.id);
 
-      if (result) {
-        toast.success(`Ticket closed successfully. Deleted ${result.deletedFiles} file(s).`);
-        setShowTicketModal(false);
-        setSelectedTicket(null);
-        loadTickets();
-      }
+      if (error) throw error;
+
+      toast.success('Ticket closed successfully');
+      setShowTicketModal(false);
+      setSelectedTicket(null);
+      loadTickets();
     } catch (error) {
       console.error('Error closing ticket:', error);
       toast.error('Failed to close ticket');
@@ -194,7 +197,7 @@ export function AdminSupportTab() {
     switch (status) {
       case 'open': return 'bg-green-500/20 text-green-700 dark:text-green-300';
       case 'pending': return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300';
-      case 'solved': return 'bg-blue-500/20 text-blue-700 dark:text-blue-300';
+      case 'responded': return 'bg-blue-500/20 text-blue-700 dark:text-blue-300';
       case 'closed': return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
       default: return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
     }
@@ -211,9 +214,8 @@ export function AdminSupportTab() {
 
   const filteredTickets = tickets.filter(ticket => {
     const matchesSearch = !searchTerm || 
-      ticket.profiles?.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.profiles?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase());
+      ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ticket.user_id?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === 'all' || ticket.status === filterStatus;
     const matchesType = filterType === 'all' || ticket.type === filterType;
@@ -225,7 +227,7 @@ export function AdminSupportTab() {
     total: tickets.length,
     open: tickets.filter(t => t.status === 'open').length,
     pending: tickets.filter(t => t.status === 'pending').length,
-    solved: tickets.filter(t => t.status === 'solved').length,
+    responded: tickets.filter(t => t.status === 'responded').length,
     closed: tickets.filter(t => t.status === 'closed').length
   };
 
@@ -246,7 +248,7 @@ export function AdminSupportTab() {
           <CardHeader className="pb-3">
             <CardTitle className="text-enhanced-heading flex items-center text-sm">
               <Ticket className="h-4 w-4 mr-2 text-accent-blue" />
-              Total Messages
+              Total Tickets
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -258,7 +260,7 @@ export function AdminSupportTab() {
           <CardHeader className="pb-3">
             <CardTitle className="text-enhanced-heading flex items-center text-sm">
               <AlertCircle className="h-4 w-4 mr-2 text-accent-orange" />
-              Unread
+              Open
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -269,8 +271,8 @@ export function AdminSupportTab() {
         <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300">
           <CardHeader className="pb-3">
             <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <Eye className="h-4 w-4 mr-2 text-accent-green" />
-              Read
+              <Clock className="h-4 w-4 mr-2 text-accent-green" />
+              Pending
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -286,7 +288,7 @@ export function AdminSupportTab() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-accent-purple">{ticketCounts.solved}</div>
+            <div className="text-2xl font-bold text-accent-purple">{ticketCounts.responded}</div>
           </CardContent>
         </Card>
         
@@ -307,7 +309,7 @@ export function AdminSupportTab() {
       <Card className="bg-gradient-card border-border/50 mb-6">
         <CardHeader>
           <CardTitle className="text-enhanced-heading">Support Ticket Management</CardTitle>
-          <CardDescription>Contact forms, feedback, and support requests</CardDescription>
+          <CardDescription>View and manage support tickets</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col lg:flex-row gap-4 mb-6">
@@ -316,7 +318,7 @@ export function AdminSupportTab() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by user name, email, or subject..."
+                  placeholder="Search by subject or user ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 mt-1 bg-background/50 border-border/50"
@@ -333,7 +335,7 @@ export function AdminSupportTab() {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="open">Open</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="solved">Solved</SelectItem>
+                  <SelectItem value="responded">Responded</SelectItem>
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
@@ -386,15 +388,11 @@ export function AdminSupportTab() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <User className="h-3 w-3" />
-                            <span>{ticket.profiles?.display_name || 'Unknown User'}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Mail className="h-3 w-3" />
-                            <span>{ticket.profiles?.email || 'No email'}</span>
+                            <span>User ID: {ticket.user_id}</span>
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Calendar className="h-3 w-3" />
-                            <span>Last activity: {new Date(ticket.last_activity_at).toLocaleDateString()}</span>
+                            <span>Created: {new Date(ticket.created_at).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </div>
@@ -433,7 +431,7 @@ export function AdminSupportTab() {
                   </Badge>
                 </div>
                 <div className="mt-2 text-sm text-muted-foreground">
-                  <p>{selectedTicket?.profiles?.display_name} ({selectedTicket?.profiles?.email})</p>
+                  <p>User ID: {selectedTicket?.user_id}</p>
                   <p>Created: {selectedTicket && new Date(selectedTicket.created_at).toLocaleString()}</p>
                 </div>
               </div>
@@ -451,61 +449,51 @@ export function AdminSupportTab() {
           </DialogHeader>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto space-y-4 py-4">
-            {messages.map((message) => (
-              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-                <div className={`max-w-[80%] p-3 rounded-lg ${
-                  message.role === 'user' 
-                    ? 'bg-muted' 
-                    : 'bg-primary text-primary-foreground'
-                }`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-xs">
-                      {message.role === 'staff' ? 'WAKTI Staff' : (message.profiles?.display_name || 'User')}
-                    </span>
-                    <span className="text-xs opacity-70">
-                      {new Date(message.created_at).toLocaleTimeString()}
-                    </span>
-                  </div>
-                  <p className="text-sm">{message.body}</p>
-                  {message.attachments.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {message.attachments.map((attachment: any, index: number) => (
-                        <div key={index} className="flex items-center gap-2 text-xs">
-                          <Paperclip className="h-3 w-3" />
-                          <span>{attachment.name}</span>
-                        </div>
-                      ))}
+          <div className="flex-1 overflow-y-auto bg-background/50 rounded p-4 space-y-4">
+            {messages.length === 0 ? (
+              <p className="text-center text-muted-foreground">No messages found</p>
+            ) : (
+              messages.map((message, index) => (
+                <div key={message.id} className={`flex ${message.sender_role === 'staff' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[70%] rounded-lg p-3 ${
+                    message.sender_role === 'staff' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-muted'
+                  }`}>
+                    <div className="text-xs opacity-70 mb-1">
+                      {message.sender_role === 'staff' ? 'Staff' : 'User'} • {new Date(message.created_at).toLocaleString()}
                     </div>
-                  )}
+                    <div className="text-sm whitespace-pre-wrap">{message.body}</div>
+                    {message.attachments && message.attachments.length > 0 && (
+                      <div className="mt-2 flex items-center gap-1 text-xs">
+                        <Paperclip className="h-3 w-3" />
+                        {message.attachments.length} attachment(s)
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
-          {/* Staff Reply Section */}
-          <div className="border-t pt-4 space-y-3">
-            <Label htmlFor="staff-reply">Staff Reply</Label>
+          {/* Reply Section */}
+          <div className="border-t pt-4">
+            <Label htmlFor="reply">Staff Reply</Label>
             <Textarea
-              id="staff-reply"
+              id="reply"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your reply to the user..."
+              placeholder="Type your reply here..."
+              className="mt-1 mb-3"
               rows={3}
             />
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowTicketModal(false)}
-              >
+              <Button variant="outline" onClick={() => setShowTicketModal(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={sendStaffReply}
-                disabled={!newMessage.trim() || isSending}
-              >
-                {isSending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                <MessageCircle className="h-4 w-4 mr-2" />
+              <Button onClick={sendStaffReply} disabled={isSending || !newMessage.trim()}>
+                {isSending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                <MessageCircle className="h-3 w-3 mr-1" />
                 Send Reply
               </Button>
             </div>
