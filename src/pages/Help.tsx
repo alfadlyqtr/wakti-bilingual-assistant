@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,15 +9,19 @@ import { ChevronRight,
   Users, Settings, Lightbulb, Navigation, MessageCircle, HelpCircle, Ticket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/AppLayout';
-import { SupportTicketModal } from '@/components/support/SupportTicketModal';
-import { UserTicketList } from '@/components/support/UserTicketList';
+import { SimpleContactFormModal } from '@/components/support/SimpleContactFormModal';
+import { ChatThread } from '@/components/support/ChatThread';
 
 export default function Help() {
   const { language } = useTheme();
   const [openSections, setOpenSections] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('guides');
-  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [submissions, setSubmissions] = useState([]);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const toggleSection = (sectionId: string) => {
     setOpenSections(prev => 
@@ -261,9 +265,45 @@ export default function Help() {
     t('tip5', language)
   ];
 
-  const refreshTickets = () => {
-    setActiveTab('support');
+  const loadSubmissions = async () => {
+    setIsLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.email) return;
+
+      const { data, error } = await supabase
+        .from('contact_submissions')
+        .select('*')
+        .eq('email', profile.email)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSubmissions(data || []);
+    } catch (error) {
+      console.error('Error loading submissions:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const refreshSubmissions = () => {
+    setActiveTab('support');
+    loadSubmissions();
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'support') {
+      loadSubmissions();
+    }
+  }, [activeTab]);
 
   return (
     <AppLayout>
@@ -467,31 +507,90 @@ export default function Help() {
             </TabsContent>
 
             <TabsContent value="support" className="space-y-6">
-              {/* Open Support Ticket Button */}
-              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                <CardContent className="p-6">
-                  <Button 
-                    onClick={() => setShowTicketModal(true)}
-                    size="lg"
-                    className="w-full bg-gradient-primary hover:bg-gradient-primary/90"
-                  >
-                    <Ticket className="h-5 w-5 mr-2" />
-                    {language === 'ar' ? 'فتح تذكرة دعم' : 'Open Support Ticket'}
-                  </Button>
-                </CardContent>
-              </Card>
+              {selectedSubmission ? (
+                <ChatThread
+                  submission={selectedSubmission}
+                  onClose={() => setSelectedSubmission(null)}
+                  isAdmin={false}
+                />
+              ) : (
+                <>
+                  {/* Contact Support Button */}
+                  <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                    <CardContent className="p-6">
+                      <Button 
+                        onClick={() => setShowContactModal(true)}
+                        size="lg"
+                        className="w-full bg-gradient-primary hover:bg-gradient-primary/90"
+                      >
+                        <MessageCircle className="h-5 w-5 mr-2" />
+                        {language === 'ar' ? 'التواصل مع الدعم' : 'Contact Support'}
+                      </Button>
+                    </CardContent>
+                  </Card>
 
-              {/* User Ticket List */}
-              <UserTicketList key={activeTab} />
+                  {/* Your Messages */}
+                  <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 bg-gradient-primary bg-clip-text text-transparent">
+                        <MessageCircle className="h-5 w-5 text-primary" />
+                        {language === 'ar' ? 'رسائلك' : 'Your Messages'}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                        </div>
+                      ) : submissions.length === 0 ? (
+                        <div className="text-center py-8">
+                          <MessageCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                          <p className="text-muted-foreground">
+                            {language === 'ar' ? 'لا توجد رسائل بعد' : 'No messages yet'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {submissions.map((submission) => (
+                            <div
+                              key={submission.id}
+                              onClick={() => setSelectedSubmission(submission)}
+                              className="p-4 bg-gradient-card/30 rounded-lg border border-border/40 cursor-pointer hover:bg-gradient-card/50 transition-all duration-200"
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="font-medium text-foreground">{submission.subject}</span>
+                                <span className={cn(
+                                  "text-xs px-2 py-1 rounded-full",
+                                  submission.status === 'unread' ? "bg-red-500/20 text-red-400" :
+                                  submission.status === 'read' ? "bg-yellow-500/20 text-yellow-400" :
+                                  "bg-green-500/20 text-green-400"
+                                )}>
+                                  {submission.status}
+                                </span>
+                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {submission.message}
+                              </p>
+                              <p className="text-xs text-muted-foreground/70 mt-2">
+                                {new Date(submission.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         </div>
 
-        {/* Support Ticket Modal */}
-        <SupportTicketModal
-          isOpen={showTicketModal}
-          onClose={() => setShowTicketModal(false)}
-          onSubmitted={refreshTickets}
+        {/* Contact Form Modal */}
+        <SimpleContactFormModal
+          isOpen={showContactModal}
+          onClose={() => setShowContactModal(false)}
+          onSubmitted={refreshSubmissions}
         />
       </div>
     </AppLayout>
