@@ -63,7 +63,7 @@ function App() {
           <BrowserRouter>
             <div className="min-h-screen bg-background font-sans antialiased">
               <Routes>
-                {/* Admin routes - completely isolated from regular auth */}
+                {/* Admin routes - completely isolated with their own AdminAuthProvider */}
                 <Route path="/mqtr" element={
                   <AdminAuthProvider>
                     <AdminLogin />
@@ -131,53 +131,127 @@ function App() {
                   </AdminAuthProvider>
                 } />
                 
-                {/* All other routes wrapped with regular AuthProvider */}
-                <Route path="/*" element={
+                {/* Public routes - no auth provider needed */}
+                <Route path="/" element={<RootHandler />} />
+                <Route path="/home" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/reset-success" element={<ResetSuccess />} />
+                <Route path="/contact" element={<ContactUs />} />
+                <Route path="/help" element={<Help />} />
+                <Route path="/privacy-terms" element={<PrivacyTerms />} />
+                <Route path="/confirmed" element={<Confirmed />} />
+                
+                {/* Shared task route (public) */}
+                <Route path="/shared-task/:shareLink" element={<SharedTask />} />
+                
+                {/* Maw3d public view */}
+                <Route path="/maw3d/:shortId" element={<Maw3dView />} />
+                
+                {/* Protected user routes - wrapped with AuthProvider only */}
+                <Route path="/dashboard" element={
                   <AuthProvider>
                     <GiftNotificationProvider>
-                      <Routes>
-                        {/* Public routes */}
-                        <Route path="/" element={<RootHandler />} />
-                        <Route path="/home" element={<Index />} />
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/signup" element={<Signup />} />
-                        <Route path="/forgot-password" element={<ForgotPassword />} />
-                        <Route path="/reset-password" element={<ResetPassword />} />
-                        <Route path="/reset-success" element={<ResetSuccess />} />
-                        <Route path="/contact" element={<ContactUs />} />
-                        <Route path="/help" element={<Help />} />
-                        <Route path="/privacy-terms" element={<PrivacyTerms />} />
-                        <Route path="/confirmed" element={<Confirmed />} />
-                        
-                        {/* Shared task route (public) - FIXED */}
-                        <Route path="/shared-task/:shareLink" element={<SharedTask />} />
-                        
-                        {/* Maw3d public view */}
-                        <Route path="/maw3d/:shortId" element={<Maw3dView />} />
-                        
-                        {/* Protected user routes wrapped with AppLayout */}
-                        <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-                        <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
-                        <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
-                        <Route path="/tasks-reminders" element={<AppLayout><TasksReminders /></AppLayout>} />
-                        <Route path="/tr" element={<AppLayout><TasksReminders /></AppLayout>} />
-                        <Route path="/wakti-ai" element={<AppLayout><WaktiAi /></AppLayout>} />
-                        <Route path="/wakti-ai-v2" element={<AppLayout><WaktiAIV2 /></AppLayout>} />
-                        <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
-                        <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
-                        {/* Unified Maw3d route - removed redundant /maw3d/events */}
-                        <Route path="/maw3d" element={<AppLayout><Maw3d /></AppLayout>} />
-                        <Route path="/maw3d/create" element={<AppLayout><Maw3dCreate /></AppLayout>} />
-                        <Route path="/maw3d/manage/:id" element={<AppLayout><Maw3dManage /></AppLayout>} />
-                        <Route path="/maw3d/edit/:id" element={<AppLayout><Maw3dEdit /></AppLayout>} />
-                        <Route path="/tasjeel" element={<AppLayout><Tasjeel /></AppLayout>} />
-                        
-                        {/* 404 */}
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
+                      <AppLayout><Dashboard /></AppLayout>
                     </GiftNotificationProvider>
                   </AuthProvider>
                 } />
+                <Route path="/account" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Account /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/settings" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Settings /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/tasks-reminders" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><TasksReminders /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/tr" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><TasksReminders /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/wakti-ai" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><WaktiAi /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/wakti-ai-v2" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><WaktiAIV2 /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/calendar" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Calendar /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/contacts" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Contacts /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/maw3d" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Maw3d /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/maw3d/create" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Maw3dCreate /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/maw3d/manage/:id" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Maw3dManage /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/maw3d/edit/:id" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Maw3dEdit /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                <Route path="/tasjeel" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <AppLayout><Tasjeel /></AppLayout>
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
+                
+                {/* 404 catch-all */}
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
           </BrowserRouter>
