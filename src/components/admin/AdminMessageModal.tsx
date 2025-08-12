@@ -10,14 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatDistanceToNow } from 'date-fns';
 
-interface ChatMessage {
-  id: string;
-  content: string;
-  sender_type: 'user' | 'admin';
-  sender_id: string | null;
-  created_at: string;
-  sender_name?: string;
-}
 
 interface ContactSubmission {
   id: string;
@@ -43,72 +35,32 @@ interface AdminMessageModalProps {
 export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: AdminMessageModalProps) => {
   const [response, setResponse] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [currentMessage, setCurrentMessage] = useState<ContactSubmission | null>(null);
 
   useEffect(() => {
     if (message && isOpen) {
-      loadMessages();
+      setCurrentMessage(message);
       const cleanup = setupRealtimeSubscription();
       return cleanup;
     }
   }, [message?.id, isOpen]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const loadMessages = async () => {
-    if (!message) return;
-    
-    try {
-      setIsLoadingMessages(true);
-      const { data, error } = await supabase
-        .from('support_messages')
-        .select('*')
-        .eq('support_request_id', message.id)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-
-      const formattedMessages = data.map(msg => ({
-        ...msg,
-        sender_name: msg.sender_type === 'admin' ? 'WAKTI Support' : message.name
-      }));
-
-      setMessages(formattedMessages);
-    } catch (error) {
-      console.error('Error loading messages:', error);
-      toast.error('Failed to load messages');
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  };
-
   const setupRealtimeSubscription = () => {
     if (!message) return () => {};
     
     const channel = supabase
-      .channel(`support_messages_${message.id}`)
+      .channel(`contact_submission_${message.id}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: 'UPDATE',
           schema: 'public',
-          table: 'support_messages',
-          filter: `support_request_id=eq.${message.id}`
+          table: 'contact_submissions',
+          filter: `id=eq.${message.id}`
         },
         (payload) => {
-          const newMsg = payload.new as ChatMessage;
-          setMessages(prev => [...prev, {
-            ...newMsg,
-            sender_name: newMsg.sender_type === 'admin' ? 'WAKTI Support' : message.name
-          }]);
+          const updatedMessage = payload.new as ContactSubmission;
+          setCurrentMessage(updatedMessage);
         }
       )
       .subscribe();
@@ -128,28 +80,18 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      const { data, error } = await supabase
-        .from('support_messages')
-        .insert({
-          support_request_id: message.id,
-          sender_type: 'admin',
-          sender_id: user?.id || null,
-          content: response.trim()
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Update submission status
-      await supabase
+      const { error } = await supabase
         .from('contact_submissions')
         .update({ 
+          admin_response: response.trim(),
           status: 'responded',
           responded_at: new Date().toISOString(),
-          responded_by: user?.id || null
+          responded_by: user?.id || null,
+          updated_at: new Date().toISOString()
         })
         .eq('id', message.id);
+
+      if (error) throw error;
 
       toast.success(`Response sent to ${message.name}`);
       setResponse("");
@@ -185,7 +127,7 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
 
   const handleClose = () => {
     setResponse("");
-    setMessages([]);
+    setCurrentMessage(null);
     onClose();
   };
 
@@ -264,42 +206,32 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
           <div className="border rounded-lg p-4">
             <Label className="text-sm font-medium mb-3 block">Chat Thread</Label>
             <div className="bg-background border rounded-lg p-3 max-h-80 overflow-y-auto space-y-3">
-              {isLoadingMessages ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              {/* User Message */}
+              <div className="flex justify-end">
+                <div className="max-w-xs lg:max-w-md px-3 py-2 rounded-lg bg-primary text-primary-foreground">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-xs font-medium">{message.name}</span>
+                    <span className="text-xs opacity-75 ml-2">
+                      {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                    </span>
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{message.message}</p>
                 </div>
-              ) : messages.length > 0 ? (
-                <>
-                  {messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex ${msg.sender_type === 'admin' ? 'justify-start' : 'justify-end'}`}
-                    >
-                      <div
-                        className={`max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${
-                          msg.sender_type === 'admin'
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-primary text-primary-foreground'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-xs font-medium">
-                            {msg.sender_name}
-                          </span>
-                          <span className="text-xs opacity-75 ml-2">
-                            {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
-                          </span>
-                        </div>
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      </div>
+              </div>
+
+              {/* Admin Response */}
+              {(currentMessage?.admin_response || message.admin_response) && (
+                <div className="flex justify-start">
+                  <div className="max-w-xs lg:max-w-md px-3 py-2 rounded-lg bg-blue-500 text-white">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-medium">WAKTI Support</span>
+                      <span className="text-xs opacity-75 ml-2">
+                        {formatDistanceToNow(new Date((currentMessage?.responded_at || message.responded_at || message.updated_at)), { addSuffix: true })}
+                      </span>
                     </div>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No messages yet. Start the conversation by sending a response below.
-                </p>
+                    <p className="text-sm whitespace-pre-wrap">{currentMessage?.admin_response || message.admin_response}</p>
+                  </div>
+                </div>
               )}
             </div>
           </div>
