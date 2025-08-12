@@ -43,11 +43,13 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadMessages();
-    setupRealtimeSubscription();
+    const cleanup = setupRealtimeSubscription();
+    return cleanup;
   }, [submission.id]);
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
 
   const loadMessages = async () => {
     try {
+      setError(null);
       const { data, error } = await supabase
         .from('chat_messages')
         .select(`
@@ -79,6 +82,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
       setMessages(formattedMessages);
     } catch (error: any) {
       console.error('Error loading messages:', error);
+      setError('Failed to load messages');
       toast.error('Failed to load messages');
     } finally {
       setIsLoading(false);
@@ -87,7 +91,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
 
   const setupRealtimeSubscription = () => {
     const channel = supabase
-      .channel('chat_messages')
+      .channel(`chat_messages_${submission.id}`)
       .on(
         'postgres_changes',
         {
@@ -114,20 +118,46 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
+    const messageContent = newMessage.trim();
+    const tempId = `temp_${Date.now()}`;
+    
+    // Optimistic update - add message immediately
+    const optimisticMessage: ChatMessage = {
+      id: tempId,
+      content: messageContent,
+      sender_type: isAdmin ? 'admin' : 'user',
+      sender_id: null,
+      created_at: new Date().toISOString(),
+      sender_name: isAdmin ? 'WAKTI Support' : submission.name
+    };
+    
+    setMessages(prev => [...prev, optimisticMessage]);
+    setNewMessage('');
     setIsSending(true);
+    setError(null);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('chat_messages')
         .insert({
           contact_submission_id: submission.id,
           sender_type: isAdmin ? 'admin' : 'user',
-          sender_id: user?.id,
-          content: newMessage.trim()
-        });
+          sender_id: user?.id || null,
+          content: messageContent
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Replace optimistic message with real one
+      setMessages(prev => prev.map(msg => 
+        msg.id === tempId 
+          ? { ...data, sender_name: isAdmin ? 'WAKTI Support' : submission.name }
+          : msg
+      ));
 
       // Update submission status if admin is responding
       if (isAdmin) {
@@ -140,10 +170,16 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
           .eq('id', submission.id);
       }
 
-      setNewMessage('');
     } catch (error: any) {
       console.error('Error sending message:', error);
-      toast.error('Failed to send message');
+      setError('Failed to send message');
+      toast.error('Failed to send message. Please try again.');
+      
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(msg => msg.id !== tempId));
+      
+      // Restore the message content
+      setNewMessage(messageContent);
     } finally {
       setIsSending(false);
     }

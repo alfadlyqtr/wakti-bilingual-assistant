@@ -504,13 +504,6 @@ export type Database = {
             referencedRelation: "contact_submissions"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "chat_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       contact_submissions: {
