@@ -1,6 +1,4 @@
-
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,14 +7,71 @@ import { Eye, EyeOff, Mail, Lock, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+/**
+ * AdminLogin
+ * - Thin login form
+ * - After auth, verifies admin via RPC get_admin_by_auth_id(user.id)
+ * - On success: HARD REDIRECT to /admindash (bypasses any router oddities)
+ * - On failure: signs out and shows error
+ * - If already signed-in + admin, auto-redirects on mount
+ */
+
 export default function AdminLogin() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Helper: verify current session is an active admin
+  const verifyAdminAndRedirect = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user?.id) {
+        return false;
+      }
+
+      console.log("[AdminLogin] Verifying admin via RPC for:", session.user.id);
+      const { data: adminData, error: adminError } = await supabase.rpc(
+        "get_admin_by_auth_id",
+        { auth_user_id: session.user.id }
+      );
+
+      if (adminError) {
+        console.error("[AdminLogin] RPC error:", adminError);
+        return false;
+      }
+
+      const row = Array.isArray(adminData) ? adminData[0] : adminData;
+      if (row) {
+        console.log("[AdminLogin] RPC success, admin row:", row);
+        toast.success("Admin login successful");
+        // Hard redirect (avoids any React Router/provider interaction)
+        setTimeout(() => {
+          window.location.replace("/admindash");
+        }, 80);
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      console.error("[AdminLogin] verifyAdminAndRedirect exception:", e);
+      return false;
+    }
+  };
+
+  // If already signed in and admin, go straight to dashboard
+  useEffect(() => {
+    (async () => {
+      setIsLoading(true);
+      const redirected = await verifyAdminAndRedirect();
+      if (!redirected) setIsLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,40 +79,44 @@ export default function AdminLogin() {
     setIsLoading(true);
 
     try {
-      console.log('[AdminLogin] Attempting admin login for:', email);
-      
-      // Sign in using Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      console.log("[AdminLogin] Attempting admin login for:", email);
 
-      console.log('[AdminLogin] Auth response:', { authData, authError });
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+      console.log("[AdminLogin] Auth response:", { authData, authError });
 
       if (authError) {
-        console.error('[AdminLogin] Auth error:', authError);
-        setErrorMsg('Invalid admin credentials');
-        toast.error('Invalid admin credentials');
+        console.error("[AdminLogin] Auth error:", authError);
+        setErrorMsg("Invalid admin credentials");
+        toast.error("Invalid admin credentials");
+        setIsLoading(false);
         return;
       }
 
-      if (!authData.session) {
-        console.error('[AdminLogin] No session returned');
-        setErrorMsg('Authentication failed');
-        toast.error('Authentication failed');
+      if (!authData?.session?.user?.id) {
+        console.error("[AdminLogin] No session returned");
+        setErrorMsg("Authentication failed");
+        toast.error("Authentication failed");
+        setIsLoading(false);
         return;
       }
 
-      console.log('[AdminLogin] SUCCESS - About to navigate to /admindash');
-      toast.success('Admin login successful');
-      navigate('/admindash');
-      console.log('[AdminLogin] Navigate called');
+      // Now verify admin and hard-redirect
+      const ok = await verifyAdminAndRedirect();
+      if (!ok) {
+        await supabase.auth.signOut();
+        setErrorMsg("Access denied - not an admin user");
+        toast.error("Access denied - not an admin user");
+        setIsLoading(false);
+      }
     } catch (err) {
-      console.error('[AdminLogin] Exception:', err);
-      setErrorMsg('Login failed. Please try again.');
-      toast.error('Login failed. Please try again.');
-    } finally {
-      console.log('[AdminLogin] Setting loading to false');
+      console.error("[AdminLogin] Exception:", err);
+      setErrorMsg("Login failed. Please try again.");
+      toast.error("Login failed. Please try again.");
       setIsLoading(false);
     }
   };
@@ -77,7 +136,7 @@ export default function AdminLogin() {
             </div>
             <h1 className="text-2xl font-bold text-white">Admin Access</h1>
             <p className="text-slate-400 mt-2">Authorized personnel only</p>
-            
+
             {errorMsg && (
               <div className="mt-4 text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-md p-3">
                 {errorMsg}
@@ -87,14 +146,16 @@ export default function AdminLogin() {
 
           <form onSubmit={handleAdminLogin} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-200">Admin Email</Label>
+              <Label htmlFor="email" className="text-slate-200">
+                Admin Email
+              </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                   <Mail className="h-5 w-5 text-slate-400" />
                 </div>
                 <Input
                   id="email"
-                  placeholder="admin@wakti.qa"
+                  placeholder="admin@tmw.qa"
                   type="email"
                   autoCapitalize="none"
                   autoComplete="email"
@@ -107,9 +168,11 @@ export default function AdminLogin() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-200">Password</Label>
+              <Label htmlFor="password" className="text-slate-200">
+                Password
+              </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                   <Lock className="h-5 w-5 text-slate-400" />
@@ -139,7 +202,7 @@ export default function AdminLogin() {
                 </button>
               </div>
             </div>
-            
+
             <Button
               type="submit"
               className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-medium"
