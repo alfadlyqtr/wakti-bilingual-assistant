@@ -2238,6 +2238,10 @@ export type Database = {
         Args: { sender_id: string; recipient_id: string }
         Returns: boolean
       }
+      can_view_profile: {
+        Args: { viewer_id: string; profile_id: string }
+        Returns: boolean
+      }
       check_browsing_quota: {
         Args: { p_user_id: string }
         Returns: number
