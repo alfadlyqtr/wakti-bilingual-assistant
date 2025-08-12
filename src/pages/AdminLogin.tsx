@@ -65,7 +65,11 @@ export default function AdminLogin() {
 
       console.log('[AdminLogin] Admin login successful for:', adminData[0]);
       toast.success('Admin login successful');
-      navigate('/admindash');
+      
+      // Add delay to allow AdminAuthProvider to complete validation
+      setTimeout(() => {
+        navigate('/admindash');
+      }, 1000);
     } catch (err) {
       console.error('[AdminLogin] Exception:', err);
       setErrorMsg('Login failed. Please try again.');
