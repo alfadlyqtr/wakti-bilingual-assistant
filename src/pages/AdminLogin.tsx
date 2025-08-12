@@ -65,7 +65,7 @@ export default function AdminLogin() {
 
       console.log('[AdminLogin] Admin login successful for:', adminData[0]);
       toast.success('Admin login successful');
-      // Let AdminAuthProvider handle the redirect automatically
+      navigate('/admindash');
     } catch (err) {
       console.error('[AdminLogin] Exception:', err);
       setErrorMsg('Login failed. Please try again.');
