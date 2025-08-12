@@ -19,14 +19,28 @@ interface AuthContextType {
   updatePassword: (password: string) => Promise<{ error: any }>;
 }
 
+// SAFE default for when AuthProvider is not mounted (e.g., admin/public routes)
+const defaultAuthContextValue: AuthContextType = {
+  user: null,
+  session: null,
+  loading: false,
+  isLoading: false,
+  signIn: async () => ({ error: null }),
+  signUp: async () => ({ error: null }),
+  signOut: async () => {},
+  resetPassword: async () => ({ error: null }),
+  forgotPassword: async () => ({ error: null }),
+  updateProfile: async () => ({ error: null }),
+  updateEmail: async () => ({ error: null }),
+  updatePassword: async () => ({ error: null }),
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  // IMPORTANT: Do NOT throw. Return an inert default when outside AuthProvider (admin/public trees).
+  return context ?? defaultAuthContextValue;
 }
 
 interface AuthProviderProps {
