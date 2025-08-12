@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
@@ -101,47 +102,71 @@ function App() {
                     <Route path="/tasjeel" element={<AppLayout><Tasjeel /></AppLayout>} />
                     
                     {/* Admin routes */}
-                    <Route path="/mqtr" element={<AdminLogin />} />
-                    <Route path="/admin-setup" element={<AdminSetup />} />
+                    <Route path="/mqtr" element={
+                      <AdminAuthProvider>
+                        <AdminLogin />
+                      </AdminAuthProvider>
+                    } />
+                    <Route path="/admin-setup" element={
+                      <AdminAuthProvider>
+                        <AdminSetup />
+                      </AdminAuthProvider>
+                    } />
                     <Route path="/admindash" element={
-                      <AdminProtectedRoute>
-                        <AdminDashboard />
-                      </AdminProtectedRoute>
+                      <AdminAuthProvider>
+                        <AdminProtectedRoute>
+                          <AdminDashboard />
+                        </AdminProtectedRoute>
+                      </AdminAuthProvider>
                     } />
                     <Route path="/admin/users" element={
-                      <AdminProtectedRoute>
-                        <AdminUsers />
-                      </AdminProtectedRoute>
+                      <AdminAuthProvider>
+                        <AdminProtectedRoute>
+                          <AdminUsers />
+                        </AdminProtectedRoute>
+                      </AdminAuthProvider>
                     } />
                     <Route path="/admin/messages" element={
-                      <AdminProtectedRoute>
-                        <AdminMessages />
-                      </AdminProtectedRoute>
+                      <AdminAuthProvider>
+                        <AdminProtectedRoute>
+                          <AdminMessages />
+                        </AdminProtectedRoute>
+                      </AdminAuthProvider>
                     } />
                     <Route path="/admin/subscriptions" element={
-                      <AdminProtectedRoute>
-                        <AdminSubscriptions />
-                      </AdminProtectedRoute>
+                      <AdminAuthProvider>
+                        <AdminProtectedRoute>
+                          <AdminSubscriptions />
+                        </AdminProtectedRoute>
+                      </AdminAuthProvider>
                     } />
                     <Route path="/admin/fawran-payments" element={
-                      <AdminProtectedRoute>
-                        <AdminFawranPayments />
-                      </AdminProtectedRoute>
+                      <AdminAuthProvider>
+                        <AdminProtectedRoute>
+                          <AdminFawranPayments />
+                        </AdminProtectedRoute>
+                      </AdminAuthProvider>
                     } />
                     <Route path="/admin/quotas" element={
-                      <AdminProtectedRoute>
-                        <AdminQuotas />
-                      </AdminProtectedRoute>
+                      <AdminAuthProvider>
+                        <AdminProtectedRoute>
+                          <AdminQuotas />
+                        </AdminProtectedRoute>
+                      </AdminAuthProvider>
                     } />
                     <Route path="/admin/analytics" element={
-                      <AdminProtectedRoute>
-                        <AdminAnalytics />
-                      </AdminProtectedRoute>
+                      <AdminAuthProvider>
+                        <AdminProtectedRoute>
+                          <AdminAnalytics />
+                        </AdminProtectedRoute>
+                      </AdminAuthProvider>
                     } />
                     <Route path="/admin-settings" element={
-                      <AdminProtectedRoute>
-                        <AdminSettings />
-                      </AdminProtectedRoute>
+                      <AdminAuthProvider>
+                        <AdminProtectedRoute>
+                          <AdminSettings />
+                        </AdminProtectedRoute>
+                      </AdminAuthProvider>
                     } />
                     
                     {/* 404 */}
