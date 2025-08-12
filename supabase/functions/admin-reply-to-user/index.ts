@@ -97,8 +97,9 @@ serve(async (req) => {
         .from('support_messages')
         .insert({
           ticket_id: ticket.id,
-          sender_type: 'staff',
-          message_body: adminResponse.trim(),
+          role: 'staff',
+          body: adminResponse.trim(),
+          sender_id: adminId,
           created_at: new Date().toISOString()
         });
 
