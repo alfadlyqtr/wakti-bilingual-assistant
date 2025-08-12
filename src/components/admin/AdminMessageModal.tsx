@@ -2,20 +2,19 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Mail, Send, MessageSquare, User, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ChatThread } from "@/components/support/ChatThread";
 
-// Use the same interface as in the parent AdminMessages component
 interface ContactSubmission {
   id: string;
   name: string;
   email: string;
-  subject?: string; // Make optional to match existing data
+  subject?: string;
   message: string;
-  submission_type: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -32,7 +31,64 @@ interface AdminMessageModalProps {
 }
 
 export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: AdminMessageModalProps) => {
-  const [isEndingChat, setIsEndingChat] = useState(false);
+  const [response, setResponse] = useState("");
+  const [isSending, setIsSending] = useState(false);
+
+  const handleSendResponse = async () => {
+    if (!message || !response.trim()) {
+      toast.error("Please write a response");
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      // Get admin session
+      const adminSession = localStorage.getItem('admin_session');
+      if (!adminSession) {
+        toast.error("Admin session not found");
+        return;
+      }
+
+      const session = JSON.parse(adminSession);
+
+      // Call the edge function to handle the admin reply
+      const { data, error } = await supabase.functions.invoke('admin-reply-to-user', {
+        body: {
+          userEmail: message.email,
+          adminResponse: response.trim(),
+          subject: message.subject,
+          submissionId: message.id,
+          adminId: session.admin_id
+        }
+      });
+
+      if (error) {
+        console.error('Error calling admin-reply-to-user function:', error);
+        toast.error("Failed to send response");
+        return;
+      }
+
+      if (!data.success) {
+        console.error('Edge function returned error:', data.error);
+        toast.error(data.error || "Failed to send response");
+        return;
+      }
+
+      toast.success(`Response sent to ${message.name} via direct message`);
+      setResponse("");
+      onResponded();
+    } catch (error) {
+      console.error('Error sending response:', error);
+      toast.error("Failed to send response");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleClose = () => {
+    setResponse("");
+    onClose();
+  };
 
   const markAsRead = async () => {
     if (!message || message.status !== 'unread') return;
@@ -52,34 +108,6 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
     }
   };
 
-  const handleEndChat = async () => {
-    if (!message) return;
-
-    setIsEndingChat(true);
-    try {
-      await supabase
-        .from('contact_submissions')
-        .update({ 
-          status: 'resolved',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', message.id);
-      
-      toast.success('Chat ended and marked as resolved');
-      onResponded();
-      onClose();
-    } catch (error) {
-      console.error('Error ending chat:', error);
-      toast.error('Failed to end chat');
-    } finally {
-      setIsEndingChat(false);
-    }
-  };
-
-  const handleClose = () => {
-    onClose();
-  };
-
   if (!message) return null;
 
   // Mark as read when modal opens
@@ -89,49 +117,90 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <MessageSquare className="h-5 w-5" />
-              <span>Support Chat</span>
-              <Badge 
-                variant={
-                  message.status === 'unread' ? 'destructive' :
-                  message.status === 'responded' ? 'default' : 
-                  message.status === 'resolved' ? 'outline' : 'secondary'
-                }
-                className="text-xs"
-              >
-                {message.status}
-              </Badge>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleEndChat}
-                disabled={isEndingChat || message.status === 'resolved'}
-                className="text-xs"
-              >
-                {isEndingChat ? 'Ending...' : 'End Chat'}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center space-x-2">
+            <MessageSquare className="h-5 w-5" />
+            <span>Support Message</span>
+            <Badge 
+              variant={
+                message.status === 'unread' ? 'destructive' :
+                message.status === 'responded' ? 'default' : 'secondary'
+              }
+              className="text-xs"
+            >
+              {message.status}
+            </Badge>
           </DialogTitle>
         </DialogHeader>
         
-        <div className="p-6 pt-0">
-          <ChatThread 
-            submission={{
-              ...message,
-              subject: message.subject || 'Support Request'
-            }} 
-            onClose={handleClose} 
-            isAdmin={true}
-          />
+        <div className="space-y-4">
+          {/* Message Details */}
+          <div className="bg-muted p-4 rounded-lg space-y-3">
+            <div className="flex items-center space-x-2">
+              <User className="h-4 w-4" />
+              <span className="font-medium">{message.name}</span>
+              <span className="text-muted-foreground">({message.email})</span>
+            </div>
+            
+            {message.subject && (
+              <div>
+                <Label className="text-sm font-medium">Subject</Label>
+                <p className="text-sm mt-1">{message.subject}</p>
+              </div>
+            )}
+            
+            <div>
+              <Label className="text-sm font-medium">Message</Label>
+              <p className="text-sm mt-1 whitespace-pre-wrap">{message.message}</p>
+            </div>
+            
+            <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>Received: {new Date(message.created_at).toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Previous Response (if any) */}
+          {message.admin_response && (
+            <div className="bg-accent/20 p-4 rounded-lg">
+              <Label className="text-sm font-medium">Previous Admin Response</Label>
+              <p className="text-sm mt-1 whitespace-pre-wrap">{message.admin_response}</p>
+              {message.responded_at && (
+                <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-2">
+                  <Clock className="h-3 w-3" />
+                  <span>Responded: {new Date(message.responded_at).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Response Section */}
+          <div>
+            <Label htmlFor="response">Admin Response</Label>
+            <Textarea
+              id="response"
+              placeholder="Type your response to the user here..."
+              value={response}
+              onChange={(e) => setResponse(e.target.value)}
+              rows={6}
+              className="mt-1"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={handleClose}>
+              Close
+            </Button>
+            <Button 
+              onClick={handleSendResponse}
+              disabled={isSending || !response.trim()}
+              className="flex items-center space-x-2"
+            >
+              <Send className="h-4 w-4" />
+              <span>{isSending ? "Sending..." : "Send Response"}</span>
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
