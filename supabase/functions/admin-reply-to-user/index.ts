@@ -48,30 +48,70 @@ serve(async (req) => {
 
     console.log('Found user profile:', userProfile.id);
 
-    // Use the user's own ID as sender to bypass foreign key constraints
-    // This creates a self-message that appears to be from "WAKTI SUPPORT"
-    const messageContent = `📧 Admin Response\n\nRe: ${subject || 'Your Support Request'}\n\n${adminResponse.trim()}\n\n---\nWAKTI Support Team`;
-    
-    const { error: messageError } = await supabaseAdmin
-      .from('messages')
-      .insert({
-        sender_id: userProfile.id, // Use user's own ID to avoid foreign key issues
-        recipient_id: userProfile.id,
-        message_type: 'text',
-        content: messageContent,
-        created_at: new Date().toISOString(),
-        is_read: false
-      });
+    // First, find the support ticket for this submission
+    const { data: ticket, error: ticketError } = await supabaseAdmin
+      .from('support_tickets')
+      .select('id')
+      .eq('user_id', userProfile.id)
+      .eq('subject', subject || 'Your Support Request')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
 
-    if (messageError) {
-      console.error('Error sending admin response message:', messageError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to send admin response', details: messageError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (ticketError) {
+      console.log('No existing support ticket found, this is a contact form submission');
+      // For contact form submissions, we'll create a notification instead
+      // This ensures admin responses don't mix with regular user messages
+      const notificationContent = `📧 Response from WAKTI Support\n\nRe: ${subject || 'Your Message'}\n\n${adminResponse.trim()}\n\n---\nWAKTI Support Team`;
+      
+      const { error: notificationError } = await supabaseAdmin
+        .from('notification_queue')
+        .insert({
+          user_id: userProfile.id,
+          notification_type: 'admin_response',
+          title: 'Response from WAKTI Support',
+          body: `You have received a response to your message: ${subject || 'Your Message'}`,
+          data: {
+            type: 'admin_response',
+            subject: subject || 'Your Message',
+            response: adminResponse.trim(),
+            submission_id: submissionId
+          },
+          deep_link: '/help',
+          status: 'pending',
+          scheduled_for: new Date().toISOString()
+        });
+
+      if (notificationError) {
+        console.error('Error creating admin response notification:', notificationError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to send admin response notification', details: notificationError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('Admin response notification queued successfully');
+    } else {
+      // This is a support ticket, add the message to the support system
+      const { error: supportMessageError } = await supabaseAdmin
+        .from('support_messages')
+        .insert({
+          ticket_id: ticket.id,
+          sender_type: 'staff',
+          message_body: adminResponse.trim(),
+          created_at: new Date().toISOString()
+        });
+
+      if (supportMessageError) {
+        console.error('Error adding support message:', supportMessageError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to add support message', details: supportMessageError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('Support message added successfully');
     }
-
-    console.log('Direct message sent successfully');
 
     // Update the contact submission with admin response
     const { error: updateError } = await supabaseAdmin
