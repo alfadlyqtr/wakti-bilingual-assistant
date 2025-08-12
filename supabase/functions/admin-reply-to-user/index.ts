@@ -14,11 +14,11 @@ serve(async (req) => {
   }
 
   try {
-    const { userEmail, adminResponse, subject, submissionId, adminId } = await req.json();
+    const { submissionId, adminResponse, adminId } = await req.json();
 
-    if (!userEmail || !adminResponse || !submissionId) {
+    if (!submissionId || !adminResponse) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: userEmail, adminResponse, submissionId' }),
+        JSON.stringify({ error: 'Missing required fields: submissionId, adminResponse' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -29,34 +29,50 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    console.log('Looking for user with email:', userEmail);
+    console.log('Processing admin reply for submission:', submissionId);
 
-    // Find the user profile by email
-    const { data: userProfile, error: userError } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('email', userEmail)
+    // Get the contact submission
+    const { data: submission, error: submissionError } = await supabaseAdmin
+      .from('contact_submissions')
+      .select('email')
+      .eq('id', submissionId)
       .single();
 
-    if (userError) {
-      console.error('Error finding user:', userError);
+    if (submissionError) {
+      console.error('Error finding submission:', submissionError);
       return new Response(
-        JSON.stringify({ error: 'User not found' }),
+        JSON.stringify({ error: 'Contact submission not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Found user profile:', userProfile.id);
+    console.log('Found submission for email:', submission.email);
 
-    // Update the contact submission with admin response
+    // Add admin reply as a chat message
+    const { error: chatError } = await supabaseAdmin
+      .from('chat_messages')
+      .insert({
+        contact_submission_id: submissionId,
+        sender_type: 'admin',
+        sender_id: adminId,
+        content: adminResponse.trim()
+      });
+
+    if (chatError) {
+      console.error('Error adding chat message:', chatError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to add chat message', details: chatError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Update the contact submission status
     const { error: updateError } = await supabaseAdmin
       .from('contact_submissions')
       .update({
-        admin_response: adminResponse.trim(),
         status: 'responded',
         responded_at: new Date().toISOString(),
-        responded_by: adminId,
-        updated_at: new Date().toISOString()
+        responded_by: adminId
       })
       .eq('id', submissionId);
 
@@ -68,35 +84,12 @@ serve(async (req) => {
       );
     }
 
-    console.log('Contact submission updated successfully');
-
-    // Send direct message to the user with admin response
-    const messageContent = `📧 Response from WAKTI Support\n\nRe: ${subject || 'Your Message'}\n\n${adminResponse.trim()}\n\n---\nWAKTI Support Team`;
-    
-    const { error: messageError } = await supabaseAdmin
-      .from('messages')
-      .insert({
-        sender_id: '00000000-0000-0000-0000-000000000001', // System profile
-        recipient_id: userProfile.id,
-        message_type: 'text',
-        content: messageContent,
-        created_at: new Date().toISOString()
-      });
-
-    if (messageError) {
-      console.error('Error sending direct message:', messageError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to send direct message', details: messageError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('Direct message sent successfully');
+    console.log('Admin reply added to chat successfully');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Response sent successfully via direct message' 
+        message: 'Admin reply added to chat successfully' 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

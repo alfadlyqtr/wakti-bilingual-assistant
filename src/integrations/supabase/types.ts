@@ -468,6 +468,51 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          contact_submission_id: string
+          content: string
+          created_at: string
+          id: string
+          sender_id: string | null
+          sender_type: string
+          updated_at: string
+        }
+        Insert: {
+          contact_submission_id: string
+          content: string
+          created_at?: string
+          id?: string
+          sender_id?: string | null
+          sender_type: string
+          updated_at?: string
+        }
+        Update: {
+          contact_submission_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          sender_id?: string | null
+          sender_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_contact_submission_id_fkey"
+            columns: ["contact_submission_id"]
+            isOneToOne: false
+            referencedRelation: "contact_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_submissions: {
         Row: {
           admin_response: string | null
