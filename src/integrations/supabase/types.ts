@@ -2445,6 +2445,10 @@ export type Database = {
         Args: { uid: string }
         Returns: boolean
       }
+      is_valid_admin: {
+        Args: { user_id?: string }
+        Returns: boolean
+      }
       log_ai_usage: {
         Args: {
           p_user_id: string
