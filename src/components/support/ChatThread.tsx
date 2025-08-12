@@ -66,29 +66,39 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
   const loadMessages = async () => {
     try {
       setError(null);
-      // For support chat, we only have the initial message and admin responses in contact_submissions
-      // Create a simple message list from the contact submission data
+      
+      // Fetch the latest submission data
+      const { data: latestSubmission, error } = await supabase
+        .from('contact_submissions')
+        .select('*')
+        .eq('id', submission.id)
+        .single();
+      
+      if (error) throw error;
+      
       const messageList: ChatMessage[] = [];
       
-      // Add initial user message
+      // Add initial message
       messageList.push({
         id: `initial_${submission.id}`,
-        content: submission.message,
+        content: latestSubmission.message,
         sender_type: 'user',
         sender_id: null,
-        created_at: submission.created_at,
-        sender_name: submission.name
+        created_at: latestSubmission.created_at,
+        sender_name: latestSubmission.name
       });
       
-      // Add admin response if exists
-      if (submission.admin_response) {
-        messageList.push({
-          id: `admin_response_${submission.id}`,
-          content: submission.admin_response,
-          sender_type: 'admin', 
-          sender_id: null,
-          created_at: submission.responded_at || submission.updated_at,
-          sender_name: 'WAKTI Support'
+      // Add all messages from the messages array
+      if (latestSubmission.messages && Array.isArray(latestSubmission.messages)) {
+        latestSubmission.messages.forEach((msg: any, index: number) => {
+          messageList.push({
+            id: `msg_${submission.id}_${index}`,
+            content: msg.content,
+            sender_type: msg.sender_type,
+            sender_id: msg.sender_id || null,
+            created_at: msg.created_at,
+            sender_name: msg.sender_name
+          });
         });
       }
 
@@ -130,19 +140,6 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
     if (!newMessage.trim()) return;
 
     const messageContent = newMessage.trim();
-    const tempId = `temp_${Date.now()}`;
-    
-    // Optimistic update - add message immediately
-    const optimisticMessage: ChatMessage = {
-      id: tempId,
-      content: messageContent,
-      sender_type: isAdmin ? 'admin' : 'user',
-      sender_id: null,
-      created_at: new Date().toISOString(),
-      sender_name: isAdmin ? 'WAKTI Support' : submission.name
-    };
-    
-    setMessages(prev => [...prev, optimisticMessage]);
     setNewMessage('');
     setIsSending(true);
     setError(null);
@@ -150,50 +147,55 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      if (isAdmin) {
-        // Admin sending response - update contact_submissions table
-        const { error } = await supabase
-          .from('contact_submissions')
-          .update({ 
-            admin_response: messageContent,
-            status: 'responded',
-            responded_at: new Date().toISOString(),
-            responded_by: user?.id || null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', submission.id);
-
-        if (error) throw error;
-
-        // Replace optimistic message with real one
-        setMessages(prev => prev.map(msg => 
-          msg.id === tempId 
-            ? { 
-                id: `admin_response_${submission.id}`,
-                content: messageContent,
-                sender_type: 'admin',
-                sender_id: user?.id || null,
-                created_at: new Date().toISOString(),
-                sender_name: 'WAKTI Support'
-              }
-            : msg
-        ));
-      } else {
-        // User sending new message - this shouldn't happen in support chat
-        // Users can only send the initial message through contact form
-        throw new Error('Users cannot send additional messages in support chat');
+      // Get current messages array
+      const { data: currentSubmission, error: fetchError } = await supabase
+        .from('contact_submissions')
+        .select('messages')
+        .eq('id', submission.id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      const messages = currentSubmission?.messages || [];
+      
+      // Add new message to array
+      messages.push({
+        content: messageContent,
+        sender_type: isAdmin ? 'admin' : 'user',
+        sender_id: user?.id || null,
+        sender_name: isAdmin ? 'WAKTI Support' : submission.name,
+        created_at: new Date().toISOString()
+      });
+      
+      // Update the submission with new messages array
+      const updateData: any = {
+        messages: messages,
+        updated_at: new Date().toISOString()
+      };
+      
+      // If admin is responding, also update status
+      if (isAdmin && submission.status !== 'responded') {
+        updateData.status = 'responded';
+        updateData.responded_at = new Date().toISOString();
+        updateData.responded_by = user?.id || null;
       }
-
+      
+      const { error: updateError } = await supabase
+        .from('contact_submissions')
+        .update(updateData)
+        .eq('id', submission.id);
+      
+      if (updateError) throw updateError;
+      
+      // Reload messages to show the new one
+      await loadMessages();
+      
+      toast.success('Message sent');
     } catch (error: any) {
       console.error('Error sending message:', error);
       setError('Failed to send message');
       toast.error('Failed to send message. Please try again.');
-      
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => msg.id !== tempId));
-      
-      // Restore the message content
-      setNewMessage(messageContent);
+      setNewMessage(messageContent); // Restore message on error
     } finally {
       setIsSending(false);
     }

@@ -513,6 +513,7 @@ export type Database = {
           email: string
           id: string
           message: string
+          messages: Json | null
           name: string
           responded_at: string | null
           responded_by: string | null
@@ -527,6 +528,7 @@ export type Database = {
           email: string
           id?: string
           message: string
+          messages?: Json | null
           name: string
           responded_at?: string | null
           responded_by?: string | null
@@ -541,6 +543,7 @@ export type Database = {
           email?: string
           id?: string
           message?: string
+          messages?: Json | null
           name?: string
           responded_at?: string | null
           responded_by?: string | null
