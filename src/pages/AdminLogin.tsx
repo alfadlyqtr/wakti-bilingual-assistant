@@ -48,28 +48,9 @@ export default function AdminLogin() {
         return;
       }
 
-      // Verify user is an admin
-      const { data: adminData, error: adminError } = await supabase.rpc('get_admin_by_auth_id', {
-        auth_user_id: authData.session.user.id
-      });
-
-      console.log('[AdminLogin] Admin verification:', { adminData, adminError });
-
-      if (adminError || !adminData || adminData.length === 0) {
-        console.error('[AdminLogin] Admin verification failed:', adminError);
-        await supabase.auth.signOut(); // Sign out if not an admin
-        setErrorMsg('Access denied - not an admin user');
-        toast.error('Access denied - not an admin user');
-        return;
-      }
-
-      console.log('[AdminLogin] Admin login successful for:', adminData[0]);
+      console.log('[AdminLogin] Admin login successful, redirecting...');
       toast.success('Admin login successful');
-      
-      // Add delay to allow AdminAuthProvider to complete validation
-      setTimeout(() => {
-        navigate('/admindash');
-      }, 1000);
+      navigate('/admindash');
     } catch (err) {
       console.error('[AdminLogin] Exception:', err);
       setErrorMsg('Login failed. Please try again.');
