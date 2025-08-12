@@ -48,14 +48,16 @@ export default function AdminLogin() {
         return;
       }
 
-      console.log('[AdminLogin] Admin login successful, redirecting...');
+      console.log('[AdminLogin] SUCCESS - About to navigate to /admindash');
       toast.success('Admin login successful');
       navigate('/admindash');
+      console.log('[AdminLogin] Navigate called');
     } catch (err) {
       console.error('[AdminLogin] Exception:', err);
       setErrorMsg('Login failed. Please try again.');
       toast.error('Login failed. Please try again.');
     } finally {
+      console.log('[AdminLogin] Setting loading to false');
       setIsLoading(false);
     }
   };
