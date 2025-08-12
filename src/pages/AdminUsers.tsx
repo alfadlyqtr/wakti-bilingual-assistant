@@ -73,13 +73,21 @@ export default function AdminUsers() {
   const loadUsers = async () => {
     try {
       setIsLoading(true);
+      console.log('Loading users...');
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .neq('display_name', '[DELETED USER]')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      console.log('Raw profiles data:', data);
+      console.log('Query error:', error);
+
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
       
       // Ensure all required fields have default values
       const processedUsers = (data || []).map(user => ({
@@ -91,10 +99,11 @@ export default function AdminUsers() {
         email_confirmed: user.email_confirmed ?? false
       }));
       
+      console.log('Processed users:', processedUsers);
       setUsers(processedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
-      toast.error('Failed to load users');
+      toast.error(`Failed to load users: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -180,7 +189,8 @@ export default function AdminUsers() {
     const matchesFilter = filterStatus === "all" || 
       (filterStatus === "subscribed" && user.is_subscribed) ||
       (filterStatus === "suspended" && user.is_suspended) ||
-      (filterStatus === "active" && !user.is_suspended);
+      (filterStatus === "active" && !user.is_suspended) ||
+      (filterStatus === "expired" && user.subscription_status === 'expired');
     
     return matchesSearch && matchesFilter;
   });
@@ -210,57 +220,71 @@ export default function AdminUsers() {
       {/* Main Content */}
       <div className="p-4 space-y-6">
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
           <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <Users className="h-4 w-4 mr-2 text-accent-blue" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
+                <Users className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-accent-blue" />
                 Total Users
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-enhanced-heading">{users.length}</div>
+            <CardContent className="pt-0">
+              <div className="text-xl lg:text-2xl font-bold text-enhanced-heading">{users.length}</div>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <Shield className="h-4 w-4 mr-2 text-accent-green" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
+                <Shield className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-accent-green" />
                 Active Users
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-accent-green">
+            <CardContent className="pt-0">
+              <div className="text-xl lg:text-2xl font-bold text-accent-green">
                 {users.filter(u => !u.is_suspended).length}
               </div>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <UserX className="h-4 w-4 mr-2 text-accent-orange" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
+                <UserX className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-accent-orange" />
                 Suspended
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-accent-orange">
+            <CardContent className="pt-0">
+              <div className="text-xl lg:text-2xl font-bold text-accent-orange">
                 {users.filter(u => u.is_suspended).length}
               </div>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <AlertTriangle className="h-4 w-4 mr-2 text-accent-purple" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
+                <CheckCircle className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-accent-purple" />
                 Subscribers
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-accent-purple">
+            <CardContent className="pt-0">
+              <div className="text-xl lg:text-2xl font-bold text-accent-purple">
                 {users.filter(u => u.is_subscribed).length}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-card border-border/50 hover:border-destructive/30 transition-all duration-300">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
+                <Clock className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-destructive" />
+                Expired
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="text-xl lg:text-2xl font-bold text-destructive">
+                {users.filter(u => u.subscription_status === 'expired').length}
               </div>
             </CardContent>
           </Card>
@@ -287,6 +311,7 @@ export default function AdminUsers() {
                 <SelectItem value="active">Active Users</SelectItem>
                 <SelectItem value="suspended">Suspended Users</SelectItem>
                 <SelectItem value="subscribed">Subscribers</SelectItem>
+                <SelectItem value="expired">Expired Users</SelectItem>
               </SelectContent>
             </Select>
           </div>
