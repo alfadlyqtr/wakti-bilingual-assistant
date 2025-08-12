@@ -411,220 +411,180 @@ export default function AdminFawranPayments() {
           />
         )}
 
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center text-sm font-medium">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Total Payments
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{payments.length}</div>
-              <div className="text-blue-100 text-xs mt-1">All time submissions</div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-to-br from-amber-500 to-orange-600 text-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center text-sm font-medium">
-                <Clock className="h-4 w-4 mr-2 animate-pulse" />
-                Pending
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">
-                {payments.filter(p => p.status === 'pending').length}
+        {/* Line Style Stats */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between p-3 border border-border/50 rounded-lg hover:bg-accent/5 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-accent-blue/10">
+                <CreditCard className="h-4 w-4 text-accent-blue" />
               </div>
-              <div className="text-amber-100 text-xs mt-1">Awaiting review</div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center text-sm font-medium">
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Approved
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">
-                {payments.filter(p => p.status === 'approved').length}
+              <div>
+                <div className="font-medium text-sm">Total Payments</div>
+                <div className="text-xs text-muted-foreground">All time submissions</div>
               </div>
-              <div className="text-green-100 text-xs mt-1">Successfully processed</div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="text-xl font-bold text-accent-blue">{payments.length}</div>
+          </div>
           
-          <Card className="bg-gradient-to-br from-red-500 to-rose-600 text-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center text-sm font-medium">
-                <AlertTriangle className="h-4 w-4 mr-2 animate-bounce" />
-                Critical Issues
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">
-                {payments.filter(p => isPaymentStuck(p) || p.tampering_detected).length + duplicatePayments.length}
+          <div className="flex items-center justify-between p-3 border border-border/50 rounded-lg hover:bg-accent/5 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-accent-orange/10">
+                <Clock className="h-4 w-4 text-accent-orange animate-pulse" />
               </div>
-              <div className="text-red-100 text-xs mt-1">Needs immediate attention</div>
-            </CardContent>
-          </Card>
+              <div>
+                <div className="font-medium text-sm">Pending</div>
+                <div className="text-xs text-muted-foreground">Awaiting review</div>
+              </div>
+            </div>
+            <div className="text-xl font-bold text-accent-orange">{payments.filter(p => p.status === 'pending').length}</div>
+          </div>
+          
+          <div className="flex items-center justify-between p-3 border border-border/50 rounded-lg hover:bg-accent/5 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-accent-green/10">
+                <CheckCircle className="h-4 w-4 text-accent-green" />
+              </div>
+              <div>
+                <div className="font-medium text-sm">Approved</div>
+                <div className="text-xs text-muted-foreground">Successfully processed</div>
+              </div>
+            </div>
+            <div className="text-xl font-bold text-accent-green">{payments.filter(p => p.status === 'approved').length}</div>
+          </div>
+          
+          <div className="flex items-center justify-between p-3 border border-border/50 rounded-lg hover:bg-accent/5 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-accent-red/10">
+                <AlertTriangle className="h-4 w-4 text-accent-red" />
+              </div>
+              <div>
+                <div className="font-medium text-sm">Critical Issues</div>
+                <div className="text-xs text-muted-foreground">Needs immediate attention</div>
+              </div>
+            </div>
+            <div className="text-xl font-bold text-accent-red">{payments.filter(p => isPaymentStuck(p) || p.tampering_detected).length + duplicatePayments.length}</div>
+          </div>
         </div>
 
-        {/* Enhanced Payments List */}
+        {/* Payment Cards - Matching User Management Style */}
         <div className="space-y-4">
-          {payments.map((payment) => (
-            <Card key={payment.id} className={`${getPaymentCardBg(payment)} border-2 hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02]`}>
-              <CardContent className="p-6">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <div className="font-bold text-enhanced-heading text-lg flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-accent-purple" />
-                            {payment.email}
-                          </div>
-                          {isPaymentStuck(payment) && (
-                            <Badge variant="destructive" className="text-xs animate-pulse bg-gradient-to-r from-red-500 to-rose-500 border-0">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              URGENT - STUCK PAYMENT
-                            </Badge>
-                          )}
-                          {duplicatePayments.some(d => d.email === payment.email) && (
-                            <Badge className="text-xs bg-orange-500 text-white animate-pulse">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              DUPLICATE
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-sm text-muted-foreground flex items-center gap-4">
-                          <span className="flex items-center gap-1">
-                            <User className="h-3 w-3" />
-                            {payment.user_display_name}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Sparkles className="h-3 w-3" />
-                            {payment.plan_type} Plan
-                          </span>
-                        </div>
-                        {payment.sender_alias && (
-                          <div className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Hash className="h-3 w-3" />
-                            Sender: {payment.sender_alias}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {getStatusBadge(payment.status)}
-                        <div className="text-2xl font-bold text-enhanced-heading">
-                          {payment.amount} <span className="text-sm text-muted-foreground">QAR</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                      <div className="flex items-center gap-2 bg-white/50 dark:bg-gray-800/50 rounded-lg p-3">
-                        <Calendar className="h-4 w-4 text-accent-blue" />
-                        <div>
-                          <span className="text-muted-foreground">Submitted:</span>
-                          <div className="font-medium">{new Date(payment.submitted_at).toLocaleString()}</div>
-                        </div>
-                      </div>
-                      {(payment.payment_reference_number || payment.transaction_reference_number) && (
-                        <div className="flex items-center gap-2 bg-white/50 dark:bg-gray-800/50 rounded-lg p-3">
-                          <Hash className="h-4 w-4 text-accent-purple" />
-                          <div>
-                            <span className="text-muted-foreground">Reference:</span>
-                            <div className="font-mono text-xs font-medium">
-                              {payment.payment_reference_number || payment.transaction_reference_number}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2">
-                      {payment.time_validation_passed && (
-                        <Badge variant="outline" className="text-xs border-green-500 text-green-600 bg-green-50">
-                          ✓ Time Valid
-                        </Badge>
-                      )}
-                      {payment.tampering_detected && (
-                        <Badge variant="destructive" className="text-xs animate-pulse">
-                          ⚠️ Security Alert
-                        </Badge>
-                      )}
-                      {payment.duplicate_detected && (
-                        <Badge variant="destructive" className="text-xs">
-                          🔄 Duplicate
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 flex-wrap lg:flex-col">
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => handleViewDetails(payment)}
-                      className="text-xs hover:bg-accent-blue/10 border-accent-blue/30"
-                    >
-                      <Eye className="h-3 w-3 mr-1" />
-                      Details
-                    </Button>
-                    
-                    {payment.status === 'pending' && (
-                      <>
-                        {isPaymentStuck(payment) && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => handleForceAnalyze(payment)}
-                            disabled={isProcessing === payment.id}
-                            className="text-xs hover:bg-blue-50 border-blue-500 text-blue-600 font-medium"
-                          >
-                            {isProcessing === payment.id ? (
-                              <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-1" />
-                            ) : (
-                              <Brain className="h-3 w-3 mr-1" />
-                            )}
-                            Force AI Analysis
-                          </Button>
-                        )}
-                        
-                        <Button 
-                          size="sm" 
-                          onClick={() => handleManualApprove(payment)}
-                          disabled={isProcessing === payment.id}
-                          className="text-xs bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
-                        >
-                          {isProcessing === payment.id ? (
-                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />
-                          ) : (
-                            <Zap className="h-3 w-3 mr-1" />
-                          )}
-                          Manual Approve
-                        </Button>
-                        
-                        <Button 
-                          size="sm" 
-                          variant="destructive"
-                          onClick={() => handleRejectPayment(payment)}
-                          disabled={isProcessing === payment.id}
-                          className="text-xs bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 border-0"
-                        >
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Reject
-                        </Button>
-                      </>
-                    )}
-                  </div>
+          {payments.length === 0 ? (
+            <Card className="enhanced-card border-dashed border-2 border-accent-purple/30">
+              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="rounded-full bg-accent-purple/10 p-3 mb-4">
+                  <CreditCard className="h-6 w-6 text-accent-purple" />
                 </div>
+                <CardTitle className="text-lg font-semibold text-enhanced-heading mb-2">No Fawran Payments Found</CardTitle>
+                <CardDescription className="text-muted-foreground max-w-sm">
+                  Fawran payment submissions will appear here once users start uploading payment screenshots.
+                </CardDescription>
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            payments.map((payment) => (
+              <Card key={payment.id} className="enhanced-card hover:shadow-lg transition-all duration-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-white font-semibold">
+                        {payment.email.charAt(0).toUpperCase()}
+                      </div>
+                      
+                      {/* User Info */}
+                      <div className="space-y-1">
+                        <h3 className="font-semibold text-enhanced-heading">{payment.email}</h3>
+                        <div className="text-sm text-muted-foreground">
+                          {payment.user_display_name || 'Unknown User'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Submitted: {new Date(payment.submitted_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status and Actions */}
+                    <div className="flex items-center gap-3">
+                      {/* Status Badge */}
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="text-xs text-muted-foreground">Status</div>
+                        {getStatusBadge(payment.status)}
+                      </div>
+
+                      {/* Plan Badge */}
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="text-xs text-muted-foreground">Plan</div>
+                        <Badge variant="outline" className="text-xs">
+                          {payment.plan_type} • {payment.amount} QAR
+                        </Badge>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleViewDetails(payment)}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          Details
+                        </Button>
+
+                        {payment.status === 'pending' && (
+                          <>
+                            <Button
+                              onClick={() => handleManualApprove(payment)}
+                              disabled={isProcessing === payment.id}
+                              size="sm"
+                              className="text-xs bg-accent-green hover:bg-accent-green/90"
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Approve
+                            </Button>
+
+                            <Button
+                              onClick={() => handleRejectPayment(payment)}
+                              disabled={isProcessing === payment.id}
+                              variant="outline"
+                              size="sm"
+                              className="text-xs border-accent-red text-accent-red hover:bg-accent-red/10"
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Security Indicators */}
+                  {(payment.tampering_detected || !payment.time_validation_passed || isPaymentStuck(payment)) && (
+                    <div className="mt-3 pt-3 border-t border-border/50">
+                      <div className="flex items-center gap-2 text-xs">
+                        <AlertTriangle className="h-3 w-3 text-accent-orange" />
+                        <span className="text-muted-foreground">Security Alerts:</span>
+                        <div className="flex gap-1">
+                          {payment.tampering_detected && (
+                            <Badge variant="destructive" className="text-xs">Tampering Detected</Badge>
+                          )}
+                          {!payment.time_validation_passed && (
+                            <Badge variant="destructive" className="text-xs">Time Invalid</Badge>
+                          )}
+                          {isPaymentStuck(payment) && (
+                            <Badge className="bg-accent-orange text-white text-xs">
+                              Stuck - {Math.floor((Date.now() - new Date(payment.submitted_at).getTime()) / (1000 * 60))}m
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
 
         {payments.length === 0 && (

@@ -43,6 +43,48 @@ export function FawranStatsCards({ stats, autoApprovalRate, avgProcessingTime, i
     ? Math.round(((stats.totalPayments - stats.tamperingDetected - stats.duplicateDetected) / stats.totalPayments) * 100)
     : 100;
 
+  const statsItems = [
+    {
+      title: "Total Payments",
+      value: stats.totalPayments,
+      icon: TrendingUp,
+      color: "text-accent-blue",
+      bgColor: "bg-accent-blue/10"
+    },
+    {
+      title: "Auto-Approval Rate",
+      value: `${autoApprovalRate}%`,
+      icon: Zap,
+      color: "text-accent-green",
+      bgColor: "bg-accent-green/10",
+      description: `${stats.autoApprovedPayments}/${stats.totalPayments} approved`
+    },
+    {
+      title: "Avg Processing Time",
+      value: `${avgProcessingTime}s`,
+      icon: Clock,
+      color: "text-accent-orange",
+      bgColor: "bg-accent-orange/10",
+      description: avgProcessingTime < 90 ? '✅ Under 90s guarantee' : '⚠️ Above 90s target'
+    },
+    {
+      title: "Pending Review",
+      value: stats.pendingPayments,
+      icon: Clock,
+      color: "text-accent-purple",
+      bgColor: "bg-accent-purple/10",
+      description: "Manual review needed"
+    },
+    {
+      title: "Security Score",
+      value: `${securityScore}%`,
+      icon: Shield,
+      color: "text-accent-cyan",
+      bgColor: "bg-accent-cyan/10",
+      description: `${stats.tamperingDetected + stats.duplicateDetected} threats blocked`
+    }
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -53,108 +95,26 @@ export function FawranStatsCards({ stats, autoApprovalRate, avgProcessingTime, i
         </Badge>
       </div>
       
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-        {/* Total Payments */}
-        <Card className="enhanced-card group hover:shadow-vibrant transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <TrendingUp className="h-4 w-4 mr-1 text-accent-blue group-hover:scale-110 transition-transform" />
-              Total Payments
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-enhanced-heading">{stats.totalPayments}</div>
-            <CardDescription className="text-xs">All time submissions</CardDescription>
-          </CardContent>
-        </Card>
-
-        {/* Auto-Approval Rate */}
-        <Card className="enhanced-card group hover:shadow-vibrant transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <Zap className="h-4 w-4 mr-1 text-accent-green group-hover:scale-110 transition-transform" />
-              Auto-Approval
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-accent-green">{autoApprovalRate}%</div>
-            <CardDescription className="text-xs">
-              {stats.autoApprovedPayments}/{stats.totalPayments} approved
-            </CardDescription>
-          </CardContent>
-        </Card>
-
-        {/* Processing Time */}
-        <Card className="enhanced-card group hover:shadow-vibrant transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <Clock className="h-4 w-4 mr-1 text-accent-orange group-hover:scale-110 transition-transform" />
-              Avg Processing
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-accent-orange">{avgProcessingTime}s</div>
-            <CardDescription className="text-xs">
-              {avgProcessingTime < 90 ? '✅ Under 90s guarantee' : '⚠️ Above 90s target'}
-            </CardDescription>
-          </CardContent>
-        </Card>
-
-        {/* Pending Payments */}
-        <Card className="enhanced-card group hover:shadow-vibrant transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <Clock className="h-4 w-4 mr-1 text-accent-purple group-hover:scale-110 transition-transform" />
-              Pending Review
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-accent-purple">{stats.pendingPayments}</div>
-            <CardDescription className="text-xs">Manual review needed</CardDescription>
-          </CardContent>
-        </Card>
-
-        {/* Security Score */}
-        <Card className="enhanced-card group hover:shadow-vibrant transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <Shield className="h-4 w-4 mr-1 text-accent-cyan group-hover:scale-110 transition-transform" />
-              Security Score
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-accent-cyan">{securityScore}%</div>
-            <CardDescription className="text-xs">
-              {stats.tamperingDetected + stats.duplicateDetected} threats blocked
-            </CardDescription>
-          </CardContent>
-        </Card>
-
-        {/* Status Distribution */}
-        <Card className="enhanced-card group hover:shadow-vibrant transition-all duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-enhanced-heading flex items-center text-sm">
-              <CheckCircle className="h-4 w-4 mr-1 text-accent-green group-hover:scale-110 transition-transform" />
-              Status Overview
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-accent-green">Approved</span>
-                <span className="font-medium">{stats.approvedPayments}</span>
+      {/* Line Style Stats */}
+      <div className="space-y-2">
+        {statsItems.map((stat, index) => (
+          <div key={index} className="flex items-center justify-between p-3 border border-border/50 rounded-lg hover:bg-accent/5 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-accent-red">Rejected</span>
-                <span className="font-medium">{stats.rejectedPayments}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-accent-purple">Pending</span>
-                <span className="font-medium">{stats.pendingPayments}</span>
+              <div>
+                <div className="font-medium text-sm">{stat.title}</div>
+                {stat.description && (
+                  <div className="text-xs text-muted-foreground">{stat.description}</div>
+                )}
               </div>
             </div>
-          </CardContent>
-        </Card>
+            <div className={`text-xl font-bold ${stat.color}`}>
+              {stat.value}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Security Alerts Row */}
