@@ -145,17 +145,8 @@ export const SimpleContactFormModal: React.FC<ContactFormModalProps> = ({
         }
       }
 
-      // Create initial chat message
-      const { error: chatError } = await supabase
-        .from('chat_messages')
-        .insert({
-          contact_submission_id: submission.id,
-          sender_type: 'user',
-          sender_id: (await supabase.auth.getUser()).data.user?.id,
-          content: formData.message
-        });
-
-      if (chatError) throw chatError;
+      // Initial message is already in the contact_submissions table
+      // No need to create separate chat message
 
       toast.success('Message sent successfully! You can now continue the conversation.');
       
