@@ -73,20 +73,48 @@ export default function AdminUsers() {
   const loadUsers = async () => {
     try {
       setIsLoading(true);
-      console.log('Loading users...');
+      console.log('[AdminUsers] Starting loadUsers...');
       
+      // Test admin authentication
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      console.log('[AdminUsers] Current auth session:', { 
+        user: sessionData?.session?.user?.id, 
+        error: sessionError 
+      });
+
+      // Test if we can access profiles directly
+      console.log('[AdminUsers] Testing direct profile access...');
+      const { data: testData, error: testError } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .limit(1);
+      
+      console.log('[AdminUsers] Test query result:', { testData, testError });
+
+      // Main query
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .neq('display_name', '[DELETED USER]')
         .order('created_at', { ascending: false });
 
-      console.log('Raw profiles data:', data);
-      console.log('Query error:', error);
+      console.log('[AdminUsers] Main query result:', { 
+        dataCount: data?.length, 
+        error,
+        sampleData: data?.slice(0, 2)
+      });
 
       if (error) {
-        console.error('Database error:', error);
-        throw error;
+        console.error('[AdminUsers] Database error:', error);
+        toast.error(`Database error: ${error.message}`);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('[AdminUsers] No users found in database');
+        toast.info('No users found in the database');
+        setUsers([]);
+        return;
       }
       
       // Ensure all required fields have default values
@@ -99,11 +127,12 @@ export default function AdminUsers() {
         email_confirmed: user.email_confirmed ?? false
       }));
       
-      console.log('Processed users:', processedUsers);
+      console.log('[AdminUsers] Successfully processed users:', processedUsers.length);
       setUsers(processedUsers);
+      toast.success(`Loaded ${processedUsers.length} users successfully`);
     } catch (error) {
-      console.error('Error loading users:', error);
-      toast.error(`Failed to load users: ${error.message}`);
+      console.error('[AdminUsers] Exception in loadUsers:', error);
+      toast.error(`Exception: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
