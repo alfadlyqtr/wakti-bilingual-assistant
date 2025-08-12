@@ -89,14 +89,17 @@ export const FawranPaymentCard = ({ payment, onReview }: FawranPaymentCardProps)
           </div>
         )}
 
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={() => onReview(payment)}
-        >
-          <Eye className="h-4 w-4 mr-2" />
-          Review Payment
-        </Button>
+        <div className="flex gap-2 pt-2 border-t border-border/50">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={() => onReview(payment)}
+            className="flex-shrink-0"
+          >
+            <Eye className="h-3 w-3 mr-1" />
+            Details
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

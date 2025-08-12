@@ -248,75 +248,50 @@ export default function AdminUsers() {
 
       {/* Main Content */}
       <div className="p-4 space-y-6">
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
-                <Users className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-accent-blue" />
-                Total Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-xl lg:text-2xl font-bold text-enhanced-heading">{users.length}</div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
-                <Shield className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-accent-green" />
-                Active Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-xl lg:text-2xl font-bold text-accent-green">
-                {users.filter(u => !u.is_suspended).length}
+        {/* Line Style Stats */}
+        <div className="space-y-3">
+          <h3 className="text-lg font-semibold text-enhanced-heading">📊 User Statistics</h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <Users className="h-4 w-4 text-accent-blue" />
+                <span className="text-sm font-medium">Total Users</span>
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-orange/30 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
-                <UserX className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-accent-orange" />
-                Suspended
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-xl lg:text-2xl font-bold text-accent-orange">
-                {users.filter(u => u.is_suspended).length}
+              <span className="text-lg font-bold text-accent-blue">{users.length}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <Shield className="h-4 w-4 text-accent-green" />
+                <span className="text-sm font-medium">Active Users</span>
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
-                <CheckCircle className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-accent-purple" />
-                Subscribers
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-xl lg:text-2xl font-bold text-accent-purple">
-                {users.filter(u => u.is_subscribed).length}
+              <span className="text-lg font-bold text-accent-green">{users.filter(u => !u.is_suspended).length}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <UserX className="h-4 w-4 text-accent-orange" />
+                <span className="text-sm font-medium">Suspended</span>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-card border-border/50 hover:border-destructive/30 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-enhanced-heading flex items-center text-xs lg:text-sm">
-                <Clock className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2 text-destructive" />
-                Expired
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-xl lg:text-2xl font-bold text-destructive">
-                {users.filter(u => u.subscription_status === 'expired').length}
+              <span className="text-lg font-bold text-accent-orange">{users.filter(u => u.is_suspended).length}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-4 w-4 text-accent-purple" />
+                <span className="text-sm font-medium">Subscribers</span>
               </div>
-            </CardContent>
-          </Card>
+              <span className="text-lg font-bold text-accent-purple">{users.filter(u => u.is_subscribed).length}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <Clock className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-medium">Expired</span>
+              </div>
+              <span className="text-lg font-bold text-destructive">{users.filter(u => u.subscription_status === 'expired').length}</span>
+            </div>
+          </div>
         </div>
 
         {/* Search and Filter Controls */}

@@ -461,61 +461,42 @@ export default function AdminSubscriptions() {
 
       {/* Main Content */}
       <div className="p-4 space-y-6">
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-blue/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <Users className="h-4 w-4 mr-2 text-accent-blue" />
-                Total Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-enhanced-heading">{users.length}</div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-green/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <CheckCircle className="h-4 w-4 mr-2 text-accent-green" />
-                Active Subs
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-accent-green">
-                {users.filter(u => u.is_subscribed && u.subscription_status === 'active').length}
+        {/* Line Style Stats */}
+        <div className="space-y-3">
+          <h3 className="text-lg font-semibold text-enhanced-heading">💳 Subscription Statistics</h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <Users className="h-4 w-4 text-accent-blue" />
+                <span className="text-sm font-medium">Total Users</span>
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <Gift className="h-4 w-4 mr-2 text-accent-purple" />
-                Gift Subs
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-accent-purple">
-                {giftSubscriptionsCount}
+              <span className="text-lg font-bold text-accent-blue">{users.length}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-4 w-4 text-accent-green" />
+                <span className="text-sm font-medium">Active Subscriptions</span>
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-card border-border/50 hover:border-accent-cyan/30 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-enhanced-heading flex items-center text-sm">
-                <Smartphone className="h-4 w-4 mr-2 text-accent-cyan" />
-                Fawran Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-accent-cyan">
-                {users.filter(u => u.payment_method === 'fawran').length}
+              <span className="text-lg font-bold text-accent-green">{users.filter(u => u.is_subscribed && u.subscription_status === 'active').length}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <Gift className="h-4 w-4 text-accent-purple" />
+                <span className="text-sm font-medium">Gift Subscriptions</span>
               </div>
-            </CardContent>
-          </Card>
+              <span className="text-lg font-bold text-accent-purple">{giftSubscriptionsCount}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <Smartphone className="h-4 w-4 text-accent-cyan" />
+                <span className="text-sm font-medium">Fawran Users</span>
+              </div>
+              <span className="text-lg font-bold text-accent-cyan">{users.filter(u => u.payment_method === 'fawran').length}</span>
+            </div>
+          </div>
         </div>
 
         {/* Search and Filter Controls */}
