@@ -2,12 +2,15 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 
-interface AdminSession {
+interface AdminData {
   admin_id: string;
-  session_token: string;
-  expires_at: string;
   email: string;
+  full_name: string;
+  role: string;
+  permissions: any;
+  is_active: boolean;
 }
 
 interface AdminProtectedRouteProps {
@@ -17,45 +20,74 @@ interface AdminProtectedRouteProps {
 export default function AdminProtectedRoute({ children }: AdminProtectedRouteProps) {
   const [isValidating, setIsValidating] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [adminData, setAdminData] = useState<AdminData | null>(null);
 
   useEffect(() => {
     validateAdminAccess();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('[AdminProtectedRoute] Auth state changed:', event, session?.user?.id);
+        if (session) {
+          await validateAdminAccess();
+        } else {
+          setIsAuthenticated(false);
+          setSession(null);
+          setAdminData(null);
+          setIsValidating(false);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const validateAdminAccess = async () => {
     try {
-      const storedSession = localStorage.getItem('admin_session');
+      console.log('[AdminProtectedRoute] Starting validation...');
       
-      if (!storedSession) {
+      // Get current Supabase Auth session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('[AdminProtectedRoute] Session error:', sessionError);
         setIsAuthenticated(false);
         setIsValidating(false);
         return;
       }
 
-      const session: AdminSession = JSON.parse(storedSession);
-      
-      // Check if session is expired
-      if (new Date(session.expires_at) < new Date()) {
-        localStorage.removeItem('admin_session');
+      if (!session) {
+        console.log('[AdminProtectedRoute] No active session');
         setIsAuthenticated(false);
         setIsValidating(false);
         return;
       }
 
-      // Validate session with database
-      const { data, error } = await supabase.rpc('validate_admin_session', {
-        p_session_token: session.session_token
+      console.log('[AdminProtectedRoute] Found session for user:', session.user.id);
+      setSession(session);
+
+      // Verify user is an admin
+      const { data: adminData, error: adminError } = await supabase.rpc('get_admin_by_auth_id', {
+        auth_user_id: session.user.id
       });
 
-      if (error || !data || data.length === 0) {
-        localStorage.removeItem('admin_session');
+      console.log('[AdminProtectedRoute] Admin verification result:', { adminData, adminError });
+
+      if (adminError) {
+        console.error('[AdminProtectedRoute] Admin verification error:', adminError);
+        setIsAuthenticated(false);
+      } else if (!adminData || adminData.length === 0) {
+        console.log('[AdminProtectedRoute] User is not an admin');
         setIsAuthenticated(false);
       } else {
+        console.log('[AdminProtectedRoute] Admin access confirmed:', adminData[0]);
+        setAdminData(adminData[0]);
         setIsAuthenticated(true);
       }
     } catch (err) {
-      console.error('Admin session validation error:', err);
-      localStorage.removeItem('admin_session');
+      console.error('[AdminProtectedRoute] Exception during validation:', err);
       setIsAuthenticated(false);
     } finally {
       setIsValidating(false);

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -17,51 +17,75 @@ export default function AdminLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Check if user is already authenticated
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Verify they're an admin
+        const { data: adminData } = await supabase.rpc('get_admin_by_auth_id', {
+          auth_user_id: session.user.id
+        });
+        
+        if (adminData && adminData.length > 0) {
+          navigate('/admindash');
+        }
+      }
+    };
+    
+    checkAuth();
+  }, [navigate]);
+
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setIsLoading(true);
 
     try {
-      console.log('Attempting admin login for:', email);
+      console.log('[AdminLogin] Attempting admin login for:', email);
       
-      // Call the admin authentication function
-      const { data, error } = await supabase.rpc('authenticate_admin', {
-        p_email: email,
-        p_password: password
+      // Sign in using Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      console.log('Admin auth response:', data, error);
+      console.log('[AdminLogin] Auth response:', { authData, authError });
 
-      if (error) {
-        console.error('Admin auth error:', error);
+      if (authError) {
+        console.error('[AdminLogin] Auth error:', authError);
         setErrorMsg('Invalid admin credentials');
         toast.error('Invalid admin credentials');
         return;
       }
 
-      if (!data || data.length === 0) {
-        console.error('No admin data returned');
-        setErrorMsg('Invalid admin credentials');
-        toast.error('Invalid admin credentials');
+      if (!authData.session) {
+        console.error('[AdminLogin] No session returned');
+        setErrorMsg('Authentication failed');
+        toast.error('Authentication failed');
         return;
       }
 
-      const adminData = data[0];
-      console.log('Admin login successful:', adminData);
-      
-      // Store admin session in localStorage
-      localStorage.setItem('admin_session', JSON.stringify({
-        admin_id: adminData.admin_id,
-        session_token: adminData.session_token,
-        expires_at: adminData.expires_at,
-        email: email
-      }));
+      // Verify user is an admin
+      const { data: adminData, error: adminError } = await supabase.rpc('get_admin_by_auth_id', {
+        auth_user_id: authData.session.user.id
+      });
 
+      console.log('[AdminLogin] Admin verification:', { adminData, adminError });
+
+      if (adminError || !adminData || adminData.length === 0) {
+        console.error('[AdminLogin] Admin verification failed:', adminError);
+        await supabase.auth.signOut(); // Sign out if not an admin
+        setErrorMsg('Access denied - not an admin user');
+        toast.error('Access denied - not an admin user');
+        return;
+      }
+
+      console.log('[AdminLogin] Admin login successful for:', adminData[0]);
       toast.success('Admin login successful');
       navigate('/admindash');
     } catch (err) {
-      console.error('Admin login error:', err);
+      console.error('[AdminLogin] Exception:', err);
       setErrorMsg('Login failed. Please try again.');
       toast.error('Login failed. Please try again.');
     } finally {

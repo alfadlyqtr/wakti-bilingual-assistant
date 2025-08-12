@@ -40,6 +40,7 @@ import NotFound from "./pages/NotFound";
 
 // Admin pages
 import AdminLogin from "./pages/AdminLogin";
+import AdminSetup from "./pages/AdminSetup";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
 import AdminMessages from "./pages/AdminMessages";
@@ -101,6 +102,7 @@ function App() {
                     
                     {/* Admin routes */}
                     <Route path="/mqtr" element={<AdminLogin />} />
+                    <Route path="/admin-setup" element={<AdminSetup />} />
                     <Route path="/admindash" element={
                       <AdminProtectedRoute>
                         <AdminDashboard />
