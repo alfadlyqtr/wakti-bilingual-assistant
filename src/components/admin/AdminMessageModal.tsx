@@ -69,19 +69,16 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
     try {
       setIsLoadingMessages(true);
       const { data, error } = await supabase
-        .from('chat_messages')
-        .select(`
-          *,
-          sender:profiles(display_name)
-        `)
-        .eq('contact_submission_id', message.id)
+        .from('support_messages')
+        .select('*')
+        .eq('support_request_id', message.id)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
 
       const formattedMessages = data.map(msg => ({
         ...msg,
-        sender_name: msg.sender?.display_name || (msg.sender_type === 'admin' ? 'WAKTI Support' : message.name)
+        sender_name: msg.sender_type === 'admin' ? 'WAKTI Support' : message.name
       }));
 
       setMessages(formattedMessages);
@@ -97,14 +94,14 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
     if (!message) return () => {};
     
     const channel = supabase
-      .channel(`admin_chat_messages_${message.id}`)
+      .channel(`support_messages_${message.id}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'chat_messages',
-          filter: `contact_submission_id=eq.${message.id}`
+          table: 'support_messages',
+          filter: `support_request_id=eq.${message.id}`
         },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
@@ -132,9 +129,9 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
       const { data: { user } } = await supabase.auth.getUser();
       
       const { data, error } = await supabase
-        .from('chat_messages')
+        .from('support_messages')
         .insert({
-          contact_submission_id: message.id,
+          support_request_id: message.id,
           sender_type: 'admin',
           sender_id: user?.id || null,
           content: response.trim()
