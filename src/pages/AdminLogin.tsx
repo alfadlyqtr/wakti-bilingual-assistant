@@ -17,6 +17,24 @@ export default function AdminLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Check if user is already authenticated
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Verify they're an admin
+        const { data: adminData } = await supabase.rpc('get_admin_by_auth_id', {
+          auth_user_id: session.user.id
+        });
+        
+        if (adminData && adminData.length > 0) {
+          navigate('/admindash');
+        }
+      }
+    };
+    
+    checkAuth();
+  }, [navigate]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +83,7 @@ export default function AdminLogin() {
 
       console.log('[AdminLogin] Admin login successful for:', adminData[0]);
       toast.success('Admin login successful');
-      // Let AdminAuthProvider handle the redirect automatically
+      navigate('/admindash');
     } catch (err) {
       console.error('[AdminLogin] Exception:', err);
       setErrorMsg('Login failed. Please try again.');

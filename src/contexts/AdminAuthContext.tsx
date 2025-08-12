@@ -57,7 +57,6 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
 
       console.log('[AdminAuth] Admin verified:', data[0]);
       setAdminData(data[0]);
-      console.log('[AdminAuth] adminData shape:', data[0]);
       return true;
     } catch (error) {
       console.error('[AdminAuth] Error validating admin:', error);
@@ -105,8 +104,7 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
     session,
     adminData,
     isLoading,
-    // Treat missing is_active as true to avoid false negatives if RPC omits the column.
-    isAdmin: !!adminData && ((adminData as any).is_active ?? true),
+    isAdmin: !!adminData && adminData.is_active,
     signOut,
   };
 
