@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Mail, Lock, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { adminSwBypass } from "@/utils/adminSwBypass";
 
 /**
  * AdminLogin v2.2 (no auto-check on mount)
@@ -24,6 +25,8 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => { adminSwBypass(); }, []);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +87,7 @@ export default function AdminLogin() {
       toast.success("Admin login successful");
 
       // HARD redirect; cache-buster avoids stale SW bundles
-      window.location.href = "/admindash?ts=" + Date.now();
+      window.location.replace('/admindash?ts=' + Date.now());
       return;
     } catch (err) {
       console.error("[AdminLogin] Exception:", err);

@@ -30,7 +30,34 @@
     
     <!-- Progressier integration -->
     <link rel="manifest" href="https://progressier.app/JnUBjX03FyINDYcP2hjx/progressier.json"/>
-    <script defer src="https://progressier.app/JnUBjX03FyINDYcP2hjx/script.js"></script>
+    <script>
+      (function () {
+        var path = location.pathname;
+        var isAdminRoute = /^\/(mqtr|admindash|admin(?:\/|$))/i.test(path);
+
+        if (!isAdminRoute) {
+          // Load Progressier PWA only for non-admin routes
+          var s = document.createElement('script');
+          s.defer = true;
+          s.src = 'https://progressier.app/JnUBjX03FyINDYcP2hjx/script.js';
+          document.head.appendChild(s);
+        } else {
+          // On admin routes: ensure no SW/caches are active
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (r) { try { r.unregister(); } catch(e){} });
+            });
+          }
+          if (typeof caches !== 'undefined' && caches.keys) {
+            caches.keys().then(function(keys){
+              keys.forEach(function(k){ try { caches.delete(k); } catch(e){} });
+            });
+          }
+          try { localStorage.removeItem('progressier'); } catch(e) {}
+          try { localStorage.removeItem('pwaInstalled'); } catch(e) {}
+        }
+      })();
+    </script>
   </head>
 
   <body>
