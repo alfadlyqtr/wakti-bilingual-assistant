@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,70 +8,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 /**
- * AdminLogin
- * - Thin login form
- * - After auth, verifies admin via RPC get_admin_by_auth_id(user.id)
- * - On success: HARD REDIRECT to /admindash (bypasses any router oddities)
- * - On failure: signs out and shows error
- * - If already signed-in + admin, auto-redirects on mount
+ * AdminLogin v2.2 (no auto-check on mount)
+ * - No useEffect on load (prevents "Authenticating..." freeze)
+ * - On submit:
+ *    1) supabase.auth.signInWithPassword
+ *    2) RPC: get_admin_by_auth_id(auth_user_id)
+ *    3) On success -> HARD REDIRECT to /admindash
+ *    4) On failure -> signOut + error
  */
 
 export default function AdminLogin() {
+  console.log("[AdminLogin] v2.2 loaded");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Helper: verify current session is an active admin
-  const verifyAdminAndRedirect = async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.user?.id) {
-        return false;
-      }
-
-      console.log("[AdminLogin] Verifying admin via RPC for:", session.user.id);
-      const { data: adminData, error: adminError } = await supabase.rpc(
-        "get_admin_by_auth_id",
-        { auth_user_id: session.user.id }
-      );
-
-      if (adminError) {
-        console.error("[AdminLogin] RPC error:", adminError);
-        return false;
-      }
-
-      const row = Array.isArray(adminData) ? adminData[0] : adminData;
-      if (row) {
-        console.log("[AdminLogin] RPC success, admin row:", row);
-        toast.success("Admin login successful");
-        // Hard redirect (avoids any React Router/provider interaction)
-        setTimeout(() => {
-          window.location.replace("/admindash");
-        }, 80);
-        return true;
-      }
-
-      return false;
-    } catch (e) {
-      console.error("[AdminLogin] verifyAdminAndRedirect exception:", e);
-      return false;
-    }
-  };
-
-  // If already signed in and admin, go straight to dashboard
-  useEffect(() => {
-    (async () => {
-      setIsLoading(true);
-      const redirected = await verifyAdminAndRedirect();
-      if (!redirected) setIsLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,10 +34,7 @@ export default function AdminLogin() {
       console.log("[AdminLogin] Attempting admin login for:", email);
 
       const { data: authData, error: authError } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        await supabase.auth.signInWithPassword({ email, password });
 
       console.log("[AdminLogin] Auth response:", { authData, authError });
 
@@ -97,22 +46,46 @@ export default function AdminLogin() {
         return;
       }
 
-      if (!authData?.session?.user?.id) {
-        console.error("[AdminLogin] No session returned");
+      const userId = authData?.session?.user?.id;
+      if (!userId) {
+        console.error("[AdminLogin] No session/user id returned");
         setErrorMsg("Authentication failed");
         toast.error("Authentication failed");
         setIsLoading(false);
         return;
       }
 
-      // Now verify admin and hard-redirect
-      const ok = await verifyAdminAndRedirect();
-      if (!ok) {
+      console.log("[AdminLogin] Verifying admin via RPC for:", userId);
+      const { data: adminData, error: adminError } = await supabase.rpc(
+        "get_admin_by_auth_id",
+        { auth_user_id: userId }
+      );
+
+      if (adminError) {
+        console.error("[AdminLogin] RPC error:", adminError);
         await supabase.auth.signOut();
         setErrorMsg("Access denied - not an admin user");
         toast.error("Access denied - not an admin user");
         setIsLoading(false);
+        return;
       }
+
+      const row = Array.isArray(adminData) ? adminData[0] : adminData;
+      if (!row) {
+        console.warn("[AdminLogin] RPC returned no admin row");
+        await supabase.auth.signOut();
+        setErrorMsg("Access denied - not an admin user");
+        toast.error("Access denied - not an admin user");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("[AdminLogin] Admin verified:", row);
+      toast.success("Admin login successful");
+
+      // HARD redirect; cache-buster avoids stale SW bundles
+      window.location.href = "/admindash?ts=" + Date.now();
+      return;
     } catch (err) {
       console.error("[AdminLogin] Exception:", err);
       setErrorMsg("Login failed. Please try again.");
