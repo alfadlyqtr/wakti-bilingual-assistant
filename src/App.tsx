@@ -7,7 +7,6 @@ import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
-import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 
 // Import all your existing components
@@ -76,58 +75,42 @@ function App() {
                 } />
                 <Route path="/admindash" element={
                   <AdminAuthProvider>
-                    <AdminProtectedRoute>
-                      <AdminDashboard />
-                    </AdminProtectedRoute>
+                    <AdminDashboard />
                   </AdminAuthProvider>
                 } />
                 <Route path="/admin/users" element={
                   <AdminAuthProvider>
-                    <AdminProtectedRoute>
-                      <AdminUsers />
-                    </AdminProtectedRoute>
+                    <AdminUsers />
                   </AdminAuthProvider>
                 } />
                 <Route path="/admin/messages" element={
                   <AdminAuthProvider>
-                    <AdminProtectedRoute>
-                      <AdminMessages />
-                    </AdminProtectedRoute>
+                    <AdminMessages />
                   </AdminAuthProvider>
                 } />
                 <Route path="/admin/subscriptions" element={
                   <AdminAuthProvider>
-                    <AdminProtectedRoute>
-                      <AdminSubscriptions />
-                    </AdminProtectedRoute>
+                    <AdminSubscriptions />
                   </AdminAuthProvider>
                 } />
                 <Route path="/admin/fawran-payments" element={
                   <AdminAuthProvider>
-                    <AdminProtectedRoute>
-                      <AdminFawranPayments />
-                    </AdminProtectedRoute>
+                    <AdminFawranPayments />
                   </AdminAuthProvider>
                 } />
                 <Route path="/admin/quotas" element={
                   <AdminAuthProvider>
-                    <AdminProtectedRoute>
-                      <AdminQuotas />
-                    </AdminProtectedRoute>
+                    <AdminQuotas />
                   </AdminAuthProvider>
                 } />
                 <Route path="/admin/analytics" element={
                   <AdminAuthProvider>
-                    <AdminProtectedRoute>
-                      <AdminAnalytics />
-                    </AdminProtectedRoute>
+                    <AdminAnalytics />
                   </AdminAuthProvider>
                 } />
                 <Route path="/admin-settings" element={
                   <AdminAuthProvider>
-                    <AdminProtectedRoute>
-                      <AdminSettings />
-                    </AdminProtectedRoute>
+                    <AdminSettings />
                   </AdminAuthProvider>
                 } />
                 
