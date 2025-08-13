@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -62,7 +61,7 @@ function App() {
           <BrowserRouter>
             <div className="min-h-screen bg-background font-sans antialiased">
               <Routes>
-                {/* Admin routes - completely isolated with their own AdminAuthProvider */}
+                {/* Admin routes - COMPLETELY OPEN, NO PROTECTION */}
                 <Route path="/mqtr" element={
                   <AdminAuthProvider>
                     <AdminLogin />
