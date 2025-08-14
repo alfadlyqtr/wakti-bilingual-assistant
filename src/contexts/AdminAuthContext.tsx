@@ -38,6 +38,49 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
   const [adminData, setAdminData] = useState<AdminData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const waitForSupabaseSession = async (
+    maxRetries = 5,
+    retryDelay = 500
+  ): Promise<Session | null> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        console.log(
+          `[AdminAuth] Supabase session found on attempt ${attempt}`
+        );
+        return session;
+      }
+      console.log(
+        `[AdminAuth] No session on attempt ${attempt}, retrying in ${retryDelay}ms`
+      );
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+    }
+
+    console.log(
+      "[AdminAuth] No session after retries, waiting for auth state change"
+    );
+
+    return new Promise((resolve) => {
+      const {
+        data: { subscription }
+      } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log(
+          `[AdminAuth] Auth state changed after retries: ${event}`
+        );
+        subscription.unsubscribe();
+        resolve(session);
+      });
+      // Fallback timeout in case no event fires
+      setTimeout(() => {
+        console.log("[AdminAuth] Auth state change timeout reached");
+        subscription.unsubscribe();
+        resolve(null);
+      }, retryDelay * maxRetries);
+    });
+  };
+
   const validateAdminSession = async (currentSession: Session | null) => {
     if (!currentSession) {
       setAdminData(null);
@@ -82,7 +125,7 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
   useEffect(() => {
     // Get initial session
     const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await waitForSupabaseSession();
       setSession(session);
       await validateAdminSession(session);
       setIsLoading(false);
@@ -95,7 +138,11 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
       async (event, session) => {
         console.log('[AdminAuth] Auth state changed:', event, session?.user?.id);
         setSession(session);
-        await validateAdminSession(session);
+        if (event === 'SIGNED_OUT') {
+          await validateAdminSession(null);
+        } else {
+          await validateAdminSession(session);
+        }
         setIsLoading(false);
       }
     );

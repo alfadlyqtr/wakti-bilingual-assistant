@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 
 interface AdminSession {
   admin_id: string;
@@ -8,13 +9,56 @@ interface AdminSession {
   expires_at: string;
 }
 
+const waitForSupabaseSession = async (
+  maxRetries = 5,
+  retryDelay = 500
+): Promise<Session | null> => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+      console.log(
+        `[AdminAuth] Supabase session found on attempt ${attempt}`
+      );
+      return session;
+    }
+    console.log(
+      `[AdminAuth] No session on attempt ${attempt}, retrying in ${retryDelay}ms`
+    );
+    await new Promise((resolve) => setTimeout(resolve, retryDelay));
+  }
+
+  console.log(
+    "[AdminAuth] No session after retries, waiting for auth state change"
+  );
+
+  return new Promise((resolve) => {
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log(
+        `[AdminAuth] Auth state changed after retries: ${event}`
+      );
+      subscription.unsubscribe();
+      resolve(session);
+    });
+    // Fallback timeout in case no event fires
+    setTimeout(() => {
+      console.log("[AdminAuth] Auth state change timeout reached");
+      subscription.unsubscribe();
+      resolve(null);
+    }, retryDelay * maxRetries);
+  });
+};
+
 export const validateAdminSession = async (): Promise<boolean> => {
   try {
     // First check if we have a valid Supabase auth session
-    const { data: { session: supabaseSession } } = await supabase.auth.getSession();
+    const supabaseSession = await waitForSupabaseSession();
     if (!supabaseSession?.user?.id) {
-      console.log('[AdminAuth] No Supabase session found');
-      localStorage.removeItem('admin_session');
+      console.log("[AdminAuth] No Supabase session found after retries");
+      localStorage.removeItem("admin_session");
       return false;
     }
 
