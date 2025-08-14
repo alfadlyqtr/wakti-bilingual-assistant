@@ -93,7 +93,12 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
         auth_user_id: currentSession.user.id
       });
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        console.warn('[AdminAuth] RPC validation failed, keeping existing session:', error);
+        return true;
+      }
+
+      if (!data || data.length === 0) {
         console.log('[AdminAuth] User is not an admin');
         setAdminData(null);
         localStorage.removeItem('admin_session');
@@ -102,7 +107,7 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
 
       console.log('[AdminAuth] Admin verified:', data[0]);
       setAdminData(data[0]);
-      
+
       // Store admin session in localStorage for persistence
       const adminSession = {
         admin_id: data[0].admin_id,
@@ -112,13 +117,11 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
       };
       localStorage.setItem('admin_session', JSON.stringify(adminSession));
-      
+
       return true;
     } catch (error) {
       console.error('[AdminAuth] Error validating admin:', error);
-      setAdminData(null);
-      localStorage.removeItem('admin_session');
-      return false;
+      return true;
     }
   };
 
