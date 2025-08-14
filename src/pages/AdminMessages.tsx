@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Trash2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ interface ContactSubmission {
 
 export default function AdminMessages() {
   const navigate = useNavigate();
+  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [messages, setMessages] = useState<ContactSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -39,17 +41,31 @@ export default function AdminMessages() {
   const [showMessageModal, setShowMessageModal] = useState(false);
 
   useEffect(() => {
-    checkAdminSession();
-    loadMessages();
-  }, []);
-
-  const checkAdminSession = async () => {
-    const { validateAdminSession } = await import('@/utils/adminAuth');
-    const isValid = await validateAdminSession();
-    if (!isValid) {
+    if (!authLoading && !isAdmin) {
       navigate('/mqtr');
+      return;
     }
-  };
+    if (isAdmin) {
+      loadMessages();
+    }
+  }, [isAdmin, authLoading, navigate]);
+
+  // Show loading while auth is being validated
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#0c0f14] text-white/90 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Validating admin access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect handled by useEffect
+  if (!isAdmin) {
+    return null;
+  }
 
   const loadMessages = async () => {
     try {

@@ -10,10 +10,18 @@ interface AdminSession {
 
 export const validateAdminSession = async (): Promise<boolean> => {
   try {
-    // Check localStorage first
+    // First check if we have a valid Supabase auth session
+    const { data: { session: supabaseSession } } = await supabase.auth.getSession();
+    if (!supabaseSession?.user?.id) {
+      console.log('[AdminAuth] No Supabase session found');
+      localStorage.removeItem('admin_session');
+      return false;
+    }
+
+    // Check localStorage session
     const storedSession = localStorage.getItem('admin_session');
     if (!storedSession) {
-      console.log('[AdminAuth] No stored session found');
+      console.log('[AdminAuth] No stored admin session found');
       return false;
     }
 
@@ -26,16 +34,25 @@ export const validateAdminSession = async (): Promise<boolean> => {
       return false;
     }
 
-    // Check if we have a valid Supabase auth session
-    const { data: { session: supabaseSession } } = await supabase.auth.getSession();
-    if (!supabaseSession?.user?.id) {
-      console.log('[AdminAuth] No Supabase session found');
-      localStorage.removeItem('admin_session');
-      return false;
-    }
+    // Verify admin status with backend
+    try {
+      const { data, error } = await supabase.rpc('get_admin_by_auth_id', {
+        auth_user_id: supabaseSession.user.id
+      });
 
-    console.log('[AdminAuth] Valid admin session found');
-    return true;
+      if (error || !data || data.length === 0) {
+        console.log('[AdminAuth] User is not an admin');
+        localStorage.removeItem('admin_session');
+        return false;
+      }
+
+      console.log('[AdminAuth] Valid admin session found');
+      return true;
+    } catch (rpcError) {
+      console.warn('[AdminAuth] RPC validation failed, falling back to localStorage check:', rpcError);
+      // Fallback to localStorage check if RPC fails
+      return true;
+    }
   } catch (error) {
     console.error('[AdminAuth] Error validating session:', error);
     localStorage.removeItem('admin_session');

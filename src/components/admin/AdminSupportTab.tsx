@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAdminAuth } from '@/contexts/AdminAuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ interface SupportMessage {
 }
 
 export function AdminSupportTab() {
+  const { isAdmin, adminData } = useAdminAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -57,33 +59,18 @@ export function AdminSupportTab() {
   const [filterType, setFilterType] = useState('all');
 
   useEffect(() => {
-    validateAdminSession();
-    loadTickets();
-  }, []);
+    if (isAdmin) {
+      loadTickets();
+    }
+  }, [isAdmin]);
 
-  const validateAdminSession = async () => {
-    const storedSession = localStorage.getItem('admin_session');
-    if (!storedSession) {
-      toast.error('Admin session not found');
-      return false;
-    }
-    
-    try {
-      const session = JSON.parse(storedSession);
-      if (new Date(session.expires_at) < new Date()) {
-        localStorage.removeItem('admin_session');
-        toast.error('Admin session expired');
-        return false;
-      }
-      return true;
-    } catch {
-      toast.error('Invalid admin session');
-      return false;
-    }
-  };
+  // Don't render if not admin
+  if (!isAdmin) {
+    return null;
+  }
 
   const loadTickets = async () => {
-    if (!await validateAdminSession()) return;
+    if (!isAdmin) return;
     
     try {
       setIsLoading(true);
@@ -137,20 +124,16 @@ export function AdminSupportTab() {
   };
 
   const sendStaffReply = async () => {
-    if (!selectedTicket || !newMessage.trim()) return;
-    if (!await validateAdminSession()) return;
+    if (!selectedTicket || !newMessage.trim() || !isAdmin || !adminData) return;
 
     setIsSending(true);
     try {
-      const storedSession = localStorage.getItem('admin_session');
-      const session = JSON.parse(storedSession!);
-      
       // Insert the staff reply message
       const { error: messageError } = await supabase
         .from('support_messages')
         .insert({
           ticket_id: selectedTicket.id,
-          sender_id: session.admin_id,
+          sender_id: adminData.admin_id,
           sender_role: 'staff',
           body: newMessage.trim(),
           attachments: []
@@ -182,8 +165,7 @@ export function AdminSupportTab() {
   };
 
   const closeTicket = async () => {
-    if (!selectedTicket) return;
-    if (!await validateAdminSession()) return;
+    if (!selectedTicket || !isAdmin) return;
 
     if (!confirm('Are you sure you want to close this ticket?')) {
       return;

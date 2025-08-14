@@ -41,6 +41,7 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
   const validateAdminSession = async (currentSession: Session | null) => {
     if (!currentSession) {
       setAdminData(null);
+      localStorage.removeItem('admin_session');
       return false;
     }
 
@@ -52,16 +53,28 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
       if (error || !data || data.length === 0) {
         console.log('[AdminAuth] User is not an admin');
         setAdminData(null);
+        localStorage.removeItem('admin_session');
         return false;
       }
 
       console.log('[AdminAuth] Admin verified:', data[0]);
       setAdminData(data[0]);
-      console.log('[AdminAuth] adminData shape:', data[0]);
+      
+      // Store admin session in localStorage for persistence
+      const adminSession = {
+        admin_id: data[0].admin_id,
+        email: data[0].email,
+        full_name: data[0].full_name,
+        role: data[0].role,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+      };
+      localStorage.setItem('admin_session', JSON.stringify(adminSession));
+      
       return true;
     } catch (error) {
       console.error('[AdminAuth] Error validating admin:', error);
       setAdminData(null);
+      localStorage.removeItem('admin_session');
       return false;
     }
   };

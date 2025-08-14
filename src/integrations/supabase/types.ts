@@ -133,6 +133,7 @@ export type Database = {
       }
       admin_users: {
         Row: {
+          auth_user_id: string | null
           created_at: string | null
           email: string
           full_name: string
@@ -145,6 +146,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          auth_user_id?: string | null
           created_at?: string | null
           email: string
           full_name: string
@@ -157,6 +159,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          auth_user_id?: string | null
           created_at?: string | null
           email?: string
           full_name?: string
@@ -2308,6 +2311,17 @@ export type Database = {
       generate_tr_share_link: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      get_admin_by_auth_id: {
+        Args: { auth_user_id: string }
+        Returns: {
+          admin_id: string
+          email: string
+          full_name: string
+          role: string
+          permissions: Json
+          is_active: boolean
+        }[]
       }
       get_admin_dashboard_stats: {
         Args: Record<PropertyKey, never>

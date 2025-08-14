@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { Gift, Search, Plus, Mic, Filter, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,7 @@ interface User {
 
 export default function AdminQuotas() {
   const navigate = useNavigate();
+  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [displayedUsers, setDisplayedUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,17 +39,14 @@ export default function AdminQuotas() {
   const [showAllUsers, setShowAllUsers] = useState(false);
 
   useEffect(() => {
-    checkAdminSession();
-    loadUsers();
-  }, []);
-
-  const checkAdminSession = async () => {
-    const { validateAdminSession } = await import('@/utils/adminAuth');
-    const isValid = await validateAdminSession();
-    if (!isValid) {
+    if (!authLoading && !isAdmin) {
       navigate('/mqtr');
+      return;
     }
-  };
+    if (isAdmin) {
+      loadUsers();
+    }
+  }, [isAdmin, authLoading, navigate]);
 
   useEffect(() => {
     filterAndDisplayUsers();
