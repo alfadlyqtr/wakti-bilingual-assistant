@@ -104,26 +104,6 @@ export const validateAdminSession = async (): Promise<boolean> => {
   }
 };
 
-export const getAdminSession = (): AdminSession | null => {
-  try {
-    const storedSession = localStorage.getItem('admin_session');
-    if (!storedSession) return null;
-    
-    const session: AdminSession = JSON.parse(storedSession);
-    
-    // Check if expired
-    if (new Date(session.expires_at) < new Date()) {
-      localStorage.removeItem('admin_session');
-      return null;
-    }
-    
-    return session;
-  } catch {
-    localStorage.removeItem('admin_session');
-    return null;
-  }
-};
-
 export const clearAdminSession = (): void => {
   localStorage.removeItem('admin_session');
 };

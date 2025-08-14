@@ -48,7 +48,7 @@ interface Subscription {
 
 export default function AdminSubscriptions() {
   const navigate = useNavigate();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
+  const { isAdmin, adminData, isLoading: authLoading } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,12 +107,6 @@ export default function AdminSubscriptions() {
     }
   };
 
-  const getCurrentAdminId = () => {
-    const { getAdminSession } = require('@/utils/adminAuth');
-    const session = getAdminSession();
-    return session?.admin_id || null;
-  };
-
   const handleActivateSubscription = async () => {
     if (!selectedUser) {
       console.error('[DEBUG] No user selected for activation');
@@ -128,9 +122,9 @@ export default function AdminSubscriptions() {
     });
 
     setIsActivating(true);
-    
+
     try {
-      const adminId = getCurrentAdminId();
+      const adminId = adminData?.admin_id;
       
       if (!adminId) {
         console.error('[DEBUG] No admin ID available');
@@ -702,7 +696,7 @@ export default function AdminSubscriptions() {
               Email: {selectedUser.email}<br/>
               Currently Subscribed: {selectedUser.is_subscribed ? 'Yes' : 'No'}<br/>
               Status: {selectedUser.subscription_status || 'N/A'}<br/>
-              Admin ID: {getCurrentAdminId() || 'Not found'}
+              Admin ID: {adminData?.admin_id || 'Not found'}
             </div>
           )}
           
