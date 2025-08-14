@@ -1,7 +1,5 @@
 
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { Shield, CreditCard, RefreshCw, Eye, CheckCircle, XCircle, Clock, AlertTriangle, Brain, Zap, RotateCcw, User, Calendar, Hash, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,8 +32,6 @@ interface FawranPayment {
 }
 
 export default function AdminFawranPayments() {
-  const navigate = useNavigate();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [payments, setPayments] = useState<FawranPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPayment, setSelectedPayment] = useState<FawranPayment | null>(null);
@@ -44,14 +40,8 @@ export default function AdminFawranPayments() {
   const [duplicatePayments, setDuplicatePayments] = useState<FawranPayment[]>([]);
 
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      navigate('/mqtr');
-      return;
-    }
-    if (isAdmin) {
-      loadPayments();
-    }
-  }, [isAdmin, authLoading, navigate]);
+    loadPayments();
+  }, []);
 
   const loadPayments = async () => {
     try {

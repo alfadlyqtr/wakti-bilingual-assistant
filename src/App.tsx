@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
+import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { AppLayout } from "@/components/AppLayout";
 
@@ -61,57 +61,17 @@ function App() {
           <BrowserRouter>
             <div className="min-h-screen bg-background font-sans antialiased">
               <Routes>
-                {/* Admin routes - COMPLETELY OPEN, NO PROTECTION */}
-                <Route path="/mqtr" element={
-                  <AdminAuthProvider>
-                    <AdminLogin />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admin-setup" element={
-                  <AdminAuthProvider>
-                    <AdminSetup />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admindash" element={
-                  <AdminAuthProvider>
-                    <AdminDashboard />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admin/users" element={
-                  <AdminAuthProvider>
-                    <AdminUsers />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admin/messages" element={
-                  <AdminAuthProvider>
-                    <AdminMessages />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admin/subscriptions" element={
-                  <AdminAuthProvider>
-                    <AdminSubscriptions />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admin/fawran-payments" element={
-                  <AdminAuthProvider>
-                    <AdminFawranPayments />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admin/quotas" element={
-                  <AdminAuthProvider>
-                    <AdminQuotas />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admin/analytics" element={
-                  <AdminAuthProvider>
-                    <AdminAnalytics />
-                  </AdminAuthProvider>
-                } />
-                <Route path="/admin-settings" element={
-                  <AdminAuthProvider>
-                    <AdminSettings />
-                  </AdminAuthProvider>
-                } />
+                {/* Admin routes */}
+                <Route path="/mqtr" element={<AdminLogin />} />
+                <Route path="/admin-setup" element={<AdminProtectedRoute><AdminSetup /></AdminProtectedRoute>} />
+                <Route path="/admindash" element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
+                <Route path="/admin/users" element={<AdminProtectedRoute><AdminUsers /></AdminProtectedRoute>} />
+                <Route path="/admin/messages" element={<AdminProtectedRoute><AdminMessages /></AdminProtectedRoute>} />
+                <Route path="/admin/subscriptions" element={<AdminProtectedRoute><AdminSubscriptions /></AdminProtectedRoute>} />
+                <Route path="/admin/fawran-payments" element={<AdminProtectedRoute><AdminFawranPayments /></AdminProtectedRoute>} />
+                <Route path="/admin/quotas" element={<AdminProtectedRoute><AdminQuotas /></AdminProtectedRoute>} />
+                <Route path="/admin/analytics" element={<AdminProtectedRoute><AdminAnalytics /></AdminProtectedRoute>} />
+                <Route path="/admin-settings" element={<AdminProtectedRoute><AdminSettings /></AdminProtectedRoute>} />
                 
                 {/* Public routes - no auth provider needed */}
                 <Route path="/" element={<RootHandler />} />

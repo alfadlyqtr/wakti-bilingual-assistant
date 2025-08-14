@@ -1,7 +1,5 @@
 
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { Shield, Users, Search, Filter, RefreshCw, Eye, UserX, Trash2, AlertTriangle, User, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,8 +33,6 @@ interface AdminUser {
 }
 
 export default function AdminUsers() {
-  const navigate = useNavigate();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -49,22 +45,8 @@ export default function AdminUsers() {
   const [actionType, setActionType] = useState<'suspend' | 'delete' | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      navigate('/mqtr');
-      return;
-    }
-    if (isAdmin) {
-      loadUsers();
-    }
-  }, [isAdmin, authLoading, navigate]);
-
-  const checkAdminSession = async () => {
-    const { validateAdminSession } = await import('@/utils/adminAuth');
-    const isValid = await validateAdminSession();
-    if (!isValid) {
-      navigate('/mqtr');
-    }
-  };
+    loadUsers();
+  }, []);
 
   const loadUsers = async () => {
     try {
@@ -73,9 +55,9 @@ export default function AdminUsers() {
       
       // Test admin authentication
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      console.log('[AdminUsers] Current auth session:', { 
-        user: sessionData?.session?.user?.id, 
-        error: sessionError 
+      console.log('[AdminUsers] Current auth session:', {
+        user: sessionData?.session?.user?.id,
+        error: sessionError
       });
 
       // Test if we can access profiles directly

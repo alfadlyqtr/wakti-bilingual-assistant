@@ -1,6 +1,5 @@
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Shield, Sun, Moon, Languages, Save, Palette, Bell, Database, Key, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +13,6 @@ import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 // Removed broken import: import { NotificationTestPanel } from "@/components/admin/NotificationTestPanel";
 
 export default function AdminSettings() {
-  const navigate = useNavigate();
   const { theme, setTheme, language, setLanguage } = useTheme();
   const [settings, setSettings] = useState({
     emailNotifications: true,
