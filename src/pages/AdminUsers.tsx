@@ -58,14 +58,6 @@ export default function AdminUsers() {
     }
   }, [isAdmin, authLoading, navigate]);
 
-  const checkAdminSession = async () => {
-    const { validateAdminSession } = await import('@/utils/adminAuth');
-    const isValid = await validateAdminSession();
-    if (!isValid) {
-      navigate('/mqtr');
-    }
-  };
-
   const loadUsers = async () => {
     try {
       setIsLoading(true);

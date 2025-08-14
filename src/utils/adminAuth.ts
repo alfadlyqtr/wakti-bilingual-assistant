@@ -11,9 +11,19 @@ interface AdminSession {
 export const validateAdminSession = async (): Promise<boolean> => {
   try {
     // First check if we have a valid Supabase auth session
-    const { data: { session: supabaseSession } } = await supabase.auth.getSession();
+    let { data: { session: supabaseSession } } = await supabase.auth.getSession();
+
+    // Supabase can return null while restoring a session, so retry a few times
+    let attempts = 0;
+    while (!supabaseSession?.user?.id && attempts < 5) {
+      attempts++;
+      console.log(`[AdminAuth] Waiting for Supabase session (attempt ${attempts}/5)`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      ({ data: { session: supabaseSession } } = await supabase.auth.getSession());
+    }
+
     if (!supabaseSession?.user?.id) {
-      console.log('[AdminAuth] No Supabase session found');
+      console.log('[AdminAuth] No Supabase session found after retries');
       localStorage.removeItem('admin_session');
       return false;
     }

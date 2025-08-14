@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { AlertTriangle, UserX, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 interface User {
   id: string;
@@ -40,24 +41,22 @@ interface DeleteModalProps {
 export const SuspendUserModal = ({ user, isOpen, onClose, onSuccess }: SuspendModalProps) => {
   const [reason, setReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const { adminData } = useAdminAuth();
 
   const handleSuspend = async () => {
     if (!user) return;
 
     setIsProcessing(true);
     try {
-      // Get admin session
-      const adminSession = localStorage.getItem('admin_session');
-      if (!adminSession) {
+      const adminId = adminData?.admin_id;
+      if (!adminId) {
         toast.error("Admin session not found");
         return;
       }
 
-      const session = JSON.parse(adminSession);
-      
       const { error } = await supabase.rpc('suspend_user', {
         p_user_id: user.id,
-        p_admin_id: session.admin_id,
+        p_admin_id: adminId,
         p_reason: reason.trim() || 'Account suspended by admin'
       });
 
@@ -169,25 +168,23 @@ export const SuspendUserModal = ({ user, isOpen, onClose, onSuccess }: SuspendMo
 
 export const DeleteUserModal = ({ user, isOpen, onClose, onSuccess }: DeleteModalProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
+  const { adminData } = useAdminAuth();
 
   const handleDelete = async () => {
     if (!user) return;
 
     setIsDeleting(true);
     try {
-      // Get admin session
-      const adminSession = localStorage.getItem('admin_session');
-      if (!adminSession) {
+      const adminId = adminData?.admin_id;
+      if (!adminId) {
         toast.error("Admin session not found");
         return;
       }
 
-      const session = JSON.parse(adminSession);
-      
       // Use the soft delete function to properly mark user as deleted
       const { error } = await supabase.rpc('soft_delete_user', {
         p_user_id: user.id,
-        p_admin_id: session.admin_id
+        p_admin_id: adminId
       });
 
       if (error) {

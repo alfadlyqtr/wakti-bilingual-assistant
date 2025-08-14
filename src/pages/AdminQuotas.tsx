@@ -27,7 +27,7 @@ interface User {
 
 export default function AdminQuotas() {
   const navigate = useNavigate();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
+  const { isAdmin, isLoading: authLoading, adminData } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [displayedUsers, setDisplayedUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -175,14 +175,11 @@ export default function AdminQuotas() {
     setIsGifting(true);
 
     try {
-      const adminSession = localStorage.getItem('admin_session');
-      if (!adminSession) {
+      const adminId = adminData?.admin_id;
+      if (!adminId) {
         toast.error('Admin session not found');
         return;
       }
-
-      const session = JSON.parse(adminSession);
-      const adminId = session.admin_id;
 
       const { data, error } = await supabase.rpc('admin_gift_voice_credits', {
         p_user_id: selectedUser.id,

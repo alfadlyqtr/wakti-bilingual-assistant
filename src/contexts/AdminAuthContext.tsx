@@ -40,8 +40,7 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
 
   const validateAdminSession = async (currentSession: Session | null) => {
     if (!currentSession) {
-      setAdminData(null);
-      localStorage.removeItem('admin_session');
+      console.log('[AdminAuth] No Supabase session available yet');
       return false;
     }
 
@@ -82,7 +81,16 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
   useEffect(() => {
     // Get initial session
     const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      let attempts = 0;
+      let session: Session | null = null;
+      while (attempts < 5) {
+        const { data: { session: current } } = await supabase.auth.getSession();
+        session = current;
+        if (session?.user?.id) break;
+        attempts++;
+        console.log(`[AdminAuth] Waiting for Supabase session (attempt ${attempts}/5)`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
       setSession(session);
       await validateAdminSession(session);
       setIsLoading(false);
@@ -95,6 +103,12 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
       async (event, session) => {
         console.log('[AdminAuth] Auth state changed:', event, session?.user?.id);
         setSession(session);
+        if (event === 'SIGNED_OUT') {
+          setAdminData(null);
+          localStorage.removeItem('admin_session');
+          setIsLoading(false);
+          return;
+        }
         await validateAdminSession(session);
         setIsLoading(false);
       }
