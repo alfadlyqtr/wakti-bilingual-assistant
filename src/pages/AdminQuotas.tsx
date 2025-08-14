@@ -37,8 +37,17 @@ export default function AdminQuotas() {
   const [showAllUsers, setShowAllUsers] = useState(false);
 
   useEffect(() => {
+    checkAdminSession();
     loadUsers();
   }, []);
+
+  const checkAdminSession = async () => {
+    const { validateAdminSession } = await import('@/utils/adminAuth');
+    const isValid = await validateAdminSession();
+    if (!isValid) {
+      navigate('/mqtr');
+    }
+  };
 
   useEffect(() => {
     filterAndDisplayUsers();

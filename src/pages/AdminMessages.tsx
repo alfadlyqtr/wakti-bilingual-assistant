@@ -39,25 +39,14 @@ export default function AdminMessages() {
   const [showMessageModal, setShowMessageModal] = useState(false);
 
   useEffect(() => {
-    validateAdminSession();
+    checkAdminSession();
     loadMessages();
   }, []);
 
-  const validateAdminSession = async () => {
-    const storedSession = localStorage.getItem('admin_session');
-    if (!storedSession) {
-      navigate('/mqtr');
-      return;
-    }
-
-    try {
-      const session = JSON.parse(storedSession);
-      if (new Date(session.expires_at) < new Date()) {
-        localStorage.removeItem('admin_session');
-        navigate('/mqtr');
-        return;
-      }
-    } catch (err) {
+  const checkAdminSession = async () => {
+    const { validateAdminSession } = await import('@/utils/adminAuth');
+    const isValid = await validateAdminSession();
+    if (!isValid) {
       navigate('/mqtr');
     }
   };

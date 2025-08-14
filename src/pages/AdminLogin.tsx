@@ -84,6 +84,18 @@ export default function AdminLogin() {
       }
 
       console.log("[AdminLogin] Admin verified:", row);
+      
+      // Store admin session in localStorage
+      const adminSession = {
+        admin_id: row.admin_id,
+        email: row.email,
+        full_name: row.full_name,
+        role: row.role,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+      };
+      localStorage.setItem('admin_session', JSON.stringify(adminSession));
+      console.log("[AdminLogin] Admin session stored:", adminSession);
+      
       toast.success("Admin login successful");
 
       // HARD redirect; cache-buster avoids stale SW bundles

@@ -65,35 +65,14 @@ export default function AdminSubscriptions() {
   });
 
   useEffect(() => {
-    validateAdminSession();
+    checkAdminSession();
     loadData();
   }, []);
 
-  const validateAdminSession = async () => {
-    const storedSession = localStorage.getItem('admin_session');
-    console.log('[DEBUG] Checking admin session:', storedSession ? 'exists' : 'missing');
-    
-    if (!storedSession) {
-      console.error('[DEBUG] No admin session found');
-      navigate('/mqtr');
-      return;
-    }
-    
-    try {
-      const session = JSON.parse(storedSession);
-      console.log('[DEBUG] Admin session parsed:', { 
-        admin_id: session.admin_id, 
-        expires_at: session.expires_at,
-        isExpired: new Date(session.expires_at) < new Date()
-      });
-      if (new Date(session.expires_at) < new Date()) {
-        localStorage.removeItem('admin_session');
-        console.error('[DEBUG] Admin session expired');
-        navigate('/mqtr');
-        return;
-      }
-    } catch (err) {
-      console.error('[DEBUG] Error parsing admin session:', err);
+  const checkAdminSession = async () => {
+    const { validateAdminSession } = await import('@/utils/adminAuth');
+    const isValid = await validateAdminSession();
+    if (!isValid) {
       navigate('/mqtr');
     }
   };
@@ -130,26 +109,9 @@ export default function AdminSubscriptions() {
   };
 
   const getCurrentAdminId = () => {
-    const storedSession = localStorage.getItem('admin_session');
-    console.log('[DEBUG] Checking admin session:', storedSession ? 'exists' : 'missing');
-    
-    if (!storedSession) {
-      console.error('[DEBUG] No admin session found');
-      return null;
-    }
-    
-    try {
-      const session = JSON.parse(storedSession);
-      console.log('[DEBUG] Admin session parsed:', { 
-        admin_id: session.admin_id, 
-        expires_at: session.expires_at,
-        isExpired: new Date(session.expires_at) < new Date()
-      });
-      return session.admin_id;
-    } catch (error) {
-      console.error('[DEBUG] Error parsing admin session:', error);
-      return null;
-    }
+    const { getAdminSession } = require('@/utils/adminAuth');
+    const session = getAdminSession();
+    return session?.admin_id || null;
   };
 
   const handleActivateSubscription = async () => {

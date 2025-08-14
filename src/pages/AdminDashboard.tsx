@@ -17,24 +17,13 @@ export default function AdminDashboard() {
   const { stats, recentActivity, isLoading, refetch } = useAdminDashboardStats();
 
   useEffect(() => {
-    validateAdminSession();
+    checkAdminSession();
   }, []);
 
-  const validateAdminSession = async () => {
-    const storedSession = localStorage.getItem('admin_session');
-    if (!storedSession) {
-      navigate('/mqtr');
-      return;
-    }
-
-    try {
-      const session = JSON.parse(storedSession);
-      if (new Date(session.expires_at) < new Date()) {
-        localStorage.removeItem('admin_session');
-        navigate('/mqtr');
-        return;
-      }
-    } catch (err) {
+  const checkAdminSession = async () => {
+    const { validateAdminSession } = await import('@/utils/adminAuth');
+    const isValid = await validateAdminSession();
+    if (!isValid) {
       navigate('/mqtr');
     }
   };
