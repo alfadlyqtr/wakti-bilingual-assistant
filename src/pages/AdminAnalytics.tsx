@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { BarChart3, TrendingUp, DollarSign, Users, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +18,6 @@ interface AnalyticsData {
 }
 
 export default function AdminAnalytics() {
-  const navigate = useNavigate();
   const [analytics, setAnalytics] = useState<AnalyticsData>({
     totalRevenue: 0,
     monthlyRevenue: 0,
