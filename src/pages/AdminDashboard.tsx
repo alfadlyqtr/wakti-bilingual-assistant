@@ -1,6 +1,4 @@
 
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Shield, RefreshCw, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminHeader } from "@/components/admin/AdminHeader";
@@ -11,35 +9,9 @@ import { ScrollableRecentActivity } from "@/components/admin/ScrollableRecentAct
 import { PaymentSystemStatus } from "@/components/admin/PaymentSystemStatus";
 import { FawranStatsCards } from "@/components/admin/FawranStatsCards";
 import { FawranSystemTest } from "@/components/admin/FawranSystemTest";
-import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 export default function AdminDashboard() {
-  const navigate = useNavigate();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const { stats, recentActivity, isLoading, refetch } = useAdminDashboardStats();
-
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      navigate('/mqtr');
-    }
-  }, [isAdmin, authLoading, navigate]);
-
-  // Show loading while auth is being validated
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#0c0f14] text-white/90 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-          <p>Validating admin access...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirect handled by useEffect, but show loading state
-  if (!isAdmin) {
-    return null;
-  }
 
   const autoApprovalRate = stats.fawranStats.totalPayments > 0 
     ? Math.round((stats.fawranStats.autoApprovedPayments / stats.fawranStats.totalPayments) * 100)
@@ -79,7 +51,7 @@ export default function AdminDashboard() {
               Recent Activity
             </h2>
             <div className="text-xs text-white/50">
-              Live updates • Last refresh: {new Date().toLocaleTimeString()}
+              Live updates • Last refresh: {new Date().  toLocaleTimeString()}
             </div>
           </div>
           <ScrollableRecentActivity activities={recentActivity} isLoading={isLoading} />

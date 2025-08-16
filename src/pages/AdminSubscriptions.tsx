@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,8 +45,6 @@ interface Subscription {
 }
 
 export default function AdminSubscriptions() {
-  const navigate = useNavigate();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,14 +63,8 @@ export default function AdminSubscriptions() {
   });
 
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      navigate('/mqtr');
-      return;
-    }
-    if (isAdmin) {
-      loadData();
-    }
-  }, [isAdmin, authLoading, navigate]);
+    loadData();
+  }, []);
 
   const loadData = async () => {
     try {

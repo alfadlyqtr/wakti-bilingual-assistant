@@ -123,12 +123,17 @@ export const AdminAuthProvider = ({ children }: AdminAuthProviderProps) => {
   };
 
   useEffect(() => {
+    console.log("[AdminAuth] Starting initialization...");
     // Get initial session
     const getInitialSession = async () => {
+      console.log("[AdminAuth] Getting initial session...");
       const session = await waitForSupabaseSession();
+      console.log("[AdminAuth] Initial session result:", session?.user?.id);
       setSession(session);
-      await validateAdminSession(session);
+      const isValid = await validateAdminSession(session);
+      console.log("[AdminAuth] Session validation result:", isValid);
       setIsLoading(false);
+      console.log("[AdminAuth] Initialization complete, isLoading set to false");
     };
 
     getInitialSession();
