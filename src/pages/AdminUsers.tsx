@@ -41,8 +41,18 @@ export default function AdminUsers() {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
+        .from('profiles')
+        .select(`
+          id,
+          email,
+          display_name,
+          is_suspended,
+          email_confirmed,
+          suspended_at,
+          suspension_reason,
+          subscription_status,
+          created_at
+        `)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -61,8 +71,8 @@ export default function AdminUsers() {
       const processedUsers = data.map(user => ({
         ...user,
         email: user.email || '',
-        full_name: user.full_name || user.display_name || 'Unknown User',
-        display_name: user.display_name || user.full_name || 'Unknown User',
+        full_name: user.display_name || 'Unknown User',
+        display_name: user.display_name || 'Unknown User',
         is_logged_in: user.is_logged_in ?? false,
         email_confirmed: user.email_confirmed ?? false,
         is_suspended: user.is_suspended ?? false
@@ -83,7 +93,7 @@ export default function AdminUsers() {
 
     try {
       const { error } = await supabase
-        .from('users')
+        .from('profiles')
         .update({
           is_suspended: !selectedUser.is_suspended,
           suspended_at: !selectedUser.is_suspended ? new Date().toISOString() : null,
@@ -108,11 +118,10 @@ export default function AdminUsers() {
 
     try {
       const { error } = await supabase
-        .from('users')
+        .from('profiles')
         .update({
           display_name: '[DELETED USER]',
-          email: null,
-          full_name: '[DELETED USER]'
+          email: null
         })
         .eq('id', selectedUser.id);
 

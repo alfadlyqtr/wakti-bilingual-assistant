@@ -1,5 +1,5 @@
 
-import { Shield, RefreshCw, TrendingUp } from "lucide-react";
+import { Shield, RefreshCw, TrendingUp, Users, CreditCard, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
@@ -57,16 +57,48 @@ export default function AdminDashboard() {
           <ScrollableRecentActivity activities={recentActivity} isLoading={isLoading} />
         </div>
 
-        {/* Enhanced System Overview */}
+        {/* System Overview */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white/90">System Overview</h2>
+            <h2 className="text-xl font-semibold text-white/90">📊 System Overview</h2>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <div className="w-1.5 h-1.5 bg-accent-green rounded-full"></div>
               <span>All Systems Operational</span>
             </div>
           </div>
-          <EnhancedStatsCards stats={stats} isLoading={isLoading} />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 border border-white/10 rounded-lg bg-white/5">
+              <div className="flex items-center gap-3">
+                <Users className="h-4 w-4 text-blue-400" />
+                <span className="text-sm font-medium text-white/90">Total Users</span>
+              </div>
+              <span className="text-lg font-bold text-blue-400">{isLoading ? '...' : stats.totalUsers.toLocaleString()}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border border-white/10 rounded-lg bg-white/5">
+              <div className="flex items-center gap-3">
+                <CreditCard className="h-4 w-4 text-green-400" />
+                <span className="text-sm font-medium text-white/90">Active Subscriptions</span>
+              </div>
+              <span className="text-lg font-bold text-green-400">{isLoading ? '...' : stats.activeSubscriptions.toLocaleString()}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border border-white/10 rounded-lg bg-white/5">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="h-4 w-4 text-yellow-400" />
+                <span className="text-sm font-medium text-white/90">Monthly Revenue</span>
+              </div>
+              <span className="text-lg font-bold text-yellow-400">{isLoading ? '...' : `${stats.monthlyRevenue.toFixed(0)} QAR`}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border border-white/10 rounded-lg bg-white/5">
+              <div className="flex items-center gap-3">
+                <MessageSquare className="h-4 w-4 text-purple-400" />
+                <span className="text-sm font-medium text-white/90">Pending Messages</span>
+              </div>
+              <span className="text-lg font-bold text-purple-400">{isLoading ? '...' : stats.pendingMessages.toLocaleString()}</span>
+            </div>
+          </div>
         </div>
 
         {/* Enhanced Payment System Status */}
