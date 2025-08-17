@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import { getAdminSession } from "@/utils/adminAuth";
 
 interface User {
   id: string;
@@ -97,10 +98,40 @@ export default function AdminSubscriptions() {
     }
   };
 
-  const getCurrentAdminId = () => {
-    const { getAdminSession } = require('@/utils/adminAuth');
-    const session = getAdminSession();
-    return session?.admin_id || null;
+  const getCurrentAdminId = async (): Promise<string | null> => {
+    try {
+      // Get current Supabase session
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error || !session?.user?.id) {
+        console.error('[DEBUG] No Supabase session found:', error);
+        return null;
+      }
+
+      // Check localStorage for admin session
+      const adminSession = getAdminSession();
+      if (adminSession?.admin_id) {
+        console.log('[DEBUG] Admin ID from localStorage:', adminSession.admin_id);
+        return adminSession.admin_id;
+      }
+
+      // Fallback: get admin info from database
+      const { data: adminData, error: adminError } = await supabase
+        .rpc('get_admin_by_auth_id', {
+          auth_user_id: session.user.id
+        });
+
+      if (adminError || !adminData || adminData.length === 0) {
+        console.error('[DEBUG] Failed to get admin info:', adminError);
+        return null;
+      }
+
+      console.log('[DEBUG] Admin ID from database:', adminData[0].id);
+      return adminData[0].id;
+    } catch (error) {
+      console.error('[DEBUG] Error getting admin ID:', error);
+      return null;
+    }
   };
 
   const handleActivateSubscription = async () => {
@@ -120,7 +151,7 @@ export default function AdminSubscriptions() {
     setIsActivating(true);
     
     try {
-      const adminId = getCurrentAdminId();
+      const adminId = await getCurrentAdminId();
       
       if (!adminId) {
         console.error('[DEBUG] No admin ID available');
@@ -186,7 +217,7 @@ export default function AdminSubscriptions() {
         });
         
         // Reload data to see changes
-        loadData();
+        await loadData();
       }
     } catch (error) {
       console.error('[DEBUG] Exception during activation:', error);
@@ -691,8 +722,7 @@ export default function AdminSubscriptions() {
               User ID: {selectedUser.id}<br/>
               Email: {selectedUser.email}<br/>
               Currently Subscribed: {selectedUser.is_subscribed ? 'Yes' : 'No'}<br/>
-              Status: {selectedUser.subscription_status || 'N/A'}<br/>
-              Admin ID: {getCurrentAdminId() || 'Not found'}
+              Status: {selectedUser.subscription_status || 'N/A'}
             </div>
           )}
           
