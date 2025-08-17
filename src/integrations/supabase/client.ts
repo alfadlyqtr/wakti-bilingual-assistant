@@ -3,20 +3,43 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
 
 // Create a single supabase client for interacting with your database
-// Use environment variables if available, otherwise fall back to hardcoded values
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://hxauxozopvpzpdygoqwf.supabase.co";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
+// Use environment variables only (no fallbacks) to avoid accidental misconfiguration
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-// Ensure that URL and key are not empty strings
+// Ensure that URL and key are present
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Supabase URL or Anonymous key is missing. Please check your environment variables.");
+  console.warn(
+    "[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. UI will load but API calls may fail. Add them to .env.local and restart dev server."
+  );
 }
+// Fallback placeholders to avoid crashing the app during local setup
+const safeUrl = (supabaseUrl || 'https://example.supabase.co') as string;
+const safeAnon = (supabaseAnonKey || 'public-anon-key') as string;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(safeUrl, safeAnon, {
   auth: {
     persistSession: true
   }
 });
+
+// One-time connectivity check (no UI impact). Logs minimal status to console.
+declare global {
+  interface Window { __SUPABASE_CHECKED__?: boolean }
+}
+
+if (typeof window !== 'undefined' && !window.__SUPABASE_CHECKED__) {
+  window.__SUPABASE_CHECKED__ = true;
+  supabase.auth.getSession()
+    .then(({ data, error }) => {
+      if (error) {
+        console.error('[Supabase] Connectivity check failed:', error?.message || error);
+      } else {
+        console.log('[Supabase] Client initialized. Session present:', !!data?.session);
+      }
+    })
+    .catch((e) => console.error('[Supabase] Connectivity error:', e?.message || e));
+}
 
 // Define types for edge function payloads
 interface TranscribeAudioPayload {

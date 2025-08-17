@@ -34,6 +34,19 @@ export default function AdminQuotas() {
   const [isGifting, setIsGifting] = useState(false);
   const [showAllUsers, setShowAllUsers] = useState(false);
 
+  console.log('--- RENDER CYCLE ---');
+  console.log('State [users]:', users);
+  console.log('State [displayedUsers]:', displayedUsers);
+  const alfadlyUserInUsers = users.find(u => u.email === 'alfadly@tmw.qa');
+  if (alfadlyUserInUsers) {
+    console.log('RENDER: alfadly@tmw.qa in `users` state:', alfadlyUserInUsers);
+  } 
+  const alfadlyUserInDisplayed = displayedUsers.find(u => u.email === 'alfadly@tmw.qa');
+  if (alfadlyUserInDisplayed) {
+    console.log('RENDER: alfadly@tmw.qa in `displayedUsers` state:', alfadlyUserInDisplayed);
+  }
+  console.log('--- END RENDER CYCLE ---');
+
   useEffect(() => {
     loadUsers();
   }, []);
@@ -45,11 +58,22 @@ export default function AdminQuotas() {
   const loadUsers = async () => {
     try {
       setIsLoading(true);
-      
-      // Get all users with their subscription status
+      console.log('🔄 Loading users and voice usage data...');
+
       const { data: usersData, error: usersError } = await supabase
         .from('profiles')
-        .select('id, email, display_name, is_subscribed, subscription_status')
+        .select(`
+          id,
+          email,
+          display_name,
+          is_subscribed,
+          subscription_status,
+          user_voice_usage (
+            characters_used,
+            characters_limit,
+            extra_characters
+          )
+        `)
         .neq('display_name', '[DELETED USER]')
         .order('email');
 
@@ -66,48 +90,33 @@ export default function AdminQuotas() {
 
       console.log('✅ Users loaded:', usersData.length);
 
-      // Get voice usage data for all users
-      const { data: voiceUsageData, error: voiceError } = await supabase
-        .from('user_voice_usage')
-        .select('user_id, characters_used, characters_limit, extra_characters');
-
-      if (voiceError) {
-        console.error('❌ Error loading voice usage:', voiceError);
-      }
-
-      // Create voice usage map
-      const voiceUsageMap = new Map(
-        voiceUsageData?.map(usage => [
-          usage.user_id, 
-          { 
-            used: usage.characters_used, 
-            limit: usage.characters_limit, 
-            extra: usage.extra_characters 
-          }
-        ]) || []
-      );
-
-      // Combine all data
       const formattedUsers: User[] = usersData.map(user => {
-        const voiceUsage = voiceUsageMap.get(user.id);
+        // user_voice_usage can be an array, so we take the first element or provide defaults.
+        const voiceUsage = Array.isArray(user.user_voice_usage) ? user.user_voice_usage[0] : user.user_voice_usage;
 
-        return {
+        const userData = {
           id: user.id,
           email: user.email || "No email",
           full_name: user.display_name || "No name",
-          voice_characters_used: voiceUsage?.used || 0,
-          voice_characters_limit: voiceUsage?.limit || 5000,
-          voice_extra_characters: voiceUsage?.extra || 0,
+          voice_characters_used: voiceUsage?.characters_used || 0,
+          voice_characters_limit: voiceUsage?.characters_limit || 6000,
+          voice_extra_characters: voiceUsage?.extra_characters || 0,
           is_subscribed: user.is_subscribed || false,
           subscription_status: user.subscription_status || 'inactive',
         };
+
+        if (user.email === 'alfadly@tmw.qa') {
+          console.log('🎯 alfadly@tmw.qa data after direct join:', userData);
+        }
+
+        return userData;
       });
 
       console.log('✅ Combined user data successfully:', formattedUsers.length);
       setUsers(formattedUsers);
     } catch (err) {
-      console.error('❌ Error loading users:', err);
-      toast.error('Failed to load users');
+      console.error('❌ Error in loadUsers:', err);
+      toast.error('Failed to load user quotas');
     } finally {
       setIsLoading(false);
     }
@@ -188,6 +197,9 @@ export default function AdminQuotas() {
           ? { ...user, voice_extra_characters: data[0]?.new_extra_characters || user.voice_extra_characters }
           : user
       ));
+
+      // Reload users to get updated data
+      await loadUsers();
 
       toast.success(`Gifted ${amount} voice characters to ${selectedUser.email}`);
       setSelectedUser(null);
@@ -275,86 +287,7 @@ export default function AdminQuotas() {
             </Button>
           </div>
 
-          {/* Users List */}
-          <div className="grid gap-2 sm:gap-4">
-            {displayedUsers.map((user) => (
-              <Card 
-                key={user.id} 
-                className={`enhanced-card cursor-pointer transition-all ${
-                  selectedUser?.id === user.id ? 'ring-2 ring-accent-purple' : ''
-                }`}
-                onClick={() => setSelectedUser(user)}
-              >
-                <CardContent className="p-3 sm:p-4">
-                  <div className="space-y-3">
-                    {/* User Info Row */}
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white font-medium text-xs sm:text-sm">
-                          {(user.full_name || user.email).charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
-                          {user.full_name || "No name"}
-                        </h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground truncate">{user.email}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {selectedUser?.id === user.id && (
-                          <Badge className="bg-accent-purple text-xs flex-shrink-0">Selected</Badge>
-                        )}
-                        <Badge 
-                          variant={user.is_subscribed ? "default" : "secondary"}
-                          className="text-xs flex-shrink-0"
-                        >
-                          {user.is_subscribed ? "Subscribed" : "Free"}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {/* Voice Quota Display */}
-                    <div className="pt-2 border-t border-border/50">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Mic className="h-3 w-3 text-accent-blue flex-shrink-0" />
-                        <span className="text-xs font-medium">Voice Usage</span>
-                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-accent-blue transition-all duration-300"
-                            style={{ 
-                              width: `${Math.min((user.voice_characters_used / user.voice_characters_limit) * 100, 100)}%` 
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Badge variant="outline" className="text-xs justify-center">
-                          {user.voice_characters_used.toLocaleString()} / {user.voice_characters_limit.toLocaleString()}
-                        </Badge>
-                        {user.voice_extra_characters > 0 && (
-                          <Badge variant="secondary" className="text-xs justify-center">
-                            +{user.voice_extra_characters.toLocaleString()} extra
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {displayedUsers.length === 0 && (
-            <Card className="enhanced-card">
-              <CardContent className="p-6 sm:p-12 text-center">
-                <Gift className="h-6 w-6 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-sm sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
-                <p className="text-muted-foreground text-xs sm:text-base">Try adjusting your search criteria.</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Gift Quota Form - Repositioned and Enhanced */}
+          {/* Gift Voice Credits Form - MOVED TO TOP */}
           {selectedUser && (
             <Card className="enhanced-card border-accent-purple/50 bg-gradient-to-r from-accent-purple/5 to-accent-blue/5">
               <CardHeader className="pb-3 sm:pb-6">
@@ -364,6 +297,11 @@ export default function AdminQuotas() {
                 </CardTitle>
                 <CardDescription className="text-xs sm:text-sm">
                   Selected: <strong>{selectedUser.email}</strong>
+                  <br />
+                  Current: {selectedUser.voice_characters_used.toLocaleString()} / {(selectedUser.voice_characters_limit + selectedUser.voice_extra_characters).toLocaleString()} characters
+                  {selectedUser.voice_extra_characters > 0 && (
+                    <span className="text-accent-purple"> (includes {selectedUser.voice_extra_characters.toLocaleString()} gifted)</span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 sm:space-y-4">
@@ -397,6 +335,96 @@ export default function AdminQuotas() {
               </CardContent>
             </Card>
           )}
+
+          {/* Users List */}
+          <div className="grid gap-2 sm:gap-4">
+            {displayedUsers.map((user) => {
+              const totalLimit = user.voice_characters_limit + user.voice_extra_characters;
+              const usagePercentage = totalLimit > 0 ? (user.voice_characters_used / totalLimit) * 100 : 0;
+              
+              return (
+                <Card 
+                  key={user.id} 
+                  className={`enhanced-card cursor-pointer transition-all ${
+                    selectedUser?.id === user.id ? 'ring-2 ring-accent-purple' : ''
+                  }`}
+                  onClick={() => setSelectedUser(user)}
+                >
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="space-y-3">
+                      {/* User Info Row */}
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-white font-medium text-xs sm:text-sm">
+                            {(user.full_name || user.email).charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
+                            {user.full_name || "No name"}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-muted-foreground truncate">{user.email}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          {selectedUser?.id === user.id && (
+                            <Badge className="bg-accent-purple text-xs flex-shrink-0">Selected</Badge>
+                          )}
+                          <Badge 
+                            variant={user.is_subscribed ? "default" : "secondary"}
+                            className="text-xs flex-shrink-0"
+                          >
+                            {user.is_subscribed ? "Subscribed" : "Free"}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Voice Quota Display - FIXED CALCULATION */}
+                      <div className="pt-2 border-t border-border/50">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Mic className="h-3 w-3 text-accent-blue flex-shrink-0" />
+                          <span className="text-xs font-medium">Voice Usage</span>
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-accent-blue transition-all duration-300"
+                              style={{ 
+                                width: `${Math.min(usagePercentage, 100)}%` 
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Badge variant="outline" className="text-xs justify-center">
+                            {user.voice_characters_used.toLocaleString()} / {totalLimit.toLocaleString()}
+                          </Badge>
+                          {user.voice_extra_characters > 0 && (
+                            <Badge variant="secondary" className="text-xs justify-center bg-accent-purple/10 text-accent-purple border-accent-purple/20">
+                              +{user.voice_extra_characters.toLocaleString()} gifted
+                            </Badge>
+                          )}
+                        </div>
+                        {user.voice_extra_characters > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1 text-center">
+                            Base: {user.voice_characters_limit.toLocaleString()} + Gifted: {user.voice_extra_characters.toLocaleString()} = Total: {totalLimit.toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {displayedUsers.length === 0 && (
+            <Card className="enhanced-card">
+              <CardContent className="p-6 sm:p-12 text-center">
+                <Gift className="h-6 w-6 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-sm sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
+                <p className="text-muted-foreground text-xs sm:text-base">Try adjusting your search criteria.</p>
+              </CardContent>
+            </Card>
+          )}
+
         </div>
       </div>
 
