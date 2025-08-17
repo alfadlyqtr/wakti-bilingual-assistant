@@ -371,7 +371,7 @@ export default function AdminSubscriptions() {
       {/* Header */}
       <AdminHeader
         title="Subscription Management"
-        subtitle="Modern Fawran AI-Verified Payments + Admin Gift Subscriptions + Auto-Expiry System"
+        subtitle=""
         icon={<Shield className="h-5 w-5 text-accent-blue" />}
       >
         <div className="flex gap-2">
