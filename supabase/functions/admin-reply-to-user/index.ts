@@ -34,7 +34,7 @@ serve(async (req) => {
     // Get the contact submission
     const { data: submission, error: submissionError } = await supabaseAdmin
       .from('contact_submissions')
-      .select('email')
+      .select('id, email, name, messages')
       .eq('id', submissionId)
       .single();
 
@@ -48,13 +48,23 @@ serve(async (req) => {
 
     console.log('Found submission for email:', submission.email);
 
+    // Map Supabase Auth user ID to admin_users.id for FK correctness
+    const { data: adminLookup, error: adminLookupError } = await supabaseAdmin
+      .rpc('get_admin_by_auth_id', { auth_user_id: adminId });
+    if (adminLookupError) {
+      console.error('Error looking up admin by auth id:', adminLookupError);
+    }
+    const adminUserId = Array.isArray(adminLookup) && adminLookup.length > 0
+      ? (adminLookup[0] as any).admin_id
+      : null;
+
     // Add admin reply as a chat message
     const { error: chatError } = await supabaseAdmin
       .from('chat_messages')
       .insert({
         contact_submission_id: submissionId,
         sender_type: 'admin',
-        sender_id: adminId,
+        sender_id: adminUserId,
         content: adminResponse.trim()
       });
 
@@ -66,13 +76,29 @@ serve(async (req) => {
       );
     }
 
-    // Update the contact submission status
+    // Prepare message object for the JSON messages array used by the UI
+    const adminMsg = {
+      content: adminResponse.trim(),
+      sender_type: 'admin',
+      sender_id: adminUserId || null,
+      sender_name: 'WAKTI Support',
+      created_at: new Date().toISOString()
+    };
+
+    // Safely append to existing messages array (if present)
+    const existingMessages = Array.isArray((submission as any)?.messages) ? (submission as any).messages : [];
+    const updatedMessages = [...existingMessages, adminMsg];
+
+    // Update the contact submission with status, response, and messages (for current UI)
     const { error: updateError } = await supabaseAdmin
       .from('contact_submissions')
       .update({
         status: 'responded',
         responded_at: new Date().toISOString(),
-        responded_by: adminId
+        responded_by: adminUserId,
+        updated_at: new Date().toISOString(),
+        admin_response: adminResponse.trim(),
+        messages: updatedMessages
       })
       .eq('id', submissionId);
 

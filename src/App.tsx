@@ -82,7 +82,13 @@ function App() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/reset-success" element={<ResetSuccess />} />
                 <Route path="/contact" element={<ContactUs />} />
-                <Route path="/help" element={<Help />} />
+                <Route path="/help" element={
+                  <AuthProvider>
+                    <GiftNotificationProvider>
+                      <Help />
+                    </GiftNotificationProvider>
+                  </AuthProvider>
+                } />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
                 <Route path="/confirmed" element={<Confirmed />} />
                 

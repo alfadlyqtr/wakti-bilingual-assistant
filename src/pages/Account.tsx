@@ -724,7 +724,7 @@ export default function Account() {
               <CardContent>
                 <Button 
                   variant="outline" 
-                  onClick={() => setIsFeedbackDialogOpen(true)}
+                  onClick={() => navigate('/help?tab=support')}
                   className="w-full sm:w-auto"
                 >
                   {t("submitFeedback", language)}
@@ -746,7 +746,7 @@ export default function Account() {
               <CardContent>
                 <Button 
                   variant="outline" 
-                  onClick={() => setIsAbuseDialogOpen(true)}
+                  onClick={() => navigate('/help?tab=support')}
                   className="w-full sm:w-auto"
                 >
                   {t("reportAbuse", language)}

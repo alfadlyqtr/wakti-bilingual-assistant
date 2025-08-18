@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Trash2, Mail } from "lucide-react";
+import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Trash2, Mail, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,16 @@ import { toast } from "sonner";
 import { AdminMessageModal } from "@/components/admin/AdminMessageModal";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ContactSubmission {
   id: string;
@@ -35,9 +45,37 @@ export default function AdminMessages() {
   const [filterType, setFilterType] = useState("all");
   const [selectedMessage, setSelectedMessage] = useState<ContactSubmission | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ContactSubmission | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMessages();
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-messages-list')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'contact_submissions' },
+        () => loadMessages()
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'contact_submissions' },
+        () => loadMessages()
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'contact_submissions' },
+        () => loadMessages()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadMessages = async () => {
@@ -69,21 +107,36 @@ export default function AdminMessages() {
     setSelectedMessage(null);
   };
 
-  const handleDeleteMessage = async (messageId: string) => {
-    if (!confirm('Are you sure you want to delete this message?')) return;
-    
+  const handleDeleteClick = (message: ContactSubmission) => {
+    setDeleteTarget(message);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    const prev = messages;
+    setDeletingId(id);
+    // Optimistic UI: remove immediately
+    setMessages((msgs) => msgs.filter((m) => m.id !== id));
+
     try {
       const { error } = await supabase
         .from('contact_submissions')
         .delete()
-        .eq('id', messageId);
+        .eq('id', id);
 
       if (error) throw error;
       toast.success('Message deleted successfully');
-      loadMessages();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting message:', error);
-      toast.error('Failed to delete message');
+      // Rollback optimistic change
+      setMessages(prev);
+      toast.error(`Failed to delete message: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setDeletingId(null);
+      setConfirmOpen(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -322,10 +375,15 @@ export default function AdminMessages() {
                             <Button 
                               size="sm" 
                               variant="outline"
-                              onClick={() => handleDeleteMessage(message.id)}
+                              onClick={() => handleDeleteClick(message)}
+                              disabled={deletingId === message.id}
                               className="text-red-500 hover:text-red-600 hover:bg-red-50/10"
                             >
-                              <Trash2 className="h-3 w-3" />
+                              {deletingId === message.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
                             </Button>
                             <Button 
                               size="sm" 
@@ -357,6 +415,35 @@ export default function AdminMessages() {
         message={selectedMessage}
         onResponded={handleMessageResponded}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the conversation and all chat history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingId}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={!!deletingId}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deletingId ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Admin Mobile Navigation */}
       <AdminMobileNav />

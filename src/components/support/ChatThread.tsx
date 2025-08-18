@@ -47,6 +47,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentStatus, setCurrentStatus] = useState(submission.status);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,6 +76,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
         .single();
       
       if (error) throw error;
+      setCurrentStatus(latestSubmission.status);
       
       const messageList: ChatMessage[] = [];
       
@@ -125,6 +127,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
         },
         (payload) => {
           const updatedSubmission = payload.new as any;
+          setCurrentStatus(updatedSubmission.status);
           // Reload messages when contact_submissions is updated (admin response added)
           loadMessages();
         }
@@ -140,12 +143,33 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
     if (!newMessage.trim()) return;
 
     const messageContent = newMessage.trim();
+    if (currentStatus === 'closed') {
+      toast.info('Chat is closed by WAKTI Support');
+      return;
+    }
     setNewMessage('');
     setIsSending(true);
     setError(null);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // Best-effort insert into chat_messages for realtime admin thread (user messages only)
+      if (!isAdmin && user?.id) {
+        try {
+          await supabase
+            .from('chat_messages')
+            .insert({
+              contact_submission_id: submission.id,
+              sender_type: 'user',
+              sender_id: user.id,
+              content: messageContent,
+            });
+        } catch (e) {
+          console.error('Best-effort chat_messages insert failed:', e);
+          // Continue with JSON update fallback below
+        }
+      }
       
       // Get current messages array
       const { data: currentSubmission, error: fetchError } = await supabase
@@ -213,6 +237,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
       case 'unread': return 'bg-red-500';
       case 'read': return 'bg-yellow-500';
       case 'responded': return 'bg-green-500';
+      case 'closed': return 'bg-gray-600';
       default: return 'bg-gray-500';
     }
   };
@@ -235,8 +260,8 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
         <div>
           <CardTitle className="flex items-center gap-2">
             {submission.subject}
-            <Badge className={getStatusColor(submission.status)}>
-              {submission.status}
+            <Badge className={getStatusColor(currentStatus)}>
+              {currentStatus}
             </Badge>
           </CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -289,19 +314,26 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
+        {currentStatus === 'closed' && (
+          <div className="flex justify-center">
+            <Badge variant="secondary" className="text-xs">Closed by WAKTI Support</Badge>
+          </div>
+        )}
+
         {/* Message input */}
         <div className="flex gap-2">
           <Textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
+            placeholder={currentStatus === 'closed' ? 'Chat closed by WAKTI Support' : 'Type your message...'}
             rows={2}
             className="flex-1"
+            disabled={currentStatus === 'closed'}
           />
           <Button
             onClick={sendMessage}
-            disabled={isSending || !newMessage.trim()}
+            disabled={isSending || !newMessage.trim() || currentStatus === 'closed'}
             size="sm"
             className="self-end"
           >

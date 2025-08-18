@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,9 +11,11 @@ import { ChevronRight,
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { AppLayout } from '@/components/AppLayout';
+import { AppHeader } from '@/components/AppHeader';
+import { MobileNav } from '@/components/MobileNav';
 import { SimpleContactFormModal } from '@/components/support/SimpleContactFormModal';
 import { ChatThread } from '@/components/support/ChatThread';
+import { formatDistanceToNow } from 'date-fns';
 
 export default function Help() {
   const { language } = useTheme();
@@ -22,6 +25,8 @@ export default function Help() {
   const [submissions, setSubmissions] = useState([]);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
 
   const toggleSection = (sectionId: string) => {
     setOpenSections(prev => 
@@ -265,6 +270,14 @@ export default function Help() {
     t('tip5', language)
   ];
 
+  // Read initial tab from query param (e.g., /help?tab=support)
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'support') {
+      setActiveTab('support');
+    }
+  }, [searchParams]);
+
   const loadSubmissions = async () => {
     setIsLoading(true);
     try {
@@ -278,6 +291,7 @@ export default function Help() {
         .single();
 
       if (!profile?.email) return;
+      if (!userEmail) setUserEmail(profile.email);
 
       const { data, error } = await supabase
         .from('contact_submissions')
@@ -305,294 +319,361 @@ export default function Help() {
     }
   }, [activeTab]);
 
+  // Realtime updates for the signed-in user's submissions
+  React.useEffect(() => {
+    if (activeTab !== 'support') return;
+
+    let isMounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const setup = async () => {
+      // Ensure we have the user's email for filtered realtime
+      if (!userEmail) {
+        await loadSubmissions();
+      }
+      if (!isMounted || !userEmail) return;
+
+      channel = supabase
+        .channel('help-user-submissions')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'contact_submissions', filter: `email=eq.${userEmail}` },
+          () => loadSubmissions()
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'contact_submissions', filter: `email=eq.${userEmail}` },
+          () => loadSubmissions()
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'contact_submissions', filter: `email=eq.${userEmail}` },
+          () => loadSubmissions()
+        )
+        .subscribe();
+    };
+
+    setup();
+
+    return () => {
+      isMounted = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [activeTab, userEmail]);
+
   return (
-    <AppLayout>
-      <div className="flex-1 overflow-y-auto p-4 pb-8 scrollbar-hide bg-gradient-background min-h-screen">
-        <div className="max-w-2xl mx-auto space-y-8">
-          {/* Header */}
-          <div className="text-center relative">
-            <div className="absolute inset-0 bg-gradient-primary rounded-3xl blur-2xl opacity-20 scale-110"></div>
-            <div className="absolute inset-0 bg-gradient-card rounded-3xl blur-xl opacity-40 scale-105"></div>
-            <div className="relative bg-gradient-card/30 backdrop-blur-2xl border border-border/30 rounded-3xl p-10 shadow-2xl">
-              <h1 className="text-4xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
-                {t('howToUseWakti', language)}
-              </h1>
-              <p className="text-muted-foreground/90 text-xl font-medium">{t('helpAndGuides', language)}</p>
+    <div className="min-h-screen bg-background">
+      <AppHeader />
+      <main className="pb-16">
+        <div className="flex-1 overflow-y-auto p-4 pb-8 scrollbar-hide bg-gradient-background min-h-screen">
+          <div className="max-w-2xl mx-auto space-y-8">
+            {/* Header */}
+            <div className="text-center relative">
+              <div className="absolute inset-0 bg-gradient-primary rounded-3xl blur-2xl opacity-20 scale-110"></div>
+              <div className="absolute inset-0 bg-gradient-card rounded-3xl blur-xl opacity-40 scale-105"></div>
+              <div className="relative bg-gradient-card/30 backdrop-blur-2xl border border-border/30 rounded-3xl p-10 shadow-2xl">
+                <h1 className="text-4xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
+                  {t('howToUseWakti', language)}
+                </h1>
+                <p className="text-muted-foreground/90 text-xl font-medium">{t('helpAndGuides', language)}</p>
+              </div>
             </div>
+
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-2 bg-gradient-card/50 backdrop-blur-sm">
+                <TabsTrigger value="guides" className="data-[state=active]:bg-primary/20">
+                  {language === 'ar' ? 'الأدلة' : 'Guides'}
+                </TabsTrigger>
+                <TabsTrigger value="support" className="data-[state=active]:bg-primary/20">
+                  {language === 'ar' ? 'الدعم' : 'Support'}
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="guides" className="space-y-6">
+
+                {/* Collapsible Navigation Tips - Moved to Top */}
+                <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                  <Collapsible 
+                    open={openSections.includes('navigation')}
+                    onOpenChange={() => toggleSection('navigation')}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
+                              <Navigation className="h-5 w-5 text-blue-500" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                                {language === 'ar' ? 'نصائح التنقّل' : 'Navigation Tips'}
+                              </CardTitle>
+                              <CardDescription>
+                                {language === 'ar' ? 'كيفية التنقل في التطبيق' : 'How to navigate the app'}
+                              </CardDescription>
+                            </div>
+                          </div>
+                          <ChevronRight 
+                            className={cn(
+                              "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
+                              openSections.includes('navigation') ? 'rotate-90' : ''
+                            )} 
+                          />
+                        </div>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent>
+                        <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                                <span className="text-sm font-semibold text-blue-400">1</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground/90">
+                                {language === 'ar' 
+                                  ? 'استخدم شريط التنقل السفلي للانتقال بين الأقسام الرئيسية'
+                                  : 'Use the bottom navigation bar to move between main sections'
+                                }
+                              </p>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                                <span className="text-sm font-semibold text-blue-400">2</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground/90">
+                                {language === 'ar' 
+                                  ? 'اضغط على صورة الملف الشخصي في الأعلى للوصول للإعدادات والرسائل'
+                                  : 'Tap your profile picture at the top to access settings and messages'
+                                }
+                              </p>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                                <span className="text-sm font-semibold text-blue-400">3</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground/90">
+                                {language === 'ar' 
+                                  ? 'اسحب لأسفل في أي صفحة لتحديث المحتوى'
+                                  : 'Pull down on any page to refresh content'
+                                }
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </Card>
+
+                {/* Collapsible Tips & Best Practices - Moved to Top */}
+                <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                  <Collapsible 
+                    open={openSections.includes('tips')}
+                    onOpenChange={() => toggleSection('tips')}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
+                              <Lightbulb className="h-5 w-5 text-amber-500" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                                {language === 'ar' ? 'نصائح وأفضل الممارسات' : 'Tips & Best Practices'}
+                              </CardTitle>
+                              <CardDescription>
+                                {language === 'ar' ? 'نصائح وحيل لاستخدام أفضل لـ WAKTI' : 'Tips and tricks for better WAKTI usage'}
+                              </CardDescription>
+                            </div>
+                          </div>
+                          <ChevronRight 
+                            className={cn(
+                              "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
+                              openSections.includes('tips') ? 'rotate-90' : ''
+                            )} 
+                          />
+                        </div>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent>
+                        <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                          <div className="space-y-4">
+                            {tips.map((tip, index) => (
+                              <div key={index} className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                                  <span className="text-sm font-semibold text-amber-400">💡</span>
+                                </div>
+                                <p className="text-sm text-muted-foreground/90">{tip}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </Card>
+
+                {/* Main Sections */}
+                <div className="space-y-6">
+                  {sections.map((section) => (
+                    <Card key={section.id} className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                      <Collapsible 
+                        open={openSections.includes(section.id)}
+                        onOpenChange={() => toggleSection(section.id)}
+                      >
+                        <CollapsibleTrigger asChild>
+                          <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className={cn("p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40", section.colorClass)}>
+                                  {section.icon}
+                                </div>
+                                <div>
+                                  <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
+                                    {section.title}
+                                  </CardTitle>
+                                  <CardDescription>
+                                    {section.description}
+                                  </CardDescription>
+                                </div>
+                              </div>
+                              <ChevronRight 
+                                className={cn(
+                                  "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
+                                  openSections.includes(section.id) ? 'rotate-90' : ''
+                                )} 
+                              />
+                            </div>
+                          </CardHeader>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <CardContent>
+                            <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                              {section.content}
+                            </div>
+                          </CardContent>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </Card>
+                  ))}
+                </div>
+
+              </TabsContent>
+
+              <TabsContent value="support" className="space-y-6">
+                {selectedSubmission ? (
+                  <ChatThread
+                    submission={selectedSubmission}
+                    onClose={() => setSelectedSubmission(null)}
+                    isAdmin={false}
+                  />
+                ) : (
+                  <>
+                    {/* Contact Support Button */}
+                    <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                      <CardContent className="p-6">
+                        <Button 
+                          onClick={() => setShowContactModal(true)}
+                          size="lg"
+                          className="w-full bg-gradient-primary hover:bg-gradient-primary/90"
+                        >
+                          <MessageCircle className="h-5 w-5 mr-2" />
+                          {language === 'ar' ? 'التواصل مع الدعم' : 'Contact Support'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    {/* Your Messages */}
+                    <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 bg-gradient-primary bg-clip-text text-transparent">
+                          <MessageCircle className="h-5 w-5 text-primary" />
+                          {language === 'ar' ? 'رسائلك' : 'Your Messages'}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {isLoading ? (
+                          <div className="flex items-center justify-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                          </div>
+                        ) : submissions.length === 0 ? (
+                          <div className="text-center py-8">
+                            <MessageCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                            <p className="text-muted-foreground">
+                              {language === 'ar' ? 'لا توجد رسائل بعد' : 'No messages yet'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {submissions.map((submission) => {
+                              const createdAt = submission.created_at ? new Date(submission.created_at) : null;
+                              const relative = createdAt ? formatDistanceToNow(createdAt, { addSuffix: true }) : '';
+                              const status = submission.status;
+                              const isClosed = status === 'closed';
+                              const statusLabel = isClosed ? 'Closed by WAKTI Support' : status;
+                              const statusClass =
+                                status === 'unread' ? "bg-red-500/20 text-red-400" :
+                                status === 'read' ? "bg-yellow-500/20 text-yellow-400" :
+                                isClosed ? "bg-green-600/20 text-green-500" :
+                                "bg-blue-500/20 text-blue-400"; // responded/other
+
+                              return (
+                                <div
+                                  key={submission.id}
+                                  onClick={() => setSelectedSubmission(submission)}
+                                  className="p-4 bg-gradient-card/30 rounded-lg border border-border/40 cursor-pointer hover:bg-gradient-card/50 transition-all duration-200"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="mt-0.5">
+                                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                        <Ticket className="h-4 w-4 text-primary" />
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between gap-2 mb-1">
+                                        <span className="font-medium text-foreground truncate">
+                                          {submission.subject || (language === 'ar' ? 'طلب دعم' : 'Support Request')}
+                                        </span>
+                                        <span className={cn("text-[11px] px-2 py-1 rounded-full whitespace-nowrap", statusClass)}>
+                                          {statusLabel}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground line-clamp-2">
+                                        {submission.message}
+                                      </p>
+                                      <div className="flex items-center justify-between mt-2">
+                                        <p className="text-xs text-muted-foreground/70" title={createdAt ? createdAt.toLocaleString() : ''}>
+                                          {relative}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
 
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2 bg-gradient-card/50 backdrop-blur-sm">
-              <TabsTrigger value="guides" className="data-[state=active]:bg-primary/20">
-                {language === 'ar' ? 'الأدلة' : 'Guides'}
-              </TabsTrigger>
-              <TabsTrigger value="support" className="data-[state=active]:bg-primary/20">
-                {language === 'ar' ? 'الدعم' : 'Support'}
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="guides" className="space-y-6">
-
-              {/* Collapsible Navigation Tips - Moved to Top */}
-              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                <Collapsible 
-                  open={openSections.includes('navigation')}
-                  onOpenChange={() => toggleSection('navigation')}
-                >
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
-                            <Navigation className="h-5 w-5 text-blue-500" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
-                              {language === 'ar' ? 'نصائح التنقّل' : 'Navigation Tips'}
-                            </CardTitle>
-                            <CardDescription>
-                              {language === 'ar' ? 'كيفية التنقل في التطبيق' : 'How to navigate the app'}
-                            </CardDescription>
-                          </div>
-                        </div>
-                        <ChevronRight 
-                          className={cn(
-                            "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
-                            openSections.includes('navigation') ? 'rotate-90' : ''
-                          )} 
-                        />
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent>
-                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
-                        <div className="space-y-4">
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
-                              <span className="text-sm font-semibold text-blue-400">1</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground/90">
-                              {language === 'ar' 
-                                ? 'استخدم شريط التنقل السفلي للانتقال بين الأقسام الرئيسية'
-                                : 'Use the bottom navigation bar to move between main sections'
-                              }
-                            </p>
-                          </div>
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
-                              <span className="text-sm font-semibold text-blue-400">2</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground/90">
-                              {language === 'ar' 
-                                ? 'اضغط على صورة الملف الشخصي في الأعلى للوصول للإعدادات والرسائل'
-                                : 'Tap your profile picture at the top to access settings and messages'
-                              }
-                            </p>
-                          </div>
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
-                              <span className="text-sm font-semibold text-blue-400">3</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground/90">
-                              {language === 'ar' 
-                                ? 'اسحب لأسفل في أي صفحة لتحديث المحتوى'
-                                : 'Pull down on any page to refresh content'
-                              }
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
-
-              {/* Collapsible Tips & Best Practices - Moved to Top */}
-              <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                <Collapsible 
-                  open={openSections.includes('tips')}
-                  onOpenChange={() => toggleSection('tips')}
-                >
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
-                            <Lightbulb className="h-5 w-5 text-amber-500" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
-                              {language === 'ar' ? 'نصائح وأفضل الممارسات' : 'Tips & Best Practices'}
-                            </CardTitle>
-                            <CardDescription>
-                              {language === 'ar' ? 'نصائح وحيل لاستخدام أفضل لـ WAKTI' : 'Tips and tricks for better WAKTI usage'}
-                            </CardDescription>
-                          </div>
-                        </div>
-                        <ChevronRight 
-                          className={cn(
-                            "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
-                            openSections.includes('tips') ? 'rotate-90' : ''
-                          )} 
-                        />
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent>
-                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
-                        <div className="space-y-4">
-                          {tips.map((tip, index) => (
-                            <div key={index} className="flex items-start gap-3">
-                              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-1">
-                                <span className="text-sm font-semibold text-amber-400">💡</span>
-                              </div>
-                              <p className="text-sm text-muted-foreground/90">{tip}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
-
-              {/* Main Sections */}
-              <div className="space-y-6">
-                {sections.map((section) => (
-                  <Card key={section.id} className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                    <Collapsible 
-                      open={openSections.includes(section.id)}
-                      onOpenChange={() => toggleSection(section.id)}
-                    >
-                      <CollapsibleTrigger asChild>
-                        <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className={cn("p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40", section.colorClass)}>
-                                {section.icon}
-                              </div>
-                              <div>
-                                <CardTitle className="text-xl bg-gradient-primary bg-clip-text text-transparent">
-                                  {section.title}
-                                </CardTitle>
-                                <CardDescription>
-                                  {section.description}
-                                </CardDescription>
-                              </div>
-                            </div>
-                            <ChevronRight 
-                              className={cn(
-                                "h-6 w-6 transition-all duration-500 text-muted-foreground/60",
-                                openSections.includes(section.id) ? 'rotate-90' : ''
-                              )} 
-                            />
-                          </div>
-                        </CardHeader>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <CardContent>
-                          <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
-                            {section.content}
-                          </div>
-                        </CardContent>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </Card>
-                ))}
-              </div>
-
-            </TabsContent>
-
-            <TabsContent value="support" className="space-y-6">
-              {selectedSubmission ? (
-                <ChatThread
-                  submission={selectedSubmission}
-                  onClose={() => setSelectedSubmission(null)}
-                  isAdmin={false}
-                />
-              ) : (
-                <>
-                  {/* Contact Support Button */}
-                  <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                    <CardContent className="p-6">
-                      <Button 
-                        onClick={() => setShowContactModal(true)}
-                        size="lg"
-                        className="w-full bg-gradient-primary hover:bg-gradient-primary/90"
-                      >
-                        <MessageCircle className="h-5 w-5 mr-2" />
-                        {language === 'ar' ? 'التواصل مع الدعم' : 'Contact Support'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-
-                  {/* Your Messages */}
-                  <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 bg-gradient-primary bg-clip-text text-transparent">
-                        <MessageCircle className="h-5 w-5 text-primary" />
-                        {language === 'ar' ? 'رسائلك' : 'Your Messages'}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-8">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                        </div>
-                      ) : submissions.length === 0 ? (
-                        <div className="text-center py-8">
-                          <MessageCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                          <p className="text-muted-foreground">
-                            {language === 'ar' ? 'لا توجد رسائل بعد' : 'No messages yet'}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {submissions.map((submission) => (
-                            <div
-                              key={submission.id}
-                              onClick={() => setSelectedSubmission(submission)}
-                              className="p-4 bg-gradient-card/30 rounded-lg border border-border/40 cursor-pointer hover:bg-gradient-card/50 transition-all duration-200"
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <span className="font-medium text-foreground">{submission.subject}</span>
-                                <span className={cn(
-                                  "text-xs px-2 py-1 rounded-full",
-                                  submission.status === 'unread' ? "bg-red-500/20 text-red-400" :
-                                  submission.status === 'read' ? "bg-yellow-500/20 text-yellow-400" :
-                                  "bg-green-500/20 text-green-400"
-                                )}>
-                                  {submission.status}
-                                </span>
-                              </div>
-                              <p className="text-sm text-muted-foreground line-clamp-2">
-                                {submission.message}
-                              </p>
-                              <p className="text-xs text-muted-foreground/70 mt-2">
-                                {new Date(submission.created_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </>
-              )}
-            </TabsContent>
-          </Tabs>
+          {/* Contact Form Modal */}
+          <SimpleContactFormModal
+            isOpen={showContactModal}
+            onClose={() => setShowContactModal(false)}
+            onSubmitted={refreshSubmissions}
+          />
         </div>
-
-        {/* Contact Form Modal */}
-        <SimpleContactFormModal
-          isOpen={showContactModal}
-          onClose={() => setShowContactModal(false)}
-          onSubmitted={refreshSubmissions}
-        />
-      </div>
-    </AppLayout>
+      </main>
+      <MobileNav />
+    </div>
   );
 }

@@ -178,9 +178,10 @@ export const SimpleContactFormModal: React.FC<ContactFormModalProps> = ({
             <Input
               id="name"
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              readOnly
               placeholder="Your name"
               required
+              className="bg-muted/60 cursor-not-allowed"
             />
           </div>
 
@@ -190,9 +191,10 @@ export const SimpleContactFormModal: React.FC<ContactFormModalProps> = ({
               id="email"
               type="email"
               value={formData.email}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              readOnly
               placeholder="your.email@example.com"
               required
+              className="bg-muted/60 cursor-not-allowed"
             />
           </div>
 
