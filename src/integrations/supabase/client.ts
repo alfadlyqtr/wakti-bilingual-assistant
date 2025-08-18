@@ -8,16 +8,20 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 // Ensure that URL and key are present
+if ((!supabaseUrl || !supabaseAnonKey) && import.meta.env.PROD) {
+  // In production we must fail fast to avoid silent misconfiguration
+  throw new Error("[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in production build. Set them in your hosting env and redeploy.");
+}
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
-    "[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. UI will load but API calls may fail. Add them to .env.local and restart dev server."
+    "[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Using dev fallbacks; API calls may fail."
   );
 }
-// Fallback placeholders to avoid crashing the app during local setup
-const safeUrl = (supabaseUrl || 'https://example.supabase.co') as string;
-const safeAnon = (supabaseAnonKey || 'public-anon-key') as string;
+// Use strict env in prod; dev fallbacks to avoid crashing local setup
+const effectiveUrl = (supabaseUrl || 'https://example.supabase.co') as string;
+const effectiveAnon = (supabaseAnonKey || 'public-anon-key') as string;
 
-export const supabase = createClient(safeUrl, safeAnon, {
+export const supabase = createClient(effectiveUrl, effectiveAnon, {
   auth: {
     persistSession: true
   }
@@ -109,14 +113,14 @@ export const callEdgeFunctionWithRetry = async <T>(
     try {
       console.log(`Edge function "${functionName}" attempt ${attempt + 1}/${maxRetries}`);
       
-      let fullUrl = `${supabaseUrl}/functions/v1/${functionName}`;
+      let fullUrl = `${effectiveUrl}/functions/v1/${functionName}`;
       console.log(`Using direct fetch to: ${fullUrl}`);
       
       const fetchOptions: RequestInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Authorization': `Bearer ${effectiveAnon}`,
           ...headers
         },
         body: JSON.stringify(body)
