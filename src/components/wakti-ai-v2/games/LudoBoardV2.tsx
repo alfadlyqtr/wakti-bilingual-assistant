@@ -76,7 +76,7 @@ export function LudoBoardV2({
   };
 
   const getCellPawns = (cellId: string): Pawn[] => {
-    console.log(`🔍 === GETTING PAWNS FOR CELL: ${cellId} (ORIGINAL LOGIC) ===`);
+    console.log(`🔍 === GETTING PAWNS FOR CELL: ${cellId} (FIXED LOGIC) ===`);
     
     // Handle outer positions (out-1 to out-52) - Convert to number for lookup
     if (cellId.startsWith('out-')) {
@@ -84,14 +84,9 @@ export function LudoBoardV2({
       const pawns = gameState.outerPosition[position] || [];
       if (pawns.length > 0) {
         console.log(`📍 Found ${pawns.length} pawns in position ${position}:`, pawns.map(p => `${p.name}(current:${p.currentCell})`));
-        // Filter to only pawns that are actually in outer area and at this position
-        const validPawns = pawns.filter(p => p.area === 'outer' && parseInt(p.currentCell) === position);
-        if (validPawns.length !== pawns.length) {
-          console.warn(`⚠️ Position mismatch! Expected ${pawns.length} pawns, found ${validPawns.length} with matching area/position`);
-        }
-        return validPawns;
       }
-      return [];
+      // Return all pawns in this position - gameState already has correct data
+      return pawns;
     }
     
     // Handle private areas - match the cell pattern exactly

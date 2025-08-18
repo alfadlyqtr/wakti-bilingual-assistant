@@ -72,20 +72,6 @@ const models: Record<string, AIModelConfig> = {
   }
 };
 
-// SMART MESSAGE FILTERING FUNCTION
-function smartFilterMessages(messages: any[]) {
-  if (!messages || messages.length === 0) return [];
-  
-  return messages.filter((msg, index) => {
-    // Always keep system messages
-    if (msg.role === 'system') return true;
-    
-    // Keep all user and assistant messages - no filtering needed
-    // The last 10 messages rule in the slice(-20) handles recency
-    return true;
-  });
-}
-
 // TAVILY SEARCH FUNCTION
 async function performSearchWithTavily(query: string, userId: string, language: string = 'en') {
   console.log('🔍 BACKEND WORKER: Processing search request');
@@ -181,26 +167,16 @@ serve(async (req) => {
       personalTouch = null
     } = requestData;
 
-    // Validate required fields
-    if (!message || typeof message !== 'string') {
-      throw new Error('Invalid message format');
-    }
-
-    // Log API key availability for debugging
-    console.log(`🔑 API Keys available: Claude=${!!ANTHROPIC_API_KEY}, GPT4=${!!OPENAI_API_KEY}, DeepSeek=${!!DEEPSEEK_API_KEY}`);
-
     // Try models in order: Claude → GPT-4 → DeepSeek
     const modelOrder = ['claude', 'gpt4', 'deepseek'];
     let lastError = null;
     let fallbackUsed = false;
-    let attemptedModels = [];
     
     for (const modelName of modelOrder) {
       const selectedModel = models[modelName];
       
       if (!selectedModel || !selectedModel.apiKey) {
-        console.log(`⚠️ ${modelName} not available (no API key), trying next model`);
-        attemptedModels.push(`${modelName}: no API key`);
+        console.log(`⚠️ ${modelName} not available, trying next model`);
         continue;
       }
       
@@ -228,7 +204,6 @@ serve(async (req) => {
         
         const responseTime = Date.now() - startTime;
         console.log(`✅ ${modelName} succeeded in ${responseTime}ms`);
-        attemptedModels.push(`${modelName}: success (${responseTime}ms)`);
         
         // Add fallback metadata if fallback was used
         if (fallbackUsed) {
@@ -238,14 +213,6 @@ serve(async (req) => {
             ? `تم استخدام ${modelName.toUpperCase()} كنموذج بديل`
             : `Used ${modelName.toUpperCase()} as fallback model`;
         }
-        
-        // Add debug info for troubleshooting
-        result.debugInfo = {
-          attemptedModels,
-          finalModel: modelName,
-          fallbackUsed,
-          responseTime
-        };
         
         return new Response(JSON.stringify(result), {
           status: 200,
@@ -260,7 +227,6 @@ serve(async (req) => {
         console.error(`❌ ${modelName} failed:`, error.message);
         lastError = error;
         fallbackUsed = true;
-        attemptedModels.push(`${modelName}: failed - ${error.message}`);
         
         // Continue to next model unless this is the last one
         if (modelName !== modelOrder[modelOrder.length - 1]) {
@@ -272,15 +238,15 @@ serve(async (req) => {
     
     // All models failed
     console.error("❌ All models failed, returning error");
-    console.error("📊 Attempted models:", attemptedModels);
-    
     const errorMessage = language === 'ar' 
-      ? 'أعتذر، لست متاح حالياً. يرجى المحاولة مرة أخرى.'
-      : 'I apologize, I\'m not available right now. Please try again.';
+      ? 'أعتذر، جميع النماذج غير متاحة حالياً. يرجى المحاولة لاحقاً.'
+      : 'I apologize, all AI models are currently unavailable. Please try again later.';
     
     return new Response(JSON.stringify({
       response: errorMessage,
-      error: true
+      error: true,
+      allModelsFailed: true,
+      lastError: lastError?.message
     }), {
       status: 503,
       headers: { 
@@ -292,15 +258,8 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("🚀 REQUEST ERROR:", error);
-    console.error("🚀 ERROR STACK:", error.stack);
-    
-    const errorMessage = language === 'ar' 
-      ? 'أعتذر، حدث خطأ مؤقت. يرجى المحاولة مرة أخرى.'
-      : 'I apologize, there was a temporary issue. Please try again.';
-    
     return new Response(JSON.stringify({
-      response: errorMessage,
-      error: true
+      error: error.message || 'Request processing error'
     }), {
       status: 500,
       headers: { 
@@ -423,10 +382,9 @@ ${personalizationContext}`;
     // Build messages array
     let messages = [];
 
-    // Add conversation history with smart filtering
+    // Add conversation history
     if (recentMessages && recentMessages.length > 0) {
-      const filteredMessages = smartFilterMessages(recentMessages);
-      const historyMessages = filteredMessages.slice(-20); // Increased from 6 to 20
+      const historyMessages = recentMessages.slice(-6);
       historyMessages.forEach(msg => {
         if (msg.role === 'user' || msg.role === 'assistant') {
           messages.push({
@@ -572,10 +530,9 @@ ${personalizationContext}`;
       { role: 'system', content: systemPrompt }
     ];
 
-    // Add conversation history with smart filtering
+    // Add conversation history
     if (recentMessages && recentMessages.length > 0) {
-      const filteredMessages = smartFilterMessages(recentMessages);
-      const historyMessages = filteredMessages.slice(-20); // Increased from 6 to 20
+      const historyMessages = recentMessages.slice(-6);
       historyMessages.forEach(msg => {
         if (msg.role === 'user' || msg.role === 'assistant') {
           messages.push({
@@ -688,10 +645,9 @@ ${personalizationContext}`;
       { role: 'system', content: systemPrompt }
     ];
 
-    // Add conversation history with smart filtering
+    // Add conversation history
     if (recentMessages && recentMessages.length > 0) {
-      const filteredMessages = smartFilterMessages(recentMessages);
-      const historyMessages = filteredMessages.slice(-20); // Increased from 6 to 20
+      const historyMessages = recentMessages.slice(-6);
       historyMessages.forEach(msg => {
         if (msg.role === 'user' || msg.role === 'assistant') {
           messages.push({

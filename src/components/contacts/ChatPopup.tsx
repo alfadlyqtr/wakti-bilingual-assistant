@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -432,6 +432,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           }}
           hideCloseButton
         >
+          <DialogHeader className="sr-only">
+            <DialogTitle>
+              {language === 'ar' ? `محادثة مع ${contactName}` : `Chat with ${contactName}`}
+            </DialogTitle>
+            <DialogDescription>
+              {language === 'ar' 
+                ? 'الرسائل تُحذف تلقائياً بعد 3 أيام للخصوصية' 
+                : 'Messages auto-delete after 3 days for privacy'}
+            </DialogDescription>
+          </DialogHeader>
           {/* Glassmorphic header */}
           <div 
             className="flex items-center justify-between p-4 border-b backdrop-blur-md sticky top-0 z-10"
@@ -620,6 +630,12 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       {expandedImage && (
         <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
           <DialogContent className="max-w-4xl max-h-[90vh] p-4" hideCloseButton>
+            <DialogHeader className="sr-only">
+              <DialogTitle>{t("image", language) || "Image"}</DialogTitle>
+              <DialogDescription>
+                {language === 'ar' ? 'عرض موسع للصورة' : 'Expanded image preview'}
+              </DialogDescription>
+            </DialogHeader>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">{t("image", language) || "Image"}</h3>
               <div className="flex gap-2">

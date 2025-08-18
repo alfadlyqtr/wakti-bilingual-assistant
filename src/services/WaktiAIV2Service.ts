@@ -25,9 +25,257 @@ export interface AIConversation {
 
 class WaktiAIV2ServiceClass {
   private personalTouchCache: any = null;
+  private conversationStorage = new Map<string, AIMessage[]>();
 
   constructor() {
     console.log('🤖 WAKTI AI SERVICE: Initialized as Backend Worker (Frontend Boss mode)');
+    this.loadConversationsFromStorage();
+  }
+
+  // Enhanced message handling with session storage
+  private getEnhancedMessages(recentMessages: AIMessage[]): AIMessage[] {
+    // Combine session storage with current messages
+    const storedMessages = this.loadStoredMessages();
+    const allMessages = [...storedMessages, ...recentMessages];
+    
+    // Remove duplicates by ID
+    const uniqueMessages = allMessages.filter((msg, index, arr) => 
+      arr.findIndex(m => m.id === msg.id) === index
+    );
+    
+    // Sort by timestamp
+    uniqueMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    
+    // Apply smart filtering and return last 20
+    return this.smartFilterMessages(uniqueMessages).slice(-20);
+  }
+
+  private smartFilterMessages(messages: AIMessage[]): AIMessage[] {
+    if (!messages || messages.length === 0) return [];
+    
+    // Filter out redundant acknowledgments and keep important context
+    const redundantPatterns = [
+      /^(thank you|thanks|ok|okay|yes|no|sure|alright)$/i,
+      /^(شكرا|حسنا|نعم|لا|طيب|ممتاز)$/i
+    ];
+    
+    return messages.filter((msg, index) => {
+      // Always keep the last 10 messages to maintain recent context
+      if (index >= messages.length - 10) return true;
+      
+      // Filter out very short redundant responses
+      if (msg.content && msg.content.length < 20) {
+        return !redundantPatterns.some(pattern => pattern.test(msg.content.trim()));
+      }
+      
+      // Keep longer, meaningful messages
+      return true;
+    });
+  }
+
+  private loadStoredMessages(): AIMessage[] {
+    try {
+      const stored = sessionStorage.getItem('wakti_conversation_memory');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+      }
+    } catch (error) {
+      console.warn('Failed to load stored messages:', error);
+    }
+    return [];
+  }
+
+  private saveMessagesToStorage(messages: AIMessage[]) {
+    try {
+      // Keep only last 50 messages to prevent storage overflow
+      const messagesToStore = messages.slice(-50);
+      sessionStorage.setItem('wakti_conversation_memory', JSON.stringify(messagesToStore));
+    } catch (error) {
+      console.warn('Failed to save messages to storage:', error);
+    }
+  }
+
+  private loadConversationsFromStorage() {
+    try {
+      const stored = sessionStorage.getItem('wakti_conversations');
+      if (stored) {
+        const conversations = JSON.parse(stored);
+        Object.entries(conversations).forEach(([id, messages]) => {
+          this.conversationStorage.set(id, messages as AIMessage[]);
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to load conversations from storage:', error);
+    }
+  }
+
+  private saveConversationsToStorage() {
+    try {
+      const conversations: Record<string, AIMessage[]> = {};
+      this.conversationStorage.forEach((messages, id) => {
+        conversations[id] = messages;
+      });
+      sessionStorage.setItem('wakti_conversations', JSON.stringify(conversations));
+    } catch (error) {
+      console.warn('Failed to save conversations to storage:', error);
+    }
+  }
+
+  // Enhanced session management
+  saveEnhancedChatSession(messages: AIMessage[], conversationId?: string | null) {
+    this.saveMessagesToStorage(messages);
+    
+    if (conversationId) {
+      this.conversationStorage.set(conversationId, messages);
+      this.saveConversationsToStorage();
+    }
+  }
+
+  loadEnhancedChatSession(conversationId?: string | null): AIMessage[] {
+    if (conversationId && this.conversationStorage.has(conversationId)) {
+      return this.conversationStorage.get(conversationId) || [];
+    }
+    return this.loadStoredMessages();
+  }
+
+  clearEnhancedChatSession(conversationId?: string | null) {
+    if (conversationId) {
+      this.conversationStorage.delete(conversationId);
+      this.saveConversationsToStorage();
+    } else {
+      sessionStorage.removeItem('wakti_conversation_memory');
+      sessionStorage.removeItem('wakti_conversations');
+      this.conversationStorage.clear();
+    }
+  }
+
+  async sendStreamingMessage(
+    message: string,
+    userId?: string,
+    language: string = 'en',
+    conversationId?: string | null,
+    inputType: 'text' | 'voice' | 'vision' = 'text',
+    recentMessages: AIMessage[] = [],
+    skipContextLoad: boolean = false,
+    activeTrigger: string = 'chat',
+    conversationSummary: string = '',
+    attachedFiles: any[] = [],
+    onToken?: (token: string) => void,
+    onComplete?: (metadata: any) => void,
+    onError?: (error: string) => void
+  ) {
+    try {
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Authentication required');
+        userId = user.id;
+      }
+
+      console.log(`🚀 FRONTEND BOSS: Starting streaming request for ${activeTrigger} mode`);
+
+      const personalTouch = this.getPersonalTouch();
+
+      // Get auth token for streaming request
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No valid session for streaming');
+      }
+
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/wakti-ai-v2-brain`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'x-streaming': 'true',
+          'Accept': 'text/event-stream'
+        },
+        body: JSON.stringify({
+          message,
+          language,
+          conversationId: conversationId,
+          inputType,
+          activeTrigger,
+          attachedFiles,
+          recentMessages: this.getEnhancedMessages(recentMessages), // Enhanced message handling
+          personalTouch: personalTouch
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Streaming request failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullResponse = '';
+      let metadata = {};
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              
+              try {
+                const parsed = JSON.parse(data);
+                
+                if (parsed.token && !parsed.done) {
+                  fullResponse += parsed.token;
+                  onToken?.(parsed.token);
+                } else if (parsed.done) {
+                  metadata = {
+                    model: parsed.model,
+                    fallbackUsed: parsed.fallbackUsed,
+                    responseTime: parsed.responseTime
+                  };
+                  onComplete?.(metadata);
+                } else if (parsed.error) {
+                  onError?.(parsed.error);
+                  break;
+                }
+              } catch (e) {
+                // Skip malformed JSON
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      console.log(`✅ FRONTEND BOSS: Streaming completed successfully`);
+
+      return {
+        response: fullResponse,
+        success: true,
+        conversationId: conversationId,
+        intent: activeTrigger,
+        confidence: 'high',
+        ...metadata
+      };
+
+    } catch (error: any) {
+      console.error('❌ FRONTEND BOSS: Streaming error:', error);
+      onError?.(error.message);
+      throw error;
+    }
   }
 
   async sendMessage(
@@ -72,7 +320,7 @@ class WaktiAIV2ServiceClass {
               inputType,
               activeTrigger,
               attachedFiles,
-              recentMessages: recentMessages.slice(-6), // Send last 6 messages for context
+              recentMessages: this.getEnhancedMessages(recentMessages), // Enhanced message handling
               personalTouch: personalTouch
             }
           }),

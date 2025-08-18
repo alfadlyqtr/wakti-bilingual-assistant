@@ -78,7 +78,9 @@ export function ChatDrawers({
       <Drawer open={showQuickActions} onOpenChange={setShowQuickActions}>
         <DrawerContent side="right">
           <DrawerHeader>
-            
+            <DrawerTitle className="sr-only">
+              {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
+            </DrawerTitle>
           </DrawerHeader>
           <div className="flex-1 overflow-hidden">
             <QuickActionsPanel 

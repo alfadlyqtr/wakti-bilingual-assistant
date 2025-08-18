@@ -357,8 +357,12 @@ export function LudoGame({ onBack }: LudoGameProps) {
       return;
     }
     
-    // Update pawn position
-    movingPawn.currentCell = nextPos.cell.toString();
+    // Update pawn position - keep numbers as numbers for outer positions
+    if (nextPos.area === 'outer') {
+      movingPawn.currentCell = nextPos.cell.toString(); // Store as string but ensure consistency
+    } else {
+      movingPawn.currentCell = nextPos.cell.toString();
+    }
     movingPawn.area = nextPos.area;
     console.log(`✅ Updated ${movingPawn.name} to: ${movingPawn.currentCell}, area: ${movingPawn.area}`);
     
@@ -384,6 +388,8 @@ export function LudoGame({ onBack }: LudoGameProps) {
       
       // Keep only same color pawns and add current pawn
       const samePawns = existingPawns.filter(p => p.color === movingPawn.color);
+      // Ensure the moving pawn has the correct currentCell value matching the position
+      movingPawn.currentCell = pos.toString();
       newGameState.outerPosition[pos] = [movingPawn, ...samePawns];
       console.log(`📍 Placed ${movingPawn.name} in outer position ${pos} with ${samePawns.length} allies`);
       
