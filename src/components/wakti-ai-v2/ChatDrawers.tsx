@@ -1,6 +1,5 @@
-
-import React from 'react';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import React, { useRef, useEffect } from 'react';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { ExtraPanel } from './ExtraPanel';
 import { useTheme } from '@/providers/ThemeProvider';
 import { QuickActionsPanel } from './QuickActionsPanel';
@@ -46,16 +45,58 @@ export function ChatDrawers({
   isLoading
 }: ChatDrawersProps) {
   const { language } = useTheme();
+  const extraDrawerRef = useRef<HTMLDivElement>(null);
+  const quickActionsDrawerRef = useRef<HTMLDivElement>(null);
+
+  // Focus management for Extra drawer
+  useEffect(() => {
+    if (showConversations && extraDrawerRef.current) {
+      // Small delay to ensure the drawer is fully mounted
+      const timer = setTimeout(() => {
+        const firstFocusable = extraDrawerRef.current?.querySelector('button, [href], [tabindex]:not([tabindex="-1"])');
+        if (firstFocusable) {
+          (firstFocusable as HTMLElement).focus();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showConversations]);
+
+  // Focus management for Quick Actions drawer
+  useEffect(() => {
+    if (showQuickActions && quickActionsDrawerRef.current) {
+      // Small delay to ensure the drawer is fully mounted
+      const timer = setTimeout(() => {
+        const firstFocusable = quickActionsDrawerRef.current?.querySelector('button, [href], [tabindex]:not([tabindex="-1"])');
+        if (firstFocusable) {
+          (firstFocusable as HTMLElement).focus();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showQuickActions]);
 
   return (
     <div>
       {/* Extra Drawer - slides from left */}
       <Drawer open={showConversations} onOpenChange={setShowConversations}>
-        <DrawerContent side="left">
+        <DrawerContent 
+          side="left" 
+          ref={extraDrawerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="extra-drawer-title"
+          aria-describedby="extra-drawer-desc"
+        >
           <DrawerHeader>
-            <DrawerTitle>
+            <DrawerTitle id="extra-drawer-title">
               {language === 'ar' ? 'إضافي' : 'Extra'}
             </DrawerTitle>
+            <DrawerDescription id="extra-drawer-desc" className="sr-only">
+              {language === 'ar' 
+                ? 'لوحة تحتوي على المحادثات السابقة والإعدادات' 
+                : 'Panel containing previous conversations and settings'}
+            </DrawerDescription>
           </DrawerHeader>
           <div className="flex-1 overflow-hidden">
             <ExtraPanel
@@ -76,11 +117,23 @@ export function ChatDrawers({
 
       {/* Quick Actions Drawer - slides from right */}
       <Drawer open={showQuickActions} onOpenChange={setShowQuickActions}>
-        <DrawerContent side="right">
+        <DrawerContent 
+          side="right" 
+          ref={quickActionsDrawerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quick-actions-title"
+          aria-describedby="quick-actions-desc"
+        >
           <DrawerHeader>
-            <DrawerTitle className="sr-only">
+            <DrawerTitle id="quick-actions-title" className="sr-only">
               {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
             </DrawerTitle>
+            <DrawerDescription id="quick-actions-desc" className="sr-only">
+              {language === 'ar'
+                ? 'اختر من أدوات الذكاء الاصطناعي السريعة لإنشاء محتوى أو تحسينه'
+                : 'Choose from quick AI tools to create or enhance content'}
+            </DrawerDescription>
           </DrawerHeader>
           <div className="flex-1 overflow-hidden">
             <QuickActionsPanel 

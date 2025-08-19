@@ -95,83 +95,102 @@ export function QuickActionsPanel({
     console.log('🔧 Quick Actions: Tool opened and drawer stays open');
   };
   
-  return <div className="h-full overflow-y-auto">
-      <div className="p-4 space-y-6">
-        <div className="text-center"></div>
-
-        {/* AI Modes */}
-        <Card className="bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="text-sm text-slate-700 dark:text-slate-300">
-              {language === 'ar' ? 'أنماط الذكاء الاصطناعي' : 'AI Modes'}
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
-              {language === 'ar' ? 'اختر النمط المناسب لمهمتك' : 'Choose the right mode for your task'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {triggerModes.map(mode => {
-            const isActive = activeTrigger === mode.id;
-            return <Button key={mode.id} onClick={() => handleTriggerSelect(mode.id)} variant="ghost" className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 ${isActive ? `${mode.activeColor} border-2 ${mode.borderColor} text-white shadow-lg` : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border-2 border-transparent text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`}`}>
-                  <div className={`p-2 rounded-lg ${isActive ? 'bg-white/20' : mode.activeColor} text-white mr-3 flex-shrink-0`}>
-                    {mode.icon}
-                  </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <div className="font-medium text-sm whitespace-normal break-words leading-tight">{mode.label}</div>
-                    <div className="text-xs opacity-70 whitespace-normal break-words leading-tight">{mode.description}</div>
-                  </div>
-                </Button>;
-          })}
-          </CardContent>
-        </Card>
-
-        {/* Quick Tools */}
+  return (
+    <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-center text-foreground">
+          {language === 'ar' ? 'أدوات سريعة' : 'Quick Tools'}
+        </h2>
+        
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
-          </h3>
-          <div className="grid gap-3">
-            {quickActions.map((action, index) => (
-              <Card 
-                key={index} 
-                className={`transition-all duration-300 bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 ${
-                  action.disabled 
-                    ? 'opacity-60 cursor-not-allowed' 
-                    : 'cursor-pointer hover:shadow-md hover:bg-white/30 dark:hover:bg-black/30 hover:border-white/40 dark:hover:border-white/30'
-                }`} 
-                onClick={action.disabled ? undefined : () => handleToolAction(action.action)}
+          {triggerModes.map((mode, index) => {
+            const isActive = activeTrigger === mode.id;
+            return (
+              <Button
+                key={mode.id}
+                autoFocus={index === 0}
+                onClick={() => handleTriggerSelect(mode.id)}
+                variant="ghost"
+                className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 ${
+                  isActive 
+                    ? `${mode.activeColor} border-2 ${mode.borderColor} text-white shadow-lg` 
+                    : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border-2 border-transparent text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`
+                }`}
+                aria-pressed={isActive}
+                aria-describedby={`${mode.id}-desc`}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${action.color} text-white ${action.disabled ? 'opacity-70' : ''}`}>
-                      {action.icon}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-sm text-slate-700 dark:text-slate-300">{action.label}</h3>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-400">{action.description}</p>
-                    </div>
+                <div 
+                  className={`p-2 rounded-lg ${
+                    isActive ? 'bg-white/20' : mode.activeColor
+                  } text-white mr-3 flex-shrink-0`}
+                  aria-hidden="true"
+                >
+                  {mode.icon}
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <div className="font-medium text-sm whitespace-normal break-words leading-tight">
+                    {mode.label}
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  <div 
+                    id={`${mode.id}-desc`}
+                    className="text-xs opacity-70 whitespace-normal break-words leading-tight"
+                  >
+                    {mode.description}
+                  </div>
+                </div>
+              </Button>
+            );
+          })}
         </div>
-
-        {/* Text Generator Popup */}
-        <TextGeneratorPopup 
-          isOpen={showTextGen} 
-          onClose={() => setShowTextGen(false)} 
-          onTextGenerated={onTextGenerated} 
-        />
-
-
-        {/* Voice Clone Popup */}
-        <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
-
-        {/* Game Mode Modal */}
-        <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />
       </div>
-    </div>;
+
+      {/* Quick Tools */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
+        </h3>
+        <div className="grid gap-3">
+          {quickActions.map((action, index) => (
+            <Card 
+              key={index} 
+              className={`transition-all duration-300 bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 ${
+                action.disabled 
+                  ? 'opacity-60 cursor-not-allowed' 
+                  : 'cursor-pointer hover:shadow-md hover:bg-white/30 dark:hover:bg-black/30 hover:border-white/40 dark:hover:border-white/30'
+              }`} 
+              onClick={action.disabled ? undefined : () => handleToolAction(action.action)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2 rounded-lg ${action.color} text-white ${action.disabled ? 'opacity-70' : ''}`}>
+                    {action.icon}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-sm text-slate-700 dark:text-slate-300">{action.label}</h3>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">{action.description}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Text Generator Popup */}
+      <TextGeneratorPopup 
+        isOpen={showTextGen} 
+        onClose={() => setShowTextGen(false)} 
+        onTextGenerated={onTextGenerated} 
+      />
+
+
+      {/* Voice Clone Popup */}
+      <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
+
+      {/* Game Mode Modal */}
+      <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />
+    </div>
+  );
 }

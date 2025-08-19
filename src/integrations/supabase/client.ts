@@ -23,7 +23,13 @@ const effectiveAnon = (supabaseAnonKey || 'public-anon-key') as string;
 
 export const supabase = createClient(effectiveUrl, effectiveAnon, {
   auth: {
-    persistSession: true
+    persistSession: true,
+    // Ensure tokens refresh and session detection on redirects
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    // Use stable storage + key to avoid accidental cross-app collisions
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'wakti-auth'
   }
 });
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -242,6 +242,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             <Wand2 className="w-5 h-5" />
             {language === 'ar' ? 'منشئ النصوص الذكي' : 'Smart Text Generator'}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {language === 'ar' 
+              ? 'أداة لإنشاء النصوص والردود الذكية باستخدام الذكاء الاصطناعي'
+              : 'Tool for generating smart texts and replies using artificial intelligence'}
+          </DialogDescription>
         </DialogHeader>
 
         {/* Error Display */}

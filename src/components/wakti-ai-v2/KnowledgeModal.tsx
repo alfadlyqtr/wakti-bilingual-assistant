@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Drawer,
@@ -523,12 +523,12 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
             <Brain className="w-5 h-5 text-primary" />
             {language === 'ar' ? 'تحسين وكتي AI الخاص بي' : 'Improve My Wakti AI'}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription className="text-sm text-muted-foreground">
             {language === 'ar' 
               ? 'ساعد الذكاء الاصطناعي على فهمك بشكل أفضل لتقديم إجابات شخصية ومفيدة'
               : 'Help AI understand you better for personalized and helpful responses'
             }
-          </p>
+          </DialogDescription>
         </DialogHeader>
         <MainContent />
       </DialogContent>

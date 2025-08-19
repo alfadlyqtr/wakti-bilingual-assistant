@@ -54,22 +54,97 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(sheetVariants({ side }), className)}
-      {...props}
-    >
-      {children}
-      <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </SheetPrimitive.Close>
-    </SheetPrimitive.Content>
-  </SheetPortal>
-))
+>(({ side = "right", className, children, ...props }, ref) => {
+  const titleId = React.useId();
+  const descriptionId = React.useId();
+
+  let hasTitle = false;
+  let hasDescription = false;
+  let processedChildren = children as React.ReactNode;
+
+  // Process children to find title and description (including within SheetHeader)
+  processedChildren = React.Children.map(processedChildren, (child) => {
+    if (!React.isValidElement(child)) return child;
+
+    // Handle SheetHeader
+    if (child.type === SheetHeader) {
+      const headerChildren = React.Children.map(
+        (child.props as any).children,
+        (headerChild) => {
+          if (!React.isValidElement(headerChild)) return headerChild;
+
+          if (headerChild.type === SheetTitle) {
+            hasTitle = true;
+            return React.cloneElement(headerChild as React.ReactElement, { id: titleId } as any);
+          }
+          if (headerChild.type === SheetDescription) {
+            hasDescription = true;
+            return React.cloneElement(headerChild as React.ReactElement, { id: descriptionId } as any);
+          }
+          return headerChild;
+        }
+      );
+      return React.cloneElement(child as React.ReactElement, { children: headerChildren } as any);
+    }
+
+    // Direct SheetTitle or SheetDescription as immediate children
+    if (child.type === SheetTitle) {
+      hasTitle = true;
+      return React.cloneElement(child as React.ReactElement, { id: titleId } as any);
+    }
+    if (child.type === SheetDescription) {
+      hasDescription = true;
+      return React.cloneElement(child as React.ReactElement, { id: descriptionId } as any);
+    }
+
+    return child;
+  });
+
+  // Inject fallback sr-only title if missing
+  if (!hasTitle) {
+    processedChildren = (
+      <>
+        <SheetTitle className="sr-only" id={titleId}>
+          Sheet
+        </SheetTitle>
+        {processedChildren}
+      </>
+    );
+    hasTitle = true;
+  }
+
+  // Inject fallback sr-only description if missing
+  if (!hasDescription) {
+    processedChildren = (
+      <>
+        {processedChildren}
+        <SheetDescription className="sr-only" id={descriptionId}>
+          Sheet content
+        </SheetDescription>
+      </>
+    );
+    hasDescription = true;
+  }
+
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        aria-labelledby={titleId}
+        aria-describedby={hasDescription ? descriptionId : undefined}
+        {...props}
+      >
+        {processedChildren}
+        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </SheetPrimitive.Close>
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+})
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
 const SheetHeader = ({

@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Download, X, Camera } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -108,10 +107,14 @@ export function ImageModal({ isOpen, onClose, imageUrl, prompt }: ImageModalProp
               </Button>
             </div>
           </div>
-          {prompt && (
-            <p className="text-sm text-muted-foreground mt-2">
+          {prompt ? (
+            <DialogDescription className="mt-2">
               <strong>{language === 'ar' ? 'الوصف:' : 'Prompt:'}</strong> {prompt}
-            </p>
+            </DialogDescription>
+          ) : (
+            <DialogDescription className="sr-only">
+              {language === 'ar' ? 'معاينة الصورة المُولدة' : 'Preview of the generated image'}
+            </DialogDescription>
           )}
         </DialogHeader>
         

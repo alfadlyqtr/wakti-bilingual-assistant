@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Image, FileText, Eye, Download } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { UploadedFile } from '@/hooks/useFileUpload';
+import { useTheme } from '@/providers/ThemeProvider';
 
 interface FilePreviewProps {
   file: UploadedFile;
@@ -20,6 +20,7 @@ export function FilePreview({
   showRemoveButton = true,
   size = 'md'
 }: FilePreviewProps) {
+  const { language } = useTheme();
   const [showModal, setShowModal] = useState(false);
   
   const isImage = file.type.startsWith('image/');
@@ -157,6 +158,11 @@ export function FilePreview({
                   <Download className="h-4 w-4" />
                 </Button>
               </DialogTitle>
+              <DialogDescription className="sr-only">
+                {language === 'ar' 
+                  ? 'معاينة الصورة بالحجم الكامل. استخدم زر التنزيل للحفظ.' 
+                  : 'Full-size preview of the selected image. Use the download button to save.'}
+              </DialogDescription>
             </DialogHeader>
             <div className="flex items-center justify-center">
               <img

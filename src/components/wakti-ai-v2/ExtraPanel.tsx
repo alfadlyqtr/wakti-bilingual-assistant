@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -45,43 +44,55 @@ export function ExtraPanel({
   }));
 
   return (
-    <div className="h-full overflow-y-auto space-y-4">
-      {/* Personal Touch Manager - Always visible */}
-      <PersonalTouchManager />
-      
-      {/* Conversations Section - Collapsible */}
-      <Collapsible open={conversationsOpen} onOpenChange={setConversationsOpen}>
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            className="w-full justify-start p-2 h-auto text-slate-700 dark:text-slate-300 hover:bg-white/10 dark:hover:bg-black/10"
-          >
-            {conversationsOpen ? (
-              <ChevronDown className="h-4 w-4 mr-2" />
-            ) : (
-              <ChevronRight className="h-4 w-4 mr-2" />
-            )}
-            <MessageSquare className="h-4 w-4 mr-2" />
-            <span className="text-sm font-medium">
-              {language === 'ar' ? 'المحادثات السابقة' : 'Recent Conversations'}
-            </span>
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-0">
-          <ConversationsList
-            conversations={mappedConversations}
-            currentConversationId={currentConversationId}
-            onSelectConversation={onSelectConversation}
-            onDeleteConversation={onDeleteConversation}
-            onRefresh={onRefresh}
-            onClose={onClose}
-            onNewConversation={onNewConversation}
-            onClearChat={onClearChat}
-            sessionMessages={sessionMessages}
-            isLoading={isLoading}
-          />
-        </CollapsibleContent>
-      </Collapsible>
+    <div className="h-full overflow-y-auto">
+      <div className="p-4 space-y-6">
+        {/* Personal Touch Manager - Always visible */}
+        <div className="space-y-2">
+          <h2 className="text-lg font-semibold text-foreground">
+            {language === 'ar' ? 'اللمسة الشخصية' : 'Personal Touch'}
+          </h2>
+          <PersonalTouchManager />
+        </div>
+        
+        {/* Conversations Section - Collapsible */}
+        <div className="space-y-2">
+          <Collapsible open={conversationsOpen} onOpenChange={setConversationsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                autoFocus
+                variant="ghost"
+                className="w-full justify-start p-2 h-auto text-slate-700 dark:text-slate-300 hover:bg-white/10 dark:hover:bg-black/10"
+                aria-expanded={conversationsOpen}
+                aria-controls="conversations-list"
+              >
+                {conversationsOpen ? (
+                  <ChevronDown className="h-4 w-4 mr-2" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 mr-2" aria-hidden="true" />
+                )}
+                <MessageSquare className="h-4 w-4 mr-2" aria-hidden="true" />
+                <span className="text-sm font-medium">
+                  {language === 'ar' ? 'المحادثات السابقة' : 'Recent Conversations'}
+                </span>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent id="conversations-list" className="space-y-0">
+              <ConversationsList
+                conversations={mappedConversations}
+                currentConversationId={currentConversationId}
+                onSelectConversation={onSelectConversation}
+                onDeleteConversation={onDeleteConversation}
+                onRefresh={onRefresh}
+                onClose={onClose}
+                onNewConversation={onNewConversation}
+                onClearChat={onClearChat}
+                sessionMessages={sessionMessages}
+                isLoading={isLoading}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      </div>
     </div>
   );
 }

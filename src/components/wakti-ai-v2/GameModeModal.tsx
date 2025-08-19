@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -128,6 +127,11 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
             <X className="h-4 w-4" />
           </Button>
         </DialogHeader>
+        <DialogDescription className="sr-only">
+          {language === 'ar' 
+            ? 'اختر ولعب ألعابًا مع الذكاء الاصطناعي. اضغط على Esc للإغلاق.' 
+            : 'Choose and play games with AI. Press Esc to close.'}
+        </DialogDescription>
         
         <div className="mt-4">
           {renderCurrentGame()}

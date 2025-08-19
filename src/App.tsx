@@ -58,8 +58,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider>
-          <BrowserRouter>
-            <div className="min-h-screen bg-background font-sans antialiased">
+          <AuthProvider>
+            <BrowserRouter>
+              <div className="min-h-screen bg-background font-sans antialiased">
               <Routes>
                 {/* Admin routes */}
                 <Route path="/mqtr" element={<AdminLogin />} />
@@ -83,11 +84,9 @@ function App() {
                 <Route path="/reset-success" element={<ResetSuccess />} />
                 <Route path="/contact" element={<ContactUs />} />
                 <Route path="/help" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <Help />
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <Help />
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
                 <Route path="/confirmed" element={<Confirmed />} />
@@ -98,111 +97,84 @@ function App() {
                 {/* Maw3d public view */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
                 
-                {/* Protected user routes - wrapped with AuthProvider only */}
+                {/* Protected user routes - AuthProvider is mounted once at top level */}
                 <Route path="/dashboard" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Dashboard /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Dashboard /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/account" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Account /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Account /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/settings" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Settings /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Settings /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/tasks-reminders" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><TasksReminders /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><TasksReminders /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/tr" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><TasksReminders /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><TasksReminders /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/wakti-ai" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><WaktiAi /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><WaktiAi /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/wakti-ai-v2" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><WaktiAIV2 /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><WaktiAIV2 /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/calendar" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Calendar /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Calendar /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/contacts" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Contacts /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Contacts /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/maw3d" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Maw3d /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Maw3d /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/maw3d/create" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Maw3dCreate /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Maw3dCreate /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/maw3d/manage/:id" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Maw3dManage /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Maw3dManage /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/maw3d/edit/:id" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Maw3dEdit /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Maw3dEdit /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 <Route path="/tasjeel" element={
-                  <AuthProvider>
-                    <GiftNotificationProvider>
-                      <AppLayout><Tasjeel /></AppLayout>
-                    </GiftNotificationProvider>
-                  </AuthProvider>
+                  <GiftNotificationProvider>
+                    <AppLayout><Tasjeel /></AppLayout>
+                  </GiftNotificationProvider>
                 } />
                 
                 {/* 404 catch-all */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
-          </BrowserRouter>
+            </BrowserRouter>
+          </AuthProvider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

@@ -1,8 +1,9 @@
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
 
 interface AuthContextType {
   user: User | null;
@@ -51,6 +52,68 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const lockChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const localNonceRef = useRef<string | null>(null);
+
+  const getNonceStorageKey = (userId: string) => `wakti_session_nonce_${userId}`;
+
+  const cleanupSessionLock = (userId?: string) => {
+    if (lockChannelRef.current) {
+      supabase.removeChannel(lockChannelRef.current);
+      lockChannelRef.current = null;
+    }
+    if (userId) {
+      try { localStorage.removeItem(getNonceStorageKey(userId)); } catch {}
+    }
+    localNonceRef.current = null;
+  };
+
+  const subscribeToSessionLock = (userId: string) => {
+    if (lockChannelRef.current) {
+      supabase.removeChannel(lockChannelRef.current);
+      lockChannelRef.current = null;
+    }
+    const channel = supabase
+      .channel(`session-lock-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_session_locks', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          const newNonce = (payload.new as any)?.nonce;
+          const current = localNonceRef.current;
+          if (newNonce && current && newNonce !== current) {
+            // Another session has taken the lock; sign out here.
+            toast.info('Your account was signed in elsewhere. You have been signed out on this device.');
+            supabase.auth.signOut();
+          }
+        }
+      )
+      .subscribe();
+    lockChannelRef.current = channel;
+  };
+
+  const claimSessionLock = async (userId: string, forceNewNonce: boolean) => {
+    try {
+      let nonce = null as string | null;
+      const storageKey = getNonceStorageKey(userId);
+      if (!forceNewNonce) {
+        try { nonce = localStorage.getItem(storageKey); } catch {}
+      }
+      if (!nonce) {
+        nonce = uuidv4();
+        try { localStorage.setItem(storageKey, nonce); } catch {}
+      }
+      localNonceRef.current = nonce;
+      await supabase
+        .from('user_session_locks')
+        .upsert({ user_id: userId, nonce }, { onConflict: 'user_id' })
+        .select('user_id')
+        .single();
+      subscribeToSessionLock(userId);
+    } catch (e) {
+      console.error('[Auth] Failed to claim session lock:', e);
+    }
+  };
 
   useEffect(() => {
     // Get initial session
@@ -58,6 +121,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      if (session?.user) {
+        // Ensure we have/claim a lock for persisted sessions without forcing a new nonce
+        claimSessionLock(session.user.id, false);
+      }
     });
 
     // Listen for auth changes
@@ -72,13 +139,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('User signed in, initializing services...');
+        // Claim the session lock with a fresh nonce to enforce single active session
+        await claimSessionLock(session.user.id, true);
         // Services will be initialized by useUnreadMessages in AppLayout
       }
 
       if (event === 'SIGNED_OUT') {
         console.log('User signed out, cleaning up...');
+        const lastUserId = user?.id;
         setUser(null);
         setSession(null);
+        if (lastUserId) cleanupSessionLock(lastUserId);
       }
 
       if (event === 'TOKEN_REFRESHED') {

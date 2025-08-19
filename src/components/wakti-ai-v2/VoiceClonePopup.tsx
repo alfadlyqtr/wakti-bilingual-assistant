@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { VoiceCloneScreen1 } from './VoiceCloneScreen1';
 import { VoiceCloneScreen2 } from './VoiceCloneScreen2';
 import { VoiceCloneScreen3 } from './VoiceCloneScreen3';
 import { supabase } from '@/integrations/supabase/client';
+import { useTheme } from '@/providers/ThemeProvider';
 
 interface VoiceClonePopupProps {
   open: boolean;
@@ -12,6 +12,7 @@ interface VoiceClonePopupProps {
 }
 
 export function VoiceClonePopup({ open, onOpenChange }: VoiceClonePopupProps) {
+  const { language } = useTheme();
   const [currentScreen, setCurrentScreen] = useState(1);
   const [hasExistingVoices, setHasExistingVoices] = useState(false);
 
@@ -73,6 +74,11 @@ export function VoiceClonePopup({ open, onOpenChange }: VoiceClonePopupProps) {
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" hideCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="sr-only">Voice Clone</DialogTitle>
+          <DialogDescription className="sr-only">
+            {language === 'ar' 
+              ? 'اتبع الخطوات لإعداد واختبار استنساخ الصوت.' 
+              : 'Follow the steps to set up and test voice cloning.'}
+          </DialogDescription>
         </DialogHeader>
         {renderScreen()}
       </DialogContent>

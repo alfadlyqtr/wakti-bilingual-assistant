@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 
@@ -39,31 +38,90 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> & {
-    side?: 'left' | 'right'
+    side?: 'left' | 'right';
   }
->(({ className, children, side = 'right', ...props }, ref) => (
-  <DrawerPortal>
-    <DrawerOverlay />
-    <DrawerPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed top-0 z-50 h-full w-80 max-w-[80vw] flex flex-col",
-        // Liquid glass effect
-        "bg-white/10 dark:bg-black/10 backdrop-blur-2xl",
-        "border-white/20 dark:border-white/10",
-        "shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]",
-        "transition-all duration-500 ease-out",
-        side === 'left' ? "left-0 border-r-2" : "right-0 border-l-2",
-        className
-      )}
-      {...props}
-    >
-      <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
-        {children}
-      </div>
-    </DrawerPrimitive.Content>
-  </DrawerPortal>
-))
+>(({ className, children, side = 'right', ...props }, ref) => {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const titleId = React.useId();
+  const descriptionId = React.useId();
+
+  let hasTitle = false;
+  let hasDescription = false;
+  let titleIdToUse: string | undefined = undefined;
+  let descriptionIdToUse: string | undefined = undefined;
+
+  const processedChildren = React.Children.map(children, (child) => {
+    if (React.isValidElement(child)) {
+      if (child.type === DrawerHeader) {
+        const headerChildren = React.Children.map(
+          (child.props as any).children,
+          (headerChild) => {
+            if (React.isValidElement(headerChild)) {
+              if (headerChild.type === DrawerTitle) {
+                hasTitle = true;
+                const existingId = (headerChild.props as any)?.id as string | undefined;
+                titleIdToUse = existingId ?? titleId;
+                return React.cloneElement(headerChild, { id: titleIdToUse });
+              }
+              if (headerChild.type === DrawerDescription) {
+                hasDescription = true;
+                const existingId = (headerChild.props as any)?.id as string | undefined;
+                descriptionIdToUse = existingId ?? descriptionId;
+                return React.cloneElement(headerChild, { id: descriptionIdToUse });
+              }
+            }
+            return headerChild;
+          }
+        );
+        return React.cloneElement(child, { children: headerChildren });
+      }
+    }
+    return child;
+  });
+
+  const setRefs = (node: HTMLDivElement) => {
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+    contentRef.current = node;
+  };
+
+  return (
+    <DrawerPortal>
+      <DrawerOverlay />
+      <DrawerPrimitive.Content
+        ref={setRefs}
+        className={cn(
+          "fixed top-0 z-50 h-full w-80 max-w-[80vw] flex flex-col",
+          "bg-background shadow-lg focus:outline-none",
+          side === 'right' ? 'right-0' : 'left-0',
+          className
+        )}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          setTimeout(() => {
+            const focusable = contentRef.current?.querySelector<HTMLElement>(
+              'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable) focusable.focus();
+            else if (contentRef.current) contentRef.current.focus();
+          }, 50);
+        }}
+        onPointerDownOutside={(e) => {
+          const isOverlay = (e.target as HTMLElement)?.hasAttribute('data-vaul-overlay');
+          if (isOverlay) return;
+          e.preventDefault();
+        }}
+        aria-labelledby={hasTitle ? titleIdToUse : undefined}
+        aria-describedby={hasDescription ? descriptionIdToUse : undefined}
+        {...props}
+      >
+        <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
+          {processedChildren}
+        </div>
+      </DrawerPrimitive.Content>
+    </DrawerPortal>
+  );
+});
 DrawerContent.displayName = "DrawerContent"
 
 const DrawerHeader = ({

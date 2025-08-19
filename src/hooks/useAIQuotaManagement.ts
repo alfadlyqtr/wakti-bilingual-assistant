@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -36,16 +35,13 @@ export function useAIQuotaManagement() {
       setLoading(true);
 
       // Use the database function to get or create quota silently
-      const { data, error } = await supabase.rpc('get_or_create_ai_quota', {
-        p_user_id: user.id
-      });
-
-      if (error) {
-        console.error('Error fetching AI quota:', error);
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_or_create_ai_quota', { p_user_id: user.id });
+      if (rpcError) {
+        console.error('Error fetching AI quota via RPC:', rpcError);
         return null;
       }
 
-      const quotaData = data?.[0] || {
+      const quotaData = (Array.isArray(rpcData) ? rpcData[0] : rpcData) || {
         chat_characters_used: 0,
         search_characters_used: 0,
         image_prompts_used: 0,
