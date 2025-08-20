@@ -1,21 +1,56 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Globe, Moon, Sun } from "lucide-react";
+import { Globe, Moon, Sun, LogOut as _LogOut, ThumbsUp } from "lucide-react";
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
-import { LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function SessionEnded() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme, language, toggleLanguage } = useTheme();
+  const [showForm, setShowForm] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleTakeover = async () => {
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      const userId = data.user?.id;
+      if (!userId) throw new Error('No user');
+      const nonce = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+        ? (crypto as any).randomUUID()
+        : `${Date.now()}-${Math.random()}`;
+      const { error: upsertErr } = await supabase
+        .from('user_session_locks')
+        .upsert({ user_id: userId, nonce }, { onConflict: 'user_id' });
+      if (upsertErr) throw upsertErr;
+      await supabase.auth.signOut();
+      setSuccess(true);
+      setTimeout(() => navigate('/login', { replace: true }), 1500);
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to log out other device';
+      try { toast.error(msg); } catch {}
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
-    // Best-effort cleanup if flag still exists
-    try { localStorage.removeItem("wakti_session_kicked"); } catch {}
+    // Best-effort cleanup if flags still exist
+    try {
+      localStorage.removeItem("wakti_session_kicked");
+      localStorage.removeItem("wakti_session_blocked");
+    } catch {}
   }, []);
 
   return (
@@ -57,7 +92,7 @@ export default function SessionEnded() {
             <div className="relative">
               <Logo3D size="md" className="opacity-80" />
               <div className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground p-1.5 rounded-full border-2 border-background shadow-sm">
-                <LogOut className="h-3.5 w-3.5" />
+                <_LogOut className="h-3.5 w-3.5" />
               </div>
             </div>
           </div>
@@ -69,23 +104,68 @@ export default function SessionEnded() {
             </p>
           </div>
           
-          <div className="flex flex-wrap gap-2 justify-center pt-1 w-full">
-            <Button 
-              size="sm"
-              className="flex-1 min-w-[120px]"
-              onClick={() => navigate("/login", { replace: true, state: { from: location } })}
-            >
-              {t("sessionEnded_goToLogin", language)}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              className="flex-1 min-w-[120px]"
-              onClick={() => navigate("/home", { replace: true })}
-            >
-              {t("sessionEnded_goToHome", language)}
-            </Button>
-          </div>
+          {success ? (
+            <div className="flex flex-col items-center gap-2">
+              <ThumbsUp className="h-8 w-8 text-green-600" />
+              <p className="text-sm text-muted-foreground">Other device logged out. Redirecting to login...</p>
+            </div>
+          ) : (
+            <div className="w-full space-y-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                onClick={() => setShowForm((s) => !s)}
+              >
+                Log out other device
+              </Button>
+
+              {showForm && (
+                <div className="space-y-2">
+                  <Input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <Input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={busy || !email || !password}
+                    onClick={handleTakeover}
+                  >
+                    {busy ? "Working..." : "Confirm and log out other device"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!success && (
+            <div className="flex flex-wrap gap-2 justify-center pt-1 w-full">
+              <Button 
+                size="sm"
+                className="flex-1 min-w-[120px]"
+                onClick={() => navigate("/login", { replace: true, state: { from: location } })}
+              >
+                {t("sessionEnded_goToLogin", language)}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="flex-1 min-w-[120px]"
+                onClick={() => navigate("/home", { replace: true })}
+              >
+                {t("sessionEnded_goToHome", language)}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

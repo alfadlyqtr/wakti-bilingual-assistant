@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -229,6 +228,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       } finally {
         inFlightRef.current = false;
       }
+    } catch (outerError) {
+      console.error('ProtectedRoute: Exception during subscription check (outer):', outerError);
+    } finally {
+      // Ensure flag resets for early-return paths (e.g., no user / owner bypass)
+      inFlightRef.current = false;
+    }
     };
 
     // Only run subscription check when we have a user and auth is not loading
@@ -293,12 +298,14 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Proper authentication check - redirect appropriately if not authenticated
   if (!user || !session) {
-    const kicked = (() => {
-      try { return localStorage.getItem('wakti_session_kicked') === '1'; } catch { return false; }
-    })();
-    if (kicked) {
-      try { localStorage.removeItem('wakti_session_kicked'); } catch {}
-      console.log("ProtectedRoute: Redirecting to session-ended page after being signed out elsewhere");
+    const kicked = (() => { try { return localStorage.getItem('wakti_session_kicked') === '1'; } catch { return false; } })();
+    const blocked = (() => { try { return localStorage.getItem('wakti_session_blocked') === '1'; } catch { return false; } })();
+    if (kicked || blocked) {
+      try {
+        localStorage.removeItem('wakti_session_kicked');
+        localStorage.removeItem('wakti_session_blocked');
+      } catch {}
+      console.log("ProtectedRoute: Redirecting to session-ended page after session conflict");
       return <Navigate to="/session-ended" replace />;
     }
     console.log("ProtectedRoute: No valid user/session, redirecting to login");

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -111,20 +110,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // 1) Subscribe FIRST to avoid missing any future changes
       subscribeToSessionLock(userId);
 
-      // If this is a fresh login, immediately claim the lock with our new nonce.
-      // Other devices will receive the realtime UPDATE and sign themselves out.
-      if (forceNewNonce) {
-        const { error: upsertErr } = await supabase
-          .from('user_session_locks')
-          .upsert({ user_id: userId, nonce }, { onConflict: 'user_id' });
-
-        if (upsertErr) {
-          console.error('[Auth] Failed to claim session lock (fresh login upsert):', upsertErr);
-        } else {
-          console.log('[Auth] SessionLock: claimed (fresh login) with nonce', nonce);
-        }
-        return;
-      }
+      // Fresh login: do NOT take over immediately. We'll check current owner first below.
+      // If another device owns the lock, this device will be blocked and signed out.
 
       // 2) Immediate post-subscribe safety check: if another session already owns the lock, sign out
       const { data: existing, error: fetchErr } = await supabase
@@ -139,22 +126,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const existingNonce = existing?.nonce as string | undefined;
       if (existingNonce && existingNonce !== nonce) {
-        console.log('[Auth] SessionLock: post-subscribe mismatch detected. Existing:', existingNonce, 'Local:', nonce, '→ signing out');
-        toast.info('Your account was signed in elsewhere. You have been signed out on this device.');
-        try { localStorage.setItem('wakti_session_kicked', '1'); } catch {}
-        await supabase.auth.signOut();
+        if (forceNewNonce) {
+          console.log('[Auth] SessionLock: existing lock detected on fresh login → blocking this device');
+          // Immediately sign out to prevent dashboard access
+          await supabase.auth.signOut();
+          // Throw error to prevent any further auth processing
+          throw new Error('BLOCKED_FRESH_LOGIN');
+        } else {
+          console.log('[Auth] SessionLock: post-subscribe mismatch detected. Existing:', existingNonce, 'Local:', nonce, '→ signing out');
+          toast.info('Your account was signed in elsewhere. You have been signed out on this device.');
+          try { localStorage.setItem('wakti_session_kicked', '1'); } catch {}
+          await supabase.auth.signOut();
+        }
         return;
       }
 
-      // 3) Now claim the lock by upserting our nonce
-      const { error: upsertErr } = await supabase
-        .from('user_session_locks')
-        .upsert({ user_id: userId, nonce }, { onConflict: 'user_id' });
+      // 3) Only claim the lock if:
+      // - This is NOT a fresh login (persisted session restoration), OR
+      // - This IS a fresh login but no conflicting lock exists
+      if (!forceNewNonce || !existingNonce) {
+        const { error: upsertErr } = await supabase
+          .from('user_session_locks')
+          .upsert({ user_id: userId, nonce }, { onConflict: 'user_id' });
 
-      if (upsertErr) {
-        console.error('[Auth] Failed to claim session lock (upsert):', upsertErr);
+        if (upsertErr) {
+          console.error('[Auth] Failed to claim session lock (upsert):', upsertErr);
+        } else {
+          console.log('[Auth] SessionLock: claimed with nonce', nonce);
+        }
       } else {
-        console.log('[Auth] SessionLock: claimed with nonce', nonce);
+        console.log('[Auth] SessionLock: skipping claim due to existing lock on fresh login');
       }
     } catch (e) {
       console.error('[Auth] Failed to claim session lock:', e);
