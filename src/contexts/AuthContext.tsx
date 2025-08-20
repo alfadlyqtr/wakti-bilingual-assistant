@@ -90,11 +90,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       )
       .subscribe();
     lockChannelRef.current = channel;
+    console.log('[Auth] SessionLock: subscribed to user_session_locks for', userId);
   };
 
   const claimSessionLock = async (userId: string, forceNewNonce: boolean) => {
     try {
-      let nonce = null as string | null;
+      // Prepare or reuse our local nonce first (but DO NOT claim yet)
+      let nonce: string | null = null;
       const storageKey = getNonceStorageKey(userId);
       if (!forceNewNonce) {
         try { nonce = localStorage.getItem(storageKey); } catch {}
@@ -104,12 +106,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try { localStorage.setItem(storageKey, nonce); } catch {}
       }
       localNonceRef.current = nonce;
-      await supabase
-        .from('user_session_locks')
-        .upsert({ user_id: userId, nonce }, { onConflict: 'user_id' })
-        .select('user_id')
-        .single();
+
+      // 1) Subscribe FIRST to avoid missing any future changes
       subscribeToSessionLock(userId);
+
+      // 2) Immediate post-subscribe safety check: if another session already owns the lock, sign out
+      const { data: existing, error: fetchErr } = await supabase
+        .from('user_session_locks')
+        .select('nonce')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (fetchErr) {
+        console.warn('[Auth] SessionLock: safety check fetch error (continuing):', fetchErr);
+      }
+
+      const existingNonce = existing?.nonce as string | undefined;
+      if (existingNonce && existingNonce !== nonce) {
+        console.log('[Auth] SessionLock: post-subscribe mismatch detected. Existing:', existingNonce, 'Local:', nonce, '→ signing out');
+        toast.info('Your account was signed in elsewhere. You have been signed out on this device.');
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // 3) Now claim the lock by upserting our nonce
+      const { error: upsertErr } = await supabase
+        .from('user_session_locks')
+        .upsert({ user_id: userId, nonce }, { onConflict: 'user_id' });
+
+      if (upsertErr) {
+        console.error('[Auth] Failed to claim session lock (upsert):', upsertErr);
+      } else {
+        console.log('[Auth] SessionLock: claimed with nonce', nonce);
+      }
     } catch (e) {
       console.error('[Auth] Failed to claim session lock:', e);
     }
