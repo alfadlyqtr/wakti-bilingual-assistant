@@ -110,6 +110,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // 1) Subscribe FIRST to avoid missing any future changes
       subscribeToSessionLock(userId);
 
+      // If this is a fresh login, immediately claim the lock with our new nonce.
+      // Other devices will receive the realtime UPDATE and sign themselves out.
+      if (forceNewNonce) {
+        const { error: upsertErr } = await supabase
+          .from('user_session_locks')
+          .upsert({ user_id: userId, nonce }, { onConflict: 'user_id' });
+
+        if (upsertErr) {
+          console.error('[Auth] Failed to claim session lock (fresh login upsert):', upsertErr);
+        } else {
+          console.log('[Auth] SessionLock: claimed (fresh login) with nonce', nonce);
+        }
+        return;
+      }
+
       // 2) Immediate post-subscribe safety check: if another session already owns the lock, sign out
       const { data: existing, error: fetchErr } = await supabase
         .from('user_session_locks')
