@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     subscriptionDetails?: any;
   }>({ isSubscribed: false, isLoading: true, needsPayment: false });
 
+  // StrictMode-safe guards and timers
+  const retryTimerRef = useRef<number | null>(null);
+  const inFlightRef = useRef(false);
+  const destroyedRef = useRef(false);
+  const retriedRef = useRef(false); // allow at most one background retry per user
+  const lastUserIdRef = useRef<string | null>(null);
+
   // Owner accounts that bypass all restrictions
   const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
 
@@ -40,6 +47,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
+      if (inFlightRef.current) return; // prevent concurrent runs (StrictMode double effects)
+      inFlightRef.current = true;
+      try {
       console.log("ProtectedRoute: Starting subscription check for user:", user?.email);
       
       if (!user) {
@@ -107,11 +117,16 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
             }
           } catch {}
 
-          // Retry in background
-          setTimeout(() => {
-            // fire and forget
-            checkSubscriptionStatus();
-          }, 3000);
+          // Retry in background (only once per user, StrictMode-safe)
+          if (!retriedRef.current && !destroyedRef.current) {
+            retriedRef.current = true;
+            if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = window.setTimeout(() => {
+              if (!destroyedRef.current) {
+                checkSubscriptionStatus();
+              }
+            }, 3000);
+          }
           return;
         }
 
@@ -211,10 +226,14 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           needsPayment: true,
           error: error instanceof Error ? error.message : 'Unknown error'
         });
+      } finally {
+        inFlightRef.current = false;
       }
     };
 
     // Only run subscription check when we have a user and auth is not loading
+    destroyedRef.current = false; // reset on effect run
+
     if (!isLoading && user) {
       console.log("ProtectedRoute: Auth loaded, starting subscription check");
       // Prime from cache immediately for UX, then refresh
@@ -234,6 +253,18 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           }
         }
       } catch {}
+      // Track user changes and reset retry gate
+      if (lastUserIdRef.current !== user.id) {
+        lastUserIdRef.current = user.id;
+        retriedRef.current = false;
+      }
+
+      // Clear any pending retry before starting a fresh check
+      if (retryTimerRef.current) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+
       // Fire async refresh
       checkSubscriptionStatus();
     } else if (!isLoading && !user) {
@@ -244,6 +275,14 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         needsPayment: true 
       });
     }
+    return () => {
+      // Cleanup on unmount or dependency change
+      destroyedRef.current = true;
+      if (retryTimerRef.current) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
   }, [user, isLoading]);
 
   // Show loading while auth or subscription status is loading
