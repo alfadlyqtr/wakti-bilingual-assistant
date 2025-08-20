@@ -36,6 +36,7 @@ import Help from "./pages/Help";
 import PrivacyTerms from "./pages/PrivacyTerms";
 import Confirmed from "./pages/Confirmed";
 import NotFound from "./pages/NotFound";
+import SessionEnded from "./pages/SessionEnded";
 
 // Admin pages
 import AdminLogin from "./pages/AdminLogin";
@@ -90,6 +91,7 @@ function App() {
                 } />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
                 <Route path="/confirmed" element={<Confirmed />} />
+                <Route path="/session-ended" element={<SessionEnded />} />
                 
                 {/* Shared task route (public) */}
                 <Route path="/shared-task/:shareLink" element={<SharedTask />} />

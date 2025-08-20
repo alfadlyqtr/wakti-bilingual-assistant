@@ -10,6 +10,9 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
+// Cache TTL: 30 minutes
+const CACHE_TTL_MS = 30 * 60 * 1000;
+
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, session, isLoading } = useAuth();
   const location = useLocation();
@@ -62,12 +65,57 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
       try {
         console.log("ProtectedRoute: Fetching subscription status from database...");
-        
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name')
-          .eq('id', user.id)
-          .maybeSingle();
+
+        // Use a 5s timeout to avoid indefinite loading
+        const timeoutMs = 5000;
+        let timedOut = false;
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => { timedOut = true; resolve('timeout'); }, timeoutMs));
+        const fetchPromise = (async () => {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name')
+            .eq('id', user.id)
+            .maybeSingle();
+          return { profile, error } as const;
+        })();
+
+        const result = await Promise.race([fetchPromise, timeoutPromise]);
+
+        if (result === 'timeout') {
+          console.warn('ProtectedRoute: Subscription check timed out after', timeoutMs, 'ms');
+          // Try cached status; if none, temporarily allow and retry later
+          try {
+            const cacheKey = `wakti_sub_status_${user.id}`;
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              const fresh = typeof parsed.ts === 'number' && (Date.now() - parsed.ts) <= CACHE_TTL_MS;
+              if (fresh) {
+                setSubscriptionStatus({
+                  isSubscribed: !!parsed.isSubscribed,
+                  isLoading: false,
+                  needsPayment: !!parsed.needsPayment,
+                  subscriptionDetails: parsed.subscriptionDetails
+                });
+              } else {
+                // Stale cache: treat as no cache
+                setSubscriptionStatus({ isSubscribed: true, isLoading: false, needsPayment: false });
+              }
+            } else {
+              // Allow temporarily to avoid blocking paid users; schedule retry
+              setSubscriptionStatus({ isSubscribed: true, isLoading: false, needsPayment: false });
+            }
+          } catch {}
+
+          // Retry in background
+          setTimeout(() => {
+            // fire and forget
+            checkSubscriptionStatus();
+          }, 3000);
+          return;
+        }
+
+        const { profile, error } = result as { profile: any, error: any };
 
         if (error) {
           console.error('ProtectedRoute: Error fetching subscription status:', error);
@@ -137,12 +185,24 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           needsPayment
         });
 
-        setSubscriptionStatus({ 
+        const nextStatus = { 
           isSubscribed: isValidSubscription, 
           isLoading: false,
           needsPayment: needsPayment && !isValidSubscription,
           subscriptionDetails: profile
-        });
+        };
+        setSubscriptionStatus(nextStatus);
+
+        // Cache the latest status for fast restores
+        try {
+          const cacheKey = `wakti_sub_status_${user.id}`;
+          localStorage.setItem(cacheKey, JSON.stringify({
+            isSubscribed: nextStatus.isSubscribed,
+            needsPayment: nextStatus.needsPayment,
+            subscriptionDetails: nextStatus.subscriptionDetails,
+            ts: Date.now()
+          }));
+        } catch {}
       } catch (error) {
         console.error('ProtectedRoute: Exception during subscription check:', error);
         setSubscriptionStatus({ 
@@ -157,6 +217,24 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     // Only run subscription check when we have a user and auth is not loading
     if (!isLoading && user) {
       console.log("ProtectedRoute: Auth loaded, starting subscription check");
+      // Prime from cache immediately for UX, then refresh
+      try {
+        const cacheKey = `wakti_sub_status_${user.id}`;
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const fresh = typeof parsed.ts === 'number' && (Date.now() - parsed.ts) <= CACHE_TTL_MS;
+          if (fresh) {
+            setSubscriptionStatus({
+              isSubscribed: !!parsed.isSubscribed,
+              isLoading: false,
+              needsPayment: !!parsed.needsPayment,
+              subscriptionDetails: parsed.subscriptionDetails
+            });
+          }
+        }
+      } catch {}
+      // Fire async refresh
       checkSubscriptionStatus();
     } else if (!isLoading && !user) {
       console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
@@ -174,8 +252,16 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Loading />;
   }
 
-  // Proper authentication check - redirect to login if not authenticated
+  // Proper authentication check - redirect appropriately if not authenticated
   if (!user || !session) {
+    const kicked = (() => {
+      try { return localStorage.getItem('wakti_session_kicked') === '1'; } catch { return false; }
+    })();
+    if (kicked) {
+      try { localStorage.removeItem('wakti_session_kicked'); } catch {}
+      console.log("ProtectedRoute: Redirecting to session-ended page after being signed out elsewhere");
+      return <Navigate to="/session-ended" replace />;
+    }
     console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

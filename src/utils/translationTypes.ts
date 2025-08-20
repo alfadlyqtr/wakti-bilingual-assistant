@@ -1495,4 +1495,8 @@ export type TranslationKey =
   | "deleteEventAfter24Hours"
   | "by"
   | "background"
-  | "textStyle";
+  | "textStyle"
+  | "sessionEnded_title"
+  | "sessionEnded_message"
+  | "sessionEnded_goToLogin"
+  | "sessionEnded_goToHome";

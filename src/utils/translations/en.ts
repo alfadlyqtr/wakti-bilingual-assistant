@@ -78,4 +78,10 @@ export const en = {
   by: "by",
   background: "Background",
   textStyle: "Text Style",
+
+  // Session Ended page
+  sessionEnded_title: "You’re signed in on another device",
+  sessionEnded_message: "For your security, you’ve been signed out on this device because your account was used to sign in elsewhere.",
+  sessionEnded_goToLogin: "Go to Login",
+  sessionEnded_goToHome: "Go to Home",
 };

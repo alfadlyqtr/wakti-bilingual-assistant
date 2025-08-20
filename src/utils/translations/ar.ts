@@ -78,4 +78,10 @@ export const ar = {
   by: "بواسطة",
   background: "الخلفية",
   textStyle: "نمط النص",
+
+  // صفحة انتهاء الجلسة
+  sessionEnded_title: "تم تسجيل الدخول على جهاز آخر",
+  sessionEnded_message: "لأمانك، تم تسجيل خروجك من هذا الجهاز لأن حسابك استُخدم لتسجيل الدخول في مكان آخر.",
+  sessionEnded_goToLogin: "الذهاب إلى تسجيل الدخول",
+  sessionEnded_goToHome: "الذهاب إلى الصفحة الرئيسية",
 };

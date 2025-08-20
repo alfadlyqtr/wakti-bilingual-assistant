@@ -84,6 +84,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (newNonce && current && newNonce !== current) {
             // Another session has taken the lock; sign out here.
             toast.info('Your account was signed in elsewhere. You have been signed out on this device.');
+            try { localStorage.setItem('wakti_session_kicked', '1'); } catch {}
             supabase.auth.signOut();
           }
         }
@@ -140,6 +141,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (existingNonce && existingNonce !== nonce) {
         console.log('[Auth] SessionLock: post-subscribe mismatch detected. Existing:', existingNonce, 'Local:', nonce, '→ signing out');
         toast.info('Your account was signed in elsewhere. You have been signed out on this device.');
+        try { localStorage.setItem('wakti_session_kicked', '1'); } catch {}
         await supabase.auth.signOut();
         return;
       }
