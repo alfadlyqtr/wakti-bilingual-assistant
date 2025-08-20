@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -8,6 +7,7 @@ const corsHeaders = {
 };
 
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 serve(async (req) => {
   // Handle CORS
@@ -20,12 +20,12 @@ serve(async (req) => {
     console.log("🎯 Text Generator: Request method:", req.method);
     console.log("🎯 Text Generator: Request headers:", Object.fromEntries(req.headers.entries()));
     
-    if (!DEEPSEEK_API_KEY) {
-      console.error("🚨 Text Generator: DEEPSEEK_API_KEY not found in environment");
+    if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
+      console.error("🚨 Text Generator: No AI provider keys found in environment");
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: "DeepSeek API key not configured. Please add DEEPSEEK_API_KEY to Supabase Edge Function Secrets." 
+          error: "No AI provider configured. Please add OPENAI_API_KEY or DEEPSEEK_API_KEY to Supabase Edge Function Secrets." 
         }),
         { 
           status: 500, 
@@ -66,69 +66,105 @@ serve(async (req) => {
       );
     }
 
-    console.log("🎯 Text Generator: Calling DeepSeek API for text generation");
+    console.log("🎯 Text Generator: Calling AI provider for text generation");
     console.log("🎯 Mode:", mode);
     console.log("🎯 Language:", language);
     console.log("🎯 Prompt length:", prompt.length);
 
     const systemPrompt = getSystemPrompt(language);
     
-    const startTime = Date.now();
-    
-    console.log("🎯 Text Generator: Making request to DeepSeek API...");
-    const deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
-    });
+    let generatedText = "";
+    let modelUsed = "";
 
-    const duration = Date.now() - startTime;
-    console.log(`🎯 Text Generator: DeepSeek request completed in ${duration}ms`);
-    console.log(`🎯 Text Generator: DeepSeek response status: ${deepseekResponse.status}`);
+    // Try OpenAI GPT-4o-mini first if available
+    if (OPENAI_API_KEY) {
+      try {
+        console.log("🎯 Text Generator: Trying OpenAI GPT-4o-mini first");
+        const startOpenAI = Date.now();
+        const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: prompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 2000,
+          }),
+        });
+        const openaiDuration = Date.now() - startOpenAI;
+        console.log(`🎯 Text Generator: OpenAI request completed in ${openaiDuration}ms with status ${openaiResponse.status}`);
 
-    if (!deepseekResponse.ok) {
-      const errorText = await deepseekResponse.text();
-      console.error("🎯 Text Generator: DeepSeek API error:", {
-        status: deepseekResponse.status,
-        statusText: deepseekResponse.statusText,
-        error: errorText
-      });
-      
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: `DeepSeek API failed (${deepseekResponse.status}): ${errorText}` 
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        if (openaiResponse.ok) {
+          const openaiResult = await openaiResponse.json();
+          const content = openaiResult.choices?.[0]?.message?.content || "";
+          if (content) {
+            generatedText = content;
+            modelUsed = "gpt-4o-mini";
+          } else {
+            console.warn("🎯 Text Generator: OpenAI returned no content");
+          }
+        } else {
+          const errTxt = await openaiResponse.text();
+          console.warn("🎯 Text Generator: OpenAI API error:", { status: openaiResponse.status, statusText: openaiResponse.statusText, error: errTxt });
         }
-      );
+      } catch (e) {
+        console.warn("🎯 Text Generator: OpenAI request threw error:", e);
+      }
     }
 
-    const result = await deepseekResponse.json();
-    console.log("🎯 Text Generator: DeepSeek response received successfully");
-    
-    const generatedText = result.choices?.[0]?.message?.content || "";
+    // Fallback to DeepSeek if needed and available
+    if (!generatedText && DEEPSEEK_API_KEY) {
+      try {
+        console.log("🎯 Text Generator: Falling back to DeepSeek (deepseek-chat)");
+        const startDeepseek = Date.now();
+        const deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: prompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 2000,
+          }),
+        });
+        const deepseekDuration = Date.now() - startDeepseek;
+        console.log(`🎯 Text Generator: DeepSeek request completed in ${deepseekDuration}ms with status ${deepseekResponse.status}`);
+
+        if (deepseekResponse.ok) {
+          const result = await deepseekResponse.json();
+          const content = result.choices?.[0]?.message?.content || "";
+          if (content) {
+            generatedText = content;
+            modelUsed = "deepseek-chat";
+          } else {
+            console.error("🎯 Text Generator: No text generated from DeepSeek API", JSON.stringify(result));
+          }
+        } else {
+          const errorText = await deepseekResponse.text();
+          console.error("🎯 Text Generator: DeepSeek API error:", { status: deepseekResponse.status, statusText: deepseekResponse.statusText, error: errorText });
+        }
+      } catch (e) {
+        console.error("🎯 Text Generator: DeepSeek request threw error:", e);
+      }
+    }
 
     if (!generatedText) {
-      console.error("🎯 Text Generator: No text generated from DeepSeek API");
-      console.error("🎯 Text Generator: DeepSeek response structure:", JSON.stringify(result, null, 2));
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: "No text generated from AI API" 
+          error: "No text generated from AI providers" 
         }),
         { 
           status: 500, 
@@ -137,14 +173,15 @@ serve(async (req) => {
       );
     }
 
-    console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length);
+    console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model:", modelUsed);
 
     return new Response(
       JSON.stringify({
         success: true,
-        generatedText: generatedText,
-        mode: mode,
-        language: language
+        generatedText,
+        mode,
+        language,
+        modelUsed
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -180,9 +217,8 @@ function getSystemPrompt(language: string): string {
 المبادئ التوجيهية:
 - اكتب نصاً واضحاً ومباشراً
 - تجنب استخدام النجوم (*) للتنسيق
-- لا تستخدم أبداً شرطة إم الطويلة (—) أو أي رموز شرطة طويلة
-- استخدم الشرطة العادية (-) فقط
-- اتبع النبرة والطول المطلوبين
+- لا تستخدم أبداً شرطة إم (—) ولا الشرطة العادية (-)
+- اتبع بدقة نوع المحتوى، النبرة، والطول المطلوب
 - حافظ على الاتساق في الأسلوب
 - قدم محتوى مفيداً وذا صلة
 - لا تضع افتراضات غير ضرورية
@@ -191,9 +227,8 @@ function getSystemPrompt(language: string): string {
 Guidelines:
 - Write clear and direct text
 - Do not use asterisks (*) for formatting
-- NEVER use em-dashes (—) or any long dash symbols
-- Use only regular hyphens (-) when needed
-- Follow the requested tone and length
+- NEVER use em-dashes (—) and hyphens (-)
+- Strictly follow the requested Content Type, Tone, and Length
 - Maintain consistency in style
 - Provide helpful and relevant content
 - Do not make unnecessary assumptions

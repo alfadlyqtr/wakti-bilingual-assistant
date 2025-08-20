@@ -55,7 +55,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     article: language === 'ar' ? 'مقال' : 'Article',
     official_letter: language === 'ar' ? 'كتاب رسمي' : 'Official Letter',
     poem: language === 'ar' ? 'قصيدة' : 'Poem',
-    story: language === 'ar' ? 'قصة' : 'Story'
+    story: language === 'ar' ? 'قصة' : 'Story',
+    memo: language === 'ar' ? 'مذكرة' : 'Memo',
+    proposal: language === 'ar' ? 'مقترح' : 'Proposal',
+    blog_post: language === 'ar' ? 'تدوينة' : 'Blog Post',
+    press_release: language === 'ar' ? 'بيان صحفي' : 'Press Release',
+    cover_letter: language === 'ar' ? 'خطاب تقديم' : 'Cover Letter',
+    summary: language === 'ar' ? 'ملخص' : 'Summary'
   };
 
   // RESTORED: All tones including romantic
@@ -65,7 +71,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     formal: language === 'ar' ? 'رسمي' : 'Formal',
     friendly: language === 'ar' ? 'ودود' : 'Friendly',
     persuasive: language === 'ar' ? 'مقنع' : 'Persuasive',
-    romantic: language === 'ar' ? 'رومانسي' : 'Romantic'
+    romantic: language === 'ar' ? 'رومانسي' : 'Romantic',
+    neutral: language === 'ar' ? 'محايد' : 'Neutral',
+    empathetic: language === 'ar' ? 'متعاطف' : 'Empathetic',
+    confident: language === 'ar' ? 'واثق' : 'Confident',
+    humorous: language === 'ar' ? 'طريف' : 'Humorous',
+    urgent: language === 'ar' ? 'عاجل' : 'Urgent',
+    apologetic: language === 'ar' ? 'اعتذاري' : 'Apologetic'
   };
 
   const lengths = {
@@ -110,6 +122,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           prompt += language === 'ar' ? 
             `\nالطول: ${lengths[length]}` : 
             `\nLength: ${lengths[length]}`;
+        }
+
+        // Formatting guidance for report/article without changing UI
+        if (contentType === 'report' || contentType === 'article') {
+          prompt += language === 'ar'
+            ? `\nالتنسيق: استخدم عنواناً واضحاً، وعند الحاجة عنواناً فرعياً، فقرات قصيرة، نقاط تعداد حيث يلزم، وعناوين/عناوين فرعية للأقسام.`
+            : `\nFormatting: Use a clear Title, optional Subtitle, short paragraphs, bullet points where useful, and section headings/subheadings.`;
         }
 
         // Add address information if provided and relevant
@@ -357,7 +376,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </div>
                   <div>
                     <Label htmlFor="from-address" className="text-sm font-medium">
-                      {language === 'ar' ? 'من المنزل' : 'From home'}
+                      {language === 'ar' ? 'من' : 'From'}
                     </Label>
                     <Input
                       id="from-address"

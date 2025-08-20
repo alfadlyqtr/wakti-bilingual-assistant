@@ -16,6 +16,94 @@ export function ProfileImageUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper: map MIME type to extension
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
+    'image/gif': 'gif'
+  };
+
+  const getSafeExt = (f: File) => {
+    const fromName = f.name && f.name.includes('.') ? f.name.split('.').pop()?.toLowerCase() : undefined;
+    if (fromName) return fromName;
+    return mimeToExt[f.type] || 'bin';
+  };
+
+  const toBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) =>
+    new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Failed to encode image'))), type, quality)
+    );
+
+  const loadBitmapOrImage = async (
+    file: File
+  ): Promise<{ draw: (ctx: CanvasRenderingContext2D) => void; width: number; height: number }> => {
+    if ('createImageBitmap' in window) {
+      try {
+        // @ts-ignore - imageOrientation may not exist in older TS lib
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        return {
+          width: bmp.width,
+          height: bmp.height,
+          draw: (ctx) => ctx.drawImage(bmp, 0, 0, bmp.width, bmp.height)
+        };
+      } catch {}
+    }
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('Failed to load image for processing'));
+        image.src = url;
+      });
+      return {
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        draw: (ctx) => ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight)
+      };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const processImage = async (
+    file: File
+  ): Promise<{ blob: Blob; ext: string; type: string }> => {
+    const type = file.type;
+    const allowedPassThrough = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowedPassThrough.includes(type) && file.size <= 5 * 1024 * 1024) {
+      return { blob: file, ext: getSafeExt(file), type };
+    }
+
+    const { draw, width, height } = await loadBitmapOrImage(file);
+    const maxDim = 1280;
+    const scale = Math.min(1, maxDim / Math.max(width, height));
+    const targetW = Math.max(1, Math.round(width * scale));
+    const targetH = Math.max(1, Math.round(height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Canvas context unavailable');
+    draw(ctx);
+
+    let quality = 0.85;
+    let blob = await toBlob(canvas, 'image/jpeg', quality);
+    while (blob.size > 5 * 1024 * 1024 && quality > 0.5) {
+      quality -= 0.1;
+      blob = await toBlob(canvas, 'image/jpeg', quality);
+    }
+    if (blob.size > 5 * 1024 * 1024) {
+      throw new Error('Compressed image still too large (max 5MB)');
+    }
+    return { blob, ext: 'jpg', type: 'image/jpeg' };
+  };
 
   const ensureProfileExists = async () => {
     if (!user?.id) {
@@ -56,12 +144,6 @@ export function ProfileImageUpload() {
       return;
     }
 
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(language === 'ar' ? 'حجم الملف كبير جداً (الحد الأقصى 5 ميجابايت)' : 'File size too large (max 5MB)');
-      return;
-    }
-
     setIsUploading(true);
     setAvatarError(false);
 
@@ -69,8 +151,11 @@ export function ProfileImageUpload() {
       // Ensure profile exists before uploading
       await ensureProfileExists();
 
+      // Process/convert image if needed (handles HEIC/large files)
+      const processed = await processImage(file);
+
       // Create unique filename with user ID folder structure for better organization
-      const fileExt = file.name.split('.').pop();
+      const fileExt = processed.ext || getSafeExt(file);
       const fileName = `${user.id}/avatar-${Date.now()}.${fileExt}`;
 
       console.log('Uploading avatar file:', fileName);
@@ -78,7 +163,8 @@ export function ProfileImageUpload() {
       // Upload to Supabase storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(fileName, file, {
+        .upload(fileName, processed.blob, {
+          contentType: processed.type,
           cacheControl: '3600',
           upsert: true
         });
@@ -124,14 +210,18 @@ export function ProfileImageUpload() {
 
       toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية بنجاح' : 'Profile picture updated successfully');
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Avatar upload error:', error);
-      toast.error(language === 'ar' ? 'فشل في تحديث الصورة الشخصية' : 'Failed to update profile picture');
+      const msg = error?.message ? `: ${error.message}` : '';
+      toast.error((language === 'ar' ? 'فشل في تحديث الصورة الشخصية' : 'Failed to update profile picture') + msg);
     } finally {
       setIsUploading(false);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = '';
       }
     }
   };
@@ -231,7 +321,7 @@ export function ProfileImageUpload() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => cameraInputRef.current?.click()}
           disabled={isUploading}
           className="flex items-center gap-2"
         >
@@ -240,7 +330,22 @@ export function ProfileImageUpload() {
           ) : (
             <Camera className="h-4 w-4" />
           )}
-          {language === 'ar' ? 'تغيير الصورة' : 'Change Photo'}
+          {language === 'ar' ? 'التقاط صورة' : 'Take Photo'}
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="flex items-center gap-2"
+        >
+          {isUploading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Upload className="h-4 w-4" />
+          )}
+          {language === 'ar' ? 'رفع من الملفات' : 'Upload from Files'}
         </Button>
 
         {avatarUrl && !avatarError && (
@@ -256,6 +361,16 @@ export function ProfileImageUpload() {
           </Button>
         )}
       </div>
+
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleImageUpload}
+        className="hidden"
+        disabled={isUploading}
+      />
 
       <input
         ref={fileInputRef}

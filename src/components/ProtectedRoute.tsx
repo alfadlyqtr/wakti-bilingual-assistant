@@ -298,16 +298,6 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Proper authentication check - redirect appropriately if not authenticated
   if (!user || !session) {
-    const kicked = (() => { try { return localStorage.getItem('wakti_session_kicked') === '1'; } catch { return false; } })();
-    const blocked = (() => { try { return localStorage.getItem('wakti_session_blocked') === '1'; } catch { return false; } })();
-    if (kicked || blocked) {
-      try {
-        localStorage.removeItem('wakti_session_kicked');
-        localStorage.removeItem('wakti_session_blocked');
-      } catch {}
-      console.log("ProtectedRoute: Redirecting to session-ended page after session conflict");
-      return <Navigate to="/session-ended" replace />;
-    }
     console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
