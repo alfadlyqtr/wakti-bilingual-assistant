@@ -14,6 +14,7 @@ export interface AIMessage {
   browsingData?: any;
   attachedFiles?: any[];
   isTextGenerated?: boolean;
+  metadata?: any;
 }
 
 export interface AIConversation {
@@ -185,12 +186,11 @@ class WaktiAIV2ServiceClass {
         throw new Error('No valid session for streaming');
       }
 
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/wakti-ai-v2-brain`, {
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/wakti-ai-v2-brain-stream`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
-          'x-streaming': 'true',
           'Accept': 'text/event-stream'
         },
         body: JSON.stringify({
@@ -243,7 +243,9 @@ class WaktiAIV2ServiceClass {
                   metadata = {
                     model: parsed.model,
                     fallbackUsed: parsed.fallbackUsed,
-                    responseTime: parsed.responseTime
+                    responseTime: parsed.responseTime,
+                    browsingUsed: parsed.browsingUsed,
+                    browsingData: parsed.browsingData
                   };
                   onComplete?.(metadata);
                 } else if (parsed.error) {
@@ -288,7 +290,9 @@ class WaktiAIV2ServiceClass {
     skipContextLoad: boolean = false,
     activeTrigger: string = 'chat',
     conversationSummary: string = '',
-    attachedFiles: any[] = []
+    attachedFiles: any[] = [],
+    signal?: AbortSignal,
+    imageMode?: string
   ) {
     const maxRetries = 2;
     let lastError: any = null;
@@ -301,12 +305,14 @@ class WaktiAIV2ServiceClass {
           userId = user.id;
         }
 
-        console.log(`🤖 FRONTEND BOSS: Attempt ${attempt}/${maxRetries} - Sending to backend worker for ${activeTrigger} mode`);
+        console.log(`🤖 FRONTEND BOSS: Attempt ${attempt}/${maxRetries} - Sending to backend worker for ${activeTrigger} mode`, {
+          imageMode: imageMode || 'none'
+        });
 
         const personalTouch = this.getPersonalTouch();
 
         // Simplified timeout - backend worker handles processing
-        const timeoutDuration = 20000; // 20s for all requests
+        const timeoutDuration = 30000; // 30s to accommodate image generation
         
         console.log(`⏱️ FRONTEND BOSS: Using ${timeoutDuration/1000}s timeout for backend communication`);
 
@@ -321,7 +327,8 @@ class WaktiAIV2ServiceClass {
               activeTrigger,
               attachedFiles,
               recentMessages: this.getEnhancedMessages(recentMessages), // Enhanced message handling
-              personalTouch: personalTouch
+              personalTouch: personalTouch,
+              imageMode: imageMode // Pass imageMode to backend
             }
           }),
           new Promise((_, reject) => 
@@ -360,7 +367,13 @@ class WaktiAIV2ServiceClass {
           actionTaken: data.actionTaken,
           imageUrl: data.imageUrl,
           browsingUsed: data.browsingUsed,
-          browsingData: data.browsingData
+          browsingData: data.browsingData,
+          metadata: {
+            runwareCost: data.runwareCost,
+            modelUsed: data.modelUsed,
+            responseTime: data.responseTime,
+            imageMode: imageMode
+          }
         };
 
         console.log(`✅ FRONTEND BOSS: Successfully received response from backend worker`);

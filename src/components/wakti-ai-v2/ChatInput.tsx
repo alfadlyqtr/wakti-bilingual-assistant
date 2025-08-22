@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, ChevronDown } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PlusMenu } from './PlusMenu';
@@ -29,12 +29,14 @@ const textareaHighlight = (activeTrigger: string) => {
   }
 };
 
+export type ImageMode = 'text2image' | 'image2image' | 'background-removal';
+
 interface ChatInputProps {
   message: string;
   setMessage: (message: string) => void;
   isLoading: boolean;
   sessionMessages: any[];
-  onSendMessage: (message: string, trigger: string, files?: any[]) => void;
+  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode) => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
   activeTrigger: string;
@@ -62,6 +64,8 @@ export function ChatInput({
 }: ChatInputProps) {
   const { language } = useTheme();
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
+  const [imageMode, setImageMode] = useState<ImageMode>('text2image');
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
 
   // Use simplified file upload hook
   const {
@@ -91,9 +95,11 @@ export function ChatInput({
     if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
       console.log('📤 SEND: Message being sent', { message: message.substring(0, 50), filesCount: uploadedFiles.length });
       
-      // AUTO-SWITCH TO VISION MODE IF IMAGES PRESENT
+      // Use the current activeTrigger - no auto-switching for image mode
       let finalTrigger = activeTrigger;
-      if (uploadedFiles.length > 0) {
+      
+      // AUTO-SWITCH TO VISION MODE ONLY if not already in image mode
+      if (uploadedFiles.length > 0 && activeTrigger !== 'image') {
         const hasImages = uploadedFiles.some(file => file.type?.startsWith('image/'));
         if (hasImages && activeTrigger !== 'video' && activeTrigger !== 'vision') {
           finalTrigger = 'vision';
@@ -120,8 +126,9 @@ export function ChatInput({
 
       await onSendMessage(
         message, 
-        finalTrigger, // Use the auto-detected trigger
-        enhancedFiles
+        finalTrigger, // Use the final trigger (could be auto-switched to vision)
+        enhancedFiles,
+        activeTrigger === 'image' ? imageMode : undefined // Only pass imageMode if in image mode
       );
       setMessage('');
       clearFiles();
@@ -240,6 +247,56 @@ export function ChatInput({
               </button>
               
               <ActiveModeIndicator activeTrigger={activeTrigger} />
+
+              {activeTrigger === 'image' && (
+                <div className="ml-auto relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsModeMenuOpen(v => !v)}
+                    disabled={isLoading || isUploading}
+                    className="h-9 px-3 rounded-2xl flex items-center gap-2 bg-orange-500/90 text-white hover:bg-orange-600 transition-all border-0"
+                    aria-haspopup="menu"
+                    aria-expanded={isModeMenuOpen}
+                    aria-label={language === 'ar' ? 'وضع الصورة' : 'Image Mode'}
+                  >
+                    <span className="text-xs font-medium">
+                      {imageMode === 'text2image' && (language === 'ar' ? 'نص → صورة' : 'Text → Image')}
+                      {imageMode === 'image2image' && (language === 'ar' ? 'صورة → صورة' : 'Image → Image')}
+                      {imageMode === 'background-removal' && (language === 'ar' ? 'إزالة الخلفية' : 'Background Removal')}
+                    </span>
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+
+                  {isModeMenuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 mt-2 w-48 rounded-xl border border-white/20 bg-white/95 dark:bg-gray-900/95 shadow-2xl overflow-hidden z-20"
+                    >
+                      <button
+                        role="menuitem"
+                        onClick={() => { setImageMode('text2image'); setIsModeMenuOpen(false); }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 dark:hover:bg-white/10 ${imageMode === 'text2image' ? 'font-semibold' : ''}`}
+                      >
+                        {language === 'ar' ? 'نص → صورة' : 'Text to Image'}
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={() => { setImageMode('image2image'); setIsModeMenuOpen(false); }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 dark:hover:bg-white/10 ${imageMode === 'image2image' ? 'font-semibold' : ''}`}
+                      >
+                        {language === 'ar' ? 'صورة → صورة' : 'Image to Image'}
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={() => { setImageMode('background-removal'); setIsModeMenuOpen(false); }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 dark:hover:bg-white/10 ${imageMode === 'background-removal' ? 'font-semibold' : ''}`}
+                      >
+                        {language === 'ar' ? 'إزالة الخلفية' : 'Background Removal'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION */}

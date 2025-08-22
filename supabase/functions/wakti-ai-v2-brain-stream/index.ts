@@ -1,11 +1,11 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { executeRegularSearch } from "../wakti-ai-v2-brain/search.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, x-streaming',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
@@ -77,7 +77,7 @@ serve(async (req) => {
     return new Response(stream, {
       headers: {
         ...corsHeaders,
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
       },
@@ -143,15 +143,48 @@ async function streamAIResponse(
     throw new Error("No AI API key configured");
   }
 
+  const startTime = Date.now();
+  let browsingUsed = false;
+  let browsingData: any = null;
+
+  // If Search mode, run Tavily and augment the user message
+  let effectiveMessage = message;
+  if (activeTrigger === 'search') {
+    try {
+      const searchRes: any = await executeRegularSearch(message, language);
+      if (searchRes?.success && searchRes?.data) {
+        browsingUsed = true;
+        browsingData = searchRes.data;
+        const sourcesList = Array.isArray(searchRes.data.results)
+          ? searchRes.data.results
+              .map((r: any, i: number) => `${i + 1}. ${r.title || 'Source'} - ${r.url || ''}`)
+              .join("\n")
+          : '';
+        const instructEn = `\n\nUse the following search context and cite sources inline like [1], [2] when relevant. Start with a concise answer, then include a Sources section listing the URLs.\n\n`;
+        const instructAr = `\n\nاستخدم السياق التالي من نتائج البحث واذكر المصادر داخل النص مثل [1] و[2] عند الحاجة. ابدأ بإجابة مختصرة، ثم أضف قسمًا للمصادر يتضمن الروابط.\n\n`;
+        const preamble = language === 'ar' ? instructAr : instructEn;
+        const sourcesHeader = language === 'ar' ? 'المصادر:' : 'Sources:';
+        const answerHeader = language === 'ar' ? 'ملخص الإجابة:' : 'Answer Summary:';
+        const answer = searchRes.data.answer ? `${answerHeader} ${searchRes.data.answer}\n\n` : '';
+        const contextBlock = searchRes.context ? `${searchRes.context}\n\n` : '';
+        const sourcesBlock = sourcesList ? `${sourcesHeader}\n${sourcesList}\n\n` : '';
+        effectiveMessage = `${message}\n\n${preamble}${answer}${contextBlock}${sourcesBlock}`.trim();
+      }
+    } catch (e) {
+      // If search fails, continue without augmentation
+      console.warn('SEARCH pre-processing failed in stream:', e);
+    }
+  }
+
   const systemPrompt = language === 'ar' 
     ? `أنت WAKTI، مساعد ذكي متقدم. كن ودوداً ومفيداً ومختصراً في إجاباتك. استخدم نصاً عادياً واضحاً بدون رموز زائدة.`
     : `You are WAKTI, an advanced AI assistant. Be friendly, helpful, and concise. Use clean, plain text without excessive formatting.`;
 
   // Prepare messages with file support
-  let userContent: any = message;
+  let userContent: any = effectiveMessage;
   
   if (attachedFiles?.length > 0) {
-    const contentParts: any[] = [{ type: 'text', text: message }];
+    const contentParts: any[] = [{ type: 'text', text: effectiveMessage }];
     
     for (const file of attachedFiles) {
       if (file.type?.startsWith('image/') && file.content) {
@@ -200,12 +233,22 @@ async function streamAIResponse(
 
   const decoder = new TextDecoder();
   let buffer = '';
+  let finalSent = false;
+
+  const sendFinalEvent = () => {
+    if (finalSent) return;
+    finalSent = true;
+    const responseTime = Date.now() - startTime;
+    const payload = { done: true, model, responseTime, browsingUsed, browsingData };
+    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`));
+  };
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       
       if (done) {
+        sendFinalEvent();
         controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
         break;
       }
@@ -219,6 +262,7 @@ async function streamAIResponse(
           const data = line.slice(6);
           
           if (data === '[DONE]') {
+            sendFinalEvent();
             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
             continue;
           }
@@ -236,6 +280,9 @@ async function streamAIResponse(
         }
       }
     }
+  } catch (err) {
+    const msg = (err as Error)?.message || 'Streaming error';
+    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
   } finally {
     controller.close();
   }

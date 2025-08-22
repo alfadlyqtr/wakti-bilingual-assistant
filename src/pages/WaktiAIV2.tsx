@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage } from '@/services/WaktiAIV2Service';
 import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
@@ -81,12 +81,23 @@ const WaktiAIV2 = () => {
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
   const { canTranslate, refreshTranslationQuota } = useQuotaManagement();
   const { canUseVoice, refreshVoiceQuota } = useExtendedQuotaManagement();
   const { quota, fetchQuota } = useAIQuotaManagement();
   
+  // Memoized values for performance
+  const quotaStatus = useMemo(() => ({
+    isQuotaExceeded,
+    isExtendedQuotaExceeded,
+    isAIQuotaExceeded
+  }), [isQuotaExceeded, isExtendedQuotaExceeded, isAIQuotaExceeded]);
+
+  const canSendMessage = useMemo(() => {
+    return !isLoading && !isClearingChat && userProfile?.id;
+  }, [isLoading, isClearingChat, userProfile?.id]);
 
   const loadUserProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -192,142 +203,128 @@ const WaktiAIV2 = () => {
     return allPatterns.some(pattern => pattern.test(messageContent));
   };
 
-  const handleSendMessage = async (messageContent: string, trigger: string, attachedFiles?: any[]) => {
-    if (isQuotaExceeded || isExtendedQuotaExceeded || isAIQuotaExceeded) {
-      showError(language === 'ar' ? 'تجاوزت الحد المسموح به' : 'Quota exceeded');
-      return;
+  const handleSendMessage = useCallback(async (messageContent: string, trigger: string, attachedFiles?: any[], imageMode?: string) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
+    abortControllerRef.current = new AbortController();
 
-    if (!messageContent || !messageContent.trim()) {
-      showError(language === 'ar' ? 'يرجى كتابة رسالة' : 'Please enter a message');
-      return;
-    }
-
-    if (!userProfile?.id) {
-      showError(language === 'ar' ? 'يرجى تسجيل الدخول' : 'Please login first');
-      return;
-    }
-
-    let finalInputType: 'text' | 'voice' | 'vision' = 'text';
-    let routingMode = activeTrigger; // FIXED: Don't override user's selected mode
-
-    // CLAUDE WAY: Process images differently for vision vs storage
-    let processedAttachedFiles: any[] = [];
-    
-    if (attachedFiles && attachedFiles.length > 0) {
-      console.log('🖼️ CLAUDE WAY: Processing attached files for vision', attachedFiles.length);
-      
-      // Separate images from other files
-      const imageFiles = attachedFiles.filter(file => isImageFile(file));
-      const nonImageFiles = attachedFiles.filter(file => !isImageFile(file));
-      
-      if (imageFiles.length > 0) {
-        // FIXED: Only set vision mode if user hasn't explicitly selected another mode
-        // OR if they selected chat mode (which can handle vision)
-        if (routingMode === 'chat' || routingMode === 'vision') {
-          finalInputType = 'vision';
-          // Only switch to vision mode if user was in chat mode
-          if (routingMode === 'chat') {
-            routingMode = 'vision';
-          }
-        }
-        
-        console.log('🖼️ CLAUDE WAY: Converting', imageFiles.length, 'images to base64 for Claude');
-        
-        // Convert images to base64 (Claude Way)
-        for (const imageFile of imageFiles) {
-          try {
-            let base64Data: string;
-            
-            if (imageFile.url && imageFile.url.startsWith('data:')) {
-              // Already base64
-              base64Data = imageFile.url;
-            } else if (imageFile.file) {
-              // Convert File object to base64
-              base64Data = await convertFileToBase64(imageFile.file);
-            } else if (imageFile.url) {
-              // Fetch image from URL and convert to base64
-              const response = await fetch(imageFile.url);
-              const blob = await response.blob();
-              const file = new File([blob], imageFile.name || 'image', { type: imageFile.type });
-              base64Data = await convertFileToBase64(file);
-            } else {
-              throw new Error('Invalid image file format');
-            }
-            
-            processedAttachedFiles.push({
-              name: imageFile.name,
-              type: imageFile.type,
-              size: imageFile.size,
-              url: base64Data, // Claude Way: Use base64 directly
-              preview: imageFile.preview,
-              imageType: imageFile.imageType || { id: 'general', name: 'General' }
-            });
-            
-          } catch (error) {
-            console.error('❌ CLAUDE WAY: Failed to convert image to base64:', error);
-            showError(language === 'ar' ? 'فشل في معالجة الصورة' : 'Failed to process image');
-            return;
-          }
-        }
-        
-        console.log('✅ CLAUDE WAY: Converted', processedAttachedFiles.length, 'images to base64');
-      }
-      
-      // For non-image files, keep current upload system
-      if (nonImageFiles.length > 0) {
-        console.log('📁 STORAGE WAY: Processing', nonImageFiles.length, 'non-image files via Supabase');
-        // Add non-image files as-is (they should already be uploaded to storage)
-        processedAttachedFiles.push(...nonImageFiles);
-      }
-    }
-
-    console.log('👑 FRONTEND BOSS: Processing message in', routingMode, 'mode');
-
-    setIsLoading(true);
-    setError(null);
     const startTime = Date.now();
+    setIsLoading(true);
+    setProcessedFiles(attachedFiles || []);
+    
+    console.log(`🚀 FRONTEND BOSS: Starting ${trigger} mode request`, {
+      messageLength: messageContent.length,
+      filesCount: attachedFiles?.length || 0,
+      imageMode: imageMode || 'none'
+    });
 
     try {
-      // FRONTEND BOSS: Ensure conversation ID exists
-      let workingConversationId = currentConversationId;
-      if (!workingConversationId) {
-        workingConversationId = EnhancedFrontendMemory.saveActiveConversation([], null);
-        setCurrentConversationId(workingConversationId);
-        setIsNewConversation(false);
+      // No global quota check here (chat/search/image/vision are not gated)
+
+      // FILE PROCESSING
+      let processedAttachedFiles = attachedFiles;
+      let finalInputType: 'text' | 'voice' | 'vision' = 'text';
+
+      if (attachedFiles && attachedFiles.length > 0) {
+        console.log('📎 FRONTEND BOSS: Processing attached files');
+        
+        // Separate image files from other files
+        const imageFiles = attachedFiles.filter(file => file.type?.startsWith('image/'));
+        const otherFiles = attachedFiles.filter(file => !file.type?.startsWith('image/'));
+
+        if (imageFiles.length > 0) {
+          finalInputType = 'vision';
+          console.log(`🖼️ FRONTEND BOSS: Found ${imageFiles.length} image files, switching to vision mode`);
+          
+          // Convert images to base64 for Claude
+          const processedImageFiles = await Promise.all(
+            imageFiles.map(async (file) => {
+              try {
+                if (file.url) {
+                  const response = await fetch(file.url);
+                  if (abortControllerRef.current?.signal.aborted) return null;
+                  
+                  const blob = await response.blob();
+                  if (abortControllerRef.current?.signal.aborted) return null;
+                  
+                  return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const base64 = (reader.result as string).split(',')[1];
+                      resolve({
+                        ...file,
+                        data: base64
+                      });
+                    };
+                    reader.readAsDataURL(blob);
+                  });
+                }
+                return file;
+              } catch (error) {
+                console.error('Error processing image file:', error);
+                return file;
+              }
+            })
+          );
+
+          // Filter out null results from aborted operations
+          const validImageFiles = processedImageFiles.filter(file => file !== null);
+          if (abortControllerRef.current?.signal.aborted) return;
+
+          processedAttachedFiles = [...validImageFiles, ...otherFiles];
+        }
       }
 
-      if (routingMode === 'image') {
-        console.log('🎨 FRONTEND BOSS: Processing image generation');
+      // Check for abort before proceeding
+      if (abortControllerRef.current?.signal.aborted) {
+        console.log('🚫 Request aborted during file processing');
+        return;
+      }
+
+      // ROUTING LOGIC
+      let routingMode = trigger;
+
+      // IMAGE MODE ROUTING
+      if (trigger === 'image') {
+        console.log('🎨 FRONTEND BOSS: Processing image generation request', { imageMode });
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
           role: 'user',
           content: messageContent,
           timestamp: new Date(),
-          inputType: finalInputType,
-          attachedFiles: processedAttachedFiles
+          inputType: 'text',
+          intent: 'image',
+          attachedFiles: processedAttachedFiles,
+          metadata: { imageMode }
         };
         
         const newMessages = [...sessionMessages, tempUserMessage];
         setSessionMessages(newMessages);
         
-        // Save to frontend memory
-        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, currentConversationId);
         
         const imageResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,
           language,
-          workingConversationId,
-          finalInputType,
+          currentConversationId,
+          'text',
           newMessages,
           false,
           'image',
           '',
-          processedAttachedFiles || []
+          processedAttachedFiles || [],
+          abortControllerRef.current?.signal,
+          imageMode
         );
-        
+
+        if (abortControllerRef.current?.signal.aborted) {
+          console.log('🚫 Image request aborted');
+          return;
+        }
+
         if (imageResponse.error) {
           throw new Error(imageResponse.error);
         }
@@ -335,19 +332,54 @@ const WaktiAIV2 = () => {
         const assistantMessage: AIMessage = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
-          content: imageResponse.response || 'Image generation completed',
+          content: imageResponse.response || 'Image generated',
           timestamp: new Date(),
-          imageUrl: imageResponse.imageUrl
+          intent: imageResponse.intent || 'image',
+          confidence: (imageResponse.confidence as 'high' | 'medium' | 'low') || 'high',
+          actionTaken: imageResponse.actionTaken || undefined,
+          imageUrl: imageResponse.imageUrl || undefined,
+          metadata: {
+            runwareCost: imageResponse.runwareCost,
+            modelUsed: imageResponse.modelUsed,
+            responseTime: imageResponse.responseTime,
+            imageMode
+          }
         };
-        
+
         const finalMessages = [...newMessages, assistantMessage];
         setSessionMessages(finalMessages);
         
-        // FRONTEND BOSS: Save to memory
-        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
+        EnhancedFrontendMemory.saveActiveConversation(finalMessages, currentConversationId);
         
-      } else if (routingMode === 'search') {
-        console.log('🔍 FRONTEND BOSS: Processing search');
+        setIsLoading(false);
+        return;
+      }
+
+      // No quota gating here; voice-only flows enforce quotas elsewhere
+
+      if (!messageContent || !messageContent.trim()) {
+        showError(language === 'ar' ? 'يرجى كتابة رسالة' : 'Please enter a message');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!userProfile?.id) {
+        showError(language === 'ar' ? 'يرجى تسجيل الدخول' : 'Please login first');
+        setIsLoading(false);
+        return;
+      }
+
+      // Ensure conversation ID exists
+      let workingConversationId = currentConversationId;
+      if (!workingConversationId) {
+        workingConversationId = EnhancedFrontendMemory.saveActiveConversation([], null);
+        setCurrentConversationId(workingConversationId);
+        setIsNewConversation(false);
+      }
+
+      // VISION MODE ROUTING - separate from image mode
+      if (trigger === 'vision' || finalInputType === 'vision') {
+        console.log('👁️ FRONTEND BOSS: Processing vision request (image analysis)');
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -355,6 +387,7 @@ const WaktiAIV2 = () => {
           content: messageContent,
           timestamp: new Date(),
           inputType: finalInputType,
+          intent: 'vision',
           attachedFiles: processedAttachedFiles
         };
         
@@ -363,7 +396,7 @@ const WaktiAIV2 = () => {
         
         EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
         
-        const searchResponse = await WaktiAIV2Service.sendMessage(
+        const visionResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,
           language,
@@ -371,28 +404,120 @@ const WaktiAIV2 = () => {
           finalInputType,
           newMessages,
           false,
-          'search',
+          'chat', // Vision uses chat mode in backend
           '',
-          processedAttachedFiles || []
+          processedAttachedFiles || [],
+          abortControllerRef.current?.signal
         );
-        
-        if (searchResponse.error) {
-          throw new Error(searchResponse.error);
+
+        if (abortControllerRef.current?.signal.aborted) {
+          console.log('🚫 Vision request aborted');
+          return;
+        }
+
+        if (visionResponse.error) {
+          throw new Error(visionResponse.error);
         }
         
         const assistantMessage: AIMessage = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
-          content: searchResponse.response || 'Search completed',
+          content: visionResponse.response || 'Vision analysis completed',
           timestamp: new Date(),
-          browsingUsed: searchResponse.browsingUsed,
-          browsingData: searchResponse.browsingData
+          intent: visionResponse.intent || 'vision',
+          confidence: (visionResponse.confidence as 'high' | 'medium' | 'low') || 'high',
+          actionTaken: visionResponse.actionTaken || undefined,
+          browsingUsed: visionResponse.browsingUsed || undefined,
+          browsingData: visionResponse.browsingData || undefined
         };
-        
+
         const finalMessages = [...newMessages, assistantMessage];
         setSessionMessages(finalMessages);
         
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
+        
+        setIsLoading(false);
+        return;
+      }
+
+      // SEARCH MODE
+      if (routingMode === 'search') {
+        console.log('🔍 FRONTEND BOSS: Processing search (streaming)');
+        
+        const tempUserMessage: AIMessage = {
+          id: `user-temp-${Date.now()}`,
+          role: 'user',
+          content: messageContent,
+          timestamp: new Date(),
+          inputType: finalInputType,
+          intent: routingMode,
+          attachedFiles: processedAttachedFiles
+        };
+        
+        const newMessages = [...sessionMessages, tempUserMessage];
+        setSessionMessages(newMessages);
+        
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+
+        // Add streaming placeholder assistant message
+        const assistantId = `assistant-${Date.now()}`;
+        const placeholderAssistant: AIMessage = {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          intent: 'search'
+        };
+        setSessionMessages(prev => [...prev, placeholderAssistant]);
+
+        // Start streaming
+        await WaktiAIV2Service.sendStreamingMessage(
+          messageContent,
+          userProfile?.id,
+          language,
+          workingConversationId,
+          finalInputType,
+          newMessages, // Do NOT include placeholder here
+          false,
+          'search',
+          '',
+          processedAttachedFiles || [],
+          // onToken
+          (token: string) => {
+            setSessionMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: (m.content || '') + token } : m));
+          },
+          // onComplete
+          (meta: any) => {
+            setSessionMessages(prev => {
+              const updated = prev.map(m => m.id === assistantId
+                ? { ...m, intent: 'search', browsingUsed: meta?.browsingUsed, browsingData: meta?.browsingData }
+                : m
+              );
+              EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
+              return updated;
+            });
+          },
+          // onError
+          (errMsg: string) => {
+            setSessionMessages(prev => prev.map(m => m.id === assistantId ? {
+              ...m,
+              content: language === 'ar'
+                ? '❌ حدث خطأ أثناء البث. يرجى المحاولة مرة أخرى.'
+                : '❌ A streaming error occurred. Please try again.'
+            } : m));
+            EnhancedFrontendMemory.saveActiveConversation(
+              [...newMessages, {
+                id: assistantId,
+                role: 'assistant',
+                content: language === 'ar'
+                  ? '❌ حدث خطأ أثناء البث. يرجى المحاولة مرة أخرى.'
+                  : '❌ A streaming error occurred. Please try again.',
+                timestamp: new Date()
+              }],
+              workingConversationId
+            );
+          }
+        );
         
       } else {
         // CHAT MODE OR EXPLICIT TASK COMMANDS (INCLUDING VISION)
@@ -421,6 +546,7 @@ const WaktiAIV2 = () => {
             content: messageContent,
             timestamp: new Date(),
             inputType: finalInputType,
+            intent: routingMode,
             attachedFiles: processedAttachedFiles
           };
 
@@ -428,7 +554,8 @@ const WaktiAIV2 = () => {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
             content: taskData.response || 'Task processing completed',
-            timestamp: new Date()
+            timestamp: new Date(),
+            intent: taskData.intent || 'parse_task'
           };
 
           const finalMessages = [...sessionMessages, tempUserMessage, taskMessage];
@@ -456,6 +583,7 @@ const WaktiAIV2 = () => {
           content: messageContent,
           timestamp: new Date(),
           inputType: finalInputType,
+          intent: routingMode,
           attachedFiles: processedAttachedFiles
         };
         
@@ -553,7 +681,7 @@ const WaktiAIV2 = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [abortControllerRef, sessionMessages, currentConversationId, userProfile, language, isQuotaExceeded, isExtendedQuotaExceeded, isAIQuotaExceeded, fileInputRef]);
 
   const checkQuotas = async () => {
     const quotaExceeded = !canTranslate;

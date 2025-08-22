@@ -43,7 +43,7 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, messageAnalysis } = requestBody;
+    const { prompt, mode, language, messageAnalysis, modelPreference, temperature, contentType } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -70,16 +70,21 @@ serve(async (req) => {
     console.log("🎯 Mode:", mode);
     console.log("🎯 Language:", language);
     console.log("🎯 Prompt length:", prompt.length);
+    console.log("🎯 Requested modelPreference:", modelPreference);
+    console.log("🎯 Requested temperature:", temperature);
 
     const systemPrompt = getSystemPrompt(language);
+    const temp = typeof temperature === 'number' ? Math.max(0, Math.min(1, temperature)) : 0.7;
+    const preferredOpenAIModel = modelPreference === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
+    let temperatureUsed = temp;
     
     let generatedText = "";
     let modelUsed = "";
 
-    // Try OpenAI GPT-4o-mini first if available
+    // Try OpenAI (preferred model) first if available
     if (OPENAI_API_KEY) {
       try {
-        console.log("🎯 Text Generator: Trying OpenAI GPT-4o-mini first");
+        console.log(`🎯 Text Generator: Trying OpenAI ${preferredOpenAIModel} first`);
         const startOpenAI = Date.now();
         const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
@@ -88,12 +93,12 @@ serve(async (req) => {
             "Authorization": `Bearer ${OPENAI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: "gpt-4o-mini",
+            model: preferredOpenAIModel,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: prompt }
             ],
-            temperature: 0.7,
+            temperature: temp,
             max_tokens: 2000,
           }),
         });
@@ -105,7 +110,7 @@ serve(async (req) => {
           const content = openaiResult.choices?.[0]?.message?.content || "";
           if (content) {
             generatedText = content;
-            modelUsed = "gpt-4o-mini";
+            modelUsed = preferredOpenAIModel;
           } else {
             console.warn("🎯 Text Generator: OpenAI returned no content");
           }
@@ -135,7 +140,7 @@ serve(async (req) => {
               { role: "system", content: systemPrompt },
               { role: "user", content: prompt }
             ],
-            temperature: 0.7,
+            temperature: temp,
             max_tokens: 2000,
           }),
         });
@@ -181,7 +186,9 @@ serve(async (req) => {
         generatedText,
         mode,
         language,
-        modelUsed
+        modelUsed,
+        temperatureUsed: temperatureUsed,
+        contentType: contentType || null
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

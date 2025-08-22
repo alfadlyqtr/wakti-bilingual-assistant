@@ -46,6 +46,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [replyTone, setReplyTone] = useState('');
   const [replyLength, setReplyLength] = useState('');
 
+  // New: Register/Dialect controls and Story dialogue density
+  const [register, setRegister] = useState<'auto' | 'formal' | 'neutral' | 'casual' | 'slang'>('auto');
+  const [englishVariant, setEnglishVariant] = useState<'auto' | 'us' | 'uk' | 'ca' | 'au'>('auto');
+  const [arabicVariant, setArabicVariant] = useState<'auto' | 'msa' | 'gcc'>('auto');
+  const [dialogueDensity, setDialogueDensity] = useState<'none' | 'light' | 'rich'>('light');
+  const [emojiLevel, setEmojiLevel] = useState<'auto' | 'none' | 'light' | 'rich'>('auto');
+
   // UPDATED: Content types - added text_message and removed social_post
   const contentTypes = {
     email: language === 'ar' ? 'بريد إلكتروني' : 'Email',
@@ -61,7 +68,15 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     blog_post: language === 'ar' ? 'تدوينة' : 'Blog Post',
     press_release: language === 'ar' ? 'بيان صحفي' : 'Press Release',
     cover_letter: language === 'ar' ? 'خطاب تقديم' : 'Cover Letter',
-    summary: language === 'ar' ? 'ملخص' : 'Summary'
+    summary: language === 'ar' ? 'ملخص' : 'Summary',
+    research_brief: language === 'ar' ? 'موجز بحثي' : 'Research Brief',
+    research_report: language === 'ar' ? 'تقرير بحثي' : 'Research Report',
+    case_study: language === 'ar' ? 'دراسة حالة' : 'Case Study',
+    how_to_guide: language === 'ar' ? 'دليل إرشادي' : 'How-To Guide',
+    policy_note: language === 'ar' ? 'مذكرة سياسات' : 'Policy Note',
+    announcement: language === 'ar' ? 'إعلان' : 'Announcement',
+    product_description: language === 'ar' ? 'وصف منتج' : 'Product Description',
+    essay: language === 'ar' ? 'مقالة' : 'Essay'
   };
 
   // RESTORED: All tones including romantic
@@ -77,13 +92,127 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     confident: language === 'ar' ? 'واثق' : 'Confident',
     humorous: language === 'ar' ? 'طريف' : 'Humorous',
     urgent: language === 'ar' ? 'عاجل' : 'Urgent',
-    apologetic: language === 'ar' ? 'اعتذاري' : 'Apologetic'
+    apologetic: language === 'ar' ? 'اعتذاري' : 'Apologetic',
+    inspirational: language === 'ar' ? 'ملهم' : 'Inspirational',
+    motivational: language === 'ar' ? 'تحفيزي' : 'Motivational',
+    sympathetic: language === 'ar' ? 'متفهم' : 'Sympathetic',
+    sincere: language === 'ar' ? 'صادق' : 'Sincere',
+    informative: language === 'ar' ? 'معلوماتي' : 'Informative',
+    concise: language === 'ar' ? 'موجز' : 'Concise',
+    dramatic: language === 'ar' ? 'درامي' : 'Dramatic',
+    suspenseful: language === 'ar' ? 'مشوق' : 'Suspenseful',
+    authoritative: language === 'ar' ? 'موثوق' : 'Authoritative',
+    educational: language === 'ar' ? 'تعليمي' : 'Educational'
   };
 
   const lengths = {
     short: language === 'ar' ? 'قصير' : 'Short',
     medium: language === 'ar' ? 'متوسط' : 'Medium',
     long: language === 'ar' ? 'طويل' : 'Long'
+  };
+
+  // Per-type profiles: allowed tones, default tone, base temperature, and model preference
+  const typeProfiles: Record<string, {
+    allowedTones: Array<keyof typeof tones>;
+    defaultTone: keyof typeof tones;
+    baseTemperature: number;
+    modelPreference: 'gpt-4o' | 'gpt-4o-mini';
+  }> = {
+    story: { allowedTones: ['empathetic','inspirational','motivational','dramatic','suspenseful','humorous','romantic','friendly','neutral'], defaultTone: 'empathetic', baseTemperature: 0.75, modelPreference: 'gpt-4o' },
+    report: { allowedTones: ['professional','neutral','formal','informative','authoritative'], defaultTone: 'professional', baseTemperature: 0.35, modelPreference: 'gpt-4o' },
+    article: { allowedTones: ['informative','professional','neutral','confident','friendly','educational'], defaultTone: 'informative', baseTemperature: 0.45, modelPreference: 'gpt-4o' },
+    proposal: { allowedTones: ['professional','persuasive','confident'], defaultTone: 'persuasive', baseTemperature: 0.45, modelPreference: 'gpt-4o' },
+    press_release: { allowedTones: ['professional','formal','confident'], defaultTone: 'formal', baseTemperature: 0.4, modelPreference: 'gpt-4o' },
+    cover_letter: { allowedTones: ['professional','confident','empathetic','sincere'], defaultTone: 'professional', baseTemperature: 0.4, modelPreference: 'gpt-4o' },
+    blog_post: { allowedTones: ['informative','friendly','confident','humorous','empathetic','educational'], defaultTone: 'friendly', baseTemperature: 0.55, modelPreference: 'gpt-4o-mini' },
+    email: { allowedTones: ['professional','concise','friendly','apologetic','urgent','persuasive','sincere'], defaultTone: 'professional', baseTemperature: 0.3, modelPreference: 'gpt-4o-mini' },
+    letter: { allowedTones: ['formal','professional','empathetic','sincere'], defaultTone: 'formal', baseTemperature: 0.35, modelPreference: 'gpt-4o-mini' },
+    official_letter: { allowedTones: ['formal','professional','authoritative'], defaultTone: 'formal', baseTemperature: 0.3, modelPreference: 'gpt-4o' },
+    text_message: { allowedTones: ['casual','friendly','urgent','apologetic','humorous','sincere'], defaultTone: 'friendly', baseTemperature: 0.4, modelPreference: 'gpt-4o-mini' },
+    memo: { allowedTones: ['professional','neutral','concise','informative'], defaultTone: 'concise', baseTemperature: 0.3, modelPreference: 'gpt-4o-mini' },
+    summary: { allowedTones: ['neutral','concise','professional','informative'], defaultTone: 'concise', baseTemperature: 0.25, modelPreference: 'gpt-4o-mini' },
+    poem: { allowedTones: ['romantic','empathetic','humorous','neutral','inspirational'], defaultTone: 'romantic', baseTemperature: 0.75, modelPreference: 'gpt-4o' },
+    research_brief: { allowedTones: ['professional','neutral','informative','authoritative'], defaultTone: 'informative', baseTemperature: 0.35, modelPreference: 'gpt-4o' },
+    research_report: { allowedTones: ['professional','neutral','authoritative'], defaultTone: 'professional', baseTemperature: 0.35, modelPreference: 'gpt-4o' },
+    case_study: { allowedTones: ['professional','persuasive','confident'], defaultTone: 'persuasive', baseTemperature: 0.4, modelPreference: 'gpt-4o' },
+    how_to_guide: { allowedTones: ['informative','friendly','professional'], defaultTone: 'informative', baseTemperature: 0.4, modelPreference: 'gpt-4o' },
+    policy_note: { allowedTones: ['professional','neutral','authoritative'], defaultTone: 'professional', baseTemperature: 0.35, modelPreference: 'gpt-4o' },
+    announcement: { allowedTones: ['professional','confident','friendly'], defaultTone: 'confident', baseTemperature: 0.35, modelPreference: 'gpt-4o-mini' },
+    product_description: { allowedTones: ['persuasive','friendly','confident'], defaultTone: 'persuasive', baseTemperature: 0.5, modelPreference: 'gpt-4o-mini' },
+    essay: { allowedTones: ['informative','neutral','confident','empathetic'], defaultTone: 'informative', baseTemperature: 0.45, modelPreference: 'gpt-4o' },
+  };
+
+  const toneRaiseSet = new Set(['humorous','inspirational','motivational','dramatic','suspenseful','romantic','friendly']);
+  const toneLowerSet = new Set(['professional','formal','concise','neutral','authoritative']);
+  const clamp = (n: number, min = 0, max = 1) => Math.max(min, Math.min(max, n));
+
+  const deriveTemperature = (base: number, currentToneKey?: string) => {
+    if (!currentToneKey) return clamp(base);
+    if (toneRaiseSet.has(currentToneKey)) return clamp(base + 0.1);
+    if (toneLowerSet.has(currentToneKey)) return clamp(base - 0.1);
+    return clamp(base);
+  };
+
+  const getAddOns = (ct?: string) => {
+    if (!ct) return '';
+    const ar = language === 'ar';
+    switch (ct) {
+      case 'story': {
+        const density = dialogueDensity;
+        const densityLine = ar
+          ? density === 'none' ? 'بدون حوارات.' : density === 'rich' ? 'أدرج حوارات كثيرة عبر المشاهد.' : 'تضمين سطرين إلى ثلاثة أسطر من الحوار.'
+          : density === 'none' ? 'No dialogue lines.' : density === 'rich' ? 'Include frequent dialogue lines across scenes.' : 'Include two to three short dialogue lines.';
+        return ar
+          ? `\nالإضافات: عنوان للقصة، ثلاث لقطات (بداية/نقطة تحول/خاتمة)، تفاصيل حسية موجزة، سطر خلاصة/عبرة في النهاية. ${densityLine}`
+          : `\nAdd-ons: Include a title, three short scenes (beginning/turning point/resolution), brief sensory details, and a one-line moral at the end. ${densityLine}`;
+      }
+      case 'report': return ar ? `\nالتنسيق: عنوان، عناوين أقسام، نقاط تعداد للنتائج، وخلاصة واضحة.` : `\nFormatting: Title, section headings, bullet points for findings, clear conclusion.`;
+      case 'article': return ar ? `\nالتنسيق: عنوان جذاب، عناوين فرعية، مقدمة موجزة، وفقـرات قصيرة، وخاتمة واضحة.` : `\nFormatting: Catchy title, subheadings, short intro, short paragraphs, clear takeaway.`;
+      case 'press_release': return ar ? `\nالتنسيق: عنوان رئيسي، عنوان فرعي، سطر المكان والتاريخ، فقرة تمهيدية (من/ماذا/متى/أين/لماذا)، اقتباس، نص تعريفي، ومعلومات التواصل.` : `\nFormatting: Headline, subheadline, dateline (CITY, DATE), lead paragraph (5Ws), quote, boilerplate, media contact.`;
+      case 'proposal': return ar ? `\nالبنية: ملخص تنفيذي، الأهداف، النطاق، الفوائد، الجدول الزمني، وخطوة تالية واضحة.` : `\nStructure: Executive summary, objectives, scope, benefits, timeline, and a clear next step.`;
+      case 'cover_letter': return ar ? `\nالبنية: افتتاح جذاب، مواءمة مع الدور، إنجاز واحد أو اثنان، وخاتمة بليغة.` : `\nStructure: Opening hook, role alignment, one or two quantified wins, polished closing.`;
+      case 'blog_post': return ar ? `\nالتنسيق: عنوان متوافق مع محركات البحث، عناوين فرعية، نقاط للتصفح السريع.` : `\nFormatting: SEO-style title, subheadings, skimmable bullets.`;
+      case 'research_brief': return ar ? `\nالبنية: الهدف، المنهجية بإيجاز، النتائج الأساسية كنقاط، الانعكاسات، والخطوات التالية.` : `\nStructure: Objective, brief method, key findings as bullets, implications, next steps.`;
+      case 'research_report': return ar ? `\nالبنية: ملخص، خلفية، منهجية، نتائج، مناقشة، خاتمة.` : `\nStructure: Abstract, background, method, results, discussion, conclusion.`;
+      case 'case_study': return ar ? `\nالبنية: سياق العميل، التحدي، الحل، النتائج مع أرقام، واقتباس.` : `\nStructure: Client context, challenge, solution, results with metrics, and a quote.`;
+      case 'how_to_guide': return ar ? `\nالبنية: المتطلبات المسبقة، خطوات مرقمة، نصائح، ومزالق شائعة.` : `\nStructure: Prerequisites, numbered steps, tips, and common pitfalls.`;
+      case 'policy_note': return ar ? `\nالبنية: ملخص، المشكلة، الخيارات، التوصية، والتداعيات.` : `\nStructure: Summary, problem, options, recommendation, implications.`;
+      case 'announcement': return ar ? `\nالتنسيق: عنوان واضح، الفائدة الأساسية، التفاصيل الأساسية، ودعوة لاتخاذ إجراء.` : `\nFormatting: Clear headline, key benefit, essential details, and a call to action.`;
+      case 'product_description': return ar ? `\nالبنية: المزايا والميزات كنقاط، لمن هذا المنتج، وخطوة الشراء.` : `\nStructure: Benefits and features as bullets, who it’s for, and a clear purchase CTA.`;
+      case 'essay': return ar ? `\nالبنية: مقدمة بحجة رئيسية، فقرات مدعومة، وخاتمة تلخص الفكرة.` : `\nStructure: Introduction with thesis, supported body paragraphs, and a concluding summary.`;
+      default: return '';
+    }
+  };
+
+  const allowedTonesForType = (ct?: string) => {
+    if (!ct || !typeProfiles[ct]) return Object.keys(tones);
+    return typeProfiles[ct].allowedTones as string[];
+  };
+
+  // Emoji helpers
+  const getEffectiveEmojiLevel = (ct?: string): 'none' | 'light' | 'rich' => {
+    if (emojiLevel !== 'auto') return emojiLevel;
+    const lightSet = new Set(['text_message','blog_post','announcement','product_description','story','poem','case_study','how_to_guide','essay']);
+    const noneSet = new Set(['email','official_letter','report','article','proposal','press_release','policy_note','letter','memo','summary','research_brief','research_report']);
+    if (!ct) return 'none';
+    if (lightSet.has(ct)) return 'light';
+    if (noneSet.has(ct)) return 'none';
+    return 'light';
+  };
+
+  const getEmojiLine = (ct?: string): string => {
+    const lvl = getEffectiveEmojiLevel(ct);
+    if (language === 'ar') {
+      if (lvl === 'none') return 'الإيموجي: بدون.';
+      if (lvl === 'light') return 'الإيموجي: أدرج إيموجي واحد أو اثنين عند الملاءمة.';
+      if (lvl === 'rich') return 'الإيموجي: استخدم الإيموجي بكثرة عندما يكون مناسباً.';
+      return '';
+    } else {
+      if (lvl === 'none') return 'Emojis: none.';
+      if (lvl === 'light') return 'Emojis: include one or two relevant emojis when natural.';
+      if (lvl === 'rich') return 'Emojis: use emojis frequently when appropriate.';
+      return '';
+    }
   };
 
   // Check if current content type requires address fields
@@ -102,6 +231,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
     setIsLoading(true);
     setLastError('');
+    setGeneratedText(''); // Clear previous text
+    
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 30000); // 30 second timeout
     
     try {
       let prompt = '';
@@ -124,12 +257,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             `\nLength: ${lengths[length]}`;
         }
 
-        // Formatting guidance for report/article without changing UI
-        if (contentType === 'report' || contentType === 'article') {
-          prompt += language === 'ar'
-            ? `\nالتنسيق: استخدم عنواناً واضحاً، وعند الحاجة عنواناً فرعياً، فقرات قصيرة، نقاط تعداد حيث يلزم، وعناوين/عناوين فرعية للأقسام.`
-            : `\nFormatting: Use a clear Title, optional Subtitle, short paragraphs, bullet points where useful, and section headings/subheadings.`;
-        }
+        // Per-type add-ons
+        prompt += getAddOns(contentType);
 
         // Add address information if provided and relevant
         if (showAddressFields) {
@@ -145,6 +274,25 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               `\nFrom: ${fromAddress}`;
           }
         }
+
+        // Register and dialect
+        if (register !== 'auto') {
+          prompt += language === 'ar' ? `\nالسجل: ${register === 'formal' ? 'رسمي' : register === 'neutral' ? 'محايد' : register === 'casual' ? 'غير رسمي' : 'عامية'}` : `\nRegister: ${register}`;
+        }
+        if (language !== 'ar' && englishVariant !== 'auto') {
+          const map: any = { us: 'US English', uk: 'UK English', ca: 'Canadian English', au: 'Australian English' };
+          prompt += `\nUse ${map[englishVariant]}.`;
+        }
+        if (language === 'ar' && arabicVariant !== 'auto') {
+          const map: any = { msa: 'العربية الفصحى الحديثة', gcc: 'العربية الخليجية' };
+          prompt += `\n${arabicVariant === 'msa' ? 'استخدم' : 'استخدم لهجة'} ${map[arabicVariant]}.`;
+        }
+
+        // Emojis preference
+        const emojiDirective = getEmojiLine(contentType);
+        if (emojiDirective) {
+          prompt += `\n${emojiDirective}`;
+        }
       } else {
         // Build reply prompt with keywords and original message
         prompt = language === 'ar' ? 
@@ -154,7 +302,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         prompt += `\n\n${language === 'ar' ? 'الرسالة الأصلية:' : 'Original Message:'}\n${originalMessage}`;
         
         if (keywords.trim()) {
-          prompt += `\n\n${language === 'ar' ? 'النقاط المهمة للتضمين:' : 'Key Points to Include:'}\n${keywords}`;
+          prompt += `\n\n${language === 'ar' ? 'نقاط للتضمين عند الملاءمة:' : 'Key points to include when natural:'}\n${keywords}`;
         }
         
         if (replyTone) {
@@ -168,6 +316,25 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             `\nالطول: ${lengths[replyLength]}` : 
             `\nLength: ${lengths[replyLength]}`;
         }
+
+        // Register and dialect for replies
+        if (register !== 'auto') {
+          prompt += language === 'ar' ? `\nالسجل: ${register === 'formal' ? 'رسمي' : register === 'neutral' ? 'محايد' : register === 'casual' ? 'غير رسمي' : 'عامية'}` : `\nRegister: ${register}`;
+        }
+        if (language !== 'ar' && englishVariant !== 'auto') {
+          const map: any = { us: 'US English', uk: 'UK English', ca: 'Canadian English', au: 'Australian English' };
+          prompt += `\nUse ${map[englishVariant]}.`;
+        }
+        if (language === 'ar' && arabicVariant !== 'auto') {
+          const map: any = { msa: 'العربية الفصحى الحديثة', gcc: 'العربية الخليجية' };
+          prompt += `\n${arabicVariant === 'msa' ? 'استخدم' : 'استخدم لهجة'} ${map[arabicVariant]}.`;
+        }
+
+        // Emojis preference
+        const emojiDirective = getEmojiLine(contentType);
+        if (emojiDirective) {
+          prompt += `\n${emojiDirective}`;
+        }
       }
 
       console.log('🎯 Text Generator: Using text-generator function for standalone text generation');
@@ -177,9 +344,23 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         body: {
           prompt: prompt,
           mode: activeTab,
-          language: language
-        }
+          language: language,
+          contentType: contentType || null,
+          // Routing params
+          modelPreference: contentType && typeProfiles[contentType] ? typeProfiles[contentType].modelPreference : (activeTab === 'reply' ? 'gpt-4o-mini' : 'gpt-4o-mini'),
+          temperature: (() => {
+            const currentToneKey = (activeTab === 'compose' ? tone : replyTone) || undefined;
+            const base = contentType && typeProfiles[contentType] ? typeProfiles[contentType].baseTemperature : (activeTab === 'reply' ? 0.35 : 0.5);
+            return deriveTemperature(base, currentToneKey);
+          })()
+        },
+        signal: abortController.signal
       });
+
+      if (abortController.signal.aborted) {
+        console.log('🚫 Text generation aborted');
+        return;
+      }
 
       if (error) {
         console.error('Text generation error:', error);
@@ -206,11 +387,18 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       showSuccess(language === 'ar' ? 'تم إنشاء النص بنجاح!' : 'Text generated successfully!');
       
     } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('🚫 Text generation was cancelled');
+        setLastError(language === 'ar' ? 'تم إلغاء العملية' : 'Operation cancelled');
+        return;
+      }
+      
       console.error('Text generation error:', error);
       const errorMessage = error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text');
       setLastError(errorMessage);
       showError(errorMessage);
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
     }
   };
@@ -314,7 +502,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</Label>
-                <Select value={contentType} onValueChange={setContentType}>
+                <Select value={contentType} onValueChange={(val) => {
+                  setContentType(val);
+                  const p = typeProfiles[val];
+                  if (p) setTone(p.defaultTone);
+                }}>
                   <SelectTrigger className="mt-2">
                     <SelectValue placeholder={language === 'ar' ? 'اختر النوع' : 'Select type'} />
                   </SelectTrigger>
@@ -333,8 +525,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     <SelectValue placeholder={language === 'ar' ? 'اختر النبرة' : 'Select tone'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(tones).map(([key, value]) => (
-                      <SelectItem key={key} value={key}>{value}</SelectItem>
+                    {allowedTonesForType(contentType).map((key) => (
+                      <SelectItem key={key} value={key}>{(tones as any)[key]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -354,6 +546,87 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </Select>
               </div>
             </div>
+
+            {/* Style Controls: Register + Variant + Emojis */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</Label>
+                <Select value={register} onValueChange={(v) => setRegister(v as any)}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</SelectItem>
+                    <SelectItem value="formal">{language === 'ar' ? 'رسمي' : 'Formal'}</SelectItem>
+                    <SelectItem value="neutral">{language === 'ar' ? 'محايد' : 'Neutral'}</SelectItem>
+                    <SelectItem value="casual">{language === 'ar' ? 'غير رسمي' : 'Casual'}</SelectItem>
+                    <SelectItem value="slang">{language === 'ar' ? 'عامية' : 'Slang'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'النوع اللغوي' : 'Language Variant'}</Label>
+                {language !== 'ar' ? (
+                  <Select value={englishVariant} onValueChange={(v) => setEnglishVariant(v as any)}>
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto</SelectItem>
+                      <SelectItem value="us">US English</SelectItem>
+                      <SelectItem value="uk">UK English</SelectItem>
+                      <SelectItem value="ca">Canadian English</SelectItem>
+                      <SelectItem value="au">Australian English</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={arabicVariant} onValueChange={(v) => setArabicVariant(v as any)}>
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder="تلقائي" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">تلقائي</SelectItem>
+                      <SelectItem value="msa">العربية الفصحى الحديثة (MSA)</SelectItem>
+                      <SelectItem value="gcc">العربية الخليجية</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* Emojis inline (Compose) */}
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'الإيموجي' : 'Emojis'}</Label>
+                <Select value={emojiLevel} onValueChange={(v) => setEmojiLevel(v as any)}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</SelectItem>
+                    <SelectItem value="none">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
+                    <SelectItem value="light">{language === 'ar' ? 'خفيف' : 'Light'}</SelectItem>
+                    <SelectItem value="rich">{language === 'ar' ? 'غني' : 'Rich'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Story-only control: Dialogue Density */}
+            {contentType === 'story' && (
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'كثافة الحوارات' : 'Dialogue Density'}</Label>
+                <Select value={dialogueDensity} onValueChange={(v) => setDialogueDensity(v as any)}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
+                    <SelectItem value="light">{language === 'ar' ? 'خفيف' : 'Light'}</SelectItem>
+                    <SelectItem value="rich">{language === 'ar' ? 'غني' : 'Rich'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Address Fields - Only show for relevant content types */}
             {showAddressFields && (
@@ -430,7 +703,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</Label>
                 <Select value={replyTone} onValueChange={setReplyTone}>
@@ -438,8 +711,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     <SelectValue placeholder={language === 'ar' ? 'اختر النبرة' : 'Select tone'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(tones).map(([key, value]) => (
-                      <SelectItem key={key} value={key}>{value}</SelectItem>
+                    {allowedTonesForType(contentType).map((key) => (
+                      <SelectItem key={key} value={key}>{(tones as any)[key]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -458,7 +731,104 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Emojis inline (Reply) */}
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'الإيموجي' : 'Emojis'}</Label>
+                <Select value={emojiLevel} onValueChange={(v) => setEmojiLevel(v as any)}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</SelectItem>
+                    <SelectItem value="none">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
+                    <SelectItem value="light">{language === 'ar' ? 'خفيف' : 'Light'}</SelectItem>
+                    <SelectItem value="rich">{language === 'ar' ? 'غني' : 'Rich'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {/* Style Controls: Register + Variant + Emojis (Reply) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</Label>
+                <Select value={register} onValueChange={(v) => setRegister(v as any)}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</SelectItem>
+                    <SelectItem value="formal">{language === 'ar' ? 'رسمي' : 'Formal'}</SelectItem>
+                    <SelectItem value="neutral">{language === 'ar' ? 'محايد' : 'Neutral'}</SelectItem>
+                    <SelectItem value="casual">{language === 'ar' ? 'غير رسمي' : 'Casual'}</SelectItem>
+                    <SelectItem value="slang">{language === 'ar' ? 'عامية' : 'Slang'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'النوع اللغوي' : 'Language Variant'}</Label>
+                {language !== 'ar' ? (
+                  <Select value={englishVariant} onValueChange={(v) => setEnglishVariant(v as any)}>
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto</SelectItem>
+                      <SelectItem value="us">US English</SelectItem>
+                      <SelectItem value="uk">UK English</SelectItem>
+                      <SelectItem value="ca">Canadian English</SelectItem>
+                      <SelectItem value="au">Australian English</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={arabicVariant} onValueChange={(v) => setArabicVariant(v as any)}>
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder="تلقائي" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">تلقائي</SelectItem>
+                      <SelectItem value="msa">العربية الفصحى الحديثة (MSA)</SelectItem>
+                      <SelectItem value="gcc">العربية الخليجية</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* Emojis inline (Reply) */}
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'الإيموجي' : 'Emojis'}</Label>
+                <Select value={emojiLevel} onValueChange={(v) => setEmojiLevel(v as any)}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</SelectItem>
+                    <SelectItem value="none">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
+                    <SelectItem value="light">{language === 'ar' ? 'خفيف' : 'Light'}</SelectItem>
+                    <SelectItem value="rich">{language === 'ar' ? 'غني' : 'Rich'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Story-only control shown for Reply too (based on chosen content type if any) */}
+            {contentType === 'story' && (
+              <div>
+                <Label className="text-sm font-medium">{language === 'ar' ? 'كثافة الحوارات' : 'Dialogue Density'}</Label>
+                <Select value={dialogueDensity} onValueChange={(v) => setDialogueDensity(v as any)}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
+                    <SelectItem value="light">{language === 'ar' ? 'خفيف' : 'Light'}</SelectItem>
+                    <SelectItem value="rich">{language === 'ar' ? 'غني' : 'Rich'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="generated" className="space-y-4 mt-4">

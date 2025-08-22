@@ -46,6 +46,7 @@ interface AIModelConfig {
   model: string;
   apiKey: string | undefined;
   maxTokens: number;
+  timeout: number;
 }
 
 const models: Record<string, AIModelConfig> = {
@@ -54,40 +55,48 @@ const models: Record<string, AIModelConfig> = {
     endpoint: 'https://api.anthropic.com/v1/messages',
     model: 'claude-3-5-sonnet-20241022',
     apiKey: ANTHROPIC_API_KEY,
-    maxTokens: 4000
+    maxTokens: 4000,
+    timeout: 25000
   },
   gpt4: {
     name: 'gpt4',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     model: 'gpt-4o-mini',
     apiKey: OPENAI_API_KEY,
-    maxTokens: 4000
+    maxTokens: 4000,
+    timeout: 20000
   },
   deepseek: {
     name: 'deepseek',
     endpoint: 'https://api.deepseek.com/chat/completions',
     model: 'deepseek-chat',
     apiKey: DEEPSEEK_API_KEY,
-    maxTokens: 4000
+    maxTokens: 4000,
+    timeout: 30000
   }
 };
 
-// SMART MESSAGE FILTERING FUNCTION
+// Enhanced message filtering with better performance
 function smartFilterMessages(messages: any[]) {
   if (!messages || messages.length === 0) return [];
   
-  return messages.filter((msg, index) => {
-    // Always keep system messages
-    if (msg.role === 'system') return true;
-    
-    // Keep all user and assistant messages - no filtering needed
-    // The last 10 messages rule in the slice(-20) handles recency
-    return true;
-  });
+  // Filter out invalid messages and keep only recent ones
+  return messages
+    .filter((msg, index) => {
+      // Always keep system messages
+      if (msg.role === 'system') return true;
+      
+      // Keep user and assistant messages with valid content
+      return (msg.role === 'user' || msg.role === 'assistant') && 
+             msg.content && 
+             typeof msg.content === 'string' && 
+             msg.content.trim().length > 0;
+    })
+    .slice(-20); // Keep last 20 messages for better context
 }
 
-// TAVILY SEARCH FUNCTION
-async function performSearchWithTavily(query: string, userId: string, language: string = 'en') {
+// Enhanced Tavily search with better error handling
+async function performSearchWithTavily(query: string, userId: string, language: string = 'en', signal?: AbortSignal) {
   console.log('🔍 BACKEND WORKER: Processing search request');
   
   if (!TAVILY_API_KEY) {
@@ -101,6 +110,14 @@ async function performSearchWithTavily(query: string, userId: string, language: 
   }
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
+    // Combine external signal with internal timeout
+    if (signal) {
+      signal.addEventListener('abort', () => controller.abort());
+    }
+
     const searchResponse = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
@@ -116,8 +133,19 @@ async function performSearchWithTavily(query: string, userId: string, language: 
         max_results: 5,
         include_domains: [],
         exclude_domains: []
-      })
+      }),
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
+
+    if (controller.signal.aborted) {
+      return {
+        success: false,
+        error: 'Search request was cancelled',
+        response: language === 'ar' ? 'تم إلغاء البحث' : 'Search was cancelled'
+      };
+    }
 
     if (!searchResponse.ok) {
       throw new Error(`Tavily API error: ${searchResponse.status}`);
@@ -127,9 +155,9 @@ async function performSearchWithTavily(query: string, userId: string, language: 
     
     if (searchData.results && searchData.results.length > 0) {
       const searchResults = searchData.results.map((result: any) => ({
-        title: result.title,
-        url: result.url,
-        content: result.content
+        title: result.title || 'Untitled',
+        url: result.url || '',
+        content: result.content || ''
       }));
 
       return {
@@ -147,6 +175,14 @@ async function performSearchWithTavily(query: string, userId: string, language: 
       };
     }
   } catch (error) {
+    if (error.name === 'AbortError') {
+      return {
+        success: false,
+        error: 'Search request was cancelled',
+        response: language === 'ar' ? 'تم إلغاء البحث' : 'Search was cancelled'
+      };
+    }
+    
     console.error('🔍 SEARCH ERROR:', error);
     return {
       success: false,
@@ -156,6 +192,51 @@ async function performSearchWithTavily(query: string, userId: string, language: 
         : 'I apologize, there was an error during search. I can help you with other questions.'
     };
   }
+}
+
+// Enhanced fetch with timeout and retry logic
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number, retries: number = 1): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok || attempt === retries) {
+        return response;
+      }
+      
+      // Retry on server errors (5xx) but not client errors (4xx)
+      if (response.status >= 500 && attempt < retries) {
+        console.log(`🔄 Retrying request (attempt ${attempt + 2}/${retries + 1})`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeoutMs}ms`);
+      }
+      
+      if (attempt === retries) {
+        throw error;
+      }
+      
+      console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${retries + 1}):`, error.message);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  
+  throw new Error('Max retries exceeded');
 }
 
 // Main request handler with intelligent fallback chain
@@ -178,7 +259,8 @@ serve(async (req) => {
       attachedFiles = [],
       activeTrigger = 'general',
       recentMessages = [],
-      personalTouch = null
+      personalTouch = null,
+      userId
     } = requestData;
 
     // Validate required fields
@@ -188,6 +270,124 @@ serve(async (req) => {
 
     // Log API key availability for debugging
     console.log(`🔑 API Keys available: Claude=${!!ANTHROPIC_API_KEY}, GPT4=${!!OPENAI_API_KEY}, DeepSeek=${!!DEEPSEEK_API_KEY}`);
+
+    // Global Search pre-processing before model selection
+    let browsingUsed = false;
+    let browsingData: any = null;
+    let effectiveMessage: string = message;
+    let effectiveTrigger: string = activeTrigger;
+
+    // Handle image generation requests FIRST (before search processing)
+    if (activeTrigger === 'image' || message.toLowerCase().includes('generate image') || message.toLowerCase().includes('أنشئ صورة')) {
+      console.log('🎨 BACKEND WORKER: Image generation request detected');
+      
+      if (!RUNWARE_API_KEY) {
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? 'أعتذر، خدمة إنشاء الصور غير متاحة حالياً.'
+            : 'I apologize, image generation service is not available.',
+          error: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }
+        });
+      }
+
+      try {
+        // Extract imageMode from request body
+        const imageMode = requestData.imageMode || 'text2image';
+        console.log('🎨 IMAGE MODE:', imageMode);
+
+        // Prepare options based on image mode
+        let imageOptions: any = {};
+        let seedImage: string | undefined = undefined;
+        let promptForImage: string = message;
+
+        // Handle different image modes
+        if (imageMode === 'image2image' && attachedFiles && attachedFiles.length > 0) {
+          const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
+          if (imageFile && imageFile.data) {
+            seedImage = `data:${imageFile.type};base64,${imageFile.data}`;
+            imageOptions.seedImage = seedImage;
+          }
+        }
+
+        if (imageMode === 'background-removal') {
+          imageOptions.outputFormat = 'PNG'; // PNG supports transparency
+          if (attachedFiles && attachedFiles.length > 0) {
+            const imageFile = attachedFiles.find(file => file.type?.startsWith('image/'));
+            if (imageFile && imageFile.data) {
+              seedImage = `data:${imageFile.type};base64,${imageFile.data}`;
+              imageOptions.seedImage = seedImage;
+              // For background removal, we'll use a special prompt
+              promptForImage = promptForImage || 'Remove the background from this image, make it transparent';
+            }
+          }
+        }
+
+        const imageResult = await generateImageWithRunware(
+          promptForImage,
+          userId,
+          language,
+          imageOptions,
+          req.signal
+        );
+
+        return new Response(JSON.stringify({
+          ...imageResult,
+          imageMode: imageMode
+        }), {
+          status: 200,
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
+          }
+        });
+      } catch (imageError) {
+        console.error('🎨 IMAGE GENERATION ERROR:', imageError);
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? 'أعتذر، حدث خطأ في إنشاء الصورة.'
+            : 'I apologize, there was an error generating the image.',
+          error: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }
+        });
+      }
+    }
+
+    if (activeTrigger === 'search') {
+      const searchResult = await performSearchWithTavily(message, 'user', language);
+      const baseMeta = { query: message, timestamp: new Date().toISOString() };
+
+      if (!searchResult.success) {
+        const early = {
+          response: searchResult.response,
+          error: true,
+          browsingUsed: true,
+          browsingData: { ...baseMeta, success: false, error: searchResult.error, results: [], answer: null }
+        };
+        return new Response(JSON.stringify(early), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }
+        });
+      }
+
+      browsingUsed = true;
+      browsingData = { ...baseMeta, success: true, answer: searchResult.answer || null, results: searchResult.results };
+      const sourcesList = searchResult.results
+        .map((r: any, i: number) => `${i + 1}. ${r.title} - ${r.url}\nSummary: ${r.content}`)
+        .join('\n\n');
+
+      effectiveMessage = (language === 'ar'
+        ? `بناءً على نتائج البحث أدناه، قدّم إجابة موجزة ودقيقة مع الاستشهاد بالمصادر باستخدام [رقم].\n\nنتائج البحث:\n${sourcesList}\n\nسؤال المستخدم: "${message}"\n\nصيغة الإخراج: إجابة موجزة تتضمن إشارات [1] و[2] إن لزم، ثم قسم "المصادر" به الروابط.`
+        : `Based on the web search results below, provide a concise, accurate answer with citations using [number].\n\nSearch results:\n${sourcesList}\n\nUser question: "${message}"\n\nOutput: A concise answer with [1], [2] style citations and a Sources section listing the URLs.`);
+
+      // Avoid model-level search branches; treat as general after augmentation
+      effectiveTrigger = 'general';
+    }
 
     // Try models in order: Claude → GPT-4 → DeepSeek
     const modelOrder = ['claude', 'gpt4', 'deepseek'];
@@ -211,18 +411,18 @@ serve(async (req) => {
         let result;
         if (modelName === 'claude') {
           result = await callClaude35API(
-            message, conversationId, language, attachedFiles, 
-            activeTrigger, recentMessages, personalTouch
+            effectiveMessage, conversationId, language, attachedFiles, 
+            effectiveTrigger, recentMessages, personalTouch, browsingUsed
           );
         } else if (modelName === 'gpt4') {
           result = await callGPT4API(
-            message, conversationId, language, attachedFiles, 
-            activeTrigger, recentMessages, personalTouch
+            effectiveMessage, conversationId, language, attachedFiles, 
+            effectiveTrigger, recentMessages, personalTouch
           );
         } else {
           result = await callDeepSeekAPI(
-            message, conversationId, language, attachedFiles, 
-            activeTrigger, recentMessages, personalTouch
+            effectiveMessage, conversationId, language, attachedFiles, 
+            effectiveTrigger, recentMessages, personalTouch
           );
         }
         
@@ -246,6 +446,10 @@ serve(async (req) => {
           fallbackUsed,
           responseTime
         };
+
+        // Attach browsing metadata (for Search mode)
+        result.browsingUsed = browsingUsed;
+        result.browsingData = browsingUsed ? browsingData : null;
         
         return new Response(JSON.stringify(result), {
           status: 200,
@@ -280,7 +484,10 @@ serve(async (req) => {
     
     return new Response(JSON.stringify({
       response: errorMessage,
-      error: true
+      error: true,
+      // Include browsing metadata even when all models fail
+      browsingUsed: browsingUsed,
+      browsingData: browsingUsed ? browsingData : null
     }), {
       status: 503,
       headers: { 
@@ -312,7 +519,7 @@ serve(async (req) => {
   }
 });
 
-async function callClaude35API(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null) {
+async function callClaude35API(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null, skipInternalSearch = false) {
   try {
     if (!ANTHROPIC_API_KEY) {
       throw new Error('Anthropic API key not configured');
@@ -329,7 +536,7 @@ async function callClaude35API(message, conversationId, language = 'en', attache
     }
 
     // Handle search requests
-    if (activeTrigger === 'search' || message.toLowerCase().includes('search for') || message.toLowerCase().includes('بحث عن')) {
+    if (activeTrigger === 'search' && !skipInternalSearch) {
       console.log('🔍 BACKEND WORKER: Search request detected');
       const searchResult = await performSearchWithTavily(message, 'user', language);
       
@@ -364,7 +571,7 @@ async function callClaude35API(message, conversationId, language = 'en', attache
       }
 
       try {
-        const imageResult = await generateImageWithRunware(message, language);
+        const imageResult = await generateImageWithRunware(message, undefined, language);
         return imageResult;
       } catch (imageError) {
         console.error('🎨 IMAGE GENERATION ERROR:', imageError);
@@ -478,7 +685,7 @@ ${personalizationContext}`;
     }
 
     // Make API call to Claude
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
@@ -492,7 +699,8 @@ ${personalizationContext}`;
         temperature: 0.7,
         system: systemPrompt,
         messages: messages
-      })
+      }),
+      timeoutMs: models.claude.timeout
     });
 
     if (!response.ok) {
@@ -597,7 +805,7 @@ ${personalizationContext}`;
     });
 
     // Make API call to OpenAI
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -608,7 +816,8 @@ ${personalizationContext}`;
         messages: messages,
         max_tokens: 4000,
         temperature: 0.7
-      })
+      }),
+      timeoutMs: models.gpt4.timeout
     });
 
     if (!response.ok) {
@@ -713,7 +922,7 @@ ${personalizationContext}`;
     });
 
     // Make API call to DeepSeek
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
+    const response = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
@@ -724,7 +933,8 @@ ${personalizationContext}`;
         messages: messages,
         max_tokens: 4000,
         temperature: 0.7
-      })
+      }),
+      timeoutMs: models.deepseek.timeout
     });
 
     if (!response.ok) {

@@ -123,7 +123,7 @@ export function ChatMessages({
           <div className="rounded-lg px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border relative">
             {/* Mode Badge */}
             <div className="flex items-center gap-2 mb-2">
-              <Badge variant="secondary" className="text-xs px-2 py-0.5 font-medium">
+              <Badge variant="secondary" className="px-2 py-1 text-xs font-medium leading-none whitespace-nowrap align-middle">
                 💬 Welcome
               </Badge>
             </div>
@@ -175,66 +175,55 @@ export function ChatMessages({
 
   // FIXED: Determine badge based on message content and activeTrigger
   const getMessageBadge = (message: AIMessage, currentActiveTrigger: string) => {
-    // For user messages, use the current active trigger or detect from content
+    // Prefer saved intent for user messages to keep badge stable
     if (message.role === 'user') {
-      // Check for explicit image generation keywords
+      if (message.intent) {
+        switch (message.intent) {
+          case 'search': return '🔍 Search';
+          case 'image': return '🎨 Image';
+          case 'vision': return '👁️ Vision';
+          case 'parse_task': return '🎯 Task';
+          default: return '💬 Chat';
+        }
+      }
+
+      // Fallback to content keyword detection or currentActiveTrigger
       const content = message.content.toLowerCase();
       if (content.includes('generate image') || content.includes('create image') || content.includes('make image') || content.includes('draw') || content.includes('paint')) {
-        return '🎨 Image';
+        return '� Image';
       }
-      
-      // Check for video generation keywords - Feature temporarily disabled
-      // if (content.includes('generate video') || content.includes('create video') || content.includes('make video')) {
-      //   return '🎬 Video';
-      // }
-      
-      // Check for explicit search keywords
       if (content.includes('search for') || content.includes('find information') || content.includes('look up') || content.includes('what is')) {
         return '🔍 Search';
       }
-      
-      // Check for vision (if has attached files)
       if (message.attachedFiles && message.attachedFiles.length > 0) {
         return '👁️ Vision';
       }
-      
-      // Check for voice input
       if (message.inputType === 'voice') {
         return '🎤 Voice';
       }
-      
-      // Use current active trigger as fallback
       if (currentActiveTrigger === 'image') return '🎨 Image';
       if (currentActiveTrigger === 'search') return '🔍 Search';
       if (currentActiveTrigger === 'vision') return '👁️ Vision';
-      // if (currentActiveTrigger === 'video') return '🎬 Video'; // Video temporarily disabled
-      
       return '💬 Chat';
     }
-    
+
     // For assistant messages, use the saved intent or detect from content
     if (message.intent === 'vision') return '👁️ Vision';
     if (message.intent === 'search') return '🔍 Search';
     if (message.intent === 'image') return '🎨 Image';
-    // if (message.intent === 'video') return '🎬 Video'; // Video temporarily disabled
     if (message.intent === 'parse_task') return '🎯 Task';
-    
-    // Detect from content for assistant messages
+
     const content = message.content.toLowerCase();
     if (content.includes('image generated') || content.includes('here is the image') || message.imageUrl) {
       return '🎨 Image';
     }
-    // Video generation temporarily disabled
-    // if (content.includes('video generat') || content.includes('🎬') || content.includes('<video')) {
-    //   return '🎬 Video';
-    // }
     if (content.includes('search results') || content.includes('found the following')) {
       return '🔍 Search';
     }
     if (content.includes('analyzing the image') || content.includes('i can see')) {
       return '👁️ Vision';
     }
-    
+
     return '💬 Chat';
   };
 
@@ -247,7 +236,7 @@ export function ChatMessages({
       return (
         <div 
           dangerouslySetInnerHTML={{ __html: content }}
-          className="prose prose-sm max-w-none [&_video]:rounded-lg [&_video]:shadow-md [&_video]:max-w-full [&_video]:h-auto"
+          className="prose prose-sm max-w-none break-words [&_video]:rounded-lg [&_video]:shadow-md [&_video]:max-w-full [&_video]:h-auto"
         />
       );
     }
@@ -265,7 +254,7 @@ export function ChatMessages({
           <div className="space-y-3">
             {/* Show text content if any (excluding the URL) */}
             {content && !content.includes(imageUrl) && (
-              <div className="whitespace-pre-wrap">
+              <div className="whitespace-pre-wrap break-words">
                 {content.replace(imageUrl, '').trim()}
               </div>
             )}
@@ -303,10 +292,25 @@ export function ChatMessages({
     
     // Regular text content with markdown-style formatting
     return (
-      <div className="whitespace-pre-wrap">
+      <div className="whitespace-pre-wrap break-words">
         {content}
       </div>
     );
+  };
+
+  const getAssistantBubbleClasses = (message: AIMessage) => {
+    switch (message.intent) {
+      case 'search':
+        return 'border-green-400';
+      case 'image':
+        return 'border-orange-400';
+      case 'vision':
+        return 'border-blue-300'; // keep vision as default
+      case 'parse_task':
+        return 'border-blue-300';
+      default:
+        return 'border-blue-300';
+    }
   };
 
   return (
@@ -331,16 +335,16 @@ export function ChatMessages({
                   <div className={`rounded-lg px-4 py-3 relative ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border'
+                      : `bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border ${getAssistantBubbleClasses(message)}`
                   }`}>
                     {/* FIXED: Mode Badge with proper logic */}
                     <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="secondary" className="text-xs px-2 py-0.5 font-medium">
+                      <Badge variant="secondary" className="px-2 py-1 text-xs font-medium leading-none whitespace-nowrap align-middle">
                         {getMessageBadge(message, activeTrigger)}
                       </Badge>
                     </div>
                     
-                    <div className="text-sm leading-relaxed">
+                    <div className={`text-sm leading-relaxed break-words ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
                       {renderMessageContent(message)}
                     </div>
                     
@@ -406,7 +410,7 @@ export function ChatMessages({
            ))}
           
           {/* Loading Indicator with proper TypingIndicator */}
-          {isLoading && <TypingIndicator />}
+          {isLoading && activeTrigger !== 'search' && <TypingIndicator />}
           
           {/* ENHANCED TASK CONFIRMATION DISPLAY WITH DEBUG LOGGING */}
           {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,8 +29,8 @@ export function QuickActionsPanel({
   const [showVoiceClone, setShowVoiceClone] = useState(false);
   const [showGameMode, setShowGameMode] = useState(false);
   
-  
-  const triggerModes = [{
+  // Memoized trigger modes for performance
+  const triggerModes = useMemo(() => [{
     id: 'chat',
     label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
     icon: <MessageSquare className="h-4 w-4" />,
@@ -54,9 +54,10 @@ export function QuickActionsPanel({
     hoverColor: 'hover:bg-orange-500/20',
     borderColor: 'border-orange-500',
     description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
-  }];
+  }], [language]);
   
-  const quickActions = [{
+  // Memoized quick actions for performance
+  const quickActions = useMemo(() => [{
     icon: <PenTool className="h-5 w-5" />,
     label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
     description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
@@ -77,9 +78,9 @@ export function QuickActionsPanel({
     action: () => setShowGameMode(true),
     color: 'bg-red-500',
     disabled: false
-  }];
+  }], [language]);
   
-  const handleTriggerSelect = (triggerId: string) => {
+  const handleTriggerSelect = useCallback((triggerId: string) => {
     onTriggerChange(triggerId);
     console.log('✨ Quick Actions: Trigger changed to:', triggerId);
     // Auto-close drawer after mode selection
@@ -88,12 +89,24 @@ export function QuickActionsPanel({
         onClose();
       }, 300);
     }
-  };
+  }, [onTriggerChange, onClose]);
 
-  const handleToolAction = (action: () => void) => {
+  const handleToolAction = useCallback((action: () => void) => {
     action();
     console.log('🔧 Quick Actions: Tool opened and drawer stays open');
-  };
+  }, []);
+
+  const handleTextGenClose = useCallback(() => {
+    setShowTextGen(false);
+  }, []);
+
+  const handleVoiceCloneClose = useCallback((open: boolean) => {
+    setShowVoiceClone(open);
+  }, []);
+
+  const handleGameModeClose = useCallback((open: boolean) => {
+    setShowGameMode(open);
+  }, []);
   
   return (
     <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
@@ -102,7 +115,7 @@ export function QuickActionsPanel({
           {language === 'ar' ? 'أدوات سريعة' : 'Quick Tools'}
         </h2>
         
-        <div className="space-y-3">
+        <div className="space-y-3" role="radiogroup" aria-label={language === 'ar' ? 'أوضاع المحادثة' : 'Chat modes'}>
           {triggerModes.map((mode, index) => {
             const isActive = activeTrigger === mode.id;
             return (
@@ -111,12 +124,13 @@ export function QuickActionsPanel({
                 autoFocus={index === 0}
                 onClick={() => handleTriggerSelect(mode.id)}
                 variant="ghost"
-                className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 ${
+                role="radio"
+                aria-checked={isActive}
+                className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                   isActive 
-                    ? `${mode.activeColor} border-2 ${mode.borderColor} text-white shadow-lg` 
-                    : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border-2 border-transparent text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`
+                    ? `${mode.activeColor} border ${mode.borderColor} text-white shadow-lg` 
+                    : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border ${mode.borderColor} text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`
                 }`}
-                aria-pressed={isActive}
                 aria-describedby={`${mode.id}-desc`}
               >
                 <div 
@@ -153,12 +167,21 @@ export function QuickActionsPanel({
           {quickActions.map((action, index) => (
             <Card 
               key={index} 
-              className={`transition-all duration-300 bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 ${
+              className={`transition-all duration-300 bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 ${
                 action.disabled 
                   ? 'opacity-60 cursor-not-allowed' 
                   : 'cursor-pointer hover:shadow-md hover:bg-white/30 dark:hover:bg-black/30 hover:border-white/40 dark:hover:border-white/30'
               }`} 
               onClick={action.disabled ? undefined : () => handleToolAction(action.action)}
+              role="button"
+              tabIndex={action.disabled ? -1 : 0}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && !action.disabled) {
+                  e.preventDefault();
+                  handleToolAction(action.action);
+                }
+              }}
+              aria-label={`${action.label}: ${action.description}`}
             >
               <CardContent className="p-4">
                 <div className="flex items-center space-x-3">
@@ -181,16 +204,15 @@ export function QuickActionsPanel({
       {/* Text Generator Popup */}
       <TextGeneratorPopup 
         isOpen={showTextGen} 
-        onClose={() => setShowTextGen(false)} 
+        onClose={handleTextGenClose} 
         onTextGenerated={onTextGenerated} 
       />
 
-
       {/* Voice Clone Popup */}
-      <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
+      <VoiceClonePopup open={showVoiceClone} onOpenChange={handleVoiceCloneClose} />
 
       {/* Game Mode Modal */}
-      <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />
+      <GameModeModal open={showGameMode} onOpenChange={handleGameModeClose} />
     </div>
   );
 }

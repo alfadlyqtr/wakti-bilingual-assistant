@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -7,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-const RUNWARE_API_KEY = "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
+const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,6 +21,16 @@ serve(async (req) => {
         JSON.stringify({ error: "Prompt is required" }),
         { 
           status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
+    }
+
+    if (!RUNWARE_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "Runware API key not configured" }),
+        {
+          status: 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         }
       );
@@ -45,13 +54,14 @@ serve(async (req) => {
           taskUUID: crypto.randomUUID(),
           positivePrompt: prompt,
           model: "runware:100@1",
-          width: 512,
-          height: 512,
+          width: 1024,
+          height: 1024,
           numberResults: 1,
           outputFormat: "WEBP",
-          CFGScale: 1,
+          includeCost: true,
+          CFGScale: 5.5,
           scheduler: "FlowMatchEulerDiscreteScheduler",
-          steps: 4,
+          steps: 28,
         },
       ]),
     });
@@ -88,7 +98,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: "Image generation failed", 
-        details: error.message 
+        details: (error as any).message 
       }),
       { 
         status: 500, 
