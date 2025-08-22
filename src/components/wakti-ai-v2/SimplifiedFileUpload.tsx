@@ -52,13 +52,14 @@ export function SimplifiedFileUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Event listener for wakti-file-selected event from PlusMenu
+  // Event listener for wakti-file-selected event from PlusMenu or Image seed upload
   useEffect(() => {
-    const handleWaktiFileSelected = (event: CustomEvent) => {
-      const { files } = event.detail;
-      if (files && files.length > 0) {
-        console.log('📁 SimplifiedFileUpload: Received files from PlusMenu:', files.length);
-        handleFileSelect(files);
+    const handleWaktiFileSelected = (evt: Event) => {
+      const event = evt as CustomEvent<{ files: FileList | null; suppressAutoSwitch?: boolean }>;
+      const { files, suppressAutoSwitch } = event.detail || { files: null, suppressAutoSwitch: false };
+      if (files && (files as FileList).length > 0) {
+        console.log('📁 SimplifiedFileUpload: Received files from PlusMenu/Seed:', (files as FileList).length, 'suppressAutoSwitch:', !!suppressAutoSwitch);
+        handleFileSelect(files, { suppressAutoSwitch });
       }
     };
 
@@ -82,7 +83,7 @@ export function SimplifiedFileUpload({
     });
   };
 
-  const handleFileSelect = async (files: FileList | null) => {
+  const handleFileSelect = async (files: FileList | null, options?: { suppressAutoSwitch?: boolean }) => {
     if (!files || files.length === 0) return;
     
     console.log('🔄 TRUE CLAUDE WAY: Processing', files.length, 'files as pure base64');
@@ -140,8 +141,8 @@ export function SimplifiedFileUpload({
       console.log('✅ TRUE CLAUDE WAY SUCCESS: Successfully processed', validFiles.length, 'files as pure base64');
       onFilesUploaded(validFiles);
       
-      // Auto-switch to vision mode when images are uploaded
-      if (onAutoSwitchMode) {
+      // Auto-switch to vision mode when images are uploaded, unless suppressed (e.g., Image mode seed upload)
+      if (onAutoSwitchMode && !options?.suppressAutoSwitch) {
         console.log('🔄 Auto-switching to vision mode');
         onAutoSwitchMode('vision');
       }

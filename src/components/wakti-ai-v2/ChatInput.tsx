@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown } from 'lucide-react';
+import { Send, Loader2, ChevronDown, Plus, ImagePlus } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PlusMenu } from './PlusMenu';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
 import { SimplifiedFileUpload } from './SimplifiedFileUpload';
+import type { SimplifiedUploadedFile } from './SimplifiedFileUpload';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
 
 // Returns border/outline classes per mode for main container & textarea
@@ -66,6 +67,7 @@ export function ChatInput({
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
   const [imageMode, setImageMode] = useState<ImageMode>('text2image');
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  const seedFileInputRef = useRef<HTMLInputElement>(null);
 
   // Use simplified file upload hook
   const {
@@ -155,6 +157,82 @@ export function ChatInput({
     return language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...';
   };
 
+  // Dynamic helper example per imageMode (shown only in Image mode)
+  const getImageModeExample = () => {
+    if (language === 'ar') {
+      switch (imageMode) {
+        case 'text2image':
+          return 'مثال: مقهى دافئ عند غروب الشمس، سينمائي، بدقة 4K، إضاءة ناعمة';
+        case 'image2image':
+          return 'مثال: حوّل الصورة المرفوعة إلى أسلوب الألوان المائية بتدرجات باستيل';
+        case 'background-removal':
+          return 'مثال: إزالة الخلفية مع الحفاظ على العنصر فقط بصيغة PNG شفافة';
+        default:
+          return '';
+      }
+    } else {
+      switch (imageMode) {
+        case 'text2image':
+          return 'Example: A cozy cafe scene at golden hour, cinematic, 4k, soft lighting';
+        case 'image2image':
+          return 'Example: Style the uploaded image as watercolor with pastel tones';
+        case 'background-removal':
+          return 'Example: Remove the background and keep the subject only with a transparent PNG';
+        default:
+          return '';
+      }
+    }
+  };
+
+  
+
+  // Seed upload (Image mode): trigger and handle locally (no global event)
+  const triggerSeedUpload = () => {
+    if (!isLoading && !isUploading) seedFileInputRef.current?.click();
+  };
+  // Local base64 converter
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (err) => reject(err);
+    });
+  };
+  const handleSeedFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const validFiles: SimplifiedUploadedFile[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        // Validate image type and size (5MB limit)
+        if (!file.type.startsWith('image/')) continue;
+        if (file.size > 5 * 1024 * 1024) continue;
+        try {
+          const base64DataUrl = await fileToBase64(file);
+          validFiles.push({
+            id: `${Date.now()}-${i}`,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            url: base64DataUrl,
+            preview: base64DataUrl,
+            base64: base64DataUrl,
+            imageType: { id: 'general', name: 'General' }
+          });
+        } catch (err) {
+          console.error('Seed image conversion failed:', err);
+        }
+      }
+      if (validFiles.length > 0) {
+        // Directly add to local uploadedFiles without auto-switching
+        handleFilesUploaded(validFiles);
+      }
+    }
+    // reset input so same file can be chosen again
+    e.target.value = '';
+  };
+
   return (
     <div className="w-full space-y-4">
       {/* Simplified File Upload Component - Only show for non-video modes */}
@@ -207,7 +285,7 @@ export function ChatInput({
                 <PlusMenu
                   onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
                   onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
-                  isLoading={isLoading || isUploading}
+                  isLoading={isLoading || isUploading || activeTrigger === 'image' || activeTrigger === 'search'}
                 />
               )}
               
@@ -246,31 +324,50 @@ export function ChatInput({
                 </span>
               </button>
               
-              <ActiveModeIndicator activeTrigger={activeTrigger} />
+              {activeTrigger !== 'image' ? (
+                <ActiveModeIndicator activeTrigger={activeTrigger} />
+              ) : (
+                <div className="relative">
+                  {/* Hidden input for seed upload */}
+                  <input
+                    ref={seedFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleSeedFilesChange}
+                    className="hidden"
+                  />
 
-              {activeTrigger === 'image' && (
-                <div className="ml-auto relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsModeMenuOpen(v => !v)}
-                    disabled={isLoading || isUploading}
-                    className="h-9 px-3 rounded-2xl flex items-center gap-2 bg-orange-500/90 text-white hover:bg-orange-600 transition-all border-0"
-                    aria-haspopup="menu"
-                    aria-expanded={isModeMenuOpen}
-                    aria-label={language === 'ar' ? 'وضع الصورة' : 'Image Mode'}
-                  >
-                    <span className="text-xs font-medium">
-                      {imageMode === 'text2image' && (language === 'ar' ? 'نص → صورة' : 'Text → Image')}
-                      {imageMode === 'image2image' && (language === 'ar' ? 'صورة → صورة' : 'Image → Image')}
-                      {imageMode === 'background-removal' && (language === 'ar' ? 'إزالة الخلفية' : 'Background Removal')}
-                    </span>
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
+                  {/* Compact Image Mode badge as dropdown with inline + (mobile-sized) */}
+                  <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50">
+                    <button
+                      type="button"
+                      onClick={() => setIsModeMenuOpen(v => !v)}
+                      disabled={isLoading || isUploading}
+                      className="inline-flex items-center gap-1 outline-none"
+                      aria-haspopup="menu"
+                      aria-expanded={isModeMenuOpen}
+                      aria-label={language === 'ar' ? 'وضع الصورة' : 'Image Mode'}
+                    >
+                      <ImagePlus className="h-3 w-3" />
+                      <span>{language === 'ar' ? 'وضع الصورة' : 'Image Mode'}</span>
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); triggerSeedUpload(); }}
+                      disabled={isLoading || isUploading}
+                      className="ml-1 h-5 w-5 flex items-center justify-center rounded-full bg-orange-200/60 text-orange-700 hover:bg-orange-300/60"
+                      aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
+                      title={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
 
                   {isModeMenuOpen && (
                     <div
                       role="menu"
-                      className="absolute right-0 mt-2 w-48 rounded-xl border border-white/20 bg-white/95 dark:bg-gray-900/95 shadow-2xl overflow-hidden z-20"
+                      className="absolute left-0 mt-2 w-48 rounded-xl border border-white/20 bg-white/95 dark:bg-gray-900/95 shadow-2xl overflow-hidden z-20"
                     >
                       <button
                         role="menuitem"
@@ -298,6 +395,13 @@ export function ChatInput({
                 </div>
               )}
             </div>
+
+            {/* IMAGE MODE HELPER EXAMPLE */}
+            {activeTrigger === 'image' && (
+              <div className="px-3 pt-1 pb-2 text-xs text-foreground/70">
+                {getImageModeExample()}
+              </div>
+            )}
 
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION */}
             {uploadedFiles.length > 0 && message === '' && (
