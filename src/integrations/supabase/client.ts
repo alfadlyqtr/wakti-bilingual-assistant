@@ -3,11 +3,11 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
 
 // Create a single supabase client for interacting with your database
-// Hardcoded values since VITE_* env vars aren't available in preview runtime
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+// Hardcoded values for your Supabase project
+const supabaseUrl = 'https://hxauxozopvpzpdygoqwf.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
 
-// Use the values directly
+// Use the hardcoded values directly
 const effectiveUrl = supabaseUrl;
 const effectiveAnon = supabaseAnonKey;
 
