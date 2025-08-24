@@ -7,6 +7,19 @@ const corsHeaders = {
 };
 
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
+// Env-driven model and quality parameters
+const RW_PREFERRED_MODEL = Deno.env.get('RUNWARE_PREFERRED_MODEL') || 'runware:97@2';
+const RW_FALLBACK_MODEL = Deno.env.get('RUNWARE_FALLBACK_MODEL') || 'runware:100@1';
+const RW_STEPS = (() => {
+  const v = parseInt(Deno.env.get('RUNWARE_STEPS') ?? '28', 10);
+  if (Number.isNaN(v)) return 28;
+  return Math.min(60, Math.max(4, v));
+})();
+const RW_CFG = (() => {
+  const v = parseFloat(Deno.env.get('RUNWARE_CFG') ?? '5.5');
+  if (Number.isNaN(v)) return 5.5;
+  return Math.min(20, Math.max(1, v));
+})();
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -37,60 +50,74 @@ serve(async (req) => {
     }
 
     console.log("Generating image with Runware API for prompt:", prompt);
-
-    // Use Runware API for image generation
-    const response = await fetch("https://api.runware.ai/v1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    // Build payload generator
+    const taskUUID = crypto.randomUUID();
+    const buildPayload = (model: string) => ([
+      {
+        taskType: "authentication",
+        apiKey: RUNWARE_API_KEY,
       },
-      body: JSON.stringify([
-        {
-          taskType: "authentication",
-          apiKey: RUNWARE_API_KEY,
-        },
-        {
-          taskType: "imageInference",
-          taskUUID: crypto.randomUUID(),
-          positivePrompt: prompt,
-          model: "runware:100@1",
-          width: 1024,
-          height: 1024,
-          numberResults: 1,
-          outputFormat: "WEBP",
-          includeCost: true,
-          CFGScale: 5.5,
-          scheduler: "FlowMatchEulerDiscreteScheduler",
-          steps: 28,
-        },
-      ]),
+      {
+        taskType: "imageInference",
+        taskUUID,
+        positivePrompt: prompt,
+        model,
+        width: 1024,
+        height: 1024,
+        numberResults: 1,
+        outputFormat: "WEBP",
+        includeCost: true,
+        CFGScale: RW_CFG,
+        scheduler: "FlowMatchEulerDiscreteScheduler",
+        steps: RW_STEPS,
+      },
+    ]);
+
+    // Try preferred then fallback
+    let modelUsed = RW_PREFERRED_MODEL;
+    let response = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload(RW_PREFERRED_MODEL)),
     });
 
-    console.log("Runware API response status:", response.status);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.warn('Preferred model failed:', response.status, errText);
+      modelUsed = RW_FALLBACK_MODEL;
+      response = await fetch("https://api.runware.ai/v1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(RW_FALLBACK_MODEL)),
+      });
+    }
 
-    if (response.ok) {
-      const result = await response.json();
-      console.log("Runware API response:", result);
-      
-      // Find the image inference result
-      const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
-      
-      if (imageResult && imageResult.imageURL) {
-        return new Response(
-          JSON.stringify({ 
-            imageUrl: imageResult.imageURL,
-            prompt: prompt,
-            provider: "runware"
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } else {
-        throw new Error("No image URL in Runware response");
-      }
-    } else {
+    console.log("Runware API response status:", response.status, 'modelUsed:', modelUsed);
+
+    if (!response.ok) {
       const errorText = await response.text();
       console.error("Runware API error:", response.status, errorText);
       throw new Error(`Runware API failed: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log("Runware API response:", result);
+    
+    // Find the image inference result
+    const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
+    
+    if (imageResult && imageResult.imageURL) {
+      return new Response(
+        JSON.stringify({ 
+          imageUrl: imageResult.imageURL,
+          prompt,
+          provider: "runware",
+          modelUsed
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } else {
+      throw new Error("No image URL in Runware response");
     }
 
   } catch (error) {
@@ -107,3 +134,4 @@ serve(async (req) => {
     );
   }
 });
+

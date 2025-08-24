@@ -281,7 +281,7 @@ export function ChatInput({
                 >
                   <span className="text-base">+🎬</span>
                 </button>
-              ) : (
+              ) : activeTrigger === 'image' ? null : (
                 <PlusMenu
                   onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
                   onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
@@ -367,26 +367,38 @@ export function ChatInput({
                   {isModeMenuOpen && (
                     <div
                       role="menu"
-                      className="absolute left-0 mt-2 w-48 rounded-xl border border-white/20 bg-white/95 dark:bg-gray-900/95 shadow-2xl overflow-hidden z-20"
+                      className="absolute left-0 mt-2 w-56 rounded-xl border border-orange-200/70 bg-orange-50/95 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-800/60 shadow-2xl overflow-hidden z-20 backdrop-blur-md"
                     >
                       <button
                         role="menuitem"
                         onClick={() => { setImageMode('text2image'); setIsModeMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 dark:hover:bg-white/10 ${imageMode === 'text2image' ? 'font-semibold' : ''}`}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors
+                          ${imageMode === 'text2image'
+                            ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
+                            : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
+                        `}
                       >
                         {language === 'ar' ? 'نص → صورة' : 'Text to Image'}
                       </button>
                       <button
                         role="menuitem"
                         onClick={() => { setImageMode('image2image'); setIsModeMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 dark:hover:bg-white/10 ${imageMode === 'image2image' ? 'font-semibold' : ''}`}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors
+                          ${imageMode === 'image2image'
+                            ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
+                            : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
+                        `}
                       >
                         {language === 'ar' ? 'صورة → صورة' : 'Image to Image'}
                       </button>
                       <button
                         role="menuitem"
                         onClick={() => { setImageMode('background-removal'); setIsModeMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 dark:hover:bg-white/10 ${imageMode === 'background-removal' ? 'font-semibold' : ''}`}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors
+                          ${imageMode === 'background-removal'
+                            ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
+                            : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
+                        `}
                       >
                         {language === 'ar' ? 'إزالة الخلفية' : 'Background Removal'}
                       </button>

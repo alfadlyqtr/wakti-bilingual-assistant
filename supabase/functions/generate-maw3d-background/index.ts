@@ -51,13 +51,15 @@ serve(async (req) => {
     }
 
     // Generate image using Runware API
-    const imageUrl = await generateImageWithRunware(prompt, runwareApiKey);
+    const { imageUrl, modelUsed } = await generateImageWithRunware(prompt, runwareApiKey);
     
     console.log('🎨 Image generated successfully:', imageUrl);
     
     return new Response(JSON.stringify({ 
       success: true,
-      imageUrl: imageUrl 
+      imageUrl: imageUrl,
+      provider: 'runware',
+      modelUsed
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
@@ -74,36 +76,60 @@ serve(async (req) => {
   }
 });
 
-// Extracted working Runware function from wakti-ai-v2-brain
-async function generateImageWithRunware(prompt: string, apiKey: string): Promise<string> {
+// Env-driven Runware helper with preferred/fallback models and configurable steps/CFG
+async function generateImageWithRunware(prompt: string, apiKey: string): Promise<{ imageUrl: string; modelUsed: string }> {
   console.log('🎨 Runware: Starting image generation with prompt:', prompt);
-  
+
+  const RW_PREFERRED_MODEL = Deno.env.get('RUNWARE_PREFERRED_MODEL') || 'runware:97@2';
+  const RW_FALLBACK_MODEL = Deno.env.get('RUNWARE_FALLBACK_MODEL') || 'runware:100@1';
+  const RW_STEPS = (() => {
+    const v = parseInt(Deno.env.get('RUNWARE_STEPS') ?? '28', 10);
+    if (Number.isNaN(v)) return 28;
+    return Math.min(60, Math.max(4, v));
+  })();
+  const RW_CFG = (() => {
+    const v = parseFloat(Deno.env.get('RUNWARE_CFG') ?? '5.5');
+    if (Number.isNaN(v)) return 5.5;
+    return Math.min(20, Math.max(1, v));
+  })();
+
   try {
-    const response = await fetch('https://api.runware.ai/v1', {
+    const taskUUID = crypto.randomUUID();
+    const buildPayload = (model: string) => ([
+      { taskType: 'authentication', apiKey },
+      {
+        taskType: 'imageInference',
+        taskUUID,
+        positivePrompt: prompt,
+        model,
+        width: 1024,
+        height: 1024,
+        numberResults: 1,
+        outputFormat: 'WEBP',
+        includeCost: true,
+        CFGScale: RW_CFG,
+        scheduler: 'FlowMatchEulerDiscreteScheduler',
+        steps: RW_STEPS,
+      }
+    ]);
+
+    let modelUsed = RW_PREFERRED_MODEL;
+    let response = await fetch('https://api.runware.ai/v1', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([
-        {
-          taskType: 'authentication',
-          apiKey: apiKey,
-        },
-        {
-          taskType: 'imageInference',
-          taskUUID: crypto.randomUUID(),
-          positivePrompt: prompt,
-          model: 'runware:100@1',
-          width: 1024,
-          height: 1024,
-          numberResults: 1,
-          outputFormat: 'WEBP',
-          CFGScale: 1,
-          scheduler: 'FlowMatchEulerDiscreteScheduler',
-          steps: 4,
-        }
-      ])
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildPayload(RW_PREFERRED_MODEL))
     });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.warn('🎨 Preferred model failed:', response.status, errText);
+      modelUsed = RW_FALLBACK_MODEL;
+      response = await fetch('https://api.runware.ai/v1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload(RW_FALLBACK_MODEL))
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -112,29 +138,19 @@ async function generateImageWithRunware(prompt: string, apiKey: string): Promise
     }
 
     const data = await response.json();
-    console.log('🎨 Runware API response:', data);
+    console.log('🎨 Runware API response:', data, 'modelUsed:', modelUsed);
 
     if (!data.data || !Array.isArray(data.data)) {
       throw new Error('Invalid response format from Runware API');
     }
 
-    // Find the image inference result
     const imageResult = data.data.find((item: any) => item.taskType === 'imageInference');
-    
-    if (!imageResult) {
-      throw new Error('No image inference result found in response');
-    }
-
-    if (imageResult.error) {
-      throw new Error(`Image generation failed: ${imageResult.error}`);
-    }
-
-    if (!imageResult.imageURL) {
+    if (!imageResult || !imageResult.imageURL) {
       throw new Error('No image URL in response');
     }
 
     console.log('🎨 Runware: Image generated successfully:', imageResult.imageURL);
-    return imageResult.imageURL;
+    return { imageUrl: imageResult.imageURL, modelUsed };
 
   } catch (error) {
     console.error('🎨 Runware generation error:', error);

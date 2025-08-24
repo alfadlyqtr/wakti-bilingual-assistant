@@ -8,7 +8,19 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-const RUNWARE_API_KEY = "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
+const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
+const RW_PREFERRED_MODEL = Deno.env.get('RUNWARE_PREFERRED_MODEL') || 'runware:97@2';
+const RW_FALLBACK_MODEL = Deno.env.get('RUNWARE_FALLBACK_MODEL') || 'runware:100@1';
+const RW_STEPS = (() => {
+  const v = parseInt(Deno.env.get('RUNWARE_STEPS') ?? '28', 10);
+  if (Number.isNaN(v)) return 28;
+  return Math.min(60, Math.max(4, v));
+})();
+const RW_CFG = (() => {
+  const v = parseFloat(Deno.env.get('RUNWARE_CFG') ?? '5.5');
+  if (Number.isNaN(v)) return 5.5;
+  return Math.min(20, Math.max(1, v));
+})();
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -196,78 +208,87 @@ async function addContact(supabase: any, data: any, userId: string, language: st
 async function generateImage(prompt: string, userId: string, language: string) {
   try {
     console.log("Generating image with Runware for prompt:", prompt);
+    if (!RUNWARE_API_KEY) {
+      throw new Error('RUNWARE_API_KEY not configured');
+    }
 
-    const response = await fetch("https://api.runware.ai/v1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const taskUUID = crypto.randomUUID();
+    const buildPayload = (model: string) => ([
+      { taskType: 'authentication', apiKey: RUNWARE_API_KEY },
+      {
+        taskType: 'imageInference',
+        taskUUID,
+        positivePrompt: prompt,
+        model,
+        width: 512,
+        height: 512,
+        numberResults: 1,
+        outputFormat: 'WEBP',
+        includeCost: true,
+        CFGScale: RW_CFG,
+        scheduler: 'FlowMatchEulerDiscreteScheduler',
+        steps: RW_STEPS,
       },
-      body: JSON.stringify([
-        {
-          taskType: "authentication",
-          apiKey: RUNWARE_API_KEY,
-        },
-        {
-          taskType: "imageInference",
-          taskUUID: crypto.randomUUID(),
-          positivePrompt: prompt,
-          model: "runware:100@1",
-          width: 512,
-          height: 512,
-          numberResults: 1,
-          outputFormat: "WEBP",
-          CFGScale: 1,
-          scheduler: "FlowMatchEulerDiscreteScheduler",
-          steps: 4,
-        },
-      ]),
+    ]);
+
+    let modelUsed = RW_PREFERRED_MODEL;
+    let response = await fetch('https://api.runware.ai/v1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildPayload(RW_PREFERRED_MODEL)),
     });
 
-    console.log("Runware response status:", response.status);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.warn('Preferred model failed:', response.status, errText);
+      modelUsed = RW_FALLBACK_MODEL;
+      response = await fetch('https://api.runware.ai/v1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload(RW_FALLBACK_MODEL)),
+      });
+    }
 
-    if (response.ok) {
-      const result = await response.json();
-      console.log("Runware response data:", result);
-      
-      // Find the image inference result
-      const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
-      
-      if (imageResult && imageResult.imageURL) {
-        // Create Supabase client to save image
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
+    console.log('Runware response status:', response.status, 'modelUsed:', modelUsed);
 
-        // Save image to database
-        try {
-          await supabase
-            .from('images')
-            .insert({
-              user_id: userId,
-              prompt: prompt,
-              image_url: imageResult.imageURL,
-              metadata: { provider: 'runware', imageUUID: imageResult.imageUUID }
-            });
-        } catch (dbError) {
-          console.log("Could not save image to database:", dbError);
-          // Continue anyway, the image was generated successfully
-        }
-
-        return {
-          success: true,
-          message: language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image generated successfully',
-          imageUrl: imageResult.imageURL
-        };
-      } else {
-        throw new Error('No image URL in response');
-      }
-    } else {
+    if (!response.ok) {
       const errorText = await response.text();
-      console.error("Runware API error:", response.status, errorText);
+      console.error('Runware API error:', response.status, errorText);
       throw new Error(`Runware API failed: ${response.status}`);
     }
-    
+
+    const result = await response.json();
+    console.log('Runware response data:', result);
+    const imageResult = result.data?.find((item: any) => item.taskType === 'imageInference');
+    if (!imageResult || !imageResult.imageURL) {
+      throw new Error('No image URL in response');
+    }
+
+    // Create Supabase client to save image
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    try {
+      await supabase
+        .from('images')
+        .insert({
+          user_id: userId,
+          prompt,
+          image_url: imageResult.imageURL,
+          metadata: { provider: 'runware', imageUUID: imageResult.imageUUID, modelUsed }
+        });
+    } catch (dbError) {
+      console.log('Could not save image to database:', dbError);
+    }
+
+    return {
+      success: true,
+      message: language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image generated successfully',
+      imageUrl: imageResult.imageURL,
+      modelUsed,
+    };
   } catch (error) {
     console.error('Error generating image with Runware:', error);
     return {

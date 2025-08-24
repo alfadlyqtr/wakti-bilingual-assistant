@@ -56,6 +56,19 @@ serve(async (req) => {
 
     // Get API key from environment
     const runwareApiKey = Deno.env.get('RUNWARE_API_KEY')
+    // Env-driven image settings
+    const RW_PREFERRED_MODEL = Deno.env.get('RUNWARE_PREFERRED_MODEL') || 'runware:97@2'
+    const RW_FALLBACK_MODEL = Deno.env.get('RUNWARE_FALLBACK_MODEL') || 'runware:100@1'
+    const RW_STEPS = (() => {
+      const v = parseInt(Deno.env.get('RUNWARE_STEPS') ?? '28', 10)
+      if (Number.isNaN(v)) return 28
+      return Math.min(60, Math.max(4, v))
+    })()
+    const RW_CFG = (() => {
+      const v = parseFloat(Deno.env.get('RUNWARE_CFG') ?? '5.5')
+      if (Number.isNaN(v)) return 5.5
+      return Math.min(20, Math.max(1, v))
+    })()
     
     if (!runwareApiKey) {
       console.error('RUNWARE_API_KEY is not configured')
@@ -114,35 +127,47 @@ serve(async (req) => {
       )
     }
 
-    // Use the correct Runware API format (same as working implementation)
+    // Use Runware with preferred-then-fallback
     console.log('🎨 Generating image with Runware API for prompt:', prompt)
-    
-    const runwareResponse = await fetch('https://api.runware.ai/v1', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${runwareApiKey}`,
-        'Content-Type': 'application/json',
+    const taskUUID = crypto.randomUUID()
+    const buildPayload = (model: string) => ([
+      {
+        taskType: "authentication",
+        apiKey: runwareApiKey
       },
-      body: JSON.stringify([
-        {
-          taskType: "authentication",
-          apiKey: runwareApiKey
-        },
-        {
-          taskType: "imageInference",
-          taskUUID: crypto.randomUUID(),
-          positivePrompt: `Event background: ${prompt}. High quality, professional, suitable for event promotion with good contrast for text overlay.`,
-          width,
-          height,
-          model: "runware:100@1",
-          numberResults: 1,
-          outputFormat: "WEBP",
-          CFGScale: 1,
-          scheduler: "FlowMatchEulerDiscreteScheduler",
-          strength: 0.8
-        }
-      ]),
+      {
+        taskType: "imageInference",
+        taskUUID,
+        positivePrompt: `Event background: ${prompt}. High quality, professional, suitable for event promotion with good contrast for text overlay.`,
+        width,
+        height,
+        model,
+        numberResults: 1,
+        outputFormat: "WEBP",
+        includeCost: true,
+        CFGScale: RW_CFG,
+        scheduler: "FlowMatchEulerDiscreteScheduler",
+        steps: RW_STEPS,
+      }
+    ])
+
+    let modelUsed = RW_PREFERRED_MODEL
+    let runwareResponse = await fetch('https://api.runware.ai/v1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildPayload(RW_PREFERRED_MODEL)),
     })
+
+    if (!runwareResponse.ok) {
+      const errText = await runwareResponse.text().catch(() => '')
+      console.warn('🎨 Runware preferred failed:', runwareResponse.status, errText)
+      modelUsed = RW_FALLBACK_MODEL
+      runwareResponse = await fetch('https://api.runware.ai/v1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload(RW_FALLBACK_MODEL)),
+      })
+    }
 
     if (!runwareResponse.ok) {
       console.error('🎨 Runware API error:', await runwareResponse.text())
@@ -207,7 +232,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         imageUrl: imageResult.imageURL,
-        provider: 'runware'
+        provider: 'runware',
+        modelUsed
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
