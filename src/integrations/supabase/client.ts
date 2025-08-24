@@ -3,23 +3,16 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
 
 // Create a single supabase client for interacting with your database
-// Use environment variables only (no fallbacks) to avoid accidental misconfiguration
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+// Hardcoded values since VITE_* env vars aren't available in preview runtime
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
 
-// Ensure that URL and key are present
-if ((!supabaseUrl || !supabaseAnonKey) && import.meta.env.PROD) {
-  // In production we must fail fast to avoid silent misconfiguration
-  throw new Error("[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in production build. Set them in your hosting env and redeploy.");
-}
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    "[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Using dev fallbacks; API calls may fail."
-  );
-}
-// Use strict env in prod; dev fallbacks to avoid crashing local setup
-const effectiveUrl = (supabaseUrl || 'https://example.supabase.co') as string;
-const effectiveAnon = (supabaseAnonKey || 'public-anon-key') as string;
+// Use the values directly
+const effectiveUrl = supabaseUrl;
+const effectiveAnon = supabaseAnonKey;
+
+// Export the URL for use in other services
+export const SUPABASE_URL = effectiveUrl;
 
 export const supabase = createClient(effectiveUrl, effectiveAnon, {
   auth: {

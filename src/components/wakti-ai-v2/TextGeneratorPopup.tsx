@@ -354,7 +354,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             return deriveTemperature(base, currentToneKey);
           })()
         },
-        signal: abortController.signal
       });
 
       if (abortController.signal.aborted) {
@@ -570,7 +569,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 {language !== 'ar' ? (
                   <Select value={englishVariant} onValueChange={(v) => setEnglishVariant(v as any)}>
                     <SelectTrigger className="mt-2">
-                      <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                      <SelectValue placeholder="Auto" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="auto">Auto</SelectItem>
@@ -772,7 +771,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 {language !== 'ar' ? (
                   <Select value={englishVariant} onValueChange={(v) => setEnglishVariant(v as any)}>
                     <SelectTrigger className="mt-2">
-                      <SelectValue placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} />
+                      <SelectValue placeholder="Auto" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="auto">Auto</SelectItem>

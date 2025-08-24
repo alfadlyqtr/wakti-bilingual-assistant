@@ -186,7 +186,7 @@ class WaktiAIV2ServiceClass {
         throw new Error('No valid session for streaming');
       }
 
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/wakti-ai-v2-brain-stream`, {
+      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

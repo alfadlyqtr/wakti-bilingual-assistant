@@ -61,19 +61,19 @@ const DrawerContent = React.forwardRef<
                 hasTitle = true;
                 const existingId = (headerChild.props as any)?.id as string | undefined;
                 titleIdToUse = existingId ?? titleId;
-                return React.cloneElement(headerChild, { id: titleIdToUse });
+                return React.cloneElement(headerChild as React.ReactElement<any>, { id: titleIdToUse });
               }
               if (headerChild.type === DrawerDescription) {
                 hasDescription = true;
                 const existingId = (headerChild.props as any)?.id as string | undefined;
                 descriptionIdToUse = existingId ?? descriptionId;
-                return React.cloneElement(headerChild, { id: descriptionIdToUse });
+                return React.cloneElement(headerChild as React.ReactElement<any>, { id: descriptionIdToUse });
               }
             }
             return headerChild;
           }
         );
-        return React.cloneElement(child, { children: headerChildren });
+        return React.cloneElement(child as React.ReactElement<any>, { children: headerChildren });
       }
     }
     return child;

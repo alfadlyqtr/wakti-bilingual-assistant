@@ -16,7 +16,6 @@ interface AdminUser {
   full_name: string;
   display_name: string;
   is_suspended: boolean;
-  is_logged_in: boolean;
   email_confirmed: boolean;
   suspended_at?: string;
   suspension_reason?: string;
@@ -73,7 +72,6 @@ export default function AdminUsers() {
         email: user.email || '',
         full_name: user.display_name || 'Unknown User',
         display_name: user.display_name || 'Unknown User',
-        is_logged_in: user.is_logged_in ?? false,
         email_confirmed: user.email_confirmed ?? false,
         is_suspended: user.is_suspended ?? false
       }));
