@@ -525,10 +525,17 @@ async function callClaude35API(message, conversationId, language = 'en', attache
       throw new Error('Anthropic API key not configured');
     }
 
-    // Determine mode based on attached files
+    // Determine mode based on activeTrigger (not just attached files)
     let detectedMode = 'chat';
     
-    if (attachedFiles && attachedFiles.length > 0) {
+    // Only use vision mode when explicitly requested via activeTrigger
+    if (activeTrigger === 'vision') {
+      detectedMode = 'vision';
+    } else if (activeTrigger === 'chat') {
+      // Force chat mode for regular conversations, even with images
+      detectedMode = 'chat';
+      console.log('🤖 BACKEND WORKER: Using chat mode for activeTrigger=chat (GPT-5 Nano priority)');
+    } else if (attachedFiles && attachedFiles.length > 0) {
       const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
       if (hasImages) {
         detectedMode = 'vision';
