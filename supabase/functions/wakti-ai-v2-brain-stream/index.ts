@@ -127,15 +127,16 @@ async function streamAIResponse(
   controller: ReadableStreamDefaultController,
   attachedFiles: any[] = []
 ) {
-  // Choose API based on files (force OpenAI for vision)
-  let apiKey = DEEPSEEK_API_KEY;
-  let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-  let model = 'deepseek-chat';
+  // Prefer OpenAI GPT-5 Nano as primary
+  let apiKey = OPENAI_API_KEY;
+  let apiUrl = 'https://api.openai.com/v1/chat/completions';
+  let model = 'gpt-5-nano-2025-08-07';
   
-  if (!apiKey || (attachedFiles?.length > 0 && attachedFiles.some(f => f.type?.startsWith('image/')))) {
-    apiKey = OPENAI_API_KEY;
-    apiUrl = 'https://api.openai.com/v1/chat/completions';
-    model = 'gpt-5-nano-2025-08-07';
+  // Fallback to DeepSeek if OpenAI key is unavailable
+  if (!apiKey) {
+    apiKey = DEEPSEEK_API_KEY;
+    apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+    model = 'deepseek-chat';
   }
   
   if (!apiKey) {

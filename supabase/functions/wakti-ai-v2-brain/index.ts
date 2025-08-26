@@ -389,8 +389,8 @@ serve(async (req) => {
       effectiveTrigger = 'general';
     }
 
-    // Try models in order: Claude → GPT-4 → DeepSeek
-    const modelOrder = ['claude', 'gpt4', 'deepseek'];
+    // Try models in order: GPT-5 Nano → Claude → DeepSeek
+    const modelOrder = ['gpt4', 'claude', 'deepseek'];
     let lastError = null;
     let fallbackUsed = false;
     let attemptedModels = [];
