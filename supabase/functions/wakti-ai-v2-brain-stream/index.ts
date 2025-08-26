@@ -136,7 +136,7 @@ async function streamAIResponse(
   if (!apiKey || (attachedFiles?.length > 0 && attachedFiles.some(f => f.type?.startsWith('image/')))) {
     apiKey = OPENAI_API_KEY;
     apiUrl = 'https://api.openai.com/v1/chat/completions';
-    model = 'gpt-4o-mini';
+    model = 'gpt-5-nano-2025-08-07';
   }
   
   if (!apiKey) {
@@ -216,8 +216,7 @@ async function streamAIResponse(
     body: JSON.stringify({
       model: model,
       messages: messages,
-      temperature: 0.7,
-      max_tokens: 2048,
+      max_completion_tokens: 2048,
       stream: true
     })
   });

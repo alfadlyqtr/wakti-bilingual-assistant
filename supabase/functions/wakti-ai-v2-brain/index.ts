@@ -61,7 +61,7 @@ const models: Record<string, AIModelConfig> = {
   gpt4: {
     name: 'gpt4',
     endpoint: 'https://api.openai.com/v1/chat/completions',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-nano-2025-08-07',
     apiKey: OPENAI_API_KEY,
     maxTokens: 4000,
     timeout: 20000
@@ -812,10 +812,9 @@ ${personalizationContext}`;
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-nano-2025-08-07',
         messages: messages,
-        max_tokens: 4000,
-        temperature: 0.7
+        max_completion_tokens: 4000
       }),
       timeoutMs: models.gpt4.timeout
     });
@@ -831,7 +830,7 @@ ${personalizationContext}`;
       return {
         response: data.choices[0].message.content,
         conversationId: conversationId,
-        model: 'gpt-4o-mini'
+        model: 'gpt-5-nano'
       };
     } else {
       throw new Error('Invalid response format from OpenAI API');
