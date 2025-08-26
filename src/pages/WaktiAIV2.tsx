@@ -226,6 +226,9 @@ const WaktiAIV2 = () => {
       let processedAttachedFiles = attachedFiles;
       let finalInputType: 'text' | 'voice' | 'vision' = 'text';
 
+      // Background-removal flag: special-case behavior in image mode
+      const isBgRemoval = trigger === 'image' && imageMode === 'background-removal';
+
       if (attachedFiles && attachedFiles.length > 0) {
         console.log('📎 FRONTEND BOSS: Processing attached files');
         
@@ -234,13 +237,52 @@ const WaktiAIV2 = () => {
         const otherFiles = attachedFiles.filter(file => !file.type?.startsWith('image/'));
 
         if (imageFiles.length > 0) {
-          finalInputType = 'vision';
-          console.log(`🖼️ FRONTEND BOSS: Found ${imageFiles.length} image files, switching to vision mode`);
+          // Only auto-mark as vision if not background-removal image mode
+          if (!isBgRemoval) {
+            finalInputType = 'vision';
+            console.log(`🖼️ FRONTEND BOSS: Found ${imageFiles.length} image files, switching to vision mode`);
+          } else {
+            console.log(`🧼 FRONTEND BOSS: Background removal mode detected, staying in image mode`);
+          }
           
-          // Convert images to base64 for Claude
+          // Convert images for downstream usage
           const processedImageFiles = await Promise.all(
             imageFiles.map(async (file) => {
               try {
+                // For background-removal we need FULL data URL in `data`
+                if (isBgRemoval) {
+                  // If we already have a data URL in url/base64, use it directly
+                  const dataUrl: string | undefined =
+                    (typeof file.url === 'string' && file.url.startsWith('data:')) ? file.url
+                    : (typeof file.base64 === 'string' && file.base64.startsWith('data:')) ? file.base64
+                    : undefined;
+
+                  if (dataUrl) {
+                    return { ...file, data: dataUrl };
+                  }
+
+                  // Fallback: fetch blob and keep full data URL
+                  if (file.url) {
+                    const response = await fetch(file.url);
+                    if (abortControllerRef.current?.signal.aborted) return null;
+                    const blob = await response.blob();
+                    if (abortControllerRef.current?.signal.aborted) return null;
+
+                    return new Promise((resolve) => {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const fullDataUrl = reader.result as string; // keep full data URL
+                        resolve({ ...file, data: fullDataUrl });
+                      };
+                      reader.readAsDataURL(blob);
+                    });
+                  }
+
+                  // As a last resort, pass through unchanged
+                  return file;
+                }
+
+                // Default behavior (vision/others): convert to raw base64 payload only
                 if (file.url) {
                   const response = await fetch(file.url);
                   if (abortControllerRef.current?.signal.aborted) return null;
@@ -275,13 +317,7 @@ const WaktiAIV2 = () => {
           processedAttachedFiles = [...validImageFiles, ...otherFiles];
         }
       }
-
-      // Check for abort before proceeding
-      if (abortControllerRef.current?.signal.aborted) {
-        console.log('🚫 Request aborted during file processing');
-        return;
-      }
-
+      
       // ROUTING LOGIC
       let routingMode = trigger;
 
@@ -592,7 +628,18 @@ const WaktiAIV2 = () => {
         
         EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
         
-        const aiResponse = await WaktiAIV2Service.sendMessage(
+        // STREAMING: Add placeholder assistant message and stream tokens into it
+        const assistantId = `assistant-${Date.now()}`;
+        const placeholderAssistant: AIMessage = {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          intent: 'chat'
+        };
+        setSessionMessages(prev => [...prev, placeholderAssistant]);
+
+        await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile?.id,
           language,
@@ -602,42 +649,40 @@ const WaktiAIV2 = () => {
           false,
           'chat',
           '',
-          processedAttachedFiles || []
+          processedAttachedFiles || [],
+          // onToken
+          (token: string) => {
+            setSessionMessages(prev => prev.map(m => m.id === assistantId
+              ? { ...m, content: (m.content || '') + token }
+              : m
+            ));
+          },
+          // onComplete
+          (meta: any) => {
+            setSessionMessages(prev => {
+              const updated = prev.map(m => m.id === assistantId
+                ? { ...m, intent: 'chat', browsingUsed: meta?.browsingUsed, browsingData: meta?.browsingData }
+                : m
+              );
+              EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
+              return updated;
+            });
+          },
+          // onError
+          (errMsg: string) => {
+            setSessionMessages(prev => {
+              const updated = prev.map(m => m.id === assistantId ? {
+                ...m,
+                content: language === 'ar'
+                  ? '❌ حدث خطأ أثناء البث. يرجى المحاولة مرة أخرى.'
+                  : '❌ A streaming error occurred. Please try again.'
+              } : m);
+              EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
+              return updated;
+            });
+            setError(errMsg || 'Streaming error');
+          }
         );
-
-        if (aiResponse.error) {
-          throw new Error(aiResponse.error);
-        }
-        
-        // FIXED: Safe property access for vision responses
-        const assistantMessage: AIMessage = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: aiResponse.response || 'Response received',
-          timestamp: new Date(),
-          intent: aiResponse.intent || undefined,
-          confidence: (aiResponse.confidence as 'high' | 'medium' | 'low') || undefined,
-          actionTaken: aiResponse.actionTaken || undefined,
-          imageUrl: aiResponse.imageUrl || undefined,
-          browsingUsed: aiResponse.browsingUsed || undefined,
-          browsingData: aiResponse.browsingData || undefined
-        };
-
-        // FIXED: Safe task form handling
-        if (aiResponse.showTaskForm && aiResponse.taskData) {
-          setPendingTaskData(aiResponse.taskData);
-          setShowTaskConfirmation(true);
-        }
-
-        // FIXED: Safe reminder handling
-        if (aiResponse.reminderCreated && aiResponse.reminderData) {
-          showSuccess(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
-        }
-        
-        const finalMessages = [...newMessages, assistantMessage];
-        setSessionMessages(finalMessages);
-        
-        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
       }
       
       const totalTime = Date.now() - startTime;
@@ -670,6 +715,8 @@ const WaktiAIV2 = () => {
             : '❌ An error occurred while processing your request. Please try again.',
           timestamp: new Date()
         });
+        // Persist error state to conversation memory
+        EnhancedFrontendMemory.saveActiveConversation(newMessages, currentConversationId);
         return newMessages;
       });
       

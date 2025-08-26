@@ -246,6 +246,11 @@ export function ChatInput({
           disabled={isLoading}
           onAutoSwitchMode={(mode) => {
             console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
+            // Do NOT auto-switch if currently in Image mode with background-removal selected
+            if (activeTrigger === 'image' && imageMode === 'background-removal') {
+              console.log('🛑 Skipping auto-switch: background-removal mode active');
+              return;
+            }
             if (onTriggerChange) {
               onTriggerChange(mode);
               if (mode === 'vision') {

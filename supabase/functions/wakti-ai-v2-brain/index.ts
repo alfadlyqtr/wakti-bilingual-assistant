@@ -58,13 +58,13 @@ const models: Record<string, AIModelConfig> = {
     maxTokens: 4000,
     timeout: 25000
   },
-  gpt4: {
-    name: 'gpt4',
+  openai: {
+    name: 'openai',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     model: 'gpt-4o-mini',
     apiKey: OPENAI_API_KEY,
     maxTokens: 4000,
-    timeout: 20000
+    timeout: 30000
   },
   deepseek: {
     name: 'deepseek',
@@ -195,43 +195,66 @@ async function performSearchWithTavily(query: string, userId: string, language: 
 }
 
 // Enhanced fetch with timeout and retry logic
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number, retries: number = 1): Promise<Response> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit & { timeoutMs?: number; retries?: number },
+  timeoutMsArg?: number,
+  retriesArg: number = 1
+): Promise<Response> {
+  // Resolve timeout and retries from positional args first, then from options, with sane defaults
+  const optAny = (options || {}) as any;
+  const resolvedTimeout =
+    typeof timeoutMsArg === 'number' && !Number.isNaN(timeoutMsArg)
+      ? timeoutMsArg
+      : typeof optAny.timeoutMs === 'number'
+        ? optAny.timeoutMs
+        : 15000; // default 15s
+  const resolvedRetries =
+    typeof retriesArg === 'number' && !Number.isNaN(retriesArg)
+      ? retriesArg
+      : typeof optAny.retries === 'number'
+        ? optAny.retries
+        : 1;
+
+  // Do not pass non-standard fields to fetch
+  const { timeoutMs: _omitTimeout, retries: _omitRetries, ...fetchOptions } = optAny;
+
+  for (let attempt = 0; attempt <= resolvedRetries; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutId = setTimeout(() => controller.abort(), resolvedTimeout);
     
     try {
       const response = await fetch(url, {
-        ...options,
+        ...(fetchOptions as RequestInit),
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
       
-      if (response.ok || attempt === retries) {
+      if (response.ok || attempt === resolvedRetries) {
         return response;
       }
       
       // Retry on server errors (5xx) but not client errors (4xx)
-      if (response.status >= 500 && attempt < retries) {
-        console.log(`🔄 Retrying request (attempt ${attempt + 2}/${retries + 1})`);
+      if (response.status >= 500 && attempt < resolvedRetries) {
+        console.log(`🔄 Retrying request (attempt ${attempt + 2}/${resolvedRetries + 1})`);
         await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
         continue;
       }
       
       return response;
-    } catch (error) {
+    } catch (error: any) {
       clearTimeout(timeoutId);
       
-      if (error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeoutMs}ms`);
+      if (error?.name === 'AbortError') {
+        throw new Error(`Request timeout after ${resolvedTimeout}ms`);
       }
       
-      if (attempt === retries) {
+      if (attempt === resolvedRetries) {
         throw error;
       }
       
-      console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${retries + 1}):`, error.message);
+      console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${resolvedRetries + 1}):`, error?.message || String(error));
       await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
     }
   }
@@ -243,6 +266,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
 serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
+  let requestLanguage = 'en';
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -262,14 +286,21 @@ serve(async (req) => {
       personalTouch = null,
       userId
     } = requestData;
+    requestLanguage = language;
 
     // Validate required fields
     if (!message || typeof message !== 'string') {
-      throw new Error('Invalid message format');
+      const badReqMessage = requestLanguage === 'ar'
+        ? 'طلب غير صالح: يجب أن تكون الرسالة نصاً صالحاً.'
+        : 'Bad request: message must be a valid non-empty string.';
+      return new Response(JSON.stringify({ response: badReqMessage, error: true }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-cache" }
+      });
     }
 
     // Log API key availability for debugging
-    console.log(`🔑 API Keys available: Claude=${!!ANTHROPIC_API_KEY}, GPT4=${!!OPENAI_API_KEY}, DeepSeek=${!!DEEPSEEK_API_KEY}`);
+    console.log(`🔑 API Keys available: Claude=${!!ANTHROPIC_API_KEY}, OpenAI=${!!OPENAI_API_KEY}, DeepSeek=${!!DEEPSEEK_API_KEY}`);
 
     // Global Search pre-processing before model selection
     let browsingUsed = false;
@@ -283,7 +314,7 @@ serve(async (req) => {
       
       if (!RUNWARE_API_KEY) {
         return new Response(JSON.stringify({
-          response: language === 'ar' 
+          response: requestLanguage === 'ar' 
             ? 'أعتذر، خدمة إنشاء الصور غير متاحة حالياً.'
             : 'I apologize, image generation service is not available.',
           error: true
@@ -328,7 +359,7 @@ serve(async (req) => {
         const imageResult = await generateImageWithRunware(
           promptForImage,
           userId,
-          language,
+          requestLanguage,
           imageOptions,
           req.signal
         );
@@ -347,7 +378,7 @@ serve(async (req) => {
       } catch (imageError) {
         console.error('🎨 IMAGE GENERATION ERROR:', imageError);
         return new Response(JSON.stringify({
-          response: language === 'ar' 
+          response: requestLanguage === 'ar' 
             ? 'أعتذر، حدث خطأ في إنشاء الصورة.'
             : 'I apologize, there was an error generating the image.',
           error: true
@@ -359,7 +390,7 @@ serve(async (req) => {
     }
 
     if (activeTrigger === 'search') {
-      const searchResult = await performSearchWithTavily(message, 'user', language);
+      const searchResult = await performSearchWithTavily(message, 'user', requestLanguage);
       const baseMeta = { query: message, timestamp: new Date().toISOString() };
 
       if (!searchResult.success) {
@@ -381,7 +412,7 @@ serve(async (req) => {
         .map((r: any, i: number) => `${i + 1}. ${r.title} - ${r.url}\nSummary: ${r.content}`)
         .join('\n\n');
 
-      effectiveMessage = (language === 'ar'
+      effectiveMessage = (requestLanguage === 'ar'
         ? `بناءً على نتائج البحث أدناه، قدّم إجابة موجزة ودقيقة مع الاستشهاد بالمصادر باستخدام [رقم].\n\nنتائج البحث:\n${sourcesList}\n\nسؤال المستخدم: "${message}"\n\nصيغة الإخراج: إجابة موجزة تتضمن إشارات [1] و[2] إن لزم، ثم قسم "المصادر" به الروابط.`
         : `Based on the web search results below, provide a concise, accurate answer with citations using [number].\n\nSearch results:\n${sourcesList}\n\nUser question: "${message}"\n\nOutput: A concise answer with [1], [2] style citations and a Sources section listing the URLs.`);
 
@@ -389,8 +420,10 @@ serve(async (req) => {
       effectiveTrigger = 'general';
     }
 
-    // Try models in order: Claude → GPT-4 → DeepSeek
-    const modelOrder = ['claude', 'gpt4', 'deepseek'];
+    // Try models in order: OpenAI → Claude → DeepSeek
+    const hasImages = Array.isArray(attachedFiles) && attachedFiles.some((f: any) => f?.type?.startsWith('image/'));
+    const isVisionMode = hasImages;
+    const modelOrder = isVisionMode ? ['claude', 'deepseek'] : ['openai', 'claude', 'deepseek'];
     let lastError = null;
     let fallbackUsed = false;
     let attemptedModels = [];
@@ -411,17 +444,17 @@ serve(async (req) => {
         let result;
         if (modelName === 'claude') {
           result = await callClaude35API(
-            effectiveMessage, conversationId, language, attachedFiles, 
+            effectiveMessage, conversationId, requestLanguage, attachedFiles, 
             effectiveTrigger, recentMessages, personalTouch, browsingUsed
           );
-        } else if (modelName === 'gpt4') {
-          result = await callGPT4API(
-            effectiveMessage, conversationId, language, attachedFiles, 
+        } else if (modelName === 'openai') {
+          result = await callOpenAIChatAPI(
+            effectiveMessage, conversationId, requestLanguage, attachedFiles, 
             effectiveTrigger, recentMessages, personalTouch
           );
         } else {
           result = await callDeepSeekAPI(
-            effectiveMessage, conversationId, language, attachedFiles, 
+            effectiveMessage, conversationId, requestLanguage, attachedFiles, 
             effectiveTrigger, recentMessages, personalTouch
           );
         }
@@ -434,7 +467,7 @@ serve(async (req) => {
         if (fallbackUsed) {
           result.fallbackUsed = true;
           result.modelUsed = modelName;
-          result.fallbackMessage = language === 'ar' 
+          result.fallbackMessage = requestLanguage === 'ar' 
             ? `تم استخدام ${modelName.toUpperCase()} كنموذج بديل`
             : `Used ${modelName.toUpperCase()} as fallback model`;
         }
@@ -461,10 +494,11 @@ serve(async (req) => {
         });
         
       } catch (error) {
-        console.error(`❌ ${modelName} failed:`, error.message);
+        console.error(`❌ ${modelName} failed:`, (error as any)?.message || String(error));
+        if ((error as any)?.stack) console.error((error as any).stack);
         lastError = error;
         fallbackUsed = true;
-        attemptedModels.push(`${modelName}: failed - ${error.message}`);
+        attemptedModels.push(`${modelName}: failed - ${((error as any)?.message || String(error))}`);
         
         // Continue to next model unless this is the last one
         if (modelName !== modelOrder[modelOrder.length - 1]) {
@@ -478,7 +512,7 @@ serve(async (req) => {
     console.error("❌ All models failed, returning error");
     console.error("📊 Attempted models:", attemptedModels);
     
-    const errorMessage = language === 'ar' 
+    const errorMessage = requestLanguage === 'ar' 
       ? 'أعتذر، لست متاح حالياً. يرجى المحاولة مرة أخرى.'
       : 'I apologize, I\'m not available right now. Please try again.';
     
@@ -501,7 +535,7 @@ serve(async (req) => {
     console.error("🚀 REQUEST ERROR:", error);
     console.error("🚀 ERROR STACK:", error.stack);
     
-    const errorMessage = language === 'ar' 
+    const errorMessage = requestLanguage === 'ar' 
       ? 'أعتذر، حدث خطأ مؤقت. يرجى المحاولة مرة أخرى.'
       : 'I apologize, there was a temporary issue. Please try again.';
     
@@ -726,7 +760,7 @@ ${personalizationContext}`;
   }
 }
 
-async function callGPT4API(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null) {
+async function callOpenAIChatAPI(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null) {
   try {
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
@@ -804,41 +838,42 @@ ${personalizationContext}`;
       content: languagePrefix + message
     });
 
-    // Make API call to OpenAI
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    // Always use Chat Completions for chat mode
+    const openAiModel = (models.openai && models.openai.model) ? models.openai.model : 'gpt-4o-mini';
+    const resp = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: openAiModel,
         messages: messages,
-        max_tokens: 4000,
+        max_tokens: models.openai.maxTokens,
         temperature: 0.7
       }),
-      timeoutMs: models.gpt4.timeout
+      timeoutMs: models.openai.timeout
     });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`OpenAI API error: ${response.status} - ${errorData}`);
+    if (!resp.ok) {
+      const errorData = await resp.text();
+      throw new Error(`OpenAI Chat Completions error: ${resp.status} - ${errorData}`);
     }
 
-    const data = await response.json();
+    const data = await resp.json();
     
-    if (data.choices && data.choices[0] && data.choices[0].message) {
+    if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
       return {
         response: data.choices[0].message.content,
         conversationId: conversationId,
-        model: 'gpt-4o-mini'
+        model: openAiModel
       };
     } else {
-      throw new Error('Invalid response format from OpenAI API');
+      throw new Error('Invalid response format from OpenAI Chat Completions API');
     }
 
   } catch (error) {
-    console.error('🤖 GPT-4 API ERROR:', error);
+    console.error('🤖 OPENAI API ERROR:', error);
     throw error;
   }
 }

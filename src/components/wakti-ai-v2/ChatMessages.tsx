@@ -5,7 +5,6 @@ import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 import { ChatBubble } from './ChatBubble';
-import { TypingIndicator } from './TypingIndicator';
 
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
@@ -190,7 +189,7 @@ export function ChatMessages({
       // Fallback to content keyword detection or currentActiveTrigger
       const content = message.content.toLowerCase();
       if (content.includes('generate image') || content.includes('create image') || content.includes('make image') || content.includes('draw') || content.includes('paint')) {
-        return '� Image';
+        return '🎨 Image';
       }
       if (content.includes('search for') || content.includes('find information') || content.includes('look up') || content.includes('what is')) {
         return '🔍 Search';
@@ -345,7 +344,26 @@ export function ChatMessages({
                     </div>
                     
                     <div className={`text-sm leading-relaxed break-words ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
-                      {renderMessageContent(message)}
+                      {message.role === 'assistant' && !message.content ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex space-x-1">
+                            <div
+                              className="w-2 h-2 bg-primary rounded-full animate-bounce"
+                              style={{ animationDelay: '0s', animationDuration: '1.4s' }}
+                            />
+                            <div
+                              className="w-2 h-2 bg-primary rounded-full animate-bounce"
+                              style={{ animationDelay: '0.2s', animationDuration: '1.4s' }}
+                            />
+                            <div
+                              className="w-2 h-2 bg-primary rounded-full animate-bounce"
+                              style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        renderMessageContent(message)
+                      )}
                     </div>
                     
                     
@@ -355,10 +373,20 @@ export function ChatMessages({
                         {message.attachedFiles.map((file, fileIndex) => (
                           <div key={fileIndex} className="relative">
                             <img
-                              src={file.url.startsWith('data:') ? file.url : `data:${file.type};base64,${file.url}`}
-                              alt={file.name}
-                              className="max-w-xs rounded-lg border border-border/50"
-                            />
+                              src={
+                                file.url?.startsWith('data:')
+                                  ? file.url
+                                  : (file.url
+                                      ? `data:${file.type || 'image/png'};base64,${file.url}`
+                                      : (file.data?.startsWith?.('data:')
+                                          ? file.data
+                                          : (file.data
+                                              ? `data:${file.type || 'image/png'};base64,${file.data}`
+                                              : '')))
+                              }
+                               alt={file.name}
+                               className="max-w-xs rounded-lg border border-border/50"
+                             />
                             <div className="text-xs text-muted-foreground mt-1">
                               {file.imageType?.name || 'General'}
                             </div>
@@ -409,8 +437,6 @@ export function ChatMessages({
               </div>
            ))}
           
-          {/* Loading Indicator with proper TypingIndicator */}
-          {isLoading && activeTrigger !== 'search' && <TypingIndicator />}
           
           {/* ENHANCED TASK CONFIRMATION DISPLAY WITH DEBUG LOGGING */}
           {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (

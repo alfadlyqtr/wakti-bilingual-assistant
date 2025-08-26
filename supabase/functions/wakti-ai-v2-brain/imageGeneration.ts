@@ -1,5 +1,3 @@
-import { callDeepSeekAPI, detectLanguageFromText } from './utils.ts';
-
 /**
  * ENHANCED: Image generation with Arabic translation support and better error handling
  */
