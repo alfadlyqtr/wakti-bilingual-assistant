@@ -61,7 +61,7 @@ const models: Record<string, AIModelConfig> = {
   openai: {
     name: 'openai',
     endpoint: 'https://api.openai.com/v1/chat/completions',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-nano-2025-08-07',
     apiKey: OPENAI_API_KEY,
     maxTokens: 4000,
     timeout: 30000
@@ -420,10 +420,8 @@ serve(async (req) => {
       effectiveTrigger = 'general';
     }
 
-    // Try models in order: OpenAI → Claude → DeepSeek
-    const hasImages = Array.isArray(attachedFiles) && attachedFiles.some((f: any) => f?.type?.startsWith('image/'));
-    const isVisionMode = hasImages;
-    const modelOrder = isVisionMode ? ['claude', 'deepseek'] : ['openai', 'claude', 'deepseek'];
+    // Try models in order: Claude → GPT-4 → DeepSeek
+    const modelOrder = ['claude', 'gpt4', 'deepseek'];
     let lastError = null;
     let fallbackUsed = false;
     let attemptedModels = [];
@@ -559,10 +557,17 @@ async function callClaude35API(message, conversationId, language = 'en', attache
       throw new Error('Anthropic API key not configured');
     }
 
-    // Determine mode based on attached files
+    // Determine mode based on activeTrigger (not just attached files)
     let detectedMode = 'chat';
     
-    if (attachedFiles && attachedFiles.length > 0) {
+    // Only use vision mode when explicitly requested via activeTrigger
+    if (activeTrigger === 'vision') {
+      detectedMode = 'vision';
+    } else if (activeTrigger === 'chat') {
+      // Force chat mode for regular conversations, even with images
+      detectedMode = 'chat';
+      console.log('🤖 BACKEND WORKER: Using chat mode for activeTrigger=chat (GPT-5 Nano priority)');
+    } else if (attachedFiles && attachedFiles.length > 0) {
       const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
       if (hasImages) {
         detectedMode = 'vision';
@@ -847,9 +852,9 @@ ${personalizationContext}`;
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: openAiModel,
+        model: 'gpt-4o-mini',
         messages: messages,
-        max_tokens: models.openai.maxTokens,
+        max_tokens: 4000,
         temperature: 0.7
       }),
       timeoutMs: models.openai.timeout
@@ -866,7 +871,7 @@ ${personalizationContext}`;
       return {
         response: data.choices[0].message.content,
         conversationId: conversationId,
-        model: openAiModel
+        model: 'gpt-4o-mini'
       };
     } else {
       throw new Error('Invalid response format from OpenAI Chat Completions API');
