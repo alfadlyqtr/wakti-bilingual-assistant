@@ -17,6 +17,8 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
+type Provider = 'openai' | 'claude' | 'deepseek';
+
 console.log("🚀 WAKTI AI STREAMING: Ultra-fast streaming service loaded");
 
 serve(async (req) => {
@@ -250,7 +252,6 @@ async function streamAIResponse(
   // Select provider according to project rules (OpenAI primary), with sensible fallbacks
   // Vision: OpenAI -> Claude (DeepSeek skipped for vision)
   // Text/Search: OpenAI -> Claude -> DeepSeek
-  type Provider = 'openai' | 'claude' | 'deepseek';
   let provider: Provider | null = null;
   let model: string = '';
   let fallbackUsed = false;
@@ -423,7 +424,7 @@ async function streamAIResponse(
           headers: {
             'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
             'Content-Type': 'application/json',
-            'x-api-key': ANTHROPIC_API_KEY!,
+            'x-api-key': ANTHROPIC_API_KEY,
             'anthropic-version': '2023-06-01'
           },
           body: JSON.stringify({
