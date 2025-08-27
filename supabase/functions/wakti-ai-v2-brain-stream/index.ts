@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { executeRegularSearch } from "../wakti-ai-v2-brain/search.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -272,8 +271,9 @@ async function streamAIResponse(
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        sendFinalEvent(model);
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ done: true, model })}\n\n`));
         controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+        controller.close();
         break;
       }
 
@@ -286,8 +286,9 @@ async function streamAIResponse(
         const data = line.slice(6);
 
         if (data === '[DONE]') {
-          sendFinalEvent(model);
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ done: true, model })}\n\n`));
           controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
           continue;
         }
 
@@ -396,8 +397,9 @@ async function streamAIResponse(
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
-            sendFinalEvent(deepseekModel);
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ done: true, model: deepseekModel })}\n\n`));
             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            controller.close();
             break;
           }
           buffer += decoder.decode(value, { stream: true });
@@ -407,8 +409,9 @@ async function streamAIResponse(
             if (!line.startsWith('data: ')) continue;
             const data = line.slice(6);
             if (data === '[DONE]') {
-              sendFinalEvent(deepseekModel);
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ done: true, model: deepseekModel })}\n\n`));
               controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+              controller.close();
               continue;
             }
             try {

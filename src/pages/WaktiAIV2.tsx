@@ -544,6 +544,7 @@ const WaktiAIV2 = () => {
               EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
               return updated;
             });
+            setIsLoading(false); // Unlock send button immediately
           },
           // onError
           (errMsg: string) => {
@@ -553,6 +554,7 @@ const WaktiAIV2 = () => {
                 ? '❌ حدث خطأ أثناء البث. يرجى المحاولة مرة أخرى.'
                 : '❌ A streaming error occurred. Please try again.'
             } : m));
+            setIsLoading(false); // Unlock send button immediately
             EnhancedFrontendMemory.saveActiveConversation(
               [...newMessages, {
                 id: assistantId,
@@ -683,6 +685,7 @@ const WaktiAIV2 = () => {
               EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
               return updated;
             });
+            setIsLoading(false); // Unlock send button immediately
           },
           // onError
           (errMsg: string) => {
