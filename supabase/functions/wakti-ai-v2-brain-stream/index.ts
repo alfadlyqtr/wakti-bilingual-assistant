@@ -335,7 +335,8 @@ async function streamAIResponse(
   ];
 
   console.log("🚀 STREAMING: Making API request");
-
+  
+  try {
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
@@ -398,6 +399,7 @@ async function streamAIResponse(
         }
       }
     }
+  }
   } catch (err) {
     // If OpenAI fails and Claude is available (and not vision invalid), fall back
     if (provider === 'openai' && ANTHROPIC_API_KEY) {
