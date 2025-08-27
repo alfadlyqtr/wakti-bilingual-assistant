@@ -34,7 +34,7 @@ class EnhancedFrontendMemoryClass {
       const activeData = {
         id: actualId,
         title,
-        messages: messages.slice(-30), // Keep last 30 messages
+        messages: messages.slice(-20), // Keep last 20 messages
         lastMessageAt: Date.now(),
         messageCount: messages.length,
         createdAt: Date.now()
@@ -104,7 +104,7 @@ class EnhancedFrontendMemoryClass {
       const conversation: StoredConversation = {
         id: conversationId,
         title: this.generateConversationTitle(messages[0].content),
-        messages: messages.slice(-30), // Keep last 30 messages
+        messages: messages.slice(-20), // Keep last 20 messages
         lastMessageAt: new Date(),
         messageCount: messages.length,
         createdAt: new Date()

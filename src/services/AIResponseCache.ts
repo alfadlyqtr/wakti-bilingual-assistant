@@ -18,9 +18,6 @@ class AIResponseCacheService {
     'what\'s your name': "I'm WAKTI, your AI assistant! 🤖",
     'what is your name': "I'm WAKTI, your AI assistant! 🤖",
     'who are you': "I'm WAKTI, your intelligent AI assistant here to help! ✨",
-    'good morning': "Good morning! Hope you have a great day ahead! ☀️",
-    'good afternoon': "Good afternoon! How can I assist you today? 🌞",
-    'good evening': "Good evening! What can I help you with? 🌙",
     'thanks': "You're welcome! Happy to help! 😊",
     'thank you': "You're very welcome! Anything else I can do for you? 😊",
     'bye': "Goodbye! Have a wonderful day! 👋",
@@ -34,9 +31,7 @@ class AIResponseCacheService {
     'كيف حالك؟': "بخير والحمد لله — مستعد لمساعدتك! 🚀",
     'ما اسمك': "أنا WAKTI، مساعدك الذكي! 🤖",
     'من أنت': "أنا WAKTI، مساعدك الذكي هنا لمساعدتك! ✨",
-    'صباح الخير': "صباح النور! أتمنى لك يوماً رائعاً! ☀️",
-    'مساء الخير': "مساء النور! كيف يمكنني مساعدتك؟ 🌙",
-    'شكرا': "عفواً! سعيد بمساعدتك! 😊",
+        'شكرا': "عفواً! سعيد بمساعدتك! 😊",
     'شكراً': "عفواً! سعيد بمساعدتك! 😊",
     'مع السلامة': "مع السلامة! اعتن بنفسك! 👋"
   };

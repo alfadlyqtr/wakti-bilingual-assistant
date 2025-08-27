@@ -33,6 +33,20 @@ class WaktiAIV2ServiceClass {
     this.loadConversationsFromStorage();
   }
 
+  // Safely get user's personal touch preferences from cache or localStorage
+  private getPersonalTouch(): any {
+    try {
+      if (this.personalTouchCache) return this.personalTouchCache;
+      const raw = localStorage.getItem('wakti_personal_touch');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      this.personalTouchCache = parsed;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
   // Enhanced message handling with session storage
   private getEnhancedMessages(recentMessages: AIMessage[]): AIMessage[] {
     // Combine session storage with current messages
@@ -61,8 +75,8 @@ class WaktiAIV2ServiceClass {
     ];
     
     return messages.filter((msg, index) => {
-      // Always keep the last 10 messages to maintain recent context
-      if (index >= messages.length - 10) return true;
+      // Always keep the last 15 messages to maintain recent context
+      if (index >= messages.length - 15) return true;
       
       // Filter out very short redundant responses
       if (msg.content && msg.content.length < 20) {
@@ -72,6 +86,52 @@ class WaktiAIV2ServiceClass {
       // Keep longer, meaningful messages
       return true;
     });
+  }
+
+  // Generate conversation summary for ultra-fast performance
+  private generateConversationSummary(messages: AIMessage[]): string {
+    if (!messages || messages.length < 10) return '';
+    
+    // Take messages except the last 10 for summary (keep last 10 as recent context)
+    const summaryMessages = messages.slice(0, -10);
+    if (summaryMessages.length === 0) return '';
+    
+    // Extract key topics and context
+    const topics = new Set<string>();
+    const userQuestions: string[] = [];
+    const assistantActions: string[] = [];
+    
+    summaryMessages.forEach(msg => {
+      if (msg.role === 'user' && msg.content.length > 30) {
+        // Extract potential topics/keywords
+        const words = msg.content.toLowerCase().split(/\s+/);
+        words.forEach(word => {
+          if (word.length > 4 && !['about', 'could', 'would', 'should', 'please'].includes(word)) {
+            topics.add(word);
+          }
+        });
+        
+        if (msg.content.includes('?')) {
+          userQuestions.push(msg.content.substring(0, 100));
+        }
+      } else if (msg.role === 'assistant' && msg.actionTaken) {
+        assistantActions.push('Action taken');
+      }
+    });
+    
+    // Build concise summary
+    let summary = '';
+    if (topics.size > 0) {
+      summary += `Topics discussed: ${Array.from(topics).slice(0, 5).join(', ')}. `;
+    }
+    if (userQuestions.length > 0) {
+      summary += `User asked about: ${userQuestions[userQuestions.length - 1]}. `;
+    }
+    if (assistantActions.length > 0) {
+      summary += `${assistantActions.length} actions performed. `;
+    }
+    
+    return summary.trim();
   }
 
   private loadStoredMessages(): AIMessage[] {
@@ -92,8 +152,8 @@ class WaktiAIV2ServiceClass {
 
   private saveMessagesToStorage(messages: AIMessage[]) {
     try {
-      // Keep only last 50 messages to prevent storage overflow
-      const messagesToStore = messages.slice(-50);
+      // Keep only last 100 messages to prevent storage overflow
+      const messagesToStore = messages.slice(-100);
       sessionStorage.setItem('wakti_conversation_memory', JSON.stringify(messagesToStore));
     } catch (error) {
       console.warn('Failed to save messages to storage:', error);
@@ -154,6 +214,13 @@ class WaktiAIV2ServiceClass {
     }
   }
 
+  // Allow UI to invalidate personal touch cache after saving settings
+  clearPersonalTouchCache() {
+    try {
+      this.personalTouchCache = null;
+    } catch {}
+  }
+
   async sendStreamingMessage(
     message: string,
     userId?: string,
@@ -181,12 +248,50 @@ class WaktiAIV2ServiceClass {
 
       const personalTouch = this.getPersonalTouch();
 
+      // Compute client local hour and welcome-back flag (gap >= 12h)
+      const clientLocalHour = new Date().getHours();
+      let isWelcomeBack = false;
+      try {
+        const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
+        if (lastSeenStr) {
+          const gapMs = Date.now() - Number(lastSeenStr);
+          isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
+        }
+      } catch {}
+
+      // Enhanced message handling with 20-message memory
+      const enhancedMessages = this.getEnhancedMessages(recentMessages);
+      const generatedSummary = this.generateConversationSummary(enhancedMessages);
+
+      // Load stored rolling summary (Supabase by conversation UUID, else local fallback)
+      let storedSummary: string | null = null;
+      const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
+      try {
+        if (uuidLike) {
+          const { data: row } = await supabase
+            .from('ai_conversation_summaries')
+            .select('summary_text')
+            .eq('conversation_id', conversationId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          storedSummary = row?.summary_text || null;
+        } else if (conversationId) {
+          storedSummary = localStorage.getItem(`wakti_local_summary_${conversationId}`) || null;
+        }
+      } catch {}
+
+      // Combine provided summary (if any), stored summary, and generated summary
+      const pieces = [conversationSummary, storedSummary, generatedSummary].filter((s) => !!(s && s.trim())) as string[];
+      let finalSummary = pieces.join(' ').slice(0, 1200);
+
       // Get auth token for streaming request
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('No valid session for streaming');
       }
-
+      
+      // Make SSE request to Edge Function with enhanced context
       const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
         method: 'POST',
         headers: {
@@ -197,35 +302,33 @@ class WaktiAIV2ServiceClass {
         body: JSON.stringify({
           message,
           language,
-          conversationId: conversationId,
+          conversationId,
           inputType,
           activeTrigger,
           attachedFiles,
-          recentMessages: this.getEnhancedMessages(recentMessages), // Enhanced message handling
-          personalTouch: personalTouch
+          recentMessages: enhancedMessages,
+          conversationSummary: finalSummary,
+          personalTouch,
+          clientLocalHour,
+          isWelcomeBack
         }),
         signal
       });
 
-      if (!response.ok) {
-        throw new Error(`Streaming request failed: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Streaming request failed: ${response.status}`);
 
+      // SSE parsing
       const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body reader available');
-      }
+      if (!reader) throw new Error('No response body reader available');
 
       const decoder = new TextDecoder();
       let buffer = '';
       let fullResponse = '';
-      let metadata = {};
+      let metadata: any = {};
       let encounteredError: string | null = null;
+      let isCompleted = false;
 
-      // Ensure stream can be aborted from callers
-      const abortHandler = async () => {
-        try { await reader.cancel(); } catch {}
-      };
+      const abortHandler = async () => { try { await reader.cancel(); } catch {} };
       if (signal) {
         if (signal.aborted) {
           await abortHandler();
@@ -237,216 +340,90 @@ class WaktiAIV2ServiceClass {
       try {
         while (true) {
           const { done, value } = await reader.read();
-          
-          if (done) break;
+          if (done) {
+            if (!isCompleted) onComplete?.(metadata);
+            break;
+          }
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              
-              try {
-                const parsed = JSON.parse(data);
-                
-                if (parsed.token && !parsed.done) {
-                  fullResponse += parsed.token;
-                  onToken?.(parsed.token);
-                } else if (parsed.done) {
-                  metadata = {
-                    model: parsed.model,
-                    fallbackUsed: parsed.fallbackUsed,
-                    responseTime: parsed.responseTime,
-                    browsingUsed: parsed.browsingUsed,
-                    browsingData: parsed.browsingData
-                  };
-                  onComplete?.(metadata);
-                } else if (parsed.error) {
-                  encounteredError = typeof parsed.error === 'string' ? parsed.error : 'Streaming error';
-                  onError?.(encounteredError);
-                  // Terminate the stream processing immediately
-                  throw new Error(encounteredError);
-                }
-              } catch (e) {
-                // Skip malformed JSON
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6);
+
+            if (data === '[DONE]') {
+              if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
+              continue;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.error) { encounteredError = parsed.error; continue; }
+              if (typeof parsed.token === 'string') { fullResponse += parsed.token; onToken?.(parsed.token); }
+              else if (typeof parsed.response === 'string') { fullResponse += parsed.response; onToken?.(parsed.response); }
+              if (parsed.metadata && typeof parsed.metadata === 'object') {
+                metadata = { ...metadata, ...parsed.metadata };
               }
+              if (parsed.done === true) {
+                if (!isCompleted) { onComplete?.(parsed.metadata || metadata); isCompleted = true; }
+              }
+            } catch {
+              // Not JSON? Treat as raw token
+              fullResponse += data;
+              onToken?.(data);
             }
           }
         }
       } finally {
-        reader.releaseLock();
-        if (signal) {
-          signal.removeEventListener('abort', abortHandler as any);
-        }
+        try { reader.releaseLock(); } catch {}
+        if (signal) signal.removeEventListener('abort', abortHandler as any);
+        try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
       }
+
+      // Best-effort: persist updated rolling summary after stream
+      try {
+        const msgsForSummary: AIMessage[] = [
+          ...enhancedMessages,
+          { id: `user-${Date.now()}`, role: 'user', content: message, timestamp: new Date() } as AIMessage,
+          { id: `assistant-${Date.now()}`, role: 'assistant', content: fullResponse, timestamp: new Date() } as AIMessage
+        ];
+        const updatedSummary = this.generateConversationSummary(msgsForSummary);
+        if (updatedSummary && updatedSummary.trim()) {
+          const uuidLike2 = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
+          if (uuidLike2) {
+            const { data: existing } = await supabase
+              .from('ai_conversation_summaries')
+              .select('id')
+              .eq('conversation_id', conversationId)
+              .limit(1)
+              .maybeSingle();
+            if (existing?.id) {
+              await supabase
+                .from('ai_conversation_summaries')
+                .update({ summary_text: updatedSummary, message_count: msgsForSummary.length })
+                .eq('id', existing.id);
+            } else {
+              await supabase
+                .from('ai_conversation_summaries')
+                .insert({ user_id: userId, conversation_id: conversationId, summary_text: updatedSummary, message_count: msgsForSummary.length });
+            }
+          } else if (conversationId) {
+            localStorage.setItem(`wakti_local_summary_${conversationId}`, updatedSummary);
+          }
+        }
+      } catch {}
+
+      if (encounteredError) throw new Error(encounteredError);
 
       console.log(`✅ FRONTEND BOSS: Streaming completed successfully`);
-
-      return {
-        response: fullResponse,
-        success: true,
-        conversationId: conversationId,
-        intent: activeTrigger,
-        confidence: 'high',
-        ...metadata
-      };
-
+      return { response: fullResponse, conversationId, metadata };
     } catch (error: any) {
-      console.error('❌ FRONTEND BOSS: Streaming error:', error);
-      onError?.(error.message);
+      console.error('❌ FRONTEND BOSS: Streaming failed:', error);
+      onError?.(error.message || 'Streaming failed');
       throw error;
     }
-  }
-
-  async sendMessage(
-    message: string,
-    userId?: string,
-    language: string = 'en',
-    conversationId?: string | null,
-    inputType: 'text' | 'voice' | 'vision' = 'text',
-    recentMessages: AIMessage[] = [],
-    skipContextLoad: boolean = false,
-    activeTrigger: string = 'chat',
-    conversationSummary: string = '',
-    attachedFiles: any[] = [],
-    signal?: AbortSignal,
-    imageMode?: string
-  ) {
-    const maxRetries = 2;
-    let lastError: any = null;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        if (!userId) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) throw new Error('Authentication required');
-          userId = user.id;
-        }
-
-        console.log(`🤖 FRONTEND BOSS: Attempt ${attempt}/${maxRetries} - Sending to backend worker for ${activeTrigger} mode`, {
-          imageMode: imageMode || 'none'
-        });
-
-        const personalTouch = this.getPersonalTouch();
-
-        // Simplified timeout - backend worker handles processing
-        const timeoutDuration = 30000; // 30s to accommodate image generation
-        
-        console.log(`⏱️ FRONTEND BOSS: Using ${timeoutDuration/1000}s timeout for backend communication`);
-
-        // FRONTEND BOSS: Send to backend worker with minimal payload
-        const { data, error } = await Promise.race([
-          supabase.functions.invoke('wakti-ai-v2-brain', {
-            body: {
-              message,
-              language,
-              conversationId: conversationId,
-              inputType,
-              activeTrigger,
-              attachedFiles,
-              recentMessages: this.getEnhancedMessages(recentMessages), // Enhanced message handling
-              personalTouch: personalTouch,
-              imageMode: imageMode // Pass imageMode to backend
-            }
-          }),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Frontend timeout - Backend worker took too long (>${timeoutDuration/1000}s)`)), timeoutDuration)
-          )
-        ]) as any;
-
-        if (error) {
-          console.error(`❌ FRONTEND BOSS: Attempt ${attempt} failed:`, error);
-          lastError = error;
-          
-          // Don't retry on specific errors
-          if (error.message?.includes('Authentication') || 
-              error.message?.includes('API key') ||
-              error.message?.includes('Invalid image')) {
-            throw error;
-          }
-          
-          if (attempt < maxRetries) {
-            console.log(`🔄 FRONTEND BOSS: Retrying in ${attempt}s...`);
-            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
-            continue;
-          }
-          
-          throw error;
-        }
-
-        // Success - create response message
-        const assistantMessage: AIMessage = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: data.response || 'I apologize, but I encountered an issue processing your request.',
-          timestamp: new Date(),
-          intent: data.intent,
-          confidence: data.confidence as 'high' | 'medium' | 'low',
-          actionTaken: data.actionTaken,
-          imageUrl: data.imageUrl,
-          browsingUsed: data.browsingUsed,
-          browsingData: data.browsingData,
-          metadata: {
-            runwareCost: data.runwareCost,
-            modelUsed: data.modelUsed,
-            responseTime: data.responseTime,
-            imageMode: imageMode
-          }
-        };
-
-        console.log(`✅ FRONTEND BOSS: Successfully received response from backend worker`);
-
-        return {
-          ...data,
-          conversationId: conversationId,
-          response: assistantMessage.content
-        };
-
-      } catch (error: any) {
-        lastError = error;
-        console.error(`❌ FRONTEND BOSS: Attempt ${attempt} failed:`, error);
-        
-        if (attempt === maxRetries) {
-          break;
-        }
-      }
-    }
-
-    // All attempts failed
-    console.error('❌ FRONTEND BOSS: All attempts failed, returning error');
-    
-    // Provide specific error messages based on error type
-    let errorMessage = 'I apologize, but I encountered an issue processing your request.';
-    if (language === 'ar') {
-      errorMessage = 'أعتذر، واجهت مشكلة في معالجة طلبك.';
-    }
-    
-    if (lastError?.message?.includes('timeout')) {
-      errorMessage = language === 'ar' 
-        ? 'أعتذر، استغرق الطلب وقتاً أطول من المتوقع. يرجى المحاولة مرة أخرى.'
-        : 'I apologize, the request took longer than expected. Please try again.';
-    } else if (lastError?.message?.includes('network') || lastError?.message?.includes('fetch')) {
-      errorMessage = language === 'ar'
-        ? 'أعتذر، حدثت مشكلة في الاتصال. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.'
-        : 'I apologize, there was a connection issue. Please check your internet connection and try again.';
-    }
-
-    throw new Error(errorMessage);
-  }
-
-  private getPersonalTouch() {
-    try {
-      const stored = localStorage.getItem('wakti_personal_touch');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  clearPersonalTouchCache() {
-    this.personalTouchCache = null;
   }
 
   // Legacy methods - now handled by frontend
@@ -469,7 +446,7 @@ class WaktiAIV2ServiceClass {
   }
 
   loadChatSession(): { messages: AIMessage[], conversationId?: string | null } | null {
-    console.log('⚠️ BACKEND WORKER: loadChatSession called - should use EnhancedFrontendMemory instead');
+    console.log('⚠️ BACKEND BOSS: loadChatSession called - should use EnhancedFrontendMemory instead');
     return null;
   }
 
