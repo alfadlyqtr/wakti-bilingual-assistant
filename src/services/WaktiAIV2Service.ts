@@ -167,7 +167,8 @@ class WaktiAIV2ServiceClass {
     attachedFiles: any[] = [],
     onToken?: (token: string) => void,
     onComplete?: (metadata: any) => void,
-    onError?: (error: string) => void
+    onError?: (error: string) => void,
+    signal?: AbortSignal
   ) {
     try {
       if (!userId) {
@@ -202,7 +203,8 @@ class WaktiAIV2ServiceClass {
           attachedFiles,
           recentMessages: this.getEnhancedMessages(recentMessages), // Enhanced message handling
           personalTouch: personalTouch
-        })
+        }),
+        signal
       });
 
       if (!response.ok) {
@@ -218,6 +220,19 @@ class WaktiAIV2ServiceClass {
       let buffer = '';
       let fullResponse = '';
       let metadata = {};
+      let encounteredError: string | null = null;
+
+      // Ensure stream can be aborted from callers
+      const abortHandler = async () => {
+        try { await reader.cancel(); } catch {}
+      };
+      if (signal) {
+        if (signal.aborted) {
+          await abortHandler();
+          throw new Error('Streaming aborted');
+        }
+        signal.addEventListener('abort', abortHandler, { once: true });
+      }
 
       try {
         while (true) {
@@ -249,8 +264,10 @@ class WaktiAIV2ServiceClass {
                   };
                   onComplete?.(metadata);
                 } else if (parsed.error) {
-                  onError?.(parsed.error);
-                  break;
+                  encounteredError = typeof parsed.error === 'string' ? parsed.error : 'Streaming error';
+                  onError?.(encounteredError);
+                  // Terminate the stream processing immediately
+                  throw new Error(encounteredError);
                 }
               } catch (e) {
                 // Skip malformed JSON
@@ -260,6 +277,9 @@ class WaktiAIV2ServiceClass {
         }
       } finally {
         reader.releaseLock();
+        if (signal) {
+          signal.removeEventListener('abort', abortHandler as any);
+        }
       }
 
       console.log(`✅ FRONTEND BOSS: Streaming completed successfully`);

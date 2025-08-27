@@ -204,13 +204,18 @@ const WaktiAIV2 = () => {
   };
 
   const handleSendMessage = useCallback(async (messageContent: string, trigger: string, attachedFiles?: any[], imageMode?: string) => {
+    console.log('🔥 DEBUG: handleSendMessage called', { trigger, messageContent: messageContent.substring(0, 50), filesCount: attachedFiles?.length || 0 });
+    
     if (abortControllerRef.current) {
+      console.log('🔥 DEBUG: Aborting previous request');
       abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
 
     const startTime = Date.now();
+    console.log('🔥 DEBUG: About to set isLoading(true)');
     setIsLoading(true);
+    console.log('⏳ isLoading -> true (handleSendMessage start)');
     setProcessedFiles(attachedFiles || []);
     
     console.log(`🚀 FRONTEND BOSS: Starting ${trigger} mode request`, {
@@ -220,6 +225,7 @@ const WaktiAIV2 = () => {
     });
 
     try {
+      console.log('🔥 DEBUG: Entered try block');
       // No global quota check here (chat/search/image/vision are not gated)
 
       // FILE PROCESSING
@@ -387,7 +393,10 @@ const WaktiAIV2 = () => {
         
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, currentConversationId);
         
+        console.log('🔥 DEBUG: Image mode completed, about to set isLoading(false)');
+        console.log('✅ isLoading -> false (image mode completed)');
         setIsLoading(false);
+        console.log('🔥 DEBUG: Image mode - isLoading set to false, returning');
         return;
       }
 
@@ -472,7 +481,9 @@ const WaktiAIV2 = () => {
         
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
         
+        console.log('🔥 DEBUG: Vision mode completed, about to set isLoading(false)');
         setIsLoading(false);
+        console.log('🔥 DEBUG: Vision mode - isLoading set to false, returning');
         return;
       }
 
@@ -507,6 +518,7 @@ const WaktiAIV2 = () => {
         setSessionMessages(prev => [...prev, placeholderAssistant]);
 
         // Start streaming
+        console.log('🔥 DEBUG: About to call sendStreamingMessage for search mode');
         await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile?.id,
@@ -552,7 +564,9 @@ const WaktiAIV2 = () => {
               }],
               workingConversationId
             );
-          }
+          },
+          // signal
+          abortControllerRef.current?.signal
         );
         
       } else {
@@ -639,6 +653,7 @@ const WaktiAIV2 = () => {
         };
         setSessionMessages(prev => [...prev, placeholderAssistant]);
 
+        console.log('🔥 DEBUG: About to call sendStreamingMessage for chat mode');
         await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile?.id,
@@ -659,6 +674,7 @@ const WaktiAIV2 = () => {
           },
           // onComplete
           (meta: any) => {
+            console.log('🔥 DEBUG: Chat streaming onComplete called');
             setSessionMessages(prev => {
               const updated = prev.map(m => m.id === assistantId
                 ? { ...m, intent: 'chat', browsingUsed: meta?.browsingUsed, browsingData: meta?.browsingData }
@@ -670,6 +686,7 @@ const WaktiAIV2 = () => {
           },
           // onError
           (errMsg: string) => {
+            console.log('🔥 DEBUG: Chat streaming onError called:', errMsg);
             setSessionMessages(prev => {
               const updated = prev.map(m => m.id === assistantId ? {
                 ...m,
@@ -681,12 +698,16 @@ const WaktiAIV2 = () => {
               return updated;
             });
             setError(errMsg || 'Streaming error');
-          }
+          },
+          // signal
+          abortControllerRef.current?.signal
         );
+        console.log('🔥 DEBUG: Chat streaming sendStreamingMessage completed');
       }
       
       const totalTime = Date.now() - startTime;
       console.log(`✅ FRONTEND BOSS: Message processed in ${totalTime}ms`);
+      console.log('🔥 DEBUG: About to exit try block normally');
       
       setProcessedFiles([]);
       checkQuotas();
@@ -696,6 +717,7 @@ const WaktiAIV2 = () => {
       }
 
     } catch (err: any) {
+      console.log('🔥 DEBUG: Entered catch block with error:', err.message);
       const totalTime = Date.now() - startTime;
       console.error("❌ FRONTEND BOSS ERROR:", err);
       console.error("📊 ERROR DETAILS:", {
@@ -726,7 +748,10 @@ const WaktiAIV2 = () => {
         : 'Failed to send message. Please try again.'
       );
     } finally {
+      console.log('🔥 DEBUG: Entered finally block');
+      console.log('🔚 finally: isLoading -> false (handleSendMessage end)');
       setIsLoading(false);
+      console.log('🔥 DEBUG: Finally block - isLoading set to false');
     }
   }, [abortControllerRef, sessionMessages, currentConversationId, userProfile, language, isQuotaExceeded, isExtendedQuotaExceeded, isAIQuotaExceeded, fileInputRef]);
 

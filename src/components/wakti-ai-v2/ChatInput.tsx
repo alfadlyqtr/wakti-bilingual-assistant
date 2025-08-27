@@ -68,6 +68,8 @@ export function ChatInput({
   const [imageMode, setImageMode] = useState<ImageMode>('text2image');
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const seedFileInputRef = useRef<HTMLInputElement>(null);
+  const [isInputCollapsed, setIsInputCollapsed] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Use simplified file upload hook
   const {
@@ -91,6 +93,13 @@ export function ChatInput({
       setWasAutoSwitchedToVision(false);
     }
   }, [uploadedFiles.length, activeTrigger, wasAutoSwitchedToVision, onTriggerChange]);
+
+  // Focus textarea after expanding the input area
+  useEffect(() => {
+    if (!isInputCollapsed) {
+      textareaRef.current?.focus();
+    }
+  }, [isInputCollapsed]);
 
   // Enhanced send message function with proper data conversion
   const handleSendMessage = async () => {
@@ -126,14 +135,18 @@ export function ChatInput({
 
       console.log('📎 ENHANCED FILES:', enhancedFiles);
 
-      await onSendMessage(
-        message, 
-        finalTrigger, // Use the final trigger (could be auto-switched to vision)
-        enhancedFiles,
-        activeTrigger === 'image' ? imageMode : undefined // Only pass imageMode if in image mode
-      );
+      // Clear input immediately for snappier UX, while sending uses captured values
+      const outgoingMessage = message;
+      const outgoingFiles = enhancedFiles;
       setMessage('');
       clearFiles();
+
+      await onSendMessage(
+        outgoingMessage, 
+        finalTrigger, // Use the final trigger (could be auto-switched to vision)
+        outgoingFiles,
+        activeTrigger === 'image' ? imageMode : undefined // Only pass imageMode if in image mode
+      );
     } else {
       console.log('❌ SEND: No message or files to send');
     }
@@ -243,7 +256,7 @@ export function ChatInput({
           uploadedFiles={uploadedFiles}
           onRemoveFile={removeFile}
           isUploading={isUploading}
-          disabled={isLoading}
+          disabled={isUploading}
           onAutoSwitchMode={(mode) => {
             console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
             // Do NOT auto-switch if currently in Image mode with background-removal selected
@@ -280,7 +293,7 @@ export function ChatInput({
                 <button
                   onClick={() => setShowVideoUpload && setShowVideoUpload(true)}
                   className="h-9 px-2 rounded-2xl flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0"
-                  disabled={isLoading || isUploading}
+                  disabled={isUploading}
                   type="button"
                   title={language === 'ar' ? 'إضافة فيديو' : 'Add Video'}
                 >
@@ -290,7 +303,7 @@ export function ChatInput({
                 <PlusMenu
                   onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
                   onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
-                  isLoading={isLoading || isUploading || activeTrigger === 'image' || activeTrigger === 'search'}
+                  isLoading={isUploading || activeTrigger === 'image' || activeTrigger === 'search'}
                 />
               )}
               
@@ -304,7 +317,7 @@ export function ChatInput({
                 }}
                 aria-label={language === "ar" ? "إضافي" : "Extra"}
                 className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
-                disabled={isLoading || isUploading}
+                disabled={isUploading}
                 type="button"
               >
                 <span className="text-lg" role="img" aria-label="Extra">💬</span>
@@ -320,7 +333,7 @@ export function ChatInput({
                 }}
                 aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
                 className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
-                disabled={isLoading || isUploading}
+                disabled={isUploading}
                 type="button"
               >
                 <span className="text-lg" role="img" aria-label="Quick Actions">⚡</span>
@@ -347,7 +360,7 @@ export function ChatInput({
                     <button
                       type="button"
                       onClick={() => setIsModeMenuOpen(v => !v)}
-                      disabled={isLoading || isUploading}
+                      disabled={isUploading}
                       className="inline-flex items-center gap-1 outline-none"
                       aria-haspopup="menu"
                       aria-expanded={isModeMenuOpen}
@@ -360,7 +373,7 @@ export function ChatInput({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); triggerSeedUpload(); }}
-                      disabled={isLoading || isUploading}
+                      disabled={isUploading}
                       className="ml-1 h-5 w-5 flex items-center justify-center rounded-full bg-orange-200/60 text-orange-700 hover:bg-orange-300/60"
                       aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
                       title={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
@@ -411,17 +424,37 @@ export function ChatInput({
                   )}
                 </div>
               )}
+              <div className="ml-auto">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setIsInputCollapsed(v => !v)}
+                        aria-expanded={!isInputCollapsed}
+                        aria-label={language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
+                        className="h-9 w-9 rounded-2xl flex items-center justify-center bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0"
+                      >
+                        <ChevronDown className={`h-4 w-4 transition-transform ${isInputCollapsed ? 'rotate-180' : ''}`} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                      {language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
             </div>
 
             {/* IMAGE MODE HELPER EXAMPLE */}
-            {activeTrigger === 'image' && (
+            {activeTrigger === 'image' && !isInputCollapsed && (
               <div className="px-3 pt-1 pb-2 text-xs text-foreground/70">
                 {getImageModeExample()}
               </div>
             )}
 
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION */}
-            {uploadedFiles.length > 0 && message === '' && (
+            {uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
               <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20">
                 {uploadedFiles[0]?.imageType?.id === 'ids' && (
                   <>
@@ -469,40 +502,41 @@ export function ChatInput({
             )}
             
             {/* INPUT ROW: Textarea + Send */}
-            <div className="relative flex items-end gap-2 px-3 pb-3 pt-0.5">
-              <div className="flex-1 flex items-end">
-                <Textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder={getPlaceholderText()}
-                  className={`
-                    flex-1 border-[2.5px]
-                    bg-white/95 dark:bg-gray-800/90
-                    text-gray-900 dark:text-gray-100
-                    ${textareaHighlight(activeTrigger)}
-                    shadow-inner shadow-primary/10
-                    backdrop-blur-[3px] resize-none
-                    focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
-                    py-3 px-4 min-h-[42px] max-h-32 text-base leading-relaxed
-                    placeholder:text-gray-500 dark:placeholder:text-gray-400
-                    rounded-xl
-                    outline-none transition-all duration-200
-                    ${!isTextareaEnabled ? 'opacity-50 cursor-not-allowed' : ''}
-                  `}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (canSend) {
-                        handleSendMessage();
+            {!isInputCollapsed && (
+              <div className="relative flex items-end gap-2 px-3 pb-3 pt-0.5">
+                <div className="flex-1 flex items-end">
+                  <Textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={getPlaceholderText()}
+                    className={`
+                      flex-1 border-[2.5px]
+                      bg-white/95 dark:bg-gray-800/90
+                      text-gray-900 dark:text-gray-100
+                      ${textareaHighlight(activeTrigger)}
+                      shadow-inner shadow-primary/10
+                      backdrop-blur-[3px] resize-none
+                      focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
+                      py-3 px-4 min-h-[42px] max-h-32 text-base leading-relaxed
+                      placeholder:text-gray-500 dark:placeholder:text-gray-400
+                      rounded-xl
+                      outline-none transition-all duration-200
+                      ${!isTextareaEnabled ? 'opacity-50 cursor-not-allowed' : ''}
+                    `}
+                    ref={textareaRef}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (canSend) {
+                          handleSendMessage();
+                        }
                       }
-                    }
-                  }}
-                  disabled={isLoading || isUploading || !isTextareaEnabled}
-                />
-              </div>
-              
-              {/* Send button with proper enabling logic */}
-              {canSend && (
+                    }}
+                    disabled={isUploading || !isTextareaEnabled}
+                  />
+                </div>
+                
+                {/* Send button: always visible, disabled when cannot send */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -529,8 +563,8 @@ export function ChatInput({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
