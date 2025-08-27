@@ -525,7 +525,7 @@ async function streamAIResponse(
               if (content) {
                 controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: content })}\n\n`));
               }
-            } catch {}
+            } catch (e) {}
           }
         }
         return;
