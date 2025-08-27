@@ -227,12 +227,10 @@ async function streamAIResponse(
   // Choose API based on files (force OpenAI for vision)
   let apiKey = DEEPSEEK_API_KEY;
   let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-  let model = 'deepseek-chat';
   
   if (!apiKey || (attachedFiles?.length > 0 && attachedFiles.some(f => f.type?.startsWith('image/')))) {
     apiKey = OPENAI_API_KEY;
     apiUrl = 'https://api.openai.com/v1/chat/completions';
-    model = 'gpt-4o-mini';
   }
   
   if (!apiKey) {
