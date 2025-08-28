@@ -21,9 +21,12 @@ export async function executeRegularSearch(query: string, language: string = 'en
     const searchPayload = {
       api_key: TAVILY_API_KEY,
       query: query,
-      search_depth: "basic",
-      include_answer: true,
-      include_raw_content: false,
+      search_depth: "advanced",
+      time_range: "week",
+      include_answer: "advanced",
+      include_raw_content: true,
+      chunks_per_source: 5,
+      follow_up_questions: true,
       max_results: 5
     };
 
