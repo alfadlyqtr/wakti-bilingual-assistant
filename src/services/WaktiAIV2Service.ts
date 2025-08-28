@@ -244,7 +244,9 @@ class WaktiAIV2ServiceClass {
         userId = user.id;
       }
 
-      console.log(`🚀 FRONTEND BOSS: Starting streaming request for ${activeTrigger} mode`);
+      // Generate a lightweight requestId for diagnostics across iOS/Safari
+      const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      console.log(`🚀 FRONTEND BOSS: Starting streaming request for ${activeTrigger} mode [${requestId}]`);
 
       const personalTouch = this.getPersonalTouch();
 
@@ -291,13 +293,25 @@ class WaktiAIV2ServiceClass {
         throw new Error('No valid session for streaming');
       }
       
+      // Prepare optional anon key header defensively for Safari/PWA edge cases
+      const maybeAnonKey = (typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_SUPABASE_ANON_KEY)
+        || (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
+        || (typeof process !== 'undefined' && (process as any)?.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+        || undefined;
+
       // Make SSE request to Edge Function with enhanced context
       const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
         method: 'POST',
+        mode: 'cors',
+        cache: 'no-store',
+        keepalive: false,
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
-          'Accept': 'text/event-stream'
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-store',
+          'x-request-id': requestId,
+          ...(maybeAnonKey ? { 'apikey': maybeAnonKey } : {})
         },
         body: JSON.stringify({
           message,
@@ -310,7 +324,8 @@ class WaktiAIV2ServiceClass {
           conversationSummary: finalSummary,
           personalTouch,
           clientLocalHour,
-          isWelcomeBack
+          isWelcomeBack,
+          requestId
         }),
         signal
       });
@@ -337,11 +352,25 @@ class WaktiAIV2ServiceClass {
         signal.addEventListener('abort', abortHandler, { once: true });
       }
 
+      // Hard timeout to prevent lingering open streams on iOS/Safari
+      const TIMEOUT_MS = 120000; // 120s
+      const timeoutId = setTimeout(async () => {
+        try {
+          if (!isCompleted) {
+            encounteredError = encounteredError || 'timeout';
+            console.warn(`⏱️ FRONTEND BOSS: Streaming timeout [${requestId}] after ${TIMEOUT_MS}ms`);
+            onError?.('timeout');
+            await reader.cancel();
+          }
+        } catch {}
+      }, TIMEOUT_MS);
+
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
             if (!isCompleted) onComplete?.(metadata);
+            console.log(`✅ FRONTEND BOSS: Stream closed cleanly [${requestId}]`);
             break;
           }
 
@@ -355,6 +384,7 @@ class WaktiAIV2ServiceClass {
 
             if (data === '[DONE]') {
               if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
+              console.log(`🏁 FRONTEND BOSS: Received [DONE] [${requestId}]`);
               continue;
             }
 
@@ -380,6 +410,7 @@ class WaktiAIV2ServiceClass {
         try { reader.releaseLock(); } catch {}
         if (signal) signal.removeEventListener('abort', abortHandler as any);
         try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
+        try { /* clear timeout if set */ /* eslint-disable @typescript-eslint/no-unused-expressions */ (typeof timeoutId !== 'undefined') && clearTimeout(timeoutId); } catch {}
       }
 
       // Best-effort: persist updated rolling summary after stream
@@ -417,7 +448,7 @@ class WaktiAIV2ServiceClass {
 
       if (encounteredError) throw new Error(encounteredError);
 
-      console.log(`✅ FRONTEND BOSS: Streaming completed successfully`);
+      console.log(`✅ FRONTEND BOSS: Streaming completed successfully [${requestId}]`);
       return { response: fullResponse, conversationId, metadata };
     } catch (error: any) {
       console.error('❌ FRONTEND BOSS: Streaming failed:', error);
