@@ -17,7 +17,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-function sendFinalEvent(controller: ReadableStreamDefaultController, model: string, fallbackUsed: boolean = false, browsingUsed: boolean = false, browsingData: any = null) {
+function sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData) {
   try {
     const finalData = {
       done: true,
@@ -116,7 +116,7 @@ serve(async (req) => {
 });
 
 // Document processing function
-async function processDocuments(attachedFiles: any[]): Promise<string> {
+async function processDocuments(attachedFiles) {
   let documentContent = '';
   
   for (const file of attachedFiles) {
@@ -143,24 +143,24 @@ async function processDocuments(attachedFiles: any[]): Promise<string> {
 
 // Ultra-fast streaming AI response
 async function streamAIResponse(
-  message: string,
-  language: string,
-  activeTrigger: string,
-  controller: ReadableStreamDefaultController,
-  attachedFiles: any[] = [],
-  personalTouch: any = null,
-  recentMessages: any[] = [],
-  conversationSummary: string = '',
-  clientLocalHour: number | null = null,
-  isWelcomeBack: boolean = false
+  message,
+  language,
+  activeTrigger,
+  controller,
+  attachedFiles = [],
+  personalTouch = null,
+  recentMessages = [],
+  conversationSummary = '',
+  clientLocalHour = null,
+  isWelcomeBack = false
 ) {
   // Initialize provider-specific config after selection
-  let apiKey: string = '';
-  let apiUrl: string = '';
+  let apiKey = '';
+  let apiUrl = '';
   let model = '';
 
   // Choose API based on files (force OpenAI for vision)
-  let provider: 'openai' | 'claude' | 'deepseek' | null = null;
+  let provider = null;
   let fallbackUsed = false;
 
   if (!OPENAI_API_KEY || (attachedFiles?.length > 0 && attachedFiles.some(f => f.type?.startsWith('image/')))) {
@@ -191,8 +191,8 @@ async function streamAIResponse(
   }
 
   const startTime = Date.now();
-  let browsingUsed = false as boolean;
-  let browsingData: any = null;
+  let browsingUsed = false;
+  let browsingData = null;
 
   // Determine if we have valid vision inputs (images with base64 content)
   const hasImages = Array.isArray(attachedFiles) && attachedFiles.some(f => f?.type?.startsWith('image/'));
@@ -251,6 +251,13 @@ async function streamAIResponse(
   // Start with brand identity
   let systemPromptFinal = systemPrompt + `\n\nBrand Identity:\n- ` + brandRules.join('\n- ');
 
+  // Global anti-repetition rules (brand/nickname/greetings)
+  if (language === 'ar') {
+    systemPromptFinal += `\n\nقواعد الأسلوب:\n- لا تكرر أي كلمة أو اسم في نفس الجملة.\n- لا تكرر كلمات العلامة أو الأسماء مثل "WAKTI" أو اسمك المستعار.\n- تجنب تكرار التحيات أو علامات التعجب.\n- اذكر اسم المستخدم مرة واحدة فقط في الرسالة، ولا تكرره.`;
+  } else {
+    systemPromptFinal += `\n\nStyle Rules:\n- Do not repeat any word or name within the same sentence.\n- Never repeat brand or nickname tokens such as "WAKTI" or your AI nickname.\n- Avoid duplicated greetings or excessive exclamation marks.\n- Mention the user's name at most once per reply; do not repeat it.`;
+  }
+
   // Optional conversation summary for continuity
   if (conversationSummary && typeof conversationSummary === 'string' && conversationSummary.trim().length > 0) {
     const summaryLabel = language === 'ar' ? 'ملخص المحادثة السابقة' : 'Conversation summary';
@@ -261,19 +268,37 @@ async function streamAIResponse(
   if (personalTouch) {
     try {
       const { nickname, aiNickname, tone, style, instruction } = personalTouch || {};
-      const lines: string[] = [];
+      const lines = [];
       if (language === 'ar') {
         if (nickname) lines.push(`نادِ المستخدم باسم "${nickname}" عند المناسب.`);
         if (aiNickname) lines.push(`قدّم نفسك أحياناً باسم "${aiNickname}".`);
         if (tone) lines.push(`استخدم نبرة ${tone}.`);
         if (style) lines.push(`أسلوب الرد: ${style}.`);
         if (instruction) lines.push(`تعليمات إضافية: ${instruction}`);
+        // Nickname repetition control (Arabic)
+        if (aiNickname) {
+          lines.push('استخدم هذا الاسم بحذر: مرة واحدة كحد أقصى في أول رد، ولا تكرر ذلك في رسائل متتالية إلا إذا طلب المستخدم.');
+          const aiNicknameUsedRecently = Array.isArray(recentMessages)
+            && recentMessages.slice(-6).some(m => m?.role === 'assistant' && typeof m?.content === 'string' && m.content.includes(aiNickname));
+          if (aiNicknameUsedRecently) {
+            lines.push(`لا تذكر "${aiNickname}" في هذا الرد إذا تم ذكره مؤخراً.`);
+          }
+        }
       } else {
         if (nickname) lines.push(`Address the user as "${nickname}" when appropriate.`);
         if (aiNickname) lines.push(`You may refer to yourself as "${aiNickname}" occasionally.`);
         if (tone) lines.push(`Use a ${tone} tone.`);
         if (style) lines.push(`Reply style: ${style}.`);
         if (instruction) lines.push(`Additional instructions: ${instruction}`);
+        // Nickname repetition control (English)
+        if (aiNickname) {
+          lines.push('Use that nickname sparingly: at most once in your first reply, and never in consecutive messages unless the user asks.');
+          const aiNicknameUsedRecently = Array.isArray(recentMessages)
+            && recentMessages.slice(-6).some(m => m?.role === 'assistant' && typeof m?.content === 'string' && m.content.includes(aiNickname));
+          if (aiNicknameUsedRecently) {
+            lines.push(`Do not mention "${aiNickname}" in this reply if it was used recently.`);
+          }
+        }
       }
       if (lines.length > 0) {
         systemPromptFinal += `\n\nPersonalization:\n- ` + lines.join('\n- ');
@@ -322,7 +347,7 @@ async function streamAIResponse(
       }
     }
   } catch (e) {
-    browsingData = { engine: 'tavily', success: false, error: (e as Error)?.message };
+    browsingData = { engine: 'tavily', success: false, error: e?.message };
   }
 
   // Prepare messages with file support and optional search context
@@ -330,9 +355,9 @@ async function streamAIResponse(
     ? `${message}\n\nWeb search context:\n${searchContext}`
     : message;
 
-  let userContent: any = textMessage;
+  let userContent = textMessage;
   if (attachedFiles?.length > 0) {
-    const contentParts: any[] = [{ type: 'text', text: textMessage }];
+    const contentParts = [{ type: 'text', text: textMessage }];
     for (const file of attachedFiles) {
       const base64 = file?.data || file?.content; // accept either
       if (file?.type?.startsWith('image/') && base64) {
@@ -348,7 +373,7 @@ async function streamAIResponse(
   const messages = [
     { role: 'system', content: systemPromptFinal },
     // Insert recent history (last 20 already handled on frontend)
-    ...((Array.isArray(recentMessages) ? recentMessages : []).map((m: any) => ({
+    ...((Array.isArray(recentMessages) ? recentMessages : []).map((m) => ({
       role: m?.role === 'assistant' ? 'assistant' : 'user',
       content: m?.content ?? ''
     }))),
@@ -384,22 +409,8 @@ async function streamAIResponse(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  // Ensure we only append the AI nickname signature once even if both
-  // a [DONE] event and the reader completion fire.
-  let signatureSent = false;
-  function appendSignatureOnce(language: string, aiNickname?: string) {
-    if (signatureSent) return;
-    try {
-      const sig = buildSignature(language, personalTouch?.aiNickname);
-      if (sig) {
-        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sig })}\n\n`));
-      }
-      signatureSent = true;
-    } catch {}
-  }
-
   // Helper: detect identity-maker questions to force branded answer
-  function isIdentityQuestion(text: string, language: string): boolean {
+  function isIdentityQuestion(text, language) {
     if (!text) return false;
     const t = ('' + text).toLowerCase();
     if (language === 'ar') {
@@ -410,10 +421,7 @@ async function streamAIResponse(
 
   // Removed greeting helpers (timeOfDay, buildGreeting) — greetings are handled entirely on the frontend
 
-  function buildSignature(language: string, aiNickname?: string): string {
-    if (!aiNickname) return '';
-    return language === 'ar' ? `، ${aiNickname}` : `, ${aiNickname}`;
-  }
+  // Signature appending removed (Option B): rely on model behavior only.
 
   // Greeting injection moved to frontend. Do not emit greeting tokens here.
 
@@ -421,8 +429,7 @@ async function streamAIResponse(
     while (true) {
     const { done, value } = await reader.read();
     if (done) {
-      // Append signature once before finalizing
-      appendSignatureOnce(language, personalTouch?.aiNickname);
+      // Finalize without appending any signature
       sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
       controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
       break;
@@ -436,8 +443,7 @@ async function streamAIResponse(
       const data = line.slice(6);
 
       if (data === '[DONE]') {
-        // Append signature once before finalizing
-        appendSignatureOnce(language, personalTouch?.aiNickname);
+        // Finalize without appending any signature
         sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
         controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
         continue;
@@ -460,7 +466,7 @@ async function streamAIResponse(
     try {
       fallbackUsed = true;
       // Reuse same message, switch to Claude simulated stream
-      const claudeContent: any[] = [];
+      const claudeContent = [];
       const languagePrefix = language === 'ar' ? 'يرجى الرد باللغة العربية فقط. ' : 'Please respond in English only. ';
       claudeContent.push({ type: 'text', text: languagePrefix + textMessage });
       if (hasValidVisionImages) {
@@ -480,7 +486,7 @@ async function streamAIResponse(
         headers: {
           'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
           'Content-Type': 'application/json',
-          'x-api-key': ANTHROPIC_API_KEY!,
+          'x-api-key': ANTHROPIC_API_KEY,
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
@@ -499,7 +505,7 @@ async function streamAIResponse(
 
       const data = await resp.json();
       const text = Array.isArray(data?.content)
-        ? data.content.map((c: any) => c?.text || '').join('')
+        ? data.content.map((c) => c?.text || '').join('')
         : (data?.content?.[0]?.text || '');
 
       model = 'claude-3-5-sonnet-20241022';
@@ -509,7 +515,7 @@ async function streamAIResponse(
       controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
       return;
     } catch (err2) {
-      const msg = (err2 as Error)?.message || 'Fallback (Claude) error';
+      const msg = err2?.message || 'Fallback (Claude) error';
       controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
       controller.close();
       return;
@@ -553,13 +559,7 @@ async function streamAIResponse(
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          // Option 1: append signature before finalizing
-          try {
-            const sig = buildSignature(language, personalTouch?.aiNickname);
-            if (sig) {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sig })}\n\n`));
-            }
-          } catch {}
+          // Finalize without appending any signature
           sendFinalEvent(controller, deepseekModel, fallbackUsed, browsingUsed, browsingData);
           controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
           break;
@@ -571,12 +571,7 @@ async function streamAIResponse(
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6);
           if (data === '[DONE]') {
-            try {
-              const sig = buildSignature(language, personalTouch?.aiNickname);
-              if (sig) {
-                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sig })}\n\n`));
-              }
-            } catch {}
+            // Finalize without appending any signature
             sendFinalEvent(controller, deepseekModel, fallbackUsed, browsingUsed, browsingData);
             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
             continue;
@@ -592,20 +587,20 @@ async function streamAIResponse(
       }
       return;
     } catch (err3) {
-      const msg = (err3 as Error)?.message || 'DeepSeek fallback error';
+      const msg = err3?.message || 'DeepSeek fallback error';
       controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
       controller.close();
       return;
     }
   }
 
-  const msg = (err as Error)?.message || 'Streaming error';
+  const msg = err?.message || 'Streaming error';
   controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
   controller.close();
 }
 
 // Search functionality
-async function executeRegularSearch(query: string, language: string = 'en') {
+async function executeRegularSearch(query, language = 'en') {
   const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
   
   console.log('🔍 SEARCH: Starting search for:', query.substring(0, 50));
@@ -668,7 +663,7 @@ async function executeRegularSearch(query: string, language: string = 'en') {
     
     if (results.length > 0) {
       context += 'Search Results:\n';
-      results.forEach((result: any, index: number) => {
+      results.forEach((result, index) => {
         if (result && typeof result === 'object') {
           context += `${index + 1}. ${result.title || 'No title'}\n`;
           context += `   ${result.content || 'No content'}\n`;
@@ -698,7 +693,7 @@ async function executeRegularSearch(query: string, language: string = 'en') {
       error: 'Search failed',
       data: null,
       context: '',
-      details: error.message
+      details: error?.message
     };
   }
 }
