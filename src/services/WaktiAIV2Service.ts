@@ -426,6 +426,176 @@ class WaktiAIV2ServiceClass {
     }
   }
 
+  async sendMessage(
+    message: string,
+    userId?: string,
+    language: string = 'en',
+    conversationId?: string | null,
+    inputType: 'text' | 'voice' | 'vision' = 'text',
+    recentMessages: AIMessage[] = [],
+    skipContextLoad: boolean = false,
+    activeTrigger: string = 'chat',
+    conversationSummary: string = '',
+    attachedFiles: any[] = [],
+    signal?: AbortSignal,
+    imageMode?: string
+  ) {
+    try {
+      // Ensure user id
+      if (!userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Authentication required');
+        userId = user.id;
+      }
+
+      const personalTouch = this.getPersonalTouch();
+
+      // Compute client local hour and welcome-back flag
+      const clientLocalHour = new Date().getHours();
+      let isWelcomeBack = false;
+      try {
+        const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
+        if (lastSeenStr) {
+          const gapMs = Date.now() - Number(lastSeenStr);
+          isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
+        }
+      } catch {}
+
+      // Enhanced message handling with 20-message memory
+      const enhancedMessages = this.getEnhancedMessages(recentMessages);
+      const generatedSummary = this.generateConversationSummary(enhancedMessages);
+
+      // Load stored rolling summary (Supabase by conversation UUID, else local fallback)
+      let storedSummary: string | null = null;
+      const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId || '');
+      try {
+        if (uuidLike && conversationId) {
+          const { data: row } = await supabase
+            .from('ai_conversation_summaries')
+            .select('summary_text')
+            .eq('conversation_id', conversationId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          storedSummary = (row as any)?.summary_text || null;
+        } else if (conversationId) {
+          storedSummary = localStorage.getItem(`wakti_local_summary_${conversationId}`) || null;
+        }
+      } catch {}
+
+      const pieces = [conversationSummary, storedSummary, generatedSummary].filter((s) => !!(s && (s as string).trim())) as string[];
+      const finalSummary = pieces.join(' ').slice(0, 1200);
+
+      // Image generation uses non-streaming function; others can reuse streaming and return the final object
+      if (activeTrigger === 'image') {
+        const payload = {
+          message,
+          conversationId,
+          language,
+          attachedFiles,
+          activeTrigger: 'image',
+          recentMessages: enhancedMessages,
+          personalTouch,
+          userId,
+          imageMode,
+          conversationSummary: finalSummary,
+          clientLocalHour,
+          isWelcomeBack
+        };
+
+        const resp = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-app-name': 'Wakti AI'
+          },
+          body: JSON.stringify(payload),
+          signal
+        });
+
+        if (!resp.ok) {
+          throw new Error(`Non-streaming request failed: ${resp.status}`);
+        }
+
+        const data = await resp.json();
+
+        // Best-effort: persist updated rolling summary after completion
+        try {
+          const msgsForSummary: AIMessage[] = [
+            ...enhancedMessages,
+            { id: `user-${Date.now()}`, role: 'user', content: message, timestamp: new Date() } as AIMessage,
+            { id: `assistant-${Date.now()}`, role: 'assistant', content: data?.response || '', timestamp: new Date() } as AIMessage
+          ];
+          const updatedSummary = this.generateConversationSummary(msgsForSummary);
+          if (updatedSummary && updatedSummary.trim()) {
+            const uuidLike2 = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId || '');
+            if (uuidLike2 && conversationId) {
+              const { data: existing } = await supabase
+                .from('ai_conversation_summaries')
+                .select('id')
+                .eq('conversation_id', conversationId)
+                .limit(1)
+                .maybeSingle();
+              if ((existing as any)?.id) {
+                await supabase
+                  .from('ai_conversation_summaries')
+                  .update({ summary_text: updatedSummary, message_count: msgsForSummary.length })
+                  .eq('id', (existing as any).id);
+              } else {
+                await supabase
+                  .from('ai_conversation_summaries')
+                  .insert({ user_id: userId, conversation_id: conversationId, summary_text: updatedSummary, message_count: msgsForSummary.length });
+              }
+            } else if (conversationId) {
+              localStorage.setItem(`wakti_local_summary_${conversationId}`, updatedSummary);
+            }
+          }
+        } catch {}
+
+        try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
+
+        return data; // { response, imageUrl?, error?, ... }
+      }
+
+      // Vision/chat/search accumulation via streaming method under the hood
+      const streamed = await this.sendStreamingMessage(
+        message,
+        userId,
+        language,
+        conversationId,
+        inputType,
+        enhancedMessages,
+        skipContextLoad,
+        activeTrigger,
+        finalSummary,
+        attachedFiles,
+        undefined,
+        undefined,
+        undefined,
+        signal
+      );
+
+      const meta = streamed?.metadata || {};
+      return {
+        response: streamed?.response || '',
+        conversationId: streamed?.conversationId || conversationId,
+        error: false,
+        browsingUsed: meta?.browsingUsed,
+        browsingData: meta?.browsingData,
+        modelUsed: meta?.model,
+        responseTime: meta?.responseTime,
+        fallbackUsed: meta?.fallbackUsed
+      };
+    } catch (error: any) {
+      console.error('❌ FRONTEND BOSS: sendMessage failed:', error);
+      // Return friendly shape expected by callers
+      return {
+        response: language === 'ar' ? 'أعتذر، لست متاح حالياً. يرجى المحاولة مرة أخرى.' : "I apologize, I'm not available right now. Please try again.",
+        error: true
+      };
+    }
+  }
+
   // Legacy methods - now handled by frontend
   async getConversations(): Promise<AIConversation[]> {
     console.log('⚠️ BACKEND WORKER: getConversations called - should use frontend memory instead');
