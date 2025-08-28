@@ -78,6 +78,9 @@ verify_jwt = false
 [functions.wakti-ai-v2-brain]
 verify_jwt = false
 
+[functions.wakti-ai-v2-brain-stream]
+verify_jwt = false
+
 [studio]
 enabled = true
 port = 54323

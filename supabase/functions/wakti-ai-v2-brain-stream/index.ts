@@ -4,8 +4,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, x-streaming',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, x-streaming, x-request-id, x-mobile-request, cache-control',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
@@ -14,7 +15,7 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 );
 
 function sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData) {
@@ -42,6 +43,12 @@ serve(async (req) => {
 
   try {
     console.log("🚀 STREAMING: Processing request");
+    
+    // Debug incoming headers for mobile CORS issues
+    const reqId = req.headers.get('x-request-id') || 'none';
+    const mobile = req.headers.get('x-mobile-request') || 'false';
+    const origin = req.headers.get('origin') || 'unknown';
+    console.log('📥 Headers - origin:', origin, 'reqId:', reqId, 'mobile:', mobile);
     
     // Authenticate user
     const authHeader = req.headers.get('authorization');
