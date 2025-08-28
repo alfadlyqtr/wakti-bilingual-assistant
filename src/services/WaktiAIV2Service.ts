@@ -378,19 +378,6 @@ class WaktiAIV2ServiceClass {
         signal.addEventListener('abort', abortHandler, { once: true });
       }
 
-      // Hard timeout to prevent lingering open streams on iOS/Safari
-      const TIMEOUT_MS = 120000; // 120s
-      const timeoutId = setTimeout(async () => {
-        try {
-          if (!isCompleted) {
-            encounteredError = encounteredError || 'timeout';
-            console.warn(`⏱️ FRONTEND BOSS: Streaming timeout [${requestId}] after ${TIMEOUT_MS}ms`);
-            onError?.('timeout');
-            await reader.cancel();
-          }
-        } catch {}
-      }, TIMEOUT_MS);
-
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -436,7 +423,6 @@ class WaktiAIV2ServiceClass {
         try { reader.releaseLock(); } catch {}
         if (signal) signal.removeEventListener('abort', abortHandler as any);
         try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
-        try { /* clear timeout if set */ /* eslint-disable @typescript-eslint/no-unused-expressions */ (typeof timeoutId !== 'undefined') && clearTimeout(timeoutId); } catch {}
       }
 
       // Best-effort: persist updated rolling summary after stream
