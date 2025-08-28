@@ -898,11 +898,18 @@ const WaktiAIV2 = () => {
       console.log('🔥 DEBUG: Entered finally block');
       console.log('🔚 finally: isLoading -> false (handleSendMessage end)');
       setIsLoading(false);
-      // Ensure we drop any stale AbortController reference after each request
+      
+      // Mobile-safe AbortController cleanup
       if (abortControllerRef.current) {
-        try { /* no-op */ } finally { abortControllerRef.current = null; }
+        try {
+          abortControllerRef.current.abort();
+        } catch (e) {
+          console.warn('AbortController cleanup warning:', e);
+        } finally {
+          abortControllerRef.current = null;
+        }
       }
-      console.log('🔥 DEBUG: Finally block - isLoading set to false, abortController cleared');
+      console.log('🔥 DEBUG: Finally block - isLoading set to false, abortController safely cleared');
     }
   }, [abortControllerRef, sessionMessages, currentConversationId, userProfile, language, isQuotaExceeded, isExtendedQuotaExceeded, isAIQuotaExceeded, fileInputRef]);
 

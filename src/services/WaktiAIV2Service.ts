@@ -293,26 +293,35 @@ class WaktiAIV2ServiceClass {
         throw new Error('No valid session for streaming');
       }
       
-      // Prepare optional anon key header defensively for Safari/PWA edge cases
-      const maybeAnonKey = (typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_SUPABASE_ANON_KEY)
-        || (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
-        || (typeof process !== 'undefined' && (process as any)?.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-        || undefined;
+      // Mobile-optimized anon key fallback for PWA environments
+      let maybeAnonKey;
+      try {
+        maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
+          || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+      } catch (e) {
+        maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+      }
 
-      // Make SSE request to Edge Function with enhanced context
-      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
-        method: 'POST',
-        mode: 'cors',
-        cache: 'no-store',
-        keepalive: false,
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-          'Cache-Control': 'no-store',
-          'x-request-id': requestId,
-          ...(maybeAnonKey ? { 'apikey': maybeAnonKey } : {})
-        },
+      // Mobile-optimized SSE request with retry logic
+      const maxRetries = 2;
+      let response;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
+            method: 'POST',
+            mode: 'cors',
+            cache: 'no-cache',
+            credentials: 'omit',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'text/event-stream',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'X-Request-ID': requestId,
+              'X-Mobile-Request': 'true',
+              'apikey': maybeAnonKey
+            },
         body: JSON.stringify({
           message,
           language,
@@ -326,9 +335,26 @@ class WaktiAIV2ServiceClass {
           clientLocalHour,
           isWelcomeBack,
           requestId
-        }),
-        signal
-      });
+            }),
+            signal
+          });
+          
+          if (response.ok) break;
+          
+          if (attempt === maxRetries) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          // Brief delay before retry on mobile networks
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          
+        } catch (error: any) {
+          if (attempt === maxRetries || error.name === 'AbortError') {
+            throw error;
+          }
+          console.warn(`🔄 Retry attempt ${attempt}/${maxRetries} for mobile request [${requestId}]`);
+        }
+      }
 
       if (!response.ok) throw new Error(`Streaming request failed: ${response.status}`);
 
