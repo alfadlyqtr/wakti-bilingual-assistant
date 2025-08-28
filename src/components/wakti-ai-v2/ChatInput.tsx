@@ -287,6 +287,27 @@ export function ChatInput({
               border-[2.5px] min-h-[70px] max-w-full
             `}
           >
+            {/* Centered collapse toggle at top */}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setIsInputCollapsed(v => !v)}
+                      aria-expanded={!isInputCollapsed}
+                      aria-label={language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
+                      className="h-9 w-9 rounded-full flex items-center justify-center bg-white text-sky-600 dark:bg-neutral-900 dark:text-white/90 hover:bg-white active:bg-white transition-all border border-white/80 dark:border-white/10 shadow-lg hover:shadow-xl ring-2 ring-sky-500/60 dark:ring-sky-400/60 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 hover:scale-[1.03]"
+                    >
+                      <ChevronDown className={`h-4 w-4 transition-transform ${isInputCollapsed ? 'rotate-180' : ''}`} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                    {language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
             <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
               {activeTrigger === 'video' ? (
@@ -424,26 +445,7 @@ export function ChatInput({
                   )}
                 </div>
               )}
-              <div className="ml-auto">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => setIsInputCollapsed(v => !v)}
-                        aria-expanded={!isInputCollapsed}
-                        aria-label={language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
-                        className="h-9 w-9 rounded-2xl flex items-center justify-center bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0"
-                      >
-                        <ChevronDown className={`h-4 w-4 transition-transform ${isInputCollapsed ? 'rotate-180' : ''}`} />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                      {language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
+              
             </div>
 
             {/* IMAGE MODE HELPER EXAMPLE */}

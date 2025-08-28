@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Globe, Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
+import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
@@ -206,10 +206,12 @@ export function AppHeader() {
                   variant="ghost" 
                   size="sm"
                   onClick={toggleLanguage}
-                  className="rounded-full h-8 w-8 p-0"
+                  className="rounded-full h-8 w-8 p-0 border border-black/10 dark:border-white/15 ring-1 ring-black/5 dark:ring-white/10 ring-offset-2 ring-offset-background bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 shadow-sm hover:shadow-md transition-all"
                   aria-label={language === 'en' ? 'Switch to Arabic' : 'Switch to English'}
                 >
-                  <Globe className="h-4 w-4" />
+                  <span className="text-[14px] font-semibold leading-none select-none">
+                    {language === 'en' ? 'ع' : 'E'}
+                  </span>
                 </Button>
               </TooltipTrigger>
             </Tooltip>
