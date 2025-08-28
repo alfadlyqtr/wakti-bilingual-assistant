@@ -159,40 +159,11 @@ async function streamAIResponse(
   let apiUrl = '';
   let model = '';
 
-  // Choose API based on files (force OpenAI for vision)
-  let provider = null;
+  // Defer provider selection until after we inspect inputs and available keys
+  let provider: 'openai' | 'claude' | 'deepseek' | null = null;
   let fallbackUsed = false;
-
-  if (!OPENAI_API_KEY || (attachedFiles?.length > 0 && attachedFiles.some(f => f.type?.startsWith('image/')))) {
-    provider = 'openai';
-  } else if (ANTHROPIC_API_KEY) {
-    provider = 'claude';
-  } else if (DEEPSEEK_API_KEY) {
-    provider = 'deepseek';
-  } else {
-    throw new Error("No AI API key configured");
-  }
-
-  // Configure API endpoint and key based on selected provider
-  if (provider === 'openai') {
-    apiKey = OPENAI_API_KEY || '';
-    apiUrl = 'https://api.openai.com/v1/chat/completions';
-  } else if (provider === 'deepseek') {
-    apiKey = DEEPSEEK_API_KEY || '';
-    apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-  } else if (provider === 'claude') {
-    // We'll intentionally let the OpenAI request fail (401) to trigger the Claude path in catch
-    apiKey = OPENAI_API_KEY || '';
-    apiUrl = 'https://api.openai.com/v1/chat/completions';
-  }
-
-  if (!apiKey && provider !== 'claude') {
-    throw new Error("No AI API key configured");
-  }
-
-  const startTime = Date.now();
   let browsingUsed = false;
-  let browsingData = null;
+  let browsingData: any = null;
 
   // Determine if we have valid vision inputs (images with base64 content)
   const hasImages = Array.isArray(attachedFiles) && attachedFiles.some(f => f?.type?.startsWith('image/'));
@@ -227,8 +198,22 @@ async function streamAIResponse(
       model = 'deepseek-chat';
       fallbackUsed = true;
     } else {
-      throw new Error("No AI API key configured");
+      throw new Error('No AI API key configured');
     }
+  }
+
+  // Configure API endpoint and key based on the selected provider
+  if (provider === 'openai') {
+    apiKey = OPENAI_API_KEY || '';
+    apiUrl = 'https://api.openai.com/v1/chat/completions';
+  } else if (provider === 'deepseek') {
+    apiKey = DEEPSEEK_API_KEY || '';
+    apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+  }
+  // Note: provider === 'claude' handled separately (non-streaming) below.
+
+  if (!apiKey && provider !== 'claude') {
+    throw new Error('No AI API key configured');
   }
 
   const systemPrompt = language === 'ar' 
@@ -379,6 +364,63 @@ async function streamAIResponse(
     }))),
     { role: 'user', content: userContent }
   ];
+
+  // If Claude is the selected provider, handle it directly (non-streaming) and return
+  if (provider === 'claude') {
+    try {
+      const claudeContent: any[] = [];
+      const languagePrefix = language === 'ar' ? 'يرجى الرد باللغة العربية فقط. ' : 'Please respond in English only. ';
+      claudeContent.push({ type: 'text', text: languagePrefix + textMessage });
+      if (hasValidVisionImages) {
+        for (const file of attachedFiles) {
+          const base64 = file?.data || file?.content;
+          if (file?.type?.startsWith('image/') && base64) {
+            claudeContent.push({
+              type: 'image',
+              source: { type: 'base64', media_type: file.type, data: base64 }
+            });
+          }
+        }
+      }
+
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY || '',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: maxTokens,
+          temperature: temperature,
+          system: systemPromptFinal,
+          messages: [{ role: 'user', content: claudeContent }]
+        })
+      });
+
+      if (!resp.ok) {
+        const errTxt = await resp.text();
+        throw new Error(`Claude API error: ${resp.status} - ${errTxt}`);
+      }
+
+      const data = await resp.json();
+      const text = Array.isArray(data?.content)
+        ? data.content.map((c: any) => c?.text || '').join('')
+        : (data?.content?.[0]?.text || '');
+
+      model = 'claude-3-5-sonnet-20241022';
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: text })}\n\n`));
+      sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
+      controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+      return;
+    } catch (err2) {
+      const msg = (err2 as any)?.message || 'Claude error';
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
+      controller.close();
+      return;
+    }
+  }
 
   console.log("🚀 STREAMING: Making API request");
 

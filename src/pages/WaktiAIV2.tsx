@@ -58,6 +58,15 @@ const timeOfDay = (hour: number) => {
   return 'night';
 };
 
+// Allow disabling greetings entirely via localStorage flag
+function greetingsDisabled(): boolean {
+  try {
+    return localStorage.getItem('wakti_disable_greetings') === '1';
+  } catch {
+    return false;
+  }
+}
+
 function buildGreetingText(language: string, personalTouch: any, welcomeBack: boolean): string {
   try {
     const pt = personalTouch || {};
@@ -80,8 +89,8 @@ function buildGreetingText(language: string, personalTouch: any, welcomeBack: bo
 
 // Strip a leading greeting phrase from the given text
 function stripLeadingGreeting(text: string, language: string): string {
-  const reEn = /^(\s*)(good\s+(morning|afternoon|evening)|hello|hi|hey)([\s,.:;!\-–—]*)/i;
-  const reAr = /^(\s*)(صباح الخير|مساء الخير|مرحبًا|اهلاً|أهلاً)([\s،.:;!\-–—]*)/i;
+  const reEn = /^(\s*)((good\s+(morning|afternoon|evening))|hello|hi|hey|welcome\s+back)([\s,.:;!\-–—]*)/i;
+  const reAr = /^(\s*)(صباح الخير|مساء الخير|مرحبًا|اهلاً|أهلاً|أهلاً بعودتك|اهلاً بعودتك|اهلا بعودتك|مرحبًا بعودتك)([\s،.:;!\-–—]*)/i;
   return language === 'ar' ? text.replace(reAr, '') : text.replace(reEn, '');
 }
 
@@ -108,6 +117,11 @@ function sanitizeStreamAccum(
   const collapseEn = /^(\s*)(good\s+(morning|afternoon|evening)[\s,]*)(\1?good\s+(morning|afternoon|evening)[\s,]*)+/i;
   const collapseAr = /^(\s*)((صباح الخير|مساء الخير)[\s،]*)(\1?(صباح الخير|مساء الخير)[\s،]*)+/i;
   out = language === 'ar' ? out.replace(collapseAr, '$1$2') : out.replace(collapseEn, '$1$2');
+
+  // Collapse repeated "welcome back" at the start as well
+  const collapseWelcomeEn = /^(\s*)(welcome\s+back[\s,]*)+/i;
+  const collapseWelcomeAr = /^(\s*)((أهلاً|اهلاً|اهلا|مرحبًا)\s+بعودتك[\s،]*)+/i;
+  out = language === 'ar' ? out.replace(collapseWelcomeAr, '$1$2') : out.replace(collapseWelcomeEn, '$1welcome back ');
 
   return out;
 }
@@ -570,17 +584,17 @@ const WaktiAIV2 = () => {
 
         // Add streaming placeholder assistant message (with optional greeting on first turn or welcome back)
         const assistantId = `assistant-${Date.now()}`;
-        // Determine greeting condition
+        // Determine greeting condition (12h threshold) and honor kill-switch
         const prevCount = sessionMessages.length;
         let isWelcomeBack = false;
         try {
           const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
           if (lastSeenStr) {
             const gapMs = Date.now() - Number(lastSeenStr);
-            isWelcomeBack = gapMs >= 30 * 60 * 1000; // 30 minutes
+            isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
           }
         } catch {}
-        const shouldGreet = prevCount === 0 || isWelcomeBack;
+        const shouldGreet = !greetingsDisabled() && (prevCount === 0 || isWelcomeBack);
         const greeting = shouldGreet ? buildGreetingText(language, personalTouch, isWelcomeBack) : '';
 
         const placeholderAssistant: AIMessage = {
@@ -743,17 +757,17 @@ const WaktiAIV2 = () => {
         
         // STREAMING: Add placeholder assistant message and stream tokens into it (with optional greeting on first turn or welcome back)
         const assistantId = `assistant-${Date.now()}`;
-        // Determine greeting condition
+        // Determine greeting condition (12h threshold) and honor kill-switch
         const prevCount = sessionMessages.length;
         let isWelcomeBack = false;
         try {
           const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
           if (lastSeenStr) {
             const gapMs = Date.now() - Number(lastSeenStr);
-            isWelcomeBack = gapMs >= 30 * 60 * 1000; // 30 minutes
+            isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
           }
         } catch {}
-        const shouldGreet = prevCount === 0 || isWelcomeBack;
+        const shouldGreet = !greetingsDisabled() && (prevCount === 0 || isWelcomeBack);
         const greeting = shouldGreet ? buildGreetingText(language, personalTouch, isWelcomeBack) : '';
 
         const placeholderAssistant: AIMessage = {
