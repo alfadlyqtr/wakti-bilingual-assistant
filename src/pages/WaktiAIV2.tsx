@@ -595,7 +595,7 @@ const WaktiAIV2 = () => {
             isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
           }
         } catch {}
-        const shouldGreet = !greetingsDisabled() && (prevCount === 0 || isWelcomeBack);
+        const shouldGreet = !greetingsDisabled() && !(typeof navigator !== 'undefined' && /android|iphone|ipad|ipod|iemobile|mobile|silk/i.test((navigator.userAgent || (navigator as any).vendor || ''))) && (prevCount === 0 || isWelcomeBack);
         const greeting = shouldGreet ? buildGreetingText(language, personalTouch, isWelcomeBack) : '';
 
         const placeholderAssistant: AIMessage = {
@@ -768,7 +768,7 @@ const WaktiAIV2 = () => {
             isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
           }
         } catch {}
-        const shouldGreet = !greetingsDisabled() && (prevCount === 0 || isWelcomeBack);
+        const shouldGreet = !greetingsDisabled() && !(typeof navigator !== 'undefined' && /android|iphone|ipad|ipod|iemobile|mobile|silk/i.test((navigator.userAgent || (navigator as any).vendor || ''))) && (prevCount === 0 || isWelcomeBack);
         const greeting = shouldGreet ? buildGreetingText(language, personalTouch, isWelcomeBack) : '';
 
         const placeholderAssistant: AIMessage = {
