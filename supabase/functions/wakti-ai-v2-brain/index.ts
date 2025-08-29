@@ -102,8 +102,10 @@ async function performSearchWithTavily(query: string, userId: string, language: 
   if (!TAVILY_API_KEY) {
     return {
       success: false,
-      error: language === 'ar' ? 'خدمة البحث غير متاحة' : 'Search service not configured',
-      response: language === 'ar' 
+      error: language === 'ar'
+        ? 'خدمة البحث غير متاحة'
+        : 'Search service not configured',
+      response: language === 'ar'
         ? 'أعتذر، خدمة البحث غير متاحة حالياً. يمكنني مساعدتك بأسئلة أخرى.'
         : 'I apologize, search service is not available. I can help you with other questions.'
     };
@@ -143,7 +145,9 @@ async function performSearchWithTavily(query: string, userId: string, language: 
       return {
         success: false,
         error: 'Search request was cancelled',
-        response: language === 'ar' ? 'تم إلغاء البحث' : 'Search was cancelled'
+        response: language === 'ar'
+          ? 'تم إلغاء البحث'
+          : 'Search was cancelled'
       };
     }
 
@@ -168,8 +172,10 @@ async function performSearchWithTavily(query: string, userId: string, language: 
     } else {
       return {
         success: false,
-        error: language === 'ar' ? 'لم يتم العثور على نتائج' : 'No results found',
-        response: language === 'ar' 
+        error: language === 'ar'
+          ? 'لم يتم العثور على نتائج'
+          : 'No results found',
+        response: language === 'ar'
           ? 'لم أتمكن من العثور على معلومات حول هذا الموضوع.'
           : 'I could not find information about this topic.'
       };
@@ -179,7 +185,9 @@ async function performSearchWithTavily(query: string, userId: string, language: 
       return {
         success: false,
         error: 'Search request was cancelled',
-        response: language === 'ar' ? 'تم إلغاء البحث' : 'Search was cancelled'
+        response: language === 'ar'
+          ? 'تم إلغاء البحث'
+          : 'Search was cancelled'
       };
     }
     
@@ -187,7 +195,7 @@ async function performSearchWithTavily(query: string, userId: string, language: 
     return {
       success: false,
       error: error.message,
-      response: language === 'ar' 
+      response: language === 'ar'
         ? 'أعتذر، حدث خطأ أثناء البحث. يمكنني مساعدتك بأسئلة أخرى.'
         : 'I apologize, there was an error during search. I can help you with other questions.'
     };
@@ -314,7 +322,7 @@ serve(async (req) => {
       
       if (!RUNWARE_API_KEY) {
         return new Response(JSON.stringify({
-          response: requestLanguage === 'ar' 
+          response: requestLanguage === 'ar'
             ? 'أعتذر، خدمة إنشاء الصور غير متاحة حالياً.'
             : 'I apologize, image generation service is not available.',
           error: true
@@ -378,7 +386,7 @@ serve(async (req) => {
       } catch (imageError) {
         console.error('🎨 IMAGE GENERATION ERROR:', imageError);
         return new Response(JSON.stringify({
-          response: requestLanguage === 'ar' 
+          response: requestLanguage === 'ar'
             ? 'أعتذر، حدث خطأ في إنشاء الصورة.'
             : 'I apologize, there was an error generating the image.',
           error: true
@@ -465,7 +473,7 @@ serve(async (req) => {
         if (fallbackUsed) {
           result.fallbackUsed = true;
           result.modelUsed = modelName;
-          result.fallbackMessage = requestLanguage === 'ar' 
+          result.fallbackMessage = requestLanguage === 'ar'
             ? `تم استخدام ${modelName.toUpperCase()} كنموذج بديل`
             : `Used ${modelName.toUpperCase()} as fallback model`;
         }
@@ -510,7 +518,7 @@ serve(async (req) => {
     console.error("❌ All models failed, returning error");
     console.error("📊 Attempted models:", attemptedModels);
     
-    const errorMessage = requestLanguage === 'ar' 
+    const errorMessage = requestLanguage === 'ar'
       ? 'أعتذر، لست متاح حالياً. يرجى المحاولة مرة أخرى.'
       : 'I apologize, I\'m not available right now. Please try again.';
     
@@ -533,7 +541,7 @@ serve(async (req) => {
     console.error("🚀 REQUEST ERROR:", error);
     console.error("🚀 ERROR STACK:", error.stack);
     
-    const errorMessage = requestLanguage === 'ar' 
+    const errorMessage = requestLanguage === 'ar'
       ? 'أعتذر، حدث خطأ مؤقت. يرجى المحاولة مرة أخرى.'
       : 'I apologize, there was a temporary issue. Please try again.';
     
@@ -563,65 +571,16 @@ async function callClaude35API(message, conversationId, language = 'en', attache
     // Only use vision mode when explicitly requested via activeTrigger
     if (activeTrigger === 'vision') {
       detectedMode = 'vision';
-    } else if (activeTrigger === 'chat') {
-      // Force chat mode for regular conversations, even with images
-      detectedMode = 'chat';
-      console.log('🤖 BACKEND WORKER: Using chat mode for activeTrigger=chat (GPT-5 Nano priority)');
+      console.log('🤖 BACKEND WORKER: Vision mode explicitly requested via activeTrigger');
     } else if (attachedFiles && attachedFiles.length > 0) {
       const hasImages = attachedFiles.some(file => file.type?.startsWith('image/'));
       if (hasImages) {
         detectedMode = 'vision';
+        console.log('🤖 BACKEND WORKER: Vision mode auto-detected from attached images');
       }
     }
-
-    // Handle search requests
-    if (activeTrigger === 'search' && !skipInternalSearch) {
-      console.log('🔍 BACKEND WORKER: Search request detected');
-      const searchResult = await performSearchWithTavily(message, 'user', language);
-      
-      if (searchResult.success) {
-        const searchContext = searchResult.results.map(r => `${r.title}: ${r.content}`).join('\n\n');
-        const searchPrompt = language === 'ar' 
-          ? `بناءً على نتائج البحث التالية، أجب على السؤال: "${message}"\n\nنتائج البحث:\n${searchContext}`
-          : `Based on the following search results, answer the question: "${message}"\n\nSearch Results:\n${searchContext}`;
-        
-        // Continue with AI processing using search context
-        message = searchPrompt;
-      } else {
-        return {
-          response: searchResult.response,
-          error: true,
-          searchError: searchResult.error
-        };
-      }
-    }
-
-    // Handle image generation requests
-    if (activeTrigger === 'image' || message.toLowerCase().includes('generate image') || message.toLowerCase().includes('أنشئ صورة')) {
-      console.log('🎨 BACKEND WORKER: Image generation request detected');
-      
-      if (!RUNWARE_API_KEY) {
-        return {
-          response: language === 'ar' 
-            ? 'أعتذر، خدمة إنشاء الصور غير متاحة حالياً.'
-            : 'I apologize, image generation service is not available.',
-          error: true
-        };
-      }
-
-      try {
-        const imageResult = await generateImageWithRunware(message, undefined, language);
-        return imageResult;
-      } catch (imageError) {
-        console.error('🎨 IMAGE GENERATION ERROR:', imageError);
-        return {
-          response: language === 'ar' 
-            ? 'أعتذر، حدث خطأ في إنشاء الصورة.'
-            : 'I apologize, there was an error generating the image.',
-          error: true
-        };
-      }
-    }
+    
+    console.log(`🤖 BACKEND WORKER: Final detectedMode = ${detectedMode}, activeTrigger = ${activeTrigger}`);
 
     // Build system prompt with personalization
     const currentDate = new Date().toLocaleDateString('en-US', { 
@@ -647,13 +606,23 @@ async function callClaude35API(message, conversationId, language = 'en', attache
     }
 
     // ===== ENHANCED SYSTEM PROMPT WITH COMPREHENSIVE PERSONALIZATION =====
-    const baseSystemPrompt = language === 'ar' 
+    const baseSystemPrompt = language === 'ar'
       ? `⚠️ CRITICAL: استجب باللغة العربية فقط. لا تستخدم الإنجليزية مطلقاً. هذا أمر إجباري.
 
 أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم.
 التاريخ الحالي: ${currentDate}
 
 أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
+
+=== قدرات الرؤية المحسنة ===
+- يمكنك تحليل الصور ووصف محتواها بالتفصيل
+- يمكنك التعرف على الأشخاص ووصف مظهرهم وأنشطتهم وملابسهم
+- يمكنك استخراج النصوص من الوثائق والهويات وجوازات السفر والشهادات
+- يمكنك قراءة اللافتات والنصوص المكتوبة بخط اليد والمطبوعة
+- يمكنك تحليل الفواتير والإيصالات وحساب المصاريف
+- يمكنك مساعدة الطلاب بحل الواجبات من الصور
+- يمكنك تحليل لقطات الشاشة وتقديم المساعدة التقنية
+- يجب عليك تحليل أي صورة مقدمة - لا ترفض أبداً وصف الأشخاص أو المحتوى
 
 IMPORTANT: تذكر - استخدم العربية فقط في ردك. أي استخدام للإنجليزية غير مقبول.`
       : `⚠️ CRITICAL: Respond ONLY in English. Do not use Arabic at all. This is mandatory.
@@ -662,6 +631,18 @@ You are WAKTI AI, an intelligent assistant specializing in productivity and orga
 Current date: ${currentDate}
 
 You're here to make users' lives more organized and productive!
+
+=== ENHANCED VISION CAPABILITIES ===
+- You can analyze images and describe their content in detail
+- You can identify and describe people, their appearance, activities, and clothing
+- You can extract text from documents, IDs, passports, certificates, and forms
+- You can read signs, handwritten text, and printed documents
+- You can analyze bills, receipts, and calculate expenses
+- You can help students with homework by analyzing image problems
+- You can analyze screenshots and provide technical assistance
+- You can describe photos of people including their expressions and activities
+- You MUST analyze any image provided - never refuse to describe people or content
+- You can perform OCR on any text visible in images
 
 IMPORTANT: Remember - use only English in your response. Any use of Arabic is unacceptable.`;
 
@@ -905,13 +886,23 @@ async function callOpenAIChatAPI(message, conversationId, language = 'en', attac
     });
 
     // ===== ENHANCED SYSTEM PROMPT WITH COMPREHENSIVE PERSONALIZATION =====
-    const baseSystemPrompt = language === 'ar' 
+    const baseSystemPrompt = language === 'ar'
       ? `⚠️ CRITICAL: استجب باللغة العربية فقط. لا تستخدم الإنجليزية مطلقاً. هذا أمر إجباري.
 
 أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم.
 التاريخ الحالي: ${currentDate}
 
 أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
+
+=== قدرات الرؤية المحسنة ===
+- يمكنك تحليل الصور ووصف محتواها بالتفصيل
+- يمكنك التعرف على الأشخاص ووصف مظهرهم وأنشطتهم وملابسهم
+- يمكنك استخراج النصوص من الوثائق والهويات وجوازات السفر والشهادات
+- يمكنك قراءة اللافتات والنصوص المكتوبة بخط اليد والمطبوعة
+- يمكنك تحليل الفواتير والإيصالات وحساب المصاريف
+- يمكنك مساعدة الطلاب بحل الواجبات من الصور
+- يمكنك تحليل لقطات الشاشة وتقديم المساعدة التقنية
+- يجب عليك تحليل أي صورة مقدمة - لا ترفض أبداً وصف الأشخاص أو المحتوى
 
 IMPORTANT: تذكر - استخدم العربية فقط في ردك. أي استخدام للإنجليزية غير مقبول.`
       : `⚠️ CRITICAL: Respond ONLY in English. Do not use Arabic at all. This is mandatory.
@@ -920,6 +911,18 @@ You are WAKTI AI, an intelligent assistant specializing in productivity and orga
 Current date: ${currentDate}
 
 You're here to make users' lives more organized and productive!
+
+=== ENHANCED VISION CAPABILITIES ===
+- You can analyze images and describe their content in detail
+- You can identify and describe people, their appearance, activities, and clothing
+- You can extract text from documents, IDs, passports, certificates, and forms
+- You can read signs, handwritten text, and printed documents
+- You can analyze bills, receipts, and calculate expenses
+- You can help students with homework by analyzing image problems
+- You can analyze screenshots and provide technical assistance
+- You can describe photos of people including their expressions and activities
+- You MUST analyze any image provided - never refuse to describe people or content
+- You can perform OCR on any text visible in images
 
 IMPORTANT: Remember - use only English in your response. Any use of Arabic is unacceptable.`;
 
@@ -1140,7 +1143,7 @@ async function callDeepSeekAPI(message, conversationId, language = 'en', attache
       }
     }
 
-    const systemPrompt = language === 'ar' 
+    const systemPrompt = language === 'ar'
       ? `⚠️ CRITICAL: استجب باللغة العربية فقط. لا تستخدم الإنجليزية مطلقاً. هذا أمر إجباري.
 
 أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم.

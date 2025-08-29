@@ -322,7 +322,7 @@ export function ChatMessages({
           {/* Chat Messages with FIXED badge logic and enhanced video display */}
           {sessionMessages.map((message, index) => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
-                <div className="flex gap-3 max-w-[80%]">
+                <div className="flex gap-3 max-w-[65%]">
                   {message.role === 'assistant' && (
                     <div className="flex-shrink-0">
                       <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
@@ -360,6 +360,9 @@ export function ChatMessages({
                               style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}
                             />
                           </div>
+                          <span className="text-xs text-muted-foreground">
+                            {activeTrigger === 'vision' ? 'Analyzing image...' : 'Thinking...'}
+                          </span>
                         </div>
                       ) : (
                         renderMessageContent(message)
@@ -385,7 +388,14 @@ export function ChatMessages({
                                               : '')))
                               }
                                alt={file.name}
-                               className="max-w-xs rounded-lg border border-border/50"
+                               className="max-w-xs max-h-48 object-contain rounded-lg border border-border/50 cursor-pointer hover:opacity-90 transition-opacity"
+                               onClick={() => setSelectedImage({ 
+                                 url: file.url?.startsWith('data:') ? file.url : 
+                                      file.url ? `data:${file.type || 'image/png'};base64,${file.url}` :
+                                      file.data?.startsWith?.('data:') ? file.data :
+                                      file.data ? `data:${file.type || 'image/png'};base64,${file.data}` : '',
+                                 prompt: file.name 
+                               })}
                              />
                             <div className="text-xs text-muted-foreground mt-1">
                               {file.imageType?.name || 'General'}
