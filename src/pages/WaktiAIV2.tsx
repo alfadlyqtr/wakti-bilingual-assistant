@@ -50,82 +50,6 @@ const isImageFile = (file: any): boolean => {
   return file.type && file.type.startsWith('image/');
 };
 
-// Greeting helpers (frontend-only, pure functions)
-const timeOfDay = (hour: number) => {
-  if (hour >= 5 && hour <= 11) return 'morning';
-  if (hour >= 12 && hour <= 17) return 'afternoon';
-  if (hour >= 18 && hour <= 22) return 'evening';
-  return 'night';
-};
-
-// Allow disabling greetings entirely via localStorage flag
-function greetingsDisabled(): boolean {
-  try {
-    return localStorage.getItem('wakti_disable_greetings') === '1';
-  } catch {
-    return false;
-  }
-}
-
-function buildGreetingText(language: string, personalTouch: any, welcomeBack: boolean): string {
-  try {
-    const pt = personalTouch || {};
-    const nickname: string | undefined = pt.nickname;
-    const namePart = nickname ? (language === 'ar' ? `${nickname}` : `${nickname}`) : '';
-
-    // Neutralize time-of-day to avoid repetitive "Good evening"
-    if (welcomeBack) {
-      if (language === 'ar') return namePart ? `أهلاً بعودتك، ${namePart}، ` : `أهلاً بعودتك، `;
-      return namePart ? `Welcome back, ${namePart}, ` : `Welcome back, `;
-    }
-
-    const base = language === 'ar' ? 'مرحبًا، ' : 'Hello, ';
-    if (namePart) return base + namePart + (language === 'ar' ? '، ' : ', ');
-    return base;
-  } catch {
-    return '';
-  }
-}
-
-// Strip a leading greeting phrase from the given text
-function stripLeadingGreeting(text: string, language: string): string {
-  const reEn = /^(\s*)((good\s+(morning|afternoon|evening))|hello|hi|hey|welcome\s+back)([\s,.:;!\-–—]*)/i;
-  const reAr = /^(\s*)(صباح الخير|مساء الخير|مرحبًا|اهلاً|أهلاً|أهلاً بعودتك|اهلاً بعودتك|اهلا بعودتك|مرحبًا بعودتك)([\s،.:;!\-–—]*)/i;
-  return language === 'ar' ? text.replace(reAr, '') : text.replace(reEn, '');
-}
-
-// Ensure the accumulated stream content does not duplicate greetings
-function sanitizeStreamAccum(
-  accum: string,
-  language: string,
-  allowGreeting: boolean,
-  baseGreeting: string
-): string {
-  let out = accum;
-
-  // Always strip any leading greeting the model may try to add
-  out = stripLeadingGreeting(out, language);
-
-  // If we already prefixed a base greeting placeholder, strip any model greeting right after it
-  if (baseGreeting) {
-    const cleaned = stripLeadingGreeting(out, language);
-    return cleaned;
-  }
-
-  // Additionally, collapse repeated time-of-day phrases at the start
-  // e.g., "Good evening, Good evening, ..."
-  const collapseEn = /^(\s*)(good\s+(morning|afternoon|evening)[\s,]*)(\1?good\s+(morning|afternoon|evening)[\s,]*)+/i;
-  const collapseAr = /^(\s*)((صباح الخير|مساء الخير)[\s،]*)(\1?(صباح الخير|مساء الخير)[\s،]*)+/i;
-  out = language === 'ar' ? out.replace(collapseAr, '$1$2') : out.replace(collapseEn, '$1$2');
-
-  // Collapse repeated "welcome back" at the start as well
-  const collapseWelcomeEn = /^(\s*)(welcome\s+back[\s,]*)+/i;
-  const collapseWelcomeAr = /^(\s*)((أهلاً|اهلاً|اهلا|مرحبًا)\s+بعودتك[\s،]*)+/i;
-  out = language === 'ar' ? out.replace(collapseWelcomeAr, '$1$2') : out.replace(collapseWelcomeEn, '$1welcome back ');
-
-  return out;
-}
-
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -583,36 +507,20 @@ const WaktiAIV2 = () => {
         
         EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
 
-        // Add streaming placeholder assistant message (with optional greeting on first turn or welcome back)
+        // Add streaming placeholder assistant message
         const assistantId = `assistant-${Date.now()}`;
-        // Determine greeting condition (12h threshold) and honor kill-switch
-        const prevCount = sessionMessages.length;
-        let isWelcomeBack = false;
-        try {
-          const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
-          if (lastSeenStr) {
-            const gapMs = Date.now() - Number(lastSeenStr);
-            isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
-          }
-        } catch {}
-        const shouldGreet = !greetingsDisabled() && !(typeof navigator !== 'undefined' && /android|iphone|ipad|ipod|iemobile|mobile|silk/i.test((navigator.userAgent || (navigator as any).vendor || ''))) && (prevCount === 0 || isWelcomeBack);
-        const greeting = shouldGreet ? buildGreetingText(language, personalTouch, isWelcomeBack) : '';
-
         const placeholderAssistant: AIMessage = {
           id: assistantId,
           role: 'assistant',
-          content: greeting,
+          content: '',
           timestamp: new Date(),
-          intent: 'search',
-          metadata: { allowGreeting: shouldGreet }
+          intent: 'search'
         };
         setSessionMessages(prev => [...prev, placeholderAssistant]);
 
-        // Start streaming
         console.log('🔥 DEBUG: About to call sendStreamingMessage for search mode');
         // Anti-greeting streaming state
         let acc_search = '';
-        const allowGreeting_search = shouldGreet;
         await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile?.id,
@@ -627,14 +535,7 @@ const WaktiAIV2 = () => {
           // onToken
           (token: string) => {
             acc_search += token;
-            let out = sanitizeStreamAccum(
-              acc_search,
-              language,
-              allowGreeting_search,
-              greeting
-            );
-            const combined = greeting ? (greeting + out.replace(/^\s+/, '')) : out;
-            setSessionMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: combined } : m));
+            setSessionMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: acc_search } : m));
           },
           // onComplete
           (meta: any) => {
@@ -756,35 +657,20 @@ const WaktiAIV2 = () => {
         
         EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
         
-        // STREAMING: Add placeholder assistant message and stream tokens into it (with optional greeting on first turn or welcome back)
+        // STREAMING: Add placeholder assistant message and stream tokens into it
         const assistantId = `assistant-${Date.now()}`;
-        // Determine greeting condition (12h threshold) and honor kill-switch
-        const prevCount = sessionMessages.length;
-        let isWelcomeBack = false;
-        try {
-          const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
-          if (lastSeenStr) {
-            const gapMs = Date.now() - Number(lastSeenStr);
-            isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
-          }
-        } catch {}
-        const shouldGreet = !greetingsDisabled() && !(typeof navigator !== 'undefined' && /android|iphone|ipad|ipod|iemobile|mobile|silk/i.test((navigator.userAgent || (navigator as any).vendor || ''))) && (prevCount === 0 || isWelcomeBack);
-        const greeting = shouldGreet ? buildGreetingText(language, personalTouch, isWelcomeBack) : '';
-
         const placeholderAssistant: AIMessage = {
           id: assistantId,
           role: 'assistant',
-          content: greeting,
+          content: '',
           timestamp: new Date(),
-          intent: 'chat',
-          metadata: { allowGreeting: shouldGreet }
+          intent: 'chat'
         };
         setSessionMessages(prev => [...prev, placeholderAssistant]);
 
         console.log('🔥 DEBUG: About to call sendStreamingMessage for chat mode');
         // Anti-greeting streaming state
         let acc_chat = '';
-        const allowGreeting_chat = shouldGreet;
         await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile?.id,
@@ -799,14 +685,7 @@ const WaktiAIV2 = () => {
           // onToken
           (token: string) => {
             acc_chat += token;
-            let out = sanitizeStreamAccum(
-              acc_chat,
-              language,
-              allowGreeting_chat,
-              greeting
-            );
-            const combined = greeting ? (greeting + out.replace(/^\s+/, '')) : out;
-            setSessionMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: combined } : m));
+            setSessionMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: acc_chat } : m));
           },
           // onComplete
           (meta: any) => {
