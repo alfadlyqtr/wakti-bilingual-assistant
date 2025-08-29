@@ -449,6 +449,8 @@ async function streamAIResponse(
       controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: text })}\n\n`));
       sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
       controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+      controller.close();
+      console.log(`✅ STREAMING: Claude completion - controller closed cleanly`);
       return;
     } catch (err2) {
       const msg = (err2 as any)?.message || 'Claude error';
@@ -503,40 +505,86 @@ async function streamAIResponse(
 
   // Greeting injection moved to frontend. Do not emit greeting tokens here.
 
+  let lastTokenTime = Date.now();
+  let tokenReceived = false;
+  const IDLE_TIMEOUT = 20000; // 20s idle timeout
+  
+  console.log(`📡 STREAMING: Starting main loop with ${provider} model: ${model}`);
+
   try {
     while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      // Finalize without appending any signature
-      sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
-      controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-      break;
-    }
+      // Add idle timeout protection
+      const idleTimer = setTimeout(async () => {
+        console.error(`⏰ STREAMING: Idle timeout reached for ${provider}`);
+        try {
+          await reader.cancel();
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: 'Stream timeout - no response from AI provider' })}\n\n`));
+          controller.close();
+        } catch (e) {
+          console.error('Error during timeout cleanup:', e);
+        }
+      }, IDLE_TIMEOUT);
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const data = line.slice(6);
-
-      if (data === '[DONE]') {
+      const { done, value } = await reader.read();
+      clearTimeout(idleTimer);
+      
+      if (done) {
+        console.log(`🏁 STREAMING: Stream completed for ${provider}, cancelling reader`);
+        try {
+          await reader.cancel();
+        } catch (e) {
+          console.warn('Reader already cancelled or closed');
+        }
         // Finalize without appending any signature
         sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
         controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-        continue;
+        controller.close();
+        console.log(`✅ STREAMING: Controller closed cleanly for ${provider}`);
+        break;
       }
 
-      try {
-        const parsed = JSON.parse(data);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) {
-          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: content })}\n\n`));
+      if (!tokenReceived) {
+        tokenReceived = true;
+        console.log(`🎯 STREAMING: First token received from ${provider}`);
+      }
+      lastTokenTime = Date.now();
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+
+        if (data === '[DONE]') {
+          console.log(`🎬 STREAMING: Received [DONE] from ${provider}, cancelling reader`);
+          try {
+            await reader.cancel();
+          } catch (e) {
+            console.warn('Reader already cancelled during [DONE]');
+          }
+          // Finalize without appending any signature
+          sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+          console.log(`✅ STREAMING: Controller closed after [DONE] for ${provider}`);
+          return;
         }
-      } catch (_) {
-        // ignore malformed json chunks
+
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: content })}\n\n`));
+          }
+        } catch (_) {
+          // ignore malformed json chunks
+        }
       }
     }
+  } catch (readError) {
+    console.error(`❌ STREAMING: Read error in main loop for ${provider}:`, readError);
+    throw readError;
   }
 } catch (err) {
   // If OpenAI fails and Claude is available (and not vision invalid), fall back
@@ -591,6 +639,8 @@ async function streamAIResponse(
       controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: text })}\n\n`));
       sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
       controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+      controller.close();
+      console.log(`✅ STREAMING: Claude fallback completion - controller closed cleanly`);
       return;
     } catch (err2) {
       const msg = err2?.message || 'Fallback (Claude) error';
@@ -635,14 +685,47 @@ async function streamAIResponse(
 
       // Greeting injection moved to frontend. Do not emit greeting tokens here (DeepSeek fallback).
 
+      let deepseekLastTokenTime = Date.now();
+      let deepseekTokenReceived = false;
+      console.log(`📡 STREAMING: Starting DeepSeek fallback loop`);
+
       while (true) {
+        // Add idle timeout for DeepSeek fallback
+        const deepseekIdleTimer = setTimeout(async () => {
+          console.error(`⏰ STREAMING: DeepSeek idle timeout reached`);
+          try {
+            await reader.cancel();
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: 'DeepSeek stream timeout' })}\n\n`));
+            controller.close();
+          } catch (e) {
+            console.error('Error during DeepSeek timeout cleanup:', e);
+          }
+        }, 20000);
+
         const { done, value } = await reader.read();
+        clearTimeout(deepseekIdleTimer);
+        
         if (done) {
+          console.log(`🏁 STREAMING: DeepSeek stream completed, cancelling reader`);
+          try {
+            await reader.cancel();
+          } catch (e) {
+            console.warn('DeepSeek reader already cancelled');
+          }
           // Finalize without appending any signature
           sendFinalEvent(controller, deepseekModel, fallbackUsed, browsingUsed, browsingData);
           controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+          console.log(`✅ STREAMING: DeepSeek fallback - controller closed cleanly`);
           break;
         }
+
+        if (!deepseekTokenReceived) {
+          deepseekTokenReceived = true;
+          console.log(`🎯 STREAMING: First token received from DeepSeek fallback`);
+        }
+        deepseekLastTokenTime = Date.now();
+
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -650,10 +733,18 @@ async function streamAIResponse(
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6);
           if (data === '[DONE]') {
+            console.log(`🎬 STREAMING: DeepSeek received [DONE], cancelling reader`);
+            try {
+              await reader.cancel();
+            } catch (e) {
+              console.warn('DeepSeek reader already cancelled during [DONE]');
+            }
             // Finalize without appending any signature
             sendFinalEvent(controller, deepseekModel, fallbackUsed, browsingUsed, browsingData);
             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-            continue;
+            controller.close();
+            console.log(`✅ STREAMING: DeepSeek controller closed after [DONE]`);
+            return;
           }
           try {
             const parsed = JSON.parse(data);
