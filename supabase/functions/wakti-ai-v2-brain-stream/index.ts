@@ -582,11 +582,7 @@ async function streamAIResponse(
         }
       }
     }
-  } catch (readError) {
-    console.error(`❌ STREAMING: Read error in main loop for ${provider}:`, readError);
-    throw readError;
-  }
-} catch (err) {
+  } catch (err) {
   // If OpenAI fails and Claude is available (and not vision invalid), fall back
   if (provider === 'openai' && ANTHROPIC_API_KEY) {
     try {
