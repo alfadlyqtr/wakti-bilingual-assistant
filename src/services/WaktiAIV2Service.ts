@@ -248,8 +248,6 @@ class WaktiAIV2ServiceClass {
       const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       console.log(`🚀 FRONTEND BOSS: Starting streaming request for ${activeTrigger} mode [${requestId}]`);
 
-      const personalTouch = this.getPersonalTouch();
-
       // Compute client local hour and welcome-back flag (gap >= 12h)
       const clientLocalHour = new Date().getHours();
       let isWelcomeBack = false;
@@ -331,7 +329,7 @@ class WaktiAIV2ServiceClass {
               attachedFiles,
               recentMessages: enhancedMessages,
               conversationSummary: finalSummary,
-              personalTouch,
+              personalTouch: null,
               clientLocalHour,
               isWelcomeBack,
               requestId
@@ -435,7 +433,7 @@ class WaktiAIV2ServiceClass {
         const updatedSummary = this.generateConversationSummary(msgsForSummary);
         if (updatedSummary && updatedSummary.trim()) {
           const uuidLike2 = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
-          if (uuidLike2) {
+          if (uuidLike2 && conversationId) {
             const { data: existing } = await supabase
               .from('ai_conversation_summaries')
               .select('id')
