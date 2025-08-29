@@ -318,23 +318,23 @@ class WaktiAIV2ServiceClass {
               'Content-Type': 'application/json',
               'Accept': 'text/event-stream',
               'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'X-Request-ID': requestId,
-              'X-Mobile-Request': 'true',
+              'x-request-id': requestId,
+              'x-mobile-request': 'true',
               'apikey': maybeAnonKey
             },
-        body: JSON.stringify({
-          message,
-          language,
-          conversationId,
-          inputType,
-          activeTrigger,
-          attachedFiles,
-          recentMessages: enhancedMessages,
-          conversationSummary: finalSummary,
-          personalTouch,
-          clientLocalHour,
-          isWelcomeBack,
-          requestId
+            body: JSON.stringify({
+              message,
+              language,
+              conversationId,
+              inputType,
+              activeTrigger,
+              attachedFiles,
+              recentMessages: enhancedMessages,
+              conversationSummary: finalSummary,
+              personalTouch,
+              clientLocalHour,
+              isWelcomeBack,
+              requestId
             }),
             signal
           });

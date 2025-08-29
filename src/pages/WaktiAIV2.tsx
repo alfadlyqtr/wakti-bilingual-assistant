@@ -286,7 +286,8 @@ const WaktiAIV2 = () => {
       console.log('🔥 DEBUG: Aborting previous request');
       abortControllerRef.current.abort();
     }
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     const startTime = Date.now();
     console.log('🔥 DEBUG: About to set isLoading(true)');
@@ -346,9 +347,9 @@ const WaktiAIV2 = () => {
                   // Fallback: fetch blob and keep full data URL
                   if (file.url) {
                     const response = await fetch(file.url);
-                    if (abortControllerRef.current?.signal.aborted) return null;
+                    if (controller.signal.aborted) return null;
                     const blob = await response.blob();
-                    if (abortControllerRef.current?.signal.aborted) return null;
+                    if (controller.signal.aborted) return null;
 
                     return new Promise((resolve) => {
                       const reader = new FileReader();
@@ -367,10 +368,10 @@ const WaktiAIV2 = () => {
                 // Default behavior (vision/others): convert to raw base64 payload only
                 if (file.url) {
                   const response = await fetch(file.url);
-                  if (abortControllerRef.current?.signal.aborted) return null;
+                  if (controller.signal.aborted) return null;
                   
                   const blob = await response.blob();
-                  if (abortControllerRef.current?.signal.aborted) return null;
+                  if (controller.signal.aborted) return null;
                   
                   return new Promise((resolve) => {
                     const reader = new FileReader();
@@ -394,7 +395,7 @@ const WaktiAIV2 = () => {
 
           // Filter out null results from aborted operations
           const validImageFiles = processedImageFiles.filter(file => file !== null);
-          if (abortControllerRef.current?.signal.aborted) return;
+          if (controller.signal.aborted) return;
 
           processedAttachedFiles = [...validImageFiles, ...otherFiles];
         }
@@ -434,11 +435,11 @@ const WaktiAIV2 = () => {
           'image',
           '',
           processedAttachedFiles || [],
-          abortControllerRef.current?.signal,
+          controller.signal,
           imageMode
         );
 
-        if (abortControllerRef.current?.signal.aborted) {
+        if (controller.signal.aborted) {
           console.log('🚫 Image request aborted');
           return;
         }
@@ -528,10 +529,10 @@ const WaktiAIV2 = () => {
           'chat', // Vision uses chat mode in backend
           '',
           processedAttachedFiles || [],
-          abortControllerRef.current?.signal
+          controller.signal
         );
 
-        if (abortControllerRef.current?.signal.aborted) {
+        if (controller.signal.aborted) {
           console.log('🚫 Vision request aborted');
           return;
         }
@@ -679,7 +680,7 @@ const WaktiAIV2 = () => {
             }, 1000);
           },
           // signal
-          abortControllerRef.current?.signal
+          controller.signal
         );
         
       } else {
@@ -847,7 +848,7 @@ const WaktiAIV2 = () => {
             }, 1000);
           },
           // signal
-          abortControllerRef.current?.signal
+          controller.signal
         );
         console.log('🔥 DEBUG: Chat streaming sendStreamingMessage completed');
       }
@@ -900,14 +901,8 @@ const WaktiAIV2 = () => {
       setIsLoading(false);
       
       // Mobile-safe AbortController cleanup
-      if (abortControllerRef.current) {
-        try {
-          abortControllerRef.current.abort();
-        } catch (e) {
-          console.warn('AbortController cleanup warning:', e);
-        } finally {
-          abortControllerRef.current = null;
-        }
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
       }
       console.log('🔥 DEBUG: Finally block - isLoading set to false, abortController safely cleared');
     }

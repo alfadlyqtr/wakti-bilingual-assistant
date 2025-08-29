@@ -2,12 +2,40 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
-const corsHeaders = {
+const baseCorsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, x-streaming, x-request-id, x-mobile-request, cache-control',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Max-Age': '86400',
 };
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin') || '*';
+  const requested = req.headers.get('access-control-request-headers') || '';
+  const allowHeaders = [
+    'authorization',
+    'x-client-info',
+    'apikey',
+    'content-type',
+    'accept',
+    'x-streaming',
+    'x-request-id',
+    'X-Request-ID',
+    'x-mobile-request',
+    'X-Mobile-Request',
+    'cache-control',
+  ];
+  const dynamic = requested
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+  const unique = Array.from(new Set([...allowHeaders, ...dynamic])).join(', ');
+  return {
+    ...baseCorsHeaders,
+    'Access-Control-Allow-Origin': origin === 'null' ? '*' : origin,
+    'Access-Control-Allow-Headers': unique,
+    'Vary': 'Origin, Access-Control-Request-Headers',
+  } as Record<string, string>;
+}
 
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -38,7 +66,8 @@ console.log("🚀 WAKTI AI STREAMING: Ultra-fast streaming service loaded");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    console.log('🛡️ Preflight - origin:', req.headers.get('origin') || 'unknown', 'req-headers:', req.headers.get('access-control-request-headers') || 'none');
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   try {
@@ -104,7 +133,7 @@ serve(async (req) => {
 
     return new Response(stream, {
       headers: {
-        ...corsHeaders,
+        ...getCorsHeaders(req),
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
@@ -117,7 +146,7 @@ serve(async (req) => {
       error: error.message || 'Streaming error'
     }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
     });
   }
 });
@@ -554,7 +583,7 @@ async function streamAIResponse(
 
       const data = await resp.json();
       const text = Array.isArray(data?.content)
-        ? data.content.map((c) => c?.text || '').join('')
+        ? data.content.map((c: any) => c?.text || '').join('')
         : (data?.content?.[0]?.text || '');
 
       model = 'claude-3-5-sonnet-20241022';
@@ -575,6 +604,7 @@ async function streamAIResponse(
   if (!hasValidVisionImages && DEEPSEEK_API_KEY && provider !== 'deepseek') {
     try {
       fallbackUsed = true;
+      // Reuse same message, switch to DeepSeek
       const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -648,6 +678,7 @@ async function streamAIResponse(
   controller.close();
 }
 
+}
 // Search functionality
 async function executeRegularSearch(query, language = 'en') {
   const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
