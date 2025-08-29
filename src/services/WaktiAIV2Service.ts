@@ -329,7 +329,7 @@ class WaktiAIV2ServiceClass {
               attachedFiles,
               recentMessages: enhancedMessages,
               conversationSummary: finalSummary,
-              personalTouch: null,
+              personalTouch: this.getPersonalTouch(),
               clientLocalHour,
               isWelcomeBack,
               requestId
