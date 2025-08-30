@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { VisionSystem } from './vision.ts';
 
 const baseCorsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -201,25 +202,25 @@ async function streamAIResponse(
   let browsingUsed = false;
   let browsingData: any = null;
 
-  // Determine if we have valid vision inputs (images with base64 content)
-  const hasImages = Array.isArray(attachedFiles) && attachedFiles.some(f => f?.type?.startsWith('image/'));
+  // Use VisionSystem to detect vision mode and process images
+  const isVisionMode = VisionSystem.shouldUseVisionMode(activeTrigger, attachedFiles);
   const hasValidVisionImages = Array.isArray(attachedFiles) && attachedFiles.some(
     (f) => f?.type?.startsWith('image/') && (f?.content || f?.data)
   );
 
-  // Select provider according to project rules (OpenAI primary), with sensible fallbacks
-  // Vision: OpenAI -> Claude (DeepSeek skipped for vision)
+  // Select provider - Claude first for vision to utilize "never refuse" instructions
+  // Vision: Claude -> OpenAI (DeepSeek skipped for vision)
   // Text/Search: OpenAI -> Claude -> DeepSeek
-  if (hasValidVisionImages) {
-    if (OPENAI_API_KEY) {
-      provider = 'openai';
-      model = 'gpt-4o-mini';
-    } else if (ANTHROPIC_API_KEY) {
+  if (isVisionMode || hasValidVisionImages) {
+    if (ANTHROPIC_API_KEY) {
       provider = 'claude';
       model = 'claude-3-5-sonnet-20241022';
-      fallbackUsed = true; // not primary
+    } else if (OPENAI_API_KEY) {
+      provider = 'openai';
+      model = 'gpt-4o-mini';
+      fallbackUsed = true; // not primary for vision
     } else {
-      throw new Error('Vision mode requires OpenAI or Claude API key');
+      throw new Error('Vision mode requires Claude or OpenAI API key');
     }
   } else {
     if (OPENAI_API_KEY) {
@@ -252,12 +253,11 @@ async function streamAIResponse(
     throw new Error('No AI API key configured');
   }
 
-  // ===== ENHANCED SYSTEM PROMPT WITH COMPREHENSIVE PERSONALIZATION =====
-  const baseSystemPrompt = language === 'ar' 
-    ? `أنت WAKTI، مساعد ذكي متقدم متخصص في الإنتاجية والتنظيم. كن ودوداً ومفيداً في إجاباتك. استخدم نصاً عادياً واضحاً بدون رموز زائدة.`
-    : `You are WAKTI, an advanced AI assistant specializing in productivity and organization. Be friendly and helpful in your responses. Use clean, plain text without excessive formatting.`;
-
-  // Brand identity rules (applied always)
+  // ===== USE VISION SYSTEM FOR COMPLETE SYSTEM PROMPT =====
+  const currentDate = new Date().toISOString().split('T')[0];
+  let systemPromptFinal = VisionSystem.buildCompleteSystemPrompt(language, currentDate, personalTouch);
+  
+  // Add brand identity rules to VisionSystem prompt
   const brandRules = language === 'ar'
     ? [
         'عند سؤالك: "من صنعك؟" اشرح: أنا مزيج من عدة نماذج ذكاء اصطناعي متقدمة، تم اختيار الأفضل منها بعناية ودمجها وصقلها من قبل فريق Wakti.',
@@ -270,24 +270,7 @@ async function streamAIResponse(
         'Represent yourself as WAKTI AI with a focus on quality and trust.'
       ];
 
-  // Memory and conversation continuity rules
-  const memoryRules = language === 'ar'
-    ? [
-        'لديك إمكانية الوصول إلى تاريخ المحادثات الحديثة. استخدم السياق السابق عند الحاجة.',
-        'إذا أشار المستخدم إلى شيء تمت مناقشته مسبقاً، اعترف بذلك وابني عليه.',
-        'لا تدعي أبداً أنك "لا تملك ذاكرة" أو "لا تتذكر المحادثات السابقة".',
-        'استخدم تاريخ المحادثة لتقديم إجابات أكثر صلة وشخصية.'
-      ]
-    : [
-        'You have access to recent conversation history. Use previous context when relevant.',
-        'If the user refers to something discussed earlier, acknowledge it and build upon it.',
-        'Never claim you "don\'t have memory" or "can\'t remember previous conversations".',
-        'Use conversation history to provide more relevant and personalized responses.'
-      ];
-
-  // Start building the system prompt
-  let systemPromptFinal = baseSystemPrompt + `\n\n=== BRAND IDENTITY ===\n- ` + brandRules.join('\n- ');
-  systemPromptFinal += `\n\n=== CONVERSATION MEMORY ===\n- ` + memoryRules.join('\n- ');
+  systemPromptFinal += `\n\n=== BRAND IDENTITY ===\n- ` + brandRules.join('\n- ');
 
   // Global anti-repetition rules (brand/nickname/greetings)
   if (language === 'ar') {
@@ -302,134 +285,8 @@ async function streamAIResponse(
     systemPromptFinal += `\n\n${summaryLabel}:\n${conversationSummary.trim()}`;
   }
 
-  // ===== ENHANCED PERSONAL TOUCH ENFORCEMENT =====
-  if (personalTouch) {
-    try {
-      const { nickname, aiNickname, tone, style, instruction } = personalTouch || {};
-      const lines = [];
-      const toneRules = [];
-      const styleRules = [];
-      const nicknameRules = [];
-      
-      if (language === 'ar') {
-        // Enhanced nickname handling with explicit recognition
-        if (nickname) {
-          nicknameRules.push(`اسم المستخدم هو "${nickname}". نادِ المستخدم بهذا الاسم عند المناسب.`);
-          nicknameRules.push(`عند سؤالك "ما اسمي؟" أو "ما لقبي؟" أجب فوراً: "${nickname}".`);
-        }
-        if (aiNickname) {
-          nicknameRules.push(`اسمك المخصص هو "${aiNickname}". استخدمه أحياناً عند تقديم نفسك.`);
-          nicknameRules.push(`عند سؤالك "ما اسمك؟" أو "ما لقبك؟" اذكر "${aiNickname}" مع "WAKTI AI".`);
-          const aiNicknameUsedRecently = Array.isArray(recentMessages)
-            && recentMessages.slice(-6).some(m => m?.role === 'assistant' && typeof m?.content === 'string' && m.content.includes(aiNickname));
-          if (aiNicknameUsedRecently) {
-            nicknameRules.push(`لا تذكر "${aiNickname}" في هذا الرد إذا تم ذكره مؤخراً.`);
-          }
-        }
-        
-        // Enhanced tone enforcement with specific behaviors
-        if (tone) {
-          const toneType = tone.toLowerCase();
-          if (toneType.includes('funny') || toneType.includes('مضحك')) {
-            toneRules.push('استخدم نبرة مضحكة: أضف تعليقات خفيفة الظل، تشبيهات مسلية، أو ملاحظات طريفة عند المناسب.');
-            toneRules.push('لا تبالغ في الفكاهة - فقط لمسات خفيفة لتجعل المحادثة أكثر متعة.');
-          } else if (toneType.includes('encouraging') || toneType.includes('محفز')) {
-            toneRules.push('استخدم نبرة محفزة: قدم التشجيع والدعم الإيجابي، اذكر نقاط القوة واحتفل بالإنجازات.');
-          } else if (toneType.includes('serious') || toneType.includes('جدي')) {
-            toneRules.push('استخدم نبرة جدية: كن رسمياً ومهنياً، ركز على الحقائق والتفاصيل المهمة.');
-          } else {
-            toneRules.push(`استخدم نبرة ${tone} في ردودك.`);
-          }
-        }
-        
-        // Enhanced style enforcement with structural requirements  
-        if (style) {
-          const styleType = style.toLowerCase();
-          if (styleType.includes('detailed') || styleType.includes('مفصل')) {
-            styleRules.push('أسلوب مفصل: قدم شروحات شاملة مع أمثلة وخطوات واضحة.');
-            styleRules.push('اكسر المواضيع المعقدة إلى أقسام منظمة مع تفاصيل كافية لكل قسم.');
-            styleRules.push('أضف سياقاً إضافياً ومعلومات مفيدة عند الحاجة.');
-          } else if (styleType.includes('short') || styleType.includes('مختصر')) {
-            styleRules.push('أسلوب مختصر: اجعل الردود مباشرة وموجزة، دون تفاصيل زائدة.');
-          } else if (styleType.includes('bullet') || styleType.includes('نقاط')) {
-            styleRules.push('أسلوب النقاط: نظم المعلومات في نقاط واضحة ومرتبة.');
-          } else if (styleType.includes('step') || styleType.includes('خطوات')) {
-            styleRules.push('أسلوب الخطوات: رتب الإجابات كخطوات مرقمة أو متسلسلة.');
-          } else {
-            styleRules.push(`أسلوب الرد: ${style}.`);
-          }
-        }
-        
-        if (instruction) nicknameRules.push(`تعليمات إضافية: ${instruction}`);
-        
-      } else {
-        // Enhanced nickname handling with explicit recognition (English)
-        if (nickname) {
-          nicknameRules.push(`The user's name is "${nickname}". Address the user by this name when appropriate.`);
-          nicknameRules.push(`When asked "what's my name?" or "what's my nickname?" respond immediately: "${nickname}".`);
-        }
-        if (aiNickname) {
-          nicknameRules.push(`Your custom name is "${aiNickname}". Use it occasionally when introducing yourself.`);
-          nicknameRules.push(`When asked "what's your name?" or "what's your nickname?" mention "${aiNickname}" along with "WAKTI AI".`);
-          const aiNicknameUsedRecently = Array.isArray(recentMessages)
-            && recentMessages.slice(-6).some(m => m?.role === 'assistant' && typeof m?.content === 'string' && m.content.includes(aiNickname));
-          if (aiNicknameUsedRecently) {
-            nicknameRules.push(`Do not mention "${aiNickname}" in this reply if it was used recently.`);
-          }
-        }
-        
-        // Enhanced tone enforcement with specific behaviors (English)
-        if (tone) {
-          const toneType = tone.toLowerCase();
-          if (toneType.includes('funny')) {
-            toneRules.push('Use a funny tone: Include light humor, wordplay, or amusing observations when appropriate.');
-            toneRules.push('Don\'t overdo the humor - just light touches to make the conversation more enjoyable.');
-          } else if (toneType.includes('encouraging')) {
-            toneRules.push('Use an encouraging tone: Provide positive support and motivation, highlight strengths and celebrate achievements.');
-          } else if (toneType.includes('serious')) {
-            toneRules.push('Use a serious tone: Be formal and professional, focus on facts and important details.');  
-          } else {
-            toneRules.push(`Use a ${tone} tone in your responses.`);
-          }
-        }
-        
-        // Enhanced style enforcement with structural requirements (English)
-        if (style) {
-          const styleType = style.toLowerCase();
-          if (styleType.includes('detailed')) {
-            styleRules.push('Detailed style: Provide comprehensive explanations with examples and clear step-by-step breakdowns.');
-            styleRules.push('Break down complex topics into organized sections with sufficient detail for each part.');
-            styleRules.push('Add additional context and helpful information when needed.');
-          } else if (styleType.includes('short')) {
-            styleRules.push('Short style: Keep responses direct and concise, without unnecessary details.');
-          } else if (styleType.includes('bullet')) {
-            styleRules.push('Bullet style: Organize information in clear, well-structured bullet points.');
-          } else if (styleType.includes('step')) {
-            styleRules.push('Step style: Arrange responses as numbered or sequential steps.');
-          } else {
-            styleRules.push(`Reply style: ${style}.`);
-          }
-        }
-        
-        if (instruction) nicknameRules.push(`Additional instructions: ${instruction}`);
-      }
-      
-      // Build personalization sections
-      if (nicknameRules.length > 0) {
-        systemPromptFinal += `\n\n=== NICKNAME RECOGNITION ===\n- ` + nicknameRules.join('\n- ');
-      }
-      if (toneRules.length > 0) {
-        systemPromptFinal += `\n\n=== TONE ENFORCEMENT ===\n- ` + toneRules.join('\n- ');
-      }
-      if (styleRules.length > 0) {
-        systemPromptFinal += `\n\n=== STYLE ENFORCEMENT ===\n- ` + styleRules.join('\n- ');
-      }
-      
-      console.log('🎯 STREAMING: Enhanced personalization applied to system prompt');
-    } catch (e) {
-      console.warn('⚠️ STREAMING: Failed to apply personalTouch', e);
-    }
-  }
+  console.log('🤖 STREAMING: VisionSystem integrated with complete capabilities');
+  console.log('🎯 STREAMING: Enhanced personalization and vision support applied');
 
   // Map personalTouch to temperature and max_tokens
   let temperature = 0.65; // default
@@ -477,19 +334,17 @@ async function streamAIResponse(
     ? `${message}\n\nWeb search context:\n${searchContext}`
     : message;
 
-  let userContent = textMessage;
-  if (attachedFiles?.length > 0) {
-    const contentParts = [{ type: 'text', text: textMessage }];
-    for (const file of attachedFiles) {
-      const base64 = file?.data || file?.content; // accept either
-      if (file?.type?.startsWith('image/') && base64) {
-        contentParts.push({
-          type: 'image_url',
-          image_url: { url: `data:${file.type};base64,${base64}` }
-        });
-      }
-    }
-    userContent = contentParts;
+  // Use VisionSystem for proper message formatting
+  let userMessage;
+  if (isVisionMode || hasValidVisionImages) {
+    userMessage = VisionSystem.buildVisionMessage(textMessage, attachedFiles, language);
+  } else {
+    userMessage = {
+      role: 'user',
+      content: language === 'ar' 
+        ? 'يرجى الرد باللغة العربية فقط. ' + textMessage
+        : 'Please respond in English only. ' + textMessage
+    };
   }
 
   const messages = [
@@ -502,7 +357,7 @@ async function streamAIResponse(
       role: m?.role === 'assistant' ? 'assistant' : 'user',
       content: m?.content ?? ''
     }))),
-    { role: 'user', content: userContent }
+    userMessage
   ];
 
   // If Claude is the selected provider, handle it directly (non-streaming) and return
