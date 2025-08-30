@@ -315,14 +315,14 @@ export function ChatMessages({
   return (
     <>
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-48">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto w-full px-4">
           {/* Welcome Message */}
           {renderWelcomeMessage()}
           
           {/* Chat Messages with FIXED badge logic and enhanced video display */}
           {sessionMessages.map((message, index) => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
-                <div className="flex gap-3 max-w-[65%]">
+                <div className="flex gap-3 max-w-[85%] w-full justify-end">
                   {message.role === 'assistant' && (
                     <div className="flex-shrink-0">
                       <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
@@ -331,7 +331,7 @@ export function ChatMessages({
                     </div>
                   )}
                   
-                  <div className={`rounded-lg px-4 py-3 relative ${
+                  <div className={`rounded-lg px-4 py-3 relative w-full ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : `bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border ${getAssistantBubbleClasses(message)}`

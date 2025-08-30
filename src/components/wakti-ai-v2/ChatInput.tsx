@@ -287,8 +287,8 @@ export function ChatInput({
               border-[2.5px] min-h-[70px] w-full
             `}
           >
-            {/* Centered collapse toggle at top */}
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+            {/* Collapse toggle positioned above input */}
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-10">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -390,16 +390,6 @@ export function ChatInput({
                       <ImagePlus className="h-3 w-3" />
                       <span>{language === 'ar' ? 'وضع الصورة' : 'Image Mode'}</span>
                       <ChevronDown className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); triggerSeedUpload(); }}
-                      disabled={isUploading}
-                      className="ml-1 h-5 w-5 flex items-center justify-center rounded-full bg-orange-200/60 text-orange-700 hover:bg-orange-300/60"
-                      aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
-                      title={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
-                    >
-                      <Plus className="h-3 w-3" />
                     </button>
                   </div>
 
@@ -538,33 +528,59 @@ export function ChatInput({
                   />
                 </div>
                 
-                {/* Send button: always visible, disabled when cannot send */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        onClick={handleSendMessage}
-                        disabled={!canSend}
-                        className={`
-                          h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
-                          border-0 shadow-2xl backdrop-blur-md
-                          transition-all duration-200 hover:scale-110 hover:shadow-2xl
-                          shadow-lg
-                        `}
-                        size="icon"
-                      >
-                        {isLoading || isUploading ? (
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : (
-                          <Send className="h-5 w-5" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                      {language === 'ar' ? 'إرسال' : 'Send'}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                {/* Upload and Send buttons container */}
+                <div className="flex flex-col items-center gap-2">
+                  {/* Upload button - visible only in image mode */}
+                  {activeTrigger === 'image' && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); triggerSeedUpload(); }}
+                            disabled={isUploading}
+                            className="h-9 w-9 flex items-center justify-center rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors"
+                            aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
+                            title={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                          {language === 'ar' ? 'تحميل صورة' : 'Upload image'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                  
+                  {/* Send button: always visible, disabled when cannot send */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleSendMessage}
+                          disabled={!canSend}
+                          className={`
+                            h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
+                            border-0 shadow-2xl backdrop-blur-md
+                            transition-all duration-200 hover:scale-110 hover:shadow-2xl
+                            shadow-lg
+                          `}
+                          size="icon"
+                        >
+                          {isLoading || isUploading ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <Send className="h-5 w-5" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                        {language === 'ar' ? 'إرسال' : 'Send'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </div>
             )}
           </div>
