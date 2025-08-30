@@ -275,8 +275,8 @@ export function ChatInput({
       )}
 
       {/* Main Input Area */}
-      <div className="px-3 pb-3 pt-2 mt-2">
-        <div className="max-w-4xl mx-auto">
+      <div className="w-full px-0 pb-3 pt-2 mt-2">
+        <div className="w-full px-3">
           <div
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
@@ -284,7 +284,7 @@ export function ChatInput({
               shadow-xl rounded-2xl backdrop-blur-2xl
               p-0 transition-all duration-300
               shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
-              border-[2.5px] min-h-[70px] max-w-full
+              border-[2.5px] min-h-[70px] w-full
             `}
           >
             {/* Centered collapse toggle at top */}

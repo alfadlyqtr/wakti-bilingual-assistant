@@ -3,11 +3,17 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
 
 // Create a single supabase client for interacting with your database
-// Hardcoded values for your Supabase project
-const supabaseUrl = 'https://hxauxozopvpzpdygoqwf.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+// Prefer environment variables; fall back to current values for dev safety
+const supabaseUrl =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) ||
+  (typeof process !== 'undefined' ? process.env.SUPABASE_URL : undefined) ||
+  'https://hxauxozopvpzpdygoqwf.supabase.co';
+const supabaseAnonKey =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) ||
+  (typeof process !== 'undefined' ? process.env.SUPABASE_ANON_KEY : undefined) ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
 
-// Use the hardcoded values directly
+// Use the resolved values
 const effectiveUrl = supabaseUrl;
 const effectiveAnon = supabaseAnonKey;
 
@@ -451,3 +457,23 @@ export const uploadAudioFile = async (options: AudioUploadOptions): Promise<stri
 export const updateRecordingTitle = async (id: string, title: string): Promise<TasjeelRecord> => {
   return updateTasjeelRecord(id, { title });
 };
+
+// Server-only admin client factory. Do NOT call from the browser.
+export function getAdminSupabaseClient(): SupabaseClient {
+  if (typeof window !== 'undefined') {
+    throw new Error('getAdminSupabaseClient() cannot be used in the browser. Use Edge Functions or server runtime.');
+  }
+  const adminKey =
+    (typeof process !== 'undefined' ? process.env.SUPABASE_SERVICE_ROLE_KEY : undefined) ||
+    (typeof process !== 'undefined' ? (process as any).env?.SUPABASE_SERVICE_ROLE : undefined);
+
+  const url =
+    (typeof process !== 'undefined' ? process.env.SUPABASE_URL : undefined) ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) ||
+    effectiveUrl;
+
+  if (!url || !adminKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY for admin client. Configure these in your server/Edge environment.');
+  }
+  return createClient(url, adminKey, { auth: { persistSession: false } });
+}
