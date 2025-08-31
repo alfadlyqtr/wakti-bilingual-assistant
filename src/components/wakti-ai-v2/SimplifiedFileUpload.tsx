@@ -3,28 +3,10 @@ import { Upload, Camera, X, Image, Eye } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
+import { UploadedFile, FileUploadProps } from '@/types/fileUpload';
 
-export interface SimplifiedUploadedFile {
-  id: string;
-  name: string;
-  type: string;
-  size: number;
-  url: string;
-  preview?: string;
-  base64?: string;
-  imageType?: {
-    id: string;
-    name: string;
-  };
-}
-
-interface SimplifiedFileUploadProps {
-  onFilesUploaded: (files: SimplifiedUploadedFile[]) => void;
-  onUpdateFiles: (files: SimplifiedUploadedFile[]) => void;
-  uploadedFiles: SimplifiedUploadedFile[];
-  onRemoveFile: (fileId: string) => void;
-  isUploading: boolean;
-  disabled?: boolean;
+interface SimplifiedFileUploadProps extends Omit<FileUploadProps, 'maxFiles'> {
+  onUpdateFiles: (files: UploadedFile[]) => void;
   onAutoSwitchMode?: (mode: string) => void;
 }
 
@@ -88,7 +70,7 @@ export function SimplifiedFileUpload({
     
     console.log('🔄 TRUE CLAUDE WAY: Processing', files.length, 'files as pure base64');
     
-    const validFiles: SimplifiedUploadedFile[] = [];
+    const validFiles: UploadedFile[] = [];
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -112,7 +94,7 @@ export function SimplifiedFileUpload({
         console.log('✅ CLAUDE WAY: Pure base64 data URL created for', file.name);
         
         // PURE BASE64 PROCESSING - TRUE CLAUDE WAY
-        const uploadedFile: SimplifiedUploadedFile = {
+        const uploadedFile: UploadedFile = {
           id: `${Date.now()}-${i}`,
           name: file.name,
           type: file.type,

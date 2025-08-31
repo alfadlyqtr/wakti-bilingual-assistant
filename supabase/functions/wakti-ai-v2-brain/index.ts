@@ -361,6 +361,9 @@ serve(async (req) => {
             if (imageFile && imageFile.data) {
               seedImage = `data:${imageFile.type};base64,${imageFile.data}`;
               imageOptions.seedImage = seedImage;
+              // Background removal (Option 1): send base64 as inputImage and enable backgroundRemoval mode
+              imageOptions.backgroundRemoval = true;
+              imageOptions.inputImage = seedImage;
               // For background removal, we'll use a special prompt
               promptForImage = promptForImage || 'Remove the background from this image, make it transparent';
             }

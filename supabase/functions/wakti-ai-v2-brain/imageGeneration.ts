@@ -38,6 +38,11 @@ export async function generateImageWithRunware(
     negativePrompt?: string;
     model?: string;
     outputFormat?: 'WEBP' | 'PNG' | 'JPEG';
+    // Background removal specific
+    backgroundRemoval?: boolean;
+    inputImage?: string; // base64 data URL supported in Option 1
+    outputType?: 'URL' | 'BASE64';
+    settings?: any;
   },
   signal?: AbortSignal
 ) {
@@ -131,28 +136,94 @@ export async function generateImageWithRunware(
 
     const outputFormat = options?.outputFormat || 'WEBP';
 
-    const buildPayload = (modelToUse: string) => ([
-      {
-        taskType: "authentication",
-        apiKey: RUNWARE_API_KEY
-      },
-      {
-        taskType: "imageInference",
-        taskUUID: taskUUID,
-        positivePrompt: finalPrompt,
-        ...(options?.negativePrompt ? { negativePrompt: options.negativePrompt } : {}),
-        width,
-        height,
-        model: modelToUse,
-        numberResults: 1,
-        outputFormat,
-        includeCost: true,
-        CFGScale: cfgScale,
-        steps,
-        ...(options?.seedImage ? { seedImage: options.seedImage, strength: Math.max(0, Math.min(1, strength ?? 0.8)) } : {}),
-        ...(options?.maskImage ? { maskImage: options.maskImage, maskMargin: options.maskMargin ?? 8 } : {})
+    // Helper: upload image (data URI, base64, or URL) to Runware to get imageUUID
+    const uploadImageAndGetUUID = async (image: string): Promise<string> => {
+      const uploadTaskUUID = crypto.randomUUID();
+      const uploadPayload = [
+        { taskType: 'authentication', apiKey: RUNWARE_API_KEY },
+        { taskType: 'imageUpload', taskUUID: uploadTaskUUID, image }
+      ];
+
+      const res = await fetch('https://api.runware.ai/v1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(uploadPayload)
+      });
+
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        console.error('❌ IMAGE UPLOAD ERROR:', res.status, t);
+        throw new Error(`Image upload API error: ${res.status}`);
       }
-    ]);
+      const text = await res.text();
+      if (!text) throw new Error('Empty response from image upload');
+      let data: any;
+      try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON from image upload'); }
+
+      // Accept both {data: {...}} and {data: [...]} shapes
+      const uploadNode = Array.isArray(data?.data) ? data.data.find((d: any) => d.taskType === 'imageUpload') : data?.data;
+      const imageUUID: string | undefined = uploadNode?.imageUUID || uploadNode?.imageUuid || uploadNode?.id;
+      if (!imageUUID) throw new Error('imageUUID not found in upload response');
+      return imageUUID;
+    };
+
+    const buildPayload = (modelToUse: string) => {
+      // Background Removal branch (Option 1: send base64 inputImage directly)
+      if (options?.backgroundRemoval) {
+        const inputImage = options.inputImage || options.seedImage;
+        const bgOutputFormat = options.outputFormat || 'PNG';
+        const outputType = options.outputType || 'URL';
+        const settings = options.settings || {
+          rgba: [255, 255, 255, 0],
+          postProcessMask: true,
+          returnOnlyMask: false,
+          alphaMatting: true,
+          alphaMattingForegroundThreshold: 240,
+          alphaMattingBackgroundThreshold: 10,
+          alphaMattingErodeSize: 10
+        };
+
+        return [
+          {
+            taskType: "authentication",
+            apiKey: RUNWARE_API_KEY
+          },
+          {
+            taskType: "imageBackgroundRemoval",
+            taskUUID: taskUUID,
+            inputImage: inputImage, // base64 data URL (Option 1)
+            outputType: outputType,
+            outputFormat: bgOutputFormat,
+            model: 'runware:109@1',
+            settings
+          }
+        ];
+      }
+
+      // Default image generation branch
+      return [
+        {
+          taskType: "authentication",
+          apiKey: RUNWARE_API_KEY
+        },
+        {
+          taskType: "imageInference",
+          taskUUID: taskUUID,
+          positivePrompt: finalPrompt,
+          ...(options?.negativePrompt ? { negativePrompt: options.negativePrompt } : {}),
+          width,
+          height,
+          model: modelToUse,
+          numberResults: 1,
+          outputFormat,
+          includeCost: true,
+          CFGScale: cfgScale,
+          steps,
+          ...(options?.seedImage ? { seedImage: options.seedImage, strength: Math.max(0, Math.min(1, strength ?? 0.8)) } : {}),
+          ...(options?.maskImage ? { maskImage: options.maskImage, maskMargin: options.maskMargin ?? 8 } : {})
+        }
+      ];
+    };
 
     const fetchWithTimeout = async (payload: any, timeoutMs = RW_TIMEOUT_MS) => {
       const controller = new AbortController();
@@ -179,6 +250,104 @@ export async function generateImageWithRunware(
     // Check for cancellation before making API calls
     if (signal && signal.aborted) {
       throw new Error('Image generation was cancelled');
+    }
+
+    // EARLY BRANCH: Background removal with upload-first (Option B)
+    if (options?.backgroundRemoval) {
+      const rawInput = options.inputImage || options.seedImage || '';
+      if (!rawInput) {
+        throw new Error('No input image provided for background removal');
+      }
+
+      // If not a UUID v4, upload first
+      const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      let inputImageUUID = rawInput;
+      if (!uuidV4Regex.test(rawInput)) {
+        console.log('⬆️ Uploading image to Runware to obtain imageUUID');
+        inputImageUUID = await uploadImageAndGetUUID(rawInput);
+        console.log('✅ Upload complete, imageUUID:', inputImageUUID);
+      }
+
+      const bgOutputFormat = options.outputFormat || 'PNG';
+      const outputType = options.outputType || 'URL';
+      const settings = options.settings || {
+        rgba: [255, 255, 255, 0],
+        postProcessMask: true,
+        returnOnlyMask: false,
+        alphaMatting: true,
+        alphaMattingForegroundThreshold: 240,
+        alphaMattingBackgroundThreshold: 10,
+        alphaMattingErodeSize: 10
+      };
+
+      const payload = [
+        { taskType: 'authentication', apiKey: RUNWARE_API_KEY },
+        {
+          taskType: 'imageBackgroundRemoval',
+          taskUUID,
+          inputImage: inputImageUUID,
+          outputType,
+          outputFormat: bgOutputFormat,
+          model: 'runware:109@1',
+          settings
+        }
+      ];
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), RW_TIMEOUT_MS);
+      if (signal) signal.addEventListener('abort', () => controller.abort());
+      const response = await fetch('https://api.runware.ai/v1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        console.error('❌ IMAGE API ERROR (backgroundRemoval):', response.status, errorText);
+        throw new Error(`Image generation API error: ${response.status}`);
+      }
+
+      const responseText = await response.text();
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Empty response from image generation service');
+      }
+      let responseData: any;
+      try { responseData = JSON.parse(responseText); } catch { throw new Error('Invalid JSON response from image generation service'); }
+
+      const imageResult = Array.isArray(responseData?.data)
+        ? responseData.data.find((item: any) => item.taskType === 'imageBackgroundRemoval')
+        : responseData?.data;
+      const urlCandidate = imageResult?.imageURL || imageResult?.url || imageResult?.outputUrl || imageResult?.outputURL;
+
+      if (urlCandidate) {
+        console.log('✅ IMAGE GEN: Successfully generated image');
+
+        const durationMs = Date.now() - startTime;
+
+        const responseMessage = language === 'ar'
+          ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${urlCandidate})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
+          : `🎨 Image generated successfully!\n\n![Generated Image](${urlCandidate})\n\n**Prompt:** ${finalPrompt}`;
+        
+        return {
+          success: true,
+          error: null,
+          response: responseMessage,
+          imageUrl: urlCandidate,
+          runwareCost: imageResult?.cost,
+          modelUsed: 'runware:109@1',
+          responseTime: durationMs
+        };
+      }
+
+      console.warn('⚠️ IMAGE GEN: No valid image URL in response');
+      return {
+        success: false,
+        error: language === 'ar' ? 'لم يتم إنشاء الصورة بنجاح' : 'Image generation failed',
+        response: language === 'ar' ? 'أعتذر، لم أتمكن من إنشاء الصورة. يرجى المحاولة مرة أخرى.' : 'I apologize, I could not generate the image. Please try again.'
+      };
     }
 
     // Try preferred model first, then fallback if needed
@@ -223,9 +392,14 @@ export async function generateImageWithRunware(
       throw new Error('Invalid JSON response from image generation service');
     }
 
-    const imageResult = responseData?.data?.find((item: any) => item.taskType === 'imageInference');
+    // Select result per task type
+    const targetTaskType = options?.backgroundRemoval ? 'imageBackgroundRemoval' : 'imageInference';
+    const imageResult = responseData?.data?.find((item: any) => item.taskType === targetTaskType);
 
-    if (imageResult?.imageURL) {
+    // Try common URL fields
+    const urlCandidate = imageResult?.imageURL || imageResult?.url || imageResult?.outputUrl || imageResult?.outputURL;
+
+    if (urlCandidate) {
       console.log('✅ IMAGE GEN: Successfully generated image');
 
       // Extract any available cost metadata without assuming exact shape
@@ -239,14 +413,14 @@ export async function generateImageWithRunware(
       const durationMs = Date.now() - startTime;
 
       const responseMessage = language === 'ar' 
-        ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageResult.imageURL})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
-        : `🎨 Image generated successfully!\n\n![Generated Image](${imageResult.imageURL})\n\n**Prompt:** ${finalPrompt}`;
+        ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${urlCandidate})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
+        : `🎨 Image generated successfully!\n\n![Generated Image](${urlCandidate})\n\n**Prompt:** ${finalPrompt}`;
       
       return {
         success: true,
         error: null,
         response: responseMessage,
-        imageUrl: imageResult.imageURL,
+        imageUrl: urlCandidate,
         runwareCost,
         modelUsed,
         responseTime: durationMs

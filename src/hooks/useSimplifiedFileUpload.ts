@@ -1,22 +1,21 @@
-
 import { useState, useCallback } from 'react';
-import { SimplifiedUploadedFile } from '@/components/wakti-ai-v2/SimplifiedFileUpload';
+import { UploadedFile } from '@/types/fileUpload';
 
-export function useSimplifiedFileUpload() {
+export function useSimplifiedFileUpload<T extends UploadedFile = UploadedFile>() {
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<SimplifiedUploadedFile[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<T[]>([]);
 
-  const handleFilesUploaded = useCallback((newFiles: SimplifiedUploadedFile[]) => {
-    setUploadedFiles(prev => [...prev, ...newFiles]);
+  const handleFilesUploaded = useCallback((newFiles: T[]) => {
+    setUploadedFiles(prev => [...prev, ...newFiles] as T[]);
     setIsUploading(false);
   }, []);
 
-  const updateFiles = useCallback((updatedFiles: SimplifiedUploadedFile[]) => {
-    setUploadedFiles(updatedFiles);
+  const updateFiles = useCallback((updatedFiles: T[]) => {
+    setUploadedFiles(updatedFiles as T[]);
   }, []);
 
   const removeFile = useCallback((fileId: string) => {
-    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+    setUploadedFiles(prev => prev.filter(file => file.id !== fileId) as T[]);
   }, []);
 
   const clearFiles = useCallback(() => {
@@ -34,6 +33,6 @@ export function useSimplifiedFileUpload() {
     updateFiles,
     removeFile,
     clearFiles,
-    startUploading
+    startUploading,
   };
 }

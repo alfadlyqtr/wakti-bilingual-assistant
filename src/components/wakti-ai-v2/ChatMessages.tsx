@@ -51,6 +51,9 @@ export function ChatMessages({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
+  // ElevenLabs audio playback state
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCacheRef = useRef<Map<string, string>>(new Map()); // messageId -> object URL
   
 
 
@@ -60,49 +63,117 @@ export function ChatMessages({
     }
   }, [sessionMessages, showTaskConfirmation]);
 
-  // Native TTS function with stop functionality
-  const handleSpeak = (text: string, messageId: string) => {
-    // If currently speaking this message, stop it
-    if (speakingMessageId === messageId) {
-      speechSynthesis.cancel();
+  // ElevenLabs-backed TTS via Edge Function with stop/toggle and caching
+  const handleSpeak = async (text: string, messageId: string) => {
+    try {
+      // Toggle off if already playing this message
+      if (speakingMessageId === messageId) {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+        setSpeakingMessageId(null);
+        return;
+      }
+
+      // Stop any current playback
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setSpeakingMessageId(messageId);
+
+      // Use cached audio if available
+      const cachedUrl = audioCacheRef.current.get(messageId);
+      if (cachedUrl) {
+        const audio = new Audio(cachedUrl);
+        audioRef.current = audio;
+        audio.onended = () => setSpeakingMessageId(null);
+        audio.onerror = () => setSpeakingMessageId(null);
+        await audio.play();
+        return;
+      }
+
+      // Choose voice ID by detected text language (Arabic chars) then UI language
+      const isArabicText = /[\u0600-\u06FF]/.test(text);
+      const voice_id = isArabicText || language === 'ar' ? 'G1QUjBCuRBbLbAmYlTgl' : 'TX3LPaxmHKxFdv7VOQHJ';
+
+      // Call existing Edge Function voice-tts with auth
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+
+      const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ text, voice_id, style: 'neutral' })
+      });
+
+      if (!resp.ok) {
+        // Attempt to read JSON error
+        setSpeakingMessageId(null);
+        return;
+      }
+
+      const arrayBuf = await resp.arrayBuffer();
+      const blob = new Blob([arrayBuf], { type: 'audio/mpeg' });
+      const objectUrl = URL.createObjectURL(blob);
+      audioCacheRef.current.set(messageId, objectUrl);
+
+      const audio = new Audio(objectUrl);
+      audioRef.current = audio;
+      audio.onended = () => setSpeakingMessageId(null);
+      audio.onerror = () => setSpeakingMessageId(null);
+      await audio.play();
+    } catch (e) {
       setSpeakingMessageId(null);
-      return;
     }
-    
-    // Stop any currently playing speech
-    speechSynthesis.cancel();
-    setSpeakingMessageId(messageId);
-    
-    // Create utterance with native TTS
-    const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Configure for native device voices
-    utterance.lang = language === 'ar' ? 'ar-SA' : 'en-US';
-    utterance.rate = 0.9;        // Natural speech rate
-    utterance.pitch = 1.0;       // Natural pitch
-    utterance.volume = 1.0;      // Full volume
-    
-    // Use device's default voice for the language
-    const voices = speechSynthesis.getVoices();
-    const preferredVoice = voices.find(voice => 
-      voice.lang.startsWith(language === 'ar' ? 'ar' : 'en') && voice.localService
-    );
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
-    }
-    
-    // Handle speech end
-    utterance.onend = () => {
-      setSpeakingMessageId(null);
-    };
-    
-    utterance.onerror = () => {
-      setSpeakingMessageId(null);
-    };
-    
-    // Speak using native device TTS
-    speechSynthesis.speak(utterance);
   };
+
+  // Prefetch audio into cache without playing
+  const prefetchSpeak = async (text: string, messageId: string) => {
+    try {
+      if (audioCacheRef.current.has(messageId)) return;
+      const isArabicText = /[\u0600-\u06FF]/.test(text);
+      const voice_id = isArabicText || language === 'ar' ? 'G1QUjBCuRBbLbAmYlTgl' : 'TX3LPaxmHKxFdv7VOQHJ';
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+      const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ text, voice_id, style: 'neutral' })
+      });
+      if (!resp.ok) return;
+      const arrayBuf = await resp.arrayBuffer();
+      const blob = new Blob([arrayBuf], { type: 'audio/mpeg' });
+      const objectUrl = URL.createObjectURL(blob);
+      audioCacheRef.current.set(messageId, objectUrl);
+    } catch {}
+  };
+
+  // Note: We only prefetch on hover to avoid unnecessary quota usage.
+
+  // Cleanup cached object URLs on unmount to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      for (const url of audioCacheRef.current.values()) {
+        try { URL.revokeObjectURL(url); } catch {}
+      }
+      audioCacheRef.current.clear();
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch {}
+      }
+    };
+  }, []);
 
 
   // FIXED: Show welcome message for new conversations
@@ -149,14 +220,17 @@ export function ChatMessages({
                   <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
                 </button>
                 
-                {/* Native TTS Button */}
+                {/* TTS Button */}
                 <button
-                   onClick={() => handleSpeak(language === 'ar' 
-                     ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
-                     : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome'
+                  onClick={() => handleSpeak(language === 'ar' 
+                    ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
+                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome'
                   )}
+                  onMouseEnter={() => prefetchSpeak(language === 'ar' 
+                    ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
+                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome')}
                   className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
-                  title={language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice'}
+                  title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
                 >
                   {speakingMessageId === 'welcome' ? (
                     <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
@@ -431,13 +505,14 @@ export function ChatMessages({
                           <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
                         </button>
                         
-                        {/* Native TTS Button with Stop Functionality */}
+                        {/* TTS Button with Stop Functionality */}
                         <button
                           onClick={() => handleSpeak(message.content, message.id)}
+                          onMouseEnter={() => prefetchSpeak(message.content, message.id)}
                           className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
                           title={speakingMessageId === message.id 
-                            ? (language === 'ar' ? 'إيقاف القراءة' : 'Stop reading')
-                            : (language === 'ar' ? 'قراءة بالصوت الطبيعي للجهاز' : 'Read with native device voice')
+                            ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
+                            : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
                           }
                         >
                           {speakingMessageId === message.id ? (

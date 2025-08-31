@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { PlusMenu } from './PlusMenu';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
 import { SimplifiedFileUpload } from './SimplifiedFileUpload';
+import { ImageModeFileUpload } from './ImageModeFileUpload';
 import type { SimplifiedUploadedFile } from './SimplifiedFileUpload';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
 
@@ -251,30 +252,37 @@ export function ChatInput({
 
   return (
     <div className="w-full space-y-4">
-      {/* Simplified File Upload Component - Only show for non-video modes */}
+      {/* File Upload Component - Different component based on mode */}
       {activeTrigger !== 'video' && (
-        <SimplifiedFileUpload
-          onFilesUploaded={handleFilesUploaded}
-          onUpdateFiles={updateFiles}
-          uploadedFiles={uploadedFiles}
-          onRemoveFile={removeFile}
-          isUploading={isUploading}
-          disabled={isUploading}
-          onAutoSwitchMode={(mode) => {
-            console.log('🔍 UPLOAD AUTO-SWITCH: Switching to', mode);
-            // Do NOT auto-switch if currently in Image mode with background-removal selected
-            if (activeTrigger === 'image' && imageMode === 'background-removal') {
-              console.log('🛑 Skipping auto-switch: background-removal mode active');
-              return;
-            }
-            if (onTriggerChange) {
-              onTriggerChange(mode);
-              if (mode === 'vision') {
-                setWasAutoSwitchedToVision(true);
-              }
-            }
-          }}
-        />
+        <>
+          {activeTrigger === 'image' ? (
+            <ImageModeFileUpload
+              onFilesUploaded={handleFilesUploaded}
+              onRemoveFile={removeFile}
+              uploadedFiles={uploadedFiles}
+              isUploading={isUploading}
+              disabled={isUploading}
+              maxFiles={1}
+            />
+          ) : (
+            <SimplifiedFileUpload
+              onFilesUploaded={handleFilesUploaded}
+              onUpdateFiles={updateFiles}
+              uploadedFiles={uploadedFiles}
+              onRemoveFile={removeFile}
+              isUploading={isUploading}
+              disabled={isUploading}
+              onAutoSwitchMode={(mode) => {
+                if (onTriggerChange) {
+                  onTriggerChange(mode);
+                  if (mode === 'vision') {
+                    setWasAutoSwitchedToVision(true);
+                  }
+                }
+              }}
+            />
+          )}
+        </>
       )}
 
       {/* Main Input Area */}
@@ -451,46 +459,58 @@ export function ChatInput({
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION */}
             {uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
               <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20">
-                {uploadedFiles[0]?.imageType?.id === 'ids' && (
+                {/* Background Removal: show only a single bilingual chip */}
+                {activeTrigger === 'image' && imageMode === 'background-removal' ? (
+                  <button
+                    onClick={() => setMessage(language === 'ar' ? 'أزل الخلفية' : 'Remove the background')}
+                    className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
+                  >
+                    🧹 {language === 'ar' ? 'أزل الخلفية' : 'Remove the background'}
+                  </button>
+                ) : (
                   <>
-                    <button onClick={() => setMessage('What info is on this document?')} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm">🔍 What info is on this document?</button>
-                    <button onClick={() => setMessage('Extract all the text for me')} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm">📝 Extract all the text</button>
-                  </>
-                )}
-                {uploadedFiles[0]?.imageType?.id === 'bills' && (
-                  <>
-                    <button onClick={() => setMessage('How much did I spend?')} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm">💰 How much did I spend?</button>
-                    <button onClick={() => setMessage('Split this bill between ___ people')} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm">➗ Split this bill</button>
-                  </>
-                )}
-                {uploadedFiles[0]?.imageType?.id === 'food' && (
-                  <>
-                    <button onClick={() => setMessage('How many calories is this?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🔥 How many calories?</button>
-                    <button onClick={() => setMessage('What ingredients do you see?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🥗 What ingredients?</button>
-                  </>
-                )}
-                {uploadedFiles[0]?.imageType?.id === 'docs' && (
-                  <>
-                    <button onClick={() => setMessage('Answer the questions in this')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📚 Answer the questions</button>
-                    <button onClick={() => setMessage('Explain this chart/report')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📊 Explain this chart</button>
-                  </>
-                )}
-                {uploadedFiles[0]?.imageType?.id === 'screens' && (
-                  <>
-                    <button onClick={() => setMessage('What\'s the error/problem here?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🚨 What's the error?</button>
-                    <button onClick={() => setMessage('How do I fix this step by step?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🛠️ How to fix this?</button>
-                  </>
-                )}
-                {uploadedFiles[0]?.imageType?.id === 'photos' && (
-                  <>
-                    <button onClick={() => setMessage('Describe the person/people')} className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm">👥 Describe the people</button>
-                    <button onClick={() => setMessage('Where was this taken?')} className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm">📍 Where was this taken?</button>
-                  </>
-                )}
-                {(!uploadedFiles[0]?.imageType || uploadedFiles[0]?.imageType?.id === 'general') && (
-                  <>
-                    <button onClick={() => setMessage('Describe everything you see')} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm">👁️ Describe everything</button>
-                    <button onClick={() => setMessage('What\'s the main subject here?')} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm">🔍 What's the main subject?</button>
+                    {uploadedFiles[0]?.imageType?.id === 'ids' && (
+                      <>
+                        <button onClick={() => setMessage('What info is on this document?')} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm">🔍 What info is on this document?</button>
+                        <button onClick={() => setMessage('Extract all the text for me')} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm">📝 Extract all the text</button>
+                      </>
+                    )}
+                    {uploadedFiles[0]?.imageType?.id === 'bills' && (
+                      <>
+                        <button onClick={() => setMessage('How much did I spend?')} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm">💰 How much did I spend?</button>
+                        <button onClick={() => setMessage('Split this bill between ___ people')} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm">➗ Split this bill</button>
+                      </>
+                    )}
+                    {uploadedFiles[0]?.imageType?.id === 'food' && (
+                      <>
+                        <button onClick={() => setMessage('How many calories is this?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🔥 How many calories?</button>
+                        <button onClick={() => setMessage('What ingredients do you see?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🥗 What ingredients?</button>
+                      </>
+                    )}
+                    {uploadedFiles[0]?.imageType?.id === 'docs' && (
+                      <>
+                        <button onClick={() => setMessage('Answer the questions in this')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📚 Answer the questions</button>
+                        <button onClick={() => setMessage('Explain this chart/report')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📊 Explain this chart</button>
+                      </>
+                    )}
+                    {uploadedFiles[0]?.imageType?.id === 'screens' && (
+                      <>
+                        <button onClick={() => setMessage('What\'s the error/problem here?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🚨 What's the error?</button>
+                        <button onClick={() => setMessage('How do I fix this step by step?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🛠️ How to fix this?</button>
+                      </>
+                    )}
+                    {uploadedFiles[0]?.imageType?.id === 'photos' && (
+                      <>
+                        <button onClick={() => setMessage('Describe the person/people')} className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm">👥 Describe the people</button>
+                        <button onClick={() => setMessage('Where was this taken?')} className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm">📍 Where was this taken?</button>
+                      </>
+                    )}
+                    {(!uploadedFiles[0]?.imageType || uploadedFiles[0]?.imageType?.id === 'general') && (
+                      <>
+                        <button onClick={() => setMessage('Describe everything you see')} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm">👁️ Describe everything</button>
+                        <button onClick={() => setMessage('What\'s the main subject here?')} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm">🔍 What's the main subject?</button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
