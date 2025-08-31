@@ -37,7 +37,7 @@ interface ChatInputProps {
   setMessage: (message: string) => void;
   isLoading: boolean;
   sessionMessages: any[];
-  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode) => void;
+  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode, imageQuality?: 'fast' | 'best_fast') => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
   activeTrigger: string;
@@ -67,6 +67,8 @@ export function ChatInput({
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
   const [imageMode, setImageMode] = useState<ImageMode>('text2image');
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  // Local-only UI state: image quality dropdown (visible only in image -> text2image)
+  const [imageQuality, setImageQuality] = useState<'fast' | 'best_fast'>('fast');
   const seedFileInputRef = useRef<HTMLInputElement>(null);
   const [isInputCollapsed, setIsInputCollapsed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -145,7 +147,8 @@ export function ChatInput({
         outgoingMessage, 
         finalTrigger, // Use the final trigger (could be auto-switched to vision)
         outgoingFiles,
-        activeTrigger === 'image' ? imageMode : undefined // Only pass imageMode if in image mode
+        activeTrigger === 'image' ? imageMode : undefined, // Only pass imageMode if in image mode
+        activeTrigger === 'image' ? imageQuality : undefined // Only pass imageQuality if in image mode
       );
     } else {
       console.log('❌ SEND: No message or files to send');
@@ -530,8 +533,30 @@ export function ChatInput({
                 
                 {/* Upload and Send buttons container */}
                 <div className="flex flex-col items-center gap-2">
-                  {/* Upload button - visible only in image mode */}
-                  {activeTrigger === 'image' && (
+                  {/* Image Quality Dropdown - only for Image mode with text2image */}
+                  {activeTrigger === 'image' && imageMode === 'text2image' && (
+                    <div className="w-full flex justify-center">
+                      <div className="relative inline-flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 rounded-lg px-2 py-1 shadow-sm min-w-[56px]">
+                        <select
+                          aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
+                          className="appearance-none text-[11px] leading-none bg-transparent outline-none text-orange-900 dark:text-orange-200 cursor-pointer text-center pb-3"
+                          value={imageQuality}
+                          onChange={(e) => setImageQuality(e.target.value as 'fast' | 'best_fast')}
+                        >
+                          <option value="fast">{language === 'ar' ? 'سريع' : 'Fast'}</option>
+                          <option value="best_fast">{language === 'ar' ? 'أفضل' : 'Best'}</option>
+                        </select>
+                        {/* Custom chevron below the word */}
+                        <span className="pointer-events-none absolute bottom-0.5 left-1/2 -translate-x-1/2 text-orange-900 dark:text-orange-200">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M7 10l5 5 5-5z" />
+                          </svg>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {/* Upload button - visible only for image->image and background-removal */}
+                  {activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal') && (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>

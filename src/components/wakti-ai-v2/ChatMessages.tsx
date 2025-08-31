@@ -344,29 +344,43 @@ export function ChatMessages({
                     </div>
                     
                     <div className={`text-sm leading-relaxed break-words ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
-                      {message.role === 'assistant' && !message.content ? (
-                        <div className="flex items-center gap-2">
-                          <div className="flex space-x-1">
-                            <div
-                              className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                              style={{ animationDelay: '0s', animationDuration: '1.4s' }}
-                            />
-                            <div
-                              className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                              style={{ animationDelay: '0.2s', animationDuration: '1.4s' }}
-                            />
-                            <div
-                              className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                              style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}
-                            />
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {activeTrigger === 'vision' ? 'Analyzing image...' : 'Thinking...'}
-                          </span>
-                        </div>
-                      ) : (
-                        renderMessageContent(message)
-                      )}
+                      {(() => {
+                        const isImageLoading = message.role === 'assistant' && message.intent === 'image' && (message as any)?.metadata?.loading;
+                        if (isImageLoading) {
+                          return (
+                            <div className="w-full">
+                              {/* Skeleton image box with subtle blur */}
+                              <div className="relative overflow-hidden rounded-lg border border-border/50 shadow-sm max-w-xs">
+                                <div className="brush-skeleton" style={{ width: '100%', height: 256 }} />
+                                {/* subtle overlay, no heavy blur to keep it light */}
+                                <div className="absolute inset-0 pointer-events-none" />
+                                {/* tiny progress bar pinned to bottom */}
+                                <div className="absolute bottom-0 left-0 right-0 p-2">
+                                  <div className="tiny-progress" />
+                                </div>
+                              </div>
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                <span>{language === 'ar' ? 'جارٍ توليد الصورة...' : 'Generating image...'}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (message.role === 'assistant' && !message.content) {
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className="flex space-x-1">
+                                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0s', animationDuration: '1.4s' }} />
+                                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1.4s' }} />
+                                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1.4s' }} />
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {activeTrigger === 'vision' ? 'Analyzing image...' : 'Thinking...'}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return renderMessageContent(message);
+                      })()}
                     </div>
                     
                     

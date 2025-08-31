@@ -203,8 +203,8 @@ const WaktiAIV2 = () => {
     return allPatterns.some(pattern => pattern.test(messageContent));
   };
 
-  const handleSendMessage = useCallback(async (messageContent: string, trigger: string, attachedFiles?: any[], imageMode?: string) => {
-    console.log('🔥 DEBUG: handleSendMessage called', { trigger, messageContent: messageContent.substring(0, 50), filesCount: attachedFiles?.length || 0 });
+  const handleSendMessage = useCallback(async (messageContent: string, trigger: string, attachedFiles?: any[], imageMode?: string, imageQuality?: 'fast' | 'best_fast') => {
+    console.log('🔥 DEBUG: handleSendMessage called', { trigger, messagePreview: messageContent.substring(0, 50), filesCount: attachedFiles?.length || 0, imageMode: imageMode || 'n/a', imageQuality: imageQuality || 'n/a' });
     
     if (abortControllerRef.current) {
       console.log('🔥 DEBUG: Aborting previous request');
@@ -330,7 +330,7 @@ const WaktiAIV2 = () => {
 
       // IMAGE MODE ROUTING
       if (trigger === 'image') {
-        console.log('🎨 FRONTEND BOSS: Processing image generation request', { imageMode });
+        console.log('🎨 FRONTEND BOSS: Processing image generation request', { imageMode, imageQuality });
         
         const tempUserMessage: AIMessage = {
           id: `user-temp-${Date.now()}`,
@@ -347,6 +347,18 @@ const WaktiAIV2 = () => {
         setSessionMessages(newMessages);
         
         EnhancedFrontendMemory.saveActiveConversation(newMessages, currentConversationId);
+
+        // Insert assistant placeholder with loading state (blurred image placeholder UI)
+        const assistantId = `assistant-${Date.now()}`;
+        const placeholderAssistant: AIMessage = {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          intent: 'image',
+          metadata: { loading: true, prompt: messageContent, imageMode }
+        };
+        setSessionMessages(prev => [...prev, placeholderAssistant]);
         
         const imageResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -360,7 +372,8 @@ const WaktiAIV2 = () => {
           '',
           processedAttachedFiles || [],
           controller.signal,
-          imageMode
+          imageMode,
+          imageQuality
         );
 
         if (controller.signal.aborted) {
@@ -372,27 +385,27 @@ const WaktiAIV2 = () => {
           throw new Error(imageResponse.error);
         }
         
-        const assistantMessage: AIMessage = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: imageResponse.response || 'Image generated',
-          timestamp: new Date(),
-          intent: imageResponse.intent || 'image',
-          confidence: (imageResponse.confidence as 'high' | 'medium' | 'low') || 'high',
-          actionTaken: imageResponse.actionTaken || undefined,
-          imageUrl: imageResponse.imageUrl || undefined,
-          metadata: {
-            runwareCost: imageResponse.runwareCost,
-            modelUsed: imageResponse.modelUsed,
-            responseTime: imageResponse.responseTime,
-            imageMode
-          }
-        };
-
-        const finalMessages = [...newMessages, assistantMessage];
-        setSessionMessages(finalMessages);
-        
-        EnhancedFrontendMemory.saveActiveConversation(finalMessages, currentConversationId);
+        // Update the placeholder with the final image result
+        setSessionMessages(prev => {
+          const updated = prev.map(m => m.id === assistantId ? {
+            ...m,
+            content: imageResponse.response || 'Image generated',
+            intent: imageResponse.intent || 'image',
+            confidence: (imageResponse.confidence as 'high' | 'medium' | 'low') || 'high',
+            actionTaken: imageResponse.actionTaken || undefined,
+            imageUrl: imageResponse.imageUrl || undefined,
+            metadata: {
+              ...(m.metadata || {}),
+              loading: false,
+              runwareCost: imageResponse.runwareCost,
+              modelUsed: imageResponse.modelUsed,
+              responseTime: imageResponse.responseTime,
+              imageMode
+            }
+          } : m);
+          EnhancedFrontendMemory.saveActiveConversation(updated, currentConversationId);
+          return updated;
+        });
         
         console.log('🔥 DEBUG: Image mode completed, about to set isLoading(false)');
         console.log('✅ isLoading -> false (image mode completed)');

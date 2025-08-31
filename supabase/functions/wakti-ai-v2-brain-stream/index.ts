@@ -47,11 +47,12 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 );
 
-function sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData) {
+function sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData, provider?: string) {
   try {
     const finalData = {
       done: true,
       model: model,
+      provider: provider,
       fallbackUsed: fallbackUsed,
       responseTime: Date.now(),
       browsingUsed: browsingUsed,
@@ -102,7 +103,8 @@ serve(async (req) => {
       recentMessages = [],
       conversationSummary = '',
       clientLocalHour = null,
-      isWelcomeBack = false
+      isWelcomeBack = false,
+      modelOverride
     } = requestBody;
 
     if (!message?.trim() && !attachedFiles?.length) {
@@ -124,7 +126,7 @@ serve(async (req) => {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          await streamAIResponse(processedContent, language, activeTrigger, controller, attachedFiles, personalTouch, recentMessages, conversationSummary, clientLocalHour, isWelcomeBack);
+          await streamAIResponse(processedContent, language, activeTrigger, controller, attachedFiles, personalTouch, recentMessages, conversationSummary, clientLocalHour, isWelcomeBack, modelOverride);
         } catch (error) {
           console.error("Streaming error:", error);
           controller.error(error);
@@ -189,7 +191,8 @@ async function streamAIResponse(
   recentMessages = [],
   conversationSummary = '',
   clientLocalHour = null,
-  isWelcomeBack = false
+  isWelcomeBack = false,
+  modelOverride?: 'fast' | 'best_fast'
 ) {
   // Initialize provider-specific config after selection
   let apiKey = '';
@@ -208,35 +211,40 @@ async function streamAIResponse(
     (f) => f?.type?.startsWith('image/') && (f?.content || f?.data)
   );
 
-  // Select provider - Claude first for vision to utilize "never refuse" instructions
-  // Vision: Claude -> OpenAI (DeepSeek skipped for vision)
-  // Text/Search: OpenAI -> Claude -> DeepSeek
+  // Select provider with override awareness
+  const override = modelOverride === 'best_fast' ? 'best_fast' : modelOverride === 'fast' ? 'fast' : undefined;
   if (isVisionMode || hasValidVisionImages) {
-    if (ANTHROPIC_API_KEY) {
-      provider = 'claude';
-      model = 'claude-3-5-sonnet-20241022';
-    } else if (OPENAI_API_KEY) {
-      provider = 'openai';
-      model = 'gpt-4o-mini';
-      fallbackUsed = true; // not primary for vision
-    } else {
+    // Vision supports Claude and OpenAI only
+    const pref = override === 'fast' ? ['openai', 'claude'] : ['claude', 'openai'];
+    for (const p of pref) {
+      if (p === 'claude' && ANTHROPIC_API_KEY) { provider = 'claude'; model = 'claude-3-5-sonnet-20241022'; break; }
+      if (p === 'openai' && OPENAI_API_KEY) { provider = 'openai'; model = 'gpt-4o-mini'; break; }
+    }
+    if (!provider) {
       throw new Error('Vision mode requires Claude or OpenAI API key');
     }
+    // Mark fallback if first preference unavailable
+    if ((override === 'best_fast' && provider !== 'claude') || (override === 'fast' && provider !== 'openai')) {
+      fallbackUsed = true;
+    }
   } else {
-    if (OPENAI_API_KEY) {
-      provider = 'openai';
-      model = 'gpt-4o-mini';
-    } else if (ANTHROPIC_API_KEY) {
-      provider = 'claude';
-      model = 'claude-3-5-sonnet-20241022';
-      fallbackUsed = true;
-    } else if (DEEPSEEK_API_KEY) {
-      provider = 'deepseek';
-      model = 'deepseek-chat';
-      fallbackUsed = true;
-    } else {
+    // Text/Search supports OpenAI, Claude, DeepSeek
+    const pref = override === 'best_fast'
+      ? ['claude', 'openai', 'deepseek']
+      : override === 'fast'
+        ? ['openai', 'deepseek', 'claude']
+        : ['openai', 'claude', 'deepseek'];
+    for (const p of pref) {
+      if (p === 'openai' && OPENAI_API_KEY) { provider = 'openai'; model = 'gpt-4o-mini'; break; }
+      if (p === 'claude' && ANTHROPIC_API_KEY) { provider = 'claude'; model = 'claude-3-5-sonnet-20241022'; break; }
+      if (p === 'deepseek' && DEEPSEEK_API_KEY) { provider = 'deepseek'; model = 'deepseek-chat'; break; }
+    }
+    if (!provider) {
       throw new Error('No AI API key configured');
     }
+    // Mark fallback if not first pref
+    const first = pref[0];
+    if ((provider as string) !== first) fallbackUsed = true;
   }
 
   // Configure API endpoint and key based on the selected provider
@@ -406,7 +414,7 @@ async function streamAIResponse(
 
       model = 'claude-3-5-sonnet-20241022';
       controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: text })}\n\n`));
-      sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
+      sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData, provider);
       controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
       controller.close();
       console.log(`✅ STREAMING: Claude completion - controller closed cleanly`);
@@ -495,7 +503,7 @@ async function streamAIResponse(
           console.warn('Reader already cancelled or closed');
         }
         // Finalize without appending any signature
-        sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
+        sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData, provider);
         controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
         controller.close();
         console.log(`✅ STREAMING: Controller closed cleanly for ${provider}`);
@@ -523,7 +531,7 @@ async function streamAIResponse(
             console.warn('Reader already cancelled during [DONE]');
           }
           // Finalize without appending any signature
-          sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
+          sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData, provider);
           controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
           controller.close();
           console.log(`✅ STREAMING: Controller closed after [DONE] for ${provider}`);
@@ -592,7 +600,7 @@ async function streamAIResponse(
       model = 'claude-3-5-sonnet-20241022';
       // Stream Claude (non-streaming response) directly as a single token and finalize
       controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: text })}\n\n`));
-      sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData);
+      sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData, 'claude');
       controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
       controller.close();
       console.log(`✅ STREAMING: Claude fallback completion - controller closed cleanly`);
@@ -668,7 +676,7 @@ async function streamAIResponse(
             console.warn('DeepSeek reader already cancelled');
           }
           // Finalize without appending any signature
-          sendFinalEvent(controller, deepseekModel, fallbackUsed, browsingUsed, browsingData);
+          sendFinalEvent(controller, deepseekModel, fallbackUsed, browsingUsed, browsingData, 'deepseek');
           controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
           controller.close();
           console.log(`✅ STREAMING: DeepSeek fallback - controller closed cleanly`);
@@ -695,7 +703,7 @@ async function streamAIResponse(
               console.warn('DeepSeek reader already cancelled during [DONE]');
             }
             // Finalize without appending any signature
-            sendFinalEvent(controller, deepseekModel, fallbackUsed, browsingUsed, browsingData);
+            sendFinalEvent(controller, deepseekModel, fallbackUsed, browsingUsed, browsingData, 'deepseek');
             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
             controller.close();
             console.log(`✅ STREAMING: DeepSeek controller closed after [DONE]`);

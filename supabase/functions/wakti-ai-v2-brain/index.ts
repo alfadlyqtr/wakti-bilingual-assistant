@@ -293,8 +293,9 @@ serve(async (req) => {
       activeTrigger = 'general',
       recentMessages = [],
       personalTouch = null,
-      userId
-    } = requestData;
+      userId,
+      modelOverride
+     } = requestData;
     requestLanguage = language;
 
     // Validate required fields
@@ -334,9 +335,10 @@ serve(async (req) => {
       }
 
       try {
-        // Extract imageMode from request body
+        // Extract imageMode and imageQuality from request body
         const imageMode = requestData.imageMode || 'text2image';
-        console.log('🎨 IMAGE MODE:', imageMode);
+        const imageQuality: 'fast' | 'best_fast' | undefined = requestData.imageQuality;
+        console.log('🎨 IMAGE MODE:', imageMode, '| 🧪 QUALITY:', imageQuality || 'default');
 
         // Prepare options based on image mode
         let imageOptions: any = {};
@@ -364,6 +366,18 @@ serve(async (req) => {
             }
           }
         }
+
+        // Map imageQuality to Runware model override
+        let mappedModel: string | undefined = undefined;
+        if (imageQuality === 'fast') {
+          mappedModel = 'runware:100@1';
+        } else if (imageQuality === 'best_fast') {
+          mappedModel = 'runware:107@1';
+        }
+        if (mappedModel) {
+          imageOptions.model = mappedModel;
+        }
+        console.log('🧠 IMAGE MODEL SELECTION:', { imageQuality: imageQuality || 'default', mappedModel: mappedModel || 'env-defaults' });
 
         const imageResult = await generateImageWithRunware(
           promptForImage,
@@ -429,8 +443,21 @@ serve(async (req) => {
       effectiveTrigger = 'general';
     }
 
-    // Try models in order: Claude → GPT-4 → DeepSeek
-    const modelOrder = ['claude', 'gpt4', 'deepseek'];
+    // Determine model order based on override and vision
+    const isVision = VisionSystem.shouldUseVisionMode(effectiveTrigger, attachedFiles);
+    let modelOrder: string[];
+    if (isVision) {
+      // Vision supports Claude and OpenAI
+      modelOrder = modelOverride === 'fast'
+        ? ['openai', 'claude']
+        : ['claude', 'openai']; // default and best_fast prefer Claude
+    } else {
+      modelOrder = modelOverride === 'best_fast'
+        ? ['claude', 'openai', 'deepseek']
+        : modelOverride === 'fast'
+          ? ['openai', 'deepseek', 'claude']
+          : ['openai', 'claude', 'deepseek'];
+    }
     let lastError = null;
     let fallbackUsed = false;
     let attemptedModels = [];
@@ -479,14 +506,17 @@ serve(async (req) => {
             : `Used ${modelName.toUpperCase()} as fallback model`;
         }
         
-        // Add debug info for troubleshooting
+        // Add debug/info metadata
         result.debugInfo = {
           attemptedModels,
           finalModel: modelName,
           fallbackUsed,
-          responseTime
+          responseTime,
+          overrideActive: !!modelOverride
         };
-
+        result.selectedProvider = modelName;
+        result.overrideActive = !!modelOverride;
+ 
         // Attach browsing metadata (for Search mode)
         result.browsingUsed = browsingUsed;
         result.browsingData = browsingUsed ? browsingData : null;

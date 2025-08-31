@@ -6,7 +6,7 @@ const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 
 // Env-configurable model/quality parameters with safe defaults
-const RW_PREFERRED_MODEL = Deno.env.get('RUNWARE_PREFERRED_MODEL') || 'runware:97@2';
+const RW_PREFERRED_MODEL = Deno.env.get('RUNWARE_PREFERRED_MODEL') || 'runware:107@1';
 const RW_FALLBACK_MODEL = Deno.env.get('RUNWARE_FALLBACK_MODEL') || 'runware:100@1';
 const RW_STEPS = (() => {
   const v = parseInt(Deno.env.get('RUNWARE_STEPS') ?? '28', 10);

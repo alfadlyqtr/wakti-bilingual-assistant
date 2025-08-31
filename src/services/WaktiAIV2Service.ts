@@ -534,7 +534,8 @@ class WaktiAIV2ServiceClass {
     conversationSummary: string = '',
     attachedFiles: any[] = [],
     signal?: AbortSignal,
-    imageMode?: string
+    imageMode?: string,
+    imageQuality?: 'fast' | 'best_fast'
   ) {
     try {
       // Ensure user id
@@ -594,16 +595,32 @@ class WaktiAIV2ServiceClass {
           personalTouch,
           userId,
           imageMode,
+          imageQuality,
           conversationSummary: finalSummary,
           clientLocalHour,
           isWelcomeBack
         };
 
+        // Auth headers required for calling Edge Functions (mirror streaming path)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error('No valid session for non-streaming');
+        }
+        let maybeAnonKey;
+        try {
+          maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
+            || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+        } catch (e) {
+          maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+        }
+
         const resp = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-app-name': 'Wakti AI'
+            'x-app-name': 'Wakti AI',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': maybeAnonKey
           },
           body: JSON.stringify(payload),
           signal

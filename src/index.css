@@ -375,3 +375,58 @@
   background: var(--gradient-nav);
   box-shadow: var(--shadow-soft), var(--glow-primary);
 }
+
+/* --- AI Image Loading Enhancements --- */
+@layer components {
+  /* Tiny indeterminate progress bar */
+  .tiny-progress {
+    position: relative;
+    height: 3px;
+    background: hsl(var(--border));
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+
+  .tiny-progress::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 -35%;
+    width: 35%;
+    background: linear-gradient(90deg, hsl(var(--accent-orange)) 0%, hsl(var(--accent-purple)) 100%);
+    border-radius: inherit;
+    animation: progress-run 1.15s ease-in-out infinite;
+  }
+
+  @keyframes progress-run {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(300%); }
+  }
+
+  /* Brush-like skeleton placeholder */
+  .brush-skeleton {
+    position: relative;
+    background: linear-gradient(90deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.02) 100%);
+    background-size: 200% 100%;
+    animation: brush-sweep 1.6s ease-in-out infinite;
+  }
+
+  .brush-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      repeating-linear-gradient( -10deg,
+        rgba(255,255,255,0.0) 0px,
+        rgba(255,255,255,0.0) 10px,
+        rgba(255,255,255,0.12) 11px,
+        rgba(255,255,255,0.12) 18px
+      );
+    mix-blend-mode: overlay;
+  }
+
+  @keyframes brush-sweep {
+    0% { background-position: -100% 0; }
+    100% { background-position: 200% 0; }
+  }
+}
