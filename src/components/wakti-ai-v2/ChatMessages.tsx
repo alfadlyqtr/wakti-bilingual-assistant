@@ -54,6 +54,47 @@ export function ChatMessages({
   // ElevenLabs audio playback state
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioCacheRef = useRef<Map<string, string>>(new Map()); // messageId -> object URL
+  const PERSIST_CACHE_PREFIX = 'wakti_tts_cache_'; // sessionStorage key prefix
+  const prefetchingIdsRef = useRef<Set<string>>(new Set());
+  const prefetchTimersRef = useRef<Map<string, number>>(new Map()); // messageId -> timeout id
+  const autoPlayedIdsRef = useRef<Set<string>>(new Set()); // messages we've auto-played
+
+  const bufferToBase64 = (buffer: ArrayBuffer) => {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
+
+  // Persisted cache helpers: store base64 with text length to detect truncation
+  type PersistedAudio = { b64: string; len: number };
+  const getPersisted = (id: string): PersistedAudio | null => {
+    const raw = sessionStorage.getItem(PERSIST_CACHE_PREFIX + id);
+    if (!raw) return null;
+    try {
+      // New format: JSON
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.b64 === 'string' && typeof parsed.len === 'number') return parsed;
+      // Fallback legacy: raw is base64 only (assume unknown length)
+      return { b64: raw, len: 0 };
+    } catch {
+      // Legacy base64
+      return { b64: raw, len: 0 };
+    }
+  };
+  const setPersisted = (id: string, b64: string, len: number) => {
+    try { sessionStorage.setItem(PERSIST_CACHE_PREFIX + id, JSON.stringify({ b64, len })); } catch {}
+  };
+
+  const base64ToBlobUrl = (base64: string) => {
+    const byteChars = atob(base64);
+    const byteNumbers = new Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'audio/mpeg' });
+    return URL.createObjectURL(blob);
+  };
   
 
 
@@ -83,10 +124,23 @@ export function ChatMessages({
       }
       setSpeakingMessageId(messageId);
 
-      // Use cached audio if available
+      // Use cached audio if available (in-memory first)
       const cachedUrl = audioCacheRef.current.get(messageId);
       if (cachedUrl) {
         const audio = new Audio(cachedUrl);
+        audioRef.current = audio;
+        audio.onended = () => setSpeakingMessageId(null);
+        audio.onerror = () => setSpeakingMessageId(null);
+        await audio.play();
+        return;
+      }
+
+      // Check persistent cache in sessionStorage and verify it matches current text length
+      const persisted = getPersisted(messageId);
+      if (persisted && persisted.len >= text.length) {
+        const objectUrl = base64ToBlobUrl(persisted.b64);
+        audioCacheRef.current.set(messageId, objectUrl);
+        const audio = new Audio(objectUrl);
         audioRef.current = audio;
         audio.onended = () => setSpeakingMessageId(null);
         audio.onerror = () => setSpeakingMessageId(null);
@@ -123,6 +177,13 @@ export function ChatMessages({
       const blob = new Blob([arrayBuf], { type: 'audio/mpeg' });
       const objectUrl = URL.createObjectURL(blob);
       audioCacheRef.current.set(messageId, objectUrl);
+      // Persist small clips (<= 2.5MB) to sessionStorage as base64 for instant replay later
+      if (arrayBuf.byteLength <= 2.5 * 1024 * 1024) {
+        try {
+          const b64 = bufferToBase64(arrayBuf);
+          setPersisted(messageId, b64, text.length);
+        } catch {}
+      }
 
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
@@ -138,6 +199,8 @@ export function ChatMessages({
   const prefetchSpeak = async (text: string, messageId: string) => {
     try {
       if (audioCacheRef.current.has(messageId)) return;
+      const persisted = getPersisted(messageId);
+      if (persisted && persisted.len >= text.length) return;
       const isArabicText = /[\u0600-\u06FF]/.test(text);
       const voice_id = isArabicText || language === 'ar' ? 'G1QUjBCuRBbLbAmYlTgl' : 'TX3LPaxmHKxFdv7VOQHJ';
       const { data: sessionData } = await supabase.auth.getSession();
@@ -157,10 +220,56 @@ export function ChatMessages({
       const blob = new Blob([arrayBuf], { type: 'audio/mpeg' });
       const objectUrl = URL.createObjectURL(blob);
       audioCacheRef.current.set(messageId, objectUrl);
+      if (arrayBuf.byteLength <= 2.5 * 1024 * 1024) {
+        try {
+          const b64 = bufferToBase64(arrayBuf);
+          setPersisted(messageId, b64, text.length);
+        } catch {}
+      }
     } catch {}
   };
 
-  // Note: We only prefetch on hover to avoid unnecessary quota usage.
+  // Auto TTS for ONLY the latest assistant message after content stabilizes
+  useEffect(() => {
+    // Clear existing timers
+    for (const [, t] of prefetchTimersRef.current) { clearTimeout(t); }
+    prefetchTimersRef.current.clear();
+
+    // Find the most recent assistant message with content
+    const lastAssistant = [...sessionMessages].reverse().find(m => m.role === 'assistant' && m.content);
+    if (!lastAssistant) return;
+    const { id, content } = lastAssistant;
+
+    // Skip if we've already auto-played this message
+    if (autoPlayedIdsRef.current.has(id)) return;
+
+    // Optional safety cap on extremely long content
+    if (content.length > 4000) return;
+
+    const timeout = window.setTimeout(() => {
+      // If already fetching, skip
+      if (prefetchingIdsRef.current.has(id)) return;
+      prefetchingIdsRef.current.add(id);
+      // Prefetch/cache only; do not auto-play unless toggle is ON
+      prefetchSpeak(content, id)
+        .then(() => {
+          const autoPlay = (() => {
+            try { return localStorage.getItem('wakti_tts_autoplay') === '1'; } catch { return false; }
+          })();
+          if (autoPlay && !autoPlayedIdsRef.current.has(id)) {
+            return handleSpeak(content, id).finally(() => {
+              autoPlayedIdsRef.current.add(id);
+            });
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          prefetchingIdsRef.current.delete(id);
+        });
+    }, 600); // debounce; consider message done if unchanged for 600ms
+    prefetchTimersRef.current.set(id, timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionMessages]);
 
   // Cleanup cached object URLs on unmount to avoid memory leaks
   useEffect(() => {
@@ -505,22 +614,24 @@ export function ChatMessages({
                           <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
                         </button>
                         
-                        {/* TTS Button with Stop Functionality */}
-                        <button
-                          onClick={() => handleSpeak(message.content, message.id)}
-                          onMouseEnter={() => prefetchSpeak(message.content, message.id)}
-                          className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
-                          title={speakingMessageId === message.id 
-                            ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
-                            : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
-                          }
-                        >
-                          {speakingMessageId === message.id ? (
-                            <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                          ) : (
-                            <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                          )}
-                        </button>
+                        {/* TTS Button with Stop Functionality (assistant only) */}
+                        {message.role === 'assistant' && (
+                          <button
+                            onClick={() => handleSpeak(message.content, message.id)}
+                            onMouseEnter={() => prefetchSpeak(message.content, message.id)}
+                            className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                            title={speakingMessageId === message.id 
+                              ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
+                              : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
+                            }
+                          >
+                            {speakingMessageId === message.id ? (
+                              <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                            ) : (
+                              <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

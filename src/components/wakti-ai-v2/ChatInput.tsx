@@ -70,6 +70,8 @@ export function ChatInput({
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   // Local-only UI state: image quality dropdown (visible only in image -> text2image)
   const [imageQuality, setImageQuality] = useState<'fast' | 'best_fast'>('fast');
+  // TTS Auto Play toggle (persisted)
+  const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
   const seedFileInputRef = useRef<HTMLInputElement>(null);
   const [isInputCollapsed, setIsInputCollapsed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -103,6 +105,20 @@ export function ChatInput({
       textareaRef.current?.focus();
     }
   }, [isInputCollapsed]);
+
+  // Initialize TTS Auto Play from localStorage
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('wakti_tts_autoplay');
+      setTtsAutoPlay(v === '1');
+    } catch {}
+  }, []);
+  // Persist on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('wakti_tts_autoplay', ttsAutoPlay ? '1' : '0');
+    } catch {}
+  }, [ttsAutoPlay]);
 
   // Enhanced send message function with proper data conversion
   const handleSendMessage = async () => {
@@ -553,6 +569,34 @@ export function ChatInput({
                 
                 {/* Upload and Send buttons container */}
                 <div className="flex flex-col items-center gap-2">
+                  {/* Auto Play toggle (small) */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setTtsAutoPlay(v => !v)}
+                          className={`h-7 px-2 rounded-lg text-[11px] leading-none flex items-center gap-1 border transition-colors
+                            ${ttsAutoPlay
+                              ? 'bg-sky-100 text-sky-900 border-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-700/50'
+                              : 'bg-white/60 text-foreground/80 border-white/60 dark:bg-white/10 dark:text-white/80 dark:border-white/10'}
+                          `}
+                          aria-pressed={ttsAutoPlay}
+                          aria-label={language === 'ar' ? 'تشغيل تلقائي للصوت' : 'Auto Play voice'}
+                        >
+                          <span className="inline-block h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: ttsAutoPlay ? '#0ea5e9' : '#9ca3af' }}
+                            aria-hidden="true"
+                          />
+                          <span>{language === 'ar' ? 'تشغيل تلقائي' : 'Auto Play'}</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                        {language === 'ar' ? 'تشغيل صوت الرد التالي تلقائيًا' : 'Auto play next assistant reply'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
                   {/* Image Quality Dropdown - only for Image mode with text2image */}
                   {activeTrigger === 'image' && imageMode === 'text2image' && (
                     <div className="w-full flex justify-center">
