@@ -80,123 +80,107 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
     if (!personalTouch) return '';
 
     const { nickname, aiNickname, tone, style, instruction } = personalTouch;
-    
-    // Build STRICT personalization enforcement
-    let strictRules = [];
+    const nicknameRules = [];
+    const toneRules = [];
+    const styleRules = [];
     
     if (language === 'ar') {
-      strictRules.push('=== إنفاذ الشخصية الصارم ===');
-      strictRules.push('يجب عليك اتباع هذه القواعد بدقة في كل رد:');
-      
-      // STRICT nickname enforcement
-      if (nickname?.trim()) {
-        strictRules.push(`• اسم المستخدم: "${nickname}" - استخدم هذا الاسم في بداية ردك عندما يكون مناسباً`);
-        strictRules.push(`• عند سؤالك "ما اسمي؟" أجب فوراً: "${nickname}"`);
+      // Enhanced nickname handling with explicit recognition
+      if (nickname) {
+        nicknameRules.push(`اسم المستخدم هو "${nickname}". نادِ المستخدم بهذا الاسم عند المناسب.`);
+        nicknameRules.push(`عند سؤالك "ما اسمي؟" أو "ما لقبي؟" أجب فوراً: "${nickname}".`);
+      }
+      if (aiNickname) {
+        nicknameRules.push(`اسمك المخصص هو "${aiNickname}". استخدمه أحياناً عند تقديم نفسك.`);
+        nicknameRules.push(`عند سؤالك "ما اسمك؟" أو "ما لقبك؟" اذكر "${aiNickname}" مع "WAKTI AI".`);
       }
       
-      if (aiNickname?.trim()) {
-        strictRules.push(`• اسمك المخصص: "${aiNickname}" - استخدمه أحياناً مع "WAKTI AI"`);
-        strictRules.push(`• عند سؤالك "ما اسمك؟" اذكر "${aiNickname}" مع "WAKTI AI"`);
-      }
-      
-      // STRICT tone enforcement
+      // Enhanced tone enforcement with specific behaviors
       if (tone) {
         const toneType = tone.toLowerCase();
         if (toneType.includes('funny') || toneType.includes('مضحك')) {
-          strictRules.push('• النبرة: مرحة ومضحكة - أضف لمسات من الفكاهة الخفيفة والتعليقات المسلية');
+          toneRules.push('استخدم نبرة مضحكة: أضف تعليقات خفيفة الظل، تشبيهات مسلية، أو ملاحظات طريفة عند المناسب.');
+          toneRules.push('لا تبالغ في الفكاهة - فقط لمسات خفيفة لتجعل المحادثة أكثر متعة.');
         } else if (toneType.includes('encouraging') || toneType.includes('محفز')) {
-          strictRules.push('• النبرة: محفزة ومشجعة - قدم الدعم الإيجابي والتحفيز');
+          toneRules.push('استخدم نبرة محفزة: قدم التشجيع والدعم الإيجابي، اذكر نقاط القوة واحتفل بالإنجازات.');
         } else if (toneType.includes('serious') || toneType.includes('جدي')) {
-          strictRules.push('• النبرة: جدية ومهنية - كن رسمياً وركز على الحقائق');
-        } else if (toneType.includes('casual') || toneType.includes('عادي')) {
-          strictRules.push('• النبرة: عادية ومريحة - كن ودوداً وغير رسمي');
+          toneRules.push('استخدم نبرة جدية: كن رسمياً ومهنياً، ركز على الحقائق والتفاصيل المهمة.');
         } else {
-          strictRules.push(`• النبرة: ${tone} - طبق هذه النبرة في جميع ردودك`);
+          toneRules.push(`استخدم نبرة ${tone} في ردودك.`);
         }
       }
       
-      // STRICT style enforcement  
+      // Enhanced style enforcement with structural requirements  
       if (style) {
         const styleType = style.toLowerCase();
-        if (styleType.includes('short') || styleType.includes('مختصر')) {
-          strictRules.push('• أسلوب الرد: مختصر وموجز - اجعل الردود قصيرة ومباشرة');
-        } else if (styleType.includes('detailed') || styleType.includes('مفصل')) {
-          strictRules.push('• أسلوب الرد: مفصل وشامل - قدم شروحات مفصلة مع أمثلة');
-        } else if (styleType.includes('step') || styleType.includes('خطوة')) {
-          strictRules.push('• أسلوب الرد: خطوة بخطوة - اكسر المعلومات إلى خطوات واضحة');
-        } else if (styleType.includes('bullet') || styleType.includes('نقاط')) {
-          strictRules.push('• أسلوب الرد: نقاط - استخدم القوائم والنقاط لتنظيم المعلومات');
+        if (styleType.includes('detailed') || styleType.includes('مفصل')) {
+          styleRules.push('أسلوب مفصل: قدم شروحات شاملة مع أمثلة وخطوات واضحة.');
+          styleRules.push('اكسر المواضيع المعقدة إلى أقسام منظمة مع تفاصيل كافية لكل قسم.');
+        } else if (styleType.includes('short') || styleType.includes('مختصر')) {
+          styleRules.push('أسلوب مختصر: اجعل الردود مباشرة وموجزة، دون تفاصيل زائدة.');
         } else {
-          strictRules.push(`• أسلوب الرد: ${style} - طبق هذا الأسلوب في ردودك`);
+          styleRules.push(`أسلوب الرد: ${style}.`);
         }
       }
       
-      if (instruction?.trim()) {
-        strictRules.push(`• تعليمات إضافية: ${instruction}`);
-      }
+      if (instruction) nicknameRules.push(`تعليمات إضافية: ${instruction}`);
       
     } else {
-      strictRules.push('=== STRICT PERSONALIZATION ENFORCEMENT ===');
-      strictRules.push('You MUST follow these rules precisely in every response:');
-      
-      // STRICT nickname enforcement
-      if (nickname?.trim()) {
-        strictRules.push(`• User's name: "${nickname}" - Use this name at the start of your response when appropriate`);
-        strictRules.push(`• When asked "what's my name?" respond immediately: "${nickname}"`);
+      // Enhanced nickname handling with explicit recognition (English)
+      if (nickname) {
+        nicknameRules.push(`The user's name is "${nickname}". Address the user by this name when appropriate.`);
+        nicknameRules.push(`When asked "what's my name?" or "what's my nickname?" respond immediately: "${nickname}".`);
+      }
+      if (aiNickname) {
+        nicknameRules.push(`Your custom name is "${aiNickname}". Use it occasionally when introducing yourself.`);
+        nicknameRules.push(`When asked "what's your name?" or "what's your nickname?" mention "${aiNickname}" along with "WAKTI AI".`);
       }
       
-      if (aiNickname?.trim()) {
-        strictRules.push(`• Your custom name: "${aiNickname}" - Use it occasionally with "WAKTI AI"`);
-        strictRules.push(`• When asked "what's your name?" mention "${aiNickname}" along with "WAKTI AI"`);
-      }
-      
-      // STRICT tone enforcement
+      // Enhanced tone enforcement with specific behaviors (English)
       if (tone) {
         const toneType = tone.toLowerCase();
         if (toneType.includes('funny')) {
-          strictRules.push('• Tone: Funny and humorous - Add light humor, wordplay, and amusing observations');
+          toneRules.push('Use a funny tone: Include light humor, wordplay, or amusing observations when appropriate.');
+          toneRules.push('Don\'t overdo the humor - just light touches to make the conversation more enjoyable.');
         } else if (toneType.includes('encouraging')) {
-          strictRules.push('• Tone: Encouraging and supportive - Provide positive motivation and celebrate achievements');
+          toneRules.push('Use an encouraging tone: Provide positive support and motivation, highlight strengths and celebrate achievements.');
         } else if (toneType.includes('serious')) {
-          strictRules.push('• Tone: Serious and professional - Be formal and focus on facts and important details');  
-        } else if (toneType.includes('casual')) {
-          strictRules.push('• Tone: Casual and relaxed - Be friendly and informal in your communication');
+          toneRules.push('Use a serious tone: Be formal and professional, focus on facts and important details.');  
         } else {
-          strictRules.push(`• Tone: ${tone} - Apply this tone consistently in all responses`);
+          toneRules.push(`Use a ${tone} tone in your responses.`);
         }
       }
       
-      // STRICT style enforcement
+      // Enhanced style enforcement with structural requirements (English)
       if (style) {
         const styleType = style.toLowerCase();
-        if (styleType.includes('short')) {
-          strictRules.push('• Reply style: Short and concise - Keep responses brief and to the point');
-        } else if (styleType.includes('detailed')) {
-          strictRules.push('• Reply style: Detailed and comprehensive - Provide thorough explanations with examples');
-        } else if (styleType.includes('step')) {
-          strictRules.push('• Reply style: Step-by-step - Break information into clear sequential steps');
-        } else if (styleType.includes('bullet')) {
-          strictRules.push('• Reply style: Bullet points - Use lists and bullet points to organize information');
+        if (styleType.includes('detailed')) {
+          styleRules.push('Detailed style: Provide comprehensive explanations with examples and clear step-by-step breakdowns.');
+          styleRules.push('Break down complex topics into organized sections with sufficient detail for each part.');
+        } else if (styleType.includes('short')) {
+          styleRules.push('Short style: Keep responses direct and concise, without unnecessary details.');
         } else {
-          strictRules.push(`• Reply style: ${style} - Apply this style consistently in your responses`);
+          styleRules.push(`Reply style: ${style}.`);
         }
       }
       
-      if (instruction?.trim()) {
-        strictRules.push(`• Additional instructions: ${instruction}`);
-      }
+      if (instruction) nicknameRules.push(`Additional instructions: ${instruction}`);
     }
     
-    // Add enforcement reminder
-    if (language === 'ar') {
-      strictRules.push('');
-      strictRules.push('تذكير مهم: يجب تطبيق هذه القواعد من أول كلمة في ردك حتى آخر كلمة.');
-    } else {
-      strictRules.push('');
-      strictRules.push('CRITICAL REMINDER: Apply these rules from the very first word of your response to the last.');
+    // Build personalization sections
+    let personalizationSections = [];
+    
+    if (nicknameRules.length > 0) {
+      personalizationSections.push(`=== NICKNAME RECOGNITION ===\n- ` + nicknameRules.join('\n- '));
+    }
+    if (toneRules.length > 0) {
+      personalizationSections.push(`=== TONE ENFORCEMENT ===\n- ` + toneRules.join('\n- '));
+    }
+    if (styleRules.length > 0) {
+      personalizationSections.push(`=== STYLE ENFORCEMENT ===\n- ` + styleRules.join('\n- '));
     }
     
-    return '\n\n' + strictRules.join('\n');
+    return personalizationSections.length > 0 ? `\n\n` + personalizationSections.join('\n\n') : '';
   }
 
   static buildCompleteSystemPrompt(language: string = 'en', currentDate: string, personalTouch: any = null): string {
