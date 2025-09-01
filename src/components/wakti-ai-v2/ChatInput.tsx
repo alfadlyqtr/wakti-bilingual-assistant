@@ -119,6 +119,23 @@ export function ChatInput({
       localStorage.setItem('wakti_tts_autoplay', ttsAutoPlay ? '1' : '0');
     } catch {}
   }, [ttsAutoPlay]);
+  // Broadcast on change so other components (e.g., drawer) stay in sync
+  useEffect(() => {
+    try {
+      window.dispatchEvent(new CustomEvent('wakti-tts-autoplay-changed', { detail: { value: ttsAutoPlay } }));
+    } catch {}
+  }, [ttsAutoPlay]);
+  // Listen for external changes (from drawer toggle)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<{ value: boolean }>;
+      if (typeof custom.detail?.value === 'boolean') {
+        setTtsAutoPlay(custom.detail.value);
+      }
+    };
+    window.addEventListener('wakti-tts-autoplay-changed', handler as EventListener);
+    return () => window.removeEventListener('wakti-tts-autoplay-changed', handler as EventListener);
+  }, []);
 
   // Enhanced send message function with proper data conversion
   const handleSendMessage = async () => {
@@ -569,33 +586,7 @@ export function ChatInput({
                 
                 {/* Upload and Send buttons container */}
                 <div className="flex flex-col items-center gap-2">
-                  {/* Auto Play toggle (small) */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() => setTtsAutoPlay(v => !v)}
-                          className={`h-7 px-2 rounded-lg text-[11px] leading-none flex items-center gap-1 border transition-colors
-                            ${ttsAutoPlay
-                              ? 'bg-sky-100 text-sky-900 border-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-700/50'
-                              : 'bg-white/60 text-foreground/80 border-white/60 dark:bg-white/10 dark:text-white/80 dark:border-white/10'}
-                          `}
-                          aria-pressed={ttsAutoPlay}
-                          aria-label={language === 'ar' ? 'تشغيل تلقائي للصوت' : 'Auto Play voice'}
-                        >
-                          <span className="inline-block h-2.5 w-2.5 rounded-full"
-                            style={{ backgroundColor: ttsAutoPlay ? '#0ea5e9' : '#9ca3af' }}
-                            aria-hidden="true"
-                          />
-                          <span>{language === 'ar' ? 'تشغيل تلقائي' : 'Auto Play'}</span>
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                        {language === 'ar' ? 'تشغيل صوت الرد التالي تلقائيًا' : 'Auto play next assistant reply'}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  {/* Auto Play toggle moved to Extra drawer */}
 
                   {/* Image Quality Dropdown - only for Image mode with text2image */}
                   {activeTrigger === 'image' && imageMode === 'text2image' && (
