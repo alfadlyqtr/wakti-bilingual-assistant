@@ -43,13 +43,16 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, messageAnalysis, modelPreference, temperature, contentType } = requestBody;
+    const { prompt, mode, language, messageAnalysis, modelPreference, temperature, contentType, length, replyLength } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
       mode, 
       language,
-      hasMessageAnalysis: !!messageAnalysis
+      hasMessageAnalysis: !!messageAnalysis,
+      contentType,
+      length,
+      replyLength
     });
 
     if (!prompt) {
@@ -75,7 +78,18 @@ serve(async (req) => {
 
     const systemPrompt = getSystemPrompt(language);
     const temp = typeof temperature === 'number' ? Math.max(0, Math.min(1, temperature)) : 0.7;
-    const preferredOpenAIModel = modelPreference === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
+
+    // Hybrid model selection (backend safety net)
+    const longFormTypes = new Set([
+      'story','article','report','proposal','press_release','cover_letter','official_letter','research_brief','research_report','case_study','how_to_guide','policy_note','essay'
+    ]);
+    const wantsLong = (mode === 'reply' ? replyLength === 'long' : length === 'long');
+    let preferredOpenAIModel = 'gpt-4o-mini';
+    if (modelPreference === 'gpt-4o' || modelPreference === 'gpt-4o-mini') {
+      preferredOpenAIModel = modelPreference;
+    } else if (wantsLong || (contentType && longFormTypes.has(contentType))) {
+      preferredOpenAIModel = 'gpt-4o';
+    }
     let temperatureUsed = temp;
     
     let generatedText = "";

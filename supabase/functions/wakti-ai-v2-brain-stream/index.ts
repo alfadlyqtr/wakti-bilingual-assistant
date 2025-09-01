@@ -508,7 +508,7 @@ async function streamAIResponse(
 
   let lastTokenTime = Date.now();
   let tokenReceived = false;
-  const IDLE_TIMEOUT = 20000; // 20s idle timeout
+  const IDLE_TIMEOUT = 30000; // 30s idle timeout
   
   console.log(`📡 STREAMING: Starting main loop with ${provider} model: ${model}`);
 
@@ -697,7 +697,7 @@ async function streamAIResponse(
           } catch (e) {
             console.error('Error during DeepSeek timeout cleanup:', e);
           }
-        }, 20000);
+        }, 30000);
 
         const { done, value } = await reader.read();
         clearTimeout(deepseekIdleTimer);

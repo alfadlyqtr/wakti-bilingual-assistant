@@ -128,7 +128,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     email: { allowedTones: ['professional','concise','friendly','apologetic','urgent','persuasive','sincere'], defaultTone: 'professional', baseTemperature: 0.3, modelPreference: 'gpt-4o-mini' },
     letter: { allowedTones: ['formal','professional','empathetic','sincere'], defaultTone: 'formal', baseTemperature: 0.35, modelPreference: 'gpt-4o-mini' },
     official_letter: { allowedTones: ['formal','professional','authoritative'], defaultTone: 'formal', baseTemperature: 0.3, modelPreference: 'gpt-4o' },
-    text_message: { allowedTones: ['casual','friendly','urgent','apologetic','humorous','sincere'], defaultTone: 'friendly', baseTemperature: 0.4, modelPreference: 'gpt-4o-mini' },
+    text_message: { allowedTones: ['casual','friendly','urgent','apologetic','humorous','sincere','professional','romantic'], defaultTone: 'friendly', baseTemperature: 0.4, modelPreference: 'gpt-4o-mini' },
     memo: { allowedTones: ['professional','neutral','concise','informative'], defaultTone: 'concise', baseTemperature: 0.3, modelPreference: 'gpt-4o-mini' },
     summary: { allowedTones: ['neutral','concise','professional','informative'], defaultTone: 'concise', baseTemperature: 0.25, modelPreference: 'gpt-4o-mini' },
     poem: { allowedTones: ['romantic','empathetic','humorous','neutral','inspirational'], defaultTone: 'romantic', baseTemperature: 0.75, modelPreference: 'gpt-4o' },
@@ -160,11 +160,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       case 'story': {
         const density = dialogueDensity;
         const densityLine = ar
-          ? density === 'none' ? 'بدون حوارات.' : density === 'rich' ? 'أدرج حوارات كثيرة عبر المشاهد.' : 'تضمين سطرين إلى ثلاثة أسطر من الحوار.'
-          : density === 'none' ? 'No dialogue lines.' : density === 'rich' ? 'Include frequent dialogue lines across scenes.' : 'Include two to three short dialogue lines.';
+          ? density === 'none' ? 'بدون حوارات.' : density === 'rich' ? 'أدرج حوارات كثيرة داخل السرد.' : 'تضمين سطرين إلى ثلاثة أسطر من الحوار.'
+          : density === 'none' ? 'No dialogue lines.' : density === 'rich' ? 'Include frequent dialogue lines within the narrative.' : 'Include two to three short dialogue lines.';
         return ar
-          ? `\nالإضافات: عنوان للقصة، ثلاث لقطات (بداية/نقطة تحول/خاتمة)، تفاصيل حسية موجزة، سطر خلاصة/عبرة في النهاية. ${densityLine}`
-          : `\nAdd-ons: Include a title, three short scenes (beginning/turning point/resolution), brief sensory details, and a one-line moral at the end. ${densityLine}`;
+          ? `\nقواعد القصة: عنوان واحد فقط في الأعلى. لا تستخدم عناوين للمشاهد. اكتب فقرات نصية عادية بدون أي رموز تنسيق (مثل # أو *). اختتم بعبرة قصيرة فقط. ${densityLine}`
+          : `\nStory rules: Use a single story title at the top. Do not include scene headings. Write plain paragraphs only (no markdown symbols such as # or *). End with a short moral only. ${densityLine}`;
       }
       case 'report': return ar ? `\nالتنسيق: عنوان، عناوين أقسام، نقاط تعداد للنتائج، وخلاصة واضحة.` : `\nFormatting: Title, section headings, bullet points for findings, clear conclusion.`;
       case 'article': return ar ? `\nالتنسيق: عنوان جذاب، عناوين فرعية، مقدمة موجزة، وفقـرات قصيرة، وخاتمة واضحة.` : `\nFormatting: Catchy title, subheadings, short intro, short paragraphs, clear takeaway.`;
@@ -346,13 +346,27 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           mode: activeTab,
           language: language,
           contentType: contentType || null,
-          // Routing params
-          modelPreference: contentType && typeProfiles[contentType] ? typeProfiles[contentType].modelPreference : (activeTab === 'reply' ? 'gpt-4o-mini' : 'gpt-4o-mini'),
+          // Routing params (Hybrid model selection)
+          modelPreference: (() => {
+            const longFormTypes = new Set([
+              'story','article','report','proposal','press_release','cover_letter','official_letter','research_brief','research_report','case_study','how_to_guide','policy_note','essay'
+            ]);
+            if (activeTab === 'reply') {
+              return (replyLength === 'long') ? 'gpt-4o' : 'gpt-4o-mini';
+            }
+            // compose
+            if (length === 'long') return 'gpt-4o';
+            if (contentType && longFormTypes.has(contentType)) return 'gpt-4o';
+            return contentType && typeProfiles[contentType] ? typeProfiles[contentType].modelPreference : 'gpt-4o-mini';
+          })(),
           temperature: (() => {
             const currentToneKey = (activeTab === 'compose' ? tone : replyTone) || undefined;
             const base = contentType && typeProfiles[contentType] ? typeProfiles[contentType].baseTemperature : (activeTab === 'reply' ? 0.35 : 0.5);
             return deriveTemperature(base, currentToneKey);
-          })()
+          })(),
+          // Include lengths for backend awareness
+          length: activeTab === 'compose' ? (length || null) : null,
+          replyLength: activeTab === 'reply' ? (replyLength || null) : null
         },
       });
 
