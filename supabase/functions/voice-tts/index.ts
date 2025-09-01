@@ -35,12 +35,6 @@ serve(async (req) => {
   }
 
   try {
-    // Check if API key is available
-    if (!ELEVENLABS_API_KEY) {
-      console.error('🎵 ELEVENLABS_API_KEY not found in environment');
-      throw new Error('ElevenLabs API key not configured');
-    }
-
     // Get user authentication
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '') || '';
@@ -55,7 +49,7 @@ serve(async (req) => {
 
     // Get request data
     const requestBody = await req.json();
-    const { text, voice_id, style = 'neutral' } = requestBody;
+    const { text, voice_id, style = 'neutral', mode } = requestBody;
     
     console.log(`🎵 TTS request:`, {
       textLength: text?.length || 0,
@@ -63,6 +57,21 @@ serve(async (req) => {
       style: style,
       textPreview: text?.substring(0, 100)
     });
+
+    // Zero-cost warmup path: keep function hot without calling ElevenLabs
+    if (mode === 'warmup') {
+      console.log('🎵 Warmup ping received, skipping ElevenLabs.');
+      return new Response(JSON.stringify({ ok: true, warmed: true, ts: Date.now() }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
+    // Check if API key is available for real TTS
+    if (!ELEVENLABS_API_KEY) {
+      console.error('🎵 ELEVENLABS_API_KEY not found in environment');
+      throw new Error('ElevenLabs API key not configured');
+    }
 
     if (!text || !voice_id) {
       throw new Error('Missing required fields: text and voice_id are required');
@@ -123,7 +132,9 @@ serve(async (req) => {
       body: JSON.stringify({
         text: text,
         model_id: 'eleven_multilingual_v2', // Updated: Use the latest model
-        voice_settings: voiceSettings
+        voice_settings: voiceSettings,
+        // Smaller file for faster transfer and quicker first play
+        output_format: 'mp3_22050_32'
       }),
     });
 

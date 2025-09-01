@@ -18,10 +18,30 @@ interface PersonalTouchData {
   style: string;
   instruction: string;
   aiNickname?: string; // NEW: AI nickname feature
+  pt_version?: number;
+  pt_updated_at?: string;
 }
 
 function saveWaktiPersonalTouch(data: PersonalTouchData) {
-  localStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify(data));
+  try {
+    const existingRaw = localStorage.getItem(PERSONAL_TOUCH_KEY);
+    let existing: any = null;
+    try { existing = existingRaw ? JSON.parse(existingRaw) : null; } catch {}
+    
+    const nextVersion = typeof existing?.pt_version === 'number' ? existing.pt_version + 1 : 1;
+    const payload: any = {
+      ...data,
+      pt_version: nextVersion,
+      pt_updated_at: new Date().toISOString()
+    };
+    localStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify(payload));
+  } catch {
+    localStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify({
+      ...data,
+      pt_version: 1,
+      pt_updated_at: new Date().toISOString()
+    }));
+  }
 }
 
 function loadWaktiPersonalTouch(): PersonalTouchData | null {

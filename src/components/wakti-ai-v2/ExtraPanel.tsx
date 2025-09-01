@@ -4,6 +4,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { PersonalTouchManager } from './PersonalTouchManager';
 import { ConversationsList } from './ConversationsList';
 import { AIConversation } from '@/services/WaktiAIV2Service';
+import { TalkBackSettings } from './TalkBackSettings';
 
 interface ExtraPanelProps {
   conversations: AIConversation[];
@@ -42,7 +43,10 @@ export function ExtraPanel({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="p-4 space-y-6">
+      <div className="px-3 pb-3 pt-0 space-y-2">
+        {/* Talk Back settings section (voice choices) */}
+        <TalkBackSettings />
+
         <Tabs defaultValue="personal" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="personal">

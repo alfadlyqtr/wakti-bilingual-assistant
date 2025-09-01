@@ -1,10 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { ExtraPanel } from './ExtraPanel';
 import { useTheme } from '@/providers/ThemeProvider';
 import { QuickActionsPanel } from './QuickActionsPanel';
 import { AIConversation } from '@/services/WaktiAIV2Service';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatDrawersProps {
   showConversations: boolean;
@@ -48,7 +47,6 @@ export function ChatDrawers({
   const { language } = useTheme();
   const extraDrawerRef = useRef<HTMLDivElement>(null);
   const quickActionsDrawerRef = useRef<HTMLDivElement>(null);
-  const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
 
   // Focus management for Extra drawer
   useEffect(() => {
@@ -78,39 +76,7 @@ export function ChatDrawers({
     }
   }, [showQuickActions]);
 
-  // Initialize TTS Auto Play from localStorage
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem('wakti_tts_autoplay');
-      setTtsAutoPlay(v === '1');
-    } catch {}
-  }, []);
-
-  // Listen for external changes (from ChatInput toggle)
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const custom = e as CustomEvent<{ value: boolean }>;
-      if (typeof custom.detail?.value === 'boolean') {
-        setTtsAutoPlay(custom.detail.value);
-      }
-    };
-    window.addEventListener('wakti-tts-autoplay-changed', handler as EventListener);
-    return () => window.removeEventListener('wakti-tts-autoplay-changed', handler as EventListener);
-  }, []);
-
-  const toggleTtsAutoPlay = () => {
-    setTtsAutoPlay((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('wakti_tts_autoplay', next ? '1' : '0');
-      } catch {}
-      // Broadcast so other components (e.g., ChatInput) stay in sync
-      try {
-        window.dispatchEvent(new CustomEvent('wakti-tts-autoplay-changed', { detail: { value: next } }));
-      } catch {}
-      return next;
-    });
-  };
+  
 
   return (
     <div>
@@ -124,8 +90,8 @@ export function ChatDrawers({
           aria-labelledby="extra-drawer-title"
           aria-describedby="extra-drawer-desc"
         >
-          <DrawerHeader>
-            <DrawerTitle id="extra-drawer-title">
+          <DrawerHeader className="p-0 m-0">
+            <DrawerTitle id="extra-drawer-title" className="sr-only">
               {language === 'ar' ? 'إضافي' : 'Extra'}
             </DrawerTitle>
             <DrawerDescription id="extra-drawer-desc" className="sr-only">
@@ -134,36 +100,7 @@ export function ChatDrawers({
                 : 'Panel containing previous conversations and settings'}
             </DrawerDescription>
           </DrawerHeader>
-          {/* Mini Auto Play toggle under header (Option A) */}
-          <div className="px-4 -mt-2 pb-1 flex justify-end">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={toggleTtsAutoPlay}
-                    className={`h-7 px-2 rounded-lg text-[11px] leading-none flex items-center gap-1 border transition-colors
-                      ${ttsAutoPlay
-                        ? 'bg-sky-100 text-sky-900 border-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-700/50'
-                        : 'bg-white/60 text-foreground/80 border-white/60 dark:bg-white/10 dark:text-white/80 dark:border-white/10'}
-                    `}
-                    aria-pressed={ttsAutoPlay}
-                    aria-label={language === 'ar' ? 'تشغيل تلقائي للصوت' : 'Auto Play voice'}
-                  >
-                    <span
-                      className="inline-block h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: ttsAutoPlay ? '#0ea5e9' : '#9ca3af' }}
-                      aria-hidden="true"
-                    />
-                    <span>{language === 'ar' ? 'تشغيل تلقائي' : 'Auto Play'}</span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                  {language === 'ar' ? 'تشغيل صوت الرد التالي تلقائيًا' : 'Auto play next assistant reply'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+          {/* Auto Play toggle moved into TalkBackSettings */}
           <div className="flex-1 overflow-hidden">
             <ExtraPanel
               conversations={conversations}

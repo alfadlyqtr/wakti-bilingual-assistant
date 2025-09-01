@@ -31,6 +31,7 @@ class WaktiAIV2ServiceClass {
   constructor() {
     console.log('🤖 WAKTI AI SERVICE: Initialized as Backend Worker (Frontend Boss mode)');
     this.loadConversationsFromStorage();
+    try { this.ensurePersonalTouch(); } catch {}
   }
 
   // Safely get user's personal touch preferences from cache or localStorage
@@ -45,6 +46,84 @@ class WaktiAIV2ServiceClass {
     } catch {
       return null;
     }
+  }
+
+  // Simple stable hash for PT diagnostics (non-crypto)
+  private hashPersonalTouch(pt: any): string | null {
+    try {
+      if (!pt) return null;
+      const s = JSON.stringify({
+        nickname: pt.nickname || '',
+        tone: pt.tone || '',
+        style: pt.style || '',
+        instruction: pt.instruction || '',
+        aiNickname: pt.aiNickname || ''
+      });
+      let hash = 5381;
+      for (let i = 0; i < s.length; i++) {
+        hash = ((hash << 5) + hash) + s.charCodeAt(i);
+        hash = hash & 0xffffffff;
+      }
+      return `djb2_${(hash >>> 0).toString(16)}`;
+    } catch {
+      return null;
+    }
+  }
+
+  // Ensure PT object exists with safe defaults and minimal normalization
+  private ensurePersonalTouch(): any {
+    const allowedTones = ['funny', 'serious', 'casual', 'encouraging', 'neutral'];
+    const allowedStyles = ['short answers', 'bullet points', 'step-by-step', 'detailed'];
+
+    let pt: any = null;
+    try { pt = this.getPersonalTouch(); } catch {}
+
+    if (!pt || typeof pt !== 'object') {
+      pt = {
+        nickname: '',
+        aiNickname: '',
+        tone: 'neutral',
+        style: 'step-by-step',
+        instruction: ''
+      };
+      pt.pt_version = 1;
+      pt.pt_updated_at = new Date().toISOString();
+    } else {
+      // Normalize tone
+      if (!pt.tone || !allowedTones.includes((pt.tone + '').toLowerCase())) {
+        pt.tone = 'neutral';
+      }
+      // Normalize style
+      const styleLower = (pt.style || '').toLowerCase();
+      const normalizedStyle = allowedStyles.find(s => s === styleLower)
+        || (styleLower.includes('short') ? 'short answers'
+        : styleLower.includes('bullet') ? 'bullet points'
+        : styleLower.includes('step') ? 'step-by-step'
+        : styleLower.includes('detail') ? 'detailed' : 'step-by-step');
+      pt.style = normalizedStyle;
+
+      // Trim instruction
+      if (typeof pt.instruction === 'string') {
+        pt.instruction = pt.instruction.slice(0, 500);
+      } else {
+        pt.instruction = '';
+      }
+
+      // Versioning metadata
+      if (typeof pt.pt_version !== 'number') pt.pt_version = 1;
+      if (!pt.pt_updated_at) pt.pt_updated_at = new Date().toISOString();
+    }
+
+    // Attach hash for transport
+    try { pt.pt_hash = this.hashPersonalTouch(pt); } catch {}
+
+    // Persist back and cache
+    try {
+      localStorage.setItem('wakti_personal_touch', JSON.stringify(pt));
+      this.personalTouchCache = pt;
+    } catch {}
+
+    return pt;
   }
 
   // Enhanced message handling with session storage
@@ -306,6 +385,19 @@ class WaktiAIV2ServiceClass {
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
+          const pt = this.ensurePersonalTouch();
+          const pt_version = pt?.pt_version ?? null;
+          const pt_updated_at = pt?.pt_updated_at ?? null;
+          const pt_hash = this.hashPersonalTouch(pt);
+
+          console.log('🎛️ PT_OUT:', {
+            tone: pt?.tone || null,
+            style: pt?.style || null,
+            pt_version,
+            pt_updated_at,
+            pt_hash
+          });
+
           response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
             method: 'POST',
             mode: 'cors',
@@ -329,7 +421,10 @@ class WaktiAIV2ServiceClass {
               attachedFiles,
               recentMessages: enhancedMessages,
               conversationSummary: finalSummary,
-              personalTouch: this.getPersonalTouch(),
+              personalTouch: pt,
+              pt_version,
+              pt_updated_at,
+              pt_hash,
               clientLocalHour,
               isWelcomeBack,
               requestId
@@ -430,6 +525,11 @@ class WaktiAIV2ServiceClass {
                 continue; 
               }
               
+              // Log server-applied PT metadata when received
+              if (parsed.metadata?.pt_applied) {
+                console.log('🧩 PT_IN_APPLIED:', parsed.metadata.pt_applied);
+              }
+              
               if (typeof parsed.token === 'string') { 
                 if (!firstTokenReceived) {
                   firstTokenReceived = true;
@@ -487,8 +587,8 @@ class WaktiAIV2ServiceClass {
         ];
         const updatedSummary = this.generateConversationSummary(msgsForSummary);
         if (updatedSummary && updatedSummary.trim()) {
-          const uuidLike2 = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
-          if (uuidLike2 && conversationId) {
+          const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
+          if (uuidLike && conversationId) {
             const { data: existing } = await supabase
               .from('ai_conversation_summaries')
               .select('id')
@@ -545,7 +645,7 @@ class WaktiAIV2ServiceClass {
         userId = user.id;
       }
 
-      const personalTouch = this.getPersonalTouch();
+      const pt = this.ensurePersonalTouch();
 
       // Compute client local hour and welcome-back flag
       const clientLocalHour = new Date().getHours();
@@ -585,6 +685,10 @@ class WaktiAIV2ServiceClass {
 
       // Image generation uses non-streaming function; others can reuse streaming and return the final object
       if (activeTrigger === 'image') {
+        const pt_version = pt?.pt_version ?? null;
+        const pt_updated_at = pt?.pt_updated_at ?? null;
+        const pt_hash = this.hashPersonalTouch(pt);
+
         const payload = {
           message,
           conversationId,
@@ -592,7 +696,10 @@ class WaktiAIV2ServiceClass {
           attachedFiles,
           activeTrigger: 'image',
           recentMessages: enhancedMessages,
-          personalTouch,
+          personalTouch: pt,
+          pt_version,
+          pt_updated_at,
+          pt_hash,
           userId,
           imageMode,
           imageQuality,

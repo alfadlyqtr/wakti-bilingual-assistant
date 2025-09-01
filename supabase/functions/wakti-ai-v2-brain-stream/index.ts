@@ -104,7 +104,11 @@ serve(async (req) => {
       conversationSummary = '',
       clientLocalHour = null,
       isWelcomeBack = false,
-      modelOverride
+      modelOverride,
+      // Frontend-attached Personal Touch metadata (optional)
+      pt_version = null,
+      pt_updated_at = null,
+      pt_hash = null
     } = requestBody;
 
     if (!message?.trim() && !attachedFiles?.length) {
@@ -126,7 +130,7 @@ serve(async (req) => {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          await streamAIResponse(processedContent, language, activeTrigger, controller, attachedFiles, personalTouch, recentMessages, conversationSummary, clientLocalHour, isWelcomeBack, modelOverride);
+          await streamAIResponse(processedContent, language, activeTrigger, controller, attachedFiles, personalTouch, recentMessages, conversationSummary, clientLocalHour, isWelcomeBack, modelOverride, pt_version, pt_updated_at, pt_hash);
         } catch (error) {
           console.error("Streaming error:", error);
           controller.error(error);
@@ -192,7 +196,10 @@ async function streamAIResponse(
   conversationSummary = '',
   clientLocalHour = null,
   isWelcomeBack = false,
-  modelOverride?: 'fast' | 'best_fast'
+  modelOverride?: 'fast' | 'best_fast',
+  pt_version = null,
+  pt_updated_at = null,
+  pt_hash = null
 ) {
   // Initialize provider-specific config after selection
   let apiKey = '';
@@ -312,9 +319,36 @@ async function streamAIResponse(
     const style = personalTouch.style.toLowerCase();
     if (style.includes('short')) maxTokens = 256;
     else if (style.includes('bullet')) maxTokens = 512;
-    else if (style.includes('step')) maxTokens = 768;
-    else if (style.includes('detailed')) maxTokens = 1024;
+    else if (style.includes('step')) maxTokens = 1024;
+    else if (style.includes('detailed')) maxTokens = 2024;
   }
+
+  // Log incoming Personal Touch payload for diagnostics
+  try {
+    console.log('🎛️ PT_IN:', {
+      tone: personalTouch?.tone || null,
+      style: personalTouch?.style || null,
+      pt_version,
+      pt_updated_at,
+      pt_hash
+    });
+  } catch (_) {}
+
+  // Emit early metadata to confirm applied personal touch on the server and log it
+  try {
+    const ptApplied = {
+      tone: personalTouch?.tone || null,
+      style: personalTouch?.style || null,
+      temperature,
+      max_tokens: maxTokens,
+      source: personalTouch ? 'client' : 'default',
+      pt_version,
+      pt_updated_at,
+      pt_hash
+    };
+    console.log('🧩 PT_APPLIED:', ptApplied);
+    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ metadata: { pt_applied: ptApplied } })}\n\n`));
+  } catch (_) {}
 
   // Optionally enrich with web search context when activeTrigger === 'search'
   let searchContext = '';
@@ -732,7 +766,6 @@ async function streamAIResponse(
   controller.close();
 }
 
-}
 // Search functionality
 async function executeRegularSearch(query, language = 'en') {
   const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');

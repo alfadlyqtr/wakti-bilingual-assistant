@@ -4,11 +4,11 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
-import { ChatBubble } from './ChatBubble';
 
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
+import { getSelectedVoices } from './TalkBackSettings';
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -55,7 +55,8 @@ export function ChatMessages({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioCacheRef = useRef<Map<string, string>>(new Map()); // messageId -> object URL
   const PERSIST_CACHE_PREFIX = 'wakti_tts_cache_'; // sessionStorage key prefix
-  const prefetchingIdsRef = useRef<Set<string>>(new Set());
+  const [prefetchingIds, setPrefetchingIds] = useState<Set<string>>(new Set());
+  const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set()); // active network fetches for playback
   const prefetchTimersRef = useRef<Map<string, number>>(new Map()); // messageId -> timeout id
   const autoPlayedIdsRef = useRef<Set<string>>(new Set()); // messages we've auto-played
 
@@ -104,6 +105,45 @@ export function ChatMessages({
     }
   }, [sessionMessages, showTaskConfirmation]);
 
+  // Immediate prefetch when streaming completes (Option A)
+  // Dispatch this from your streaming handler:
+  // window.dispatchEvent(new CustomEvent('wakti-ai-stream-finished', { detail: { id: messageId, text: fullText } }))
+  useEffect(() => {
+    const onStreamFinished = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string; text: string } | undefined;
+      if (!detail?.id || !detail?.text) return;
+      const { id, text } = detail;
+      // Prefetch now, no debounce
+      setPrefetchingIds(prev => new Set(prev).add(id));
+      prefetchSpeak(text, id).finally(() => {
+        // If autoplay is enabled, play immediately
+        try {
+          const auto = localStorage.getItem('wakti_tts_autoplay') === '1';
+          if (auto) {
+            handleSpeak(text, id);
+          }
+        } catch {}
+      }).finally(() => {
+        setPrefetchingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      });
+    };
+    window.addEventListener('wakti-ai-stream-finished', onStreamFinished as EventListener);
+    return () => window.removeEventListener('wakti-ai-stream-finished', onStreamFinished as EventListener);
+  }, []);
+
+  // Listen for voice changes to invalidate caches
+  useEffect(() => {
+    const handler = () => {
+      // Clear in-memory cache when voice is changed to avoid stale audio
+      for (const url of audioCacheRef.current.values()) {
+        try { URL.revokeObjectURL(url); } catch {}
+      }
+      audioCacheRef.current.clear();
+    };
+    window.addEventListener('wakti-tts-voice-changed', handler as EventListener);
+    return () => window.removeEventListener('wakti-tts-voice-changed', handler as EventListener);
+  }, []);
+
   // ElevenLabs-backed TTS via Edge Function with stop/toggle and caching
   const handleSpeak = async (text: string, messageId: string) => {
     try {
@@ -124,8 +164,14 @@ export function ChatMessages({
       }
       setSpeakingMessageId(messageId);
 
+      // Choose voice ID based on detected text language and user Talk Back settings
+      const isArabicText = /[\u0600-\u06FF]/.test(text);
+      const { ar, en } = getSelectedVoices();
+      const voice_id = (isArabicText || language === 'ar') ? ar : en;
+      const cacheKey = `${messageId}::${voice_id}`;
+
       // Use cached audio if available (in-memory first)
-      const cachedUrl = audioCacheRef.current.get(messageId);
+      const cachedUrl = audioCacheRef.current.get(cacheKey);
       if (cachedUrl) {
         const audio = new Audio(cachedUrl);
         audioRef.current = audio;
@@ -136,10 +182,10 @@ export function ChatMessages({
       }
 
       // Check persistent cache in sessionStorage and verify it matches current text length
-      const persisted = getPersisted(messageId);
+      const persisted = getPersisted(cacheKey);
       if (persisted && persisted.len >= text.length) {
         const objectUrl = base64ToBlobUrl(persisted.b64);
-        audioCacheRef.current.set(messageId, objectUrl);
+        audioCacheRef.current.set(cacheKey, objectUrl);
         const audio = new Audio(objectUrl);
         audioRef.current = audio;
         audio.onended = () => setSpeakingMessageId(null);
@@ -148,11 +194,8 @@ export function ChatMessages({
         return;
       }
 
-      // Choose voice ID by detected text language (Arabic chars) then UI language
-      const isArabicText = /[\u0600-\u06FF]/.test(text);
-      const voice_id = isArabicText || language === 'ar' ? 'G1QUjBCuRBbLbAmYlTgl' : 'TX3LPaxmHKxFdv7VOQHJ';
-
       // Call existing Edge Function voice-tts with auth
+      setFetchingIds(prev => new Set(prev).add(messageId));
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
@@ -176,33 +219,37 @@ export function ChatMessages({
       const arrayBuf = await resp.arrayBuffer();
       const blob = new Blob([arrayBuf], { type: 'audio/mpeg' });
       const objectUrl = URL.createObjectURL(blob);
-      audioCacheRef.current.set(messageId, objectUrl);
+      audioCacheRef.current.set(cacheKey, objectUrl);
       // Persist small clips (<= 2.5MB) to sessionStorage as base64 for instant replay later
       if (arrayBuf.byteLength <= 2.5 * 1024 * 1024) {
         try {
           const b64 = bufferToBase64(arrayBuf);
-          setPersisted(messageId, b64, text.length);
+          setPersisted(cacheKey, b64, text.length);
         } catch {}
       }
 
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
-      audio.onended = () => setSpeakingMessageId(null);
-      audio.onerror = () => setSpeakingMessageId(null);
-      await audio.play();
     } catch (e) {
       setSpeakingMessageId(null);
+    } finally {
+      setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
     }
   };
 
   // Prefetch audio into cache without playing
   const prefetchSpeak = async (text: string, messageId: string) => {
     try {
-      if (audioCacheRef.current.has(messageId)) return;
-      const persisted = getPersisted(messageId);
-      if (persisted && persisted.len >= text.length) return;
+      // Determine voice and cache key up-front
       const isArabicText = /[\u0600-\u06FF]/.test(text);
-      const voice_id = isArabicText || language === 'ar' ? 'G1QUjBCuRBbLbAmYlTgl' : 'TX3LPaxmHKxFdv7VOQHJ';
+      const { ar, en } = getSelectedVoices();
+      const voice_id = (isArabicText || language === 'ar') ? ar : en;
+      const cacheKey = `${messageId}::${voice_id}`;
+
+      if (audioCacheRef.current.has(cacheKey)) return;
+      setPrefetchingIds(prev => new Set(prev).add(messageId));
+      const persisted = getPersisted(cacheKey);
+      if (persisted && persisted.len >= text.length) return;
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
@@ -219,14 +266,16 @@ export function ChatMessages({
       const arrayBuf = await resp.arrayBuffer();
       const blob = new Blob([arrayBuf], { type: 'audio/mpeg' });
       const objectUrl = URL.createObjectURL(blob);
-      audioCacheRef.current.set(messageId, objectUrl);
+      audioCacheRef.current.set(cacheKey, objectUrl);
       if (arrayBuf.byteLength <= 2.5 * 1024 * 1024) {
         try {
           const b64 = bufferToBase64(arrayBuf);
-          setPersisted(messageId, b64, text.length);
+          setPersisted(cacheKey, b64, text.length);
         } catch {}
       }
-    } catch {}
+    } catch {} finally {
+      setPrefetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
+    }
   };
 
   // Auto TTS for ONLY the latest assistant message after content stabilizes
@@ -247,9 +296,8 @@ export function ChatMessages({
     if (content.length > 4000) return;
 
     const timeout = window.setTimeout(() => {
-      // If already fetching, skip
-      if (prefetchingIdsRef.current.has(id)) return;
-      prefetchingIdsRef.current.add(id);
+      // Mark as actively fetching for UI spinner
+      setFetchingIds(prev => new Set(prev).add(id));
       // Prefetch/cache only; do not auto-play unless toggle is ON
       prefetchSpeak(content, id)
         .then(() => {
@@ -264,9 +312,9 @@ export function ChatMessages({
         })
         .catch(() => {})
         .finally(() => {
-          prefetchingIdsRef.current.delete(id);
+          setFetchingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
         });
-    }, 600); // debounce; consider message done if unchanged for 600ms
+    }, 800); // debounce; consider message done if unchanged for 800ms
     prefetchTimersRef.current.set(id, timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionMessages]);
@@ -284,6 +332,25 @@ export function ChatMessages({
     };
   }, []);
 
+  // Client warmup on mount (zero-cost)
+  useEffect(() => {
+    const warmup = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({ mode: 'warmup' })
+        });
+      } catch { /* ignore warmup errors */ }
+    };
+    warmup();
+  }, []);
 
   // FIXED: Show welcome message for new conversations
   const renderWelcomeMessage = () => {
@@ -323,10 +390,10 @@ export function ChatMessages({
                      ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
                      : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`
                   )}
-                  className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                  className="p-2 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
                 >
-                  <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                  <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                 </button>
                 
                 {/* TTS Button */}
@@ -338,13 +405,13 @@ export function ChatMessages({
                   onMouseEnter={() => prefetchSpeak(language === 'ar' 
                     ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
                     : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome')}
-                  className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                  className="p-2 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
                 >
                   {speakingMessageId === 'welcome' ? (
-                    <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                    <VolumeX className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                   ) : (
-                    <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                    <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                   )}
                 </button>
               </div>
@@ -446,7 +513,7 @@ export function ChatMessages({
               <img
                 src={imageUrl}
                 alt="Generated image"
-                className="max-w-full h-auto rounded-lg border border-border/50 shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
+                className="max-w-full h-auto rounded-lg border border-border/50 cursor-pointer hover:opacity-90 transition-opacity"
                 onClick={() => setSelectedImage({ url: imageUrl, prompt })}
                 onError={(e) => {
                   console.error('Image failed to load:', imageUrl);
@@ -608,10 +675,10 @@ export function ChatMessages({
                         {/* Copy Button */}
                         <button
                           onClick={() => navigator.clipboard.writeText(message.content)}
-                          className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                          className="p-2 rounded-md hover:bg-background/80 transition-colors"
                           title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
                         >
-                          <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                          <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                         </button>
                         
                         {/* TTS Button with Stop Functionality (assistant only) */}
@@ -619,16 +686,18 @@ export function ChatMessages({
                           <button
                             onClick={() => handleSpeak(message.content, message.id)}
                             onMouseEnter={() => prefetchSpeak(message.content, message.id)}
-                            className="p-1.5 rounded-md hover:bg-background/80 transition-colors"
+                            className="p-2 rounded-md hover:bg-background/80 transition-colors"
                             title={speakingMessageId === message.id 
                               ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
                               : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
                             }
                           >
                             {speakingMessageId === message.id ? (
-                              <VolumeX className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                              <VolumeX className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                            ) : (prefetchingIds.has(message.id) || fetchingIds.has(message.id)) ? (
+                              <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
                             ) : (
-                              <Volume2 className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                              <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                             )}
                           </button>
                         )}
