@@ -8,7 +8,7 @@ import { PlusMenu } from './PlusMenu';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
 import { SimplifiedFileUpload } from './SimplifiedFileUpload';
 import { ImageModeFileUpload } from './ImageModeFileUpload';
-import type { SimplifiedUploadedFile } from './SimplifiedFileUpload';
+import type { UploadedFile } from '@/types/fileUpload';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
 
 // Returns border/outline classes per mode for main container & textarea
@@ -252,7 +252,7 @@ export function ChatInput({
   const handleSeedFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      const validFiles: SimplifiedUploadedFile[] = [];
+      const validFiles: UploadedFile[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         // Validate image type and size (5MB limit)

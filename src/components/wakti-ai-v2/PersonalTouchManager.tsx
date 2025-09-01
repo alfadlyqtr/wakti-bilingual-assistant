@@ -162,7 +162,7 @@ export function PersonalTouchManager() {
 
         {/* Style Dropdown */}
         <div className="space-y-2">
-          <Label className="text-xs text-slate-600 dark:text-slave-400">
+          <Label className="text-xs text-slate-600 dark:text-slate-400">
             {language === 'ar' ? 'أسلوب الرد' : 'Reply style'}
           </Label>
           <Select value={formData.style} onValueChange={(value) => setFormData(prev => ({ ...prev, style: value }))}>

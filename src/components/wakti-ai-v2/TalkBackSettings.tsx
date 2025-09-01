@@ -9,34 +9,40 @@ const LS_AUTOPLAY = 'wakti_tts_autoplay';
 // Default voice IDs (provided by user)
 export const DEFAULT_VOICES = {
   ar: {
-    male: 'G1QUjBCuRBbLbAmYlTgl',
-    female: 'tavIIPLplRB883FzWU0V',
+    male: 'G1QUjBCuRBbLbAmYlTgl' as const,
+    female: 'tavIIPLplRB883FzWU0V' as const,
   },
   en: {
-    male: 'TX3LPaxmHKxFdv7VOQHJ',
-    female: 'gh8WokH7VR2QkmMmwWHS',
+    male: 'TX3LPaxmHKxFdv7VOQHJ' as const,
+    female: 'gh8WokH7VR2QkmMmwWHS' as const,
   },
-} as const;
+};
+
+type VoiceId = typeof DEFAULT_VOICES.ar.male | typeof DEFAULT_VOICES.ar.female | typeof DEFAULT_VOICES.en.male | typeof DEFAULT_VOICES.en.female;
 
 export function getSelectedVoices() {
   // Read selections with safe fallbacks
-  let ar = DEFAULT_VOICES.ar.male;
-  let en = DEFAULT_VOICES.en.male;
+  let ar: VoiceId = DEFAULT_VOICES.ar.male;
+  let en: VoiceId = DEFAULT_VOICES.en.male;
   try {
     const arSaved = localStorage.getItem(LS_AR);
-    if (arSaved) ar = arSaved;
+    if (arSaved && (arSaved === DEFAULT_VOICES.ar.male || arSaved === DEFAULT_VOICES.ar.female)) {
+      ar = arSaved as VoiceId;
+    }
   } catch {}
   try {
     const enSaved = localStorage.getItem(LS_EN);
-    if (enSaved) en = enSaved;
+    if (enSaved && (enSaved === DEFAULT_VOICES.en.male || enSaved === DEFAULT_VOICES.en.female)) {
+      en = enSaved as VoiceId;
+    }
   } catch {}
   return { ar, en };
 }
 
 export const TalkBackSettings: React.FC = () => {
   const { language } = useTheme();
-  const [arVoice, setArVoice] = useState<string>(DEFAULT_VOICES.ar.male);
-  const [enVoice, setEnVoice] = useState<string>(DEFAULT_VOICES.en.male);
+  const [arVoice, setArVoice] = useState<VoiceId>(DEFAULT_VOICES.ar.male);
+  const [enVoice, setEnVoice] = useState<VoiceId>(DEFAULT_VOICES.en.male);
   const [autoPlay, setAutoPlay] = useState<boolean>(false);
 
   // Load saved selections on mount
@@ -47,13 +53,13 @@ export const TalkBackSettings: React.FC = () => {
     try { setAutoPlay(localStorage.getItem(LS_AUTOPLAY) === '1'); } catch {}
   }, []);
 
-  const saveAr = (val: string) => {
+  const saveAr = (val: VoiceId) => {
     setArVoice(val);
     try { localStorage.setItem(LS_AR, val); } catch {}
     // Notify listeners so caches can invalidate
     try { window.dispatchEvent(new CustomEvent('wakti-tts-voice-changed', { detail: { lang: 'ar', voiceId: val } })); } catch {}
   };
-  const saveEn = (val: string) => {
+  const saveEn = (val: VoiceId) => {
     setEnVoice(val);
     try { localStorage.setItem(LS_EN, val); } catch {}
     try { window.dispatchEvent(new CustomEvent('wakti-tts-voice-changed', { detail: { lang: 'en', voiceId: val } })); } catch {}
@@ -103,7 +109,7 @@ export const TalkBackSettings: React.FC = () => {
               name="ar-voice"
               value={DEFAULT_VOICES.ar.male}
               checked={arVoice === DEFAULT_VOICES.ar.male}
-              onChange={(e) => saveAr(e.target.value)}
+              onChange={(e) => saveAr(e.target.value as VoiceId)}
             />
             <span>{language === 'ar' ? 'ذكر' : 'Male'}</span>
           </label>
@@ -113,7 +119,7 @@ export const TalkBackSettings: React.FC = () => {
               name="ar-voice"
               value={DEFAULT_VOICES.ar.female}
               checked={arVoice === DEFAULT_VOICES.ar.female}
-              onChange={(e) => saveAr(e.target.value)}
+              onChange={(e) => saveAr(e.target.value as VoiceId)}
             />
             <span>{language === 'ar' ? 'أنثى' : 'Female'}</span>
           </label>
@@ -130,7 +136,7 @@ export const TalkBackSettings: React.FC = () => {
               name="en-voice"
               value={DEFAULT_VOICES.en.male}
               checked={enVoice === DEFAULT_VOICES.en.male}
-              onChange={(e) => saveEn(e.target.value)}
+              onChange={(e) => saveEn(e.target.value as VoiceId)}
             />
             <span>{language === 'ar' ? 'ذكر' : 'Male'}</span>
           </label>
@@ -140,7 +146,7 @@ export const TalkBackSettings: React.FC = () => {
               name="en-voice"
               value={DEFAULT_VOICES.en.female}
               checked={enVoice === DEFAULT_VOICES.en.female}
-              onChange={(e) => saveEn(e.target.value)}
+              onChange={(e) => saveEn(e.target.value as VoiceId)}
             />
             <span>{language === 'ar' ? 'أنثى' : 'Female'}</span>
           </label>
