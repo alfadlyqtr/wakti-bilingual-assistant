@@ -868,4 +868,5 @@ async function executeRegularSearch(query, language = 'en') {
   }
 }
 
-// end-of-file
+// end-of-file fix: add a missing closing brace to balance parsing
+}
