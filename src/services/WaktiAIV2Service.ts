@@ -84,7 +84,7 @@ class WaktiAIV2ServiceClass {
         nickname: '',
         aiNickname: '',
         tone: 'neutral',
-        style: 'step-by-step',
+        style: 'short answers',
         instruction: ''
       };
       pt.pt_version = 1;
@@ -100,7 +100,7 @@ class WaktiAIV2ServiceClass {
         || (styleLower.includes('short') ? 'short answers'
         : styleLower.includes('bullet') ? 'bullet points'
         : styleLower.includes('step') ? 'step-by-step'
-        : styleLower.includes('detail') ? 'detailed' : 'step-by-step');
+        : styleLower.includes('detail') ? 'detailed' : 'short answers');
       pt.style = normalizedStyle;
 
       // Trim instruction

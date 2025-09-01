@@ -60,7 +60,7 @@ export function PersonalTouchManager() {
   const [formData, setFormData] = useState<PersonalTouchData>({
     nickname: '',
     tone: 'neutral',
-    style: 'detailed',
+    style: 'short answers',
     instruction: '',
     aiNickname: '' // NEW: AI nickname
   });
@@ -79,8 +79,19 @@ export function PersonalTouchManager() {
   const handleSave = () => {
     saveWaktiPersonalTouch(formData);
     
+    // Also persist in sessionStorage for immediate availability in this session
+    try {
+      sessionStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify({ ...formData }));
+    } catch {}
+    
     // Clear the cache so settings take effect without refresh
     WaktiAIV2Service.clearPersonalTouchCache();
+    
+    // Notify the app to refresh Personal Touch immediately
+    try {
+      const latest = loadWaktiPersonalTouch() || formData;
+      window.dispatchEvent(new CustomEvent('wakti-personal-touch-updated', { detail: latest }));
+    } catch {}
     
     showSuccess(language === 'ar' ? 'تم حفظ الإعدادات!' : 'Settings saved!');
   };

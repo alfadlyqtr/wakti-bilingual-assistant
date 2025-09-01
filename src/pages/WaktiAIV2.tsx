@@ -170,6 +170,18 @@ const WaktiAIV2 = () => {
     loadFrontendMemory();
   }, []);
 
+  // Listen for Personal Touch updates and reflect immediately
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      try {
+        setPersonalTouch(e.detail || JSON.parse(localStorage.getItem('wakti_personal_touch') || 'null'));
+      } catch {
+        loadPersonalTouch();
+      }
+    };
+    window.addEventListener('wakti-personal-touch-updated', handler as EventListener);
+    return () => window.removeEventListener('wakti-personal-touch-updated', handler as EventListener);
+  }, []);
   useEffect(() => {
     if (currentConversationId) {
       setIsNewConversation(false);
