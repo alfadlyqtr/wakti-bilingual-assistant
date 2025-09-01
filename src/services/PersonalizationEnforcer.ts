@@ -40,20 +40,13 @@ export class PersonalizationEnforcer {
       originalLength: originalResponse.length
     });
 
-    // 1. ENHANCED: Basic nickname usage (increased probability for consistent usage)
-    if (personalTouch.nickname && personalTouch.nickname.trim() && originalResponse.length > 50) {
-      // FIXED: Increased from 30% to 80% chance to add nickname for consistent usage
-      if (Math.random() < 0.8 && !originalResponse.toLowerCase().includes(personalTouch.nickname.toLowerCase())) {
-        const greetings = language === 'ar' ? [
-          `${personalTouch.nickname}، `,
-          `أهلاً ${personalTouch.nickname}! `
-        ] : [
-          `${personalTouch.nickname}, `,
-          `Hey ${personalTouch.nickname}! `
-        ];
-        const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
-        enforcedResponse = randomGreeting + enforcedResponse;
-      }
+    // 1. DETERMINISTIC: Always use nickname when available (no randomness, no length gate)
+    const nickname = personalTouch.nickname?.trim();
+    if (nickname && !new RegExp(`\\b${nickname}\\b`, 'i').test(originalResponse)) {
+      const greeting = language === 'ar'
+        ? `${nickname}، `
+        : `Hey ${nickname}! `;
+      enforcedResponse = greeting + enforcedResponse;
     }
 
     // 2. Basic AI nickname signature (only occasionally)

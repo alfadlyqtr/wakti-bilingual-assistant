@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { PersonalizationEnforcer } from './PersonalizationEnforcer';
 
 export interface AIMessage {
   id: string;
@@ -576,6 +577,18 @@ class WaktiAIV2ServiceClass {
         try { reader.releaseLock(); } catch {}
         if (signal) signal.removeEventListener('abort', abortHandler as any);
         try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
+      }
+
+      // Apply deterministic Personal Touch enforcement (nickname, signature)
+      try {
+        const ptForEnforce = this.ensurePersonalTouch();
+        fullResponse = PersonalizationEnforcer.enforcePersonalization(fullResponse, {
+          personalTouch: ptForEnforce,
+          language,
+          originalResponse: fullResponse
+        });
+      } catch (e) {
+        console.warn('Personalization enforcement failed:', e);
       }
 
       // Best-effort: persist updated rolling summary after stream
