@@ -1,5 +1,8 @@
 
 
+// DEPRECATED: Personal Touch is now enforced via system prompt in VisionSystem.buildPersonalizationSection()
+// This file is kept for backward compatibility but should not be used.
+
 import { PersonalizationEnforcer } from './PersonalizationEnforcer';
 
 interface PersonalTouchData {
@@ -18,49 +21,25 @@ interface ProcessingOptions {
 
 export class PersonalizationProcessor {
   /**
-   * SIMPLIFIED: Main post-processing function with basic personalization
+   * DEPRECATED: Personal Touch is now enforced via system prompt
+   * This method now returns the original response unchanged
    */
   static enhanceResponse(
     originalResponse: string,
     options: ProcessingOptions
   ): string {
-    // CRITICAL FIX: Type validation to prevent crashes
-    if (!originalResponse || typeof originalResponse !== 'string') {
-      console.warn('🚨 PERSONALIZATION PROCESSOR: Invalid response type received');
-      return typeof originalResponse === 'string' ? originalResponse : 'Sorry, there was an error processing your request.';
-    }
-
-    if (!options.personalTouch) {
-      return originalResponse;
-    }
-
-    console.log('🎨 PERSONALIZATION PROCESSOR: Starting basic enhancement');
-
-    // Apply basic enforcement
-    const enhancedResponse = PersonalizationEnforcer.enforcePersonalization(
-      originalResponse,
-      {
-        personalTouch: options.personalTouch,
-        language: options.language,
-        originalResponse
-      }
-    );
-
-    console.log('✅ PERSONALIZATION PROCESSOR: Basic enhancement completed', {
-      originalLength: originalResponse.length,
-      finalLength: enhancedResponse.length,
-      enforcementApplied: enhancedResponse !== originalResponse
-    });
-
-    return enhancedResponse;
+    console.warn('🚨 DEPRECATED: PersonalizationProcessor is deprecated. Personal Touch is now enforced via system prompt.');
+    
+    // Return original response unchanged - PT is handled in system prompt
+    return originalResponse || 'Sorry, there was an error processing your request.';
   }
 
   /**
-   * Get processing performance stats
+   * Get processing performance stats (deprecated)
    */
   static getProcessingStats(): { averageTime: number; totalProcessed: number } {
     return {
-      averageTime: 45, // milliseconds
+      averageTime: 0,
       totalProcessed: 0
     };
   }

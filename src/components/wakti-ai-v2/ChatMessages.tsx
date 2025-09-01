@@ -376,8 +376,8 @@ export function ChatMessages({
             
             <div className="text-sm leading-relaxed">
               {language === 'ar' 
-                 ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI، مساعدك الذكي المطور. يمكنني:\n\n🎯 **إنشاء المهام والتذكيرات** - فقط اكتب "أنشئ مهمة" أو "ذكرني"\n🖼️ **تحليل الصور** - ارفع أي صورة وسأصفها لك\n🔍 **البحث والاستكشاف** - اسألني عن أي موضوع\n💬 **المحادثة الذكية** - أتذكر محادثاتنا السابقة\n\nما الذي يمكنني مساعدتك به اليوم؟`
-                : `Hello ${userName}! 👋\n\nI'm WAKTI AI, your advanced AI assistant. I can help you with:\n\n🎯 **Create Tasks & Reminders** - Just say "create a task" or "remind me"\n🖼️ **Analyze Images** - Upload any image and I'll describe it\n🔍 **Search & Explore** - Ask me about any topic\n💬 **Smart Conversations** - I remember our previous chats\n\nWhat can I help you with today?`
+                 ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
+                : `Hey ${userName}! 👋 I'm WAKTI AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`
               }
             </div>
             
@@ -387,8 +387,8 @@ export function ChatMessages({
                 {/* Copy Button */}
                 <button
                   onClick={() => navigator.clipboard.writeText(language === 'ar' 
-                     ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
-                     : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`
+                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
+                     : `Hey ${userName}! 👋 I'm WAKTI AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`
                   )}
                   className="p-2 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
@@ -396,15 +396,12 @@ export function ChatMessages({
                   <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                 </button>
                 
-                {/* TTS Button */}
+                {/* TTS Button - No preloading, only on click */}
                 <button
                   onClick={() => handleSpeak(language === 'ar' 
-                    ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
-                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome'
+                    ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
+                    : `Hey ${userName}! 👋 I'm WAKTI AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
                   )}
-                  onMouseEnter={() => prefetchSpeak(language === 'ar' 
-                    ? `مرحباً ${userName}! أنا WAKTI AI، مساعدك الذكي المطور. يمكنني إنشاء المهام والتذكيرات، تحليل الصور، البحث والاستكشاف، والمحادثة الذكية. ما الذي يمكنني مساعدتك به اليوم؟`
-                    : `Hello ${userName}! I'm WAKTI AI, your advanced AI assistant. I can help you create tasks and reminders, analyze images, search and explore topics, and have smart conversations. What can I help you with today?`, 'welcome')}
                   className="p-2 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
                 >
