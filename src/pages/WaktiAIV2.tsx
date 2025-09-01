@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { PersonalTouchManager } from '@/components/wakti-ai-v2/PersonalTouchManager';
 import { FileUploader } from '@/components/wakti-ai-v2/FileUploader';
-import { AIMessage, WaktiAIV2Service } from '@/services/WaktiAIV2Service';
+import { Message, WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { Send, Paperclip, Loader2 } from 'lucide-react';
 
 interface PersonalTouchData {
@@ -23,8 +23,6 @@ interface PersonalTouchData {
   pt_updated_at?: string;
 }
 
-type ChatMessage = AIMessage & { isError?: boolean };
-
 const FRONTEND_MEMORY_KEY = "wakti_frontend_memory";
 const PERSONAL_TOUCH_KEY = "wakti_personal_touch";
 
@@ -32,13 +30,13 @@ export default function WaktiAIV2() {
   const { language, theme } = useTheme();
   const { showSuccess } = useToastHelper();
   
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [currentResponse, setCurrentResponse] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<any[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
   const [conversationMemory, setConversationMemory] = useState<any[]>([]);
   const [personalTouch, setPersonalTouch] = useState<PersonalTouchData | null>(null);
   
@@ -66,7 +64,7 @@ export default function WaktiAIV2() {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
           setMessages(parsed);
-          setConversationMemory(parsed.map((m: any) => ({ role: m.role, content: m.content })));
+          setConversationMemory(parsed.map(m => ({ role: m.role, content: m.content })));
           return parsed;
         }
       }
@@ -76,9 +74,9 @@ export default function WaktiAIV2() {
     return [];
   };
 
-  const saveFrontendMemory = (msgs: ChatMessage[]) => {
+  const saveFrontendMemory = (messages: Message[]) => {
     try {
-      sessionStorage.setItem(FRONTEND_MEMORY_KEY, JSON.stringify(msgs));
+      sessionStorage.setItem(FRONTEND_MEMORY_KEY, JSON.stringify(messages));
     } catch (e) {
       console.warn('Failed to save frontend memory:', e);
     }
@@ -93,19 +91,23 @@ export default function WaktiAIV2() {
   }, []);
 
   useEffect(() => {
+    // Listen for Personal Touch updates from the manager
     const handlePersonalTouchUpdate = (event: CustomEvent<PersonalTouchData>) => {
       console.log('🧩 PT_EVENT:', event.detail);
       setPersonalTouch(event.detail);
     };
+
     window.addEventListener('wakti-personal-touch-updated', handlePersonalTouchUpdate as any);
+
     return () => {
       window.removeEventListener('wakti-personal-touch-updated', handlePersonalTouchUpdate as any);
     };
   }, []);
 
   useEffect(() => {
+    // Scroll to bottom on new messages
     scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, currentResponse, isTyping]);
+  }, [messages]);
 
   const handleSendMessage = () => {
     sendStreamingMessage(newMessage, 'chat', attachedFiles);
@@ -157,28 +159,31 @@ export default function WaktiAIV2() {
     setNewMessage(textarea.value);
   };
 
+  // Enhanced sendStreamingMessage with strict Personal Touch diagnostics
   const sendStreamingMessage = async (
     userMessage: string,
     activeTrigger = 'chat',
-    files: any[] = []
+    attachedFiles: any[] = []
   ) => {
-    if (!userMessage.trim() && !files?.length) return;
+    if (!userMessage.trim() && !attachedFiles?.length) return;
 
     setIsLoading(true);
     setCurrentResponse('');
     setIsTyping(true);
 
-    const userMsg: ChatMessage = {
+    // Add user message to conversation immediately
+    const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: userMessage,
       timestamp: new Date(),
-      attachedFiles: files?.map(f => ({ name: f.name, type: f.type, size: f.size })) || []
+      attachedFiles: attachedFiles?.map(f => ({ name: f.name, type: f.type, size: f.size })) || []
     };
 
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
 
+    // Log Personal Touch diagnostics
     if (personalTouch) {
       console.log('🎯 STRICT PT ACTIVE:', {
         nickname: personalTouch.nickname || 'none',
@@ -192,46 +197,95 @@ export default function WaktiAIV2() {
     }
 
     try {
-      const result = await WaktiAIV2Service.sendStreamingMessage(
-        userMessage,                        // message
-        undefined,                          // userId (auto from session)
-        language,                           // language
-        currentConversationId,              // conversationId
-        files?.some(f => f?.type?.startsWith('image/')) ? 'vision' : 'text', // inputType
-        conversationMemory.slice(-20) as AIMessage[], // recentMessages
-        false,                              // skipContextLoad
-        activeTrigger,                      // activeTrigger
-        '',                                 // conversationSummary (service builds)
-        files,                               // attachedFiles
-        (token) => {
-          setCurrentResponse(prev => prev + token);
-        },
-        (metadata) => {
-          console.log('🔥 DEBUG: Chat streaming onComplete called');
-        },
-        (error) => {
-          console.error('❌ STREAM ERROR:', error);
+      const streamResponse = await WaktiAIV2Service.sendStreamingMessage({
+        message: userMessage,
+        language,
+        conversationId: currentConversationId,
+        activeTrigger,
+        attachedFiles,
+        personalTouch,
+        recentMessages: conversationMemory.slice(-20),
+        conversationSummary: '',
+        clientLocalHour: new Date().getHours(),
+        isWelcomeBack: false
+      });
+
+      if (!streamResponse) {
+        throw new Error('No stream response received');
+      }
+
+      // Process streaming response
+      const reader = streamResponse.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulatedResponse = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              // Handle streaming tokens
+              if (parsed.token) {
+                accumulatedResponse += parsed.token;
+                setCurrentResponse(accumulatedResponse);
+              }
+              
+              // Handle metadata (PT diagnostics)
+              if (parsed.metadata?.pt_applied) {
+                console.log('✅ SERVER CONFIRMED PT:', parsed.metadata.pt_applied);
+              }
+              
+              // Handle final event with completion stats
+              if (parsed.done) {
+                console.log('🏁 STREAM COMPLETE:', {
+                  model: parsed.model,
+                  provider: parsed.provider,
+                  fallbackUsed: parsed.fallbackUsed
+                });
+                break;
+              }
+              
+            } catch (e) {
+              // Ignore malformed JSON chunks
+            }
+          }
         }
-      );
+      } finally {
+        reader.releaseLock();
+      }
 
-      const accumulatedResponse = (result?.response || '').trim();
-
-      if (accumulatedResponse) {
-        const aiMsg: ChatMessage = {
+      // Add AI response to conversation
+      if (accumulatedResponse.trim()) {
+        const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: accumulatedResponse,
+          content: accumulatedResponse.trim(),
           timestamp: new Date()
         };
 
         setMessages(prev => [...prev, aiMsg]);
-
+        
+        // Update conversation memory
         setConversationMemory(prev => [
           ...prev,
           { role: 'user', content: userMessage },
-          { role: 'assistant', content: accumulatedResponse }
+          { role: 'assistant', content: accumulatedResponse.trim() }
         ]);
 
+        // Save to frontend memory
         saveFrontendMemory([...updatedMessages, aiMsg]);
       }
 
@@ -282,7 +336,7 @@ export default function WaktiAIV2() {
                   {msg.content}
                   {msg.attachedFiles && msg.attachedFiles.length > 0 && (
                     <div className="mt-2">
-                      {msg.attachedFiles.map((file: any, index: number) => (
+                      {msg.attachedFiles.map((file, index) => (
                         <div key={index} className="text-xs text-slate-400">
                           {file.name} ({file.type}, {file.size} bytes)
                         </div>
