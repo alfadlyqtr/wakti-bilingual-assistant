@@ -9,12 +9,12 @@ const LS_AUTOPLAY = 'wakti_tts_autoplay';
 // Default voice IDs (provided by user)
 export const DEFAULT_VOICES = {
   ar: {
-    male: 'G1QUjBCuRBbLbAmYlTgl' as const,
-    female: 'tavIIPLplRB883FzWU0V' as const,
+    male: 'ar-XA-Wavenet-B' as const,
+    female: 'ar-XA-Wavenet-A' as const,
   },
   en: {
-    male: 'TX3LPaxmHKxFdv7VOQHJ' as const,
-    female: 'gh8WokH7VR2QkmMmwWHS' as const,
+    male: 'en-US-Wavenet-D' as const,
+    female: 'en-US-Wavenet-H' as const,
   },
 };
 
