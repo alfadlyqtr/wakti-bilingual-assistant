@@ -7,9 +7,10 @@ interface VoiceCloneScreen1Props {
   onNext: () => void;
   onSkip: () => void;
   hasExistingVoices: boolean;
+  onOpenTTS: () => void;
 }
 
-export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCloneScreen1Props) {
+export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices, onOpenTTS }: VoiceCloneScreen1Props) {
   const { language } = useTheme();
 
   return (
@@ -121,6 +122,16 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
       </div>
 
       <div className="space-y-3 pt-4">
+        {/* New action - Text To Speech */}
+        <Button 
+          onClick={onOpenTTS}
+          variant="secondary"
+          className="w-full h-12 text-base"
+        >
+          <Volume2 className="h-5 w-5 mr-2" />
+          {language === 'ar' ? 'تحويل النص إلى كلام' : 'Text To Speech'}
+        </Button>
+
         {/* Primary action - Clone voice */}
         <Button 
           onClick={onNext}

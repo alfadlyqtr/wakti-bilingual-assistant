@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useNavigate } from 'react-router-dom';
 
 // LocalStorage keys
 const LS_AR = 'wakti_tts_voice_ar';
@@ -9,12 +10,12 @@ const LS_AUTOPLAY = 'wakti_tts_autoplay';
 // Default voice IDs (provided by user)
 export const DEFAULT_VOICES = {
   ar: {
-    male: 'ar-XA-Chirp3-HD-Algenib' as const,
+    male: 'ar-XA-Chirp3-HD-Umbriel' as const,
     female: 'ar-XA-Chirp3-HD-Zephyr' as const,
   },
   en: {
     male: 'en-US-Chirp3-HD-Algenib' as const,
-    female: 'en-US-Chirp3-HD-Achernar' as const,
+    female: 'en-US-Chirp3-HD-Erinome' as const,
   },
 };
 
@@ -41,6 +42,7 @@ export function getSelectedVoices() {
 
 export const TalkBackSettings: React.FC = () => {
   const { language } = useTheme();
+  const navigate = useNavigate();
   const [arVoice, setArVoice] = useState<VoiceId>(DEFAULT_VOICES.ar.male);
   const [enVoice, setEnVoice] = useState<VoiceId>(DEFAULT_VOICES.en.male);
   const [autoPlay, setAutoPlay] = useState<boolean>(false);
@@ -71,32 +73,44 @@ export const TalkBackSettings: React.FC = () => {
         <div className="text-[11px] font-semibold opacity-80">
         {language === 'ar' ? 'الاستجابة الصوتية' : 'Talk Back'}
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setAutoPlay(prev => {
-              const next = !prev;
-              try { localStorage.setItem(LS_AUTOPLAY, next ? '1' : '0'); } catch {}
-              // Broadcast change so other components (e.g., ChatInput/ChatDrawers listeners) stay in sync
-              try { window.dispatchEvent(new CustomEvent('wakti-tts-autoplay-changed', { detail: { value: next } })); } catch {}
-              return next;
-            });
-          }}
-          className={`h-6 px-2 rounded-md text-[10px] leading-none flex items-center gap-1 border transition-colors
-            ${autoPlay
-              ? 'bg-sky-100 text-sky-900 border-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-700/50'
-              : 'bg-white/60 text-foreground/80 border-white/60 dark:bg-white/10 dark:text-white/80 dark:border-white/10'}`}
-          aria-pressed={autoPlay}
-          aria-label={language === 'ar' ? 'تشغيل تلقائي للصوت' : 'Auto Play voice'}
-          title={language === 'ar' ? 'تشغيل صوت الرد التالي تلقائيًا' : 'Auto play next assistant reply'}
-        >
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ backgroundColor: autoPlay ? '#0ea5e9' : '#9ca3af' }}
-            aria-hidden="true"
-          />
-          <span>{language === 'ar' ? 'تشغيل تلقائي' : 'Auto Play'}</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => navigate('/voice-tts')}
+            className={`h-6 px-2 rounded-md text-[10px] leading-none flex items-center gap-1 border transition-colors
+              bg-white/70 text-foreground/90 border-white/70 hover:bg-white/90 dark:bg-white/10 dark:text-white/90 dark:border-white/10`}
+            aria-label={language === 'ar' ? 'تحويل النص إلى كلام' : 'Text To Speech'}
+            title={language === 'ar' ? 'افتح صفحة تحويل النص إلى كلام' : 'Open Text To Speech page'}
+          >
+            <span>{language === 'ar' ? 'تحويل النص إلى كلام' : 'Text To Speech'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAutoPlay(prev => {
+                const next = !prev;
+                try { localStorage.setItem(LS_AUTOPLAY, next ? '1' : '0'); } catch {}
+                // Broadcast change so other components (e.g., ChatInput/ChatDrawers listeners) stay in sync
+                try { window.dispatchEvent(new CustomEvent('wakti-tts-autoplay-changed', { detail: { value: next } })); } catch {}
+                return next;
+              });
+            }}
+            className={`h-6 px-2 rounded-md text-[10px] leading-none flex items-center gap-1 border transition-colors
+              ${autoPlay
+                ? 'bg-sky-100 text-sky-900 border-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-700/50'
+                : 'bg-white/60 text-foreground/80 border-white/60 dark:bg-white/10 dark:text-white/80 dark:border-white/10'}`}
+            aria-pressed={autoPlay}
+            aria-label={language === 'ar' ? 'تشغيل تلقائي للصوت' : 'Auto Play voice'}
+            title={language === 'ar' ? 'تشغيل صوت الرد التالي تلقائيًا' : 'Auto play next assistant reply'}
+          >
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: autoPlay ? '#0ea5e9' : '#9ca3af' }}
+              aria-hidden="true"
+            />
+            <span>{language === 'ar' ? 'تشغيل تلقائي' : 'Auto Play'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Arabic */}

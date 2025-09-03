@@ -409,7 +409,7 @@ export function ChatMessages({
               <Bot className="w-4 h-4 text-white" />
             </div>
           </div>
-          <div className="rounded-lg px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border relative">
+          <div className="rounded-lg px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border relative dark:from-slate-800/70 dark:to-slate-900/70 dark:text-slate-100 dark:border-slate-700">
             {/* Mode Badge */}
             <div className="flex items-center gap-2 mb-2">
               <Badge variant="secondary" className="px-2 py-1 text-xs font-medium leading-none whitespace-nowrap align-middle">
@@ -420,7 +420,7 @@ export function ChatMessages({
             <div className="text-sm leading-relaxed">
               {language === 'ar' 
                  ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                : `Hey ${userName}! 👋 I'm WAKTI AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`
+                : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`
               }
             </div>
             
@@ -431,7 +431,7 @@ export function ChatMessages({
                 <button
                   onClick={() => navigator.clipboard.writeText(language === 'ar' 
                      ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                     : `Hey ${userName}! 👋 I'm WAKTI AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`
+                     : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`
                   )}
                   className="p-2 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
@@ -443,7 +443,7 @@ export function ChatMessages({
                 <button
                   onClick={() => handleSpeak(language === 'ar' 
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                    : `Hey ${userName}! 👋 I'm WAKTI AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
+                    : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
                   )}
                   className={`p-2 rounded-md transition-colors ${speakingMessageId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
@@ -461,7 +461,7 @@ export function ChatMessages({
                 </button>
               </div>
               {speakingMessageId === 'welcome' && (
-                <div className="ml-1 inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border">
+                <div className="ml-1 inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border text-foreground/80 dark:bg-white/5 dark:border-white/10 dark:text-white/80">
                   <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
                     {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
                   </button>

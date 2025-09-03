@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { VoiceCloneScreen1 } from './VoiceCloneScreen1';
 import { VoiceCloneScreen2 } from './VoiceCloneScreen2';
 import { VoiceCloneScreen3 } from './VoiceCloneScreen3';
+import { VoiceTTSScreen } from './VoiceTTSScreen';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -49,6 +50,7 @@ export function VoiceClonePopup({ open, onOpenChange }: VoiceClonePopupProps) {
             onNext={() => setCurrentScreen(2)}
             onSkip={() => setCurrentScreen(3)}
             hasExistingVoices={hasExistingVoices}
+            onOpenTTS={() => setCurrentScreen(4)}
           />
         );
       case 2:
@@ -62,6 +64,12 @@ export function VoiceClonePopup({ open, onOpenChange }: VoiceClonePopupProps) {
         return (
           <VoiceCloneScreen3
             onBack={() => setCurrentScreen(2)}
+          />
+        );
+      case 4:
+        return (
+          <VoiceTTSScreen
+            onBack={() => setCurrentScreen(1)}
           />
         );
       default:

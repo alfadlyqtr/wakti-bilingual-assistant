@@ -49,6 +49,7 @@ import AdminQuotas from "./pages/AdminQuotas";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminSettings from "./pages/AdminSettings";
 import AdminFawranPayments from "./pages/AdminFawranPayments";
+import VoiceTTS from "./pages/VoiceTTS";
 
 import "./App.css";
 
@@ -168,6 +169,11 @@ function App() {
                 <Route path="/tasjeel" element={
                   <GiftNotificationProvider>
                     <AppLayout><Tasjeel /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/voice-tts" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><VoiceTTS /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 

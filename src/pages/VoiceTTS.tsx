@@ -1,0 +1,345 @@
+import React, { useEffect, useState } from 'react';
+import { useTheme } from '@/providers/ThemeProvider';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Info, Copy, Download } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
+import EnhancedAudioControls from '@/components/tasjeel/EnhancedAudioControls';
+
+interface VoiceClone {
+  id: string;
+  voice_name: string;
+  voice_id: string;
+  is_default?: boolean;
+}
+
+// Keep same defaults and quota behavior as Voice Studio
+const DEFAULT_VOICES: VoiceClone[] = [
+  { id: 'default-aria', voice_name: 'Wakti Female', voice_id: '9BWtsMINqrJLrRacOk9x', is_default: true },
+  { id: 'default-brian', voice_name: 'Wakti Male', voice_id: 'nPczCjzI2devNBz1zQrb', is_default: true },
+];
+
+const VOICE_STYLES = {
+  neutral: {
+    name: { en: 'Neutral', ar: 'عادي' },
+    description: { en: 'Balanced, natural conversational tone', ar: 'نبرة محادثة طبيعية ومتوازنة' },
+    technicalDesc: { en: 'Moderate stability & similarity', ar: 'ثبات واعتدال متوسط' },
+    icon: '💬',
+    settings: { stability: 0.7, similarity_boost: 0.85, style: 0.0, use_speaker_boost: true },
+  },
+  report: {
+    name: { en: 'News Report', ar: 'تقرير إخباري' },
+    description: { en: 'Professional, clear news reporting style', ar: 'أسلوب التقارير الإخبارية المهنية والواضحة' },
+    technicalDesc: { en: 'Authoritative & clear delivery', ar: 'إلقاء موثوق وواضح' },
+    icon: '📰',
+    settings: { stability: 0.8, similarity_boost: 0.9, style: 0.3, use_speaker_boost: true },
+  },
+  storytelling: {
+    name: { en: 'Storytelling', ar: 'سرد القصص' },
+    description: { en: 'Dramatic, engaging narrative voice with emotion', ar: 'صوت سردي درامي وجذاب مع العاطفة' },
+    technicalDesc: { en: 'Expressive & engaging delivery', ar: 'إلقاء معبر وجذاب' },
+    icon: '📚',
+    settings: { stability: 0.5, similarity_boost: 0.7, style: 0.6, use_speaker_boost: true },
+  },
+  poetry: {
+    name: { en: 'Poetry', ar: 'شعر' },
+    description: { en: 'Highly expressive, artistic poetic delivery', ar: 'إلقاء شعري فني معبر للغاية' },
+    technicalDesc: { en: 'Very expressive & artistic', ar: 'معبر وفني للغاية' },
+    icon: '🎭',
+    settings: { stability: 0.4, similarity_boost: 0.6, style: 0.7, use_speaker_boost: true },
+  },
+  teacher: {
+    name: { en: 'Teacher', ar: 'معلم' },
+    description: { en: 'Clear, authoritative educational presentation', ar: 'عرض تعليمي واضح وموثوق' },
+    technicalDesc: { en: 'Firm & instructive delivery', ar: 'إلقاء حازم وتعليمي' },
+    icon: '👨‍🏫',
+    settings: { stability: 0.8, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true },
+  },
+  sports: {
+    name: { en: 'Sports Announcer', ar: 'معلق رياضي' },
+    description: { en: 'Dynamic, energetic sports commentary', ar: 'تعليق رياضي ديناميكي ونشيط' },
+    technicalDesc: { en: 'Intense & energetic delivery', ar: 'إلقاء مكثف ونشيط' },
+    icon: '🏆',
+    settings: { stability: 0.3, similarity_boost: 0.5, style: 0.8, use_speaker_boost: true },
+  },
+} as const;
+
+export default function VoiceTTS() {
+  const { language } = useTheme();
+  const [text, setText] = useState('');
+  const [voices, setVoices] = useState<VoiceClone[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState('');
+  const [selectedStyle, setSelectedStyle] = useState<keyof typeof VOICE_STYLES>('neutral');
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [showStyleDetails, setShowStyleDetails] = useState(false);
+  const [defaultVoiceId, setDefaultVoiceId] = useState<string>('');
+  const [defaultStyle, setDefaultStyle] = useState<string>('neutral');
+
+  const { userVoiceQuota, isLoadingVoiceQuota, loadUserVoiceQuota, totalAvailableCharacters, canUseVoice } =
+    useExtendedQuotaManagement(language);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: voicesData } = await supabase.from('user_voice_clones').select('*').order('created_at', { ascending: false });
+        const allVoices = [...DEFAULT_VOICES, ...(voicesData || [])];
+        setVoices(allVoices);
+
+        const savedDefaultVoice = localStorage.getItem('wakti-default-voice');
+        const savedDefaultStyle = localStorage.getItem('wakti-default-style');
+        if (savedDefaultVoice) {
+          setDefaultVoiceId(savedDefaultVoice);
+          setSelectedVoiceId(savedDefaultVoice);
+        } else {
+          setSelectedVoiceId(allVoices[0]?.voice_id || '');
+        }
+        if (savedDefaultStyle) {
+          setDefaultStyle(savedDefaultStyle);
+          setSelectedStyle(savedDefaultStyle as keyof typeof VOICE_STYLES);
+        }
+        await loadUserVoiceQuota();
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const canGenerate = text.trim().length > 0 && selectedVoiceId && text.length <= totalAvailableCharacters && canUseVoice;
+
+  const setAsDefaultVoice = (voiceId: string) => {
+    localStorage.setItem('wakti-default-voice', voiceId);
+    setDefaultVoiceId(voiceId);
+    toast.success(language === 'ar' ? 'تم تعيين الصوت كافتراضي' : 'Voice set as default');
+  };
+  const setAsDefaultVoiceStyle = (style: string) => {
+    localStorage.setItem('wakti-default-style', style);
+    setDefaultStyle(style);
+    toast.success(language === 'ar' ? 'تم تعيين الأسلوب كافتراضي' : 'Style set as default');
+  };
+
+  const generateSpeech = async () => {
+    if (!canGenerate) return;
+    setIsGenerating(true);
+    setAudioUrl(null);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error('User not authenticated');
+
+      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({ text: text.trim(), voice_id: selectedVoiceId, style: selectedStyle }),
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+
+      const contentType = response.headers.get('content-type') || '';
+      let audioBlob: Blob;
+      if (contentType.includes('application/json')) {
+        const json = await response.json();
+        if (json.error) throw new Error(json.error);
+        if (!json.audioContent) throw new Error('No audio content in response');
+        const bin = atob(json.audioContent);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
+      } else if (contentType.includes('audio/mpeg')) {
+        const buf = await response.arrayBuffer();
+        audioBlob = new Blob([buf], { type: 'audio/mpeg' });
+      } else {
+        throw new Error(`Unexpected content type: ${contentType}`);
+      }
+
+      if (audioBlob.size === 0) throw new Error('Received empty audio data');
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl(url);
+      await loadUserVoiceQuota();
+      toast.success(language === 'ar' ? 'تم إنشاء الصوت بنجاح' : 'Speech generated successfully');
+    } catch (e: any) {
+      toast.error(e.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const downloadAudio = () => {
+    if (!audioUrl) return;
+    const link = document.createElement('a');
+    link.href = audioUrl;
+    link.download = 'voice-output.mp3';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (loading || isLoadingVoiceQuota) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-xl mx-auto space-y-6 p-4">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold mb-2">{language === 'ar' ? 'تحويل النص إلى كلام' : 'Text To Speech'}</h2>
+        <p className="text-sm text-muted-foreground">
+          {language === 'ar'
+            ? 'استخدم نفس حصة الأحرف في استوديو الصوت. اختر الصوت والأسلوب ثم أنشئ الصوت.'
+            : 'Uses the same character quota as Voice Studio. Pick a voice and style, then generate speech.'}
+        </p>
+      </div>
+
+      {/* Character quota (same behavior as Voice Studio) */}
+      <div className="p-3 bg-muted rounded-lg">
+        <div className="flex justify-between items-center">
+          <span className="text-sm font-medium">{language === 'ar' ? 'الأحرف المتبقية' : 'Characters Remaining'}</span>
+          <span className="text-sm">{totalAvailableCharacters.toLocaleString()} / {(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}</span>
+        </div>
+        <div className="w-full bg-background rounded-full h-2 mt-2">
+          <div
+            className="bg-blue-500 h-2 rounded-full"
+            style={{ width: `${Math.max(0, Math.min(100, (userVoiceQuota.characters_used / (userVoiceQuota.characters_limit + userVoiceQuota.extra_characters)) * 100))}%` }}
+          />
+        </div>
+        <div className="flex justify-between items-center mt-2">
+          <p className="text-xs text-muted-foreground">
+            {language === 'ar'
+              ? `لديك ${totalAvailableCharacters.toLocaleString()} حرف متبقي من أصل ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
+              : `You have ${totalAvailableCharacters.toLocaleString()} characters left out of ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`}
+          </p>
+          {userVoiceQuota.extra_characters > 0 && (
+            <span className="text-xs text-green-600 font-medium">+{userVoiceQuota.extra_characters.toLocaleString()} {language === 'ar' ? 'إضافي' : 'extra'}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Voice selector */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">{language === 'ar' ? 'اختر الصوت' : 'Select Voice'}</label>
+          {selectedVoiceId && (
+            <Button onClick={() => setAsDefaultVoice(selectedVoiceId)} variant="outline" size="sm" className="text-xs">
+              {defaultVoiceId === selectedVoiceId ? (language === 'ar' ? '✓ افتراضي' : '✓ Default') : (language === 'ar' ? 'جعل افتراضي' : 'Set Default')}
+            </Button>
+          )}
+        </div>
+        <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId}>
+          <SelectTrigger className="h-12">
+            <SelectValue placeholder={language === 'ar' ? 'اختر صوت' : 'Choose a voice'} />
+          </SelectTrigger>
+          <SelectContent>
+            {voices.filter(v => v.is_default).map(v => (
+              <SelectItem key={v.id} value={v.voice_id}>
+                <div className="flex items-center gap-2"><span className="text-blue-600">🤖</span><span>{v.voice_name}</span><span className="text-xs text-muted-foreground">({language === 'ar' ? 'افتراضي' : 'Default'})</span>{defaultVoiceId === v.voice_id && <span className="text-green-600">✓</span>}</div>
+              </SelectItem>
+            ))}
+            {voices.filter(v => !v.is_default).map(v => (
+              <SelectItem key={v.id} value={v.voice_id}>
+                <div className="flex items-center gap-2"><span className="text-green-600">🎤</span><span>{v.voice_name}</span><span className="text-xs text-muted-foreground">({language === 'ar' ? 'مستنسخ' : 'Cloned'})</span>{defaultVoiceId === v.voice_id && <span className="text-green-600">✓</span>}</div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Voice style */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">{language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}</label>
+            <Button variant="ghost" size="sm" onClick={() => setShowStyleDetails(!showStyleDetails)} className="h-auto p-1">
+              <Info className="h-3 w-3" />
+            </Button>
+          </div>
+          <Button onClick={() => setAsDefaultVoiceStyle(selectedStyle)} variant="outline" size="sm" className="text-xs">
+            {defaultStyle === selectedStyle ? (language === 'ar' ? '✓ افتراضي' : '✓ Default') : (language === 'ar' ? 'جعل افتراضي' : 'Set Default')}
+          </Button>
+        </div>
+        <Select value={selectedStyle} onValueChange={v => setSelectedStyle(v as keyof typeof VOICE_STYLES)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(VOICE_STYLES).map(([key, style]) => (
+              <SelectItem key={key} value={key}>
+                <div className="flex items-center gap-2">
+                  <span>{(style as any).icon}</span>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{(style as any).name[language]}</span>
+                    <span className="text-xs text-muted-foreground">{(style as any).description[language]}</span>
+                  </div>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="text-xs text-muted-foreground space-y-1">
+          <p>{(VOICE_STYLES as any)[selectedStyle].description[language]}</p>
+          {showStyleDetails && (
+            <div className="bg-muted/50 p-2 rounded text-xs">
+              <p className="font-medium mb-1">{language === 'ar' ? 'الإعدادات التقنية:' : 'Technical Settings:'}</p>
+              <div className="mt-1 font-mono text-xs">{JSON.stringify((VOICE_STYLES as any)[selectedStyle].settings, null, 2)}</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Text input */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">{language === 'ar' ? 'النص' : 'Text'}</label>
+          {text && (
+            <Button onClick={() => navigator.clipboard.writeText(text)} variant="ghost" size="sm" className="h-auto p-1">
+              <Copy className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بأي لغة...' : 'Type what you want to hear in any language...'}
+          className="min-h-32 resize-none"
+          maxLength={totalAvailableCharacters}
+          dir="auto"
+        />
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{text.length} / {totalAvailableCharacters}</span>
+        </div>
+      </div>
+
+      {/* Generate */}
+      <Button onClick={generateSpeech} disabled={!canGenerate || isGenerating} className="w-full">
+        {isGenerating ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />{language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'}</>) : (language === 'ar' ? 'إنشاء الصوت' : 'Generate Speech')}
+      </Button>
+
+      {/* Playback */}
+      {audioUrl && (
+        <div className="space-y-2">
+          <EnhancedAudioControls
+            audioUrl={audioUrl}
+            labels={{
+              play: language === 'ar' ? 'تشغيل' : 'Play',
+              pause: language === 'ar' ? 'إيقاف مؤقت' : 'Pause',
+              rewind: language === 'ar' ? 'ترجيع' : 'Rewind',
+              stop: language === 'ar' ? 'إيقاف' : 'Stop',
+              error: language === 'ar' ? 'حدث خطأ في تشغيل الصوت' : 'Audio playback error',
+            }}
+          />
+          <div className="flex gap-2">
+            <Button onClick={downloadAudio} variant="outline" size="sm"><Download className="h-4 w-4 mr-1" />{language === 'ar' ? 'تنزيل' : 'Download'}</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
