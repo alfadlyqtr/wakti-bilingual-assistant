@@ -566,7 +566,7 @@ const WaktiAIV2 = () => {
           (meta: any) => {
             setSessionMessages(prev => {
               const updated = prev.map(m => m.id === assistantId
-                ? { ...m, intent: 'search', browsingUsed: meta?.browsingUsed, browsingData: meta?.browsingData }
+                ? { ...m, content: acc_search, intent: 'search', browsingUsed: meta?.browsingUsed, browsingData: meta?.browsingData }
                 : m
               );
               EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
@@ -717,7 +717,7 @@ const WaktiAIV2 = () => {
             console.log('🔥 DEBUG: Chat streaming onComplete called');
             setSessionMessages(prev => {
               const updated = prev.map(m => m.id === assistantId
-                ? { ...m, intent: 'chat', browsingUsed: meta?.browsingUsed, browsingData: meta?.browsingData }
+                ? { ...m, content: acc_chat, intent: 'chat', browsingUsed: meta?.browsingUsed, browsingData: meta?.browsingData }
                 : m
               );
               EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);

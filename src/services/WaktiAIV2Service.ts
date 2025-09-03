@@ -476,12 +476,12 @@ class WaktiAIV2ServiceClass {
       let clientIdleTimer: NodeJS.Timeout | null = null;
       let firstTokenReceived = false;
       let lastTokenTime = Date.now();
-      const CLIENT_IDLE_TIMEOUT = 45000; // 45s client timeout
+      const CLIENT_IDLE_TIMEOUT = 120000; // 120s client timeout
 
       const resetIdleTimer = () => {
         if (clientIdleTimer) clearTimeout(clientIdleTimer);
         clientIdleTimer = setTimeout(() => {
-          console.error(`⏰ CLIENT: Stream idle timeout reached [${requestId}] - no tokens for 45s`);
+          console.error(`⏰ CLIENT: Stream idle timeout reached [${requestId}] - no tokens for 120s`);
           try {
             reader.cancel();
             onError?.('Stream timeout - please try again');

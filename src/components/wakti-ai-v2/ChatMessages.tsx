@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink } from 'lucide-react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
@@ -50,6 +50,7 @@ export function ChatMessages({
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
   // ElevenLabs audio playback state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -59,6 +60,10 @@ export function ChatMessages({
   const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set()); // active network fetches for playback
   const prefetchTimersRef = useRef<Map<string, number>>(new Map()); // messageId -> timeout id
   const autoPlayedIdsRef = useRef<Set<string>>(new Set()); // messages we've auto-played
+  // Progress percentage per message while fetching audio
+  const [progressMap, setProgressMap] = useState<Map<string, number>>(new Map());
+  // Smooth progress intervals for unknown content-length streams
+  const progressIntervalRef = useRef<Map<string, number>>(new Map()); // messageId -> interval id
 
   const bufferToBase64 = (buffer: ArrayBuffer) => {
     let binary = '';
@@ -96,8 +101,6 @@ export function ChatMessages({
     const blob = new Blob([byteArray], { type: 'audio/mpeg' });
     return URL.createObjectURL(blob);
   };
-  
-
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -105,28 +108,19 @@ export function ChatMessages({
     }
   }, [sessionMessages, showTaskConfirmation]);
 
-  // Immediate prefetch when streaming completes (Option A)
-  // Dispatch this from your streaming handler:
-  // window.dispatchEvent(new CustomEvent('wakti-ai-stream-finished', { detail: { id: messageId, text: fullText } }))
+  // Cleanup all progress intervals on unmount
   useEffect(() => {
-    const onStreamFinished = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { id: string; text: string } | undefined;
-      if (!detail?.id || !detail?.text) return;
-      const { id, text } = detail;
-      // Prefetch now, no debounce
-      setPrefetchingIds(prev => new Set(prev).add(id));
-      prefetchSpeak(text, id).finally(() => {
-        // If autoplay is enabled, play immediately
-        try {
-          const auto = localStorage.getItem('wakti_tts_autoplay') === '1';
-          if (auto) {
-            handleSpeak(text, id);
-          }
-        } catch {}
-      }).finally(() => {
-        setPrefetchingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
-      });
+    return () => {
+      for (const [, iv] of progressIntervalRef.current) {
+        window.clearInterval(iv);
+      }
+      progressIntervalRef.current.clear();
     };
+  }, []);
+
+  // Disable auto prefetch on stream-finished events (fetch only on user click)
+  useEffect(() => {
+    const onStreamFinished = () => {};
     window.addEventListener('wakti-ai-stream-finished', onStreamFinished as EventListener);
     return () => window.removeEventListener('wakti-ai-stream-finished', onStreamFinished as EventListener);
   }, []);
@@ -175,8 +169,10 @@ export function ChatMessages({
       if (cachedUrl) {
         const audio = new Audio(cachedUrl);
         audioRef.current = audio;
-        audio.onended = () => setSpeakingMessageId(null);
-        audio.onerror = () => setSpeakingMessageId(null);
+        audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); };
+        audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); };
+        audio.onplay = () => setIsPaused(false);
+        audio.onpause = () => setIsPaused(true);
         await audio.play();
         return;
       }
@@ -188,14 +184,17 @@ export function ChatMessages({
         audioCacheRef.current.set(cacheKey, objectUrl);
         const audio = new Audio(objectUrl);
         audioRef.current = audio;
-        audio.onended = () => setSpeakingMessageId(null);
-        audio.onerror = () => setSpeakingMessageId(null);
+        audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); };
+        audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); };
+        audio.onplay = () => setIsPaused(false);
+        audio.onpause = () => setIsPaused(true);
         await audio.play();
         return;
       }
 
       // Call existing Edge Function voice-tts with auth
       setFetchingIds(prev => new Set(prev).add(messageId));
+      setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 1); return n; });
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
@@ -211,112 +210,101 @@ export function ChatMessages({
       });
 
       if (!resp.ok) {
-        // Attempt to read JSON error
         setSpeakingMessageId(null);
+        // clear any progress interval if created
+        const iv = progressIntervalRef.current.get(messageId);
+        if (iv) { window.clearInterval(iv); progressIntervalRef.current.delete(messageId); }
         return;
       }
 
-      const arrayBuf = await resp.arrayBuffer();
-      const blob = new Blob([arrayBuf], { type: 'audio/mpeg' });
+      // Stream the response to compute progress
+      const contentLength = Number(resp.headers.get('content-length') || 0);
+      const reader = resp.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      // If content-length is unknown, show a short steady ramp 1→4, then snap to 100% when ready
+      if (!contentLength) {
+        let step = 1;
+        setProgressMap(prev => { const n = new Map(prev); n.set(messageId, step); return n; });
+        const iv = window.setInterval(() => {
+          step = Math.min(4, step + 1);
+          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, step); return n; });
+          if (step >= 4) {
+            window.clearInterval(iv);
+            progressIntervalRef.current.delete(messageId);
+          }
+        }, 650);
+        progressIntervalRef.current.set(messageId, iv);
+      }
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            received += value.byteLength;
+            if (contentLength > 0) {
+              const pct = Math.min(100, Math.max(1, Math.round((received / contentLength) * 100)));
+              setProgressMap(prev => { const n = new Map(prev); n.set(messageId, pct); return n; });
+            } else {
+              // Unknown length: let the deterministic 1→4 interval drive the UI; no per-chunk nudge
+            }
+          }
+        }
+      }
+      const blob = new Blob(chunks, { type: 'audio/mpeg' });
       const objectUrl = URL.createObjectURL(blob);
       audioCacheRef.current.set(cacheKey, objectUrl);
       // Persist small clips (<= 2.5MB) to sessionStorage as base64 for instant replay later
-      if (arrayBuf.byteLength <= 2.5 * 1024 * 1024) {
+      if (blob.size <= 2.5 * 1024 * 1024) {
         try {
-          const b64 = bufferToBase64(arrayBuf);
+          const arrayBuf2 = await blob.arrayBuffer();
+          const b64 = bufferToBase64(arrayBuf2);
           setPersisted(cacheKey, b64, text.length);
         } catch {}
       }
 
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
+      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); };
+      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); };
+      audio.onplay = () => setIsPaused(false);
+      audio.onpause = () => setIsPaused(true);
+      // Snap to 100% now that audio is ready
+      setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 100); return n; });
+      // Guard: user may have cancelled during loading; if so, do not auto-play
+      if (speakingMessageId !== messageId) {
+        try { URL.revokeObjectURL(objectUrl); } catch {}
+        audioCacheRef.current.delete(cacheKey);
+        return;
+      }
+      // Attempt autoplay; if the first attempt is blocked or not ready, retry once shortly after
+      try {
+        await audio.play();
+      } catch (err) {
+        try {
+          await new Promise(res => setTimeout(res, 300));
+          await audio.play();
+        } catch (err2) {
+          // If autoplay still fails, keep UI state so the user can press play using the mini controls
+          setIsPaused(true);
+        }
+      }
     } catch (e) {
       setSpeakingMessageId(null);
     } finally {
       setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
+      // clear fallback interval if any
+      const iv = progressIntervalRef.current.get(messageId);
+      if (iv) { window.clearInterval(iv); progressIntervalRef.current.delete(messageId); }
+      setProgressMap(prev => { const n = new Map(prev); n.delete(messageId); return n; });
     }
   };
 
-  // Prefetch audio into cache without playing
-  const prefetchSpeak = async (text: string, messageId: string) => {
-    try {
-      // Determine voice and cache key up-front
-      const isArabicText = /[\u0600-\u06FF]/.test(text);
-      const { ar, en } = getSelectedVoices();
-      const voice_id = (isArabicText || language === 'ar') ? ar : en;
-      const cacheKey = `${messageId}::${voice_id}`;
-
-      if (audioCacheRef.current.has(cacheKey)) return;
-      setPrefetchingIds(prev => new Set(prev).add(messageId));
-      const persisted = getPersisted(cacheKey);
-      if (persisted && persisted.len >= text.length) return;
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-      const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'audio/mpeg',
-          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({ text, voice_id, style: 'neutral' })
-      });
-      if (!resp.ok) return;
-      const arrayBuf = await resp.arrayBuffer();
-      const blob = new Blob([arrayBuf], { type: 'audio/mpeg' });
-      const objectUrl = URL.createObjectURL(blob);
-      audioCacheRef.current.set(cacheKey, objectUrl);
-      if (arrayBuf.byteLength <= 2.5 * 1024 * 1024) {
-        try {
-          const b64 = bufferToBase64(arrayBuf);
-          setPersisted(cacheKey, b64, text.length);
-        } catch {}
-      }
-    } catch {} finally {
-      setPrefetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-    }
-  };
-
-  // Auto TTS for ONLY the latest assistant message after content stabilizes
+  // Disable auto TTS/prefetch entirely; audio will be fetched only when user clicks the speaker button
   useEffect(() => {
-    // Clear existing timers
     for (const [, t] of prefetchTimersRef.current) { clearTimeout(t); }
     prefetchTimersRef.current.clear();
-
-    // Find the most recent assistant message with content
-    const lastAssistant = [...sessionMessages].reverse().find(m => m.role === 'assistant' && m.content);
-    if (!lastAssistant) return;
-    const { id, content } = lastAssistant;
-
-    // Skip if we've already auto-played this message
-    if (autoPlayedIdsRef.current.has(id)) return;
-
-    // Optional safety cap on extremely long content
-    if (content.length > 4000) return;
-
-    const timeout = window.setTimeout(() => {
-      // Mark as actively fetching for UI spinner
-      setFetchingIds(prev => new Set(prev).add(id));
-      // Prefetch/cache only; do not auto-play unless toggle is ON
-      prefetchSpeak(content, id)
-        .then(() => {
-          const autoPlay = (() => {
-            try { return localStorage.getItem('wakti_tts_autoplay') === '1'; } catch { return false; }
-          })();
-          if (autoPlay && !autoPlayedIdsRef.current.has(id)) {
-            return handleSpeak(content, id).finally(() => {
-              autoPlayedIdsRef.current.add(id);
-            });
-          }
-        })
-        .catch(() => {})
-        .finally(() => {
-          setFetchingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
-        });
-    }, 800); // debounce; consider message done if unchanged for 800ms
-    prefetchTimersRef.current.set(id, timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionMessages]);
 
   // Cleanup cached object URLs on unmount to avoid memory leaks
@@ -402,13 +390,28 @@ export function ChatMessages({
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
                     : `Hey ${userName}! 👋 I'm WAKTI AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
                   )}
-                  className="p-2 rounded-md hover:bg-background/80 transition-colors"
+                  className={`p-2 rounded-md transition-colors relative ${speakingMessageId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
                 >
+                  {fetchingIds.has('welcome') && typeof progressMap.get('welcome') === 'number' ? (
+                    <span className="text-[10px] text-muted-foreground mr-1 align-middle">{progressMap.get('welcome')}%</span>
+                  ) : null}
                   {speakingMessageId === 'welcome' ? (
-                    <VolumeX className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                    <Volume2 className="h-4 w-4 animate-pulse" />
+                  ) : fetchingIds.has('welcome') ? (
+                    <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
                   ) : (
                     <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                  )}
+                  {speakingMessageId === 'welcome' && (
+                    <span className="absolute -right-1.5 top-1/2 -translate-y-1/2 ml-1 flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border pointer-events-none">
+                      <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground pointer-events-auto" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
+                        {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                      </button>
+                      <button onClick={onRewindClick} className="p-0.5 hover:text-foreground pointer-events-auto" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
                   )}
                 </button>
               </div>
@@ -559,6 +562,35 @@ export function ChatMessages({
     }
   };
 
+  // Mini-controls handlers
+  const togglePauseResume = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) {
+      a.play();
+    } else {
+      a.pause();
+    }
+  };
+
+  const rewind = (sec = 5) => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.currentTime = Math.max(0, a.currentTime - sec);
+  };
+
+  // Click handlers that won't bubble to the parent button
+  const onPauseResumeClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePauseResume();
+  };
+  const onRewindClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    rewind(5);
+  };
+
   return (
     <>
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-48">
@@ -682,19 +714,33 @@ export function ChatMessages({
                         {message.role === 'assistant' && (
                           <button
                             onClick={() => handleSpeak(message.content, message.id)}
-                            onMouseEnter={() => prefetchSpeak(message.content, message.id)}
                             className="p-2 rounded-md hover:bg-background/80 transition-colors"
                             title={speakingMessageId === message.id 
                               ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
                               : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
                             }
                           >
-                            {speakingMessageId === message.id ? (
-                              <VolumeX className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                            ) : (prefetchingIds.has(message.id) || fetchingIds.has(message.id)) ? (
-                              <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
-                            ) : (
-                              <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                            {fetchingIds.has(message.id) && typeof progressMap.get(message.id) === 'number' ? (
+                              <span className="text-[10px] text-muted-foreground mr-1 align-middle">{progressMap.get(message.id)}%</span>
+                            ) : null}
+                            <span className={`inline-flex items-center ${speakingMessageId === message.id ? 'text-green-500' : ''}`}>
+                              {speakingMessageId === message.id ? (
+                                <Volume2 className="h-4 w-4 animate-pulse" />
+                              ) : fetchingIds.has(message.id) ? (
+                                <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                              ) : (
+                                <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                              )}
+                            </span>
+                            {speakingMessageId === message.id && (
+                              <span className="ml-1 inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border">
+                                <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
+                                  {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                                </button>
+                                <button onClick={onRewindClick} className="p-0.5 hover:text-foreground" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
                             )}
                           </button>
                         )}

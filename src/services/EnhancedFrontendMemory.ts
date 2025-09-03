@@ -28,20 +28,28 @@ class EnhancedFrontendMemoryClass {
   // Active conversation management
   saveActiveConversation(messages: any[], conversationId?: string | null): string {
     try {
+      // Normalize input defensively
+      const safeMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
+      const normalized = safeMessages.map(m => ({
+        ...m,
+        role: m?.role || 'assistant',
+        content: typeof m?.content === 'string' ? m.content : ''
+      }));
+
       const actualId = conversationId || this.generateConversationId();
-      const title = messages.length > 0 ? this.generateConversationTitle(messages[0].content) : 'New Conversation';
+      const title = normalized.length > 0 ? this.generateConversationTitle(normalized[0].content) : 'New Conversation';
       
       const activeData = {
         id: actualId,
         title,
-        messages: messages.slice(-20), // Keep last 20 messages
+        messages: normalized.slice(-20), // Keep last 20 messages
         lastMessageAt: Date.now(),
-        messageCount: messages.length,
+        messageCount: normalized.length,
         createdAt: Date.now()
       };
       
       localStorage.setItem('wakti_active_conversation', JSON.stringify(activeData));
-      console.log('✅ FRONTEND BOSS: Saved active conversation', actualId, 'with', messages.length, 'messages');
+      console.log('✅ FRONTEND BOSS: Saved active conversation', actualId, 'with', normalized.length, 'messages');
       
       return actualId;
     } catch (error) {
@@ -101,12 +109,19 @@ class EnhancedFrontendMemoryClass {
     }
 
     try {
+      const safeMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
+      const normalized = safeMessages.map(m => ({
+        ...m,
+        role: m?.role || 'assistant',
+        content: typeof m?.content === 'string' ? m.content : ''
+      }));
+
       const conversation: StoredConversation = {
         id: conversationId,
-        title: this.generateConversationTitle(messages[0].content),
-        messages: messages.slice(-20), // Keep last 20 messages
+        title: this.generateConversationTitle(normalized[0]?.content || ''),
+        messages: normalized.slice(-20), // Keep last 20 messages
         lastMessageAt: new Date(),
-        messageCount: messages.length,
+        messageCount: normalized.length,
         createdAt: new Date()
       };
 
