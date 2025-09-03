@@ -50,6 +50,8 @@ export function ChatMessages({
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  // Always-accurate ref mirror to avoid stale state in async guards
+  const speakingMessageIdRef = useRef<string | null>(null);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
   // ElevenLabs audio playback state
@@ -64,6 +66,11 @@ export function ChatMessages({
   const [progressMap, setProgressMap] = useState<Map<string, number>>(new Map());
   // Smooth progress intervals for unknown content-length streams
   const progressIntervalRef = useRef<Map<string, number>>(new Map()); // messageId -> interval id
+
+  // Keep ref synchronized with state to avoid stale closures during async work
+  useEffect(() => {
+    speakingMessageIdRef.current = speakingMessageId;
+  }, [speakingMessageId]);
 
   const bufferToBase64 = (buffer: ArrayBuffer) => {
     let binary = '';
@@ -167,13 +174,37 @@ export function ChatMessages({
       // Use cached audio if available (in-memory first)
       const cachedUrl = audioCacheRef.current.get(cacheKey);
       if (cachedUrl) {
+        // Simulated quick progress for cached audio: 1→4 then 100, then autoplay
+        setFetchingIds(prev => new Set(prev).add(messageId));
+        setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 1); return n; });
+        let step = 1;
+        const iv = window.setInterval(() => {
+          step = Math.min(4, step + 1);
+          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, step); return n; });
+          if (step >= 4) {
+            window.clearInterval(iv);
+            progressIntervalRef.current.delete(messageId);
+          }
+        }, 120);
+        progressIntervalRef.current.set(messageId, iv);
+
         const audio = new Audio(cachedUrl);
         audioRef.current = audio;
         audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); };
         audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); };
         audio.onplay = () => setIsPaused(false);
         audio.onpause = () => setIsPaused(true);
-        await audio.play();
+        setTimeout(async () => {
+          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 100); return n; });
+          try {
+            await audio.play();
+          } finally {
+            setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
+            const iv2 = progressIntervalRef.current.get(messageId);
+            if (iv2) { window.clearInterval(iv2); progressIntervalRef.current.delete(messageId); }
+            setProgressMap(prev => { const n = new Map(prev); n.delete(messageId); return n; });
+          }
+        }, 400);
         return;
       }
 
@@ -182,13 +213,37 @@ export function ChatMessages({
       if (persisted && persisted.len >= text.length) {
         const objectUrl = base64ToBlobUrl(persisted.b64);
         audioCacheRef.current.set(cacheKey, objectUrl);
+        // Quick simulated progress (1→4, then 100) and autoplay
+        setFetchingIds(prev => new Set(prev).add(messageId));
+        setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 1); return n; });
+        let step = 1;
+        const iv = window.setInterval(() => {
+          step = Math.min(4, step + 1);
+          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, step); return n; });
+          if (step >= 4) {
+            window.clearInterval(iv);
+            progressIntervalRef.current.delete(messageId);
+          }
+        }, 120);
+        progressIntervalRef.current.set(messageId, iv);
+
         const audio = new Audio(objectUrl);
         audioRef.current = audio;
         audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); };
         audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); };
         audio.onplay = () => setIsPaused(false);
         audio.onpause = () => setIsPaused(true);
-        await audio.play();
+        setTimeout(async () => {
+          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 100); return n; });
+          try {
+            await audio.play();
+          } finally {
+            setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
+            const iv2 = progressIntervalRef.current.get(messageId);
+            if (iv2) { window.clearInterval(iv2); progressIntervalRef.current.delete(messageId); }
+            setProgressMap(prev => { const n = new Map(prev); n.delete(messageId); return n; });
+          }
+        }, 400);
         return;
       }
 
@@ -273,7 +328,7 @@ export function ChatMessages({
       // Snap to 100% now that audio is ready
       setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 100); return n; });
       // Guard: user may have cancelled during loading; if so, do not auto-play
-      if (speakingMessageId !== messageId) {
+      if (speakingMessageIdRef.current !== messageId) {
         try { URL.revokeObjectURL(objectUrl); } catch {}
         audioCacheRef.current.delete(cacheKey);
         return;
@@ -390,7 +445,7 @@ export function ChatMessages({
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
                     : `Hey ${userName}! 👋 I'm WAKTI AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
                   )}
-                  className={`p-2 rounded-md transition-colors relative ${speakingMessageId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
+                  className={`p-2 rounded-md transition-colors ${speakingMessageId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
                 >
                   {fetchingIds.has('welcome') && typeof progressMap.get('welcome') === 'number' ? (
@@ -403,18 +458,18 @@ export function ChatMessages({
                   ) : (
                     <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                   )}
-                  {speakingMessageId === 'welcome' && (
-                    <span className="absolute -right-1.5 top-1/2 -translate-y-1/2 ml-1 flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border pointer-events-none">
-                      <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground pointer-events-auto" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
-                        {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                      </button>
-                      <button onClick={onRewindClick} className="p-0.5 hover:text-foreground pointer-events-auto" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </button>
-                    </span>
-                  )}
                 </button>
               </div>
+              {speakingMessageId === 'welcome' && (
+                <div className="ml-1 inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border">
+                  <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
+                    {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                  </button>
+                  <button onClick={onRewindClick} className="p-0.5 hover:text-foreground" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
