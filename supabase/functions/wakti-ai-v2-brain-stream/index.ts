@@ -58,6 +58,16 @@ const baseCorsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
+// Forbidden character sanitization (strict mode)
+function sanitizeText(input: string): string {
+  if (!input) return '';
+  // Apply simple global replacements. No exceptions for URLs/time by default.
+  return input
+    .replace(/#/g, 'No.')
+    .replace(/:/g, ' — ')
+    .replace(/\*/g, '•');
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get('origin') || '*';
   const requested = req.headers.get('access-control-request-headers') || '';
@@ -499,7 +509,7 @@ async function streamAIResponse(
         : (data?.content?.[0]?.text || '');
 
       model = 'claude-3-5-sonnet-20241022';
-      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: text })}\n\n`));
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(text) })}\n\n`));
       sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData, provider);
       controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
       controller.close();
@@ -628,7 +638,7 @@ async function streamAIResponse(
           const parsed = JSON.parse(data);
           const content = parsed.choices?.[0]?.delta?.content;
           if (content) {
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: content })}\n\n`));
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(content) })}\n\n`));
           }
         } catch (_) {
           // ignore malformed json chunks
@@ -685,7 +695,7 @@ async function streamAIResponse(
 
       model = 'claude-3-5-sonnet-20241022';
       // Stream Claude (non-streaming response) directly as a single token and finalize
-      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: text })}\n\n`));
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(text) })}\n\n`));
       sendFinalEvent(controller, model, fallbackUsed, browsingUsed, browsingData, 'claude');
       controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
       controller.close();
@@ -799,7 +809,7 @@ async function streamAIResponse(
             const parsed = JSON.parse(data);
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: content })}\n\n`));
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(content) })}\n\n`));
             }
           } catch {}
         }

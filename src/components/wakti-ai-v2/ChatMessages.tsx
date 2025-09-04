@@ -7,6 +7,7 @@ import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
+import { YouTubePreview } from './YouTubePreview';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 
@@ -483,7 +484,11 @@ export function ChatMessages({
     if (message.role === 'user') {
       if (message.intent) {
         switch (message.intent) {
-          case 'search': return '🔍 Search';
+          case 'search': {
+            // If content indicates YouTube submode (prefixed by ChatInput)
+            if (message.content?.trim().toLowerCase().startsWith('yt:')) return 'YouTube';
+            return '🔍 Search';
+          }
           case 'image': return '🎨 Image';
           case 'vision': return '👁️ Vision';
           case 'parse_task': return '🎯 Task';
@@ -506,14 +511,22 @@ export function ChatMessages({
         return '🎤 Voice';
       }
       if (currentActiveTrigger === 'image') return '🎨 Image';
-      if (currentActiveTrigger === 'search') return '🔍 Search';
+      if (currentActiveTrigger === 'search') {
+        if (message.content?.trim().toLowerCase().startsWith('yt:')) return 'YouTube';
+        return '🔍 Search';
+      }
       if (currentActiveTrigger === 'vision') return '👁️ Vision';
       return '💬 Chat';
     }
 
     // For assistant messages, use the saved intent or detect from content
     if (message.intent === 'vision') return '👁️ Vision';
-    if (message.intent === 'search') return '🔍 Search';
+    if (message.intent === 'search') {
+      const yt = (message as any)?.metadata?.youtube;
+      const ytErr = (message as any)?.metadata?.youtubeError;
+      if (yt || ytErr) return 'YouTube';
+      return '🔍 Search';
+    }
     if (message.intent === 'image') return '🎨 Image';
     if (message.intent === 'parse_task') return '🎯 Task';
 
@@ -522,7 +535,9 @@ export function ChatMessages({
       return '🎨 Image';
     }
     if (content.includes('search results') || content.includes('found the following')) {
-      return '🔍 Search';
+      const yt = (message as any)?.metadata?.youtube;
+      const ytErr = (message as any)?.metadata?.youtubeError;
+      return (yt || ytErr) ? 'YouTube' : '🔍 Search';
     }
     if (content.includes('analyzing the image') || content.includes('i can see')) {
       return '👁️ Vision';
@@ -534,6 +549,42 @@ export function ChatMessages({
   // ENHANCED: Function to render message content with proper video display
   const renderMessageContent = (message: AIMessage) => {
     const content = message.content;
+    const yt = (message as any)?.metadata?.youtube;
+    const ytErr = (message as any)?.metadata?.youtubeError as string | undefined;
+
+    // YouTube search result preview
+    if (message.role === 'assistant' && yt && yt.videoId) {
+      return (
+        <YouTubePreview
+          videoId={yt.videoId}
+          title={yt.title}
+          description={yt.description}
+          thumbnail={yt.thumbnail}
+        />
+      );
+    }
+
+    // YouTube error states
+    if (message.role === 'assistant' && ytErr) {
+      const ar = language === 'ar';
+      let text = '';
+      switch (ytErr) {
+        case 'quota':
+          text = ar ? '💤 تم استهلاك حصة واجهة برمجة تطبيقات يوتيوب لهذا اليوم. حاول لاحقًا.' : '💤 YouTube API quota is exhausted for today. Please try again later.';
+          break;
+        case 'no_results':
+          text = ar ? '🔎 لا توجد نتائج فيديو مطابقة لبحثك.' : '🔎 No YouTube results matched your query.';
+          break;
+        case 'network':
+          text = ar ? '🌐 تعذر الوصول إلى بحث يوتيوب حالياً.' : '🌐 Unable to reach YouTube search right now.';
+          break;
+        case 'invalid':
+        default:
+          text = ar ? '⚠️ لم يتم العثور على نتائج صالحة.' : '⚠️ No valid results found.';
+          break;
+      }
+      return <div className="text-sm text-muted-foreground">{text}</div>;
+    }
     
     // Check if content contains HTML (video tags, styling, etc.)
     if (content.includes('<video') || content.includes('<div style') || content.includes('<style>')) {
@@ -604,8 +655,11 @@ export function ChatMessages({
 
   const getAssistantBubbleClasses = (message: AIMessage) => {
     switch (message.intent) {
-      case 'search':
-        return 'border-green-400';
+      case 'search': {
+        const yt = (message as any)?.metadata?.youtube;
+        const ytErr = (message as any)?.metadata?.youtubeError;
+        return (yt || ytErr) ? 'border-red-400' : 'border-green-400';
+      }
       case 'image':
         return 'border-orange-400';
       case 'vision':
@@ -753,54 +807,60 @@ export function ChatMessages({
                       </div>
                     )}
                     
-                    {/* Mini Buttons Bar - Always Visible for Both User and AI */}
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex gap-1">
-                        {/* Copy Button */}
-                        <button
-                          onClick={() => navigator.clipboard.writeText(message.content)}
-                          className="p-2 rounded-md hover:bg-background/80 transition-colors"
-                          title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
-                        >
-                          <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                        </button>
-                        
-                        {/* TTS Button with Stop Functionality (assistant only) */}
-                        {message.role === 'assistant' && (
-                          <button
-                            onClick={() => handleSpeak(message.content, message.id)}
-                            className="p-2 rounded-md hover:bg-background/80 transition-colors"
-                            title={speakingMessageId === message.id 
-                              ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
-                              : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
-                            }
-                          >
-                            {fetchingIds.has(message.id) && typeof progressMap.get(message.id) === 'number' ? (
-                              <span className="text-[10px] text-muted-foreground mr-1 align-middle">{progressMap.get(message.id)}%</span>
-                            ) : null}
-                            <span className={`inline-flex items-center ${speakingMessageId === message.id ? 'text-green-500' : ''}`}>
-                              {speakingMessageId === message.id ? (
-                                <Volume2 className="h-4 w-4 animate-pulse" />
-                              ) : fetchingIds.has(message.id) ? (
-                                <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
-                              ) : (
-                                <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                              )}
-                            </span>
-                            {speakingMessageId === message.id && (
-                              <span className="ml-1 inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border">
-                                <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
-                                  {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                                </button>
-                                <button onClick={onRewindClick} className="p-0.5 hover:text-foreground" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
-                                  <RotateCcw className="h-3.5 w-3.5" />
-                                </button>
-                              </span>
+                    {/* Mini Buttons Bar - Hidden for YouTube assistant previews */}
+                    {(() => {
+                      const isAssistantYouTube = message.role === 'assistant' && ((message as any)?.metadata?.youtube || (message as any)?.metadata?.youtubeError);
+                      if (isAssistantYouTube) return null;
+                      return (
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex gap-1">
+                            {/* Copy Button */}
+                            <button
+                              onClick={() => navigator.clipboard.writeText(message.content)}
+                              className="p-2 rounded-md hover:bg-background/80 transition-colors"
+                              title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
+                            >
+                              <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                            </button>
+                            
+                            {/* TTS Button with Stop Functionality (assistant only) */}
+                            {message.role === 'assistant' && (
+                              <button
+                                onClick={() => handleSpeak(message.content, message.id)}
+                                className="p-2 rounded-md hover:bg-background/80 transition-colors"
+                                title={speakingMessageId === message.id 
+                                  ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
+                                  : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
+                                }
+                              >
+                                {fetchingIds.has(message.id) && typeof progressMap.get(message.id) === 'number' ? (
+                                  <span className="text-[10px] text-muted-foreground mr-1 align-middle">{progressMap.get(message.id)}%</span>
+                                ) : null}
+                                <span className={`inline-flex items-center ${speakingMessageId === message.id ? 'text-green-500' : ''}`}>
+                                  {speakingMessageId === message.id ? (
+                                    <Volume2 className="h-4 w-4 animate-pulse" />
+                                  ) : fetchingIds.has(message.id) ? (
+                                    <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                                  ) : (
+                                    <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                  )}
+                                </span>
+                                {speakingMessageId === message.id && (
+                                  <span className="ml-1 inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border">
+                                    <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
+                                      {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                                    </button>
+                                    <button onClick={onRewindClick} className="p-0.5 hover:text-foreground" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
+                                      <RotateCcw className="h-3.5 w-3.5" />
+                                    </button>
+                                  </span>
+                                )}
+                              </button>
                             )}
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   
                   {message.role === 'user' && (

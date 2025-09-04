@@ -224,7 +224,12 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
     const memoryRules = this.getMemoryRules(language);
     const personalizationSection = this.buildPersonalizationSection(personalTouch, language);
     
-    return basePrompt + `\n\n=== CONVERSATION MEMORY ===\n- ` + memoryRules.join('\n- ') + personalizationSection;
+    // Forbidden character output policy (model-level instruction)
+    const forbiddenSection = language === 'ar'
+      ? `\n\n=== سياسة الإخراج (ممنوعات الأحرف) ===\n- لا تستخدم هذه الأحرف في الردود إطلاقاً: #، :، *.\n- بدائل إلزامية:\n  • "#" => "No."\n  • ":" => " — " (شرطة طويلة)\n  • "*" => "•" (رمز نقطة).\n- استخدم البدائل دائماً للحفاظ على سهولة القراءة.`
+      : `\n\n=== OUTPUT POLICY (FORBIDDEN CHARACTERS) ===\n- Never use these characters in responses: #, :, *.\n- Mandatory replacements:\n  • "#" => "No."\n  • ":" => " — " (em dash)\n  • "*" => "•" (bullet).\n- Always use the replacements to keep responses readable.`;
+
+    return basePrompt + `\n\n=== CONVERSATION MEMORY ===\n- ` + memoryRules.join('\n- ') + personalizationSection + forbiddenSection;
   }
 
   static shouldUseVisionMode(activeTrigger: string, attachedFiles: any[]): boolean {

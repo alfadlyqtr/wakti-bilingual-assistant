@@ -68,6 +68,13 @@ export function ChatInput({
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
   const [imageMode, setImageMode] = useState<ImageMode>('text2image');
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  // Search submode: 'web' | 'youtube'
+  const [searchSubmode, setSearchSubmode] = useState<'web' | 'youtube'>(() => {
+    try {
+      const v = localStorage.getItem('wakti_search_submode');
+      return (v === 'youtube' || v === 'web') ? (v as 'web' | 'youtube') : 'web';
+    } catch { return 'web'; }
+  });
   // Local-only UI state: image quality dropdown (visible only in image -> text2image)
   const [imageQuality, setImageQuality] = useState<'fast' | 'best_fast'>('fast');
   // TTS Auto Play toggle (persisted)
@@ -119,6 +126,10 @@ export function ChatInput({
       localStorage.setItem('wakti_tts_autoplay', ttsAutoPlay ? '1' : '0');
     } catch {}
   }, [ttsAutoPlay]);
+  // Persist search submode selection
+  useEffect(() => {
+    try { localStorage.setItem('wakti_search_submode', searchSubmode); } catch {}
+  }, [searchSubmode]);
   // Broadcast on change so other components (e.g., drawer) stay in sync
   useEffect(() => {
     try {
@@ -177,8 +188,13 @@ export function ChatInput({
       setMessage('');
       clearFiles();
 
+      // If Search + YouTube submode, prefix with lightweight marker for routing in service
+      const maybePrefixed = (finalTrigger === 'search' && searchSubmode === 'youtube')
+        ? `yt: ${outgoingMessage}`
+        : outgoingMessage;
+
       await onSendMessage(
-        outgoingMessage, 
+        maybePrefixed, 
         finalTrigger, // Use the final trigger (could be auto-switched to vision)
         outgoingFiles,
         activeTrigger === 'image' ? imageMode : undefined, // Only pass imageMode if in image mode
@@ -190,8 +206,19 @@ export function ChatInput({
   };
 
   // Layout & Mode highlighting classes
-  const containerHighlight = modeHighlightStyles(activeTrigger);
-  const textareaHighlightClass = textareaHighlight(activeTrigger);
+  // Default highlights from activeTrigger, but override to YouTube-red when Search submode is YouTube
+  const containerHighlight = (() => {
+    if (activeTrigger === 'search' && searchSubmode === 'youtube') {
+      return 'border-red-400 ring-2 ring-red-200/70 shadow-red-100/10';
+    }
+    return modeHighlightStyles(activeTrigger);
+  })();
+  const textareaHighlightClass = (() => {
+    if (activeTrigger === 'search' && searchSubmode === 'youtube') {
+      return 'border-red-300 shadow-[inset_0_2px_12px_0_rgba(248,113,113,0.10)]';
+    }
+    return textareaHighlight(activeTrigger);
+  })();
 
   // Determine if textarea should be enabled
   const isTextareaEnabled = activeTrigger !== 'video' || (activeTrigger === 'video' && videoTemplate === 'image2video');
@@ -324,7 +351,7 @@ export function ChatInput({
           <div
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
-              ${modeHighlightStyles(activeTrigger)}
+              ${containerHighlight}
               shadow-xl rounded-2xl backdrop-blur-2xl
               p-0 transition-all duration-300
               shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
@@ -408,7 +435,71 @@ export function ChatInput({
               </button>
               
               {activeTrigger !== 'image' ? (
-                <ActiveModeIndicator activeTrigger={activeTrigger} />
+                // Show custom Search submode badge dropdown when in Search mode
+                activeTrigger === 'search' ? (
+                  <div className="relative">
+                    <div
+                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${searchSubmode === 'youtube'
+                        ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
+                        : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setIsModeMenuOpen(v => !v)}
+                        disabled={isUploading}
+                        className="inline-flex items-center gap-1 outline-none"
+                        aria-haspopup="menu"
+                        aria-expanded={isModeMenuOpen}
+                        aria-label={language === 'ar' ? 'وضع البحث' : 'Search Mode'}
+                      >
+                        {searchSubmode === 'youtube' ? (
+                          <span className="text-[11px]">YouTube</span>
+                        ) : (
+                          <>
+                            <span className="text-[11px]">{language === 'ar' ? 'البحث' : 'Search'}</span>
+                            <span className="opacity-60">·</span>
+                            <span className="text-[11px]">{language === 'ar' ? 'الويب' : 'Web'}</span>
+                          </>
+                        )}
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    {isModeMenuOpen && (
+                      <div
+                        role="menu"
+                        className={`absolute left-0 mt-2 w-56 rounded-xl shadow-2xl overflow-hidden z-20 backdrop-blur-md border ${searchSubmode === 'youtube'
+                          ? 'bg-red-50/95 text-red-900 dark:bg-red-950/60 dark:text-red-200 border-red-200/70 dark:border-red-800/60'
+                          : 'bg-green-50/95 text-green-900 dark:bg-green-950/60 dark:text-green-200 border-green-200/70 dark:border-green-800/60'
+                        }`}
+                      >
+                        <button
+                          role="menuitem"
+                          onClick={() => { setSearchSubmode('web'); setIsModeMenuOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${searchSubmode === 'web'
+                            ? 'bg-green-200/70 dark:bg-green-800/60 text-green-900 dark:text-green-100 font-semibold'
+                            : 'hover:bg-white/40 dark:hover:bg-white/10'}
+                          `}
+                        >
+                          {language === 'ar' ? 'بحث الويب' : 'Web Search'}
+                        </button>
+                        <button
+                          role="menuitem"
+                          onClick={() => { setSearchSubmode('youtube'); setIsModeMenuOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${searchSubmode === 'youtube'
+                            ? 'bg-red-200/70 text-red-900 dark:bg-red-800/60 dark:text-red-100 font-semibold'
+                            : 'hover:bg-white/40 dark:hover:bg-white/10'
+                          }`}
+                        >
+                          YouTube
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <ActiveModeIndicator activeTrigger={activeTrigger} />
+                )
               ) : (
                 <div className="relative">
                   {/* Hidden input for seed upload */}
@@ -561,7 +652,7 @@ export function ChatInput({
                       flex-1 border-[2.5px]
                       bg-white/95 dark:bg-gray-800/90
                       text-gray-900 dark:text-gray-100
-                      ${textareaHighlight(activeTrigger)}
+                      ${textareaHighlightClass}
                       shadow-inner shadow-primary/10
                       backdrop-blur-[3px] resize-none
                       focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
@@ -641,7 +732,8 @@ export function ChatInput({
                           onClick={handleSendMessage}
                           disabled={!canSend}
                           className={`
-                            h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
+                            h-11 w-11 rounded-xl p-0 flex-shrink-0
+                            ${activeTrigger === 'search' && searchSubmode === 'youtube' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary/90 hover:bg-primary'}
                             border-0 shadow-2xl backdrop-blur-md
                             transition-all duration-200 hover:scale-110 hover:shadow-2xl
                             shadow-lg

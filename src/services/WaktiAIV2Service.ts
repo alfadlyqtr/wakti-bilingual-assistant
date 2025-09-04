@@ -687,6 +687,99 @@ class WaktiAIV2ServiceClass {
       const pieces = [conversationSummary, storedSummary, generatedSummary].filter((s) => !!(s && (s as string).trim())) as string[];
       const finalSummary = pieces.join(' ').slice(0, 1200);
 
+      // Special-case: YouTube Search via Edge Function when in Search mode and message is prefixed with 'yt:' or 'yt '
+      if (activeTrigger === 'search') {
+        const ytPrefixMatch = /^(?:\s*yt:\s*|\s*yt\s+)(.*)$/i.exec(message || '');
+        if (ytPrefixMatch) {
+          const query = (ytPrefixMatch[1] || '').trim();
+          if (!query) {
+            return {
+              response: language === 'ar' ? 'يرجى إدخال عبارة للبحث في يوتيوب.' : 'Please enter a query to search YouTube.',
+              error: false,
+              intent: 'search'
+            } as any;
+          }
+
+          // Auth headers required for calling Edge Functions (mirror existing calls)
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) {
+            throw new Error('No valid session for YouTube search');
+          }
+          let maybeAnonKey;
+          try {
+            maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
+              || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+          } catch (e) {
+            maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+          }
+          // Fallback to hosted project URL if local env var is missing
+          const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
+            || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+
+          const resp = await fetch(`${supabaseUrl}/functions/v1/youtube-search`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+              'apikey': maybeAnonKey
+            },
+            body: JSON.stringify({ query }),
+            signal
+          });
+
+          if (!resp.ok) {
+            return {
+              response: language === 'ar' ? 'تعذر الوصول إلى بحث يوتيوب حالياً.' : 'Unable to reach YouTube search right now.',
+              error: true,
+              intent: 'search',
+              metadata: { youtubeError: 'network' }
+            } as any;
+          }
+
+          const data = await resp.json();
+          if (data?.error === 'quota_exceeded') {
+            return {
+              response: language === 'ar' ? 'تم استهلاك حصة واجهة برمجة تطبيقات يوتيوب لهذا اليوم. حاول لاحقًا.' : 'YouTube API quota is exhausted for today. Please try again later.',
+              error: false,
+              intent: 'search',
+              metadata: { youtubeError: 'quota' }
+            } as any;
+          }
+          if (data?.message === 'no_results' || (Array.isArray(data?.results) && data.results.length === 0)) {
+            return {
+              response: language === 'ar' ? 'لا توجد نتائج فيديو مطابقة لبحثك.' : 'No YouTube results matched your query.',
+              error: false,
+              intent: 'search',
+              metadata: { youtubeError: 'no_results' }
+            } as any;
+          }
+
+          const top = Array.isArray(data?.results) ? data.results[0] : null;
+          if (!top?.videoId) {
+            return {
+              response: language === 'ar' ? 'لم يتم العثور على نتائج صالحة.' : 'No valid results found.',
+              error: false,
+              intent: 'search',
+              metadata: { youtubeError: 'invalid' }
+            } as any;
+          }
+
+          const title = top.title ? String(top.title) : '';
+          const videoId = String(top.videoId);
+          const description = top.description ? String(top.description) : '';
+          const thumbnail = top.thumbnail ? String(top.thumbnail) : '';
+
+          return {
+            response: title || (language === 'ar' ? 'نتيجة من يوتيوب' : 'YouTube result'),
+            error: false,
+            intent: 'search',
+            modelUsed: 'youtube-search',
+            browsingUsed: true,
+            metadata: { youtube: { videoId, title, description, thumbnail } }
+          } as any;
+        }
+      }
+
       // Image generation uses non-streaming function; others can reuse streaming and return the final object
       if (activeTrigger === 'image') {
         const pt_version = pt?.pt_version ?? null;

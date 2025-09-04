@@ -543,6 +543,66 @@ const WaktiAIV2 = () => {
         };
         setSessionMessages(prev => [...prev, placeholderAssistant]);
 
+        // OPTION 1: If YouTube-prefixed search (yt: or yt ), use non-streaming path and attach metadata
+        const ytPrefixMatch = /^(?:\s*yt:\s*|\s*yt\s+)(.*)$/i.exec(messageContent || '');
+        if (ytPrefixMatch) {
+          console.log('🔴 YT ROUTE: Using non-streaming sendMessage() for YouTube search');
+          const ytResp = await WaktiAIV2Service.sendMessage(
+            messageContent,
+            userProfile?.id,
+            language,
+            workingConversationId,
+            finalInputType,
+            newMessages,
+            false,
+            'search',
+            '',
+            processedAttachedFiles || [],
+            controller.signal
+          );
+
+          if (controller.signal.aborted) {
+            console.log('🚫 YouTube search request aborted');
+            return;
+          }
+
+          if (ytResp.error) {
+            setSessionMessages(prev => prev.map(m => m.id === assistantId ? {
+              ...m,
+              content: ytResp.response || (language === 'ar' ? '🌐 تعذر الوصول إلى بحث يوتيوب حالياً.' : '🌐 Unable to reach YouTube search right now.'),
+              intent: 'search',
+              metadata: { ...(m.metadata || {}), ...(ytResp.metadata || {}) }
+            } : m));
+            EnhancedFrontendMemory.saveActiveConversation(
+              [...newMessages, {
+                id: assistantId,
+                role: 'assistant',
+                content: ytResp.response || (language === 'ar' ? '🌐 تعذر الوصول إلى بحث يوتيوب حالياً.' : '🌐 Unable to reach YouTube search right now.'),
+                timestamp: new Date(),
+                intent: 'search'
+              }],
+              workingConversationId
+            );
+            setIsLoading(false);
+            return;
+          }
+
+          setSessionMessages(prev => {
+            const updated = prev.map(m => m.id === assistantId ? {
+              ...m,
+              content: ytResp.response || '',
+              intent: 'search',
+              browsingUsed: ytResp.browsingUsed ?? true,
+              browsingData: ytResp.browsingData,
+              metadata: { ...(m.metadata || {}), ...(ytResp.metadata || {}) }
+            } : m);
+            EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
+            return updated;
+          });
+          setIsLoading(false);
+          return;
+        }
+
         console.log('🔥 DEBUG: About to call sendStreamingMessage for search mode');
         // Anti-greeting streaming state
         let acc_search = '';
