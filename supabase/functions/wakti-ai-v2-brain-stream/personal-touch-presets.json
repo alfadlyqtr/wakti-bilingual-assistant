@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "defaults": {
+    "tone": "neutral",
+    "style": "short answers",
+    "language": "en"
+  },
+  "tones": {
+    "funny": {
+      "temperature": 0.8,
+      "description": "Light, playful tone. Occasional tasteful humor. No sarcasm unless asked."
+    },
+    "serious": {
+      "temperature": 0.25,
+      "description": "Professional, direct, and no fluff. No jokes or emojis."
+    },
+    "casual": {
+      "temperature": 0.5,
+      "description": "Relaxed, conversational tone. Friendly but not overfamiliar."
+    },
+    "encouraging": {
+      "temperature": 0.6,
+      "description": "Supportive and positive. Motivate the user without exaggeration."
+    },
+    "neutral": {
+      "temperature": 0.4,
+      "description": "Balanced, objective, and clear. No strong emotion or humor."
+    }
+  },
+  "styles": {
+    "short answers": {
+      "max_tokens": 768,
+      "structure": "Answer in 2–4 concise sentences maximum. End with a crisp takeaway."
+    },
+    "bullet points": {
+      "max_tokens": 1024,
+      "structure": "Use clear bullet points. 3–7 bullets. Each bullet is one compact line."
+    },
+    "step-by-step": {
+      "max_tokens": 1536,
+      "structure": "Numbered steps. Each step is a short sentence. Include tips if essential."
+    },
+    "detailed": {
+      "max_tokens": 3072,
+      "structure": "Well-structured paragraphs with sub-points/examples. End with a summary."
+    }
+  }
+}

@@ -3,6 +3,55 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { VisionSystem } from './vision.ts';
 
+const presets = {
+  version: 1,
+  defaults: {
+    tone: 'neutral',
+    style: 'short answers',
+    language: 'en'
+  },
+  tones: {
+    funny: {
+      temperature: 0.8,
+      description: 'Light, playful tone. Occasional tasteful humor. No sarcasm unless asked.'
+    },
+    serious: {
+      temperature: 0.25,
+      description: 'Professional, direct, and no fluff. No jokes or emojis.'
+    },
+    casual: {
+      temperature: 0.5,
+      description: 'Relaxed, conversational tone. Friendly but not overfamiliar.'
+    },
+    encouraging: {
+      temperature: 0.6,
+      description: 'Supportive and positive. Motivate the user without exaggeration.'
+    },
+    neutral: {
+      temperature: 0.4,
+      description: 'Balanced, objective, and clear. No strong emotion or humor.'
+    }
+  },
+  styles: {
+    'short answers': {
+      max_tokens: 768,
+      structure: 'Answer in 2–4 concise sentences maximum. End with a crisp takeaway.'
+    },
+    'bullet points': {
+      max_tokens: 1024,
+      structure: 'Use clear bullet points. 3–7 bullets. Each bullet is one compact line.'
+    },
+    'step-by-step': {
+      max_tokens: 1536,
+      structure: 'Numbered steps. Each step is a short sentence. Include tips if essential.'
+    },
+    detailed: {
+      max_tokens: 3072,
+      structure: 'Well-structured paragraphs with sub-points/examples. End with a summary.'
+    }
+  }
+} as const;
+
 const baseCorsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -303,24 +352,26 @@ async function streamAIResponse(
   console.log('🤖 STREAMING: VisionSystem integrated with complete capabilities');
   console.log('🎯 STREAMING: Enhanced personalization and vision support applied');
 
-  // Map personalTouch to temperature and max_tokens
-  let temperature = 0.65; // default
-  let maxTokens = 2048; // fallback
-  
-  if (personalTouch?.tone) {
-    const tone = personalTouch.tone.toLowerCase();
-    if (tone.includes('funny') || tone.includes('casual')) temperature = 0.70;
-    else if (tone.includes('encouraging')) temperature = 0.65;
-    else if (tone.includes('neutral')) temperature = 0.62;
-    else if (tone.includes('serious')) temperature = 0.58;
-  }
-  
-  if (personalTouch?.style) {
-    const style = personalTouch.style.toLowerCase();
-    if (style.includes('short')) maxTokens = 256;
-    else if (style.includes('bullet')) maxTokens = 512;
-    else if (style.includes('step')) maxTokens = 1024;
-    else if (style.includes('detailed')) maxTokens = 2024;
+  // Map personalTouch to temperature and max_tokens via presets
+  let temperature = 0.65; // sensible default
+  let maxTokens = 2048; // sensible fallback
+
+  try {
+    const presetDefaults = (presets as any)?.defaults || {};
+    const tones = (presets as any)?.tones || {};
+    const styles = (presets as any)?.styles || {};
+
+    const toneKey = (personalTouch?.tone || presetDefaults.tone || '').toLowerCase();
+    const styleKey = (personalTouch?.style || presetDefaults.style || '').toLowerCase();
+
+    if (toneKey && tones[toneKey]?.temperature != null) {
+      temperature = Number(tones[toneKey].temperature);
+    }
+    if (styleKey && styles[styleKey]?.max_tokens != null) {
+      maxTokens = Number(styles[styleKey].max_tokens);
+    }
+  } catch (_) {
+    // Fall back to defaults above if presets are unavailable
   }
 
   // Log incoming Personal Touch payload for diagnostics
@@ -342,6 +393,7 @@ async function streamAIResponse(
       temperature,
       max_tokens: maxTokens,
       source: personalTouch ? 'client' : 'default',
+      preset_version: (presets as any)?.version ?? null,
       pt_version,
       pt_updated_at,
       pt_hash

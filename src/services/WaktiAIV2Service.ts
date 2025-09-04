@@ -1,5 +1,4 @@
 import { supabase } from '@/integrations/supabase/client';
-import { PersonalizationEnforcer } from './PersonalizationEnforcer';
 
 export interface AIMessage {
   id: string;
@@ -580,16 +579,8 @@ class WaktiAIV2ServiceClass {
       }
 
       // Apply deterministic Personal Touch enforcement (nickname, signature)
-      try {
-        const ptForEnforce = this.ensurePersonalTouch();
-        fullResponse = PersonalizationEnforcer.enforcePersonalization(fullResponse, {
-          personalTouch: ptForEnforce,
-          language,
-          originalResponse: fullResponse
-        });
-      } catch (e) {
-        console.warn('Personalization enforcement failed:', e);
-      }
+      // Deprecated: Frontend post-processing for Personal Touch was removed.
+      // Enforcement now happens server-side in VisionSystem system prompts.
 
       // Best-effort: persist updated rolling summary after stream
       try {
