@@ -26,9 +26,31 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Refs to avoid stale values inside YouTube API callbacks
   const loopRef = useRef<boolean>(false);
   const isFullscreenRef = useRef<boolean>(false);
+  // Use native YT controls on mobile portrait so PiP is available and continues in background
+  const [useNativeControls, setUseNativeControls] = useState<boolean>(false);
 
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
+
+  // Compute whether we should use native controls (mobile portrait)
+  useEffect(() => {
+    const calc = () => {
+      try {
+        const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+        const isPortrait = window.matchMedia('(orientation: portrait)').matches;
+        setUseNativeControls(isCoarse && isPortrait);
+      } catch {
+        setUseNativeControls(false);
+      }
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    window.addEventListener('orientationchange', calc as any);
+    return () => {
+      window.removeEventListener('resize', calc);
+      window.removeEventListener('orientationchange', calc as any);
+    };
+  }, []);
 
   // Load YT Iframe API and create player
   useEffect(() => {
@@ -69,7 +91,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
         height: '100%',
         width: '100%',
         playerVars: {
-          controls: 0,
+          controls: useNativeControls ? 1 : 0,
           fs: 0,
           rel: 0,
           modestbranding: 1,
@@ -86,6 +108,12 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
               setMuted(true);
               const d = ev.target.getDuration?.() || 0;
               if (d) setDuration(d);
+              // Allow PiP and fullscreen on the iframe element
+              try {
+                const iframe = ev.target?.getIframe?.();
+                iframe?.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+                iframe?.setAttribute('allowfullscreen', '');
+              } catch {}
             } catch {}
           },
           onStateChange: (ev: any) => {
@@ -140,7 +168,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       try { playerRef.current?.destroy?.(); } catch {}
       playerRef.current = null;
     };
-  }, [videoId]);
+  }, [videoId, useNativeControls]);
 
   // Control handlers
   const handlePlay = () => {
@@ -269,7 +297,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
       <div
         ref={fullscreenWrapperRef}
-        className={`${isFullscreen ? 'fixed inset-0 z-50 bg-black' : 'relative'} transition-all duration-300`}
+        className={`${isFullscreen ? 'fixed inset-0 z-[100000] bg-black' : 'relative'} transition-all duration-300`}
         style={isFullscreen ? { borderRadius: 0 } : { paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: '0.5rem' }}
         onContextMenu={(e) => e.preventDefault()}
       >
@@ -278,7 +306,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           style={{ position: isFullscreen ? 'fixed' : 'absolute', top: 0, left: 0, width: '100%', height: isFullscreen ? '100%' : '100%' }}
         />
         {/* Non-interactive overlay to block iframe interactions and capture clicks for fullscreen */}
-        {hasStarted && (
+        {hasStarted && !useNativeControls && (
           <div
             className="absolute inset-0"
             style={{ pointerEvents: 'auto' }}
@@ -340,7 +368,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       </div>
 
       {/* Controls */}
-      <div className="space-y-2">
+      <div className="space-y-2" dir="ltr">
         {/* Progress bar (range input) */}
         <div className="w-full">
           <input
@@ -356,6 +384,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             onTouchEnd={onScrubEnd}
             aria-label="Seek"
             className="w-full h-2 bg-transparent appearance-none"
+            dir="ltr"
             style={{
               background: `linear-gradient(to right, #ef4444 ${pct}%, rgba(239,68,68,0.25) ${pct}%)`,
               borderRadius: '9999px'
@@ -368,7 +397,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
         </div>
 
         {/* Icon Buttons */}
-        <div className="flex items-center gap-1.5 text-xs">
+        <div className="flex items-center gap-1.5 text-xs" dir="ltr">
           <button
             className="h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white/70 dark:bg-white/10 border-border hover:bg-white"
             onClick={() => handleRewind(10)}
@@ -378,7 +407,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             <RotateCcw className="h-4 w-4" />
           </button>
           <button
-            className="h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white/70 dark:bg-white/10 border-border hover:bg-white"
+            className={`${isPlaying
+              ? 'h-8 w-8 inline-flex items-center justify-center rounded-md border bg-green-50 text-green-700 border-green-300 shadow-[0_0_8px_rgba(34,197,94,0.7)] dark:bg-green-900/30 dark:text-green-300 dark:border-green-700/50'
+              : 'h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white/70 dark:bg-white/10 border-border hover:bg-white'}`}
             onClick={handlePlayPause}
             title={isPlaying ? 'Pause' : 'Play'}
             aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -402,7 +433,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
           <button
-            className={`h-8 w-8 inline-flex items-center justify-center rounded-md border ${loop ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700/50' : 'bg-white/70 dark:bg-white/10 border-border hover:bg-white'}`}
+            className={`h-8 w-8 inline-flex items-center justify-center rounded-md border ${loop
+              ? 'bg-green-50 text-green-700 border-green-300 shadow-[0_0_8px_rgba(34,197,94,0.7)] dark:bg-green-900/30 dark:text-green-300 dark:border-green-700/50'
+              : 'bg-white/70 dark:bg-white/10 border-border hover:bg-white'}`}
             onClick={() => setLoop((v) => !v)}
             title={loop ? 'Loop On' : 'Loop Off'}
             aria-label={loop ? 'Loop On' : 'Loop Off'}

@@ -99,8 +99,8 @@ export function MobileNav() {
   };
   
   return (
-    <nav className="fixed bottom-1 left-0 w-full z-50">
-      <div className="bg-gradient-nav backdrop-blur-lg border-t border-border/50 shadow-vibrant">
+    <nav className="fixed bottom-0 left-0 right-0 z-[1000]">
+      <div className="bg-gradient-nav backdrop-blur-lg border-t border-border/50 shadow-vibrant pb-[env(safe-area-inset-bottom)]">
         <ul className="flex justify-around items-center h-16 px-2">
           {navItems.map((item) => {
             const IconComponent = iconMap[item.icon] || Calendar;

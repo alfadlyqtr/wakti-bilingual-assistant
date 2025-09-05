@@ -179,8 +179,8 @@ export function AppHeader() {
   const IconComponent = pageInfo.icon;
   
   return (
-    <div className="bg-background border-b sticky top-0 z-50">
-      <div className="container flex h-16 items-center justify-between py-3">
+    <div className="bg-background border-b fixed top-0 left-0 right-0 z-[1000]">
+      <div className="container flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="flex items-center">
             <Logo3D size="sm" />

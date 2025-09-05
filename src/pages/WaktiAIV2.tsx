@@ -1140,7 +1140,7 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <div className="flex h-screen antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
+    <div className="flex min-h-[100svh] antialiased text-slate-900 selection:bg-blue-500 selection:text-white pt-[calc(64px+env(safe-area-inset-top))]">
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
@@ -1178,7 +1178,7 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
+        <div className="flex-1 overflow-y-auto pb-[180px]" ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages.slice(-25)}
             isLoading={isLoading}
@@ -1198,7 +1198,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg">
+        <div className="fixed left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg bottom-[calc(64px+env(safe-area-inset-bottom))]">
           <div className="max-w-4xl mx-auto p-4">
             <ChatInput
               message={message}
