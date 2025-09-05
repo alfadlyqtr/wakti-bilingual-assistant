@@ -710,7 +710,7 @@ export function ChatMessages({
           {/* Chat Messages with FIXED badge logic and enhanced video display */}
           {sessionMessages.map((message, index) => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
-                <div className="flex gap-3 max-w-[85%] w-full justify-end">
+                <div className="flex gap-3 max-w-[95%] w-full justify-end">
                   {message.role === 'assistant' && (
                     <div className="flex-shrink-0">
                       <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
@@ -719,7 +719,7 @@ export function ChatMessages({
                     </div>
                   )}
                   
-                  <div className={`rounded-lg px-4 py-3 relative w-full ${
+                  <div className={`rounded-lg px-4 py-3 relative w-full min-h-24 ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : `bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border ${getAssistantBubbleClasses(message)}`
@@ -734,6 +734,7 @@ export function ChatMessages({
                     <div className={`text-sm leading-relaxed break-words ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
                       {(() => {
                         const isImageLoading = message.role === 'assistant' && message.intent === 'image' && (message as any)?.metadata?.loading;
+                        const isVisionLoading = message.role === 'assistant' && message.intent === 'vision' && (message as any)?.metadata?.loading;
                         if (isImageLoading) {
                           return (
                             <div className="w-full">
@@ -749,6 +750,20 @@ export function ChatMessages({
                               </div>
                               <div className="mt-2 text-xs text-muted-foreground">
                                 <span>{language === 'ar' ? 'جارٍ توليد الصورة...' : 'Generating image...'}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (isVisionLoading) {
+                          return (
+                            <div className="w-full">
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <span>{language === 'ar' ? 'جاري تحليل الصورة...' : 'Wakti Vision is analyzing...'}</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                  <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                  <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                </span>
                               </div>
                             </div>
                           );

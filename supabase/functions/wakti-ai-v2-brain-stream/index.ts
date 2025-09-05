@@ -329,7 +329,51 @@ async function streamAIResponse(
 
   // ===== USE VISION SYSTEM FOR COMPLETE SYSTEM PROMPT =====
   const currentDate = new Date().toISOString().split('T')[0];
-  let systemPromptFinal = VisionSystem.buildCompleteSystemPrompt(language, currentDate, personalTouch);
+
+  // Detect translation target language from the user's message (overrides UI language for this reply only)
+  function detectTargetLanguage(text: string): string | null {
+    try {
+      if (!text) return null;
+      const t = ('' + text).toLowerCase();
+
+      // Map names and codes to our internal keys
+      const map: Record<string, string> = {
+        arabic: 'ar', ar: 'ar', عربي: 'ar', العربية: 'ar',
+        english: 'en', en: 'en', انجليزي: 'en', الإنجليزية: 'en',
+        french: 'fr', fr: 'fr', français: 'fr', francais: 'fr', الفرنسية: 'fr',
+        spanish: 'es', es: 'es', español: 'es', espanol: 'es', الاسبانية: 'es',
+        german: 'de', de: 'de', deutsch: 'de', الالمانية: 'de',
+        turkish: 'tr', tr: 'tr', türkçe: 'tr', التركية: 'tr',
+        hindi: 'hi', hi: 'hi', हिन्दी: 'hi', الهندية: 'hi',
+        urdu: 'ur', ur: 'ur', اردو: 'ur',
+        italian: 'it', it: 'it', italiano: 'it', الايطالية: 'it',
+        portuguese: 'pt', pt: 'pt', português: 'pt', portuguesa: 'pt', البرتغالية: 'pt',
+        russian: 'ru', ru: 'ru', русский: 'ru', الروسية: 'ru',
+        chinese: 'zh', zh: 'zh', 中文: 'zh', الصينية: 'zh',
+        japanese: 'ja', ja: 'ja', 日本語: 'ja', اليابانية: 'ja',
+        korean: 'ko', ko: 'ko', 한국어: 'ko', الكورية: 'ko'
+      };
+
+      // English patterns
+      const m1 = /(translate\s+(this|it|the\s+text)?\s*(to|into)\s+([a-z\u0600-\u06FF]+))/i.exec(t);
+      // Arabic patterns
+      const m2 = /(ترجم|ترجمة)\s+(هذا|النص)?\s*(إلى|لـ|الى)\s+([a-z\u0600-\u06FF]+)/i.exec(t);
+      const token = (m1?.[4] || m2?.[4] || '').trim();
+      if (!token) return null;
+
+      // exact match
+      if (map[token] ) return map[token];
+      // try stripping diacritics/basic normalization
+      const norm = token.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+      if (map[norm]) return map[norm];
+      return null;
+    } catch { return null; }
+  }
+
+  const targetLang = detectTargetLanguage(message);
+  const responseLanguage = targetLang || language;
+
+  let systemPromptFinal = VisionSystem.buildCompleteSystemPrompt(responseLanguage, currentDate, personalTouch);
   
   // Add brand identity rules to VisionSystem prompt
   const brandRules = language === 'ar'
@@ -346,8 +390,31 @@ async function streamAIResponse(
 
   systemPromptFinal += `\n\n=== BRAND IDENTITY ===\n- ` + brandRules.join('\n- ');
 
+  // Enforce a structured metadata block at the END of the assistant response that we can parse server-side
+  // The assistant MUST include a final XML-like wrapped JSON block. We will strip it from user-visible text
+  // and emit it as a metadata SSE event to the client.
+  const META_START = '<WAKTI_JSON>';
+  const META_END = '</WAKTI_JSON>';
+  const nearExpiryDays = 90;
+  const outputSection = responseLanguage === 'ar'
+    ? `\n\n=== مخرجات منظمة مطلوبة ===\n- في نهاية إجابتك، أضف كتلة JSON ضمن وسمين ${META_START} و ${META_END} فقط مرة واحدة.\n- يجب أن تتبع المخطط التالي (القيم أمثلة إرشادية):\n${META_START}{\n  "visionType": "document | general",\n  "classifier": { "category": "passport | id_card | driver_license | receipt | invoice | certificate | scene | people | food | places | object | other", "confidence": 0.92 },\n  "documentInsights": {\n    "document_type": "passport",\n    "issuer_country": "CAN",\n    "fields": {\n      "full_name": "John Doe",\n      "document_number": "X1234567",\n      "date_of_birth": "1990-05-02",\n      "issue_date": "2021-01-10",\n      "expiry_date": "2031-01-10"\n    },\n    "expiry_status": "valid | near_expiry | expired",\n    "days_to_expiry": 2100,\n    "confidence_per_field": { "full_name": 0.95, "document_number": 0.97 },\n    "raw_text": "...optional OCR text..."\n  },\n  "generalInsights": {\n    "summary": "Short summary of the scene",\n    "entities": ["person", "laptop"],\n    "qa": [],\n    "tables": [],\n    "charts": []\n  }\n}${META_END}\n- near_expiry يعني ضمن ${nearExpiryDays} يوماً من تاريخ اليوم.`
+    : `\n\n=== REQUIRED OUTPUT FORMAT ===\n- At the end of your answer, append ONE JSON block wrapped with ${META_START} and ${META_END}.\n- Follow this schema (values are examples):\n${META_START}{\n  "visionType": "document | general",\n  "classifier": { "category": "passport | id_card | driver_license | receipt | invoice | certificate | scene | people | food | places | object | other", "confidence": 0.92 },\n  "documentInsights": {\n    "document_type": "passport",\n    "issuer_country": "CAN",\n    "fields": {\n      "full_name": "John Doe",\n      "document_number": "X1234567",\n      "date_of_birth": "1990-05-02",\n      "issue_date": "2021-01-10",\n      "expiry_date": "2031-01-10"\n    },\n    "expiry_status": "valid | near_expiry | expired",\n    "days_to_expiry": 2100,\n    "confidence_per_field": { "full_name": 0.95, "document_number": 0.97 },\n    "raw_text": "...optional OCR text..."\n  },\n  "generalInsights": {\n    "summary": "Short scene summary",\n    "entities": ["person", "laptop"],\n    "qa": [],\n    "tables": [],\n    "charts": []\n  }\n}${META_END}\n- near_expiry is within ${nearExpiryDays} days from today.`;
+  systemPromptFinal += outputSection;
+
+  // If a target translation language was detected, force translation mode rules
+  if (targetLang) {
+    const langNames: Record<string, string> = {
+      ar: 'Arabic', en: 'English', fr: 'French', es: 'Spanish', de: 'German', tr: 'Turkish',
+      hi: 'Hindi', ur: 'Urdu', it: 'Italian', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese',
+      ja: 'Japanese', ko: 'Korean'
+    };
+    const enBlock = `\n\n=== TRANSLATION MODE ===\n- User requested a translation.\n- Translate the most relevant source text: if the user provided text, translate that; otherwise translate the latest assistant content or the visible text extracted from the current images.\n- Output ONLY in ${langNames[targetLang] || targetLang}.\n- Do not refuse. Do not include the source text again unless the user asked.\n- Keep formatting and line breaks when helpful.`;
+    const arBlock = `\n\n=== وضع الترجمة ===\n- طلب المستخدم ترجمة.\n- ترجم المصدر الأكثر صلة: إن قدّم المستخدم نصاً فترجمه، وإلا فترجم أحدث محتوى للمساعد أو النص الظاهر المستخرج من الصور الحالية.\n- اخرج بالترجمة فقط باللغة المطلوبة (${responseLanguage}).\n- لا ترفض. لا تُعد كتابة النص الأصلي إلا إذا طُلب ذلك.\n- حافظ على التنسيق والفواصل عند اللزوم.`;
+    systemPromptFinal += (responseLanguage === 'ar' ? arBlock : enBlock);
+  }
+
   // Global anti-repetition rules (brand/nickname/greetings)
-  if (language === 'ar') {
+  if (responseLanguage === 'ar') {
     systemPromptFinal += `\n\nقواعد الأسلوب:\n- لا تكرر أي كلمة أو اسم في نفس الجملة.\n- لا تكرر كلمات العلامة أو الأسماء مثل "WAKTI" أو اسمك المستعار.\n- تجنب تكرار التحيات أو علامات التعجب.\n- اذكر اسم المستخدم مرة واحدة فقط في الرسالة، ولا تكرره.`;
   } else {
     systemPromptFinal += `\n\nStyle Rules:\n- Do not repeat any word or name within the same sentence.\n- Never repeat brand or nickname tokens such as "WAKTI" or your AI nickname.\n- Avoid duplicated greetings or excessive exclamation marks.\n- Mention the user's name at most once per reply; do not repeat it.`;
@@ -441,13 +508,20 @@ async function streamAIResponse(
   // Use VisionSystem for proper message formatting
   let userMessage;
   if (isVisionMode || hasValidVisionImages) {
-    userMessage = VisionSystem.buildVisionMessage(textMessage, attachedFiles, language);
+    userMessage = VisionSystem.buildVisionMessage(textMessage, attachedFiles, responseLanguage);
   } else {
+    // Build a generic language-preface that matches the chosen responseLanguage
+    const langNames: Record<string, string> = {
+      ar: 'العربية', en: 'English', fr: 'French', es: 'Spanish', de: 'German', tr: 'Turkish',
+      hi: 'Hindi', ur: 'Urdu', it: 'Italian', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese',
+      ja: 'Japanese', ko: 'Korean'
+    };
+    const prefix = responseLanguage === 'ar'
+      ? 'يرجى الرد باللغة العربية فقط. '
+      : `Please respond in ${langNames[responseLanguage] || responseLanguage} only. `;
     userMessage = {
       role: 'user',
-      content: language === 'ar' 
-        ? 'يرجى الرد باللغة العربية فقط. ' + textMessage
-        : 'Please respond in English only. ' + textMessage
+      content: prefix + textMessage
     };
   }
 
@@ -464,11 +538,31 @@ async function streamAIResponse(
     userMessage
   ];
 
+  // Helper to extract and emit metadata from a text block, and return the "clean" text without the metadata section
+  function extractAndEmitMetadataIfPresent(text: string) {
+    try {
+      const startIdx = text.indexOf(META_START);
+      const endIdx = text.indexOf(META_END);
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        const jsonStr = text.slice(startIdx + META_START.length, endIdx).trim();
+        const clean = (text.slice(0, startIdx) + text.slice(endIdx + META_END.length)).trim();
+        try {
+          const meta = JSON.parse(jsonStr);
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
+        } catch (e) {
+          console.warn('Failed to parse WAKTI_JSON metadata:', e);
+        }
+        return clean;
+      }
+      return text;
+    } catch (_) { return text; }
+  }
+
   // If Claude is the selected provider, handle it directly (non-streaming) and return
   if (provider === 'claude') {
     try {
       const claudeContent: any[] = [];
-      const languagePrefix = language === 'ar' ? 'يرجى الرد باللغة العربية فقط. ' : 'Please respond in English only. ';
+      const languagePrefix = responseLanguage === 'ar' ? 'يرجى الرد باللغة العربية فقط. ' : 'Please respond in English only. ';
       claudeContent.push({ type: 'text', text: languagePrefix + textMessage });
       if (hasValidVisionImages) {
         for (const file of attachedFiles) {
@@ -504,9 +598,12 @@ async function streamAIResponse(
       }
 
       const data = await resp.json();
-      const text = Array.isArray(data?.content)
+      let text = Array.isArray(data?.content)
         ? data.content.map((c: any) => c?.text || '').join('')
         : (data?.content?.[0]?.text || '');
+
+      // Extract and send metadata as a separate SSE event; strip it from user-visible text
+      text = extractAndEmitMetadataIfPresent(text);
 
       model = 'claude-3-5-sonnet-20241022';
       controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(text) })}\n\n`));
@@ -551,6 +648,8 @@ async function streamAIResponse(
 
   const decoder = new TextDecoder();
   let buffer = '';
+  let metaActive = false;
+  let metaBuffer = '';
 
   // Helper: detect identity-maker questions to force branded answer
   function isIdentityQuestion(text, language) {
@@ -636,9 +735,44 @@ async function streamAIResponse(
 
         try {
           const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(content) })}\n\n`));
+          let content = parsed.choices?.[0]?.delta?.content as string | undefined;
+          if (typeof content === 'string' && content.length > 0) {
+            // Intercept metadata block and do not forward it to user
+            let out = content;
+            // Handle cases where start/end tags split across chunks
+            if (metaActive) {
+              metaBuffer += out;
+              const endIdx = metaBuffer.indexOf(META_END);
+              if (endIdx !== -1) {
+                const jsonStr = metaBuffer.slice(0, endIdx).trim();
+                metaActive = false;
+                metaBuffer = '';
+                try { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ metadata: JSON.parse(jsonStr) })}\n\n`)); } catch (e) { console.warn('Metadata parse error (stream):', e); }
+                const remainder = content.slice(content.indexOf(META_END) + META_END.length);
+                if (remainder) controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(remainder) })}\n\n`));
+              }
+              // Do not emit tokens while capturing metadata
+              continue;
+            }
+            const startIdx = out.indexOf(META_START);
+            if (startIdx !== -1) {
+              // Emit any text before the metadata start
+              const before = out.slice(0, startIdx);
+              if (before) controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(before) })}\n\n`));
+              const after = out.slice(startIdx + META_START.length);
+              const endIdx = after.indexOf(META_END);
+              if (endIdx !== -1) {
+                const jsonStr = after.slice(0, endIdx).trim();
+                try { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ metadata: JSON.parse(jsonStr) })}\n\n`)); } catch (e) { console.warn('Metadata parse error (same-chunk):', e); }
+                const remainder = after.slice(endIdx + META_END.length);
+                if (remainder) controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(remainder) })}\n\n`));
+              } else {
+                metaActive = true;
+                metaBuffer = after; // wait for closing tag in next chunks
+              }
+            } else {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(out) })}\n\n`));
+            }
           }
         } catch (_) {
           // ignore malformed json chunks
@@ -740,6 +874,8 @@ async function streamAIResponse(
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let metaActiveFallback = false;
+      let metaBufferFallback = '';
       const deepseekModel = 'deepseek-chat';
 
       // Greeting injection moved to frontend. Do not emit greeting tokens here (DeepSeek fallback).
@@ -807,9 +943,39 @@ async function streamAIResponse(
           }
           try {
             const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(content) })}\n\n`));
+            let content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (typeof content === 'string' && content.length > 0) {
+              if (metaActiveFallback) {
+                metaBufferFallback += content;
+                const endIdx = metaBufferFallback.indexOf(META_END);
+                if (endIdx !== -1) {
+                  const jsonStr = metaBufferFallback.slice(0, endIdx).trim();
+                  metaActiveFallback = false;
+                  metaBufferFallback = '';
+                  try { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ metadata: JSON.parse(jsonStr) })}\n\n`)); } catch {}
+                  const remainder = content.slice(content.indexOf(META_END) + META_END.length);
+                  if (remainder) controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(remainder) })}\n\n`));
+                }
+                continue;
+              }
+              const startIdx = content.indexOf(META_START);
+              if (startIdx !== -1) {
+                const before = content.slice(0, startIdx);
+                if (before) controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(before) })}\n\n`));
+                const after = content.slice(startIdx + META_START.length);
+                const endIdx = after.indexOf(META_END);
+                if (endIdx !== -1) {
+                  const jsonStr = after.slice(0, endIdx).trim();
+                  try { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ metadata: JSON.parse(jsonStr) })}\n\n`)); } catch {}
+                  const remainder = after.slice(endIdx + META_END.length);
+                  if (remainder) controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(remainder) })}\n\n`));
+                } else {
+                  metaActiveFallback = true;
+                  metaBufferFallback = after;
+                }
+              } else {
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: sanitizeText(content) })}\n\n`));
+              }
             }
           } catch {}
         }

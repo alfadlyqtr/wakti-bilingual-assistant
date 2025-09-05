@@ -466,6 +466,18 @@ const WaktiAIV2 = () => {
         setSessionMessages(newMessages);
         
         EnhancedFrontendMemory.saveActiveConversation(newMessages, workingConversationId);
+
+        // Insert assistant placeholder with loading state so UI shows analyzing indicator
+        const assistantId = `assistant-${Date.now()}`;
+        const placeholderAssistant: AIMessage = {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          intent: 'vision',
+          metadata: { loading: true }
+        };
+        setSessionMessages(prev => [...prev, placeholderAssistant]);
         
         const visionResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -490,22 +502,21 @@ const WaktiAIV2 = () => {
           throw new Error(visionResponse.error);
         }
         
-        const assistantMessage: AIMessage = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: visionResponse.response || 'Vision analysis completed',
-          timestamp: new Date(),
-          intent: visionResponse.intent || 'vision',
-          confidence: (visionResponse.confidence as 'high' | 'medium' | 'low') || 'high',
-          actionTaken: visionResponse.actionTaken || undefined,
-          browsingUsed: visionResponse.browsingUsed || undefined,
-          browsingData: visionResponse.browsingData || undefined
-        };
-
-        const finalMessages = [...newMessages, assistantMessage];
-        setSessionMessages(finalMessages);
-        
-        EnhancedFrontendMemory.saveActiveConversation(finalMessages, workingConversationId);
+        // Update the placeholder with the final vision analysis
+        setSessionMessages(prev => {
+          const updated = prev.map(m => m.id === assistantId ? {
+            ...m,
+            content: visionResponse.response || 'Vision analysis completed',
+            intent: visionResponse.intent || 'vision',
+            confidence: (visionResponse.confidence as 'high' | 'medium' | 'low') || 'high',
+            actionTaken: visionResponse.actionTaken || undefined,
+            browsingUsed: visionResponse.browsingUsed || undefined,
+            browsingData: visionResponse.browsingData || undefined,
+            metadata: { ...(m.metadata || {}), loading: false }
+          } : m);
+          EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
+          return updated;
+        });
         
         console.log('🔥 DEBUG: Vision mode completed, about to set isLoading(false)');
         setIsLoading(false);
@@ -1180,7 +1191,7 @@ const WaktiAIV2 = () => {
       <div className="flex flex-col h-full w-full relative">
         <div className="flex-1 overflow-y-auto pb-[180px]" ref={scrollAreaRef}>
           <ChatMessages
-            sessionMessages={sessionMessages.slice(-25)}
+            sessionMessages={sessionMessages.slice(-35)}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}

@@ -439,7 +439,7 @@ export function ChatInput({
                 activeTrigger === 'search' ? (
                   <div className="relative">
                     <div
-                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${searchSubmode === 'youtube'
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 h-7 rounded-full text-[11px] font-medium leading-none border align-middle ${searchSubmode === 'youtube'
                         ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
                         : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
                       }`}
@@ -453,15 +453,9 @@ export function ChatInput({
                         aria-expanded={isModeMenuOpen}
                         aria-label={language === 'ar' ? 'وضع البحث' : 'Search Mode'}
                       >
-                        {searchSubmode === 'youtube' ? (
-                          <span className="text-[11px]">YouTube</span>
-                        ) : (
-                          <>
-                            <span className="text-[11px]">{language === 'ar' ? 'البحث' : 'Search'}</span>
-                            <span className="opacity-60">·</span>
-                            <span className="text-[11px]">{language === 'ar' ? 'الويب' : 'Web'}</span>
-                          </>
-                        )}
+                        <span className="text-[11px]">
+                          {searchSubmode === 'youtube' ? 'YouTube' : (language === 'ar' ? 'الويب' : 'Web')}
+                        </span>
                         <ChevronDown className="h-3 w-3" />
                       </button>
                     </div>
@@ -469,7 +463,7 @@ export function ChatInput({
                     {isModeMenuOpen && (
                       <div
                         role="menu"
-                        className={`absolute left-0 mt-2 w-56 rounded-xl shadow-2xl overflow-hidden z-20 backdrop-blur-md border ${searchSubmode === 'youtube'
+                        className={`absolute ${language === 'ar' ? 'right-0' : 'left-0'} mt-2 w-56 rounded-xl shadow-2xl overflow-hidden z-20 backdrop-blur-md border ${searchSubmode === 'youtube'
                           ? 'bg-red-50/95 text-red-900 dark:bg-red-950/60 dark:text-red-200 border-red-200/70 dark:border-red-800/60'
                           : 'bg-green-50/95 text-green-900 dark:bg-green-950/60 dark:text-green-200 border-green-200/70 dark:border-green-800/60'
                         }`}
@@ -482,7 +476,7 @@ export function ChatInput({
                             : 'hover:bg-white/40 dark:hover:bg-white/10'}
                           `}
                         >
-                          {language === 'ar' ? 'بحث الويب' : 'Web Search'}
+                          {language === 'ar' ? 'الويب' : 'Web'}
                         </button>
                         <button
                           role="menuitem"
@@ -512,7 +506,7 @@ export function ChatInput({
                   />
 
                   {/* Compact Image Mode badge as dropdown with inline + (mobile-sized) */}
-                  <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50">
+                  <div className="inline-flex items-center gap-1 px-2.5 py-1 h-7 rounded-full text-[11px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle">
                     <button
                       type="button"
                       onClick={() => setIsModeMenuOpen(v => !v)}
@@ -531,7 +525,7 @@ export function ChatInput({
                   {isModeMenuOpen && (
                     <div
                       role="menu"
-                      className="absolute left-0 mt-2 w-56 rounded-xl border border-orange-200/70 bg-orange-50/95 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-800/60 shadow-2xl overflow-hidden z-20 backdrop-blur-md"
+                      className={`absolute ${language === 'ar' ? 'right-0' : 'left-0'} mt-2 w-56 max-w-[80vw] rounded-xl border border-orange-200/70 bg-orange-50/95 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-800/60 shadow-2xl overflow-hidden z-30 backdrop-blur-md`}
                     >
                       <button
                         role="menuitem"

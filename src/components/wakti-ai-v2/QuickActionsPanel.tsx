@@ -42,10 +42,11 @@ export function QuickActionsPanel({
     id: 'search',
     label: language === 'ar' ? 'بحث' : 'Search',
     icon: <Search className="h-4 w-4" />,
-    activeColor: 'bg-green-500',
-    hoverColor: 'hover:bg-green-500/20',
+    activeColor: 'bg-gradient-to-r from-green-500 to-red-500',
+    hoverColor: 'hover:from-green-500 hover:to-red-500 hover:bg-gradient-to-r',
     borderColor: 'border-green-500',
-    description: language === 'ar' ? 'بحث في الإنترنت' : 'Search the internet'
+    description: language === 'ar' ? 'الويب – يوتيوب' : 'Web – YouTube',
+    dual: true
   }, {
     id: 'image',
     label: language === 'ar' ? 'صورة' : 'Image',
@@ -128,14 +129,16 @@ export function QuickActionsPanel({
                 aria-checked={isActive}
                 className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                   isActive 
-                    ? `${mode.activeColor} border ${mode.borderColor} text-white shadow-lg` 
-                    : `bg-white/10 dark:bg-black/10 ${mode.hoverColor} border ${mode.borderColor} text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`
+                    ? `${mode.dual ? 'bg-gradient-to-r from-green-500 to-red-500' : mode.activeColor} border ${mode.borderColor} text-white shadow-lg` 
+                    : `bg-white/10 dark:bg-black/10 ${mode.dual ? 'hover:bg-gradient-to-r hover:from-green-50/40 hover:to-red-50/40' : mode.hoverColor} border ${mode.borderColor} text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`
                 }`}
                 aria-describedby={`${mode.id}-desc`}
               >
                 <div 
                   className={`p-2 rounded-lg ${
-                    isActive ? 'bg-white/20' : mode.activeColor
+                    mode.dual
+                      ? (isActive ? 'bg-white/20' : 'bg-gradient-to-r from-green-500 to-red-500')
+                      : (isActive ? 'bg-white/20' : mode.activeColor)
                   } text-white mr-3 flex-shrink-0`}
                   aria-hidden="true"
                 >

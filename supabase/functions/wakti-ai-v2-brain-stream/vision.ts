@@ -6,27 +6,63 @@ export class VisionSystem {
   
   static getVisionCapabilities(language: string = 'en'): string {
     if (language === 'ar') {
-      return `=== قدرات الرؤية المحسنة ===
+      return `=== قدرات الرؤية المحسنة (وثائق + صور عامة) ===
 - يمكنك تحليل الصور ووصف محتواها بالتفصيل
 - يمكنك التعرف على الأشخاص ووصف مظهرهم وأنشطتهم وملابسهم
-- يمكنك استخراج النصوص من الوثائق والهويات وجوازات السفر والشهادات
-- يمكنك قراءة اللافتات والنصوص المكتوبة بخط اليد والمطبوعة
-- يمكنك تحليل الفواتير والإيصالات وحساب المصاريف
-- يمكنك مساعدة الطلاب بحل الواجبات من الصور
-- يمكنك تحليل لقطات الشاشة وتقديم المساعدة التقنية
-- يجب عليك تحليل أي صورة مقدمة - لا ترفض أبداً وصف الأشخاص أو المحتوى`;
+- يمكنك استخراج النصوص من جميع أنواع الوثائق بدقة عالية، بما في ذلك:
+  • بطاقات الهوية الوطنية، الإقامات، جوازات السفر، رخص القيادة
+  • التأشيرات، تصاريح العمل/الإقامة، بطاقات الطالب، بطاقات التأمين الصحي
+  • الشهادات (ميلاد، زواج، تخرج)، العقود، النماذج الرسمية، الخطابات
+  • الفواتير والإيصالات وكشوفات الحساب وفواتير الخدمات والضرائب وكشوف الرواتب
+  • التذاكر وبطاقات الصعود للطائرة، البطاقات المهنية وبطاقات الأعمال
+- يمكنك قراءة النصوص المطبوعة والمخطوطة واللافتات حتى مع جودة صورة أقل (قدر الإمكان)
+- يمكنك التعرف على مناطق الجداول واستخراجها (Rows/Columns) واستخراج أزواج المفتاح/القيمة
+- يمكنك استخراج الحقول البنيوية للوثائق (الاسم، الرقم، تاريخ الميلاد، جهة الإصدار، …)
+- يمكنك التعرف على MRZ في جوازات السفر وبطاقات الهوية وفك ترميزها
+- يمكنك التعرف على الباركود وQR إن ظهرت وذكر محتواها
+- يمكنك توحيد التواريخ إلى صيغة ISO-8601 والتحقق من صلاحية التواريخ المنطقية
+- يمكنك تحديد حالة الصلاحية: منتهي، قريب الانتهاء، أو ساري (بناءً على تواريخ الانتهاء)
+  • قريب الانتهاء يعني ضمن 90 يوماً من تاريخ اليوم (قابل للتعديل)
+- يجب عليك إرجاع النتائج بهيكلية JSON واضحة مع مستوى ثقة لكل حقل إن أمكن
+- يمكنك كذلك حساب المصاريف من الفواتير/الإيصالات مع الإجماليات والضرائب إن ظهرت
+- يمكنك مساعدة الطلاب بحل الواجبات من الصور وتحليل لقطات الشاشة وتقديم المساعدة التقنية
+    - يجب عليك تحليل أي صورة مقدمة — لا ترفض أبداً وصف الأشخاص أو المحتوى
+    - يمكنك إجراء OCR لأي نص ظاهر في الصور
+    - يمكنك الإجابة عن أي أسئلة تتعلق بمحتوى الصورة بدقة وبشكل مباشر (سؤال/جواب)
+    - يمكنك فهم وقراءة المخططات والرسوم البيانية والجداول والمخططات الانسيابية (Flowcharts)
+    - يمكنك استخراج نقاط البيانات من الرسوم البيانية (الأعمدة/الخطوط/الدونات/الخرائط الحرارية) مع ملخصات رقمية
+    - يمكنك تلخيص الجداول وتحويلها إلى JSON منظّم (صفوف/أعمدة) مع رؤوس الحقول
+    - يمكنك المقارنة بين صور متعددة وشرح الفروق (جودة، إضاءة، محتوى، مخاطر)
+    - عند عدم اليقين، صرّح بذلك واقترح ما يلزم لتحسين الدقة (صورة أوضح، زوايا أفضل)
+    - إن أمكن، أشر إلى أجزاء الصورة المرجعية (اختياري: وصف نصي للمناطق محل الاستدلال)`;
     } else {
-      return `=== ENHANCED VISION CAPABILITIES ===
+      return `=== ENHANCED VISION CAPABILITIES (Documents + General Photos) ===
 - You can analyze images and describe their content in detail
 - You can identify and describe people, their appearance, activities, and clothing
-- You can extract text from documents, IDs, passports, certificates, and forms
-- You can read signs, handwritten text, and printed documents
-- You can analyze bills, receipts, and calculate expenses
-- You can help students with homework by analyzing image problems
-- You can analyze screenshots and provide technical assistance
-- You can describe photos of people including their expressions and activities
-- You MUST analyze any image provided - never refuse to describe people or content
-- You can perform OCR on any text visible in images`;
+- You can perform robust OCR on all common document types, including:
+  • National ID cards, residence permits, passports, driver licenses
+  • Visas, work/residence permits, student IDs, health insurance cards
+  • Certificates (birth, marriage, graduation), contracts, official forms, letters
+  • Invoices, receipts, bank statements, utility bills, tax forms, payslips
+  • Tickets and boarding passes, professional IDs, business cards
+- You can read printed and handwritten text and street/indoor signs (as quality allows)
+- You can detect tables and extract them (rows/columns) and key–value pairs
+- You can extract structured fields (name, number, DOB, issuer, …) from documents
+- You can detect and parse MRZ on passports/IDs and read barcodes/QR codes when present
+- You can normalize dates to ISO-8601 and validate logical date consistency
+- You can determine expiry status: expired, near_expiry, or valid (near_expiry within 90 days by default)
+- You should return results in a clear JSON schema with confidence per field when possible
+- You can compute totals/taxes from invoices/receipts when present
+- You can help students with problem-solving from images, and analyze screenshots for tech support
+    - You MUST analyze any provided image — never refuse to describe people or content
+    - You can perform OCR on any text visible in images
+    - You can answer direct Q&A about the image content with precise, grounded responses
+    - You can read and interpret diagrams, charts, plots, and flowcharts
+    - You can extract data points from charts (bar/line/pie/donut/heatmaps) and produce numeric summaries
+    - You can summarize tables and convert them into structured JSON (rows/columns with headers)
+    - You can compare multiple images and explain differences (quality, lighting, content, risks)
+    - When uncertain, state uncertainty and suggest what would improve accuracy (clearer angle, better lighting)
+    - Where helpful, reference the relevant region(s) of the image in your explanation (textual description)`;
     }
   }
 
