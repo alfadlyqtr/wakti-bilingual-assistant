@@ -79,7 +79,7 @@ export function VoiceClonePopup({ open, onOpenChange }: VoiceClonePopupProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" hideCloseButton={false}>
+      <DialogContent className="w-[90vw] max-w-[90vw] md:max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl" hideCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="sr-only">Voice Clone</DialogTitle>
           <DialogDescription className="sr-only">

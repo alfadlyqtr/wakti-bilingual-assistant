@@ -1,12 +1,9 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-react';
-import TextGeneratorPopup from './TextGeneratorPopup';
-import { VoiceClonePopup } from './VoiceClonePopup';
-import { GameModeModal } from './GameModeModal';
 
 
 interface QuickActionsProps {
@@ -15,6 +12,7 @@ interface QuickActionsProps {
   onTriggerChange: (trigger: string) => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
   onClose?: () => void;
+  onOpenTool?: (tool: 'text' | 'voice' | 'game') => void;
 }
 
 export function QuickActionsPanel({
@@ -22,12 +20,10 @@ export function QuickActionsPanel({
   activeTrigger,
   onTriggerChange,
   onTextGenerated,
-  onClose
+  onClose,
+  onOpenTool
 }: QuickActionsProps) {
   const { language } = useTheme();
-  const [showTextGen, setShowTextGen] = useState(false);
-  const [showVoiceClone, setShowVoiceClone] = useState(false);
-  const [showGameMode, setShowGameMode] = useState(false);
   
   // Memoized trigger modes for performance
   const triggerModes = useMemo(() => [{
@@ -62,21 +58,21 @@ export function QuickActionsPanel({
     icon: <PenTool className="h-5 w-5" />,
     label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
     description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
-    action: () => setShowTextGen(true),
+    action: () => onOpenTool && onOpenTool('text'),
     color: 'bg-purple-500',
     disabled: false
   }, {
     icon: <Mic className="h-5 w-5" />,
     label: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
     description: language === 'ar' ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة' : 'Clone your voice, translate and speak in different languages',
-    action: () => setShowVoiceClone(true),
+    action: () => onOpenTool && onOpenTool('voice'),
     color: 'bg-pink-500',
     disabled: false
   }, {
     icon: <Gamepad2 className="h-5 w-5" />,
     label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
     description: language === 'ar' ? 'العب ألعاب ذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
-    action: () => setShowGameMode(true),
+    action: () => onOpenTool && onOpenTool('game'),
     color: 'bg-red-500',
     disabled: false
   }], [language]);
@@ -93,21 +89,11 @@ export function QuickActionsPanel({
   }, [onTriggerChange, onClose]);
 
   const handleToolAction = useCallback((action: () => void) => {
+    // Delegate to parent to close drawer and open tool modal globally
     action();
-    console.log('🔧 Quick Actions: Tool opened and drawer stays open');
   }, []);
 
-  const handleTextGenClose = useCallback(() => {
-    setShowTextGen(false);
-  }, []);
-
-  const handleVoiceCloneClose = useCallback((open: boolean) => {
-    setShowVoiceClone(open);
-  }, []);
-
-  const handleGameModeClose = useCallback((open: boolean) => {
-    setShowGameMode(open);
-  }, []);
+  // Tool popups are controlled by parent (ChatDrawers) so no local close handlers are needed here.
   
   return (
     <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
@@ -204,18 +190,7 @@ export function QuickActionsPanel({
         </div>
       </div>
 
-      {/* Text Generator Popup */}
-      <TextGeneratorPopup 
-        isOpen={showTextGen} 
-        onClose={handleTextGenClose} 
-        onTextGenerated={onTextGenerated} 
-      />
-
-      {/* Voice Clone Popup */}
-      <VoiceClonePopup open={showVoiceClone} onOpenChange={handleVoiceCloneClose} />
-
-      {/* Game Mode Modal */}
-      <GameModeModal open={showGameMode} onOpenChange={handleGameModeClose} />
+      {/* Tool popups are rendered by parent (ChatDrawers) to avoid drawer backdrop/blur */}
     </div>
   );
 }

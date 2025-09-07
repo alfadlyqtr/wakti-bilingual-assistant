@@ -82,6 +82,11 @@ export function ChatInput({
   const seedFileInputRef = useRef<HTMLInputElement>(null);
   const [isInputCollapsed, setIsInputCollapsed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Ref to measure the actual input card height for dynamic spacing
+  const inputCardRef = useRef<HTMLDivElement>(null);
+  // Ref to the inner card to compute offset from viewport bottom to card top
+  const cardRef = useRef<HTMLDivElement>(null);
+  
 
   // Use simplified file upload hook
   const {
@@ -120,6 +125,73 @@ export function ChatInput({
       setTtsAutoPlay(v === '1');
     } catch {}
   }, []);
+
+  // Dynamically measure input card height and expose as CSS var --chat-input-height
+  useEffect(() => {
+    const el = inputCardRef.current;
+    if (!el) return;
+
+    const applyHeight = () => {
+      const h = el.offsetHeight || 0;
+      try {
+        document.documentElement.style.setProperty('--chat-input-height', `${h}px`);
+        document.body?.style?.setProperty?.('--chat-input-height', `${h}px`);
+      } catch {}
+      try {
+        const ev = new CustomEvent('wakti-chat-input-resized', { detail: { height: h } });
+        window.dispatchEvent(ev);
+      } catch {}
+    };
+
+    // Initial measurement
+    applyHeight();
+
+    // Observe size changes
+    let ro: ResizeObserver | null = null;
+    try {
+      ro = new ResizeObserver(() => {
+        applyHeight();
+      });
+      ro.observe(el);
+    } catch {
+      // Fallback: window resize
+      const onResize = () => applyHeight();
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+    }
+
+    return () => {
+      if (ro) {
+        try { ro.disconnect(); } catch {}
+      }
+    };
+  }, [isInputCollapsed, activeTrigger]);
+
+  // Measure distance from card top to viewport bottom and expose as --chat-input-offset
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const applyOffset = () => {
+      try {
+        const rect = card.getBoundingClientRect();
+        const offset = Math.max(0, window.innerHeight - rect.top);
+        document.documentElement.style.setProperty('--chat-input-offset', `${offset}px`);
+        document.body?.style?.setProperty?.('--chat-input-offset', `${offset}px`);
+        window.dispatchEvent(new CustomEvent('wakti-chat-input-offset', { detail: { offset } }));
+      } catch {}
+    };
+    applyOffset();
+    let ro: ResizeObserver | null = null;
+    try {
+      ro = new ResizeObserver(() => applyOffset());
+      ro.observe(card);
+    } catch {
+      const onResize = () => applyOffset();
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+    }
+    return () => { try { ro && ro.disconnect(); } catch {} };
+  }, [isInputCollapsed, activeTrigger]);
   // Persist on change
   useEffect(() => {
     try {
@@ -346,7 +418,7 @@ export function ChatInput({
       )}
 
       {/* Main Input Area */}
-      <div className="w-full px-0 pb-3 pt-2 mt-2">
+      <div className="w-full px-0 pb-3 pt-2 mt-0" ref={inputCardRef}>
         <div className="w-full px-3">
           <div
             className={`
@@ -357,6 +429,7 @@ export function ChatInput({
               shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
               border-[2.5px] min-h-[70px] w-full
             `}
+            ref={cardRef}
           >
             {/* Collapse toggle positioned above input */}
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-10">
@@ -379,8 +452,8 @@ export function ChatInput({
                 </Tooltip>
               </TooltipProvider>
             </div>
-            {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
-            <div className="flex items-center flex-wrap gap-2 gap-y-2 px-3 pt-2 pb-2 w-full">
+            {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] — single line */}
+            <div className="flex items-center flex-nowrap whitespace-nowrap gap-2 px-3 pt-2 pb-2 w-full overflow-x-auto">
               {activeTrigger === 'video' ? (
                 <button
                   onClick={() => setShowVideoUpload && setShowVideoUpload(true)}
@@ -392,11 +465,13 @@ export function ChatInput({
                   <span className="text-base">+🎬</span>
                 </button>
               ) : (activeTrigger === 'image' || activeTrigger === 'search') ? null : (
-                <PlusMenu
+                <div className="shrink-0">
+                  <PlusMenu
                   onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
                   onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
                   isLoading={isUploading || activeTrigger === 'image' || activeTrigger === 'search'}
-                />
+                  />
+                </div>
               )}
               
               <button
@@ -408,7 +483,7 @@ export function ChatInput({
                   }
                 }}
                 aria-label={language === "ar" ? "إضافي" : "Extra"}
-                className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
+                className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0 shrink-0"
                 disabled={isUploading}
                 type="button"
               >
@@ -424,7 +499,7 @@ export function ChatInput({
                   if (onOpenPlusDrawer) onOpenPlusDrawer();
                 }}
                 aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
-                className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0"
+                className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0 flex-shrink-0"
                 disabled={isUploading}
                 type="button"
               >
@@ -437,7 +512,7 @@ export function ChatInput({
               {activeTrigger !== 'image' ? (
                 // Show custom Search submode badge dropdown when in Search mode
                 activeTrigger === 'search' ? (
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     <div
                       className={`inline-flex items-center gap-1 px-2.5 py-1 h-9 rounded-full text-[11px] font-medium leading-none border align-middle ${searchSubmode === 'youtube'
                         ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
@@ -506,7 +581,7 @@ export function ChatInput({
                   />
 
                   {/* Compact Image Mode badge as dropdown with inline + (mobile-sized) */}
-                  <div className="inline-flex items-center gap-1 px-2.5 py-1 h-7 rounded-full text-[11px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle">
+                  <div className="inline-flex items-center gap-1 px-2.5 py-1 h-7 rounded-full text-[11px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0">
                     <button
                       type="button"
                       onClick={() => setIsModeMenuOpen(v => !v)}

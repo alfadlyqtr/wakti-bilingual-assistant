@@ -53,6 +53,13 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [inputHeight, setInputHeight] = useState<number>(() => {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--chat-input-height');
+      const n = parseInt(v || '0', 10);
+      return Number.isFinite(n) && n > 0 ? n : 80;
+    } catch { return 80; }
+  });
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   // Always-accurate ref mirror to avoid stale state in async guards
   const speakingMessageIdRef = useRef<string | null>(null);
@@ -83,6 +90,23 @@ export function ChatMessages({
     for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary);
   };
+
+  // If YouTube starts playing, pause any ongoing TTS to avoid overlapping audio
+  useEffect(() => {
+    const onYouTubePlaying = () => {
+      const a = audioRef.current;
+      try {
+        if (a && !a.paused) {
+          a.pause();
+          a.currentTime = 0;
+          setSpeakingMessageId(null);
+          setIsPaused(false);
+        }
+      } catch {}
+    };
+    window.addEventListener('wakti-youtube-playing', onYouTubePlaying as EventListener);
+    return () => window.removeEventListener('wakti-youtube-playing', onYouTubePlaying as EventListener);
+  }, []);
 
   // Persisted cache helpers: store base64 with text length to detect truncation
   type PersistedAudio = { b64: string; len: number };
@@ -118,6 +142,30 @@ export function ChatMessages({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [sessionMessages, showTaskConfirmation]);
+
+  // Keep scrolled to bottom when input height changes (maintain consistent gap)
+  useEffect(() => {
+    const handler = (e?: Event) => {
+      // Update local CSS variable source of truth for reliability
+      try {
+        const ce = e as CustomEvent<{ height: number }>;
+        if (ce?.detail?.height && Number.isFinite(ce.detail.height)) {
+          setInputHeight(ce.detail.height);
+        } else {
+          const v = getComputedStyle(document.documentElement).getPropertyValue('--chat-input-height');
+          const n = parseInt(v || '0', 10);
+          if (Number.isFinite(n) && n > 0) setInputHeight(n);
+        }
+      } catch {}
+      // Always pin to bottom so the visual gap remains exact after resize
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+      }
+    };
+    window.addEventListener('wakti-chat-input-resized', handler as EventListener);
+    return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
+  }, [scrollAreaRef]);
+
 
   // Cleanup all progress intervals on unmount
   useEffect(() => {
@@ -201,6 +249,7 @@ export function ChatMessages({
         setTimeout(async () => {
           setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 100); return n; });
           try {
+            try { window.dispatchEvent(new CustomEvent('wakti-tts-playing', { detail: { messageId } })); } catch {}
             await audio.play();
           } finally {
             setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
@@ -339,10 +388,12 @@ export function ChatMessages({
       }
       // Attempt autoplay; if the first attempt is blocked or not ready, retry once shortly after
       try {
+        try { window.dispatchEvent(new CustomEvent('wakti-tts-playing', { detail: { messageId } })); } catch {}
         await audio.play();
       } catch (err) {
         try {
           await new Promise(res => setTimeout(res, 300));
+          try { window.dispatchEvent(new CustomEvent('wakti-tts-playing', { detail: { messageId } })); } catch {}
           await audio.play();
         } catch (err2) {
           // If autoplay still fails, keep UI state so the user can press play using the mini controls
@@ -735,22 +786,15 @@ export function ChatMessages({
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-[calc(var(--chat-input-height,80px)+16px)]">
-        <div className="max-w-6xl mx-auto w-full px-2">
+      <div ref={scrollAreaRef} className="flex-1 overflow-y-auto p-4 space-y-4 pb-[calc(var(--chat-input-height,80px)+8px)]" style={{ ['--chat-input-height' as any]: `${inputHeight}px` }}>
+        <div className="max-w-6xl mx-auto w-full px-2 space-y-4">
           {/* Welcome Message */}
           {renderWelcomeMessage()}
           
           {/* Chat Messages with FIXED badge logic and enhanced video display */}
           {sessionMessages.map((message, index) => (
-              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
-                <div className="flex gap-3 max-w-[98%] w-full justify-end min-w-0">
-                  {message.role === 'assistant' && (
-                    <div className="flex-shrink-0">
-                      <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-                        <Bot className="w-3.5 h-3.5 text-white" />
-                      </div>
-                    </div>
-                  )}
+              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
+                <div className="flex w-full min-w-0">
                   
                   <div className={`rounded-lg px-4 py-3 relative w-full min-h-24 ${
                     message.role === 'user'
@@ -910,14 +954,6 @@ export function ChatMessages({
                       );
                     })()}
                   </div>
-                  
-                  {message.role === 'user' && (
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                        <User className="w-4 h-4 text-primary-foreground" />
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
            ))}

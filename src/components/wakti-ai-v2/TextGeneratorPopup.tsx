@@ -456,7 +456,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[90vw] max-w-[90vw] md:max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Wand2 className="w-5 h-5" />

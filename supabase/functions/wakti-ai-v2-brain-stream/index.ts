@@ -167,7 +167,8 @@ serve(async (req) => {
       // Frontend-attached Personal Touch metadata (optional)
       pt_version = null,
       pt_updated_at = null,
-      pt_hash = null
+      pt_hash = null,
+      location: userLocation = null
     } = requestBody;
 
     if (!message?.trim() && !attachedFiles?.length) {
@@ -389,6 +390,22 @@ async function streamAIResponse(
       ];
 
   systemPromptFinal += `\n\n=== BRAND IDENTITY ===\n- ` + brandRules.join('\n- ');
+
+  // Inject lightweight user profile context (country/city) if available
+  try {
+    const country = (userLocation && typeof userLocation === 'object' && (userLocation as any).country) ? String((userLocation as any).country) : '';
+    const city = (userLocation && typeof userLocation === 'object' && (userLocation as any).city) ? String((userLocation as any).city) : '';
+    if (country || city) {
+      const label = language === 'ar' ? 'معلومات موقع المستخدم' : 'User Location Context';
+      const countryLabel = language === 'ar' ? 'الدولة' : 'Country';
+      const cityLabel = language === 'ar' ? 'المدينة' : 'City';
+      const hint = language === 'ar'
+        ? 'يمكنك استخدام هذه المعلومة لتخصيص الإجابات (مثل الوقت المحلي، المناسبات، اللهجات)، ولكن لا تفترض تفاصيل غير مذكورة.'
+        : 'Use this to tailor answers (local time, holidays, dialect) but do not invent extra details.';
+      const line = `${countryLabel}: ${country || '-'}${city ? `, ${cityLabel}: ${city}` : ''}`;
+      systemPromptFinal += `\n\n=== ${label} ===\n- ${line}\n- ${hint}`;
+    }
+  } catch (_) {}
 
   // Enforce a structured metadata block at the END of the assistant response that we can parse server-side
   // The assistant MUST include a final XML-like wrapped JSON block. We will strip it from user-visible text

@@ -27,6 +27,7 @@ export interface AIConversation {
 class WaktiAIV2ServiceClass {
   private personalTouchCache: any = null;
   private conversationStorage = new Map<string, AIMessage[]>();
+  private locationCache: { country: string | null; city: string | null } | null = null;
 
   constructor() {
     console.log('🤖 WAKTI AI SERVICE: Initialized as Backend Worker (Frontend Boss mode)');
@@ -124,6 +125,51 @@ class WaktiAIV2ServiceClass {
     } catch {}
 
     return pt;
+  }
+
+  // Fetch user's country/city once and cache (localStorage + memory)
+  private async getUserLocation(userId: string): Promise<{ country: string | null; city: string | null }> {
+    // In-memory cache first
+    if (this.locationCache) return this.locationCache;
+    // LocalStorage fallback
+    try {
+      const raw = localStorage.getItem('wakti_user_location');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          this.locationCache = { country: parsed.country || null, city: parsed.city || null };
+          return this.locationCache;
+        }
+      }
+    } catch {}
+
+    // Fetch from profiles
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('country, city')
+        .eq('id', userId)
+        .maybeSingle();
+      const loc = { country: (prof as any)?.country || null, city: (prof as any)?.city || null };
+      this.locationCache = loc;
+      try { localStorage.setItem('wakti_user_location', JSON.stringify(loc)); } catch {}
+      return loc;
+    } catch {
+      const fallback = { country: null, city: null };
+      this.locationCache = fallback;
+      return fallback;
+    }
+  }
+
+  // Allow UI to explicitly refresh location (e.g., when user updates account page)
+  async refreshUserLocation(userId?: string) {
+    try { this.locationCache = null; localStorage.removeItem('wakti_user_location'); } catch {}
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      userId = user.id;
+    }
+    await this.getUserLocation(userId);
   }
 
   // Enhanced message handling with session storage
@@ -337,6 +383,9 @@ class WaktiAIV2ServiceClass {
           isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
         }
       } catch {}
+
+      // Load user location (country, city) to include in metadata
+      const location = await this.getUserLocation(userId);
 
       // Enhanced message handling with 20-message memory
       const enhancedMessages = this.getEnhancedMessages(recentMessages);
@@ -664,15 +713,7 @@ class WaktiAIV2ServiceClass {
       } catch {}
 
       // Load user location once (country, city) to include in metadata
-      let location: { country: string | null; city: string | null } = { country: null, city: null };
-      try {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('country, city')
-          .eq('id', userId)
-          .maybeSingle();
-        location = { country: (prof as any)?.country || null, city: (prof as any)?.city || null };
-      } catch {}
+      const location = await this.getUserLocation(userId);
 
       // Enhanced message handling with 20-message memory
       const enhancedMessages = this.getEnhancedMessages(recentMessages);

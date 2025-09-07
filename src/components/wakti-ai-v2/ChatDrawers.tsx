@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { SideSheet } from "@/components/ui/side-sheet";
 import { ExtraPanel } from './ExtraPanel';
 import { useTheme } from '@/providers/ThemeProvider';
 import { QuickActionsPanel } from './QuickActionsPanel';
 import { AIConversation } from '@/services/WaktiAIV2Service';
+import TextGeneratorPopup from './TextGeneratorPopup';
+import { VoiceClonePopup } from './VoiceClonePopup';
+import { GameModeModal } from './GameModeModal';
 
 interface ChatDrawersProps {
   showConversations: boolean;
@@ -46,7 +49,20 @@ export function ChatDrawers({
 }: ChatDrawersProps) {
   const { language } = useTheme();
 
-  
+  // Lifted modal states so tools can open after closing the drawer
+  const [showTextGen, setShowTextGen] = useState(false);
+  const [showVoiceClone, setShowVoiceClone] = useState(false);
+  const [showGameMode, setShowGameMode] = useState(false);
+
+  const openTool = useCallback((tool: 'text' | 'voice' | 'game') => {
+    // Close drawer first to remove blur/backdrop, then open the modal
+    setShowQuickActions(false);
+    setTimeout(() => {
+      if (tool === 'text') setShowTextGen(true);
+      if (tool === 'voice') setShowVoiceClone(true);
+      if (tool === 'game') setShowGameMode(true);
+    }, 150);
+  }, [setShowQuickActions]);
 
   return (
     <>
@@ -82,8 +98,18 @@ export function ChatDrawers({
           onTriggerChange={onTriggerChange} 
           onTextGenerated={onTextGenerated} 
           onClose={() => setShowQuickActions(false)} 
+          onOpenTool={openTool}
         />
       </SideSheet>
+
+      {/* Global modals rendered outside the drawer so they are not blurred and persist after close */}
+      <TextGeneratorPopup 
+        isOpen={showTextGen}
+        onClose={() => setShowTextGen(false)}
+        onTextGenerated={onTextGenerated}
+      />
+      <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
+      <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />
     </>
   );
 }

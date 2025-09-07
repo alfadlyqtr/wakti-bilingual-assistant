@@ -37,8 +37,8 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
     const calc = () => {
       try {
         const isCoarse = window.matchMedia('(pointer: coarse)').matches;
-        const isPortrait = window.matchMedia('(orientation: portrait)').matches;
-        setUseNativeControls(isCoarse && isPortrait);
+        // Force native controls for all mobile scenarios to support PiP/background on lock
+        setUseNativeControls(!!isCoarse);
       } catch {
         setUseNativeControls(false);
       }
@@ -97,6 +97,8 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           modestbranding: 1,
           playsinline: 1,
           disablekb: 1,
+          loop: 1,
+          playlist: videoId,
         },
         events: {
           onReady: (ev: any) => {
@@ -122,6 +124,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             if (state === 1) {
               setIsPlaying(true);
               setHasStarted(true);
+              try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
               // Start progress polling every 1s while playing
               if (progressIntervalRef.current) window.clearInterval(progressIntervalRef.current);
               progressIntervalRef.current = window.setInterval(() => {
@@ -136,24 +139,12 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
               }, 1000) as unknown as number;
             } else if (state === 2 || state === 0) {
               setIsPlaying(false);
+              try { window.dispatchEvent(new CustomEvent('wakti-youtube-paused', { detail: { videoId, ended: state === 0 } })); } catch {}
               if (progressIntervalRef.current) {
                 window.clearInterval(progressIntervalRef.current);
                 progressIntervalRef.current = null;
               }
-              if (state === 0) {
-                // ended
-                try {
-                  const d = playerRef.current?.getDuration?.() || 0;
-                  setCurrentTime(d);
-                  if (loopRef.current) {
-                    playerRef.current?.seekTo?.(0, true);
-                    playerRef.current?.playVideo?.();
-                  } else if (isFullscreenRef.current) {
-                    // auto-collapse when not looping
-                    exitFullscreen();
-                  }
-                } catch {}
-              }
+              // Do not force-exit fullscreen on natural loop end; YouTube will restart due to loop+playlist
             }
           }
         }
@@ -169,6 +160,15 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       playerRef.current = null;
     };
   }, [videoId, useNativeControls]);
+
+  // If Talk-Back TTS starts playing, pause YouTube to avoid mixed audio
+  useEffect(() => {
+    const onTtsPlaying = () => {
+      try { if (playerRef.current) playerRef.current.pauseVideo?.(); } catch {}
+    };
+    window.addEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
+    return () => window.removeEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
+  }, []);
 
   // Control handlers
   const handlePlay = () => {
