@@ -427,7 +427,8 @@ class WaktiAIV2ServiceClass {
               pt_hash,
               clientLocalHour,
               isWelcomeBack,
-              requestId
+              requestId,
+              location
             }),
             signal
           });
@@ -662,6 +663,17 @@ class WaktiAIV2ServiceClass {
         }
       } catch {}
 
+      // Load user location once (country, city) to include in metadata
+      let location: { country: string | null; city: string | null } = { country: null, city: null };
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('country, city')
+          .eq('id', userId)
+          .maybeSingle();
+        location = { country: (prof as any)?.country || null, city: (prof as any)?.city || null };
+      } catch {}
+
       // Enhanced message handling with 20-message memory
       const enhancedMessages = this.getEnhancedMessages(recentMessages);
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
@@ -802,7 +814,8 @@ class WaktiAIV2ServiceClass {
           imageQuality,
           conversationSummary: finalSummary,
           clientLocalHour,
-          isWelcomeBack
+          isWelcomeBack,
+          location
         };
 
         // Auth headers required for calling Edge Functions (mirror streaming path)

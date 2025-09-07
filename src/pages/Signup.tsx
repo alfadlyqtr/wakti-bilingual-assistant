@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -18,7 +18,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validateDisplayName, validateEmail, validatePassword, validateConfirmPassword } from "@/utils/validations";
-import { countries } from "@/utils/countries";
+import { countries, getCountryByCode } from "@/utils/countries";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -31,6 +31,12 @@ export default function Signup() {
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
   const [dobInputValue, setDobInputValue] = useState("");
   const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
+  // Reset city when country changes
+  useEffect(() => {
+    setCity("");
+  }, [country]);
+
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -83,6 +89,11 @@ export default function Signup() {
       return;
     }
     
+    if (!city) {
+      setErrorMsg(language === 'en' ? 'Please select your city' : 'يرجى اختيار مدينتك');
+      return;
+    }
+    
     if (!agreedToTerms) {
       setErrorMsg(language === 'en' ? 'Please agree to the Privacy Policy and Terms of Service' : 'يرجى الموافقة على سياسة الخصوصية وشروط الخدمة');
       return;
@@ -111,6 +122,7 @@ export default function Signup() {
             date_of_birth: dateOfBirth.toISOString().split('T')[0],
             country: selectedCountry?.name || '',
             country_code: country,
+            city: city || ''
           },
         },
       });
@@ -299,75 +311,110 @@ export default function Signup() {
                     />
                   </div>
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="username" className="text-base">{t.username}</Label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <User className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <Input
-                      id="username"
-                      placeholder={t.usernamePlaceholder}
-                      type="text"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      disabled={isLoading}
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="pl-10 py-6 text-base shadow-sm"
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-base">{t.email}</Label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Mail className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <Input
-                      id="email"
-                      placeholder={t.emailPlaceholder}
-                      type="email"
-                      autoCapitalize="none"
-                      autoComplete="email"
-                      autoCorrect="off"
-                      disabled={isLoading}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 py-6 text-base shadow-sm"
-                      required
-                    />
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="country" className="text-base">{t.country}</Label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
-                      <Globe className="h-5 w-5 text-muted-foreground" />
+                {/* Country + City in one row */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Country */}
+                  <div className="space-y-2">
+                    <Label htmlFor="country" className="text-base">{t.country}</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
+                        <Globe className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <Select 
+                        value={country} 
+                        onValueChange={setCountry}
+                        disabled={isLoading}
+                        required
+                      >
+                        <SelectTrigger className="pl-10 py-6 text-base shadow-sm">
+                          <SelectValue placeholder={t.selectCountry} />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {countries.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {language === 'ar' ? c.nameAr : c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <Select 
-                      value={country} 
-                      onValueChange={setCountry}
-                      disabled={isLoading}
-                      required
-                    >
-                      <SelectTrigger className="pl-10 py-6 text-base shadow-sm">
-                        <SelectValue placeholder={t.selectCountry} />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {countries.map((c) => (
-                          <SelectItem key={c.code} value={c.code}>
-                            {language === 'ar' ? c.nameAr : c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  </div>
+
+                  {/* City - Plain input (no dataset) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="city" className="text-base">{language === 'ar' ? 'المدينة' : 'City'}</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
+                        <Globe className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <Input
+                        id="city"
+                        placeholder={language === 'ar' ? 'أدخل مدينتك' : 'Enter your city'}
+                        type="text"
+                        autoCapitalize="words"
+                        autoCorrect="off"
+                        disabled={isLoading || !country}
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="pl-10 py-6 text-base shadow-sm"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
+                
+                {/* Username + Email in one row */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Username */}
+                  <div className="space-y-2">
+                    <Label htmlFor="username" className="text-base">{t.username}</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <User className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <Input
+                        id="username"
+                        placeholder={t.usernamePlaceholder}
+                        type="text"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        disabled={isLoading}
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="pl-10 py-6 text-base shadow-sm"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-base">{t.email}</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <Mail className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <Input
+                        id="email"
+                        placeholder={t.emailPlaceholder}
+                        type="email"
+                        autoCapitalize="none"
+                        autoComplete="email"
+                        autoCorrect="off"
+                        disabled={isLoading}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10 py-6 text-base shadow-sm"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Email moved next to Username above */}
+
+                {/* Country moved next to City above */}
                 
                 <div className="space-y-2">
                   <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
@@ -413,68 +460,73 @@ export default function Signup() {
                   </div>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-base">{t.password}</Label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Lock className="h-5 w-5 text-muted-foreground" />
+                {/* Password + Confirm Password in one row */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Password */}
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-base">{t.password}</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <Lock className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder={t.passwordPlaceholder}
+                        autoCapitalize="none"
+                        autoComplete="new-password"
+                        disabled={isLoading}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10 py-6 text-base shadow-sm"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </button>
                     </div>
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder={t.passwordPlaceholder}
-                      autoCapitalize="none"
-                      autoComplete="new-password"
-                      disabled={isLoading}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10 py-6 text-base shadow-sm"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5 text-muted-foreground" />
-                      ) : (
-                        <Eye className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </button>
+                    <p className="text-xs text-muted-foreground">{t.passwordRequirements}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{t.passwordRequirements}</p>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-base">{t.confirmPassword}</Label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Lock className="h-5 w-5 text-muted-foreground" />
+
+                  {/* Confirm Password */}
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword" className="text-base">{t.confirmPassword}</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <Lock className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder={t.confirmPasswordPlaceholder}
+                        autoCapitalize="none"
+                        autoComplete="new-password"
+                        disabled={isLoading}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="pl-10 pr-10 py-6 text-base shadow-sm"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </button>
                     </div>
-                    <Input
-                      id="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      placeholder={t.confirmPasswordPlaceholder}
-                      autoCapitalize="none"
-                      autoComplete="new-password"
-                      disabled={isLoading}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pl-10 pr-10 py-6 text-base shadow-sm"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3"
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-5 w-5 text-muted-foreground" />
-                      ) : (
-                        <Eye className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </button>
                   </div>
                 </div>
                 

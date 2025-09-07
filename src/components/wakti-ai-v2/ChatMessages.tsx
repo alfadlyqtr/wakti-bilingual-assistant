@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
@@ -586,16 +589,6 @@ export function ChatMessages({
       return <div className="text-sm text-muted-foreground">{text}</div>;
     }
     
-    // Check if content contains HTML (video tags, styling, etc.)
-    if (content.includes('<video') || content.includes('<div style') || content.includes('<style>')) {
-      return (
-        <div 
-          dangerouslySetInnerHTML={{ __html: content }}
-          className="prose prose-sm max-w-none break-words [&_video]:rounded-lg [&_video]:shadow-md [&_video]:max-w-full [&_video]:h-auto"
-        />
-      );
-    }
-    
     // FIXED: Check for generated images (Runware URLs) with modal functionality
     if (message.imageUrl || content.includes('https://im.runware.ai/')) {
       const imageUrl = message.imageUrl || content.match(/https:\/\/im\.runware\.ai\/[^\s\)]+/)?.[0];
@@ -644,12 +637,52 @@ export function ChatMessages({
         );
       }
     }
-    
-    // Regular text content with markdown-style formatting
+    // Render assistant content using ReactMarkdown (tables, code, images)
+    if (message.role === 'assistant') {
+      return (
+        <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-pre:my-3 prose-table:my-3">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeRaw]}
+            components={{
+              table: ({ node, ...props }) => (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm" {...props} />
+                </div>
+              ),
+              th: ({ node, ...props }) => (
+                <th className="border border-border px-2 py-1 bg-muted/40 text-left" {...props} />
+              ),
+              td: ({ node, ...props }) => (
+                <td className="border border-border px-2 py-1 align-top" {...props} />
+              ),
+              code: (rawProps) => {
+                const { className, children, ...props } = (rawProps as any);
+                const isInline = !String(children).includes('\n');
+                if (isInline) {
+                  return <code className="px-1 py-[1px] rounded bg-muted/60" {...props}>{children}</code>;
+                }
+                return (
+                  <pre className="bg-muted/40 p-3 rounded-md overflow-x-auto text-[13px]">
+                    <code className={className} {...props}>{children}</code>
+                  </pre>
+                );
+              },
+              img: ({ node, ...props }) => (
+                // Responsive images
+                <img className="max-w-full h-auto rounded-md border" {...props} />
+              ),
+            }}
+          >
+            {content}
+          </ReactMarkdown>
+        </div>
+      );
+    }
+
+    // Regular text for user messages
     return (
-      <div className="whitespace-pre-wrap break-words">
-        {content}
-      </div>
+      <div className="whitespace-pre-wrap break-words">{content}</div>
     );
   };
 
@@ -702,19 +735,19 @@ export function ChatMessages({
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-48">
-        <div className="max-w-6xl mx-auto w-full px-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-[calc(var(--chat-input-height,80px)+16px)]">
+        <div className="max-w-6xl mx-auto w-full px-2">
           {/* Welcome Message */}
           {renderWelcomeMessage()}
           
           {/* Chat Messages with FIXED badge logic and enhanced video display */}
           {sessionMessages.map((message, index) => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 group`}>
-                <div className="flex gap-3 max-w-[95%] w-full justify-end">
+                <div className="flex gap-3 max-w-[98%] w-full justify-end min-w-0">
                   {message.role === 'assistant' && (
                     <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-                        <Bot className="w-4 h-4 text-white" />
+                      <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                        <Bot className="w-3.5 h-3.5 text-white" />
                       </div>
                     </div>
                   )}
@@ -913,8 +946,7 @@ export function ChatMessages({
             </div>
           )}
           
-          {/* Extra spacing before end to ensure visibility */}
-          <div className="h-24" />
+          {/* End anchor for auto-scroll */}
           <div ref={messagesEndRef} />
         </div>
       </div>

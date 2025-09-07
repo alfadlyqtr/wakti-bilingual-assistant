@@ -13,6 +13,7 @@ interface UserProfile {
   last_name?: string;
   country?: string;
   country_code?: string;
+  city?: string;
   updated_at?: string;
 }
 
@@ -35,6 +36,7 @@ export function useUserProfile() {
           email: user?.email,
           country: user?.user_metadata?.country || null,
           country_code: user?.user_metadata?.country_code || null,
+          city: user?.user_metadata?.city || null,
           settings: {
             widgets: {
               tasksWidget: true,

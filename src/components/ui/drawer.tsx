@@ -27,9 +27,13 @@ const DrawerOverlay = React.forwardRef<
   <DrawerPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/20 backdrop-blur-md transition-all duration-300",
+      "fixed inset-y-0 z-[850] bg-black/20 backdrop-blur-md transition-all duration-300",
       className
     )}
+    style={{
+      top: 'calc(env(safe-area-inset-top, 0px) + 64px)',
+      bottom: 'calc(env(safe-area-inset-bottom, 0px) + 72px)'
+    }}
     {...props}
   />
 ))
@@ -91,11 +95,23 @@ const DrawerContent = React.forwardRef<
       <DrawerPrimitive.Content
         ref={setRefs}
         className={cn(
-          "fixed top-0 z-50 h-full w-80 max-w-[80vw] flex flex-col",
+          "fixed inset-y-0 z-[900] w-80 max-w-[88vw] flex flex-col",
           "bg-background shadow-lg focus:outline-none",
+          // Neutralize any vertical slide from library defaults
+          "translate-y-0 data-[state=open]:translate-y-0 data-[state=closed]:translate-y-0",
+          // Side positioning
           side === 'right' ? 'right-0' : 'left-0',
+          // Smooth slide animations per side
+          side === 'right'
+            ? 'transition-transform duration-300 ease-out data-[state=closed]:translate-x-full data-[state=open]:translate-x-0'
+            : 'transition-transform duration-300 ease-out data-[state=closed]:-translate-x-full data-[state=open]:translate-x-0',
           className
         )}
+        style={{
+          // Keep the drawer between header and bottom navbar
+          top: 'calc(env(safe-area-inset-top, 0px) + 72px)', // header h-16 plus small buffer
+          bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)' // slightly larger buffer for bottom tab bar
+        }}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           setTimeout(() => {
@@ -115,7 +131,7 @@ const DrawerContent = React.forwardRef<
         aria-describedby={hasDescription ? descriptionIdToUse : undefined}
         {...props}
       >
-        <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto p-4 pt-4 pb-6 scrollbar-hide">
           {processedChildren}
         </div>
       </DrawerPrimitive.Content>

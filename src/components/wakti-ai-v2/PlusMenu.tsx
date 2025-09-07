@@ -77,7 +77,8 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
       {isOpen && (
         <div 
           className={cn(
-            "absolute left-0 top-12 z-50 min-w-[140px]",
+            // Anchor based on language: RTL -> right edge with stronger leftward shift (responsive) to avoid clipping, LTR -> left edge
+            `absolute ${language === 'ar' ? 'right-0 translate-x-[-56px] sm:translate-x-[-40px]' : 'left-0'} top-12 z-50 min-w-[140px] max-w-[80vw]`,
             "bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl",
             "border border-white/20 dark:border-white/10",
             "rounded-2xl shadow-2xl dark:shadow-2xl",

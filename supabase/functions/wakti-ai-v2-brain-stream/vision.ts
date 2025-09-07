@@ -6,7 +6,7 @@ export class VisionSystem {
   
   static getVisionCapabilities(language: string = 'en'): string {
     if (language === 'ar') {
-      return `=== قدرات الرؤية المحسنة (وثائق + صور عامة) ===
+      return `=== قدرات الرؤية المحسنة (الوثائق + الصور العامة + لقطات الشاشة) ===
 - يمكنك تحليل الصور ووصف محتواها بالتفصيل
 - يمكنك التعرف على الأشخاص ووصف مظهرهم وأنشطتهم وملابسهم
 - يمكنك استخراج النصوص من جميع أنواع الوثائق بدقة عالية، بما في ذلك:
@@ -16,13 +16,12 @@ export class VisionSystem {
   • الفواتير والإيصالات وكشوفات الحساب وفواتير الخدمات والضرائب وكشوف الرواتب
   • التذاكر وبطاقات الصعود للطائرة، البطاقات المهنية وبطاقات الأعمال
 - يمكنك قراءة النصوص المطبوعة والمخطوطة واللافتات حتى مع جودة صورة أقل (قدر الإمكان)
-- يمكنك التعرف على مناطق الجداول واستخراجها (Rows/Columns) واستخراج أزواج المفتاح/القيمة
+- يمكنك التعرف على مناطق الجداول واستخراجها (صفوف/أعمدة) واستخراج أزواج المفتاح/القيمة
 - يمكنك استخراج الحقول البنيوية للوثائق (الاسم، الرقم، تاريخ الميلاد، جهة الإصدار، …)
 - يمكنك التعرف على MRZ في جوازات السفر وبطاقات الهوية وفك ترميزها
 - يمكنك التعرف على الباركود وQR إن ظهرت وذكر محتواها
 - يمكنك توحيد التواريخ إلى صيغة ISO-8601 والتحقق من صلاحية التواريخ المنطقية
 - يمكنك تحديد حالة الصلاحية: منتهي، قريب الانتهاء، أو ساري (بناءً على تواريخ الانتهاء)
-  • قريب الانتهاء يعني ضمن 90 يوماً من تاريخ اليوم (قابل للتعديل)
 - يجب عليك إرجاع النتائج بهيكلية JSON واضحة مع مستوى ثقة لكل حقل إن أمكن
 - يمكنك كذلك حساب المصاريف من الفواتير/الإيصالات مع الإجماليات والضرائب إن ظهرت
 - يمكنك مساعدة الطلاب بحل الواجبات من الصور وتحليل لقطات الشاشة وتقديم المساعدة التقنية
@@ -34,9 +33,28 @@ export class VisionSystem {
     - يمكنك تلخيص الجداول وتحويلها إلى JSON منظّم (صفوف/أعمدة) مع رؤوس الحقول
     - يمكنك المقارنة بين صور متعددة وشرح الفروق (جودة، إضاءة، محتوى، مخاطر)
     - عند عدم اليقين، صرّح بذلك واقترح ما يلزم لتحسين الدقة (صورة أوضح، زوايا أفضل)
-    - إن أمكن، أشر إلى أجزاء الصورة المرجعية (اختياري: وصف نصي للمناطق محل الاستدلال)`;
+    - إن أمكن، أشر إلى أجزاء الصورة المرجعية (اختياري: وصف نصي للمناطق محل الاستدلال)
+- تعزيز: يمكنك تحليل لقطات الشاشة (امتحانات، واجبات، شاشات تطبيقات، أسئلة).
+  • إذا احتوت اللقطة على أسئلة، يجب أن تجيب عنها بشكل مباشر ودقيق.
+  • حل مسائل الرياضيات/القواعد/المنطق خطوة بخطوة.
+  • إذا كانت أسئلة اختيار من متعدد، حدّد الإجابة الصحيحة مع التفسير.
+  • إذا كانت أسئلة مفتوحة، قدّم إجابة منظمة.
+  • إذا كانت لقطات شاشة تقنية (أخطاء برمجية، واجهات)، فسّر المشكلة واقترح الحلول.
+- متطلبات الإخراج:
+  • دائماً أعد:
+    1) JSON منظّم (مع الحقول/القيم/الثقة أو الأجوبة عند الحاجة)
+    2) ملخص قصير بلغة المحادثة (1–3 جمل)
+  • مثال لأسئلة من لقطة شاشة:
+    {
+      "type": "screenshot_QA",
+      "questions": [
+        { "question": "ما حاصل 5 + 7؟", "answer": "12", "confidence": 0.98 },
+        { "question": "من كتب هاملت؟", "answer": "ويليام شكسبير", "confidence": 0.95 }
+      ]
+    }
+    الملخص: "تحتوي اللقطة على سؤالين. الإجابات: 5+7=12، ومؤلف هاملت هو ويليام شكسبير."`;
     } else {
-      return `=== ENHANCED VISION CAPABILITIES (Documents + General Photos) ===
+      return `=== ENHANCED VISION CAPABILITIES (Documents + General Photos + Screenshots) ===
 - You can analyze images and describe their content in detail
 - You can identify and describe people, their appearance, activities, and clothing
 - You can perform robust OCR on all common document types, including:
@@ -62,7 +80,26 @@ export class VisionSystem {
     - You can summarize tables and convert them into structured JSON (rows/columns with headers)
     - You can compare multiple images and explain differences (quality, lighting, content, risks)
     - When uncertain, state uncertainty and suggest what would improve accuracy (clearer angle, better lighting)
-    - Where helpful, reference the relevant region(s) of the image in your explanation (textual description)`;
+    - Where helpful, reference the relevant region(s) of the image in your explanation (textual description)
+- ENHANCEMENT: You can analyze uploaded screenshots (exam papers, worksheets, app screenshots, problem statements).
+  • If the screenshot contains questions, you MUST answer them directly and clearly.
+  • Solve math, grammar, or logic problems from screenshots step by step.
+  • If multiple-choice, identify the correct choice with reasoning.
+  • If open-ended, provide a structured answer.
+  • For technical screenshots (error logs, UI bugs), explain the problem and propose solutions.
+- OUTPUT REQUIREMENTS:
+  • Always return both:
+    1) Structured JSON (with fields, values, confidence, or answers when applicable)
+    2) Human-friendly conversational summary (1–3 sentences)
+  • Example for Q&A screenshot:
+    {
+      "type": "screenshot_QA",
+      "questions": [
+        { "question": "What is 5+7?", "answer": "12", "confidence": 0.98 },
+        { "question": "Who wrote Hamlet?", "answer": "William Shakespeare", "confidence": 0.95 }
+      ]
+    }
+    Summary: "The screenshot contained two questions. Answer: 5+7=12, and Hamlet was written by Shakespeare."`;
     }
   }
 

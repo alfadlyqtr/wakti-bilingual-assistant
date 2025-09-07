@@ -42,7 +42,6 @@ export const countries: Country[] = [
   { name: "Iran", code: "IR", nameAr: "إيران" },
   { name: "Iraq", code: "IQ", nameAr: "العراق" },
   { name: "Ireland", code: "IE", nameAr: "أيرلندا" },
-  { name: "Israel", code: "IL", nameAr: "إسرائيل" },
   { name: "Italy", code: "IT", nameAr: "إيطاليا" },
   { name: "Japan", code: "JP", nameAr: "اليابان" },
   { name: "Kenya", code: "KE", nameAr: "كينيا" },

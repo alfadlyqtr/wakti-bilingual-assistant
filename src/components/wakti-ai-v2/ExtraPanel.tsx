@@ -42,27 +42,34 @@ export function ExtraPanel({
   }));
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="px-3 pb-3 pt-0 space-y-2">
-        {/* Talk Back settings section (voice choices) */}
-        <TalkBackSettings />
+    <div className="h-full overflow-hidden">
+      <div className="px-2 pb-2 pt-0 h-full flex flex-col">
+        <Tabs defaultValue="personal" className="h-full flex flex-col">
+          {/* Sticky compact tabs header (inside the same Tabs) */}
+          <div className="sticky top-0 z-10 px-1 pt-1 pb-1">
+            <TabsList className="flex gap-2 h-8 p-0 bg-transparent !rounded-none justify-start">
+              <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="personal">
+                {language === 'ar' ? 'الشخصية' : 'Personal'}
+              </TabsTrigger>
+              <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="conversations">
+                {language === 'ar' ? 'المحادثات' : 'Convos'}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-        <Tabs defaultValue="personal" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="personal">
-              {language === 'ar' ? 'اللمسة الشخصية' : 'Personal Touch'}
-            </TabsTrigger>
-            <TabsTrigger value="conversations">
-              {language === 'ar' ? 'المحادثات' : 'Conversations'}
-            </TabsTrigger>
-          </TabsList>
+          {/* Personal tab content: scrollable area */}
+          <TabsContent value="personal" className="flex-1">
+            <div className="mt-2 mb-3 grid grid-cols-1 gap-2 w-full">
+              <TalkBackSettings compact />
+            </div>
 
-          <TabsContent value="personal" className="mt-4">
-            <PersonalTouchManager />
+            <div className="mt-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+              <PersonalTouchManager compact />
+            </div>
           </TabsContent>
 
-          <TabsContent value="conversations" className="mt-4">
-            {/* Conversations Section */}
+          {/* Conversations tab content: scrollable list */}
+          <TabsContent value="conversations" className="flex-1 mt-2">
             <ConversationsList
               conversations={mappedConversations}
               currentConversationId={currentConversationId}

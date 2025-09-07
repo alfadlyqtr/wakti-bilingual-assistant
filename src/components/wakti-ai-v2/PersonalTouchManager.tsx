@@ -53,10 +53,13 @@ function loadWaktiPersonalTouch(): PersonalTouchData | null {
   }
 }
 
-export function PersonalTouchManager() {
+interface PTMProps { compact?: boolean }
+export function PersonalTouchManager({ compact = false }: PTMProps) {
   const { language } = useTheme();
   const { showSuccess } = useToastHelper();
   
+  const [showMore, setShowMore] = useState<boolean>(!compact);
+
   const [formData, setFormData] = useState<PersonalTouchData>({
     nickname: '',
     tone: 'neutral',
@@ -112,106 +115,184 @@ export function PersonalTouchManager() {
   ];
 
   return (
-    <Card className="bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 backdrop-blur-xl">
-      <CardHeader>
-        <CardTitle className="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
+    <Card className={compact ? "bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 backdrop-blur-xl" : "bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 backdrop-blur-xl"}>
+      <CardHeader className={compact ? "py-1.5" : undefined}>
+        <CardTitle className={compact ? "text-[13px] text-slate-700 dark:text-slate-300 flex items-center gap-2" : "text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2"}>
           <Brain className="h-4 w-4" />
           {language === 'ar' ? 'تخصيص وقتي الذكي' : '🧠 Personalize Wakti AI'}
         </CardTitle>
-        <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
-          {language === 'ar' ? 'خصص طريقة تفاعل الذكاء الاصطناعي معك' : 'Customize how AI interacts with you'}
-        </CardDescription>
+        {!compact && (
+          <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
+            {language === 'ar' ? 'خصص طريقة تفاعل الذكاء الاصطناعي معك' : 'Customize how AI interacts with you'}
+          </CardDescription>
+        )}
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Nickname Field */}
-        <div className="space-y-2">
-          <Label htmlFor="nickname" className="text-xs text-slate-600 dark:text-slate-400">
-            {language === 'ar' ? 'ماذا يجب أن يناديك وقتي؟' : 'What should Wakti call you?'}
-          </Label>
-          <Input
-            id="nickname"
-            value={formData.nickname}
-            onChange={(e) => setFormData(prev => ({ ...prev, nickname: e.target.value }))}
-            placeholder={language === 'ar' ? 'عبود' : 'Abood'}
-            className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm"
-          />
-        </div>
+      <CardContent className={compact ? "space-y-2.5 pt-0" : "space-y-4"}>
+        {/* Core fields grid in compact mode */}
+        {compact ? (
+          <div className="grid grid-cols-2 gap-3 items-end">
+            {/* Nickname Field */}
+            <div className="space-y-1">
+              <Label htmlFor="nickname" className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1 h-4">
+                {language === 'ar' ? 'اسم المستخدم' : 'User nickname'}
+              </Label>
+              <Input
+                id="nickname"
+                value={formData.nickname}
+                onChange={(e) => setFormData(prev => ({ ...prev, nickname: e.target.value }))}
+                placeholder={language === 'ar' ? 'عبود' : 'Abood'}
+                className="w-full h-9 text-[13px] bg-white dark:bg-black/10 border border-primary/30 dark:border-white/20 rounded-md shadow-sm focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+              />
+            </div>
 
-        {/* NEW: AI Nickname Field */}
-        <div className="space-y-2">
-          <Label htmlFor="aiNickname" className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1">
-            <Bot className="h-3 w-3" />
-            {language === 'ar' ? 'أعط وقتي اسماً مستعاراً' : 'Give Wakti AI a nickname'}
-          </Label>
-          <Input
-            id="aiNickname"
-            value={formData.aiNickname}
-            onChange={(e) => setFormData(prev => ({ ...prev, aiNickname: e.target.value }))}
-            placeholder={language === 'ar' ? 'مساعدي الذكي' : 'My Smart Assistant'}
-            className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm"
-          />
-        </div>
+            {/* AI Nickname Field */}
+            <div className="space-y-1">
+              <Label htmlFor="aiNickname" className="block text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1 mb-1 h-4">
+                <Bot className="h-3 w-3" />
+                {language === 'ar' ? 'اسم وقتي' : 'AI nickname'}
+              </Label>
+              <Input
+                id="aiNickname"
+                value={formData.aiNickname}
+                onChange={(e) => setFormData(prev => ({ ...prev, aiNickname: e.target.value }))}
+                placeholder={language === 'ar' ? 'مساعدي' : 'Assistant'}
+                className="w-full h-9 text-[13px] bg-white dark:bg-black/10 border border-primary/30 dark:border-white/20 rounded-md shadow-sm focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+              />
+            </div>
 
-        {/* Tone Dropdown */}
-        <div className="space-y-2">
-          <Label className="text-xs text-slate-600 dark:text-slate-400">
-            {language === 'ar' ? 'النبرة المفضلة' : 'Preferred tone'}
-          </Label>
-          <Select value={formData.tone} onValueChange={(value) => setFormData(prev => ({ ...prev, tone: value }))}>
-            <SelectTrigger className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {toneOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+            {/* Tone Dropdown */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-slate-600 dark:text-slate-400">
+                {language === 'ar' ? 'النبرة' : 'Tone'}
+              </Label>
+              <Select value={formData.tone} onValueChange={(value) => setFormData(prev => ({ ...prev, tone: value }))}>
+                <SelectTrigger className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-[13px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {toneOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        {/* Style Dropdown */}
-        <div className="space-y-2">
-          <Label className="text-xs text-slate-600 dark:text-slate-400">
-            {language === 'ar' ? 'أسلوب الرد' : 'Reply style'}
-          </Label>
-          <Select value={formData.style} onValueChange={(value) => setFormData(prev => ({ ...prev, style: value }))}>
-            <SelectTrigger className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {styleOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+            {/* Style Dropdown */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-slate-600 dark:text-slate-400">
+                {language === 'ar' ? 'الأسلوب' : 'Style'}
+              </Label>
+              <Select value={formData.style} onValueChange={(value) => setFormData(prev => ({ ...prev, style: value }))}>
+                <SelectTrigger className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-[13px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {styleOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Nickname Field */}
+            <div className="space-y-2">
+              <Label htmlFor="nickname" className="text-xs text-slate-600 dark:text-slate-400">
+                {language === 'ar' ? 'ماذا يجب أن يناديك وقتي؟' : 'What should Wakti call you?'}
+              </Label>
+              <Input
+                id="nickname"
+                value={formData.nickname}
+                onChange={(e) => setFormData(prev => ({ ...prev, nickname: e.target.value }))}
+                placeholder={language === 'ar' ? 'عبود' : 'Abood'}
+                className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm"
+              />
+            </div>
 
-        {/* Special Instructions Textarea */}
-        <div className="space-y-2">
-          <Label htmlFor="instruction" className="text-xs text-slate-600 dark:text-slate-400">
+            {/* NEW: AI Nickname Field */}
+            <div className="space-y-2">
+              <Label htmlFor="aiNickname" className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                <Bot className="h-3 w-3" />
+                {language === 'ar' ? 'أعط وقتي اسماً مستعاراً' : 'Give Wakti AI a nickname'}
+              </Label>
+              <Input
+                id="aiNickname"
+                value={formData.aiNickname}
+                onChange={(e) => setFormData(prev => ({ ...prev, aiNickname: e.target.value }))}
+                placeholder={language === 'ar' ? 'مساعدي الذكي' : 'My Smart Assistant'}
+                className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm"
+              />
+            </div>
+
+            {/* Tone Dropdown */}
+            <div className="space-y-2">
+              <Label className="text-xs text-slate-600 dark:text-slate-400">
+                {language === 'ar' ? 'النبرة المفضلة' : 'Preferred tone'}
+              </Label>
+              <Select value={formData.tone} onValueChange={(value) => setFormData(prev => ({ ...prev, tone: value }))}>
+                <SelectTrigger className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {toneOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Style Dropdown */}
+            <div className="space-y-2">
+              <Label className="text-xs text-slate-600 dark:text-slate-400">
+                {language === 'ar' ? 'أسلوب الرد' : 'Reply style'}
+              </Label>
+              <Select value={formData.style} onValueChange={(value) => setFormData(prev => ({ ...prev, style: value }))}>
+                <SelectTrigger className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {styleOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+
+        {/* Special Instructions Textarea (always visible, small box) */}
+        <div className={compact ? "space-y-1.5" : "space-y-2"}>
+          <Label htmlFor="instruction" className={compact ? "text-[11px] text-slate-600 dark:text-slate-400" : "text-xs text-slate-600 dark:text-slate-400"}>
             {language === 'ar' ? 'أي شيء آخر؟' : 'Anything else?'}
           </Label>
           <Textarea
             id="instruction"
             value={formData.instruction}
             onChange={(e) => setFormData(prev => ({ ...prev, instruction: e.target.value }))}
-            placeholder={language === 'ar' ? 'قسم الأشياء إلى خطوات بسيطة وانتظر حتى أقول "التالي".' : "Break things down into baby steps and wait for me to say 'next'."}
-            className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-sm resize-none"
-            rows={3}
+            placeholder={language === 'ar' ? 'اكتب ملاحظة قصيرة...' : 'Write a short note...'}
+            className={compact
+              ? "h-12 text-[13px] bg-white border border-primary/30 rounded-md shadow-sm focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+              : "h-16 text-sm bg-white border border-primary/30 rounded-md shadow-sm focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-0"}
+            rows={compact ? 2 : 3}
           />
         </div>
 
         {/* Save Button */}
         <Button 
           onClick={handleSave}
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white"
-          size="sm"
+          className={compact ? "w-full bg-blue-500 hover:bg-blue-600 text-white h-8 text-[13px]" : "w-full bg-blue-500 hover:bg-blue-600 text-white"}
+          size={compact ? 'sm' : 'sm'}
         >
-          <Save className="h-4 w-4 mr-2" />
+          <Save className={compact ? "h-3.5 w-3.5 mr-2" : "h-4 w-4 mr-2"} />
           {language === 'ar' ? 'حفظ' : 'Save'}
         </Button>
       </CardContent>

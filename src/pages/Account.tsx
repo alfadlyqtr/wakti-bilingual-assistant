@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ProfileImageUpload } from "@/components/ProfileImageUpload";
 import { AccountCountrySection } from "@/components/AccountCountrySection";
+import { AccountCitySection } from "@/components/AccountCitySection";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
@@ -707,8 +708,11 @@ export default function Account() {
               </CardContent>
             </Card>
 
-            {/* Add Country Section */}
-            <AccountCountrySection />
+            {/* Country + City in one row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AccountCountrySection />
+              <AccountCitySection />
+            </div>
             
             {/* Submit Feedback Section */}
             <Card>

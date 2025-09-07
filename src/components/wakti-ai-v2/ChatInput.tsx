@@ -380,7 +380,7 @@ export function ChatInput({
               </TooltipProvider>
             </div>
             {/* TOP ROW: [Plus] [💬 Extra] [⚡ Quick Actions] [Mode Badge] */}
-            <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
+            <div className="flex items-center flex-wrap gap-2 gap-y-2 px-3 pt-2 pb-2 w-full">
               {activeTrigger === 'video' ? (
                 <button
                   onClick={() => setShowVideoUpload && setShowVideoUpload(true)}
@@ -391,7 +391,7 @@ export function ChatInput({
                 >
                   <span className="text-base">+🎬</span>
                 </button>
-              ) : activeTrigger === 'image' ? null : (
+              ) : (activeTrigger === 'image' || activeTrigger === 'search') ? null : (
                 <PlusMenu
                   onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
                   onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
@@ -439,7 +439,7 @@ export function ChatInput({
                 activeTrigger === 'search' ? (
                   <div className="relative">
                     <div
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 h-7 rounded-full text-[11px] font-medium leading-none border align-middle ${searchSubmode === 'youtube'
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 h-9 rounded-full text-[11px] font-medium leading-none border align-middle ${searchSubmode === 'youtube'
                         ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
                         : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
                       }`}
@@ -525,7 +525,7 @@ export function ChatInput({
                   {isModeMenuOpen && (
                     <div
                       role="menu"
-                      className={`absolute ${language === 'ar' ? 'right-0' : 'left-0'} mt-2 w-56 max-w-[80vw] rounded-xl border border-orange-200/70 bg-orange-50/95 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-800/60 shadow-2xl overflow-hidden z-30 backdrop-blur-md`}
+                      className={`absolute right-0 mt-2 w-56 max-w-[80vw] rounded-xl border border-orange-200/70 bg-orange-50/95 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-800/60 shadow-2xl overflow-hidden z-30 backdrop-blur-md`}
                     >
                       <button
                         role="menuitem"
