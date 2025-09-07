@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Camera, Upload } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -17,13 +17,30 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  const computePosition = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const menuWidth = 160; // min-w
+    const padding = 8;
+    const left = language === 'ar'
+      ? Math.max(padding, rect.right - menuWidth)
+      : Math.min(window.innerWidth - menuWidth - padding, rect.left);
+    const top = Math.min(window.innerHeight - 200, rect.bottom + 8);
+    return { top, left };
+  };
 
   const handleToggle = () => {
     if (!isLoading) {
+      if (!isOpen) {
+        const pos = computePosition();
+        if (pos) setMenuPos(pos);
+      }
       setIsOpen(!isOpen);
     }
   };
-
   const handleCamera = () => {
     cameraInputRef.current?.click();
     setIsOpen(false);
@@ -49,10 +66,26 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
     }
   };
 
+  // Keep menu anchored to the button while open
+  useEffect(() => {
+    if (!isOpen) return;
+    const update = () => {
+      const pos = computePosition();
+      if (pos) setMenuPos(pos);
+    };
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [isOpen, language]);
+
   return (
     <div className="relative" ref={menuRef}>
       {/* Main Plus Button */}
       <Button
+        ref={triggerRef}
         onClick={handleToggle}
         disabled={isLoading}
         className={cn(
@@ -77,14 +110,14 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
       {isOpen && (
         <div 
           className={cn(
-            // Anchor based on language: RTL -> right edge with stronger leftward shift (responsive) to avoid clipping, LTR -> left edge
-            `absolute ${language === 'ar' ? 'right-0 translate-x-[-56px] sm:translate-x-[-40px]' : 'left-0'} top-12 z-[950] min-w-[140px] max-w-[80vw]`,
+            "fixed z-[1200] min-w-[160px] max-w-[80vw]",
             "bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl",
             "border border-white/20 dark:border-white/10",
             "rounded-2xl shadow-2xl dark:shadow-2xl",
             "shadow-black/10 dark:shadow-black/40",
             "animate-in fade-in-0 zoom-in-95 duration-200"
           )}
+          style={{ top: menuPos?.top ?? 0, left: menuPos?.left ?? 0 }}
         >
           <div className="p-2 space-y-1">
             <button
