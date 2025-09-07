@@ -28,7 +28,7 @@ export function UnreadBadge({ count, size = "md", blink = false, className = "" 
       className={`absolute rounded-full
         bg-red-500 text-white flex items-center justify-center font-bold
         ${sz} ${blinkClass} ${className}
-        right-0 -top-1 border-white border-2 z-10`}
+        right-0 -top-1 border-white border-2 z-[1001]`}
       style={{ minWidth: size === "sm" ? 13 : 20 }}
       aria-label={`${count} unread`}
     >
