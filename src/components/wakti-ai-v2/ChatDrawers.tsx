@@ -1,12 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { SideSheet } from "@/components/ui/side-sheet";
 import { ExtraPanel } from './ExtraPanel';
 import { useTheme } from '@/providers/ThemeProvider';
 import { QuickActionsPanel } from './QuickActionsPanel';
 import { AIConversation } from '@/services/WaktiAIV2Service';
-import TextGeneratorPopup from './TextGeneratorPopup';
-import { VoiceClonePopup } from './VoiceClonePopup';
-import { GameModeModal } from './GameModeModal';
+import { useNavigate } from 'react-router-dom';
 
 interface ChatDrawersProps {
   showConversations: boolean;
@@ -48,21 +46,17 @@ export function ChatDrawers({
   isLoading
 }: ChatDrawersProps) {
   const { language } = useTheme();
-
-  // Lifted modal states so tools can open after closing the drawer
-  const [showTextGen, setShowTextGen] = useState(false);
-  const [showVoiceClone, setShowVoiceClone] = useState(false);
-  const [showGameMode, setShowGameMode] = useState(false);
+  const navigate = useNavigate();
 
   const openTool = useCallback((tool: 'text' | 'voice' | 'game') => {
-    // Close drawer first to remove blur/backdrop, then open the modal
+    // Close drawer, then navigate to dedicated pages instead of modals
     setShowQuickActions(false);
     setTimeout(() => {
-      if (tool === 'text') setShowTextGen(true);
-      if (tool === 'voice') setShowVoiceClone(true);
-      if (tool === 'game') setShowGameMode(true);
+      if (tool === 'text') navigate('/tools/text');
+      if (tool === 'voice') navigate('/tools/voice-studio');
+      if (tool === 'game') navigate('/tools/game');
     }, 150);
-  }, [setShowQuickActions]);
+  }, [setShowQuickActions, navigate]);
 
   return (
     <>
@@ -102,14 +96,7 @@ export function ChatDrawers({
         />
       </SideSheet>
 
-      {/* Global modals rendered outside the drawer so they are not blurred and persist after close */}
-      <TextGeneratorPopup 
-        isOpen={showTextGen}
-        onClose={() => setShowTextGen(false)}
-        onTextGenerated={onTextGenerated}
-      />
-      <VoiceClonePopup open={showVoiceClone} onOpenChange={setShowVoiceClone} />
-      <GameModeModal open={showGameMode} onOpenChange={setShowGameMode} />
+      {/* Tool popups removed – now dedicated pages via routes */}
     </>
   );
 }

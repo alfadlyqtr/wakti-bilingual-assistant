@@ -50,6 +50,9 @@ import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminSettings from "./pages/AdminSettings";
 import AdminFawranPayments from "./pages/AdminFawranPayments";
 import VoiceTTS from "./pages/VoiceTTS";
+import TextGenerator from "./pages/TextGenerator";
+import VoiceStudio from "./pages/VoiceStudio";
+import GameMode from "./pages/GameMode";
 
 import "./App.css";
 
@@ -174,6 +177,22 @@ function App() {
                 <Route path="/voice-tts" element={
                   <GiftNotificationProvider>
                     <AppLayout><VoiceTTS /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                {/* Tool pages */}
+                <Route path="/tools/text" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><TextGenerator /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/tools/voice-studio" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><VoiceStudio /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/tools/game" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><GameMode /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 

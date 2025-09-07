@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Plus, Camera, Upload } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -18,27 +19,36 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // Viewport-fixed positioning via portal to avoid clipping by parent overflow
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
-  const computePosition = () => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return null;
-    const menuWidth = 160; // min-w
+  const computeViewportPos = (): { top: number; left: number } | null => {
+    const el = (triggerRef.current as unknown as HTMLElement) || menuRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const menuWidth = 160;
     const padding = 8;
+    const offsetX = -140; // move menu much further left so it sits closer to/inside the text area
     const left = language === 'ar'
-      ? Math.max(padding, rect.right - menuWidth)
-      : Math.min(window.innerWidth - menuWidth - padding, rect.left);
+      ? Math.max(padding, Math.min(window.innerWidth - menuWidth - padding, rect.right - menuWidth + offsetX))
+      : Math.max(padding, Math.min(window.innerWidth - menuWidth - padding, rect.left + offsetX));
     const top = Math.min(window.innerHeight - 200, rect.bottom + 8);
     return { top, left };
   };
 
   const handleToggle = () => {
-    if (!isLoading) {
-      if (!isOpen) {
-        const pos = computePosition();
-        if (pos) setMenuPos(pos);
-      }
-      setIsOpen(!isOpen);
+    if (isLoading) return;
+    if (!isOpen) {
+      const pos = computeViewportPos();
+      if (pos) setMenuPos(pos);
+      setIsOpen(true);
+      // Recompute after paint for safety
+      requestAnimationFrame(() => {
+        const pos2 = computeViewportPos();
+        if (pos2) setMenuPos(pos2);
+      });
+    } else {
+      setIsOpen(false);
     }
   };
   const handleCamera = () => {
@@ -66,18 +76,19 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
     }
   };
 
-  // Keep menu anchored to the button while open
+  // Keep menu anchored on scroll/resize when open
   useEffect(() => {
     if (!isOpen) return;
-    const update = () => {
-      const pos = computePosition();
+    const onUpd = () => {
+      const pos = computeViewportPos();
       if (pos) setMenuPos(pos);
     };
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
+    window.addEventListener('scroll', onUpd, true);
+    window.addEventListener('resize', onUpd);
+    onUpd();
     return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('scroll', onUpd, true);
+      window.removeEventListener('resize', onUpd);
     };
   }, [isOpen, language]);
 
@@ -106,18 +117,18 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
         />
       </Button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
+      {/* Dropdown Menu via portal (position: fixed) */}
+      {isOpen && menuPos && createPortal(
         <div 
           className={cn(
-            "fixed z-[1200] min-w-[160px] max-w-[80vw]",
+            "fixed z-[9999] min-w-[160px] max-w-[80vw]",
             "bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl",
             "border border-white/20 dark:border-white/10",
             "rounded-2xl shadow-2xl dark:shadow-2xl",
             "shadow-black/10 dark:shadow-black/40",
             "animate-in fade-in-0 zoom-in-95 duration-200"
           )}
-          style={{ top: menuPos?.top ?? 0, left: menuPos?.left ?? 0 }}
+          style={{ top: menuPos.top, left: menuPos.left }}
         >
           <div className="p-2 space-y-1">
             <button
@@ -150,7 +161,8 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
               </span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Click outside to close */}
@@ -169,6 +181,8 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
         accept="image/*,.txt"
         onChange={handleFileSelect}
         className="hidden"
+        aria-hidden="true"
+        title={language === 'ar' ? 'تحميل ملف' : 'Upload file'}
       />
       <input
         ref={cameraInputRef}
@@ -177,6 +191,8 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
         capture="environment"
         onChange={handleFileSelect}
         className="hidden"
+        aria-hidden="true"
+        title={language === 'ar' ? 'التقاط صورة' : 'Capture photo'}
       />
     </div>
   );

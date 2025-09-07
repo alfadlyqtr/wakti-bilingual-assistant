@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, Loader2, ChevronDown, Plus, ImagePlus } from 'lucide-react';
@@ -68,6 +69,12 @@ export function ChatInput({
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
   const [imageMode, setImageMode] = useState<ImageMode>('text2image');
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  // Button ref and viewport position for Search submode dropdown (Web/YouTube)
+  const searchModeBtnRef = useRef<HTMLButtonElement>(null);
+  const [searchMenuPos, setSearchMenuPos] = useState<{ top: number; left: number } | null>(null);
+  // Button ref and viewport position for Image Mode dropdown
+  const imageModeBtnRef = useRef<HTMLButtonElement>(null);
+  const [imageMenuPos, setImageMenuPos] = useState<{ top: number; left: number } | null>(null);
   // Search submode: 'web' | 'youtube'
   const [searchSubmode, setSearchSubmode] = useState<'web' | 'youtube'>(() => {
     try {
@@ -464,15 +471,7 @@ export function ChatInput({
                 >
                   <span className="text-base">+🎬</span>
                 </button>
-              ) : (activeTrigger === 'image' || activeTrigger === 'search') ? null : (
-                <div className="shrink-0">
-                  <PlusMenu
-                  onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
-                  onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
-                  isLoading={isUploading || activeTrigger === 'image' || activeTrigger === 'search'}
-                  />
-                </div>
-              )}
+              ) : null}
               
               <button
                 onClick={() => {
@@ -521,7 +520,34 @@ export function ChatInput({
                     >
                       <button
                         type="button"
-                        onClick={() => setIsModeMenuOpen(v => !v)}
+                        ref={searchModeBtnRef}
+                        onClick={() => {
+                          setIsModeMenuOpen(v => {
+                            const willOpen = !v;
+                            if (willOpen) {
+                              const btn = searchModeBtnRef.current;
+                              if (btn) {
+                                const rect = btn.getBoundingClientRect();
+                                const width = 224; // approx w-56
+                                const padding = 8;
+                                const left = language === 'ar'
+                                  ? Math.max(padding, Math.min(window.innerWidth - width - padding, rect.right - width))
+                                  : Math.max(padding, Math.min(window.innerWidth - width - padding, rect.left));
+                                const top = Math.min(window.innerHeight - 200, rect.bottom + 8);
+                                setSearchMenuPos({ top, left });
+                                requestAnimationFrame(() => {
+                                  const rect2 = btn.getBoundingClientRect();
+                                  const left2 = language === 'ar'
+                                    ? Math.max(padding, Math.min(window.innerWidth - width - padding, rect2.right - width))
+                                    : Math.max(padding, Math.min(window.innerWidth - width - padding, rect2.left));
+                                  const top2 = Math.min(window.innerHeight - 200, rect2.bottom + 8);
+                                  setSearchMenuPos({ top: top2, left: left2 });
+                                });
+                              }
+                            }
+                            return willOpen;
+                          });
+                        }}
                         disabled={isUploading}
                         className="inline-flex items-center gap-1 outline-none"
                         aria-haspopup="menu"
@@ -535,13 +561,14 @@ export function ChatInput({
                       </button>
                     </div>
 
-                    {isModeMenuOpen && (
+                    {isModeMenuOpen && searchMenuPos && createPortal(
                       <div
                         role="menu"
-                        className={`absolute ${language === 'ar' ? 'right-0' : 'left-0'} mt-2 w-56 rounded-xl shadow-2xl overflow-hidden z-20 backdrop-blur-md border ${searchSubmode === 'youtube'
+                        className={`fixed mt-0 w-56 rounded-xl shadow-2xl overflow-hidden z-[9999] backdrop-blur-md border ${searchSubmode === 'youtube'
                           ? 'bg-red-50/95 text-red-900 dark:bg-red-950/60 dark:text-red-200 border-red-200/70 dark:border-red-800/60'
                           : 'bg-green-50/95 text-green-900 dark:bg-green-950/60 dark:text-green-200 border-green-200/70 dark:border-green-800/60'
                         }`}
+                        style={{ top: searchMenuPos.top, left: searchMenuPos.left }}
                       >
                         <button
                           role="menuitem"
@@ -563,7 +590,8 @@ export function ChatInput({
                         >
                           YouTube
                         </button>
-                      </div>
+                      </div>,
+                      document.body
                     )}
                   </div>
                 ) : (
@@ -584,7 +612,30 @@ export function ChatInput({
                   <div className="inline-flex items-center gap-1 px-2.5 py-1 h-7 rounded-full text-[11px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0">
                     <button
                       type="button"
-                      onClick={() => setIsModeMenuOpen(v => !v)}
+                      ref={imageModeBtnRef}
+                      onClick={() => {
+                        setIsModeMenuOpen(v => {
+                          const willOpen = !v;
+                          if (willOpen) {
+                            const btn = imageModeBtnRef.current;
+                            if (btn) {
+                              const rect = btn.getBoundingClientRect();
+                              const width = 224; // ~ w-56
+                              const padding = 8;
+                              const left = Math.max(padding, Math.min(window.innerWidth - width - padding, rect.left));
+                              const top = Math.min(window.innerHeight - 200, rect.bottom + 8);
+                              setImageMenuPos({ top, left });
+                              requestAnimationFrame(() => {
+                                const rect2 = btn.getBoundingClientRect();
+                                const left2 = Math.max(padding, Math.min(window.innerWidth - width - padding, rect2.left));
+                                const top2 = Math.min(window.innerHeight - 200, rect2.bottom + 8);
+                                setImageMenuPos({ top: top2, left: left2 });
+                              });
+                            }
+                          }
+                          return willOpen;
+                        });
+                      }}
                       disabled={isUploading}
                       className="inline-flex items-center gap-1 outline-none"
                       aria-haspopup="menu"
@@ -597,10 +648,11 @@ export function ChatInput({
                     </button>
                   </div>
 
-                  {isModeMenuOpen && (
+                  {isModeMenuOpen && imageMenuPos && createPortal(
                     <div
                       role="menu"
-                      className={`absolute right-0 mt-2 w-56 max-w-[80vw] rounded-xl border border-orange-200/70 bg-orange-50/95 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-800/60 shadow-2xl overflow-hidden z-30 backdrop-blur-md`}
+                      className={`fixed mt-0 w-56 max-w-[80vw] rounded-xl border border-orange-200/70 bg-orange-50/95 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-800/60 shadow-2xl overflow-hidden z-[9999] backdrop-blur-md`}
+                      style={{ top: imageMenuPos.top, left: imageMenuPos.left }}
                     >
                       <button
                         role="menuitem"
@@ -635,7 +687,8 @@ export function ChatInput({
                       >
                         {language === 'ar' ? 'إزالة الخلفية' : 'Background Removal'}
                       </button>
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
               )}
@@ -747,6 +800,17 @@ export function ChatInput({
                 {/* Upload and Send buttons container */}
                 <div className="flex flex-col items-center gap-2">
                   {/* Auto Play toggle moved to Extra drawer */}
+
+                  {/* Chat Mode: Plus menu above Send button (requested placement) */}
+                  {activeTrigger === 'chat' && (
+                    <div className="w-full flex justify-center">
+                      <PlusMenu
+                        onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
+                        onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
+                        isLoading={isUploading}
+                      />
+                    </div>
+                  )}
 
                   {/* Image Quality Dropdown - only for Image mode with text2image */}
                   {activeTrigger === 'image' && imageMode === 'text2image' && (
