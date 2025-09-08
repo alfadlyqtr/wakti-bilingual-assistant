@@ -34,6 +34,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const [existingVoices, setExistingVoices] = useState<VoiceClone[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDeletingVoice, setIsDeletingVoice] = useState<string | null>(null);
+  const [showTips, setShowTips] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -372,96 +373,66 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Header - compact */}
       <div className="text-center">
-        <h2 className="text-xl font-semibold mb-2">
-          {language === 'ar' ? 'سجل صوتك' : 'Record Your Voice'}
+        <h2 className="text-lg font-semibold">
+          {language === 'ar' ? 'استنساخ صوتك' : 'Clone Your Voice'}
         </h2>
-        <div className="space-y-1">
-          <p className="text-sm text-muted-foreground">
-            {language === 'ar' ? 'يمكنك إنشاء حتى صوتين' : 'You can create up to 2 voices'}
-          </p>
-          <p className="text-xs font-medium">
-            {language === 'ar' 
-              ? `أصواتك (${existingVoices.length}/2)`
-              : `Your Voices (${existingVoices.length}/2)`
-            }
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {language === 'ar' 
+            ? `الأصوات ${existingVoices.length}/2 • يتم حذف الأصوات غير المستخدمة بعد 60 يومًا`
+            : `Voices ${existingVoices.length}/2 • Unused voices auto-delete after 60 days`}
+        </p>
       </div>
 
-      {/* Audio Quality Guidelines */}
-      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-blue-800 dark:text-blue-200">
-            <p className="font-medium mb-1">
-              {language === 'ar' ? 'متطلبات ElevenLabs للجودة المثلى:' : 'ElevenLabs Requirements for Best Quality:'}
-            </p>
-            <ul className="text-xs space-y-1 list-disc list-inside">
-              <li>{language === 'ar' ? 'سجل لمدة دقيقة واحدة على الأقل (3 دقائق كحد أقصى)' : 'Record at least 1 minute (max 3 minutes)'}</li>
-              <li>{language === 'ar' ? 'تحدث بنبرة ثابتة ومتسقة' : 'Keep consistent tone and performance'}</li>
-              <li>{language === 'ar' ? 'سجل في مكان هادئ بدون ضوضاء خلفية' : 'Record in quiet environment without background noise'}</li>
-              <li>{language === 'ar' ? 'تجنب الصدى والتشويه' : 'Avoid reverb and artifacts'}</li>
-              <li>{language === 'ar' ? 'حافظ على مستوى صوت مثالي' : 'Maintain ideal volume levels'}</li>
+      {/* Tips - collapsible, minimal chrome */}
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={() => setShowTips(v => !v)}
+          className="text-xs text-blue-600 hover:underline"
+        >
+          {showTips
+            ? (language === 'ar' ? 'إخفاء نصائح التسجيل' : 'Hide recording tips')
+            : (language === 'ar' ? 'عرض نصائح التسجيل' : 'Show recording tips')}
+        </button>
+        {showTips && (
+          <div className="mt-2 text-left mx-auto max-w-prose">
+            <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
+              <li>{language === 'ar' ? 'سجّل دقيقة واحدة على الأقل (بحد أقصى 3 دقائق)' : 'Record at least 1 minute (max 3 minutes)'}</li>
+              <li>{language === 'ar' ? 'حافظ على نبرة متسقة' : 'Keep a consistent tone'}</li>
+              <li>{language === 'ar' ? 'مكان هادئ بدون ضوضاء' : 'Quiet room, low noise'}</li>
             </ul>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Voice Expiration Warning */}
-      <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-amber-800 dark:text-amber-200">
-            <p className="font-medium">
-              {language === 'ar' ? 'تنبيه: الحذف التلقائي' : 'Notice: Auto-Deletion'}
-            </p>
-            <p className="text-xs mt-1">
-              {language === 'ar' 
-                ? 'الأصوات غير المستخدمة لمدة 60 يوماً سيتم حذفها تلقائياً. استخدم أصواتك بانتظام للاحتفاظ بها.'
-                : 'Voices unused for 60 days will be automatically deleted. Use your voices regularly to keep them active.'
-              }
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Auto-deletion notice removed per request */}
 
-      {/* Existing Voices */}
+      {/* Existing Voices - compact row list */}
       {existingVoices.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-medium text-sm">
-            {language === 'ar' ? 'أصواتك المحفوظة' : 'Your Saved Voices'}
-          </h3>
+        <div className="space-y-1">
           {existingVoices.map((voice) => {
             const daysRemaining = getDaysRemaining(voice.expires_at);
             const isExpiringSoon = daysRemaining !== null && daysRemaining <= 7;
-            
             return (
-              <div key={voice.id} className="flex items-center gap-2 p-2 bg-muted rounded-md">
-                <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                <div className="flex-1">
-                  <span className="text-sm font-medium">{voice.voice_name}</span>
+              <div key={voice.id} className="flex items-center gap-2 text-xs p-2 rounded-md bg-muted/60">
+                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                <div className="flex-1 truncate">
+                  <span className="font-medium">{voice.voice_name}</span>
                   {daysRemaining !== null && (
-                    <div className="text-xs text-muted-foreground">
+                    <span className="ml-2 text-muted-foreground">
                       {daysRemaining > 0 ? (
                         <span className={isExpiringSoon ? 'text-amber-600' : ''}>
-                          {language === 'ar' 
-                            ? `${daysRemaining} أيام متبقية`
-                            : `${daysRemaining} days remaining`
-                          }
+                          {language === 'ar' ? `${daysRemaining} يومًا متبقيًا` : `${daysRemaining} days left`}
                         </span>
                       ) : (
-                        <span className="text-red-600">
-                          {language === 'ar' ? 'منتهي الصلاحية' : 'Expired'}
-                        </span>
+                        <span className="text-red-600">{language === 'ar' ? 'منتهي' : 'Expired'}</span>
                       )}
-                    </div>
+                    </span>
                   )}
                 </div>
-                <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                  {language === 'ar' ? 'جاهز' : 'Ready'}
-                </span>
                 <Button
                   onClick={() => deleteVoiceClone(voice.voice_id, voice.voice_name)}
                   variant="ghost"
@@ -495,121 +466,82 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
       {canRecord && (
         <>
-          {/* Recording Section */}
-          <div className="space-y-4">
-            <div className="p-4 border rounded-lg space-y-4">
-              <h3 className="font-medium">
-                {language === 'ar' ? 'تسجيل صوتي' : 'Voice Recording'}
-              </h3>
-              
-              <div className="flex items-center gap-4">
+          {/* Slim Recorder Row */}
+          <div className="border rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
                 <Button
                   onClick={isRecording ? stopRecording : startRecording}
                   variant={isRecording ? "destructive" : "default"}
-                  size="lg"
-                  className="flex-shrink-0"
+                  size="sm"
+                  className="px-3"
                   disabled={isCloning}
                 >
-                  {isRecording ? <Square className="h-4 w-4 mr-2" /> : <Mic className="h-4 w-4 mr-2" />}
-                  {isRecording 
-                    ? (language === 'ar' ? 'إيقاف' : 'Stop') 
-                    : (language === 'ar' ? 'تسجيل' : 'Record')
-                  }
+                  {isRecording ? <Square className="h-3.5 w-3.5 mr-2" /> : <Mic className="h-3.5 w-3.5 mr-2" />}
+                  {isRecording ? (language === 'ar' ? 'إيقاف' : 'Stop') : (language === 'ar' ? 'تسجيل' : 'Record')}
                 </Button>
-                
-                <div className="text-lg font-mono">
-                  {formatTime(recordingTime)} / 3:00
-                </div>
-                
+                <div className="text-sm font-mono">{formatTime(recordingTime)} / 3:00</div>
+              </div>
+              <div className="flex items-center gap-2">
                 {recordingTime > 0 && recordingTime < 60 && (
-                  <span className="text-xs text-amber-600">
-                    {language === 'ar' ? 'الحد الأدنى دقيقة واحدة' : 'Min 1 minute'}
-                  </span>
+                  <span className="text-xs text-amber-600">{language === 'ar' ? 'الحد الأدنى 1 دقيقة' : 'Min 1 min'}</span>
                 )}
-                
                 {recordingTime >= 60 && recordingTime <= 180 && (
-                  <span className="text-xs text-green-600">
-                    {language === 'ar' ? 'مدة ممتازة!' : 'Perfect duration!'}
-                  </span>
+                  <span className="text-xs text-green-600">{language === 'ar' ? 'مدة ممتازة' : 'Great length'}</span>
                 )}
               </div>
-
-              {audioBlob && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={isPlaying ? pauseAudio : playAudio}
-                    variant="outline"
-                    size="sm"
-                    disabled={isCloning}
-                  >
-                    {isPlaying ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
-                    {isPlaying 
-                      ? (language === 'ar' ? 'إيقاف مؤقت' : 'Pause') 
-                      : (language === 'ar' ? 'تشغيل' : 'Play')
-                    }
-                  </Button>
-                  <Button 
-                    onClick={deleteRecording} 
-                    variant="outline" 
-                    size="sm"
-                    disabled={isCloning}
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    {language === 'ar' ? 'حذف' : 'Delete'}
-                  </Button>
-                </div>
-              )}
             </div>
+            {/* Inline controls moved to dedicated section below */}
+          </div>
 
-            {/* Voice Name Input */}
-            <div className="space-y-2">
-              <Label htmlFor="voice-name">
-                {language === 'ar' ? 'اسم الصوت' : 'Voice Name'}
-              </Label>
-              <Input
-                id="voice-name"
-                value={voiceName}
-                onChange={(e) => setVoiceName(e.target.value)}
-                placeholder={language === 'ar' ? 'مثال: صوتي الهادئ' : 'e.g., My Calm Voice'}
-                maxLength={50}
-                disabled={isCloning}
-              />
-            </div>
-
-            {/* Clone Button */}
-            <Button
-              onClick={createVoiceClone}
-              disabled={!hasValidAudio || !voiceName.trim() || isCloning}
-              className="w-full"
-            >
+          {/* Name + Create */}
+          <div className="space-y-2">
+            <Label htmlFor="voice-name">{language === 'ar' ? 'اسم الصوت' : 'Voice Name'}</Label>
+            <Input
+              id="voice-name"
+              value={voiceName}
+              onChange={(e) => setVoiceName(e.target.value)}
+              placeholder={language === 'ar' ? 'مثال: صوتي الهادئ' : 'e.g., My Calm Voice'}
+              maxLength={50}
+              disabled={isCloning}
+            />
+            <Button onClick={createVoiceClone} disabled={!hasValidAudio || !voiceName.trim() || isCloning} className="w-full">
               {isCloning ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {language === 'ar' ? 'جاري الإنشاء بواسطة ElevenLabs...' : 'Creating with ElevenLabs...'}
+                  {language === 'ar' ? 'جاري الإنشاء...' : 'Creating...'}
                 </>
               ) : (
-                <>
-                  {language === 'ar' ? 'إنشاء النسخة' : 'Create Voice Clone'}
-                </>
+                <>{language === 'ar' ? 'إنشاء نسخة الصوت' : 'Create Voice Clone'}</>
               )}
             </Button>
           </div>
         </>
       )}
 
-      {/* Navigation */}
-      <div className="flex gap-3 pt-4">
-        <Button onClick={onBack} variant="outline" className="flex-1" disabled={isCloning}>
-          {language === 'ar' ? 'رجوع' : 'Back'}
-        </Button>
-        <Button 
-          onClick={onNext} 
-          className="flex-1"
-          disabled={existingVoices.length === 0 || isCloning}
-        >
-          {language === 'ar' ? 'التالي ← استخدم صوتك' : 'Next → Use Your Voice'}
-        </Button>
-      </div>
+      {/* Your Recording section */}
+      {audioBlob && (
+        <div className="border rounded-lg p-3">
+          <h3 className="text-sm font-medium mb-2">{language === 'ar' ? 'تسجيلك' : 'Your Recording'}</h3>
+          <div className="flex items-center gap-2">
+            <Button onClick={isPlaying ? pauseAudio : playAudio} variant="outline" size="sm" disabled={isCloning}>
+              {isPlaying ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
+              {isPlaying ? (language === 'ar' ? 'إيقاف مؤقت' : 'Pause') : (language === 'ar' ? 'تشغيل' : 'Play')}
+            </Button>
+            <Button onClick={deleteRecording} variant="outline" size="sm" disabled={isCloning}>
+              <Trash2 className="h-3 w-3 mr-1" />{language === 'ar' ? 'حذف' : 'Delete'}
+            </Button>
+            <a
+              className="ml-auto text-xs underline text-muted-foreground flex items-center gap-1"
+              href={audioBlob ? URL.createObjectURL(audioBlob) : undefined}
+              download={`voice-sample.webm`}
+              onClick={(e) => { if (!audioBlob) e.preventDefault(); }}
+            >
+              <Download className="h-3 w-3" /> {language === 'ar' ? 'تنزيل' : 'Download'}
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

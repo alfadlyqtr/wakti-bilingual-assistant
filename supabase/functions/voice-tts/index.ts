@@ -10,7 +10,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
 // Flexibly locate a Google TTS key from env without requiring an exact name
 const envObj = Deno.env.toObject?.() ?? {} as Record<string, string>;
@@ -29,25 +28,13 @@ if (!GOOGLE_TTS_KEY) {
   }
 }
 
-const TTS_PROVIDER = (Deno.env.get('TTS_PROVIDER') || 'google').toLowerCase();
-
-console.log("🎵 VOICE TTS: Function loaded");
-console.log("🎵 TTS Provider:", TTS_PROVIDER);
-console.log("🎵 ElevenLabs API Key available:", !!ELEVENLABS_API_KEY);
+console.log("🎵 VOICE TTS: Function loaded (Google-only)");
 console.log("🎵 Google TTS Key picked:", GOOGLE_TTS_KEY_NAME || "<not found>");
 console.log("🎵 Google TTS Key available:", !!GOOGLE_TTS_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Updated voice style configurations with corrected mappings for eleven_multilingual_v2
-const VOICE_STYLES = {
-  neutral: { stability: 0.7, similarity_boost: 0.85, style: 0.0, use_speaker_boost: true },
-  report: { stability: 0.8, similarity_boost: 0.9, style: 0.3, use_speaker_boost: true },
-  storytelling: { stability: 0.5, similarity_boost: 0.7, style: 0.6, use_speaker_boost: true },
-  poetry: { stability: 0.4, similarity_boost: 0.6, style: 0.7, use_speaker_boost: true },
-  teacher: { stability: 0.8, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true },
-  sports: { stability: 0.3, similarity_boost: 0.5, style: 0.8, use_speaker_boost: true }
-};
+// No style mapping needed for Google-only path
 
 serve(async (req: Request) => {
   console.log(`🎵 Request: ${req.method} ${req.url}`);
@@ -71,12 +58,11 @@ serve(async (req: Request) => {
 
     // Get request data
     const requestBody = await req.json();
-    const { text, voice_id, style = 'neutral', mode } = requestBody;
+    const { text, voice_id, mode } = requestBody;
     
     console.log(`🎵 TTS request:`, {
       textLength: text?.length || 0,
       voiceId: voice_id,
-      style: style,
       textPreview: text?.substring(0, 100)
     });
 
@@ -89,26 +75,17 @@ serve(async (req: Request) => {
       });
     }
 
-    // Check provider configuration
-    if (TTS_PROVIDER === 'google') {
-      if (!GOOGLE_TTS_KEY) {
-        console.error('🎵 GOOGLE_TTS_KEY not found in environment');
-        throw new Error('Google TTS key not configured');
-      }
-    } else {
-      if (!ELEVENLABS_API_KEY) {
-        console.error('🎵 ELEVENLABS_API_KEY not found in environment');
-        throw new Error('ElevenLabs API key not configured');
-      }
+    // Check Google configuration
+    if (!GOOGLE_TTS_KEY) {
+      console.error('🎵 GOOGLE_TTS_KEY not found in environment');
+      throw new Error('Google TTS key not configured');
     }
 
     if (!text || !voice_id) {
       throw new Error('Missing required fields: text and voice_id are required');
     }
 
-    // Get the appropriate voice settings for the selected style
-    const voiceSettings = VOICE_STYLES[style as keyof typeof VOICE_STYLES] || VOICE_STYLES.neutral;
-    console.log(`🎵 Using voice settings for style "${style}":`, voiceSettings);
+    // Google-only; no external style settings
 
     // Check user's voice quota before proceeding
     console.log(`🎵 Checking voice quota for user: ${user.id}`);
@@ -142,22 +119,58 @@ serve(async (req: Request) => {
       throw new Error(`Text length (${text.length}) exceeds available quota (${totalAvailable})`);
     }
 
-    // Perform TTS call according to selected provider
-    let audioBuffer: ArrayBuffer;
-    if (TTS_PROVIDER === 'google') {
+    // Perform TTS call with Google only
       console.log('🎵 Calling Google Cloud Text-to-Speech API...');
       console.log('🎵 Request details:', { voiceName: voice_id, textLength: text.length });
-      const googleResp = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}` , {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          input: { text },
-          voice: { name: voice_id },
-          audioConfig: { audioEncoding: 'MP3' }
-        })
-      });
+
+      // Derive languageCode from the voice name (e.g., en-US-Chirp3-HD-Orus -> en-US)
+      const deriveLang = (name: string) => {
+        const parts = (name || '').split('-');
+        if (parts.length >= 2) return `${parts[0]}-${parts[1]}`;
+        // Fallback by rough detection
+        if (/^ar/i.test(name)) return 'ar-XA';
+        return 'en-US';
+      };
+      const languageCode = deriveLang(voice_id);
+
+      const synthesize = async (name: string) => {
+        const lang = deriveLang(name);
+        const isChirp = /Chirp3/i.test(name);
+        const apiBase = isChirp
+          ? `https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${GOOGLE_TTS_KEY}`
+          : `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`;
+        const resp = await fetch(apiBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: { text },
+            voice: { 
+              name,
+              languageCode: lang,
+              // Add support for Chirp3 HD voices
+              ssmlGender: name.includes('HD-Orus') || name.includes('HD-Schedar') ? 'MALE' : 
+                         name.includes('HD-Zephyr') || name.includes('HD-Vindemiatrix') ? 'FEMALE' : 'NEUTRAL'
+            },
+            audioConfig: { 
+              audioEncoding: 'MP3',
+              // Add effects profile for better voice quality (match Google demo)
+              effectsProfileId: name.includes('Chirp3-HD') 
+                ? ['headphone-class-device', 'small-bluetooth-speaker-class-device'] 
+                : []
+            }
+          })
+        });
+        return resp;
+      };
+
+      let googleResp = await synthesize(voice_id);
+      if (!googleResp.ok && (googleResp.status === 400 || googleResp.status === 404)) {
+        // One-time fallback to a safe voice based on language
+        const isArabic = /^ar/i.test(languageCode);
+        const fallbackVoice = isArabic ? 'ar-XA-Chirp3-HD-Schedar' : 'en-US-Chirp3-HD-Orus';
+        console.warn('🎵 Google TTS voice failed, retrying with fallback voice:', fallbackVoice);
+        googleResp = await synthesize(fallbackVoice);
+      }
 
       if (!googleResp.ok) {
         const errorText = await googleResp.text();
@@ -166,6 +179,7 @@ serve(async (req: Request) => {
           statusText: googleResp.statusText,
           error: errorText,
           voiceName: voice_id,
+          languageCode,
         });
         if (googleResp.status === 401 || googleResp.status === 403) {
           throw new Error('Google TTS authentication/authorization failed - check API key and quotas');
@@ -184,62 +198,9 @@ serve(async (req: Request) => {
       for (let i = 0; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      audioBuffer = bytes.buffer;
-      console.log('🎵 Google TTS audio generated successfully:', { audioSize: bytes.byteLength });
-    } else {
-      console.log(`🎵 Calling ElevenLabs TTS API with eleven_multilingual_v2 model...`);
-      console.log(`🎵 Request details:`, {
-        voiceId: voice_id,
-        textLength: text.length,
-        model: 'eleven_multilingual_v2',
-        voiceSettings
-      });
-
-      const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'audio/mpeg',
-          'Content-Type': 'application/json',
-          'xi-api-key': ELEVENLABS_API_KEY!,
-        },
-        body: JSON.stringify({
-          text: text,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: voiceSettings,
-          output_format: 'mp3_22050_32'
-        }),
-      });
-
-      if (!elevenLabsResponse.ok) {
-        const errorText = await elevenLabsResponse.text();
-        console.error('🎵 ElevenLabs API error:', {
-          status: elevenLabsResponse.status,
-          statusText: elevenLabsResponse.statusText,
-          error: errorText,
-          voiceId: voice_id,
-          model: 'eleven_multilingual_v2'
-        });
-        if (elevenLabsResponse.status === 401) {
-          throw new Error('ElevenLabs API authentication failed - check API key');
-        } else if (elevenLabsResponse.status === 404) {
-          throw new Error(`Voice ID ${voice_id} not found in ElevenLabs - voice may have been deleted`);
-        } else if (elevenLabsResponse.status === 422) {
-          throw new Error('Invalid voice settings or text format');
-        } else {
-          throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status} - ${errorText}`);
-        }
-      }
-
-      audioBuffer = await elevenLabsResponse.arrayBuffer();
-      console.log(`🎵 ElevenLabs audio generated successfully:`, {
-        audioSize: audioBuffer.byteLength,
-        voiceStyle: style,
-        model: 'eleven_multilingual_v2'
-      });
-      if (audioBuffer.byteLength === 0) {
-        throw new Error('Received empty audio data from ElevenLabs API');
-      }
-    }
+      const audioBuffer = bytes.buffer as ArrayBuffer;
+      console.log('🎵 Google TTS audio generated successfully:', { audioSize: audioBuffer.byteLength });
+    
 
     // Update user's voice usage
     console.log(`🎵 Updating voice usage for user: ${user.id}`);

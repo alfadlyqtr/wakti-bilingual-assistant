@@ -16,7 +16,7 @@ export function ActiveModeIndicator({ activeTrigger }: ActiveModeIndicatorProps)
       case 'chat':
         return {
           icon: Bot,
-          label: language === 'ar' ? 'المحادثة' : 'Chat Mode',
+          label: language === 'ar' ? 'المحادثة' : 'Chat',
           className: "bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50"
         };
       case 'search':

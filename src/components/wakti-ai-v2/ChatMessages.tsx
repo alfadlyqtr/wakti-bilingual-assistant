@@ -197,112 +197,34 @@ export function ChatMessages({
     return () => window.removeEventListener('wakti-tts-voice-changed', handler as EventListener);
   }, []);
 
-  // ElevenLabs-backed TTS via Edge Function with stop/toggle and caching
+  // Google Cloud TTS via Edge Function (no ElevenLabs, no browser SpeechSynthesis)
   const handleSpeak = async (text: string, messageId: string) => {
     try {
       // Toggle off if already playing this message
       if (speakingMessageId === messageId) {
         if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
+          try { audioRef.current.pause(); } catch {}
+          try { audioRef.current.currentTime = 0; } catch {}
         }
         setSpeakingMessageId(null);
+        setIsPaused(false);
         return;
       }
 
       // Stop any current playback
       if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+        try { audioRef.current.pause(); } catch {}
+        try { audioRef.current.currentTime = 0; } catch {}
       }
       setSpeakingMessageId(messageId);
+      setIsPaused(false);
 
-      // Choose voice ID based on detected text language and user Talk Back settings
+      // Determine voice_id from TalkBack settings
       const isArabicText = /[\u0600-\u06FF]/.test(text);
       const { ar, en } = getSelectedVoices();
       const voice_id = (isArabicText || language === 'ar') ? ar : en;
-      const cacheKey = `${messageId}::${voice_id}`;
 
-      // Use cached audio if available (in-memory first)
-      const cachedUrl = audioCacheRef.current.get(cacheKey);
-      if (cachedUrl) {
-        // Simulated quick progress for cached audio: 1→4 then 100, then autoplay
-        setFetchingIds(prev => new Set(prev).add(messageId));
-        setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 1); return n; });
-        let step = 1;
-        const iv = window.setInterval(() => {
-          step = Math.min(4, step + 1);
-          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, step); return n; });
-          if (step >= 4) {
-            window.clearInterval(iv);
-            progressIntervalRef.current.delete(messageId);
-          }
-        }, 120);
-        progressIntervalRef.current.set(messageId, iv);
-
-        const audio = new Audio(cachedUrl);
-        audioRef.current = audio;
-        audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); };
-        audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); };
-        audio.onplay = () => setIsPaused(false);
-        audio.onpause = () => setIsPaused(true);
-        setTimeout(async () => {
-          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 100); return n; });
-          try {
-            try { window.dispatchEvent(new CustomEvent('wakti-tts-playing', { detail: { messageId } })); } catch {}
-            await audio.play();
-          } finally {
-            setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-            const iv2 = progressIntervalRef.current.get(messageId);
-            if (iv2) { window.clearInterval(iv2); progressIntervalRef.current.delete(messageId); }
-            setProgressMap(prev => { const n = new Map(prev); n.delete(messageId); return n; });
-          }
-        }, 400);
-        return;
-      }
-
-      // Check persistent cache in sessionStorage and verify it matches current text length
-      const persisted = getPersisted(cacheKey);
-      if (persisted && persisted.len >= text.length) {
-        const objectUrl = base64ToBlobUrl(persisted.b64);
-        audioCacheRef.current.set(cacheKey, objectUrl);
-        // Quick simulated progress (1→4, then 100) and autoplay
-        setFetchingIds(prev => new Set(prev).add(messageId));
-        setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 1); return n; });
-        let step = 1;
-        const iv = window.setInterval(() => {
-          step = Math.min(4, step + 1);
-          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, step); return n; });
-          if (step >= 4) {
-            window.clearInterval(iv);
-            progressIntervalRef.current.delete(messageId);
-          }
-        }, 120);
-        progressIntervalRef.current.set(messageId, iv);
-
-        const audio = new Audio(objectUrl);
-        audioRef.current = audio;
-        audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); };
-        audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); };
-        audio.onplay = () => setIsPaused(false);
-        audio.onpause = () => setIsPaused(true);
-        setTimeout(async () => {
-          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 100); return n; });
-          try {
-            await audio.play();
-          } finally {
-            setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-            const iv2 = progressIntervalRef.current.get(messageId);
-            if (iv2) { window.clearInterval(iv2); progressIntervalRef.current.delete(messageId); }
-            setProgressMap(prev => { const n = new Map(prev); n.delete(messageId); return n; });
-          }
-        }, 400);
-        return;
-      }
-
-      // Call existing Edge Function voice-tts with auth
-      setFetchingIds(prev => new Set(prev).add(messageId));
-      setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 1); return n; });
+      // Auth + endpoint
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
@@ -319,92 +241,24 @@ export function ChatMessages({
 
       if (!resp.ok) {
         setSpeakingMessageId(null);
-        // clear any progress interval if created
-        const iv = progressIntervalRef.current.get(messageId);
-        if (iv) { window.clearInterval(iv); progressIntervalRef.current.delete(messageId); }
+        setIsPaused(false);
         return;
       }
 
-      // Stream the response to compute progress
-      const contentLength = Number(resp.headers.get('content-length') || 0);
-      const reader = resp.body?.getReader();
-      const chunks: Uint8Array[] = [];
-      let received = 0;
-      // If content-length is unknown, show a short steady ramp 1→4, then snap to 100% when ready
-      if (!contentLength) {
-        let step = 1;
-        setProgressMap(prev => { const n = new Map(prev); n.set(messageId, step); return n; });
-        const iv = window.setInterval(() => {
-          step = Math.min(4, step + 1);
-          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, step); return n; });
-          if (step >= 4) {
-            window.clearInterval(iv);
-            progressIntervalRef.current.delete(messageId);
-          }
-        }, 650);
-        progressIntervalRef.current.set(messageId, iv);
-      }
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) {
-            chunks.push(value);
-            received += value.byteLength;
-            if (contentLength > 0) {
-              const pct = Math.min(100, Math.max(1, Math.round((received / contentLength) * 100)));
-              setProgressMap(prev => { const n = new Map(prev); n.set(messageId, pct); return n; });
-            } else {
-              // Unknown length: let the deterministic 1→4 interval drive the UI; no per-chunk nudge
-            }
-          }
-        }
-      }
-      const blob = new Blob(chunks, { type: 'audio/mpeg' });
+      const blob = await resp.blob();
       const objectUrl = URL.createObjectURL(blob);
-      audioCacheRef.current.set(cacheKey, objectUrl);
-      // Persist small clips (<= 2.5MB) to sessionStorage as base64 for instant replay later
-      if (blob.size <= 2.5 * 1024 * 1024) {
-        try {
-          const arrayBuf2 = await blob.arrayBuffer();
-          const b64 = bufferToBase64(arrayBuf2);
-          setPersisted(cacheKey, b64, text.length);
-        } catch {}
-      }
-
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
-      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); };
-      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); };
+      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
+      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
       audio.onplay = () => setIsPaused(false);
       audio.onpause = () => setIsPaused(true);
-      // Snap to 100% now that audio is ready
-      setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 100); return n; });
-      // Guard: user may have cancelled during loading; if so, do not auto-play
-      if (speakingMessageIdRef.current !== messageId) {
-        try { URL.revokeObjectURL(objectUrl); } catch {}
-        audioCacheRef.current.delete(cacheKey);
-        return;
-      }
-      // Attempt autoplay; if the first attempt is blocked or not ready, retry once shortly after
-      try {
-        try { window.dispatchEvent(new CustomEvent('wakti-tts-playing', { detail: { messageId } })); } catch {}
-        await audio.play();
-      } catch (err) {
-        try {
-          await new Promise(res => setTimeout(res, 300));
-          try { window.dispatchEvent(new CustomEvent('wakti-tts-playing', { detail: { messageId } })); } catch {}
-          await audio.play();
-        } catch (err2) {
-          // If autoplay still fails, keep UI state so the user can press play using the mini controls
-          setIsPaused(true);
-        }
-      }
-    } catch (e) {
+      await audio.play();
+    } catch {
       setSpeakingMessageId(null);
+      setIsPaused(false);
     } finally {
       setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-      // clear fallback interval if any
       const iv = progressIntervalRef.current.get(messageId);
       if (iv) { window.clearInterval(iv); progressIntervalRef.current.delete(messageId); }
       setProgressMap(prev => { const n = new Map(prev); n.delete(messageId); return n; });
@@ -415,40 +269,10 @@ export function ChatMessages({
   useEffect(() => {
     for (const [, t] of prefetchTimersRef.current) { clearTimeout(t); }
     prefetchTimersRef.current.clear();
-  }, [sessionMessages]);
-
-  // Cleanup cached object URLs on unmount to avoid memory leaks
-  useEffect(() => {
-    return () => {
-      for (const url of audioCacheRef.current.values()) {
-        try { URL.revokeObjectURL(url); } catch {}
-      }
-      audioCacheRef.current.clear();
-      if (audioRef.current) {
-        try { audioRef.current.pause(); } catch {}
-      }
-    };
   }, []);
 
-  // Client warmup on mount (zero-cost)
-  useEffect(() => {
-    const warmup = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-      try {
-        await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
-          },
-          body: JSON.stringify({ mode: 'warmup' })
-        });
-      } catch { /* ignore warmup errors */ }
-    };
-    warmup();
-  }, []);
+  // Remove ElevenLabs warmup; Google TTS via edge needs none
+  useEffect(() => {}, []);
 
   // FIXED: Show welcome message for new conversations
   const renderWelcomeMessage = () => {
@@ -760,9 +584,9 @@ export function ChatMessages({
     const a = audioRef.current;
     if (!a) return;
     if (a.paused) {
-      a.play();
+      try { a.play(); setIsPaused(false); } catch {}
     } else {
-      a.pause();
+      try { a.pause(); setIsPaused(true); } catch {}
     }
   };
 

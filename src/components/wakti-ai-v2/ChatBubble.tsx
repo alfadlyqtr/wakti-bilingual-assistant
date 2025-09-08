@@ -1,13 +1,15 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
-import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy, Save, Expand, Speaker } from 'lucide-react';
+import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy, Save, Expand, Play, Pause } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { ImageModal } from './ImageModal';
+import { supabase } from '@/integrations/supabase/client';
+import { getSelectedVoices } from './TalkBackSettings';
 
 interface ChatBubbleProps {
   message: any;
@@ -19,6 +21,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
   const { language } = useTheme();
   const isUser = message.role === 'user';
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   // Format message content with enhanced buddy-chat features
   const formatContent = (content: string) => {
@@ -51,109 +54,73 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     }
   };
 
-  // ENHANCED: Speak message content with improved Arabic support
+  // Google Cloud TTS via Edge Function (align with ChatMessages)
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const handleSpeak = async () => {
     try {
-      if (!message.content || !window.speechSynthesis) {
-        toast.error(language === 'ar' ? 'خطأ' : 'Error', {
-          description: language === 'ar' ? 'ميزة النطق غير متوفرة' : 'Speech synthesis not available',
-        });
+      const text = String(message.content || '').trim();
+      if (!text) return;
+
+      // If audio already exists, toggle pause/resume
+      if (audioRef.current && isSpeaking) {
+        const a = audioRef.current;
+        if (a.paused) {
+          try { await a.play(); setIsPaused(false); } catch {}
+        } else {
+          try { a.pause(); setIsPaused(true); } catch {}
+        }
         return;
       }
 
-      // Stop any currently speaking text
-      window.speechSynthesis.cancel();
-
-      if (isSpeaking) {
-        setIsSpeaking(false);
-        return;
+      // Stop any current playback
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch {}
+        try { audioRef.current.currentTime = 0; } catch {}
       }
-
       setIsSpeaking(true);
+      setIsPaused(false);
 
-      const utterance = new SpeechSynthesisUtterance(message.content);
-      
-      // ENHANCED: Better Arabic detection and voice selection
-      const isArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(message.content);
-      
-      // Wait for voices to load
-      const getVoices = () => new Promise<SpeechSynthesisVoice[]>((resolve) => {
-        const voices = window.speechSynthesis.getVoices();
-        if (voices.length) {
-          resolve(voices);
-        } else {
-          window.speechSynthesis.onvoiceschanged = () => {
-            resolve(window.speechSynthesis.getVoices());
-          };
-        }
+      // Determine voice from TalkBack settings
+      const isArabicText = /[\u0600-\u06FF]/.test(text);
+      const { ar, en } = getSelectedVoices();
+      const voice_id = (isArabicText || language === 'ar') ? ar : en;
+
+      // Auth + endpoint
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+
+      const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ text, voice_id, style: 'neutral' })
       });
 
-      const voices = await getVoices();
-      
-      if (isArabic) {
-        // Find Arabic voice with better patterns
-        const arabicVoice = voices.find(voice => 
-          voice.lang.startsWith('ar') || 
-          voice.name.toLowerCase().includes('arabic') ||
-          voice.name.toLowerCase().includes('عربي') ||
-          voice.lang.includes('SA') ||
-          voice.lang.includes('AE') ||
-          voice.lang.includes('EG')
-        );
-        
-        if (arabicVoice) {
-          utterance.voice = arabicVoice;
-          console.log('🎙️ ARABIC VOICE FOUND:', arabicVoice.name);
-        } else {
-          console.log('⚠️ NO ARABIC VOICE FOUND, using default');
-        }
-        utterance.lang = "ar-SA";
-        utterance.rate = 0.7; // Slower for Arabic
-      } else {
-        // Find English voice
-        const englishVoice = voices.find(voice => 
-          voice.lang.startsWith('en') && 
-          (voice.name.toLowerCase().includes('female') || voice.name.toLowerCase().includes('male'))
-        );
-        
-        if (englishVoice) {
-          utterance.voice = englishVoice;
-        }
-        utterance.lang = "en-US";
-        utterance.rate = 0.9;
-      }
-      
-      // Set voice properties
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      
-      // Handle speech events
-      utterance.onend = () => {
-        setIsSpeaking(false);
-      };
-      
-      utterance.onerror = (event) => {
-        console.error('Speech synthesis error:', event);
+      if (!resp.ok) {
         setIsSpeaking(false);
         toast.error(language === 'ar' ? 'خطأ' : 'Error', {
-          description: language === 'ar' ? 'فشل في قراءة الرسالة' : 'Failed to speak message',
+          description: language === 'ar' ? 'فشل في توليد الصوت' : 'Failed to generate audio',
         });
-      };
+        return;
+      }
 
-      window.speechSynthesis.speak(utterance);
-      
-      toast.success(language === 'ar' ? 'جاري القراءة...' : 'Speaking...', {
-        description: isArabic 
-          ? 'يتم قراءة الرسالة بالعربية' 
-          : 'Reading message aloud',
-      });
-
+      const blob = await resp.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const audio = new Audio(objectUrl);
+      audioRef.current = audio;
+      audio.onended = () => { setIsSpeaking(false); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
+      audio.onerror = () => { setIsSpeaking(false); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
+      audio.onpause = () => setIsPaused(true);
+      audio.onplay = () => setIsPaused(false);
+      await audio.play();
     } catch (error) {
-      console.error('Failed to speak message:', error);
+      console.error('Failed to play TTS:', error);
       setIsSpeaking(false);
-      toast.error(language === 'ar' ? 'خطأ' : 'Error', {
-        description: language === 'ar' ? 'فشل في قراءة الرسالة' : 'Failed to speak message',
-      });
+      setIsPaused(false);
     }
   };
 
@@ -387,16 +354,18 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 {/* ENHANCED: Mini Speak Button for ALL messages with Arabic support */}
                 <button
                   onClick={handleSpeak}
-                  className={`p-1 rounded-md hover:bg-muted/60 transition-colors ${isSpeaking ? 'bg-primary/20' : ''}`}
-                  title={language === 'ar' ? 'تحدث' : 'Speak'}
-                >
-                  <Speaker className={`w-3 h-3 ${
+                  className={`p-1 rounded-md transition-colors ${
                     isSpeaking 
-                      ? 'text-primary' 
-                      : isUser 
-                        ? 'text-white/70 hover:text-white' 
-                        : 'text-muted-foreground'
-                  }`} />
+                      ? 'text-green-600 bg-green-500/15 shadow-[0_0_8px_rgba(34,197,94,0.7)]' 
+                      : 'hover:bg-muted/60'
+                  }`}
+                  title={isSpeaking && !isPaused ? (language==='ar'?'إيقاف مؤقت':'Pause') : (language==='ar'?'تشغيل':'Play')}
+                >
+                  {isSpeaking && !isPaused ? (
+                    <Pause className="w-3 h-3" />
+                  ) : (
+                    <Play className={`w-3 h-3 ${isUser ? 'text-white/70 hover:text-white' : 'text-muted-foreground'}`} />
+                  )}
                 </button>
               </div>
 

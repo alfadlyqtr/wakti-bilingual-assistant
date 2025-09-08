@@ -640,10 +640,10 @@ export function ChatInput({
                       className="inline-flex items-center gap-1 outline-none"
                       aria-haspopup="menu"
                       aria-expanded={isModeMenuOpen}
-                      aria-label={language === 'ar' ? 'وضع الصورة' : 'Image Mode'}
+                      aria-label={language === 'ar' ? 'وضع الصورة' : 'Image'}
                     >
                       <ImagePlus className="h-3 w-3" />
-                      <span>{language === 'ar' ? 'وضع الصورة' : 'Image Mode'}</span>
+                      <span>{language === 'ar' ? 'وضع الصورة' : 'Image'}</span>
                       <ChevronDown className="h-3 w-3" />
                     </button>
                   </div>
@@ -663,7 +663,7 @@ export function ChatInput({
                             : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
                         `}
                       >
-                        {language === 'ar' ? 'نص → صورة' : 'Text to Image'}
+                        {language === 'ar' ? 'نص → صورة' : 'text>image'}
                       </button>
                       <button
                         role="menuitem"
@@ -674,7 +674,7 @@ export function ChatInput({
                             : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
                         `}
                       >
-                        {language === 'ar' ? 'صورة → صورة' : 'Image to Image'}
+                        {language === 'ar' ? 'صورة → صورة' : 'image>image'}
                       </button>
                       <button
                         role="menuitem"
@@ -685,7 +685,7 @@ export function ChatInput({
                             : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
                         `}
                       >
-                        {language === 'ar' ? 'إزالة الخلفية' : 'Background Removal'}
+                        {language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}
                       </button>
                     </div>,
                     document.body

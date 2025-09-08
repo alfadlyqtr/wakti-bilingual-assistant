@@ -8,13 +8,16 @@ interface VoiceCloneScreen1Props {
   onSkip: () => void;
   hasExistingVoices: boolean;
   onOpenTTS: () => void;
+  hideActions?: boolean;
+  hideHeader?: boolean;
 }
 
-export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices, onOpenTTS }: VoiceCloneScreen1Props) {
+export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices, onOpenTTS, hideActions = false, hideHeader = false }: VoiceCloneScreen1Props) {
   const { language } = useTheme();
 
   return (
     <div className="space-y-6">
+      {!hideHeader && (
       <div className="text-center">
         <div className="mx-auto w-16 h-16 bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full flex items-center justify-center mb-4">
           <Mic2 className="h-8 w-8 text-white" />
@@ -29,6 +32,7 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices, onOpenTTS
           }
         </p>
       </div>
+      )}
 
       <div className="space-y-4">
         <div className="flex items-start gap-3">
@@ -121,6 +125,7 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices, onOpenTTS
         </p>
       </div>
 
+      {!hideActions && (
       <div className="space-y-3 pt-4">
         {/* New action - Text To Speech */}
         <Button 
@@ -166,6 +171,7 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices, onOpenTTS
           </Button>
         )}
       </div>
+      )}
     </div>
   );
 }

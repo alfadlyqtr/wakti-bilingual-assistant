@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -131,6 +131,33 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [generatedText, setGeneratedText] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // Cached generated texts (persisted)
+  const CACHE_KEY = 'wakti_generated_text_cache_v1';
+  const [cachedTexts, setCachedTexts] = useState<string[]>([]);
+
+  // Load cache on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setCachedTexts(arr.filter((s) => typeof s === 'string').slice(0, 3));
+      }
+    } catch {}
+  }, []);
+
+  // If user opens Generated tab and there's no current text, auto-load newest cached
+  useEffect(() => {
+    if (activeTab === 'generated' && !generatedText && cachedTexts.length > 0) {
+      setGeneratedText(cachedTexts[0]);
+    }
+  }, [activeTab, generatedText, cachedTexts]);
+
+  const saveCache = (arr: string[]) => {
+    setCachedTexts(arr);
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); } catch {}
+  };
+
   const canGenerate = useMemo(() => {
     if (activeTab === 'compose') return topic.trim().length > 0 && !isLoading;
     if (activeTab === 'reply') return originalMessage.trim().length > 0 && !isLoading;
@@ -241,6 +268,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         setGeneratedText(resp.generatedText);
         setActiveTab('generated');
         onTextGenerated(resp.generatedText, body.mode);
+
+        // Update cache: newest first, keep max 3, remove duplicates/empties
+        const clean = (resp.generatedText || '').trim();
+        if (clean) {
+          const next = [clean, ...cachedTexts.filter((t) => t.trim() && t.trim() !== clean)].slice(0, 3);
+          saveCache(next);
+        }
       } else {
         setError(resp?.error || 'Failed to generate text');
       }
@@ -274,9 +308,21 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               className={`px-3 py-2 rounded-md border ${activeTab==='reply' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'رد' : 'Reply'}</button>
             <button
-              disabled={!generatedText}
-              onClick={() => setActiveTab('generated')}
-              className={`px-3 py-2 rounded-md border ${activeTab==='generated' ? 'bg-primary text-primary-foreground' : generatedText ? 'hover:bg-muted' : 'opacity-60 cursor-not-allowed'}`}
+              disabled={!generatedText && cachedTexts.length === 0}
+              onClick={() => {
+                // Switch to Generated; if empty, preload latest cached
+                if (!generatedText && cachedTexts.length > 0) {
+                  setGeneratedText(cachedTexts[0]);
+                }
+                setActiveTab('generated');
+              }}
+              className={`px-3 py-2 rounded-md border ${
+                activeTab==='generated' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : (generatedText || cachedTexts.length > 0) 
+                    ? 'hover:bg-muted' 
+                    : 'opacity-60 cursor-not-allowed'
+              }`}
             >{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</button>
           </div>
         </div>
@@ -435,6 +481,34 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 <label className="text-sm font-medium">{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</label>
                 <textarea className="w-full border rounded p-3 min-h-[220px]" readOnly value={generatedText} />
               </div>
+              {/* Cached texts: show up to 3 previous results */}
+              {cachedTexts.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">
+                    {language === 'ar' ? 'نصوص محفوظة:' : 'Cached texts:'}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {cachedTexts.map((t, idx) => (
+                      <button
+                        key={idx}
+                        className="text-left border rounded p-2 hover:bg-muted"
+                        onClick={() => { setGeneratedText(t); setActiveTab('generated'); }}
+                        title={language === 'ar' ? 'تحميل في مربع النص' : 'Load into Generated Text'}
+                      >
+                        <div className="text-xs line-clamp-2 whitespace-pre-wrap break-words">{t}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <button
+                      className="px-3 py-1.5 rounded border hover:bg-muted"
+                      onClick={() => { saveCache([]); }}
+                    >
+                      {language === 'ar' ? 'مسح المحفوظات' : 'Clear Cache'}
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button className="px-3 py-1.5 rounded border hover:bg-muted" onClick={handleCopy}>
                   {copied ? (language === 'ar' ? 'تم النسخ!' : 'Copied!') : (language === 'ar' ? 'نسخ' : 'Copy')}

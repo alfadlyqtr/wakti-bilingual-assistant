@@ -10,12 +10,12 @@ const LS_AUTOPLAY = 'wakti_tts_autoplay';
 // Default voice IDs (provided by user)
 export const DEFAULT_VOICES = {
   ar: {
-    male: 'ar-XA-Chirp3-HD-Umbriel' as const,
-    female: 'ar-XA-Chirp3-HD-Zephyr' as const,
+    male: 'ar-XA-Chirp3-HD-Schedar' as const,
+    female: 'ar-XA-Chirp3-HD-Vindemiatrix' as const,
   },
   en: {
-    male: 'en-US-Chirp3-HD-Algenib' as const,
-    female: 'en-US-Chirp3-HD-Erinome' as const,
+    male: 'en-US-Chirp3-HD-Orus' as const,
+    female: 'en-US-Chirp3-HD-Zephyr' as const,
   },
 };
 
@@ -25,18 +25,28 @@ export function getSelectedVoices() {
   // Read selections with safe fallbacks
   let ar: VoiceId = DEFAULT_VOICES.ar.male;
   let en: VoiceId = DEFAULT_VOICES.en.male;
+
+  const validAr = new Set<VoiceId>([DEFAULT_VOICES.ar.male, DEFAULT_VOICES.ar.female]);
+  const validEn = new Set<VoiceId>([DEFAULT_VOICES.en.male, DEFAULT_VOICES.en.female]);
+
   try {
-    const arSaved = localStorage.getItem(LS_AR);
-    if (arSaved && (arSaved === DEFAULT_VOICES.ar.male || arSaved === DEFAULT_VOICES.ar.female)) {
-      ar = arSaved as VoiceId;
+    const arSaved = localStorage.getItem(LS_AR) || '';
+    const cleanedAr = arSaved && /^(ar-XA-)/.test(arSaved) ? arSaved : DEFAULT_VOICES.ar.male;
+    ar = (validAr.has(cleanedAr as VoiceId) ? cleanedAr : DEFAULT_VOICES.ar.male) as VoiceId;
+    if (ar !== arSaved) {
+      try { localStorage.setItem(LS_AR, ar); } catch {}
     }
   } catch {}
+
   try {
-    const enSaved = localStorage.getItem(LS_EN);
-    if (enSaved && (enSaved === DEFAULT_VOICES.en.male || enSaved === DEFAULT_VOICES.en.female)) {
-      en = enSaved as VoiceId;
+    const enSaved = localStorage.getItem(LS_EN) || '';
+    const cleanedEn = enSaved && /^(en-US-)/.test(enSaved) ? enSaved : DEFAULT_VOICES.en.male;
+    en = (validEn.has(cleanedEn as VoiceId) ? cleanedEn : DEFAULT_VOICES.en.male) as VoiceId;
+    if (en !== enSaved) {
+      try { localStorage.setItem(LS_EN, en); } catch {}
     }
   } catch {}
+
   return { ar, en };
 }
 

@@ -3,7 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Info, Copy, Download } from 'lucide-react';
+import { Loader2, Copy, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -76,7 +76,7 @@ export default function VoiceTTS() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showStyleDetails, setShowStyleDetails] = useState(false);
+  // Removed external style details; info kept inside dropdown items
   const [defaultVoiceId, setDefaultVoiceId] = useState<string>('');
   const [defaultStyle, setDefaultStyle] = useState<string>('neutral');
 
@@ -192,11 +192,7 @@ export default function VoiceTTS() {
     <div className="max-w-xl mx-auto space-y-6 p-4">
       <div className="text-center">
         <h2 className="text-xl font-semibold mb-2">{language === 'ar' ? 'تحويل النص إلى كلام' : 'Text To Speech'}</h2>
-        <p className="text-sm text-muted-foreground">
-          {language === 'ar'
-            ? 'استخدم نفس حصة الأحرف في استوديو الصوت. اختر الصوت والأسلوب ثم أنشئ الصوت.'
-            : 'Uses the same character quota as Voice Studio. Pick a voice and style, then generate speech.'}
-        </p>
+        {/* Intro paragraph removed per request */}
       </div>
 
       {/* Character quota (same behavior as Voice Studio) */}
@@ -223,74 +219,89 @@ export default function VoiceTTS() {
         </div>
       </div>
 
-      {/* Voice selector */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium">{language === 'ar' ? 'اختر الصوت' : 'Select Voice'}</label>
-          {selectedVoiceId && (
-            <Button onClick={() => setAsDefaultVoice(selectedVoiceId)} variant="outline" size="sm" className="text-xs">
-              {defaultVoiceId === selectedVoiceId ? (language === 'ar' ? '✓ افتراضي' : '✓ Default') : (language === 'ar' ? 'جعل افتراضي' : 'Set Default')}
-            </Button>
-          )}
+      {/* Voice selector + Voice style side-by-side on md+ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Voice selector */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">{language === 'ar' ? 'اختر الصوت' : 'Select Voice'}</label>
+            {selectedVoiceId && (
+              <Button onClick={() => setAsDefaultVoice(selectedVoiceId)} variant="outline" size="sm" className={`text-xs ${defaultVoiceId === selectedVoiceId ? 'text-green-600' : ''}`}>
+                {defaultVoiceId === selectedVoiceId ? '✓' : (language === 'ar' ? 'جعل افتراضي' : 'Set Default')}
+              </Button>
+            )}
+          </div>
+          <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId}>
+            <SelectTrigger className="h-12">
+              {(() => {
+                const v = voices.find(vo => vo.voice_id === selectedVoiceId);
+                const isDefault = v?.is_default;
+                const icon = isDefault ? '🤖' : '🎤';
+                return (
+                  <div className="flex items-center gap-2 w-full">
+                    <span className={isDefault ? 'text-blue-600' : 'text-green-600'}>{icon}</span>
+                    <span>{v?.voice_name || (language === 'ar' ? 'اختر صوت' : 'Choose a voice')}</span>
+                    {defaultVoiceId === selectedVoiceId && <span className="text-green-600 ml-auto">✓</span>}
+                  </div>
+                );
+              })()}
+            </SelectTrigger>
+            <SelectContent>
+              {voices.filter(v => v.is_default).map(v => (
+                <SelectItem key={v.id} value={v.voice_id}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-600">🤖</span>
+                    <span>{v.voice_name}</span>
+                    {defaultVoiceId === v.voice_id && <span className="text-green-600">✓</span>}
+                  </div>
+                </SelectItem>
+              ))}
+              {voices.filter(v => !v.is_default).map(v => (
+                <SelectItem key={v.id} value={v.voice_id}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">🎤</span>
+                    <span>{v.voice_name}</span>
+                    {defaultVoiceId === v.voice_id && <span className="text-green-600">✓</span>}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId}>
-          <SelectTrigger className="h-12">
-            <SelectValue placeholder={language === 'ar' ? 'اختر صوت' : 'Choose a voice'} />
-          </SelectTrigger>
-          <SelectContent>
-            {voices.filter(v => v.is_default).map(v => (
-              <SelectItem key={v.id} value={v.voice_id}>
-                <div className="flex items-center gap-2"><span className="text-blue-600">🤖</span><span>{v.voice_name}</span><span className="text-xs text-muted-foreground">({language === 'ar' ? 'افتراضي' : 'Default'})</span>{defaultVoiceId === v.voice_id && <span className="text-green-600">✓</span>}</div>
-              </SelectItem>
-            ))}
-            {voices.filter(v => !v.is_default).map(v => (
-              <SelectItem key={v.id} value={v.voice_id}>
-                <div className="flex items-center gap-2"><span className="text-green-600">🎤</span><span>{v.voice_name}</span><span className="text-xs text-muted-foreground">({language === 'ar' ? 'مستنسخ' : 'Cloned'})</span>{defaultVoiceId === v.voice_id && <span className="text-green-600">✓</span>}</div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
-      {/* Voice style */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">{language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}</label>
-            <Button variant="ghost" size="sm" onClick={() => setShowStyleDetails(!showStyleDetails)} className="h-auto p-1">
-              <Info className="h-3 w-3" />
+        {/* Voice style */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">{language === 'ar' ? 'أسلوب الصوت' : 'Voice Style'}</label>
+            </div>
+            <Button onClick={() => setAsDefaultVoiceStyle(selectedStyle)} variant="outline" size="sm" className="text-xs">
+              {defaultStyle === selectedStyle ? '✓' : (language === 'ar' ? 'جعل افتراضي' : 'Set Default')}
             </Button>
           </div>
-          <Button onClick={() => setAsDefaultVoiceStyle(selectedStyle)} variant="outline" size="sm" className="text-xs">
-            {defaultStyle === selectedStyle ? (language === 'ar' ? '✓ افتراضي' : '✓ Default') : (language === 'ar' ? 'جعل افتراضي' : 'Set Default')}
-          </Button>
-        </div>
-        <Select value={selectedStyle} onValueChange={v => setSelectedStyle(v as keyof typeof VOICE_STYLES)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(VOICE_STYLES).map(([key, style]) => (
-              <SelectItem key={key} value={key}>
-                <div className="flex items-center gap-2">
-                  <span>{(style as any).icon}</span>
-                  <div className="flex flex-col">
-                    <span className="font-medium">{(style as any).name[language]}</span>
-                    <span className="text-xs text-muted-foreground">{(style as any).description[language]}</span>
+          <Select value={selectedStyle} onValueChange={v => setSelectedStyle(v as keyof typeof VOICE_STYLES)}>
+            <SelectTrigger className="h-12">
+              <div className="flex items-center gap-2">
+                <span>{(VOICE_STYLES as any)[selectedStyle].icon}</span>
+                <span className="font-medium">{(VOICE_STYLES as any)[selectedStyle].name[language]}</span>
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(VOICE_STYLES).map(([key, style]) => (
+                <SelectItem key={key} value={key}>
+                  <div className="flex items-center gap-2 w-full">
+                    <span>{(style as any).icon}</span>
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="font-medium">{(style as any).name[language]}</span>
+                      <span className="text-xs text-muted-foreground truncate">{(style as any).description[language]}</span>
+                    </div>
+                    {defaultStyle === key && <span className="text-green-600 ml-auto">✓</span>}
                   </div>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="text-xs text-muted-foreground space-y-1">
-          <p>{(VOICE_STYLES as any)[selectedStyle].description[language]}</p>
-          {showStyleDetails && (
-            <div className="bg-muted/50 p-2 rounded text-xs">
-              <p className="font-medium mb-1">{language === 'ar' ? 'الإعدادات التقنية:' : 'Technical Settings:'}</p>
-              <div className="mt-1 font-mono text-xs">{JSON.stringify((VOICE_STYLES as any)[selectedStyle].settings, null, 2)}</div>
-            </div>
-          )}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* External description/details removed; info is shown inside the dropdown items */}
         </div>
       </div>
 
