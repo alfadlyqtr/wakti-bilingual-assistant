@@ -16,11 +16,21 @@ interface VoiceClone {
   is_default?: boolean;
 }
 
-// Keep same defaults and quota behavior as Voice Studio
-const DEFAULT_VOICES: VoiceClone[] = [
-  { id: 'default-aria', voice_name: 'Wakti Female', voice_id: '9BWtsMINqrJLrRacOk9x', is_default: true },
-  { id: 'default-brian', voice_name: 'Wakti Male', voice_id: 'nPczCjzI2devNBz1zQrb', is_default: true },
-];
+// Language-aware default voices (English vs Arabic)
+const getDefaultVoices = (lang: string): VoiceClone[] => {
+  if (lang === 'ar') {
+    // Arabic
+    return [
+      { id: 'default-female-ar', voice_name: 'Wakti Female', voice_id: 'u0TsaWvt0v8migutHM3M', is_default: true },
+      { id: 'default-male-ar', voice_name: 'Wakti Male', voice_id: 'G1QUjBCuRBbLbAmYlTgl', is_default: true },
+    ];
+  }
+  // English
+  return [
+    { id: 'default-aria', voice_name: 'Wakti Female', voice_id: '9BWtsMINqrJLrRacOk9x', is_default: true },
+    { id: 'default-brian', voice_name: 'Wakti Male', voice_id: 'nPczCjzI2devNBz1zQrb', is_default: true },
+  ];
+};
 
 const VOICE_STYLES = {
   neutral: {
@@ -69,6 +79,7 @@ const VOICE_STYLES = {
 
 export default function VoiceTTS() {
   const { language } = useTheme();
+  const defaultVoices = getDefaultVoices(language);
   const [text, setText] = useState('');
   const [voices, setVoices] = useState<VoiceClone[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
@@ -87,7 +98,7 @@ export default function VoiceTTS() {
     (async () => {
       try {
         const { data: voicesData } = await supabase.from('user_voice_clones').select('*').order('created_at', { ascending: false });
-        const allVoices = [...DEFAULT_VOICES, ...(voicesData || [])];
+        const allVoices = [...defaultVoices, ...(voicesData || [])];
         setVoices(allVoices);
 
         const savedDefaultVoice = localStorage.getItem('wakti-default-voice');
@@ -96,7 +107,7 @@ export default function VoiceTTS() {
           setDefaultVoiceId(savedDefaultVoice);
           setSelectedVoiceId(savedDefaultVoice);
         } else {
-          setSelectedVoiceId(allVoices[0]?.voice_id || '');
+          setSelectedVoiceId(defaultVoices[0]?.voice_id || '');
         }
         if (savedDefaultStyle) {
           setDefaultStyle(savedDefaultStyle);
@@ -130,7 +141,10 @@ export default function VoiceTTS() {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) throw new Error('User not authenticated');
 
-      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-tts`, {
+      // Use ElevenLabs-specific edge function (separate from Talk Back / Mini Speaker)
+      const ttsEndpoint = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/elevenlabs-tts`;
+      console.log('🎵 VoiceTTS: calling', ttsEndpoint);
+      const response = await fetch(ttsEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

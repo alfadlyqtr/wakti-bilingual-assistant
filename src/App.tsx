@@ -50,6 +50,7 @@ import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminSettings from "./pages/AdminSettings";
 import AdminFawranPayments from "./pages/AdminFawranPayments";
 import VoiceTTS from "./pages/VoiceTTS";
+import VoiceStudio from "./pages/VoiceStudio";
 import TextGenerator from "./pages/TextGenerator";
 import GameMode from "./pages/GameMode";
 
@@ -184,7 +185,11 @@ function App() {
                     <AppLayout><TextGenerator /></AppLayout>
                   </GiftNotificationProvider>
                 } />
-                {/* Voice Studio removed: Google TTS only */}
+                <Route path="/tools/voice-studio" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><VoiceStudio /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
                 <Route path="/tools/game" element={
                   <GiftNotificationProvider>
                     <AppLayout><GameMode /></AppLayout>

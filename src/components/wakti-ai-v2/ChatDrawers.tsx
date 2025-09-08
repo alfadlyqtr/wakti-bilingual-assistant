@@ -53,8 +53,8 @@ export function ChatDrawers({
     setShowQuickActions(false);
     setTimeout(() => {
       if (tool === 'text') navigate('/tools/text');
-      // Redirect Voice tool to Google TTS page (Voice Studio removed)
-      if (tool === 'voice') navigate('/voice-tts');
+      // Open the full Voice Studio page with tabs
+      if (tool === 'voice') navigate('/tools/voice-studio');
       if (tool === 'game') navigate('/tools/game');
     }, 150);
   }, [setShowQuickActions, navigate]);

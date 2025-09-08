@@ -335,8 +335,8 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         throw new Error('User not authenticated');
       }
 
-      // Make direct fetch call to the edge function with corrected style parameter
-      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-tts`, {
+      // Make direct fetch call to the ElevenLabs-specific edge function (kept separate from Talk Back/Mini Speaker)
+      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/elevenlabs-tts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -349,7 +349,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         })
       });
 
-      console.log('🎵 Frontend response status:', response.status);
+      console.log('🎵 Frontend response status (elevenlabs-tts):', response.status);
       console.log('🎵 Frontend response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
