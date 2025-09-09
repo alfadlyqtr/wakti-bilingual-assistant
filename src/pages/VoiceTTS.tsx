@@ -19,16 +19,16 @@ interface VoiceClone {
 // Language-aware default voices (English vs Arabic)
 const getDefaultVoices = (lang: string): VoiceClone[] => {
   if (lang === 'ar') {
-    // Arabic
+    // Arabic UI labels for default voices
     return [
-      { id: 'default-female-ar', voice_name: 'Wakti Female', voice_id: 'u0TsaWvt0v8migutHM3M', is_default: true },
-      { id: 'default-male-ar', voice_name: 'Wakti Male', voice_id: 'G1QUjBCuRBbLbAmYlTgl', is_default: true },
+      { id: 'default-female-ar', voice_name: 'واكتي أنثى', voice_id: 'u0TsaWvt0v8migutHM3M', is_default: true },
+      { id: 'default-male-ar', voice_name: 'واكتي ذكر', voice_id: 'G1QUjBCuRBbLbAmYlTgl', is_default: true },
     ];
   }
   // English (updated to requested ElevenLabs voices)
   return [
     { id: 'default-female-en', voice_name: 'Wakti Female', voice_id: 'vr5WKaGvRWsoaX5LCVax', is_default: true },
-    { id: 'default-male-en', voice_name: 'Wakti Male', voice_id: 'ZB6Q1KAIKj9o7p9iJEWQ', is_default: true },
+    { id: 'default-male-en', voice_name: 'Wakti Male', voice_id: 'uju3wxzG5OhpWcoi3SMy', is_default: true },
   ];
 };
 
@@ -374,10 +374,18 @@ export default function VoiceTTS() {
                 : 'bg-accent hover:bg-accent/90 text-accent-foreground')
             }
             disabled={isCorrecting}
+            aria-busy={isCorrecting}
             aria-label={isCorrected ? (language === 'ar' ? 'تم التصحيح' : 'Corrected') : (language === 'ar' ? 'تصحيح' : 'Correct')}
           >
             {isCorrecting ? (
-              <span className="text-xs">{language === 'ar' ? '...تصحيح' : 'Correcting...'}</span>
+              <span className="flex items-center gap-1 text-xs">
+                {language === 'ar' ? 'جاري التصحيح' : 'Correcting'}
+                <span className="flex items-center gap-1 ml-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+              </span>
             ) : isCorrected ? (
               <span className="flex items-center gap-1 text-xs"><Check className="h-3 w-3" />{language === 'ar' ? 'تم التصحيح' : 'Corrected'}</span>
             ) : (
