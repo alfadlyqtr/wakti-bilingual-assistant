@@ -89,10 +89,11 @@ export default function Maw3dManage() {
   };
 
   const handleDelete = async () => {
-    if (!event || !confirm('Are you sure you want to delete this event?')) return;
-    
+    if (!event) return;
+    console.log('Maw3dManage: Deleting event now (no confirm modal):', event.id);
     try {
       await Maw3dService.deleteEvent(event.id);
+      console.log('Maw3dManage: Delete succeeded');
       toast.success('Event deleted successfully');
       navigate('/maw3d');
     } catch (error) {
@@ -213,7 +214,7 @@ export default function Maw3dManage() {
             {/* Primary Actions - Horizontal Layout */}
             <div className="grid grid-cols-2 gap-3">
               <Button
-                onClick={() => navigate(`/maw3d/edit/${event?.id}`)}
+                onClick={() => navigate(`/maw3d/create?id=${event?.id}`)}
                 className="gap-2 h-12"
                 size="lg"
               >

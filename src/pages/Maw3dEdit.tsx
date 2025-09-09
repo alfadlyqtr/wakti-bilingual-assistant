@@ -27,7 +27,7 @@ interface EventData {
 }
 
 export default function Maw3dEdit() {
-  const { eventId } = useParams<{ eventId: string }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { language } = useTheme();
   const { user } = useAuth();
@@ -37,17 +37,17 @@ export default function Maw3dEdit() {
   const [event, setEvent] = useState<EventData | null>(null);
 
   useEffect(() => {
-    if (eventId) {
+    if (id) {
       fetchEvent();
     }
-  }, [eventId]);
+  }, [id]);
 
   const fetchEvent = async () => {
     try {
       const { data, error } = await supabase
         .from('maw3d_events')
         .select('*')
-        .eq('id', eventId)
+        .eq('id', id as string)
         .single();
 
       if (error) throw error;
@@ -86,12 +86,12 @@ export default function Maw3dEdit() {
           requires_approval: event.requires_approval,
           updated_at: new Date().toISOString()
         })
-        .eq('id', eventId);
+        .eq('id', id as string);
 
       if (error) throw error;
 
       toast.success(language === 'ar' ? 'تم تحديث الحدث بنجاح' : 'Event updated successfully');
-      navigate(`/maw3d/event/${eventId}`);
+      navigate(`/maw3d/manage/${id}`);
     } catch (error) {
       console.error('Error updating event:', error);
       toast.error(language === 'ar' ? 'فشل في تحديث الحدث' : 'Failed to update event');
@@ -101,23 +101,14 @@ export default function Maw3dEdit() {
   };
 
   const handleDelete = async () => {
-    if (!event || !confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا الحدث؟' : 'Are you sure you want to delete this event?')) {
-      return;
-    }
-
+    if (!event || !id) return;
     setDeleting(true);
     try {
-      // Delete RSVPs first
-      await supabase
-        .from('maw3d_rsvps')
-        .delete()
-        .eq('event_id', eventId);
-
-      // Delete the event
+      // With ON DELETE CASCADE, it's enough to delete the event
       const { error } = await supabase
         .from('maw3d_events')
         .delete()
-        .eq('id', eventId);
+        .eq('id', id as string);
 
       if (error) throw error;
 

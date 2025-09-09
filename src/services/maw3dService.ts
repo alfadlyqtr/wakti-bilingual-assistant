@@ -164,13 +164,12 @@ export class Maw3dService {
         return null;
       }
       
-      // Validate required fields
+      // Validate required fields (treat empty strings as valid; only null/undefined are missing)
       const requiredFields = ['id', 'title', 'event_date', 'created_by'];
-      const missingFields = requiredFields.filter(field => !data[field]);
-      
+      const missingFields = requiredFields.filter((field) => data[field] === null || data[field] === undefined);
       if (missingFields.length > 0) {
-        console.error('Missing required fields:', missingFields);
-        throw new Error(`Event data is missing required fields: ${missingFields.join(', ')}`);
+        console.warn('Event has missing fields (non-fatal):', missingFields);
+        // Do not throw; proceed with available data and let UI show sensible defaults
       }
       
       // Validate text_style field

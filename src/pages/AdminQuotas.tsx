@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Gift, Search, Plus, Mic, Filter, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -99,7 +98,7 @@ export default function AdminQuotas() {
           email: user.email || "No email",
           full_name: user.display_name || "No name",
           voice_characters_used: voiceUsage?.characters_used || 0,
-          voice_characters_limit: voiceUsage?.characters_limit || 6000,
+          voice_characters_limit: voiceUsage?.characters_limit || 10000,
           voice_extra_characters: voiceUsage?.extra_characters || 0,
           is_subscribed: user.is_subscribed || false,
           subscription_status: user.subscription_status || 'inactive',

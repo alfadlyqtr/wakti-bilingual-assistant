@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
-import { Plus, ArrowLeft, Calendar, MapPin, Users, Palette, Type, Settings, ChevronDown, Folder, FileText, Brush, Image, Lock, AlertTriangle } from 'lucide-react';
+import { Plus, ArrowLeft, Calendar, MapPin, Users, Palette, Type, Settings, ChevronDown, Folder, FileText, Brush, Image, Lock, AlertTriangle, Mic } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -104,12 +104,14 @@ const templates = [
 
 export default function Maw3dCreate() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { language, theme } = useTheme();
   const { user } = useAuth();
   
   // Form state
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   
   // Collapsible states - all closed by default
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -117,12 +119,130 @@ export default function Maw3dCreate() {
   const [textStylingOpen, setTextStylingOpen] = useState(false);
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [audioOpen, setAudioOpen] = useState(false);
   
   // Event styling state
   const [backgroundType, setBackgroundType] = useState<'color' | 'gradient' | 'image' | 'ai'>('color');
   const [backgroundColor, setBackgroundColor] = useState('#3b82f6');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [imageBlur, setImageBlur] = useState(0);
+  
+  // Audio section state (simple for now)
+  const [audioSrc, setAudioSrc] = useState<string>('/lovable-uploads/beep.mp3');
+  const [audioSearch, setAudioSearch] = useState<string>('');
+  const [ytResults, setYtResults] = useState<Array<{ videoId: string; title: string; thumbnail: string | null }>>([]);
+  const [ytLoading, setYtLoading] = useState<boolean>(false);
+  const [ytError, setYtError] = useState<string | null>(null);
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+  const [selectedVideoTitle, setSelectedVideoTitle] = useState<string | null>(null);
+  const [attachToEvent, setAttachToEvent] = useState<boolean>(false);
+  const [autoplayInEvent, setAutoplayInEvent] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [ytApiReady, setYtApiReady] = useState<boolean>(false);
+  const ytPlayerRef = React.useRef<any>(null);
+
+  // Load YouTube IFrame API once when needed
+  useEffect(() => {
+    if (!selectedVideoId) return; // load only when user picks a song
+    if ((window as any).YT && (window as any).YT.Player) {
+      setYtApiReady(true);
+      return;
+    }
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.body.appendChild(tag);
+    (window as any).onYouTubeIframeAPIReady = () => {
+      setYtApiReady(true);
+    };
+  }, [selectedVideoId]);
+
+  // Create / update player when API ready and a video is selected
+  useEffect(() => {
+    if (!ytApiReady || !selectedVideoId) return;
+    // Destroy previous player
+    if (ytPlayerRef.current && ytPlayerRef.current.destroy) {
+      ytPlayerRef.current.destroy();
+      ytPlayerRef.current = null;
+    }
+    const YT = (window as any).YT;
+    ytPlayerRef.current = new YT.Player('yt-audio-player', {
+      height: '0',
+      width: '0',
+      videoId: selectedVideoId,
+      playerVars: {
+        controls: 0,
+        modestBranding: 1,
+        rel: 0,
+        playsinline: 1,
+        autoplay: 0,
+        origin: window.location.origin,
+        enablejsapi: 1
+      },
+      events: {
+        onStateChange: (e: any) => {
+          // 1 = playing, 2 = paused, 0 = ended
+          if (e.data === 1) setIsPlaying(true);
+          else if (e.data === 2 || e.data === 0) setIsPlaying(false);
+        }
+      }
+    });
+  }, [ytApiReady, selectedVideoId]);
+
+  const handlePlaySelected = () => {
+    if (ytPlayerRef.current && ytPlayerRef.current.playVideo) {
+      ytPlayerRef.current.playVideo();
+    }
+  };
+
+  const handlePauseSelected = () => {
+    if (ytPlayerRef.current && ytPlayerRef.current.pauseVideo) {
+      ytPlayerRef.current.pauseVideo();
+    }
+  };
+
+  const handleYouTubeSearch = async () => {
+    const q = audioSearch.trim();
+    if (!q) return;
+    try {
+      setYtLoading(true);
+      setYtError(null);
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        setYtError('Please sign in to search YouTube');
+        return;
+      }
+      const resp = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/youtube-search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`
+        },
+        body: JSON.stringify({ query: q })
+      });
+      const json = await resp.json();
+      if (!resp.ok) {
+        setYtError('Network error searching YouTube');
+        return;
+      }
+      if (json?.error) {
+        if (json.error === 'quota_exceeded') setYtError('YouTube quota exceeded. Please try again later.');
+        else setYtError('YouTube search error');
+        setYtResults([]);
+        return;
+      }
+      const results = (json?.results || []).map((r: any) => ({
+        videoId: r.videoId,
+        title: r.title,
+        thumbnail: r.thumbnail || null
+      }));
+      setYtResults(results);
+    } catch (e) {
+      setYtError('Unexpected error searching YouTube');
+      setYtResults([]);
+    } finally {
+      setYtLoading(false);
+    }
+  };
   
   // Text styling state
   const [textStyle, setTextStyle] = useState<TextStyle>({
@@ -169,6 +289,84 @@ export default function Maw3dCreate() {
 
   const watchedValues = watch();
 
+  // Detect edit mode via query param ?id
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    setEditId(id);
+  }, [location.search]);
+
+  // Load event when in edit mode
+  useEffect(() => {
+    const loadForEdit = async () => {
+      if (!editId) return;
+      try {
+        const { data, error } = await supabase
+          .from('maw3d_events')
+          .select('*')
+          .eq('id', editId)
+          .single();
+        if (error) throw error;
+        if (data.created_by !== user?.id) {
+          toast.error('You are not authorized to edit this event');
+          navigate('/maw3d');
+          return;
+        }
+
+        // Prefill form values
+        setValue('title', data.title || '');
+        setValue('description', data.description || '');
+        setValue('location', data.location || '');
+        setValue('google_maps_link', data.google_maps_link || '');
+        setValue('organizer', data.organizer || '');
+        setValue('event_date', data.event_date);
+        setValue('is_all_day', !!data.is_all_day);
+        setValue('start_time', data.start_time || '');
+        setValue('end_time', data.end_time || '');
+        setValue('is_public', !!data.is_public);
+        setValue('show_attending_count', !!data.show_attending_count);
+        setValue('auto_delete_enabled', data.auto_delete_enabled !== false);
+        setValue('template_type', data.template_type || null);
+        setValue('image_blur', data.image_blur || 0);
+
+        // Background
+        const bgType = (data.background_type as 'color' | 'gradient' | 'image' | 'ai') || 'color';
+        const bgValue = data.background_value || '#3b82f6';
+        setBackgroundType(bgType);
+        if (bgType === 'image') {
+          setBackgroundImage(bgValue);
+        } else {
+          setBackgroundColor(bgValue);
+        }
+        setValue('background_type', bgType);
+        setValue('background_value', bgValue);
+        setImageBlur(data.image_blur || 0);
+
+        // Text style
+        const ts = typeof data.text_style === 'object' ? data.text_style : {};
+        const mergedTs: TextStyle = {
+          fontFamily: ts.fontFamily || 'Inter',
+          fontSize: ts.fontSize || 24,
+          color: ts.color || '#ffffff',
+          isBold: ts.isBold !== undefined ? ts.isBold : true,
+          isItalic: ts.isItalic || false,
+          isUnderline: ts.isUnderline || false,
+          alignment: ts.alignment || 'center',
+          hasShadow: ts.hasShadow !== undefined ? ts.hasShadow : true,
+          shadowIntensity: ts.shadowIntensity !== undefined ? ts.shadowIntensity : 5,
+        } as TextStyle;
+        setTextStyle(mergedTs);
+        setValue('text_style', mergedTs);
+      } catch (e) {
+        console.error('Failed to load event for edit:', e);
+        toast.error('Failed to load event');
+        navigate('/maw3d');
+      }
+    };
+    loadForEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   // Apply template when selected
   useEffect(() => {
     if (selectedTemplate) {
@@ -194,45 +392,56 @@ export default function Maw3dCreate() {
     setIsLoading(true);
     
     try {
-      // Prepare event data for database
-      const eventData = {
-        created_by: user.id,
+      // Prepare base event data
+      const baseData = {
         title: data.title,
         description: data.description || null,
         location: data.location || null,
         google_maps_link: data.google_maps_link || null,
         organizer: data.organizer || null,
         event_date: data.event_date,
-        start_time: data.is_all_day ? null : data.start_time,
-        end_time: data.is_all_day ? null : data.end_time,
+        start_time: data.is_all_day ? null : (data.start_time || null),
+        end_time: data.is_all_day ? null : (data.end_time || null),
         is_all_day: data.is_all_day,
         is_public: data.is_public,
         show_attending_count: data.show_attending_count,
         auto_delete_enabled: data.auto_delete_enabled,
         background_type: backgroundType,
-        background_value: backgroundType === 'image' ? backgroundImage || backgroundColor : backgroundColor,
+        background_value: backgroundType === 'image' ? (backgroundImage || backgroundColor) : backgroundColor,
         text_style: textStyle,
         template_type: data.template_type,
-        language: language,
-        image_blur: backgroundType === 'image' ? imageBlur : 0
+        image_blur: backgroundType === 'image' ? imageBlur : 0,
       };
 
-      console.log('Creating event with data:', eventData);
-
-      const { data: createdEvent, error } = await supabase
-        .from('maw3d_events')
-        .insert([eventData])
-        .select('*')
-        .single();
-
-      if (error) {
-        console.error("Error creating event:", error);
-        toast.error("Failed to create event");
-        return;
+      if (editId) {
+        console.log('Updating event with data:', { id: editId, ...baseData });
+        const { error } = await supabase
+          .from('maw3d_events')
+          .update({ ...baseData, language })
+          .eq('id', editId);
+        if (error) {
+          console.error('Error updating event:', error);
+          toast.error('Failed to update event');
+          return;
+        }
+        toast.success('Event updated successfully');
+        navigate(`/maw3d/manage/${editId}`);
+      } else {
+        const createData = { created_by: user.id, language, ...baseData };
+        console.log('Creating event with data:', createData);
+        const { data: createdEvent, error } = await supabase
+          .from('maw3d_events')
+          .insert([createData])
+          .select('*')
+          .single();
+        if (error) {
+          console.error('Error creating event:', error);
+          toast.error('Failed to create event');
+          return;
+        }
+        toast.success('Event created successfully!');
+        navigate('/maw3d');
       }
-
-      toast.success("Event created successfully!");
-      navigate("/maw3d");
       
     } catch (error) {
       console.error("Unexpected error creating event:", error);
@@ -288,7 +497,7 @@ export default function Maw3dCreate() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-                Create Event
+                {editId ? 'Edit Event' : 'Create Event'}
               </h1>
               <p className="text-sm text-muted-foreground/80 font-medium">
                 Create and manage events
@@ -315,7 +524,7 @@ export default function Maw3dCreate() {
               className="group px-6 py-2.5 bg-gradient-primary hover:shadow-glow transition-all duration-300 hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:rotate-90" />
-              <span>{isLoading ? t('creating', language) : 'Create Event'}</span>
+              <span>{editId ? (isLoading ? 'Saving...' : 'Save Changes') : (isLoading ? t('creating', language) : 'Create Event')}</span>
             </Button>
           </div>
         </div>
@@ -665,6 +874,111 @@ export default function Maw3dCreate() {
                     onBackgroundImageChange={(image) => handleBackgroundChange('image', image || '')}
                     onImageBlurChange={setImageBlur}
                   />
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Audio Section */}
+          <Collapsible open={audioOpen} onOpenChange={setAudioOpen}>
+            <Card className="backdrop-blur-xl bg-gradient-card border-border/50 shadow-vibrant hover:shadow-glow transition-all duration-500">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-accent/10 transition-all duration-300 rounded-t-xl">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Mic className="w-5 h-5 text-accent-blue drop-shadow-glow-blue" />
+                      <span className="bg-gradient-primary bg-clip-text text-transparent">Audio</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">{audioOpen ? '−' : '+'}</span>
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${audioOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="space-y-4 backdrop-blur-sm">
+                  {/* Search bar (hidden after selection) */}
+                  {!selectedVideoId && (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Search audio..."
+                        value={audioSearch}
+                        onChange={(e) => setAudioSearch(e.target.value)}
+                        className="input-enhanced"
+                      />
+                      <Button type="button" variant="secondary" onClick={handleYouTubeSearch} disabled={ytLoading}>
+                        {ytLoading ? 'Searching...' : 'Search'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Results */}
+                  {ytError && (
+                    <p className="text-sm text-destructive">{ytError}</p>
+                  )}
+
+                  {ytResults.length > 0 && !selectedVideoId && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {ytResults.map(r => (
+                        <button
+                          key={r.videoId}
+                          type="button"
+                          onClick={() => {
+                            setSelectedVideoId(r.videoId);
+                            setSelectedVideoTitle(r.title);
+                            // Keep existing audio element; we are not showing video.
+                          }}
+                          className={`flex gap-3 items-center p-2 rounded-lg border transition hover:bg-accent/10 text-left ${selectedVideoId === r.videoId ? 'border-primary' : 'border-border/40'}`}
+                        >
+                          {r.thumbnail ? (
+                            <img src={r.thumbnail} alt={r.title} className="w-16 h-10 object-cover rounded" />
+                          ) : (
+                            <div className="w-16 h-10 rounded bg-muted" />
+                          )}
+                          <span className="text-sm line-clamp-2">{r.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Player (audio only, powered by hidden YouTube iframe when selected) */}
+                  <div className="rounded-lg p-4 bg-gradient-card border border-border/30 space-y-2">
+                    {selectedVideoId ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-medium truncate">{selectedVideoTitle}</div>
+                        <div className="flex gap-2">
+                          {!isPlaying ? (
+                            <Button size="sm" onClick={handlePlaySelected}>Play</Button>
+                          ) : (
+                            <Button size="sm" variant="secondary" onClick={handlePauseSelected}>Pause</Button>
+                          )}
+                          <Button size="sm" variant="ghost" onClick={() => { setSelectedVideoId(null); setSelectedVideoTitle(null); setYtResults([]); setIsPlaying(false); }}>Change</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <audio controls src={audioSrc} className="w-full">
+                          Your browser does not support the audio element.
+                        </audio>
+                        <p className="text-xs text-muted-foreground">Default sample: {audioSrc}</p>
+                      </>
+                    )}
+                    {/* Hidden YT player container */}
+                    <div id="yt-audio-player" style={{ width: 0, height: 0, overflow: 'hidden' }} />
+                  </div>
+
+                  {/* Attach/autoplay toggles (local only for now) */}
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={attachToEvent} onChange={(e) => setAttachToEvent(e.target.checked)} />
+                      Attach selected song to event card
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={autoplayInEvent} onChange={(e) => setAutoplayInEvent(e.target.checked)} disabled={!attachToEvent} />
+                      Autoplay on event page
+                    </label>
+                  </div>
                 </CardContent>
               </CollapsibleContent>
             </Card>
