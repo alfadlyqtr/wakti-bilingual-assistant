@@ -1,4 +1,3 @@
-
 import React from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
@@ -17,7 +16,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     <ProtectedRoute>
       <div className="min-h-screen bg-background">
         <AppHeader />
-        <main className="pb-16">
+        <main className="pt-[var(--app-header-h)] pb-[var(--app-bottom-tabs-h)]">
           {children}
         </main>
         <MobileNav />

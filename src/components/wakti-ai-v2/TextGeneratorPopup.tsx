@@ -17,11 +17,11 @@ type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 // Stable keys for option values; labels are localized at render time
 type ContentTypeKey =
   | 'email' | 'text_message' | 'message' | 'blog_post' | 'story' | 'press_release' | 'cover_letter'
-  | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'essay' | 'proposal' | 'official_letter';
+  | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'essay' | 'proposal' | 'official_letter' | 'poem';
 type ToneKey =
   | 'professional' | 'casual' | 'formal' | 'friendly' | 'persuasive' | 'romantic' | 'neutral' | 'empathetic' | 'confident' | 'humorous' | 'urgent'
   | 'apologetic' | 'inspirational' | 'motivational' | 'sympathetic' | 'sincere' | 'informative' | 'concise' | 'dramatic' | 'suspenseful' | 'authoritative' | 'educational';
-type RegisterKey = 'auto' | 'formal' | 'neutral' | 'casual' | 'slang';
+type RegisterKey = 'auto' | 'formal' | 'neutral' | 'casual' | 'slang' | 'poetic' | 'gen_z' | 'business_formal' | 'executive_brief';
 type LanguageVariantKey =
   | 'auto'
   | 'us_english'
@@ -33,71 +33,91 @@ type LanguageVariantKey =
 type EmojisKey = 'auto' | 'none' | 'light' | 'rich';
 
 const CONTENT_TYPE_KEYS: ContentTypeKey[] = [
-  'email','text_message','message','blog_post','story','press_release','cover_letter',
-  'research_brief','research_report','case_study','how_to_guide','policy_note','product_description','essay','proposal','official_letter'
+  'email', 'text_message', 'message', 'blog_post', 'story', 'press_release', 'cover_letter',
+  'research_brief', 'research_report', 'case_study', 'how_to_guide', 'policy_note', 'product_description', 'essay', 'proposal', 'official_letter', 'poem'
 ];
 const TONE_KEYS: ToneKey[] = [
-  'professional','casual','formal','friendly','persuasive','romantic','neutral','empathetic','confident','humorous','urgent',
-  'apologetic','inspirational','motivational','sympathetic','sincere','informative','concise','dramatic','suspenseful','authoritative','educational'
+  'professional', 'casual', 'formal', 'friendly', 'persuasive', 'romantic', 'neutral', 'empathetic', 'confident', 'humorous', 'urgent',
+  'apologetic', 'inspirational', 'motivational', 'sympathetic', 'sincere', 'informative', 'concise', 'dramatic', 'suspenseful', 'authoritative', 'educational'
 ];
-const REGISTER_KEYS: RegisterKey[] = ['auto','formal','neutral','casual','slang'];
+const REGISTER_KEYS: RegisterKey[] = ['auto', 'formal', 'neutral', 'casual', 'slang', 'poetic', 'gen_z', 'business_formal', 'executive_brief'];
 // Base English variants. For Arabic UI we will present Arabic-specific variants instead.
-const LANGUAGE_VARIANT_KEYS_EN: LanguageVariantKey[] = ['auto','us_english','uk_english','canadian_english','australian_english'];
-const LANGUAGE_VARIANT_KEYS_AR: LanguageVariantKey[] = ['auto','msa','gulf_arabic'];
-const EMOJIS_KEYS: EmojisKey[] = ['auto','none','light','rich'];
+const LANGUAGE_VARIANT_KEYS_EN: LanguageVariantKey[] = ['auto', 'us_english', 'uk_english', 'canadian_english', 'australian_english'];
+const LANGUAGE_VARIANT_KEYS_AR: LanguageVariantKey[] = ['auto', 'msa', 'gulf_arabic'];
+const EMOJIS_KEYS: EmojisKey[] = ['auto', 'none', 'light', 'rich'];
 
-const ctLabel = (k: ContentTypeKey, lang: 'en'|'ar') => {
-  const en: Record<ContentTypeKey,string> = {
+const ctLabel = (k: ContentTypeKey, lang: 'en' | 'ar') => {
+  const en: Record<ContentTypeKey, string> = {
     email: 'Email', text_message: 'Text Message', message: 'Message', blog_post: 'Blog Post', story: 'Story', press_release: 'Press Release', cover_letter: 'Cover Letter',
-    research_brief: 'Research Brief', research_report: 'Research Report', case_study: 'Case Study', how_to_guide: 'How-to Guide', policy_note: 'Policy Note', product_description: 'Product Description', essay: 'Essay', proposal: 'Proposal', official_letter: 'Official Letter'
+    research_brief: 'Research Brief', research_report: 'Research Report', case_study: 'Case Study', how_to_guide: 'How-to Guide', policy_note: 'Policy Note', product_description: 'Product Description', essay: 'Essay', proposal: 'Proposal', official_letter: 'Official Letter', poem: 'Poem'
   };
-  const ar: Record<ContentTypeKey,string> = {
-    email: 'بريد إلكتروني', text_message: 'رسالة نصية', message: 'رسالة', blog_post: 'مقال مدونة', story: 'قصة', press_release: 'بيان صحفي', cover_letter: 'خطاب تقديم',
+  const ar: Record<ContentTypeKey, string> = {
+    email: 'بريد إلكتروني', text_message: 'رسالة نصية', message: 'رسالة', blog_post: 'مقال مدونة', story: 'قصة', press_release: 'بيان صحفي', cover_letter: 'خطاب تقديم', poem: 'قصيدة',
     research_brief: 'موجز بحثي', research_report: 'تقرير بحثي', case_study: 'دراسة حالة', how_to_guide: 'دليل إرشادي', policy_note: 'مذكرة سياسات', product_description: 'وصف منتج', essay: 'مقال', proposal: 'اقتراح', official_letter: 'خطاب رسمي'
   };
-  return lang==='ar'? ar[k] : en[k];
+  return lang === 'ar' ? ar[k] : en[k];
 };
-const toneLabel = (k: ToneKey, lang: 'en'|'ar') => {
-  const en: Record<ToneKey,string> = {
-    professional:'Professional',casual:'Casual',formal:'Formal',friendly:'Friendly',persuasive:'Persuasive',romantic:'Romantic',neutral:'Neutral',empathetic:'Empathetic',confident:'Confident',humorous:'Humorous',urgent:'Urgent',
-    apologetic:'Apologetic',inspirational:'Inspirational',motivational:'Motivational',sympathetic:'Sympathetic',sincere:'Sincere',informative:'Informative',concise:'Concise',dramatic:'Dramatic',suspenseful:'Suspenseful',authoritative:'Authoritative',educational:'Educational'
+const toneLabel = (k: ToneKey, lang: 'en' | 'ar') => {
+  const en: Record<ToneKey, string> = {
+    professional: 'Professional', casual: 'Casual', formal: 'Formal', friendly: 'Friendly', persuasive: 'Persuasive', romantic: 'Romantic', neutral: 'Neutral', empathetic: 'Empathetic', confident: 'Confident', humorous: 'Humorous', urgent: 'Urgent',
+    apologetic: 'Apologetic', inspirational: 'Inspirational', motivational: 'Motivational', sympathetic: 'Sympathetic', sincere: 'Sincere', informative: 'Informative', concise: 'Concise', dramatic: 'Dramatic', suspenseful: 'Suspenseful', authoritative: 'Authoritative', educational: 'Educational'
   };
-  const ar: Record<ToneKey,string> = {
-    professional:'مهني',casual:'غير رسمي',formal:'رسمي',friendly:'ودود',persuasive:'إقناعي',romantic:'رومانسي',neutral:'محايد',empathetic:'متعاطف',confident:'واثق',humorous:'مرح',urgent:'عاجل',
-    apologetic:'اعتذاري',inspirational:'ملهم',motivational:'تحفيزي',sympathetic:'متعاطف',sincere:'صادق',informative:'معلوماتي',concise:'موجز',dramatic:'درامي',suspenseful:'مشوّق',authoritative:'موثوق',educational:'تثقيفي'
+  const ar: Record<ToneKey, string> = {
+    professional: 'مهني', casual: 'غير رسمي', formal: 'رسمي', friendly: 'ودود', persuasive: 'إقناعي', romantic: 'رومانسي', neutral: 'محايد', empathetic: 'متعاطف', confident: 'واثق', humorous: 'مرح', urgent: 'عاجل',
+    apologetic: 'اعتذاري', inspirational: 'ملهم', motivational: 'تحفيزي', sympathetic: 'متعاطف', sincere: 'صادق', informative: 'معلوماتي', concise: 'موجز', dramatic: 'درامي', suspenseful: 'مشوّق', authoritative: 'موثوق', educational: 'تثقيفي'
   };
-  return lang==='ar'? ar[k] : en[k];
+  return lang === 'ar' ? ar[k] : en[k];
 };
-const registerLabel = (k: RegisterKey, lang: 'en'|'ar') => {
-  const en: Record<RegisterKey,string> = { auto:'Auto', formal:'Formal', neutral:'Neutral', casual:'Casual', slang:'Slang' };
-  const ar: Record<RegisterKey,string> = { auto:'تلقائي', formal:'رسمي', neutral:'محايد', casual:'غير رسمي', slang:'عامي' };
-  return lang==='ar'? ar[k] : en[k];
-};
-const langVariantLabel = (k: LanguageVariantKey, lang: 'en'|'ar') => {
-  const en: Record<LanguageVariantKey,string> = {
-    auto:'Auto',
-    us_english:'US English',
-    uk_english:'UK English',
-    canadian_english:'Canadian English',
-    australian_english:'Australian English',
-    msa:'Modern Standard Arabic (MSA)',
-    gulf_arabic:'Gulf Arabic'
+const registerLabel = (k: RegisterKey, lang: 'en' | 'ar') => {
+  const en: Record<RegisterKey, string> = {
+    auto: 'Auto',
+    formal: 'Formal',
+    neutral: 'Neutral',
+    casual: 'Casual',
+    slang: 'Slang',
+    poetic: 'Poetic / Lyrical',
+    gen_z: 'Gen Z',
+    business_formal: 'Business Formal',
+    executive_brief: 'Executive Brief'
   };
-  const ar: Record<LanguageVariantKey,string> = {
-    auto:'تلقائي',
-    us_english:'الإنجليزية الأمريكية',
-    uk_english:'الإنجليزية البريطانية',
-    canadian_english:'الإنجليزية الكندية',
-    australian_english:'الإنجليزية الأسترالية',
-    msa:'العربية الفصحى الحديثة (MSA)',
-    gulf_arabic:'العربية الخليجية'
+  const ar: Record<RegisterKey, string> = {
+    auto: 'تلقائي',
+    formal: 'رسمي',
+    neutral: 'محايد',
+    casual: 'غير رسمي',
+    slang: 'عامي',
+    poetic: 'شِعري / أدبي',
+    gen_z: 'أسلوب جيل زد',
+    business_formal: 'رسمي للأعمال',
+    executive_brief: 'موجز تنفيذي'
   };
-  return lang==='ar'? ar[k] : en[k];
+  return lang === 'ar' ? ar[k] : en[k];
 };
-const emojisLabel = (k: EmojisKey, lang: 'en'|'ar') => {
-  const en: Record<EmojisKey,string> = { auto:'Auto', none:'None', light:'Light', rich:'Rich' };
-  const ar: Record<EmojisKey,string> = { auto:'تلقائي', none:'بدون', light:'قليل', rich:'كثير' };
-  return lang==='ar'? ar[k] : en[k];
+const langVariantLabel = (k: LanguageVariantKey, lang: 'en' | 'ar') => {
+  const en: Record<LanguageVariantKey, string> = {
+    auto: 'Auto',
+    us_english: 'US English',
+    uk_english: 'UK English',
+    canadian_english: 'Canadian English',
+    australian_english: 'Australian English',
+    msa: 'Modern Standard Arabic (MSA)',
+    gulf_arabic: 'Gulf Arabic'
+  };
+  const ar: Record<LanguageVariantKey, string> = {
+    auto: 'تلقائي',
+    us_english: 'الإنجليزية الأمريكية',
+    uk_english: 'الإنجليزية البريطانية',
+    canadian_english: 'الإنجليزية الكندية',
+    australian_english: 'الإنجليزية الأسترالية',
+    msa: 'العربية الفصحى MSA',
+    gulf_arabic: 'العربية الخليجية'
+  };
+  return lang === 'ar' ? ar[k] : en[k];
+};
+const emojisLabel = (k: EmojisKey, lang: 'en' | 'ar') => {
+  const en: Record<EmojisKey, string> = { auto: 'Auto', none: 'None', light: 'Light', rich: 'Rich' };
+  const ar: Record<EmojisKey, string> = { auto: 'تلقائي', none: 'بدون', light: 'قليل', rich: 'كثير' };
+  return lang === 'ar' ? ar[k] : en[k];
 };
 
 const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
@@ -143,7 +163,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) setCachedTexts(arr.filter((s) => typeof s === 'string').slice(0, 3));
       }
-    } catch {}
+    } catch { }
   }, []);
 
   // If user opens Generated tab and there's no current text, auto-load newest cached
@@ -155,7 +175,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   const saveCache = (arr: string[]) => {
     setCachedTexts(arr);
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); } catch {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); } catch { }
   };
 
   const canGenerate = useMemo(() => {
@@ -206,7 +226,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       await navigator.clipboard.writeText(generatedText || '');
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {}
+    } catch { }
   }, [generatedText]);
 
   const handleShare = useCallback(async () => {
@@ -301,11 +321,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           <div className="grid grid-cols-3 gap-2 mb-4">
             <button
               onClick={() => { setActiveTab('compose'); setMode('compose'); }}
-              className={`px-3 py-2 rounded-md border ${activeTab==='compose' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              className={`px-3 py-2 rounded-md border ${activeTab === 'compose' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'تأليف' : 'Compose'}</button>
             <button
               onClick={() => { setActiveTab('reply'); setMode('reply'); }}
-              className={`px-3 py-2 rounded-md border ${activeTab==='reply' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              className={`px-3 py-2 rounded-md border ${activeTab === 'reply' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'رد' : 'Reply'}</button>
             <button
               disabled={!generatedText && cachedTexts.length === 0}
@@ -317,10 +337,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 setActiveTab('generated');
               }}
               className={`px-3 py-2 rounded-md border ${
-                activeTab==='generated' 
-                  ? 'bg-primary text-primary-foreground' 
-                  : (generatedText || cachedTexts.length > 0) 
-                    ? 'hover:bg-muted' 
+                activeTab === 'generated'
+                  ? 'bg-primary text-primary-foreground'
+                  : (generatedText || cachedTexts.length > 0)
+                    ? 'hover:bg-muted'
                     : 'opacity-60 cursor-not-allowed'
               }`}
             >{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</button>

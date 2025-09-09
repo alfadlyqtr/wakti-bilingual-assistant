@@ -150,6 +150,7 @@ const TRANSLATION_LANGUAGES = [
 
 export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const { language } = useTheme();
+  const MAX_INPUT_CHARS = 250;
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('neutral');
@@ -307,7 +308,13 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
-  const canGenerate = text.trim().length > 0 && selectedVoiceId && text.length <= totalAvailableCharacters && canUseVoice;
+  const canGenerate = (
+    text.trim().length > 0 &&
+    selectedVoiceId &&
+    text.length <= MAX_INPUT_CHARS &&
+    text.length <= totalAvailableCharacters &&
+    canUseVoice
+  );
   const canTranslate = translationText.trim().length > 0;
 
   const generateSpeech = async () => {
@@ -494,41 +501,29 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
 
   return (
     <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold mb-2">
-          {language === 'ar' ? 'استوديو الصوت' : 'Voice Studio'}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {language === 'ar' 
-            ? 'أنشئ كلام أو ترجم النصوص بصوتك المستنسخ أو الافتراضي • 50 لغة متاحة للترجمة • أساليب صوتية متنوعة'
-            : 'Generate speech or translate text with your cloned or default voice • 50 languages available for translation • Multiple voice styles'
-          }
-        </p>
-      </div>
-
-      {/* Character Usage - Updated to use totalAvailableCharacters */}
+      {/* Character Usage - Updated to use totalAvailableCharacters consistently */}
       <div className="p-3 bg-muted rounded-lg">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium">
             {language === 'ar' ? 'الأحرف المتبقية' : 'Characters Remaining'}
           </span>
           <span className="text-sm">
-            {totalAvailableCharacters.toLocaleString()} / {(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}
+            {(Math.max(0, totalAvailableCharacters - text.length)).toLocaleString()} / {(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}
           </span>
         </div>
         <div className="w-full bg-background rounded-full h-2 mt-2">
           <div 
             className="bg-blue-500 h-2 rounded-full" 
             style={{ 
-              width: `${Math.max(0, Math.min(100, ((userVoiceQuota.characters_used) / (userVoiceQuota.characters_limit + userVoiceQuota.extra_characters)) * 100))}%` 
+              width: `${Math.max(0, Math.min(100, ((userVoiceQuota.characters_used + text.length) / (userVoiceQuota.characters_limit + userVoiceQuota.extra_characters)) * 100))}%` 
             }}
           />
         </div>
         <div className="flex justify-between items-center mt-2">
           <p className="text-xs text-muted-foreground">
             {language === 'ar' 
-              ? `لديك ${totalAvailableCharacters.toLocaleString()} حرف متبقي من أصل ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
-              : `You have ${totalAvailableCharacters.toLocaleString()} characters left out of ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
+              ? `لديك ${(Math.max(0, totalAvailableCharacters - text.length)).toLocaleString()} حرف متبقي من أصل ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
+              : `You have ${(Math.max(0, totalAvailableCharacters - text.length)).toLocaleString()} characters left out of ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
             }
           </p>
           {userVoiceQuota.extra_characters > 0 && (
@@ -756,12 +751,12 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             : 'Type whatever you want in any language to speak it in your voice and in many styles!'
           }
           className="min-h-32 resize-none"
-          maxLength={totalAvailableCharacters}
+          maxLength={MAX_INPUT_CHARS}
           dir="auto"
         />
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{text.length} / {totalAvailableCharacters}</span>
-          {text.length > totalAvailableCharacters && (
+          <span>{text.length} / {MAX_INPUT_CHARS}</span>
+          {text.length > MAX_INPUT_CHARS && (
             <span className="text-red-500">
               {language === 'ar' ? 'تجاوز الحد المسموح' : 'Exceeds limit'}
             </span>
@@ -819,13 +814,6 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </div>
         </div>
       )}
-
-      {/* Navigation */}
-      <div className="flex gap-3 pt-4">
-        <Button onClick={onBack} variant="outline" className="flex-1">
-          {language === 'ar' ? 'رجوع' : 'Back'}
-        </Button>
-      </div>
     </div>
   );
 }

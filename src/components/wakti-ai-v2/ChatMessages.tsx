@@ -64,6 +64,8 @@ export function ChatMessages({
   // Always-accurate ref mirror to avoid stale state in async guards
   const speakingMessageIdRef = useRef<string | null>(null);
   const [isPaused, setIsPaused] = useState<boolean>(false);
+  // Transient visual state to keep the green glow briefly after audio ends
+  const [fadeOutId, setFadeOutId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
   // ElevenLabs audio playback state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -107,6 +109,14 @@ export function ChatMessages({
     window.addEventListener('wakti-youtube-playing', onYouTubePlaying as EventListener);
     return () => window.removeEventListener('wakti-youtube-playing', onYouTubePlaying as EventListener);
   }, []);
+
+  // Trigger a short fade-out glow after audio ends
+  const triggerFadeOut = (id: string) => {
+    try { setFadeOutId(id); } catch {}
+    window.setTimeout(() => {
+      setFadeOutId((curr) => (curr === id ? null : curr));
+    }, 450);
+  };
 
   // Persisted cache helpers: store base64 with text length to detect truncation
   type PersistedAudio = { b64: string; len: number };
@@ -219,6 +229,37 @@ export function ChatMessages({
       setSpeakingMessageId(messageId);
       setIsPaused(false);
 
+      // Reuse cached audio if available (in-memory first)
+      const cachedUrl = audioCacheRef.current.get(messageId);
+      if (cachedUrl) {
+        const a = new Audio(cachedUrl);
+        audioRef.current = a;
+        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); };
+        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); };
+        a.onplay = () => setIsPaused(false);
+        a.onpause = () => setIsPaused(true);
+        await a.play();
+        return;
+      }
+
+      // Check persisted cache next
+      const persisted = getPersisted(messageId);
+      if (persisted?.b64) {
+        const url = base64ToBlobUrl(persisted.b64);
+        audioCacheRef.current.set(messageId, url);
+        const a = new Audio(url);
+        audioRef.current = a;
+        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} };
+        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} };
+        a.onplay = () => setIsPaused(false);
+        a.onpause = () => setIsPaused(true);
+        await a.play();
+        return;
+      }
+
+      // Mark fetching for this message to drive spinners/percentages
+      setFetchingIds(prev => { const n = new Set(prev); n.add(messageId); return n; });
+
       // Determine voice_id from TalkBack settings
       const isArabicText = /[\u0600-\u06FF]/.test(text);
       const { ar, en } = getSelectedVoices();
@@ -242,15 +283,59 @@ export function ChatMessages({
       if (!resp.ok) {
         setSpeakingMessageId(null);
         setIsPaused(false);
+        setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
         return;
       }
 
-      const blob = await resp.blob();
-      const objectUrl = URL.createObjectURL(blob);
+      // Stream response for progress if possible
+      const contentLength = Number(resp.headers.get('Content-Length') || 0);
+      const reader = resp.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      if (reader) {
+        if (contentLength > 0) {
+          // Update real percentage while reading
+          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 0); return n; });
+        } else {
+          // Unknown size: simulate smooth progress 0→90% until complete
+          const iv = window.setInterval(() => {
+            setProgressMap(prev => {
+              const n = new Map(prev);
+              const curr = n.get(messageId) ?? 0;
+              const next = Math.min(90, (curr || 0) + 2);
+              n.set(messageId, next);
+              return n;
+            });
+          }, 200);
+          progressIntervalRef.current.set(messageId, iv);
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            received += value.length;
+            if (contentLength > 0) {
+              const pct = Math.max(1, Math.min(99, Math.floor((received / contentLength) * 100)));
+              setProgressMap(prev => { const n = new Map(prev); n.set(messageId, pct); return n; });
+            }
+          }
+        }
+      }
+
+      const full = chunks.length ? new Blob(chunks, { type: 'audio/mpeg' }) : await resp.blob();
+      const buf = await full.arrayBuffer();
+      const b64 = bufferToBase64(buf);
+      setPersisted(messageId, b64, text.length);
+      const objectUrl = URL.createObjectURL(full);
+      audioCacheRef.current.set(messageId, objectUrl);
+
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
-      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
-      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
+      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} };
+      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} };
       audio.onplay = () => setIsPaused(false);
       audio.onpause = () => setIsPaused(true);
       await audio.play();
@@ -324,7 +409,7 @@ export function ChatMessages({
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
                     : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
                   )}
-                  className={`p-2 rounded-md transition-colors ${speakingMessageId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
+                  className={`p-2 rounded-md transition-colors ${speakingMessageId === 'welcome' || fadeOutId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
                 >
                   {fetchingIds.has('welcome') && typeof progressMap.get('welcome') === 'number' ? (
@@ -333,7 +418,10 @@ export function ChatMessages({
                   {speakingMessageId === 'welcome' ? (
                     <Volume2 className="h-4 w-4 animate-pulse" />
                   ) : fetchingIds.has('welcome') ? (
-                    <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground">{progressMap.get('welcome')}%</span>
+                      <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                    </div>
                   ) : (
                     <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                   )}
@@ -743,7 +831,7 @@ export function ChatMessages({
                             {message.role === 'assistant' && (
                               <button
                                 onClick={() => handleSpeak(message.content, message.id)}
-                                className="p-2 rounded-md hover:bg-background/80 transition-colors"
+                                className={`p-2 rounded-md transition-colors ${speakingMessageId === message.id || fadeOutId === message.id ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                                 title={speakingMessageId === message.id 
                                   ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
                                   : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
@@ -756,7 +844,10 @@ export function ChatMessages({
                                   {speakingMessageId === message.id ? (
                                     <Volume2 className="h-4 w-4 animate-pulse" />
                                   ) : fetchingIds.has(message.id) ? (
-                                    <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-muted-foreground">{progressMap.get(message.id)}%</span>
+                                      <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                                    </div>
                                   ) : (
                                     <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                                   )}

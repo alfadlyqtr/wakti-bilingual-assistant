@@ -87,37 +87,8 @@ serve(async (req: Request) => {
 
     // Google-only; no external style settings
 
-    // Check user's voice quota before proceeding
-    console.log(`🎵 Checking voice quota for user: ${user.id}`);
-    const { data: quotaData, error: quotaError } = await supabase.rpc('get_or_create_user_voice_quota', {
-      p_user_id: user.id
-    });
-
-    if (quotaError) {
-      console.error('🎵 Error checking voice quota:', quotaError);
-      throw new Error('Failed to check voice quota');
-    }
-
-    if (!quotaData || quotaData.length === 0) {
-      throw new Error('No quota data found');
-    }
-
-    const quota = quotaData[0];
-    const remainingChars = Math.max(0, quota.characters_limit - quota.characters_used);
-    const totalAvailable = remainingChars + quota.extra_characters;
-    
-    console.log(`🎵 Voice quota check:`, {
-      used: quota.characters_used,
-      limit: quota.characters_limit,
-      extra: quota.extra_characters,
-      remaining: remainingChars,
-      totalAvailable: totalAvailable,
-      textLength: text.length
-    });
-
-    if (text.length > totalAvailable) {
-      throw new Error(`Text length (${text.length}) exceeds available quota (${totalAvailable})`);
-    }
+    // NOTE: No voice quota enforcement here. This endpoint is reserved for Talk Back / Mini Speaker.
+    // Quota checks and usage persistence are handled exclusively by the ElevenLabs endpoint `elevenlabs-tts`.
 
     // Perform TTS call with Google only
       console.log('🎵 Calling Google Cloud Text-to-Speech API...');
@@ -202,22 +173,7 @@ serve(async (req: Request) => {
       console.log('🎵 Google TTS audio generated successfully:', { audioSize: audioBuffer.byteLength });
     
 
-    // Update user's voice usage
-    console.log(`🎵 Updating voice usage for user: ${user.id}`);
-    const { error: updateError } = await supabase
-      .from('user_voice_usage')
-      .upsert({
-        user_id: user.id,
-        characters_used: (quota.characters_used || 0) + text.length,
-        updated_at: new Date().toISOString()
-      });
-
-    if (updateError) {
-      console.error('🎵 Error updating voice usage:', updateError);
-      // Continue anyway - don't fail the TTS generation
-    } else {
-      console.log(`🎵 Voice usage updated: +${text.length} characters`);
-    }
+    // NOTE: No voice quota mutation here. Persist usage only in `elevenlabs-tts`.
 
     return new Response(audioBuffer, {
       headers: { 

@@ -3,7 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Copy, Download } from 'lucide-react';
+import { Loader2, Copy, Download, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -25,10 +25,10 @@ const getDefaultVoices = (lang: string): VoiceClone[] => {
       { id: 'default-male-ar', voice_name: 'Wakti Male', voice_id: 'G1QUjBCuRBbLbAmYlTgl', is_default: true },
     ];
   }
-  // English
+  // English (updated to requested ElevenLabs voices)
   return [
-    { id: 'default-aria', voice_name: 'Wakti Female', voice_id: '9BWtsMINqrJLrRacOk9x', is_default: true },
-    { id: 'default-brian', voice_name: 'Wakti Male', voice_id: 'nPczCjzI2devNBz1zQrb', is_default: true },
+    { id: 'default-female-en', voice_name: 'Wakti Female', voice_id: 'vr5WKaGvRWsoaX5LCVax', is_default: true },
+    { id: 'default-male-en', voice_name: 'Wakti Male', voice_id: 'ZB6Q1KAIKj9o7p9iJEWQ', is_default: true },
   ];
 };
 
@@ -87,6 +87,8 @@ export default function VoiceTTS() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isCorrecting, setIsCorrecting] = useState(false);
+  const [isCorrected, setIsCorrected] = useState(false);
   // Removed external style details; info kept inside dropdown items
   const [defaultVoiceId, setDefaultVoiceId] = useState<string>('');
   const [defaultStyle, setDefaultStyle] = useState<string>('neutral');
@@ -194,6 +196,40 @@ export default function VoiceTTS() {
     document.body.removeChild(link);
   };
 
+  const handleCorrect = async () => {
+    if (!text.trim()) return;
+    try {
+      setIsCorrecting(true);
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error('User not authenticated');
+      const resp = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/checker`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({ text, lang: language || 'en' })
+      });
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(`Checker failed: ${resp.status} ${msg}`);
+      }
+      const json = await resp.json();
+      if (json?.success && typeof json.corrected === 'string') {
+        setText(json.corrected);
+        toast.success(language === 'ar' ? 'تم التصحيح' : 'Corrected');
+        setIsCorrected(true);
+      } else {
+        throw new Error('Invalid checker response');
+      }
+    } catch (e: any) {
+      toast.error(language === 'ar' ? 'فشل التصحيح' : 'Correction failed');
+      console.error('checker error', e);
+    } finally {
+      setIsCorrecting(false);
+    }
+  };
+
   if (loading || isLoadingVoiceQuota) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -209,23 +245,23 @@ export default function VoiceTTS() {
         {/* Intro paragraph removed per request */}
       </div>
 
-      {/* Character quota (same behavior as Voice Studio) */}
+      {/* Character quota (wired to live input and backend quota) */}
       <div className="p-3 bg-muted rounded-lg">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium">{language === 'ar' ? 'الأحرف المتبقية' : 'Characters Remaining'}</span>
-          <span className="text-sm">{totalAvailableCharacters.toLocaleString()} / {(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}</span>
+          <span className="text-sm">{Math.max(0, totalAvailableCharacters - text.length).toLocaleString()} / {(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}</span>
         </div>
         <div className="w-full bg-background rounded-full h-2 mt-2">
           <div
             className="bg-blue-500 h-2 rounded-full"
-            style={{ width: `${Math.max(0, Math.min(100, (userVoiceQuota.characters_used / (userVoiceQuota.characters_limit + userVoiceQuota.extra_characters)) * 100))}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, ((userVoiceQuota.characters_used + text.length) / (userVoiceQuota.characters_limit + userVoiceQuota.extra_characters)) * 100))}%` }}
           />
         </div>
         <div className="flex justify-between items-center mt-2">
           <p className="text-xs text-muted-foreground">
             {language === 'ar'
-              ? `لديك ${totalAvailableCharacters.toLocaleString()} حرف متبقي من أصل ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
-              : `You have ${totalAvailableCharacters.toLocaleString()} characters left out of ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`}
+              ? `لديك ${Math.max(0, totalAvailableCharacters - text.length).toLocaleString()} حرف متبقي من أصل ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
+              : `You have ${Math.max(0, totalAvailableCharacters - text.length).toLocaleString()} characters left out of ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`}
           </p>
           {userVoiceQuota.extra_characters > 0 && (
             <span className="text-xs text-green-600 font-medium">+{userVoiceQuota.extra_characters.toLocaleString()} {language === 'ar' ? 'إضافي' : 'extra'}</span>
@@ -328,17 +364,36 @@ export default function VoiceTTS() {
               <Copy className="h-3 w-3" />
             </Button>
           )}
+          <Button
+            onClick={handleCorrect}
+            size="sm"
+            className={
+              `h-auto px-3 py-1 text-xs rounded-md transition-all duration-200 shadow-sm ` +
+              (isCorrected
+                ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-400/40 focus-visible:ring-green-500'
+                : 'bg-accent hover:bg-accent/90 text-accent-foreground')
+            }
+            disabled={isCorrecting}
+            aria-label={isCorrected ? (language === 'ar' ? 'تم التصحيح' : 'Corrected') : (language === 'ar' ? 'تصحيح' : 'Correct')}
+          >
+            {isCorrecting ? (
+              <span className="text-xs">{language === 'ar' ? '...تصحيح' : 'Correcting...'}</span>
+            ) : isCorrected ? (
+              <span className="flex items-center gap-1 text-xs"><Check className="h-3 w-3" />{language === 'ar' ? 'تم التصحيح' : 'Corrected'}</span>
+            ) : (
+              <span className="text-xs">{language === 'ar' ? 'تصحيح' : 'Correct'}</span>
+            )}
+          </Button>
         </div>
         <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بأي لغة...' : 'Type what you want to hear in any language...'}
           className="min-h-32 resize-none"
-          maxLength={totalAvailableCharacters}
-          dir="auto"
+          maxLength={1000}
+          value={text}
+          onChange={(e) => { setText(e.target.value); if (isCorrected) setIsCorrected(false); }}
+          placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بأي لغة...' : 'Type what you want to hear in any language...'}
         />
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{text.length} / {totalAvailableCharacters}</span>
+          <span>{text.length} / 1000</span>
         </div>
       </div>
 

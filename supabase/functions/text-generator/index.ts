@@ -9,6 +9,97 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
+// Content type configurations
+const contentConfig = {
+  // Short form content types (emails, messages, etc.)
+  email: { baseTokens: 1024, model: 'gpt-4o-mini', temperature: 0.7 },
+  text_message: { baseTokens: 512, model: 'gpt-4o-mini', temperature: 0.7 },
+  message: { baseTokens: 768, model: 'gpt-4o-mini', temperature: 0.7 },
+  
+  // Long form content types
+  blog_post: { baseTokens: 2048, model: 'gpt-4o', temperature: 0.7 },
+  story: { baseTokens: 3072, model: 'gpt-4o', temperature: 0.8 },
+  press_release: { baseTokens: 1536, model: 'gpt-4o', temperature: 0.5 },
+  cover_letter: { baseTokens: 1024, model: 'gpt-4o', temperature: 0.6 },
+  research_brief: { baseTokens: 2048, model: 'gpt-4o', temperature: 0.4 },
+  research_report: { baseTokens: 4096, model: 'gpt-4o', temperature: 0.4 },
+  case_study: { baseTokens: 3072, model: 'gpt-4o', temperature: 0.6 },
+  how_to_guide: { baseTokens: 2048, model: 'gpt-4o', temperature: 0.5 },
+  policy_note: { baseTokens: 1536, model: 'gpt-4o', temperature: 0.4 },
+  product_description: { baseTokens: 768, model: 'gpt-4o-mini', temperature: 0.7 },
+  essay: { baseTokens: 3072, model: 'gpt-4o', temperature: 0.7 },
+  proposal: { baseTokens: 2560, model: 'gpt-4o', temperature: 0.6 },
+  official_letter: { baseTokens: 1024, model: 'gpt-4o', temperature: 0.5 },
+  poem: { baseTokens: 1024, model: 'gpt-4o', temperature: 0.9 },
+  
+  // Default fallback
+  default: { baseTokens: 1024, model: 'gpt-4o-mini', temperature: 0.7 }
+};
+
+// Length multipliers
+const lengthMultipliers = {
+  'very_short': 0.5,
+  'short': 0.75,
+  'medium': 1.0,
+  'long': 1.5,
+  'very_long': 2.0
+};
+
+// Tone adjustments
+const toneAdjustments = {
+  // Creative tones
+  funny: { tempAdj: +0.2, tokenAdj: 1.0 },
+  romantic: { tempAdj: +0.2, tokenAdj: 1.0 },
+  humorous: { tempAdj: +0.3, tokenAdj: 1.0 },
+  inspirational: { tempAdj: +0.1, tokenAdj: 1.1 },
+  motivational: { tempAdj: +0.1, tokenAdj: 1.1 },
+  
+  // Professional tones
+  professional: { tempAdj: -0.1, tokenAdj: 1.0 },
+  formal: { tempAdj: -0.2, tokenAdj: 1.0 },
+  serious: { tempAdj: -0.2, tokenAdj: 1.0 },
+  authoritative: { tempAdj: -0.1, tokenAdj: 1.0 },
+  
+  // Neutral tones
+  neutral: { tempAdj: 0, tokenAdj: 1.0 },
+  friendly: { tempAdj: +0.1, tokenAdj: 1.0 },
+  empathetic: { tempAdj: +0.1, tokenAdj: 1.0 },
+  
+  // Default fallback
+  default: { tempAdj: 0, tokenAdj: 1.0 }
+};
+
+// Register adjustments: influence temperature and tokens based on register (formality/style)
+const registerAdjustments = {
+  auto:       { tempAdj: 0.0,  tokenAdj: 1.0 },
+  formal:     { tempAdj: -0.10, tokenAdj: 1.0 },
+  neutral:    { tempAdj: 0.0,  tokenAdj: 1.0 },
+  casual:     { tempAdj: +0.05, tokenAdj: 1.0 },
+  slang:      { tempAdj: +0.10, tokenAdj: 0.90 },
+  poetic:     { tempAdj: +0.05, tokenAdj: 1.10 },
+  gen_z:      { tempAdj: +0.10, tokenAdj: 0.90 },
+  business_formal: { tempAdj: -0.10, tokenAdj: 1.0 },
+  executive_brief: { tempAdj: -0.10, tokenAdj: 0.85 },
+} as const;
+
+// Get generation parameters based on content type, tone, length, and register
+function getGenerationParams(contentType: string, tone: string, length: string, register?: string) {
+  const config = contentConfig[contentType as keyof typeof contentConfig] || contentConfig.default;
+  const lengthMult = lengthMultipliers[length as keyof typeof lengthMultipliers] || 1.0;
+  const toneAdj = toneAdjustments[tone as keyof typeof toneAdjustments] || toneAdjustments.default;
+  const regAdj = registerAdjustments[(register as keyof typeof registerAdjustments) || 'auto'] || registerAdjustments.auto;
+  
+  // Calculate final values with bounds
+  const finalTemp = Math.min(1.0, Math.max(0.1, config.temperature + toneAdj.tempAdj + regAdj.tempAdj));
+  const finalTokens = Math.max(256, Math.min(4096, Math.floor(config.baseTokens * lengthMult * toneAdj.tokenAdj * regAdj.tokenAdj)));
+  
+  return {
+    model: config.model,
+    temperature: finalTemp,
+    max_tokens: finalTokens
+  };
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
@@ -43,7 +134,7 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, messageAnalysis, modelPreference, temperature, contentType, length, replyLength } = requestBody;
+    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference, temperature, contentType, length, replyLength, tone, register } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -52,7 +143,8 @@ serve(async (req) => {
       hasMessageAnalysis: !!messageAnalysis,
       contentType,
       length,
-      replyLength
+      replyLength,
+      tone
     });
 
     if (!prompt) {
@@ -76,29 +168,16 @@ serve(async (req) => {
     console.log("🎯 Requested modelPreference:", modelPreference);
     console.log("🎯 Requested temperature:", temperature);
 
-    const systemPrompt = getSystemPrompt(language);
-    const temp = typeof temperature === 'number' ? Math.max(0, Math.min(1, temperature)) : 0.7;
+    const systemPrompt = getSystemPrompt(language, languageVariant);
+    const genParams = getGenerationParams(contentType, tone, length || 'medium', register);
+    console.log("🎯 Generation parameters:", genParams);
 
-    // Hybrid model selection (backend safety net)
-    const longFormTypes = new Set([
-      'story','article','report','proposal','press_release','cover_letter','official_letter','research_brief','research_report','case_study','how_to_guide','policy_note','essay'
-    ]);
-    const wantsLong = (mode === 'reply' ? replyLength === 'long' : length === 'long');
-    let preferredOpenAIModel = 'gpt-4o-mini';
-    if (modelPreference === 'gpt-4o' || modelPreference === 'gpt-4o-mini') {
-      preferredOpenAIModel = modelPreference;
-    } else if (wantsLong || (contentType && longFormTypes.has(contentType))) {
-      preferredOpenAIModel = 'gpt-4o';
-    }
-    let temperatureUsed = temp;
-    
-    let generatedText = "";
-    let modelUsed = "";
+    let generatedText: string | undefined;
 
     // Try OpenAI (preferred model) first if available
     if (OPENAI_API_KEY) {
       try {
-        console.log(`🎯 Text Generator: Trying OpenAI ${preferredOpenAIModel} first`);
+        console.log(`🎯 Text Generator: Trying OpenAI ${genParams.model}`);
         const startOpenAI = Date.now();
         const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
@@ -107,13 +186,13 @@ serve(async (req) => {
             "Authorization": `Bearer ${OPENAI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: preferredOpenAIModel,
+            model: genParams.model,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: prompt }
             ],
-            temperature: temp,
-            max_tokens: 2000,
+            temperature: genParams.temperature,
+            max_tokens: genParams.max_tokens,
           }),
         });
         const openaiDuration = Date.now() - startOpenAI;
@@ -124,7 +203,21 @@ serve(async (req) => {
           const content = openaiResult.choices?.[0]?.message?.content || "";
           if (content) {
             generatedText = content;
-            modelUsed = preferredOpenAIModel;
+            let modelUsed = genParams.model;
+            console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model:", modelUsed);
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                generatedText,
+                mode,
+                language,
+                modelUsed,
+                temperatureUsed: genParams.temperature,
+                contentType: contentType || null
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           } else {
             console.warn("🎯 Text Generator: OpenAI returned no content");
           }
@@ -138,7 +231,7 @@ serve(async (req) => {
     }
 
     // Fallback to DeepSeek if needed and available
-    if (!generatedText && DEEPSEEK_API_KEY) {
+    if (!OPENAI_API_KEY || (!generatedText && DEEPSEEK_API_KEY)) {
       try {
         console.log("🎯 Text Generator: Falling back to DeepSeek (deepseek-chat)");
         const startDeepseek = Date.now();
@@ -149,13 +242,13 @@ serve(async (req) => {
             "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
           },
           body: JSON.stringify({
-            model: "deepseek-chat",
+            model: genParams.model,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: prompt }
             ],
-            temperature: temp,
-            max_tokens: 2000,
+            temperature: genParams.temperature,
+            max_tokens: genParams.max_tokens,
           }),
         });
         const deepseekDuration = Date.now() - startDeepseek;
@@ -166,7 +259,21 @@ serve(async (req) => {
           const content = result.choices?.[0]?.message?.content || "";
           if (content) {
             generatedText = content;
-            modelUsed = "deepseek-chat";
+            let modelUsed = genParams.model;
+            console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model:", modelUsed);
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                generatedText,
+                mode,
+                language,
+                modelUsed,
+                temperatureUsed: genParams.temperature,
+                contentType: contentType || null
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           } else {
             console.error("🎯 Text Generator: No text generated from DeepSeek API", JSON.stringify(result));
           }
@@ -179,32 +286,15 @@ serve(async (req) => {
       }
     }
 
-    if (!generatedText) {
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: "No text generated from AI providers" 
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        }
-      );
-    }
-
-    console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model:", modelUsed);
-
     return new Response(
-      JSON.stringify({
-        success: true,
-        generatedText,
-        mode,
-        language,
-        modelUsed,
-        temperatureUsed: temperatureUsed,
-        contentType: contentType || null
+      JSON.stringify({ 
+        success: false,
+        error: "No text generated from AI providers" 
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      }
     );
     
   } catch (error: any) {
@@ -227,13 +317,37 @@ serve(async (req) => {
   }
 });
 
-// System prompt for text generation
-function getSystemPrompt(language: string): string {
-  const basePrompt = language === 'ar' 
-    ? "أنت مساعد ذكي متخصص في إنشاء النصوص عالية الجودة. مهمتك هي إنشاء محتوى واضح ومفيد ومتسق بناءً على طلب المستخدم."
+// System prompt for text generation with language variant enforcement
+function getSystemPrompt(language: string, languageVariant?: string): string {
+  const isArabic = language === 'ar';
+
+  // Normalize variant for robust matching (e.g., "Canadian English", "en-CA", "CA")
+  const v = (languageVariant || '').toString().trim().toLowerCase();
+
+  let variantLine = '';
+  if (!isArabic) {
+    if (v.includes('canadian') || v.includes('en-ca') || v === 'ca' || v.includes('canada')) {
+      variantLine = 'Use Canadian English spelling and phrasing (e.g., colour, centre, cheque, licence, defence). Prefer metric units.';
+    } else if (v.includes('us') || v.includes('en-us') || v.includes('american')) {
+      variantLine = 'Use US English spelling and phrasing (e.g., color, center, check, license, defense).';
+    } else if (v.includes('uk') || v.includes('en-gb') || v.includes('british')) {
+      variantLine = 'Use UK English spelling and phrasing (e.g., colour, centre, cheque, licence, defence).';
+    } else if (v.includes('aus') || v.includes('au') || v.includes('australian') || v.includes('en-au')) {
+      variantLine = 'Use Australian English spelling and phrasing. Prefer metric units.';
+    }
+  } else {
+    if (v.includes('msa') || v.includes('modern standard') || v.includes('فصحى') || v.includes('fusha')) {
+      variantLine = 'استخدم العربية الفصحى MSA.';
+    } else if (v.includes('gulf') || v.includes('khaleeji') || v.includes('الخليج') || v.includes('خليج')) {
+      variantLine = 'استخدم العربية الخليجية بأسلوب طبيعي ومفهوم.';
+    }
+  }
+
+  const basePrompt = isArabic
+    ? 'أنت مساعد ذكي متخصص في إنشاء النصوص عالية الجودة. مهمتك هي إنشاء محتوى واضح ومفيد ومتسق بناءً على طلب المستخدم.'
     : "You are an intelligent assistant specialized in generating high-quality text content. Your task is to create clear, helpful, and coherent content based on the user's request.";
 
-  const guidelines = language === 'ar'
+  const guidelines = isArabic
     ? `
 المبادئ التوجيهية:
 - اكتب نصاً واضحاً ومباشراً
@@ -255,5 +369,9 @@ Guidelines:
 - Do not make unnecessary assumptions
 - Focus only on text generation`;
 
-  return basePrompt + guidelines;
+  const variantBlock = variantLine
+    ? (isArabic ? `\nتعليمات المتغير اللغوي: ${variantLine}` : `\nLanguage variant instruction: ${variantLine}`)
+    : '';
+
+  return basePrompt + guidelines + variantBlock;
 }

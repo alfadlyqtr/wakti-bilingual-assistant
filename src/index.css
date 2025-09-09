@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -54,6 +53,10 @@
     --glow-green: 0 0 20px hsla(142, 76%, 65%, 0.6);
     --glow-orange: 0 0 20px hsla(25, 95%, 70%, 0.6);
     --glow-purple: 0 0 20px hsla(280, 60%, 75%, 0.6);
+    /* Global layout offsets */
+    --app-header-h: 64px;          /* Adjust to your header height */
+    --app-bottom-tabs-h: 72px;     /* Adjust to your bottom tab bar height */
+    --app-content-gap: 8px;        /* Extra breathing space for anchor scrolls */
   }
 
   .dark {
@@ -344,6 +347,13 @@
     animation: pulse-color 2s ease-in-out infinite;
     transform: scale(1.1);
   }
+
+  /* Ensure anchor jumps and scrollIntoView land below the fixed header */
+  html {
+    scroll-padding-top: calc(var(--app-header-h) + var(--app-content-gap));
+  }
+
+  /* Spacing is handled in AppLayout <main> via pt/pb using the variables above */
 }
 
 /* Dark mode styles with enhanced vibrant visuals */
