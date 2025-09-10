@@ -21,6 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CreateEventFormData, TextStyle } from '@/types/maw3d';
 import TextStyleCustomizer from '@/components/maw3d/TextStyleCustomizer';
 import BackgroundCustomizer from '@/components/events/BackgroundCustomizer';
+import LocationPickerModal from '@/components/events/LocationPickerModal';
 import { t } from '@/utils/translations';
 import YouTubeAudioPlayer from '@/components/audio/YouTubeAudioPlayer';
 
@@ -121,6 +122,8 @@ export default function Maw3dCreate() {
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [audioOpen, setAudioOpen] = useState(false);
+  // Location picker modal state
+  const [locModalOpen, setLocModalOpen] = useState(false);
   
   // Event styling state
   const [backgroundType, setBackgroundType] = useState<'color' | 'gradient' | 'image' | 'ai'>('color');
@@ -181,6 +184,14 @@ export default function Maw3dCreate() {
     } finally {
       setSearching(false);
     }
+  };
+
+  // Handle confirm from Location Picker
+  const onLocationPicked = ({ lat, lng, name }: { lat: number; lng: number; name: string }) => {
+    const encoded = encodeURIComponent(name || 'Location');
+    const link = `https://www.google.com/maps?q=${lat},${lng}(${encoded})`;
+    setValue('google_maps_link', link, { shouldDirty: true });
+    toast.success('Map link added');
   };
 
   // no AAC detection needed
@@ -744,56 +755,54 @@ export default function Maw3dCreate() {
                       render={({ field }) => (
                         <Input 
                           id="location" 
-                          placeholder={t('enterLocation', language)}
-                          className="input-enhanced backdrop-blur-sm"
+                          placeholder="Enter location name to show"
+                          className="input-enhanced backdrop-blur-sm placeholder:italic placeholder:text-xs placeholder:text-muted-foreground/70"
                           {...field}
                         />
                       )}
                     />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="google_maps_link" className="text-enhanced-heading">{t('googleMapsLink', language)}</Label>
-                    <div className="flex justify-end mb-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          if (!('geolocation' in navigator)) {
-                            toast.error('Geolocation not supported');
-                            return;
-                          }
-                          navigator.geolocation.getCurrentPosition(
-                            (pos) => {
-                              const { latitude, longitude } = pos.coords;
-                              const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
-                              setValue('google_maps_link', url, { shouldDirty: true });
-                              toast.success('Location added');
-                            },
-                            (err) => {
-                              console.error('Geolocation error:', err);
-                              toast.error('Unable to fetch location');
-                            },
-                            { enableHighAccuracy: true, timeout: 10000 }
-                          );
-                        }}
-                      >
-                        Use Current Location
+                    <div className="flex justify-center my-3">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setLocModalOpen(true)} className="px-4 rounded-md bg-gradient-secondary text-secondary-foreground border border-border/40 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)] hover:shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)] hover:bg-secondary/80 transition-all duration-300">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        Pick Location
                       </Button>
                     </div>
+                    <Label htmlFor="google_maps_link" className="text-enhanced-heading">{t('googleMapsLink', language)}</Label>
                     <Controller
                       name="google_maps_link"
                       control={control}
                       render={({ field }) => (
-                        <Input 
-                          id="google_maps_link" 
-                          placeholder="https://maps.google.com/..."
-                          className="input-enhanced backdrop-blur-sm"
-                          {...field}
-                        />
+                        <div className="relative flex items-center gap-2">
+                          <Input 
+                            id="google_maps_link" 
+                            placeholder="https://maps.google.com/..."
+                            className="input-enhanced backdrop-blur-sm pr-24"
+                            readOnly
+                            onPaste={(e) => {
+                              const text = e.clipboardData.getData('text');
+                              if (text) {
+                                e.preventDefault();
+                                setValue('google_maps_link', text, { shouldDirty: true });
+                              }
+                            }}
+                            value={field.value || ''}
+                            onChange={() => { /* read-only typing ignored */ }}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 text-xs"
+                            onClick={() => setValue('google_maps_link', '', { shouldDirty: true })}
+                          >
+                            Clear
+                          </Button>
+                        </div>
                       )}
                     />
+                    <p className="text-[10px] text-muted-foreground mt-1 text-center">
+                      Or paste a Google Maps link above
+                    </p>
                   </div>
                 </CardContent>
               </CollapsibleContent>
@@ -1120,6 +1129,12 @@ export default function Maw3dCreate() {
           </Collapsible>
         </form>
       </div>
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        open={locModalOpen}
+        onOpenChange={setLocModalOpen}
+        onConfirm={onLocationPicked}
+      />
     </div>
   );
 }
