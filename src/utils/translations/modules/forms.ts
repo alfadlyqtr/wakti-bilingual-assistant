@@ -10,6 +10,8 @@ export const forms = {
   guestName: "Guest Name",
   user: "User",
   creating: "Creating",
+  saving: "Saving...",
+  saveChanges: "Save Changes",
   generating: "Generating",
   sending: "Sending",
   reply: "Reply",

@@ -6,11 +6,18 @@ const allowedOrigins = [
   'https://wakti.qa',
   'https://www.wakti.qa',
   'https://lovable.dev',
-  'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com'
+  'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com',
+  // Dev/local
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
 ];
 
 const getCorsHeaders = (origin: string | null) => {
-  const corsOrigin = allowedOrigins.includes(origin || '') ? origin : 'https://wakti.qa';
+  const corsOrigin: string = allowedOrigins.includes(origin ?? '')
+    ? (origin ?? 'https://wakti.qa')
+    : 'https://wakti.qa';
   
   return {
     'Access-Control-Allow-Origin': corsOrigin,
@@ -40,7 +47,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, width = 1024, height = 1024, style = "photographic" }: RequestBody = await req.json()
+    const { prompt, width = 1024, height = 1024, style: _style = "photographic" }: RequestBody = await req.json()
 
     if (!prompt) {
       return new Response(
@@ -87,7 +94,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             model: "dall-e-3",
-            prompt: `Create an event background image: ${prompt}. Make it suitable for event promotion with good contrast for text overlay.`,
+            prompt: `Create an event background image: ${prompt}. This is an image to be used on an event card. No text on image. No words, no typography, no watermarks. High quality, suitable for event promotion with good contrast for text overlay.`,
             n: 1,
             size: "1024x1024",
             quality: "standard",
@@ -138,7 +145,7 @@ serve(async (req) => {
       {
         taskType: "imageInference",
         taskUUID,
-        positivePrompt: `Event background: ${prompt}. High quality, professional, suitable for event promotion with good contrast for text overlay.`,
+        positivePrompt: `Event background: ${prompt}. This is an image to be used on an event card. No text on image. No words, no typography, no watermarks. High quality, professional, suitable for event promotion with good contrast for text overlay.`,
         width,
         height,
         model,
@@ -186,7 +193,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             model: "dall-e-3",
-            prompt: `Create an event background image: ${prompt}. Make it suitable for event promotion with good contrast for text overlay.`,
+            prompt: `Create an event background image: ${prompt}. This is an image to be used on an event card. No text on image. No words, no typography, no watermarks. High quality, suitable for event promotion with good contrast for text overlay.`,
             n: 1,
             size: "1024x1024",
             quality: "standard",
@@ -220,7 +227,7 @@ serve(async (req) => {
     console.log('🎨 Runware response data:', data)
 
     // Find the image generation result in the response array
-    const imageResult = data.data?.find((item: any) => item.taskType === "imageInference")
+    const imageResult = data.data?.find((item: { taskType?: string; imageURL?: string }) => item.taskType === "imageInference")
     
     if (!imageResult || !imageResult.imageURL) {
       console.error('Invalid response from Runware API:', data)
@@ -241,12 +248,13 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error in generate-event-image function:', error)
+    const err = error as Error
+    console.error('Error in generate-event-image function:', err)
     
     return new Response(
       JSON.stringify({ 
         error: 'Failed to generate image',
-        details: error.message,
+        details: err.message,
         imageUrl: '/placeholder.svg' // Provide fallback
       }),
       { 

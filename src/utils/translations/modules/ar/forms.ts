@@ -10,6 +10,8 @@ export const formsAr = {
   guestName: "اسم الضيف",
   user: "المستخدم",
   creating: "جاري الإنشاء",
+  saving: "جارٍ الحفظ...",
+  saveChanges: "حفظ التغييرات",
   generating: "جاري التوليد",
   sending: "جاري الإرسال",
   reply: "رد",

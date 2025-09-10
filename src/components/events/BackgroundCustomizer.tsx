@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Palette, Image, Sparkles } from 'lucide-react';
+import { Palette, Image, Sparkles, Paintbrush } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -93,6 +93,13 @@ export default function BackgroundCustomizer({
 
   return (
     <Card>
+      {/* Inline CSS for brush animation (scoped by class names) */}
+      <style>{`
+        @keyframes wakti-brush-move { 0% { transform: translateX(-10%) rotate(-12deg); } 50% { transform: translateX(110%) rotate(8deg); } 100% { transform: translateX(-10%) rotate(-12deg); } }
+        @keyframes wakti-stroke-sheen { 0% { left: -40%; } 50% { left: 140%; } 100% { left: -40%; } }
+        .wakti-brush-anim { animation: wakti-brush-move 1.6s ease-in-out infinite; }
+        .wakti-stroke-anim { animation: wakti-stroke-sheen 1.6s ease-in-out infinite; }
+      `}</style>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Palette className="w-4 h-4" />
@@ -175,9 +182,18 @@ export default function BackgroundCustomizer({
               <Button 
                 onClick={generateAIBackground}
                 disabled={isGenerating}
-                className="w-full mt-2"
+                className="relative overflow-hidden w-full mt-2"
               >
-                <Sparkles className="w-4 h-4 mr-2" />
+                {isGenerating && (
+                  <>
+                    <span className="pointer-events-none absolute inset-0">
+                      {/* subtle shimmering stroke under the brush */}
+                      <span className="absolute top-1/2 -translate-y-1/2 h-[2px] w-1/2 rounded-full bg-gradient-to-r from-transparent via-primary/40 to-transparent wakti-stroke-anim" />
+                    </span>
+                    <Paintbrush className="w-4 h-4 mr-2 wakti-brush-anim relative z-[1]" />
+                  </>
+                )}
+                {!isGenerating && <Sparkles className="w-4 h-4 mr-2" />}
                 {isGenerating ? t('generating', language) : t('generateAIBackground', language)}
               </Button>
             </div>

@@ -85,5 +85,20 @@ export const eventsAr = {
   googleCalendar: "تقويم جوجل",
   outlookCalendar: "تقويم Outlook",
   appleCalendar: "تقويم Apple",
-  eventDetails: "تفاصيل الحدث"
+  eventDetails: "تفاصيل الحدث",
+  // Extended keys used in Maw3dCreate audio section and headers
+  audio: "الصوت",
+  searchSongPlaceholder: "ابحث عن أغنية...",
+  search: "بحث",
+  searching: "جارٍ البحث...",
+  showMore: "عرض المزيد",
+  change: "تغيير",
+  attachToMaw3d: "إرفاق إلى Maw3d",
+  autoplay: "تشغيل تلقائي",
+  searchAndSelectSong: "ابحث واختر أغنية للمعاينة.",
+  selectedAudio: "الصوت المحدد",
+  shareableLink: "رابط قابل للمشاركة",
+  shareableLinkDesc: "بعد الإنشاء، سيحصل الحدث على رابط فريد يمكنك إرساله للآخرين. يسمح الرابط للناس بعرض الحدث وتأكيد الحضور حسب إعدادات الخصوصية.",
+  autoDeleteWarningTitle: "تحذير الحذف التلقائي",
+  autoDeleteWarningDesc: "سيتم حذف هذا الحدث تلقائياً بعد 24 ساعة من انتهاء تاريخ الحدث. سيتم حذف جميع البيانات المرتبطة بما في ذلك التأكيدات والرسائل بشكل دائم."
 };

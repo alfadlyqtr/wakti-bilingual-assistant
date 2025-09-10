@@ -1410,7 +1410,7 @@ export type TranslationKey =
   
   // THE MISSING KEY THAT'S CAUSING THE BUILD ERROR:
   | "tasksReminders"
-  
+
   // NEW MISSING TR KEYS FROM BUILD ERRORS:
   | "manageTasksAndResponsibilities"
   | "searchTasks"
@@ -1419,6 +1419,19 @@ export type TranslationKey =
   | "noTasksFound"
   | "noTasksYet"
   | "createFirstTask"
+  
+  // NEW KEYS FOR MAW3D CREATE UI (audio + headers)
+  | "saving"
+  | "audio"
+  | "searchSongPlaceholder"
+  | "searching"
+  | "attachToMaw3d"
+  | "autoplay"
+  | "searchAndSelectSong"
+  | "selectedAudio"
+  | "shareableLink"
+  | "shareableLinkDesc"
+  | "createAndManageEvents"
   
   // NEW MISSING MAW3D KEYS FROM BUILD ERRORS:
   | "createAndManageEvents"

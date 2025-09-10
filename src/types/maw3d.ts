@@ -9,6 +9,7 @@ export interface TextStyle {
   alignment: 'left' | 'center' | 'right';
   hasShadow: boolean;
   shadowIntensity?: number;
+  preferred_theme?: 'dark' | 'light';
 }
 
 export interface BackgroundStyle {
@@ -86,6 +87,14 @@ export interface Maw3dEvent {
   short_id?: string | null;
   language?: string;
   image_blur: number;
+  // Optional audio fields
+  audio_source?: string | null;
+  audio_title?: string | null;
+  audio_artist?: string | null;
+  audio_preview_url?: string | null;
+  audio_artwork_url?: string | null;
+  audio_duration_sec?: number | null;
+  audio_playback_mode?: 'autoplay' | 'tap' | null;
 }
 
 export interface Maw3dRsvp {

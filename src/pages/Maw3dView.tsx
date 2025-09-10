@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,15 @@ import { toast } from 'sonner';
 import { Toaster } from "@/components/ui/toaster";
 import { Maw3dService } from '@/services/maw3dService';
 import { EventPreview } from '@/components/maw3d/EventPreview';
+import YouTubeAudioPlayer from '@/components/audio/YouTubeAudioPlayer';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
+import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import CalendarDropdown from '@/components/events/CalendarDropdown';
 
 export default function Maw3dView() {
   const { shortId } = useParams();
+  const { setTheme } = useTheme();
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -24,6 +27,11 @@ export default function Maw3dView() {
   const [hasResponded, setHasResponded] = useState(false);
   const [userResponse, setUserResponse] = useState<'accepted' | 'declined' | null>(null);
   const [submittedName, setSubmittedName] = useState('');
+  // Attendee audio playback state
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const [audioTried, setAudioTried] = useState(false);
+  const [aacSupported, setAacSupported] = useState<boolean | null>(null);
   
   // LocalStorage-based RSVP tracking
   const [hasAlreadyRsvped, setHasAlreadyRsvped] = useState(false);
@@ -40,6 +48,47 @@ export default function Maw3dView() {
       fetchEvent();
     }
   }, [shortId]);
+
+  // Enforce the creator's preferred theme on shared view
+  useEffect(() => {
+    const pref = event?.text_style?.preferred_theme as 'dark' | 'light' | undefined;
+    if (pref === 'dark' || pref === 'light') {
+      setTheme(pref);
+    }
+  }, [event?.text_style?.preferred_theme, setTheme]);
+
+  // Detect AAC (M4A) playback capability
+  useEffect(() => {
+    try {
+      const el = document.createElement('audio');
+      const can = el.canPlayType('audio/mp4; codecs="mp4a.40.2"');
+      setAacSupported(!!can);
+    } catch {
+      setAacSupported(null);
+    }
+  }, []);
+
+  // Try safe autoplay if event requests it and browser allows (native audio only)
+  useEffect(() => {
+    if (!event) return;
+    if (!event.audio_preview_url) return;
+    // If it's YouTube, our custom player handles autoplay internally; skip native logic
+    const isYouTube = /youtu\.be\//.test(event.audio_preview_url) || /youtube\.com/.test(event.audio_preview_url);
+    if (event.audio_source === 'youtube' || isYouTube) return;
+    // playback_mode: 'autoplay' | 'tap'
+    if (event.audio_playback_mode !== 'autoplay') return;
+    if (audioTried) return; // avoid spamming attempts
+
+    const t = setTimeout(() => {
+      if (audioRef.current) {
+        setAudioTried(true);
+        audioRef.current.play().catch(() => {
+          setAudioBlocked(true);
+        });
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [event, audioTried]);
 
   useEffect(() => {
     // Check localStorage for previous RSVP when event is loaded
@@ -306,6 +355,50 @@ export default function Maw3dView() {
               language={eventLanguage}
               imageBlur={event.image_blur}
             />
+
+            {/* Audio playback (if event has audio) */}
+            {event.audio_preview_url && (
+              <Card>
+                <CardContent className="p-3 space-y-1.5">
+                  {(() => {
+                    const isYouTube = /youtu\.be\//.test(event.audio_preview_url!) || /youtube\.com/.test(event.audio_preview_url!);
+                    if (event.audio_source === 'youtube' || isYouTube) {
+                      const match = event.audio_preview_url!.match(/[?&]v=([^&]+)/) || event.audio_preview_url!.match(/youtu\.be\/([^?]+)/);
+                      const vid = match ? match[1] : undefined;
+                      if (vid) {
+                        return (
+                          <YouTubeAudioPlayer
+                            videoId={vid}
+                            title={event.audio_title || undefined}
+                            autoplay={event.audio_playback_mode === 'autoplay'}
+                            compact={true}
+                            showTitle={false}
+                          />
+                        );
+                      }
+                    }
+                    // Fallback to native audio
+                    return (
+                      <div className="flex items-center gap-3">
+                        <audio ref={audioRef} controls className="w-56">
+                          <source src={event.audio_preview_url!} type="audio/mp4" />
+                          <source src={event.audio_preview_url!} type="audio/x-m4a" />
+                          Your browser does not support AAC audio.
+                        </audio>
+                        {(event.audio_playback_mode === 'autoplay' && audioBlocked) && (
+                          <Button size="sm" onClick={() => { audioRef.current?.play().catch(() => {}); setAudioBlocked(false); }}>
+                            {eventLanguage === 'ar' ? 'اضغط للتشغيل' : 'Tap to play'}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {aacSupported === false && event.audio_source !== 'youtube' && (
+                    <div className="text-xs text-destructive mt-1">This browser may not support M4A/AAC previews. Please try Chrome or Edge.</div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Action Buttons - Fixed to be on same line */}
             <div className="flex gap-3 justify-center">

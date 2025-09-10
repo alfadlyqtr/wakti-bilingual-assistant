@@ -86,5 +86,20 @@ export const events = {
   addToCalendar: "Add to Calendar",
   googleCalendar: "Google Calendar",
   outlookCalendar: "Outlook Calendar",
-  appleCalendar: "Apple Calendar"
+  appleCalendar: "Apple Calendar",
+  // Extended keys used in Maw3dCreate audio section and headers
+  audio: "Audio",
+  searchSongPlaceholder: "Search song...",
+  search: "Search",
+  searching: "Searching...",
+  showMore: "Show more",
+  change: "Change",
+  attachToMaw3d: "Attach to Maw3d",
+  autoplay: "Autoplay",
+  searchAndSelectSong: "Search and select a song to preview.",
+  selectedAudio: "Selected Audio",
+  shareableLink: "Shareable Link",
+  shareableLinkDesc: "Once created, your event will have a unique shareable link that you can send to others. The link will allow people to view and RSVP to your event based on your privacy settings.",
+  autoDeleteWarningTitle: "Auto-delete Warning",
+  autoDeleteWarningDesc: "This event will be automatically deleted 24 hours after the event date passes. All associated data including RSVPs and messages will be permanently removed."
 };

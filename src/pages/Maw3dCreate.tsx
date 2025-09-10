@@ -22,6 +22,7 @@ import { CreateEventFormData, TextStyle } from '@/types/maw3d';
 import TextStyleCustomizer from '@/components/maw3d/TextStyleCustomizer';
 import BackgroundCustomizer from '@/components/events/BackgroundCustomizer';
 import { t } from '@/utils/translations';
+import YouTubeAudioPlayer from '@/components/audio/YouTubeAudioPlayer';
 
 const templates = [
   {
@@ -127,91 +128,32 @@ export default function Maw3dCreate() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [imageBlur, setImageBlur] = useState(0);
   
-  // Audio section state (simple for now)
-  const [audioSrc, setAudioSrc] = useState<string>('/lovable-uploads/beep.mp3');
+  // Audio section state (YouTube search + custom player)
   const [audioSearch, setAudioSearch] = useState<string>('');
-  const [ytResults, setYtResults] = useState<Array<{ videoId: string; title: string; thumbnail: string | null }>>([]);
-  const [ytLoading, setYtLoading] = useState<boolean>(false);
-  const [ytError, setYtError] = useState<string | null>(null);
+  const [ytResults, setYtResults] = useState<Array<{ videoId: string; title: string; thumbnail: string | null; channel?: string }>>([]);
+  const [visibleCount, setVisibleCount] = useState<number>(6);
+  const [searching, setSearching] = useState<boolean>(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const [selectedVideoTitle, setSelectedVideoTitle] = useState<string | null>(null);
+  const [selectedVideoThumb, setSelectedVideoThumb] = useState<string | null>(null);
+  const [selectedVideoChannel, setSelectedVideoChannel] = useState<string | null>(null);
   const [attachToEvent, setAttachToEvent] = useState<boolean>(false);
   const [autoplayInEvent, setAutoplayInEvent] = useState<boolean>(false);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [ytApiReady, setYtApiReady] = useState<boolean>(false);
-  const ytPlayerRef = React.useRef<any>(null);
+  // no AAC detection needed for YouTube
 
-  // Load YouTube IFrame API once when needed
-  useEffect(() => {
-    if (!selectedVideoId) return; // load only when user picks a song
-    if ((window as any).YT && (window as any).YT.Player) {
-      setYtApiReady(true);
-      return;
-    }
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    document.body.appendChild(tag);
-    (window as any).onYouTubeIframeAPIReady = () => {
-      setYtApiReady(true);
-    };
-  }, [selectedVideoId]);
-
-  // Create / update player when API ready and a video is selected
-  useEffect(() => {
-    if (!ytApiReady || !selectedVideoId) return;
-    // Destroy previous player
-    if (ytPlayerRef.current && ytPlayerRef.current.destroy) {
-      ytPlayerRef.current.destroy();
-      ytPlayerRef.current = null;
-    }
-    const YT = (window as any).YT;
-    ytPlayerRef.current = new YT.Player('yt-audio-player', {
-      height: '0',
-      width: '0',
-      videoId: selectedVideoId,
-      playerVars: {
-        controls: 0,
-        modestBranding: 1,
-        rel: 0,
-        playsinline: 1,
-        autoplay: 0,
-        origin: window.location.origin,
-        enablejsapi: 1
-      },
-      events: {
-        onStateChange: (e: any) => {
-          // 1 = playing, 2 = paused, 0 = ended
-          if (e.data === 1) setIsPlaying(true);
-          else if (e.data === 2 || e.data === 0) setIsPlaying(false);
-        }
-      }
-    });
-  }, [ytApiReady, selectedVideoId]);
-
-  const handlePlaySelected = () => {
-    if (ytPlayerRef.current && ytPlayerRef.current.playVideo) {
-      ytPlayerRef.current.playVideo();
-    }
-  };
-
-  const handlePauseSelected = () => {
-    if (ytPlayerRef.current && ytPlayerRef.current.pauseVideo) {
-      ytPlayerRef.current.pauseVideo();
-    }
-  };
-
-  const handleYouTubeSearch = async () => {
+  const handleAudioSearch = async () => {
     const q = audioSearch.trim();
     if (!q) return;
     try {
-      setYtLoading(true);
-      setYtError(null);
+      setSearching(true);
+      setSearchError(null);
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
-        setYtError('Please sign in to search YouTube');
+        setSearchError('Please sign in to search YouTube');
         return;
       }
-      const resp = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/youtube-search`, {
+      const resp = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/youtube-search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -220,29 +162,28 @@ export default function Maw3dCreate() {
         body: JSON.stringify({ query: q })
       });
       const json = await resp.json();
-      if (!resp.ok) {
-        setYtError('Network error searching YouTube');
-        return;
-      }
-      if (json?.error) {
-        if (json.error === 'quota_exceeded') setYtError('YouTube quota exceeded. Please try again later.');
-        else setYtError('YouTube search error');
+      if (!resp.ok || json?.error) {
+        setSearchError(json?.error || 'YouTube search failed');
         setYtResults([]);
         return;
       }
       const results = (json?.results || []).map((r: any) => ({
         videoId: r.videoId,
         title: r.title,
-        thumbnail: r.thumbnail || null
+        thumbnail: r.thumbnail || null,
+        channel: r.channel || undefined
       }));
       setYtResults(results);
+      setVisibleCount(6);
     } catch (e) {
-      setYtError('Unexpected error searching YouTube');
+      setSearchError('Search failed. Please try again.');
       setYtResults([]);
     } finally {
-      setYtLoading(false);
+      setSearching(false);
     }
   };
+
+  // no AAC detection needed
   
   // Text styling state
   const [textStyle, setTextStyle] = useState<TextStyle>({
@@ -357,6 +298,31 @@ export default function Maw3dCreate() {
         } as TextStyle;
         setTextStyle(mergedTs);
         setValue('text_style', mergedTs);
+
+        // Audio: prefill selection/toggles if event has audio saved
+        if (data.audio_preview_url) {
+          setAttachToEvent(true);
+          setAutoplayInEvent(data.audio_playback_mode === 'autoplay');
+          // If YouTube, extract videoId
+          const url: string = data.audio_preview_url;
+          const match = url.match(/[?&]v=([^&]+)/) || url.match(/youtu\.be\/([^?]+)/);
+          if ((data.audio_source === 'youtube' || match) && url) {
+            const vid = match ? match[1] : null;
+            if (vid) {
+              setSelectedVideoId(vid);
+              setSelectedVideoTitle(data.audio_title || t('selectedAudio', language));
+              setSelectedVideoThumb(data.audio_artwork_url || null);
+              setSelectedVideoChannel(data.audio_artist || null);
+            }
+          } else {
+            // Non-YouTube legacy: no selection
+            setSelectedVideoId(null);
+          }
+        } else {
+          setAttachToEvent(false);
+          setAutoplayInEvent(false);
+          setSelectedVideoId(null);
+        }
       } catch (e) {
         console.error('Failed to load event for edit:', e);
         toast.error('Failed to load event');
@@ -393,7 +359,8 @@ export default function Maw3dCreate() {
     
     try {
       // Prepare base event data
-      const baseData = {
+      const styleWithTheme = { ...textStyle, preferred_theme: theme };
+      const baseData: any = {
         title: data.title,
         description: data.description || null,
         location: data.location || null,
@@ -408,10 +375,29 @@ export default function Maw3dCreate() {
         auto_delete_enabled: data.auto_delete_enabled,
         background_type: backgroundType,
         background_value: backgroundType === 'image' ? (backgroundImage || backgroundColor) : backgroundColor,
-        text_style: textStyle,
+        text_style: styleWithTheme,
         template_type: data.template_type,
         image_blur: backgroundType === 'image' ? imageBlur : 0,
       };
+
+      // Attach audio fields if user opted in and a YT video is selected
+      if (attachToEvent && selectedVideoId) {
+        baseData.audio_source = 'youtube';
+        baseData.audio_title = selectedVideoTitle || null;
+        baseData.audio_artist = selectedVideoChannel || null;
+        baseData.audio_preview_url = `https://www.youtube.com/watch?v=${selectedVideoId}`;
+        baseData.audio_artwork_url = selectedVideoThumb || null;
+        baseData.audio_duration_sec = null;
+        baseData.audio_playback_mode = autoplayInEvent ? 'autoplay' : 'tap';
+      } else {
+        baseData.audio_source = null;
+        baseData.audio_title = null;
+        baseData.audio_artist = null;
+        baseData.audio_preview_url = null;
+        baseData.audio_artwork_url = null;
+        baseData.audio_duration_sec = null;
+        baseData.audio_playback_mode = null;
+      }
 
       if (editId) {
         console.log('Updating event with data:', { id: editId, ...baseData });
@@ -469,15 +455,21 @@ export default function Maw3dCreate() {
   };
 
   // Preview styles
-  const previewStyle = {
-    background: backgroundType === 'image' && backgroundImage 
-      ? `url(${backgroundImage})` 
-      : backgroundType === 'gradient' 
-        ? backgroundColor 
-        : backgroundColor,
+  // Use only longhand properties for background to avoid React warnings,
+  // and put blur on a separate background layer so text stays crisp.
+  const isImageBg = backgroundType === 'image' && !!backgroundImage;
+  const bgLayerStyle: React.CSSProperties = {
+    backgroundImage: isImageBg
+      ? `url(${backgroundImage})`
+      : (backgroundType === 'gradient' ? backgroundColor : undefined),
+    backgroundColor: backgroundType === 'color' ? backgroundColor : undefined,
+    backgroundRepeat: 'no-repeat',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    filter: backgroundType === 'image' ? `blur(${imageBlur}px)` : 'none',
+    filter: isImageBg ? `blur(${imageBlur}px)` : 'none'
+  };
+
+  const textPreviewStyle: React.CSSProperties = {
     color: textStyle.color,
     fontSize: `${Math.min(textStyle.fontSize, 32)}px`,
     fontFamily: textStyle.fontFamily,
@@ -497,10 +489,10 @@ export default function Maw3dCreate() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-                {editId ? 'Edit Event' : 'Create Event'}
+                {editId ? t('editEvent', language) : t('createEvent', language)}
               </h1>
               <p className="text-sm text-muted-foreground/80 font-medium">
-                Create and manage events
+                {t('createAndManageEvents', language)}
               </p>
             </div>
           </div>
@@ -524,7 +516,7 @@ export default function Maw3dCreate() {
               className="group px-6 py-2.5 bg-gradient-primary hover:shadow-glow transition-all duration-300 hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:rotate-90" />
-              <span>{editId ? (isLoading ? 'Saving...' : 'Save Changes') : (isLoading ? t('creating', language) : 'Create Event')}</span>
+              <span>{editId ? (isLoading ? t('saving', language) : t('saveChanges', language)) : (isLoading ? t('creating', language) : t('createEvent', language))}</span>
             </Button>
           </div>
         </div>
@@ -762,6 +754,34 @@ export default function Maw3dCreate() {
 
                   <div>
                     <Label htmlFor="google_maps_link" className="text-enhanced-heading">{t('googleMapsLink', language)}</Label>
+                    <div className="flex justify-end mb-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          if (!('geolocation' in navigator)) {
+                            toast.error('Geolocation not supported');
+                            return;
+                          }
+                          navigator.geolocation.getCurrentPosition(
+                            (pos) => {
+                              const { latitude, longitude } = pos.coords;
+                              const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                              setValue('google_maps_link', url, { shouldDirty: true });
+                              toast.success('Location added');
+                            },
+                            (err) => {
+                              console.error('Geolocation error:', err);
+                              toast.error('Unable to fetch location');
+                            },
+                            { enableHighAccuracy: true, timeout: 10000 }
+                          );
+                        }}
+                      >
+                        Use Current Location
+                      </Button>
+                    </div>
                     <Controller
                       name="google_maps_link"
                       control={control}
@@ -840,9 +860,11 @@ export default function Maw3dCreate() {
                   <div className="space-y-2">
                     <h3 className="text-lg font-semibold text-enhanced-heading">Preview</h3>
                     <div 
-                      className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden backdrop-blur-lg border border-border/30 shadow-vibrant"
-                      style={previewStyle}
+                      className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden border border-border/30 shadow-vibrant"
+                      style={textPreviewStyle}
                     >
+                      {/* Background layer with blur applied only to the image/gradient */}
+                      <div className="absolute inset-0 -z-0" style={bgLayerStyle} aria-hidden="true" />
                       <div className="text-center space-y-2 relative z-10">
                         <h2 className="font-bold leading-tight">
                           {watchedValues.title || t('eventTitle', language)}
@@ -887,7 +909,7 @@ export default function Maw3dCreate() {
                   <CardTitle className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Mic className="w-5 h-5 text-accent-blue drop-shadow-glow-blue" />
-                      <span className="bg-gradient-primary bg-clip-text text-transparent">Audio</span>
+                      <span className="bg-gradient-primary bg-clip-text text-transparent">{t('audio', language)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">{audioOpen ? '−' : '+'}</span>
@@ -900,83 +922,88 @@ export default function Maw3dCreate() {
                 <CardContent className="space-y-4 backdrop-blur-sm">
                   {/* Search bar (hidden after selection) */}
                   {!selectedVideoId && (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
                       <Input
-                        placeholder="Search audio..."
+                        placeholder={t('searchSongPlaceholder', language)}
                         value={audioSearch}
                         onChange={(e) => setAudioSearch(e.target.value)}
                         className="input-enhanced"
                       />
-                      <Button type="button" variant="secondary" onClick={handleYouTubeSearch} disabled={ytLoading}>
-                        {ytLoading ? 'Searching...' : 'Search'}
+                      <Button type="button" variant="secondary" onClick={handleAudioSearch} disabled={searching}>
+                        {searching ? t('searching', language) : t('search', language)}
                       </Button>
                     </div>
                   )}
 
                   {/* Results */}
-                  {ytError && (
-                    <p className="text-sm text-destructive">{ytError}</p>
+                  {searchError && (
+                    <p className="text-sm text-destructive">{searchError}</p>
                   )}
 
                   {ytResults.length > 0 && !selectedVideoId && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {ytResults.map(r => (
+                      {ytResults.slice(0, visibleCount).map(r => (
                         <button
                           key={r.videoId}
                           type="button"
-                          onClick={() => {
-                            setSelectedVideoId(r.videoId);
-                            setSelectedVideoTitle(r.title);
-                            // Keep existing audio element; we are not showing video.
-                          }}
-                          className={`flex gap-3 items-center p-2 rounded-lg border transition hover:bg-accent/10 text-left ${selectedVideoId === r.videoId ? 'border-primary' : 'border-border/40'}`}
+                          onClick={() => { setSelectedVideoId(r.videoId); setSelectedVideoTitle(r.title); setSelectedVideoThumb(r.thumbnail); setSelectedVideoChannel(r.channel || null); }}
+                          className="flex gap-3 items-center p-2 rounded-lg border transition hover:bg-accent/10 text-left border-border/40"
                         >
                           {r.thumbnail ? (
-                            <img src={r.thumbnail} alt={r.title} className="w-16 h-10 object-cover rounded" />
+                            <img src={r.thumbnail} alt={r.title} className="w-12 h-12 object-cover rounded" />
                           ) : (
-                            <div className="w-16 h-10 rounded bg-muted" />
+                            <div className="w-12 h-12 rounded bg-muted" />
                           )}
-                          <span className="text-sm line-clamp-2">{r.title}</span>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{r.title}</div>
+                            {r.channel && (
+                              <div className="text-xs text-muted-foreground truncate">{r.channel}</div>
+                            )}
+                          </div>
                         </button>
                       ))}
+                      {ytResults.length > visibleCount && (
+                        <Button type="button" variant="ghost" onClick={() => setVisibleCount(Math.min(12, ytResults.length))}>{t('showMore', language)}</Button>
+                      )}
                     </div>
                   )}
 
-                  {/* Player (audio only, powered by hidden YouTube iframe when selected) */}
+                  {/* Player (custom - YouTube) */}
                   <div className="rounded-lg p-4 bg-gradient-card border border-border/30 space-y-2">
                     {selectedVideoId ? (
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-medium truncate">{selectedVideoTitle}</div>
-                        <div className="flex gap-2">
-                          {!isPlaying ? (
-                            <Button size="sm" onClick={handlePlaySelected}>Play</Button>
-                          ) : (
-                            <Button size="sm" variant="secondary" onClick={handlePauseSelected}>Pause</Button>
-                          )}
-                          <Button size="sm" variant="ghost" onClick={() => { setSelectedVideoId(null); setSelectedVideoTitle(null); setYtResults([]); setIsPlaying(false); }}>Change</Button>
-                        </div>
-                      </div>
-                    ) : (
                       <>
-                        <audio controls src={audioSrc} className="w-full">
-                          Your browser does not support the audio element.
-                        </audio>
-                        <p className="text-xs text-muted-foreground">Default sample: {audioSrc}</p>
+                        <YouTubeAudioPlayer
+                          videoId={selectedVideoId}
+                          title={selectedVideoTitle || undefined}
+                          autoplay={autoplayInEvent}
+                          compact={true}
+                          showTitle={true}
+                        />
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="px-4 rounded-full bg-gradient-primary text-primary-foreground hover:shadow-glow transition-all duration-300 hover:scale-105 active:scale-100"
+                            onClick={() => { setSelectedVideoId(null); setSelectedVideoTitle(null); setSelectedVideoThumb(null); setSelectedVideoChannel(null); }}
+                          >
+                            {t('change', language)}
+                          </Button>
+                        </div>
                       </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{t('searchAndSelectSong', language)}</p>
                     )}
-                    {/* Hidden YT player container */}
-                    <div id="yt-audio-player" style={{ width: 0, height: 0, overflow: 'hidden' }} />
                   </div>
 
-                  {/* Attach/autoplay toggles (local only for now) */}
+                  {/* Attach/autoplay toggles */}
                   <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={attachToEvent} onChange={(e) => setAttachToEvent(e.target.checked)} />
-                      Attach selected song to event card
+                      {t('attachToMaw3d', language)}
                     </label>
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={autoplayInEvent} onChange={(e) => setAutoplayInEvent(e.target.checked)} disabled={!attachToEvent} />
-                      Autoplay on event page
+                      {t('autoplay', language)}
                     </label>
                   </div>
                 </CardContent>
@@ -1082,10 +1109,9 @@ export default function Maw3dCreate() {
                   <Separator className="bg-gradient-to-r from-transparent via-border to-transparent" />
 
                   <div className="space-y-2 p-4 rounded-lg bg-gradient-card border border-border/30 backdrop-blur-sm">
-                    <h4 className="font-medium text-enhanced-heading">Shareable Link</h4>
+                    <h4 className="font-medium text-enhanced-heading">{t('shareableLink', language)}</h4>
                     <p className="text-sm text-muted-foreground">
-                      Once created, your event will have a unique shareable link that you can send to others. 
-                      The link will allow people to view and RSVP to your event based on your privacy settings.
+                      {t('shareableLinkDesc', language)}
                     </p>
                   </div>
                 </CardContent>
