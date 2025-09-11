@@ -352,6 +352,20 @@ export const misc = {
   textColor: "Text Color",
   textShadow: "Text Shadow",
   textAlignment: "Text Alignment",
+  bold: "bold",
+  italic: "italic",
+  underline: "underline",
+  // Generic options
+  color: "color",
+  gradient: "gradient",
+  image: "image",
+  noFileChosen: "No file chosen",
+  // Custom gradient builder
+  customGradient: "Custom Gradient",
+  angle: "Angle",
+  position: "Position",
+  addColorStop: "Add color stop",
+  applyGradient: "Apply Gradient",
   
   // Background customization translations
   backgroundCustomization: "Background Customization",

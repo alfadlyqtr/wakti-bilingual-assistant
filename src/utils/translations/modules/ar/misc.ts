@@ -352,6 +352,20 @@ export const miscAr = {
   textColor: "لون النص",
   textShadow: "ظل النص",
   textAlignment: "محاذاة النص",
+  bold: "عريض",
+  italic: "مائل",
+  underline: "تحته خط",
+  // Generic options
+  color: "لون",
+  gradient: "تدرّج",
+  image: "صورة",
+  noFileChosen: "لم يتم اختيار ملف",
+  // Custom gradient builder
+  customGradient: "تدرّج مخصص",
+  angle: "الزاوية",
+  position: "الموضع",
+  addColorStop: "إضافة لون",
+  applyGradient: "تطبيق التدرّج",
   
   // Background customization translations
   backgroundCustomization: "تخصيص الخلفية",

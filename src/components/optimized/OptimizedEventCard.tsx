@@ -5,13 +5,17 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, Clock, Heart } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Maw3dEvent } from '@/types/maw3d';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 
 interface OptimizedEventCardProps {
   event: Maw3dEvent;
   onClick: () => void;
+  attendingCount?: number;
 }
 
-const OptimizedEventCard: React.FC<OptimizedEventCardProps> = ({ event, onClick }) => {
+const OptimizedEventCard: React.FC<OptimizedEventCardProps> = ({ event, onClick, attendingCount }) => {
+  const { language } = useTheme();
   // Simplified background style computation
   const hasImage = event.background_type === 'image' && event.background_value;
   
@@ -26,22 +30,29 @@ const OptimizedEventCard: React.FC<OptimizedEventCardProps> = ({ event, onClick 
     backgroundColor: event.background_value || '#3b82f6'
   };
 
-  // Simplified date formatting
+  // Simplified date formatting with localization
   const formattedDate = (() => {
-    if (!event.event_date) return 'Date TBD';
+    if (!event.event_date) return t('date', language) || 'Date';
     try {
-      return format(parseISO(event.event_date.toString()), 'MMM d, yyyy');
+      const d = parseISO(event.event_date.toString());
+      if (language === 'ar') {
+        return d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' } as any);
+      }
+      return format(d, 'MMM d, yyyy');
     } catch {
-      return 'Invalid Date';
+      return '—';
     }
   })();
 
   const formattedTime = (() => {
-    if (!event.start_time) return null;
+    if (!event.start_time || event.is_all_day) return null;
     try {
       const [hours, minutes] = event.start_time.split(':');
       const date = new Date();
       date.setHours(parseInt(hours), parseInt(minutes));
+      if (language === 'ar') {
+        return date.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', hour12: true } as any);
+      }
       return format(date, 'h:mm a');
     } catch {
       return null;
@@ -83,7 +94,7 @@ const OptimizedEventCard: React.FC<OptimizedEventCardProps> = ({ event, onClick 
                   <span>{formattedDate}</span>
                 </div>
                 
-                {formattedTime && !event.is_all_day && (
+                {formattedTime && (
                   <div className="flex items-center gap-1 text-sm bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
                     <Clock className="h-4 w-4" />
                     <span>{formattedTime}</span>
@@ -101,14 +112,14 @@ const OptimizedEventCard: React.FC<OptimizedEventCardProps> = ({ event, onClick 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-sm">
                   <Users className="h-4 w-4 text-pink-300" />
-                  <span>0 attending</span>
+                  <span>{attendingCount ?? 0} {t('attendees', language)}</span>
                 </div>
                 
                 <Badge 
                   variant={event.is_public ? "secondary" : "outline"}
                   className="bg-white/20 backdrop-blur-sm border-white/30 text-white hover:bg-white/30"
                 >
-                  {event.is_public ? 'Public' : 'Private'}
+                  {event.is_public ? t('publicEvent', language) : t('privateEvent', language)}
                 </Badge>
               </div>
             </div>

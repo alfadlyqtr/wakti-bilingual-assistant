@@ -29,7 +29,7 @@ const OptimizedMaw3dEvents = React.memo(() => {
   const { language } = useTheme();
   
   // Use optimized hook with caching and deduplication
-  const { events, loading, error } = useOptimizedMaw3dEvents();
+  const { events, loading, error, attendingCounts } = useOptimizedMaw3dEvents();
 
   const handleEventClick = React.useCallback((event: any) => {
     console.log('📱 Navigating to event management:', event.id);
@@ -128,6 +128,7 @@ const OptimizedMaw3dEvents = React.memo(() => {
                 <OptimizedEventCard
                   key={event.id}
                   event={event}
+                  attendingCount={attendingCounts?.[event.id] ?? 0}
                   onClick={() => handleEventClick(event)}
                 />
               ))}

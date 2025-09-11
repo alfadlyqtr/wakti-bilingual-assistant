@@ -37,5 +37,24 @@ export const status = {
   approved: "Approved",
   denied: "Denied",
   approve: "Approve",
-  deny: "Deny"
+  deny: "Deny",
+  // Chat related statuses
+  typing: "typing...",
+  lastSeen: "Last seen {time} ago",
+  justNow: "just now",
+  messageSaved: "Message saved",
+  messageUnsaved: "Message removed from saved",
+  errorSavingMessage: "Error saving message",
+  errorSendingMessage: "Error sending message",
+  errorUploadingImage: "Error uploading image",
+  errorSavingImage: "Error saving image",
+  imageTooLarge: "Image must be less than 5MB",
+  imageSaved: "Image saved successfully",
+  saveMessage: "Save message",
+  unsaveMessage: "Unsave message",
+  expand: "Expand",
+  download: "Download",
+  today: "Today",
+  yesterday: "Yesterday",
+  minsAgo: "m ago"
 };

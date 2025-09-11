@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CalendarEntry, EntryType } from "@/utils/calendarUtils";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 
@@ -39,7 +38,15 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
       if (entry) {
         setTitle(entry.title);
         setDescription(entry.description || "");
-        setDate(new Date(entry.date));
+        // Manual notes now store date as 'yyyy-MM-dd' (local day).
+        // Parse safely to avoid UTC shifting the day.
+        try {
+          const parsed = parse(entry.date, 'yyyy-MM-dd', new Date());
+          setDate(parsed);
+        } catch {
+          // Fallback for legacy ISO entries
+          setDate(new Date(entry.date));
+        }
       } else {
         setTitle("");
         setDescription("");
@@ -60,16 +67,15 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
       setError(t("dateRequired", language));
       return;
     }
-    
     // Create entry object
     const entryData = {
       ...(entry ? { id: entry.id } : {}),
       title: title.trim(),
       description: description.trim() || undefined,
-      date: date.toISOString(),
+      // Store as local day string to prevent timezone shifting one day back
+      date: format(date, 'yyyy-MM-dd'),
       type: EntryType.MANUAL_NOTE,
     };
-    
     onSave(entryData);
   };
   

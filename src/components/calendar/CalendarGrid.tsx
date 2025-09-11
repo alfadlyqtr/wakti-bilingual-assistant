@@ -15,7 +15,8 @@ import {
   getDay,
   addDays,
   getMonth,
-  getYear
+  getYear,
+  parse
 } from "date-fns";
 import { arSA, enUS, Locale } from "date-fns/locale";
 import { motion } from "framer-motion";
@@ -72,10 +73,18 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   const getEntriesForDate = (date: Date) => {
     const dateString = format(date, 'yyyy-MM-dd');
     const entries = calendarEntries.filter(entry => {
-      const entryDate = entry.date.split('T')[0]; // Handle both date and datetime formats
-      return view === 'year'
-        ? getMonth(new Date(entry.date)) === getMonth(date) && getYear(new Date(entry.date)) === getYear(date)
-        : entryDate === dateString;
+      const entryDatePart = entry.date.split('T')[0]; // works for both 'yyyy-MM-dd' and ISO
+      if (view === 'year') {
+        // Parse safely in local time to avoid UTC shifting the month/day
+        let entryDt: Date;
+        try {
+          entryDt = parse(entryDatePart, 'yyyy-MM-dd', new Date());
+        } catch {
+          entryDt = new Date(entry.date);
+        }
+        return getMonth(entryDt) === getMonth(date) && getYear(entryDt) === getYear(date);
+      }
+      return entryDatePart === dateString;
     });
     
     console.log(`Entries for ${dateString}:`, entries);

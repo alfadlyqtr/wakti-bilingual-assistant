@@ -178,6 +178,8 @@ export function AppHeader() {
   const pageInfo = getPageTitleWithIcon();
   const IconComponent = pageInfo.icon;
   
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
   return (
     <div className="bg-background border-b fixed top-0 left-0 right-0 z-[1000]">
       <div className="container flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
@@ -230,7 +232,7 @@ export function AppHeader() {
           </Button>
           
           {/* User Menu - Made smaller */}
-          <DropdownMenu>
+          <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 rounded-full relative">
                 <span className="relative">
@@ -245,7 +247,22 @@ export function AppHeader() {
                 </span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+
+            {/* Backdrop overlay when user menu is open */}
+            {userMenuOpen && (
+              <div 
+                onClick={() => setUserMenuOpen(false)}
+                className="fixed inset-0 z-[1050] bg-background/20 backdrop-blur-sm"
+              />
+            )}
+
+            <DropdownMenuContent 
+              align="end" 
+              side="bottom"
+              sideOffset={10}
+              collisionPadding={16}
+              className="z-[1100]"
+            >
               <DropdownMenuLabel>{language === 'ar' ? 'الحساب' : 'Account'}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {menuItems.map((item, index) => (

@@ -264,7 +264,7 @@ export default function Maw3dManage() {
               <div className="relative">
                 <CheckCircle className="w-6 h-6 mx-auto mb-2 text-green-600" />
                 <div className="text-2xl font-bold text-green-600">{rsvpCounts.accepted}</div>
-                <div className="text-xs font-medium text-green-700 dark:text-green-300">{t("going", language)}</div>
+                <div className="text-xs font-medium text-green-700 dark:text-green-300">{t("accepted", language)}</div>
               </div>
             </CardContent>
           </Card>
@@ -288,7 +288,7 @@ export default function Maw3dManage() {
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span>{t("going", language)}</span>
+                  <span>{t("accepted", language)}</span>
                 </div>
                 <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                   {acceptedRsvps.length}

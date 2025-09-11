@@ -157,8 +157,16 @@ export function WeatherButton() {
           </div>
         </Button>
       </PopoverTrigger>
+      {/* Backdrop overlay when popover is open */}
+      {isOpen && (
+        <div
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-[1050] bg-background/20 backdrop-blur-sm"
+        />
+      )}
+
       <PopoverContent 
-        className="w-80 p-0 border-0 shadow-2xl"
+        className="w-80 p-0 border-0 shadow-2xl z-[1100]"
         style={{
           background: 'rgba(255, 255, 255, 0.1)',
           backdropFilter: 'blur(40px)',
@@ -166,7 +174,10 @@ export function WeatherButton() {
           border: '1px solid rgba(255, 255, 255, 0.2)',
           boxShadow: '0 20px 80px rgba(0, 0, 0, 0.2)',
         }}
-        sideOffset={4}
+        side="bottom"
+        align="end"
+        sideOffset={10}
+        collisionPadding={16}
         avoidCollisions={true}
       >
         <div className={`relative ${language === 'ar' ? 'rtl' : 'ltr'}`}>

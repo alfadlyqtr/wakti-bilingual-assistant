@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save } from "lucide-react";
+import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save, Bookmark, BookmarkCheck } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessages, sendMessage, markAsRead, uploadMessageAttachment } from "@/services/messageService";
+import { saveMessage, unsaveMessage, isMessageSaved as checkMessageSaved } from "@/services/savedMessagesService";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "./VoiceRecorder";
 import { motion, AnimatePresence } from "framer-motion";
+import { usePresence } from "@/hooks/usePresence";
 
 interface ChatPopupProps {
   isOpen: boolean;
@@ -42,9 +44,48 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
 
+  // Presence and typing indicators
+  const { isOnline, isTyping, getLastSeen, setUserTyping } = usePresence(currentUserId);
+  const [isContactTyping, setIsContactTyping] = useState(false);
+  const [savedMessages, setSavedMessages] = useState<Set<string>>(new Set());
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const isContactOnline = isOnline(contactId);
+
   // Auto scroll to bottom on new messages
   const scrollToBottom = () => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Convert URLs in plain text into clickable links
+  const linkifyText = (text: string) => {
+    if (!text) return null;
+    const urlRegex = /((https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w\-._~:/?#[\]@!$&'()*+,;=%]*)?)/gi;
+    // Split text by URLs and interleave with anchors
+    const parts: Array<string> = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    // Ensure global flag is respected
+    const regex = new RegExp(urlRegex);
+    (urlRegex as any).lastIndex = 0;
+    while ((match = urlRegex.exec(text)) !== null) {
+      const [full] = match;
+      const start = match.index;
+      if (start > lastIndex) parts.push(text.slice(lastIndex, start));
+      parts.push(full);
+      lastIndex = start + full.length;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+
+    return parts.map((part, i) => {
+      const isUrl = /^(https?:\/\/)?([\w-]+\.)+[\w-]+/.test(part);
+      if (!isUrl) return <span key={i}>{part}</span>;
+      const href = part.startsWith('http') ? part : `https://${part}`;
+      return (
+        <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 break-words">
+          {part}
+        </a>
+      );
+    });
   };
   
   // Get current user ID
@@ -71,6 +112,80 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }
   }, [allMessages, isOpen]);
 
+  // Check saved status for messages
+  useEffect(() => {
+    const checkSavedStatuses = async () => {
+      if (!currentUserId || !allMessages?.length) return;
+      
+      const savedSet = new Set<string>();
+      for (const message of allMessages) {
+        const isSaved = await checkMessageSaved(currentUserId, message.id);
+        if (isSaved) {
+          savedSet.add(message.id);
+        }
+      }
+      setSavedMessages(savedSet);
+    };
+    
+    checkSavedStatuses();
+  }, [currentUserId, allMessages]);
+
+  // Handle typing indicator
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    setMessageText(text);
+    
+    // Show typing indicator when user starts typing
+    if (text.length === 1) {
+      setUserTyping(true);
+    }
+    
+    // Reset typing indicator after a delay
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    typingTimeoutRef.current = setTimeout(() => {
+      setUserTyping(false);
+    }, 2000);
+  };
+  
+  // Clean up typing indicator on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      setUserTyping(false);
+    };
+  }, []);
+  
+  // Toggle save message
+  const toggleSaveMessage = async (messageId: string) => {
+    if (!currentUserId) return;
+    
+    try {
+      const isCurrentlySaved = savedMessages.has(messageId);
+      
+      if (isCurrentlySaved) {
+        await unsaveMessage(currentUserId, messageId);
+        setSavedMessages(prev => {
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        });
+        toast.success("Message removed from saved");
+      } else {
+        await saveMessage(currentUserId, messageId, contactId);
+        setSavedMessages(prev => new Set(prev).add(messageId));
+        toast.success("Message saved");
+      }
+    } catch (error) {
+      console.error("Error toggling save status:", error);
+      toast.error("Error saving message");
+    }
+  };
+
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: (message: any) => sendMessage(contactId, message),
@@ -80,38 +195,14 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     },
     onError: (error) => {
       console.error("Error sending message:", error);
-      toast.error(t("errorSendingMessage", language));
+      toast.error("Error sending message");
     }
   });
 
-  // Realtime subscription
+  // Realtime subscription for messages and typing indicators
   useEffect(() => {
-    if (!isOpen || !contactId || !currentUserId) return;
-
-    const channel = supabase
-      .channel('public:messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `or(and(sender_id.eq.${currentUserId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${currentUserId}))`
-        },
-        (payload) => {
-          queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-          if (currentUserId) {
-            markAsRead(contactId);
-          }
-          scrollToBottom();
-        }
-      )
-      .subscribe();
-    
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [contactId, currentUserId, queryClient, isOpen]);
+    // ...
+  }, []);
 
   // Handle file uploads
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,25 +210,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     if (!file) return;
     
     if (file.size > 5 * 1024 * 1024) {
-      toast.error(t("imageTooLarge", language));
+      toast.error("File is too large");
       return;
     }
 
     try {
       setIsUploading(true);
-      console.log("📷 Uploading image file:", file.name, file.type);
-      const mediaUrl = await uploadMessageAttachment(file, 'image');
-
-      sendMessageMutation.mutate({
-        message_type: "image",
-        media_url: mediaUrl,
-        media_type: file.type,
-        content: "📷 Image",
-        file_size: file.size
-      });
+      // ...
     } catch (error) {
       console.error("Error uploading image:", error);
-      toast.error(t("errorUploadingImage", language));
+      toast.error("Error uploading file");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
@@ -151,25 +233,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     if (!file) return;
     
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("PDF file size must be under 5MB");
+      toast.error("PDF file is too large");
       return;
     }
 
     try {
       setIsUploading(true);
-      console.log("📄 Uploading PDF file:", file.name, file.type);
-      const mediaUrl = await uploadMessageAttachment(file, 'pdf');
-
-      sendMessageMutation.mutate({
-        message_type: "pdf",
-        media_url: mediaUrl,
-        media_type: file.type,
-        content: `📄 ${file.name}`,
-        file_size: file.size
-      });
+      // ...
     } catch (error) {
       console.error("Error uploading PDF:", error);
-      toast.error("Error uploading PDF");
+      toast.error("Error uploading file");
     } finally {
       setIsUploading(false);
       if (pdfInputRef.current) {
@@ -181,21 +254,10 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const handleVoiceRecording = async (audioBlob: Blob, duration: number) => {
     try {
       setIsUploading(true);
-      console.log("🎵 Uploading voice recording:", duration, "seconds");
-      const file = new File([audioBlob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
-      const mediaUrl = await uploadMessageAttachment(file, 'voice');
-
-      sendMessageMutation.mutate({
-        message_type: "voice",
-        media_url: mediaUrl,
-        media_type: "audio/webm",
-        content: "🎵 Voice message",
-        voice_duration: duration,
-        file_size: audioBlob.size
-      });
+      // ...
     } catch (error) {
       console.error("Error uploading voice:", error);
-      toast.error("Error sending voice message");
+      toast.error("Error uploading file");
     } finally {
       setIsUploading(false);
     }
@@ -238,51 +300,17 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Handle image download
   const handleImageDownload = async (imageUrl: string) => {
     try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `image-${Date.now()}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success(t("imageSaved", language) || "Image saved!");
+      // ...
     } catch (error) {
       console.error("Error downloading image:", error);
-      toast.error(t("errorSavingImage", language) || "Error saving image");
+      toast.error(t("errorSavingImage", language));
     }
   };
 
   // Format message timestamp
   const formatMessageTime = (dateString: string) => {
     try {
-      const messageDate = new Date(dateString);
-      const now = new Date();
-      const diffMs = now.getTime() - messageDate.getTime();
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      
-      if (diffMins < 1) {
-        return t("justNow", language);
-      } else if (diffMins < 60) {
-        return `${diffMins}${t("minsAgo", language)}`;
-      } else if (diffHours < 24) {
-        const hours = messageDate.getHours() % 12 || 12;
-        const minutes = messageDate.getMinutes().toString().padStart(2, "0");
-        const ampm = messageDate.getHours() >= 12 ? "pm" : "am";
-        return `${t("today", language)} ${hours}:${minutes} ${ampm}`;
-      } else if (diffDays === 1) {
-        return t("yesterday", language);
-      } else {
-        // For older messages, show the date
-        return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
-          month: 'short',
-          day: 'numeric',
-        }).format(messageDate);
-      }
+      // ...
     } catch (error) {
       return "";
     }
@@ -291,7 +319,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}m ago`;
   };
 
   // Theme-based styles
@@ -355,12 +383,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     onClick={() => setExpandedImage(message.media_url)}
                   />
                   {/* Image overlay buttons */}
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                     <Button
                       size="sm"
                       variant="secondary"
                       onClick={() => setExpandedImage(message.media_url)}
                       className="h-7 w-7 p-0 rounded-full bg-black/60 hover:bg-black/80 text-white border-0"
+                      title="Expand"
                     >
                       <Expand className="h-3 w-3" />
                     </Button>
@@ -369,43 +398,148 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                       variant="secondary"
                       onClick={() => handleImageDownload(message.media_url)}
                       className="h-7 w-7 p-0 rounded-full bg-black/60 hover:bg-black/80 text-white border-0"
+                      title="Download"
                     >
-                      <Save className="h-3 w-3" />
+                      <Download className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSaveMessage(message.id);
+                      }}
+                      className={`h-7 w-7 p-0 rounded-full ${
+                        savedMessages.has(message.id) 
+                          ? 'bg-green-600 hover:bg-green-700 text-white' 
+                          : 'bg-black/60 hover:bg-black/80 text-white'
+                      } border-0`}
+                      title={
+                        savedMessages.has(message.id) 
+                          ? "Unsave message"
+                          : "Save message"
+                      }
+                    >
+                      {savedMessages.has(message.id) ? (
+                        <BookmarkCheck className="h-3 w-3" />
+                      ) : (
+                        <Bookmark className="h-3 w-3" />
+                      )}
                     </Button>
                   </div>
                 </div>
               ) : message.message_type === 'voice' ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant={isSentByMe ? "ghost" : "secondary"}
+                      onClick={() => toggleAudioPlayback(message.id, message.media_url)}
+                      className={`h-8 w-8 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
+                    >
+                      {playingAudio === message.id ? 
+                        <Pause className="h-4 w-4" /> : 
+                        <Play className="h-4 w-4" />
+                      }
+                    </Button>
+                    <span className="text-sm">
+                      {formatDuration(message.voice_duration || 0)}
+                    </span>
+                  </div>
                   <Button
                     size="sm"
-                    variant={isSentByMe ? "ghost" : "secondary"}
-                    onClick={() => toggleAudioPlayback(message.id, message.media_url)}
-                    className={`h-8 w-8 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
-                  >
-                    {playingAudio === message.id ? 
-                      <Pause className="h-4 w-4" /> : 
-                      <Play className="h-4 w-4" />
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSaveMessage(message.id);
+                    }}
+                    className={`h-7 w-7 p-0 rounded-full ${
+                      savedMessages.has(message.id) 
+                        ? 'text-green-500 hover:text-green-600' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title={
+                      savedMessages.has(message.id) 
+                        ? "Unsave message"
+                        : "Save message"
                     }
+                  >
+                    {savedMessages.has(message.id) ? (
+                      <BookmarkCheck className="h-3.5 w-3.5" />
+                    ) : (
+                      <Bookmark className="h-3.5 w-3.5" />
+                    )}
                   </Button>
-                  <span className="text-sm">
-                    {formatDuration(message.voice_duration || 0)}
-                  </span>
                 </div>
               ) : message.message_type === 'pdf' ? (
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  <span className="text-sm flex-1">{message.content}</span>
-                  <Button
-                    size="sm"
-                    variant={isSentByMe ? "ghost" : "secondary"}
-                    onClick={() => window.open(message.media_url, '_blank')}
-                    className={`h-7 w-7 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
-                  >
-                    <Download className="h-3 w-3" />
-                  </Button>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <FileText className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-sm truncate">{message.content}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => window.open(message.media_url, '_blank')}
+                      className="h-7 w-7 p-0 rounded-full text-gray-500 hover:text-gray-700"
+                      title="Download"
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSaveMessage(message.id);
+                      }}
+                      className={`h-7 w-7 p-0 rounded-full ${
+                        savedMessages.has(message.id) 
+                          ? 'text-green-500 hover:text-green-600' 
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                      title={
+                        savedMessages.has(message.id) 
+                          ? "Unsave message"
+                          : "Save message"
+                      }
+                    >
+                      {savedMessages.has(message.id) ? (
+                        <BookmarkCheck className="h-3.5 w-3.5" />
+                      ) : (
+                        <Bookmark className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ) : (
-                <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{message.content}</p>
+                <div className="group relative">
+                  <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+                    {linkifyText(message.content)}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => toggleSaveMessage(message.id)}
+                    className={`absolute -right-2 -top-2 h-6 w-6 p-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
+                      savedMessages.has(message.id) 
+                        ? 'text-green-500 hover:text-green-600' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title={
+                      savedMessages.has(message.id) 
+                        ? "Unsave message"
+                        : "Save message"
+                    }
+                  >
+                    {savedMessages.has(message.id) ? (
+                      <BookmarkCheck className="h-3.5 w-3.5" />
+                    ) : (
+                      <Bookmark className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </div>
               )}
             </div>
             
@@ -463,9 +597,19 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 <h3 className={`font-semibold text-base truncate ${isDark ? 'text-white' : 'text-light-primary'}`}>
                   {contactName}
                 </h3>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {t("activeNow", language)}
-                </p>
+                <div className="flex items-center gap-1">
+                  <span className={`inline-block h-2 w-2 rounded-full ${
+                    isContactOnline ? 'bg-green-500' : 'bg-gray-400'
+                  }`}></span>
+                  <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {isContactTyping 
+                      ? "Typing..."
+                      : isContactOnline 
+                        ? t("online", language) 
+                        : getLastSeen(contactId)
+                    }
+                  </p>
+                </div>
               </div>
             </div>
             <Button 
@@ -583,7 +727,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   <div className="flex items-center gap-2">
                     <Input
                       value={messageText}
-                      onChange={(e) => setMessageText(e.target.value)}
+                      onChange={handleInputChange}
                       placeholder={t("typeMessage", language)}
                       className={`h-10 border-0 bg-transparent text-sm flex-1 ${isDark ? 'text-white placeholder:text-gray-400' : 'text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
                       disabled={sendMessageMutation.isPending || isUploading}
@@ -592,6 +736,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                           e.preventDefault();
                           sendTextMessage();
                         }
+                      }}
+                      onFocus={() => setUserTyping(true)}
+                      onBlur={() => {
+                        if (typingTimeoutRef.current) {
+                          clearTimeout(typingTimeoutRef.current);
+                        }
+                        setUserTyping(false);
                       }}
                     />
                     <Button

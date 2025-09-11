@@ -188,10 +188,10 @@ export default function Maw3dCreate() {
 
   // Handle confirm from Location Picker
   const onLocationPicked = ({ lat, lng, name }: { lat: number; lng: number; name: string }) => {
-    const encoded = encodeURIComponent(name || 'Location');
+    const encoded = encodeURIComponent(name || t('selectedLocation', language));
     const link = `https://www.google.com/maps?q=${lat},${lng}(${encoded})`;
     setValue('google_maps_link', link, { shouldDirty: true });
-    toast.success('Map link added');
+    toast.success(t('mapLinkAdded', language));
   };
 
   // no AAC detection needed
@@ -755,7 +755,7 @@ export default function Maw3dCreate() {
                       render={({ field }) => (
                         <Input 
                           id="location" 
-                          placeholder="Enter location name to show"
+                          placeholder={t('enterLocationPlaceholder', language)}
                           className="input-enhanced backdrop-blur-sm placeholder:italic placeholder:text-xs placeholder:text-muted-foreground/70"
                           {...field}
                         />
@@ -764,7 +764,7 @@ export default function Maw3dCreate() {
                     <div className="flex justify-center my-3">
                       <Button type="button" variant="secondary" size="sm" onClick={() => setLocModalOpen(true)} className="px-4 rounded-md bg-gradient-secondary text-secondary-foreground border border-border/40 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)] hover:shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)] hover:bg-secondary/80 transition-all duration-300">
                         <MapPin className="w-4 h-4 mr-2" />
-                        Pick Location
+                        {t('pickLocationButton', language)}
                       </Button>
                     </div>
                     <Label htmlFor="google_maps_link" className="text-enhanced-heading">{t('googleMapsLink', language)}</Label>
@@ -775,7 +775,7 @@ export default function Maw3dCreate() {
                         <div className="relative flex items-center gap-2">
                           <Input 
                             id="google_maps_link" 
-                            placeholder="https://maps.google.com/..."
+                            placeholder={t('googleMapsPlaceholder', language)}
                             className="input-enhanced backdrop-blur-sm pr-24"
                             readOnly
                             onPaste={(e) => {
@@ -795,13 +795,13 @@ export default function Maw3dCreate() {
                             className="absolute right-1 top-1/2 -translate-y-1/2 text-xs"
                             onClick={() => setValue('google_maps_link', '', { shouldDirty: true })}
                           >
-                            Clear
+                            {t('clear', language)}
                           </Button>
                         </div>
                       )}
                     />
                     <p className="text-[10px] text-muted-foreground mt-1 text-center">
-                      Or paste a Google Maps link above
+                      {t('pasteMapsHint', language)}
                     </p>
                   </div>
                 </CardContent>
@@ -867,7 +867,7 @@ export default function Maw3dCreate() {
                 <CardContent className="space-y-4 backdrop-blur-sm">
                   {/* Event Preview integrated within background section */}
                   <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-enhanced-heading">Preview</h3>
+                    <h3 className="text-lg font-semibold text-enhanced-heading">{t('preview', language)}</h3>
                     <div 
                       className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden border border-border/30 shadow-vibrant"
                       style={textPreviewStyle}
@@ -891,7 +891,7 @@ export default function Maw3dCreate() {
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Preview with current blur settings, {imageBlur}px
+                      {t('previewWithCurrentBlur', language)}, {imageBlur}px
                     </p>
                   </div>
 
@@ -904,6 +904,7 @@ export default function Maw3dCreate() {
                     onBackgroundColorChange={(color) => handleBackgroundChange('color', color)}
                     onBackgroundImageChange={(image) => handleBackgroundChange('image', image || '')}
                     onImageBlurChange={setImageBlur}
+                    onApplyGradient={(css) => handleBackgroundChange('gradient', css)}
                   />
                 </CardContent>
               </CollapsibleContent>
@@ -1105,10 +1106,9 @@ export default function Maw3dCreate() {
                       <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-orange-50/80 to-orange-100/80 dark:from-orange-950/50 dark:to-orange-900/50 border border-orange-200/50 dark:border-orange-800/50 rounded-lg backdrop-blur-sm">
                         <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
                         <div className="text-sm">
-                          <p className="font-medium text-orange-800 dark:text-orange-200">Auto-delete Warning</p>
+                          <p className="font-medium text-orange-800 dark:text-orange-200">{t('autoDeleteWarningTitle', language)}</p>
                           <p className="text-orange-700 dark:text-orange-300 mt-1">
-                            This event will be automatically deleted 24 hours after the event date passes. 
-                            All associated data including RSVPs and messages will be permanently removed.
+                            {t('autoDeleteWarningDesc', language)}
                           </p>
                         </div>
                       </div>

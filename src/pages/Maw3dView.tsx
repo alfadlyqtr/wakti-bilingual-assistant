@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Maw3dService } from '@/services/maw3dService';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import YouTubeAudioPlayer from '@/components/audio/YouTubeAudioPlayer';
+import NativeAudioPlayer from '@/components/audio/NativeAudioPlayer';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -27,10 +28,7 @@ export default function Maw3dView() {
   const [hasResponded, setHasResponded] = useState(false);
   const [userResponse, setUserResponse] = useState<'accepted' | 'declined' | null>(null);
   const [submittedName, setSubmittedName] = useState('');
-  // Attendee audio playback state
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [audioBlocked, setAudioBlocked] = useState(false);
-  const [audioTried, setAudioTried] = useState(false);
+  // Attendee audio playback capability
   const [aacSupported, setAacSupported] = useState<boolean | null>(null);
   
   // LocalStorage-based RSVP tracking
@@ -68,27 +66,7 @@ export default function Maw3dView() {
     }
   }, []);
 
-  // Try safe autoplay if event requests it and browser allows (native audio only)
-  useEffect(() => {
-    if (!event) return;
-    if (!event.audio_preview_url) return;
-    // If it's YouTube, our custom player handles autoplay internally; skip native logic
-    const isYouTube = /youtu\.be\//.test(event.audio_preview_url) || /youtube\.com/.test(event.audio_preview_url);
-    if (event.audio_source === 'youtube' || isYouTube) return;
-    // playback_mode: 'autoplay' | 'tap'
-    if (event.audio_playback_mode !== 'autoplay') return;
-    if (audioTried) return; // avoid spamming attempts
-
-    const t = setTimeout(() => {
-      if (audioRef.current) {
-        setAudioTried(true);
-        audioRef.current.play().catch(() => {
-          setAudioBlocked(true);
-        });
-      }
-    }, 200);
-    return () => clearTimeout(t);
-  }, [event, audioTried]);
+  // Native audio autoplay is now handled inside NativeAudioPlayer when applicable
 
   useEffect(() => {
     // Check localStorage for previous RSVP when event is loaded
@@ -377,20 +355,15 @@ export default function Maw3dView() {
                         );
                       }
                     }
-                    // Fallback to native audio
+                    // Fallback to native audio via custom player
                     return (
-                      <div className="flex items-center gap-3">
-                        <audio ref={audioRef} controls className="w-56">
-                          <source src={event.audio_preview_url!} type="audio/mp4" />
-                          <source src={event.audio_preview_url!} type="audio/x-m4a" />
-                          Your browser does not support AAC audio.
-                        </audio>
-                        {(event.audio_playback_mode === 'autoplay' && audioBlocked) && (
-                          <Button size="sm" onClick={() => { audioRef.current?.play().catch(() => {}); setAudioBlocked(false); }}>
-                            {eventLanguage === 'ar' ? 'اضغط للتشغيل' : 'Tap to play'}
-                          </Button>
-                        )}
-                      </div>
+                      <NativeAudioPlayer
+                        src={event.audio_preview_url!}
+                        title={event.audio_title || undefined}
+                        autoplay={event.audio_playback_mode === 'autoplay'}
+                        compact={true}
+                        rtl={eventLanguage === 'ar'}
+                      />
                     );
                   })()}
                   {aacSupported === false && event.audio_source !== 'youtube' && (

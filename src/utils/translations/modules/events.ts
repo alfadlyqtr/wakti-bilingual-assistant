@@ -45,6 +45,7 @@ export const events = {
   responses: "Responses",
   allResponses: "All Responses",
   going: "Going",
+  accepted: "Accepted",
   notGoing: "Not Going",
   guests: "Guests",
   loadingEvents: "Loading events...",
@@ -87,6 +88,30 @@ export const events = {
   googleCalendar: "Google Calendar",
   outlookCalendar: "Outlook Calendar",
   appleCalendar: "Apple Calendar",
+  // Event privacy & toggles (EN)
+  allDayEvent: "All Day Event",
+  anyoneCanViewAndRSVP: "Anyone can view and RSVP to the invite",
+  showAttendingCount: "Show Attending Count",
+  displayNumberOfAttendees: "Display number of attendees",
+  autoDelete: "Auto-delete",
+  deleteEventAfter24Hours: "Delete the event 24 hours after",
+  // Auto-delete warning card (keys defined later as well - keep single source)
+  // Preview helper
+  previewWithCurrentBlur: "Preview with current blur settings",
+  // Location picker (EN)
+  pickLocationButton: "Pick Location",
+  enterLocationPlaceholder: "Enter location name to show",
+  googleMapsPlaceholder: "https://maps.google.com/...",
+  pasteMapsHint: "Or paste a Google Maps link above",
+  mapLinkAdded: "Map link added",
+  pickLocationTitle: "Pick Location",
+  searchPlaces: "Search places",
+  goToPlace: "Go to this place",
+  go: "Go",
+  useMyLocation: "Use My Location",
+  dragPinHint: "Drag the pin to fine-tune the position.",
+  currentLocation: "Current Location",
+  selectedLocation: "Selected Location",
   // Extended keys used in Maw3dCreate audio section and headers
   audio: "Audio",
   searchSongPlaceholder: "Search song...",
