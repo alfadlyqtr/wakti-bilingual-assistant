@@ -19,10 +19,15 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const gmapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const searchInputDomRef = useRef<HTMLInputElement | null>(null);
+  const goTimerRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
   const [placeName, setPlaceName] = useState('');
   const selectedRef = useRef<{ lat?: number; lng?: number; label?: string }>({});
   type LatLng = { lat: number; lng: number };
+  // Map ID for vector map + Advanced Markers
+  // Read directly from env to ensure we always pass it to Map options
+  const ENV_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string | undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -37,10 +42,12 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
+        mapId: ENV_MAP_ID,
       });
       gmapRef.current = gmap;
+      if (!ENV_MAP_ID) { try { console.warn('[Maps] VITE_GOOGLE_MAPS_MAP_ID is not set'); } catch {} }
 
-      // Create draggable AdvancedMarkerElement if available, else fallback
+      // Prefer AdvancedMarkerElement when available (Vector map with Map ID)
       if (window.google?.maps?.marker?.AdvancedMarkerElement) {
         markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
           map: gmap,
@@ -48,6 +55,7 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
           gmpDraggable: true,
         });
       } else {
+        // Rare fallback if marker library isn't available
         markerRef.current = new window.google.maps.Marker({
           position: center,
           map: gmap,
@@ -77,70 +85,55 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
         });
       }
 
-      // New PlaceAutocompleteElement rendered in container (no duplicate input)
+      // New Places element (no legacy). We control resolution via Geocoder.
       if (searchContainerRef.current && window.google?.maps?.places?.PlaceAutocompleteElement) {
-        const pac = new window.google.maps.places.PlaceAutocompleteElement({});
-        // stretch and style the element
-        (pac as any).style.display = 'block';
-        (pac as any).style.width = '100%';
-        searchContainerRef.current.innerHTML = '';
-        searchContainerRef.current.appendChild(pac as unknown as Node);
-        pac.addEventListener('gmp-placeselect', async (event: any) => {
-          const place = event?.place || event?.detail?.place;
-          if (!place) return;
-          try {
-            if (place.fetchFields) {
-              await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
-            }
-          } catch {}
-          const loc = place?.location || place?.geometry?.location;
-          if (!loc) return;
-          const pos: LatLng = {
-            lat: typeof loc.lat === 'function' ? loc.lat() : loc.lat,
-            lng: typeof loc.lng === 'function' ? loc.lng() : loc.lng,
-          };
-          gmap.setCenter(pos);
-          if (markerRef.current.position !== undefined) {
-            markerRef.current.position = pos;
-          } else {
-            markerRef.current.setPosition(pos as any);
-          }
-          selectedRef.current = {
-            lat: pos.lat,
-            lng: pos.lng,
-            label: place?.displayName || place?.formattedAddress || '',
-          };
-          setPlaceName(selectedRef.current.label || '');
-        });
-      } else if (searchContainerRef.current && window.google?.maps?.places?.Autocomplete) {
-        // Fallback legacy Autocomplete if new element not available
-        // Create a single input inside the container
         const input = document.createElement('input');
         input.type = 'text';
         input.placeholder = 'Search places';
-        input.className = 'w-full rounded-xl border border-border/40 bg-white/5 px-3 py-2 mb-2';
+        input.className = 'w-full rounded-xl border border-border/40 bg-white/5 px-3 py-2';
         searchContainerRef.current.innerHTML = '';
         searchContainerRef.current.appendChild(input);
-        const legacy = new window.google.maps.places.Autocomplete(input, {
-          fields: ['geometry', 'name', 'formatted_address']
-        });
-        legacy.addListener('place_changed', () => {
-          const place = legacy.getPlace();
-          if (!place || !place.geometry) return;
-          const loc = place.geometry.location;
-          const pos: LatLng = { lat: loc.lat(), lng: loc.lng() };
-          gmap.setCenter(pos);
-          if (markerRef.current.position !== undefined) {
-            markerRef.current.position = pos;
-          } else {
-            markerRef.current.setPosition(pos as any);
+        searchInputDomRef.current = input;
+
+        const pac = new window.google.maps.places.PlaceAutocompleteElement({ inputElement: input });
+        // Do NOT append pac to DOM to avoid a second black search bar.
+
+        const geocoder = new window.google.maps.Geocoder();
+        const resolveAndMove = async (query: string) => {
+          const gmap = gmapRef.current;
+          if (!gmap || !query) return;
+          try {
+            const resp: any = await geocoder.geocode({ address: query });
+            const gg = resp?.results?.[0]?.geometry?.location;
+            if (!gg) return;
+            const pos = { lat: typeof gg.lat === 'function' ? gg.lat() : gg.lat, lng: typeof gg.lng === 'function' ? gg.lng() : gg.lng };
+            gmap.setCenter(pos);
+            try { gmap.setZoom(16); } catch {}
+            // AdvancedMarkerElement uses the `position` property
+            markerRef.current.position = pos as any;
+            selectedRef.current.lat = pos.lat;
+            selectedRef.current.lng = pos.lng;
+            selectedRef.current.label = resp?.results?.[0]?.formatted_address || query;
+          } catch (err) {
+            try { console.warn('[Geocode failed]', err); } catch {}
           }
-          selectedRef.current = {
-            lat: pos.lat,
-            lng: pos.lng,
-            label: place.name || place.formatted_address || ''
-          };
-          setPlaceName(selectedRef.current.label || '');
+        };
+
+        // Enter key fallback
+        input.addEventListener('keydown', async (ke: KeyboardEvent) => {
+          if (ke.key !== 'Enter') return;
+          await resolveAndMove((searchInputDomRef.current?.value || '').trim());
+        });
+
+        // Handle selection from new element by geocoding its name/address
+        pac.addEventListener('gmp-placeselect', async (event: any) => {
+          try { event.preventDefault && event.preventDefault(); } catch {}
+          const place = event?.place || event?.detail?.place;
+          let query = input.value.trim();
+          try { if (place?.fetchFields) await place.fetchFields({ fields: ['displayName', 'formattedAddress'] }); } catch {}
+          if (place?.displayName) query = place.displayName;
+          if (!query && place?.formattedAddress) query = place.formattedAddress;
+          await resolveAndMove(query);
         });
       }
 
@@ -176,11 +169,7 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
         const lat = pos.coords.latitude, lng = pos.coords.longitude;
         const posLL: LatLng = { lat, lng };
         gmapRef.current?.setCenter(posLL);
-        if (markerRef.current.position !== undefined) {
-          markerRef.current.position = posLL;
-        } else {
-          markerRef.current?.setPosition(posLL as any);
-        }
+        markerRef.current.position = posLL as any;
         selectedRef.current.lat = lat;
         selectedRef.current.lng = lng;
         try {
@@ -189,8 +178,11 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
           const addr = res.results?.[0]?.formatted_address;
           if (addr) { selectedRef.current.label = addr; setPlaceName(addr); }
         } catch {}
+        // Immediately confirm and close
+        onConfirm({ lat, lng, name: selectedRef.current.label || 'Current Location' });
+        onOpenChange(false);
       },
-      () => { /* optionally toast, but do not crash */ },
+      (err) => { try { console.warn('[Use My Location] failed', err); } catch {} },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   };
@@ -226,7 +218,38 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
           <DialogTitle>Pick Location</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div ref={searchContainerRef} className="w-full rounded-xl border border-border/40 bg-background/60 p-0.5" />
+          <div className="space-y-2">
+            <div ref={searchContainerRef} className="w-full rounded-xl border border-border/40 bg-background/60 p-0.5 relative z-[200] overflow-visible" />
+            <div className="flex justify-end">
+              <button
+                type="button"
+                aria-label="Go to this place"
+                title="Go to this place"
+                className="text-xs bg-primary/90 hover:bg-primary text-primary-foreground border border-border/40 rounded-md px-3 py-1"
+                onClick={async () => {
+                  try {
+                    const typed: string = (searchInputDomRef.current?.value || '').trim();
+                    if (!typed) return;
+                    // Use Geocoder only to avoid legacy/new API warnings
+                    const geocoder = new window.google.maps.Geocoder();
+                    const resp: any = await geocoder.geocode({ address: typed });
+                    const gg = resp?.results?.[0]?.geometry?.location;
+                    if (!gg) return;
+                    const pos = { lat: gg.lat(), lng: gg.lng() };
+                    const gmap = gmapRef.current; if (!gmap) return;
+                    gmap.setCenter(pos);
+                    try { gmap.setZoom(16); } catch {}
+                    markerRef.current.position = pos as any;
+                    selectedRef.current.lat = pos.lat;
+                    selectedRef.current.lng = pos.lng;
+                    selectedRef.current.label = resp?.results?.[0]?.formatted_address || typed;
+                  } catch {}
+                }}
+              >
+                Go
+              </button>
+            </div>
+          </div>
           <div ref={mapRef} className="w-full h-80 rounded-md border border-border/40" />
           <div className="flex items-center justify-between">
             <Button variant="secondary" onClick={useMyLocation}>Use My Location</Button>
