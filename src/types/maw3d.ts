@@ -9,6 +9,7 @@ export interface TextStyle {
   alignment: 'left' | 'center' | 'right';
   hasShadow: boolean;
   shadowIntensity?: number;
+  shadowColor?: string;
   preferred_theme?: 'dark' | 'light';
 }
 
@@ -18,6 +19,50 @@ export interface BackgroundStyle {
   backgroundGradient?: string;
   backgroundImage?: string;
   imageBlur?: number;
+}
+
+// Event card styling (separate from text styling)
+export interface EventStyleBackgroundGradient {
+  from: string; // hex
+  to: string;   // hex
+  angle: number; // degrees
+}
+
+export interface EventStyleBackground {
+  type: 'solid' | 'gradient';
+  color?: string; // for solid
+  gradient?: EventStyleBackgroundGradient; // for gradient
+}
+
+export interface EventStyleBorder {
+  radius: number; // px
+  width: number;  // px
+  color: string;  // hex or rgba
+  mode?: 'border' | 'outline' | 'inline'; // how to render the border stroke
+}
+
+export type EventStyleButtonPreset = 'glass' | 'solid' | 'outline';
+
+export interface EventStyleSection {
+  liquidGlass: boolean;
+  background: EventStyleBackground;
+  border: EventStyleBorder;
+  buttonStyle: EventStyleButtonPreset;
+  glassBlur?: number; // px
+  glassTint?: string; // rgba or hex with alpha
+  buttonBorder?: {
+    radius: number; // px
+    width: number;  // px
+    color: string;  // hex/rgba
+  };
+  buttonColor?: string; // used when buttonStyle === 'solid'
+}
+
+export interface EventStyle {
+  cardMode: 'full' | 'split';
+  card: EventStyleSection;
+  lowerSection?: EventStyleSection; // only used in split mode
+  chips?: { enabled: boolean };
 }
 
 // Updated EventFormData to match database structure
@@ -40,6 +85,7 @@ export interface EventFormData {
   template_type?: string | null;
   invited_contacts: string[];
   image_blur: number;
+  event_style?: EventStyle;
 }
 
 export interface CreateEventFormData {
@@ -87,6 +133,7 @@ export interface Maw3dEvent {
   short_id?: string | null;
   language?: string;
   image_blur: number;
+  event_style?: EventStyle | null;
   // Optional audio fields
   audio_source?: string | null;
   audio_title?: string | null;

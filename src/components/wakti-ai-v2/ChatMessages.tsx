@@ -79,6 +79,9 @@ export function ChatMessages({
   const [progressMap, setProgressMap] = useState<Map<string, number>>(new Map());
   // Smooth progress intervals for unknown content-length streams
   const progressIntervalRef = useRef<Map<string, number>>(new Map()); // messageId -> interval id
+  // Talk Back Auto Play and iOS unlock helpers
+  const autoPlayRef = useRef<boolean>(false);
+  const audioUnlockedRef = useRef<boolean>(false);
 
   // Keep ref synchronized with state to avoid stale closures during async work
   useEffect(() => {
@@ -91,6 +94,31 @@ export function ChatMessages({
     const len = bytes.byteLength;
     for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary);
+  };
+
+  // Sanitize content for TTS so it does not read symbols like ":", "*", or markdown like "##"
+  const sanitizeForTTS = (raw: string) => {
+    try {
+      let t = raw || '';
+      // Strip markdown links [text](url) -> text
+      t = t.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
+      // Remove code fences/backticks
+      t = t.replace(/`{1,3}[^`]*`{1,3}/g, ' ');
+      t = t.replace(/`/g, ' ');
+      // Remove markdown headings and emphasis markers (#, *, _, >)
+      t = t.replace(/^\s*#{1,6}\s*/gm, '');
+      t = t.replace(/[\*\_\>#`~]+/g, ' ');
+      // Remove list bullets like "- ", "* ", "• " at line starts
+      t = t.replace(/^\s*[-*•]\s+/gm, '');
+      // Remove excessive separators like ::: or ---
+      t = t.replace(/[:]{1,}/g, ' ');
+      t = t.replace(/-{3,}/g, ' ');
+      // Collapse whitespace
+      t = t.replace(/\s{2,}/g, ' ').trim();
+      return t;
+    } catch {
+      return raw;
+    }
   };
 
   // If YouTube starts playing, pause any ongoing TTS to avoid overlapping audio
@@ -210,6 +238,7 @@ export function ChatMessages({
   // Google Cloud TTS via Edge Function (no ElevenLabs, no browser SpeechSynthesis)
   const handleSpeak = async (text: string, messageId: string) => {
     try {
+      const cleanText = sanitizeForTTS(text);
       // Toggle off if already playing this message
       if (speakingMessageId === messageId) {
         if (audioRef.current) {
@@ -261,7 +290,7 @@ export function ChatMessages({
       setFetchingIds(prev => { const n = new Set(prev); n.add(messageId); return n; });
 
       // Determine voice_id from TalkBack settings
-      const isArabicText = /[\u0600-\u06FF]/.test(text);
+      const isArabicText = /[\u0600-\u06FF]/.test(cleanText);
       const { ar, en } = getSelectedVoices();
       const voice_id = (isArabicText || language === 'ar') ? ar : en;
 
@@ -277,7 +306,7 @@ export function ChatMessages({
           'Accept': 'audio/mpeg',
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ text, voice_id, style: 'neutral' })
+        body: JSON.stringify({ text: cleanText, voice_id, style: 'neutral' })
       });
 
       if (!resp.ok) {
@@ -328,7 +357,7 @@ export function ChatMessages({
       const full = chunks.length ? new Blob(chunks, { type: 'audio/mpeg' }) : await resp.blob();
       const buf = await full.arrayBuffer();
       const b64 = bufferToBase64(buf);
-      setPersisted(messageId, b64, text.length);
+      setPersisted(messageId, b64, cleanText.length);
       const objectUrl = URL.createObjectURL(full);
       audioCacheRef.current.set(messageId, objectUrl);
 
@@ -350,11 +379,67 @@ export function ChatMessages({
     }
   };
 
-  // Disable auto TTS/prefetch entirely; audio will be fetched only when user clicks the speaker button
+  // Manage prefetch timers (kept disabled)
   useEffect(() => {
     for (const [, t] of prefetchTimersRef.current) { clearTimeout(t); }
     prefetchTimersRef.current.clear();
   }, []);
+
+  // Initialize Talk Back Auto Play state and listen for changes
+  useEffect(() => {
+    try {
+      autoPlayRef.current = (localStorage.getItem('wakti_tts_autoplay') === '1');
+    } catch {}
+    const onAuto = (e: Event) => {
+      const ce = e as CustomEvent<{ value: boolean }>;
+      if (typeof ce?.detail?.value === 'boolean') autoPlayRef.current = ce.detail.value;
+    };
+    window.addEventListener('wakti-tts-autoplay-changed', onAuto as EventListener);
+    return () => window.removeEventListener('wakti-tts-autoplay-changed', onAuto as EventListener);
+  }, []);
+
+  // Best-effort iOS audio unlock on first user interaction
+  useEffect(() => {
+    const unlock = async () => {
+      if (audioUnlockedRef.current) return;
+      try {
+        const a = new Audio();
+        // A very short silent data URI (tiny)
+        a.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+        await a.play().catch(() => {});
+        a.pause();
+        audioUnlockedRef.current = true;
+      } catch {
+        // Ignore; autoplay will gracefully fail on iOS until the user taps the speaker once
+      }
+      window.removeEventListener('touchend', unlock);
+      window.removeEventListener('click', unlock);
+    };
+    window.addEventListener('touchend', unlock, { once: true, passive: true } as any);
+    window.addEventListener('click', unlock, { once: true } as any);
+    return () => {
+      window.removeEventListener('touchend', unlock);
+      window.removeEventListener('click', unlock);
+    };
+  }, []);
+
+  // Attempt to auto-play the newest assistant reply when messages change
+  useEffect(() => {
+    try {
+      if (!autoPlayRef.current) return;
+      const last = sessionMessages[sessionMessages.length - 1];
+      if (!last || last.role !== 'assistant') return;
+      if (autoPlayedIdsRef.current.has(last.id)) return;
+      // Avoid overlapping
+      if (speakingMessageIdRef.current) return;
+      // Mark to avoid repeats
+      autoPlayedIdsRef.current.add(last.id);
+      // Best-effort play; iOS may require prior unlock/gesture
+      const text = last.content || '';
+      // Debounce slightly to let DOM settle
+      setTimeout(() => { handleSpeak(text, last.id); }, 150);
+    } catch {}
+  }, [sessionMessages]);
 
   // Remove ElevenLabs warmup; Google TTS via edge needs none
   useEffect(() => {}, []);

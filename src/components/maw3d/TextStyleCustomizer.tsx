@@ -102,6 +102,35 @@ export default function TextStyleCustomizer({
         </span>
       </div>
 
+      {textStyle.hasShadow && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>{t('shadowColor', language)}</Label>
+            <input
+              type="color"
+              value={textStyle.shadowColor ?? '#000000'}
+              onChange={(e) => onTextStyleChange({ shadowColor: e.target.value })}
+              className="h-8 w-16 rounded border"
+              aria-label="Shadow Color"
+            />
+          </div>
+          <div>
+            <Label>{t('shadowBrightness', language)}</Label>
+            <Slider
+              value={[textStyle.shadowIntensity ?? 5]}
+              onValueChange={(value) => onTextStyleChange({ shadowIntensity: value[0] })}
+              min={0}
+              max={10}
+              step={1}
+              className="mt-2"
+            />
+            <span className="text-sm text-muted-foreground">
+              {(Math.round(((textStyle.shadowIntensity ?? 5) / 10) * 100))}%
+            </span>
+          </div>
+        </div>
+      )}
+
       <div>
         <Label>{t('textAlignment', language)}</Label>
         <RadioGroup 

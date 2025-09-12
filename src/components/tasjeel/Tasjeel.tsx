@@ -37,10 +37,10 @@ import { useNavigate } from "react-router-dom";
 import SavedRecordings from "./SavedRecordings";
 import { SummaryAudioUploadResult } from "./types";
 
-// Define maximum recording time (30 minutes in seconds)
-const MAX_RECORDING_TIME = 1800; // 30 minutes
-const WARNING_TIME_1 = 300; // 5 minutes left (25 minute mark)
-const WARNING_TIME_2 = 60; // 1 minute left (29 minute mark)
+// Define maximum recording time (45 minutes in seconds)
+const MAX_RECORDING_TIME = 2700; // 45 minutes
+const WARNING_TIME_1 = 300; // 5 minutes left (40 minute mark)
+const WARNING_TIME_2 = 60; // 1 minute left (44 minute mark)
 
 // Translations
 const translations = {
@@ -1021,8 +1021,8 @@ const Tasjeel: React.FC = () => {
                       <Timer className="h-5 w-5 mr-2" />
                       <span className="text-sm">
                         {language === 'en' 
-                          ? "Maximum recording time: 30 minutes" 
-                          : "الحد الأقصى لمدة التسجيل: 30 دقيقة"}
+                          ? "Maximum recording time: 45 minutes" 
+                          : "الحد الأقصى لمدة التسجيل: 45 دقيقة"}
                       </span>
                     </div>
                   </div>

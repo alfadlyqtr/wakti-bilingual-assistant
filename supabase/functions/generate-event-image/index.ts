@@ -32,6 +32,8 @@ interface RequestBody {
   width?: number
   height?: number
   style?: string
+  no_text?: boolean
+  negative_prompt?: string
 }
 
 serve(async (req) => {
@@ -47,7 +49,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, width = 1024, height = 1024, style: _style = "photographic" }: RequestBody = await req.json()
+    const { prompt, width = 1024, height = 1024, style: _style = "photographic", no_text = false, negative_prompt = '' }: RequestBody = await req.json()
 
     if (!prompt) {
       return new Response(
@@ -60,6 +62,26 @@ serve(async (req) => {
     }
 
     console.log('Generating event image with prompt:', prompt)
+
+    // Normalize prompts
+    const noTextClause = 'No text on image. No words, no typography, no watermarks, no captions, no logos.'
+    const positivePrompt = no_text
+      ? `${prompt} ${noTextClause}`
+      : `${prompt}`
+    const negativePrompt = [
+      'text', 'words', 'typography', 'watermark', 'logo', 'caption', 'subtitles', 'lettering',
+      'arabic text', 'english text'
+    ]
+      .concat(negative_prompt ? [negative_prompt] : [])
+      .join(', ')
+
+    // Map OpenAI supported sizes
+    const mapOpenAISize = (w: number, h: number) => {
+      // DALL·E 3 supports only 1024x1024, 1024x1792 (portrait), 1792x1024 (landscape)
+      if (w >= h) return '1792x1024'
+      if (h > w) return '1024x1792'
+      return '1024x1024'
+    }
 
     // Get API key from environment
     const runwareApiKey = Deno.env.get('RUNWARE_API_KEY')
@@ -94,9 +116,9 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             model: "dall-e-3",
-            prompt: `Create an event background image: ${prompt}. This is an image to be used on an event card. No text on image. No words, no typography, no watermarks. High quality, suitable for event promotion with good contrast for text overlay.`,
+            prompt: `Create an event background image: ${positivePrompt}. This is an image to be used on an event card. ${noTextClause} High quality, suitable for event promotion with good contrast for text overlay.`,
             n: 1,
-            size: "1024x1024",
+            size: mapOpenAISize(width, height),
             quality: "standard",
             response_format: "url"
           }),
@@ -145,7 +167,8 @@ serve(async (req) => {
       {
         taskType: "imageInference",
         taskUUID,
-        positivePrompt: `Event background: ${prompt}. This is an image to be used on an event card. No text on image. No words, no typography, no watermarks. High quality, professional, suitable for event promotion with good contrast for text overlay.`,
+        positivePrompt: `Event background: ${positivePrompt}. This is an image to be used on an event card. ${noTextClause} High quality, professional, suitable for event promotion with good contrast for text overlay.`,
+        negativePrompt,
         width,
         height,
         model,

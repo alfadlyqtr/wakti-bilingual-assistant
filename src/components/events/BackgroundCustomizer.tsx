@@ -75,7 +75,24 @@ export default function BackgroundCustomizer({
     } catch (error) {
       console.error('Error uploading image:', error);
       toast.error('Error uploading image');
+    } finally {
+      // Reset input so selecting the same file again still triggers onChange (mobile-friendly)
+      if (fileInputRef.current) {
+        try { fileInputRef.current.value = ''; } catch {}
+      }
     }
+  };
+
+  // Programmatic chooser to improve mobile behavior and allow camera capture
+  const handleUploadClick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    // Prefer back camera on mobile if available
+    // Note: not all browsers honor capture; harmless when ignored
+    (input as any).capture = 'environment';
+    input.onchange = (e: any) => handleImageUpload(e as any);
+    input.click();
   };
 
   const generateAIBackground = async () => {
@@ -84,10 +101,29 @@ export default function BackgroundCustomizer({
       return;
     }
 
+    // Build a system-style prompt to bias models away from putting any text on the image
+    const systemPrompt = `Generate a beautiful, high-quality background image for an event card.
+    Requirements:
+    - No text, words, watermarks, logos, captions, or typography in any language
+    - Modern, vibrant, visually appealing
+    - Works well behind overlaid UI text (good contrast, no clutter)
+    - 16:9 composition if possible
+    Description: ${aiPrompt}`;
+
+    console.log('[AI BG] User prompt:', aiPrompt);
+    console.log('[AI BG] Final prompt sent:', systemPrompt);
+
     setIsGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-event-image', {
-        body: { prompt: aiPrompt }
+        body: {
+          prompt: systemPrompt,
+          // Hints some providers support
+          no_text: true,
+          negative_prompt: 'text, watermark, caption, logo, words, letters, typography, subtitles, arabic text, english text',
+          width: 1280,
+          height: 720,
+        }
       });
 
       if (error) throw error;
@@ -260,11 +296,14 @@ export default function BackgroundCustomizer({
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                // Hint for mobile devices to use back camera when possible
+                // Some browsers ignore this attribute; safe to include
+                capture="environment"
                 onChange={handleImageUpload}
                 className="hidden"
               />
               <div className="mt-2 flex items-center gap-3">
-                <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                <Button type="button" variant="secondary" onClick={handleUploadClick}>
                   {t('chooseImage', language)}
                 </Button>
                 <span className="text-xs text-muted-foreground truncate max-w-[60%]">

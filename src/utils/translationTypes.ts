@@ -575,6 +575,8 @@ export type TranslationKey =
   | "textShadow"
   | "shadowEnabled"
   | "shadowDisabled"
+  | "shadowColor"
+  | "shadowBrightness"
   | "textFormatting"
   | "textAlignment"
   | "reminderUpdatedSuccessfully"

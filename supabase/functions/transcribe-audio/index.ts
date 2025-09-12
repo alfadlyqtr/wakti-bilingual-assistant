@@ -195,19 +195,15 @@ serve(async (req) => {
 
     console.log('Audio file downloaded, size:', audioData.size);
 
-    // Convert the audio data to a form that can be sent to OpenAI
+    // Convert the audio data to a form that can be sent to OpenAI (GPT-4o transcribe)
     const formData = new FormData();
-    
-    // Create a proper Blob with explicit MIME type and filename
+    // Keep filename and content-type explicit for best format detection
     const audioBlob = new Blob([audioData], { type: 'audio/webm' });
-    
-    // Add file with explicit filename including extension, necessary for OpenAI to recognize the format
     formData.append('file', audioBlob, 'audio.webm');
-    formData.append('model', 'whisper-1');
+    // Use GPT-4o mini transcribe for speed/cost. Supports multilingual (AR/EN).
+    formData.append('model', 'gpt-4o-mini-transcribe');
 
-    console.log('FormData created with proper MIME type and filename, sending to OpenAI Whisper API');
-    
-    // Send the audio to OpenAI Whisper API
+    console.log('FormData ready, sending to OpenAI GPT-4o Mini Transcribe');
     const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {

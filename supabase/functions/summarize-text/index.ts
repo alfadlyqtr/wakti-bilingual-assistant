@@ -15,12 +15,13 @@ serve(async (req) => {
   try {
     console.log('summarize-text function called');
     
-    const { transcript, language, recordId } = await req.json();
+    const { transcript, language, recordId, model } = await req.json();
     console.log('Request payload:', { 
       hasTranscript: !!transcript, 
       language, 
       transcriptLength: transcript?.length,
-      hasRecordId: !!recordId
+      hasRecordId: !!recordId,
+      model
     });
 
     if (!transcript) {
@@ -33,52 +34,36 @@ serve(async (req) => {
 
     // Determine the language for the prompt
     const isArabic = language === 'ar';
-    
-    // Create the prompt based on the language
-    const promptPrefix = isArabic 
-      ? `أنت مساعد محترف للتلخيص. قم بتلخيص النص التالي بشكل منظم ومهني. قدم ملخصًا يتضمن العناصر التالية:
-        - عنوان (إذا كان مناسبًا)
-        - النقاط الرئيسية
-        - عناصر العمل (إذا وجدت)
-        
-        اجعل التلخيص يبدو كملخص احترافي لاجتماع أو محاضرة حقيقية. النص هو:`
-      : `You are a professional summarization assistant. Summarize the following text in a structured, professional manner. Provide a summary that includes:
-        - Title (if appropriate)
-        - Main Points
-        - Action Items (if present)
-        
-        Make it feel like a professional summary of a real meeting or lecture. The text is:`;
-
-    // Call DeepSeek API for summarization
-    const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
-    
-    if (!deepseekApiKey) {
-      console.error('Error: DEEPSEEK_API_KEY is not set');
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      console.error('Error: OPENAI_API_KEY is not set');
       return new Response(
-        JSON.stringify({ error: 'DeepSeek API key is not configured' }),
+        JSON.stringify({ error: 'OpenAI API key is not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    console.log('Calling DeepSeek API...');
-    
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+
+    // Default to gpt-4o for meeting/lecture quality; allow optional override via payload
+    const chosenModel = typeof model === 'string' && model.trim() ? model : 'gpt-4o';
+
+    const systemPrompt = isArabic
+      ? 'أنت مساعد تلخيص محترف لاجتماعات ومحاضرات. اكتب ملخصاً منظماً ومهنياً باللغة المناسبة للمحتوى، مع الأقسام: العنوان، النقاط الرئيسية، عناصر العمل (إن وجدت). كن واضحاً ومباشراً.'
+      : 'You are a professional meeting/lecture summarizer. Produce a structured, professional summary in the appropriate language of the content, with sections: Title, Main Points, Action Items (if any). Be clear and succinct.';
+
+    const userPrompt = `${transcript}`;
+
+    console.log('Calling OpenAI Chat Completions with model:', chosenModel);
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${deepseekApiKey}`,
+        'Authorization': `Bearer ${openaiApiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: chosenModel,
         messages: [
-          {
-            role: 'system',
-            content: isArabic ? 'أنت مساعد تلخيص محترف' : 'You are a professional summarization assistant'
-          },
-          {
-            role: 'user',
-            content: `${promptPrefix}\n\n${transcript}`
-          }
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
         ],
         temperature: 0.3,
         max_tokens: 1500,
@@ -87,7 +72,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('DeepSeek API error:', errorText);
+      console.error('OpenAI API error (summarize-text):', errorText);
       return new Response(
         JSON.stringify({ error: 'Summarization failed', details: errorText }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -95,7 +80,7 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log('DeepSeek API response received successfully');
+    console.log('OpenAI API response received successfully');
     
     const summary = data.choices[0].message.content;
 

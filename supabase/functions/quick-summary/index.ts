@@ -49,13 +49,13 @@ serve(async (req) => {
 
     console.log('Processing audio file:', audioFile.name, 'Size:', audioFile.size);
 
-    // Send the audio to OpenAI Whisper API
+    // Send the audio to OpenAI GPT-4o transcription API
     const whisperFormData = new FormData();
     whisperFormData.append('file', audioFile, 'audio.mp3');
-    whisperFormData.append('model', 'whisper-1');
+    // Use GPT-4o mini transcribe for speed/cost; multilingual
+    whisperFormData.append('model', 'gpt-4o-mini-transcribe');
 
-    console.log('Sending to OpenAI Whisper API');
-    
+    console.log('Sending to OpenAI GPT-4o Mini Transcription');
     const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
@@ -79,15 +79,15 @@ serve(async (req) => {
     const transcription = await openaiResponse.json();
     console.log('Transcription received, length:', transcription.text.length);
 
-    // Now use the transcription to create a summary using OpenAI with enhanced prompt
-    console.log('Sending enhanced summary request to OpenAI');
+    // Now use the transcription to create a summary using OpenAI GPT-4o-mini with a brainstorming prompt
+    console.log('Sending brainstorming summary request to OpenAI (gpt-4o-mini)');
     
     const summaryRequestOptions = {
       model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: 'You are a professional summarization assistant. Summarize the following text in a structured, professional manner. Provide a summary that includes:\n\nTitle (concise and descriptive)\n\nMain Points (key ideas organized clearly)\n\nAction Items (if present in the original content)\n\nMake the summary feel like a professional summary of a real meeting or lecture. Ensure it captures the essence of the discussion efficiently.'
+          content: 'You are a fast, lightweight brainstorming summarizer. Produce concise, clear quick notes suitable for idea capture and planning. Output sections: Title (short), Key Ideas (bullets), Action Items (bullets, if any). Keep it compact and readable.'
         },
         {
           role: 'user',

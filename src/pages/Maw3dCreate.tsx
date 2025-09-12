@@ -18,12 +18,38 @@ import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { CreateEventFormData, TextStyle } from '@/types/maw3d';
+import { CreateEventFormData, TextStyle, EventStyle } from '@/types/maw3d';
 import TextStyleCustomizer from '@/components/maw3d/TextStyleCustomizer';
+import EventStyleCustomizer from '@/components/maw3d/EventStyleCustomizer';
 import BackgroundCustomizer from '@/components/events/BackgroundCustomizer';
 import LocationPickerModal from '@/components/events/LocationPickerModal';
 import { t } from '@/utils/translations';
 import YouTubeAudioPlayer from '@/components/audio/YouTubeAudioPlayer';
+import { EventPreview } from '@/components/maw3d/EventPreview';
+
+// Helper utilities for shadow color application
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const normalized = hex.replace('#', '');
+  if (normalized.length === 3) {
+    const r = parseInt(normalized[0] + normalized[0], 16);
+    const g = parseInt(normalized[1] + normalized[1], 16);
+    const b = parseInt(normalized[2] + normalized[2], 16);
+    return { r, g, b };
+  }
+  if (normalized.length === 6) {
+    const r = parseInt(normalized.slice(0, 2), 16);
+    const g = parseInt(normalized.slice(2, 4), 16);
+    const b = parseInt(normalized.slice(4, 6), 16);
+    return { r, g, b };
+  }
+  return null;
+};
+
+const buildShadowCss = (intensity?: number, color?: string) => {
+  const alpha = Math.max(0, Math.min(1, (intensity ?? 5) / 10));
+  const rgb = hexToRgb(color || '#000000') || { r: 0, g: 0, b: 0 };
+  return `2px 2px 4px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+};
 
 const templates = [
   {
@@ -122,6 +148,7 @@ export default function Maw3dCreate() {
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [audioOpen, setAudioOpen] = useState(false);
+  const [eventStyleOpen, setEventStyleOpen] = useState(false);
   // Location picker modal state
   const [locModalOpen, setLocModalOpen] = useState(false);
   
@@ -130,6 +157,25 @@ export default function Maw3dCreate() {
   const [backgroundColor, setBackgroundColor] = useState('#3b82f6');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [imageBlur, setImageBlur] = useState(0);
+
+  // Event card/layout style (separate from text styling)
+  const defaultEventStyle: EventStyle = {
+    cardMode: 'split',
+    card: {
+      liquidGlass: true,
+      background: { type: 'solid', color: 'rgba(255,255,255,0.06)' },
+      border: { radius: 16, width: 1, color: 'rgba(255,255,255,0.18)' },
+      buttonStyle: 'glass'
+    },
+    lowerSection: {
+      liquidGlass: true,
+      background: { type: 'solid', color: 'rgba(255,255,255,0.04)' },
+      border: { radius: 16, width: 1, color: 'rgba(255,255,255,0.12)' },
+      buttonStyle: 'glass'
+    },
+    chips: { enabled: false }
+  };
+  const [eventStyle, setEventStyle] = useState<EventStyle>(defaultEventStyle);
   
   // Audio section state (YouTube search + custom player)
   const [audioSearch, setAudioSearch] = useState<string>('');
@@ -235,7 +281,7 @@ export default function Maw3dCreate() {
       text_style: textStyle,
       template_type: null,
       invited_contacts: [],
-      image_blur: 0
+      image_blur: 0,
     }
   });
 
@@ -294,6 +340,13 @@ export default function Maw3dCreate() {
         setValue('background_value', bgValue);
         setImageBlur(data.image_blur || 0);
 
+        // Event style (card/layout)
+        if (data.event_style) {
+          setEventStyle(data.event_style as EventStyle);
+        } else {
+          setEventStyle(defaultEventStyle);
+        }
+
         // Text style
         const ts = typeof data.text_style === 'object' ? data.text_style : {};
         const mergedTs: TextStyle = {
@@ -306,6 +359,7 @@ export default function Maw3dCreate() {
           alignment: ts.alignment || 'center',
           hasShadow: ts.hasShadow !== undefined ? ts.hasShadow : true,
           shadowIntensity: ts.shadowIntensity !== undefined ? ts.shadowIntensity : 5,
+          shadowColor: ts.shadowColor || undefined,
         } as TextStyle;
         setTextStyle(mergedTs);
         setValue('text_style', mergedTs);
@@ -387,6 +441,7 @@ export default function Maw3dCreate() {
         background_type: backgroundType,
         background_value: backgroundType === 'image' ? (backgroundImage || backgroundColor) : backgroundColor,
         text_style: styleWithTheme,
+        event_style: eventStyle,
         template_type: data.template_type,
         image_blur: backgroundType === 'image' ? imageBlur : 0,
       };
@@ -488,7 +543,7 @@ export default function Maw3dCreate() {
     fontStyle: textStyle.isItalic ? 'italic' : 'normal',
     textDecoration: textStyle.isUnderline ? 'underline' : 'none',
     textAlign: textStyle.alignment as any,
-    textShadow: textStyle.hasShadow ? `2px 2px 4px rgba(0,0,0,${(textStyle.shadowIntensity || 5) / 10})` : 'none'
+    textShadow: textStyle.hasShadow ? buildShadowCss(textStyle.shadowIntensity, (textStyle as any).shadowColor) : 'none'
   };
 
   return (
@@ -587,7 +642,9 @@ export default function Maw3dCreate() {
                                 fontWeight: template.text_style.isBold ? 'bold' : 'normal',
                                 fontStyle: template.text_style.isItalic ? 'italic' : 'normal',
                                 textDecoration: template.text_style.isUnderline ? 'underline' : 'none',
-                                textShadow: template.text_style.hasShadow ? `2px 2px 4px rgba(0,0,0,${(template.text_style.shadowIntensity || 5) / 10})` : 'none',
+                                textShadow: template.text_style.hasShadow
+                                  ? buildShadowCss(template.text_style.shadowIntensity, (template.text_style as any).shadowColor)
+                                  : 'none',
                                 textAlign: template.text_style.alignment
                               }}
                             >
@@ -599,6 +656,39 @@ export default function Maw3dCreate() {
                       ))}
                     </div>
                   </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Event Style Section */}
+          <Collapsible open={eventStyleOpen} onOpenChange={setEventStyleOpen}>
+            <Card className="backdrop-blur-xl bg-gradient-card border-border/50 shadow-vibrant hover:shadow-glow transition-all duration-500">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-accent/10 transition-all duration-300 rounded-t-xl">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Brush className="w-5 h-5 text-accent-purple drop-shadow-glow-purple" />
+                      <span className="bg-gradient-primary bg-clip-text text-transparent">
+                        Event Style
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {eventStyleOpen ? '−' : '+'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${eventStyleOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="space-y-4">
+                  <EventStyleCustomizer
+                    language={language}
+                    value={eventStyle}
+                    onChange={(v) => { setEventStyle(v); }}
+                  />
                 </CardContent>
               </CollapsibleContent>
             </Card>
@@ -868,28 +958,41 @@ export default function Maw3dCreate() {
                   {/* Event Preview integrated within background section */}
                   <div className="space-y-2">
                     <h3 className="text-lg font-semibold text-enhanced-heading">{t('preview', language)}</h3>
-                    <div 
-                      className="relative w-full h-64 rounded-lg flex flex-col items-center justify-center p-6 overflow-hidden border border-border/30 shadow-vibrant"
-                      style={textPreviewStyle}
-                    >
-                      {/* Background layer with blur applied only to the image/gradient */}
-                      <div className="absolute inset-0 -z-0" style={bgLayerStyle} aria-hidden="true" />
-                      <div className="text-center space-y-2 relative z-10">
-                        <h2 className="font-bold leading-tight">
-                          {watchedValues.title || t('eventTitle', language)}
-                        </h2>
-                        {watchedValues.description && (
-                          <p className="text-sm opacity-90 line-clamp-2">
-                            {watchedValues.description}
-                          </p>
-                        )}
-                        {watchedValues.organizer && (
-                          <p className="text-xs opacity-75">
-                            {t('by', language)} {watchedValues.organizer}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    <EventPreview
+                      event={{
+                        id: 'preview',
+                        title: watchedValues.title || t('eventTitle', language),
+                        description: watchedValues.description || '',
+                        location: watchedValues.location || '',
+                        google_maps_link: watchedValues.google_maps_link || '',
+                        organizer: watchedValues.organizer || '',
+                        event_date: watchedValues.event_date,
+                        start_time: watchedValues.is_all_day ? undefined : watchedValues.start_time,
+                        end_time: watchedValues.is_all_day ? undefined : watchedValues.end_time,
+                        is_all_day: watchedValues.is_all_day,
+                        is_public: watchedValues.is_public,
+                        show_attending_count: watchedValues.show_attending_count,
+                        auto_delete_enabled: true,
+                        background_type: backgroundType,
+                        background_value: backgroundType === 'image' ? (backgroundImage || backgroundColor) : backgroundColor,
+                        text_style: textStyle,
+                        template_type: null,
+                        created_by: 'preview',
+                        created_at: '',
+                        updated_at: '',
+                        short_id: null,
+                        language,
+                        image_blur: imageBlur,
+                      } as any}
+                      textStyle={textStyle}
+                      backgroundType={backgroundType}
+                      backgroundValue={backgroundType === 'image' ? (backgroundImage || backgroundColor) : backgroundColor}
+                      rsvpCount={{ accepted: 3, declined: 0 }}
+                      showAttendingCount={watchedValues.show_attending_count}
+                      language={language}
+                      imageBlur={imageBlur}
+                      eventStyle={eventStyle}
+                    />
                     <p className="text-sm text-muted-foreground">
                       {t('previewWithCurrentBlur', language)}, {imageBlur}px
                     </p>

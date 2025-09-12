@@ -1,4 +1,3 @@
-
 export const miscAr = {
   never: "أبداً",
   always: "دائماً",
@@ -391,5 +390,7 @@ export const miscAr = {
   
   // Shadow settings
   shadowEnabled: "مُفعّل",
-  shadowDisabled: "مُعطّل"
+  shadowDisabled: "مُعطّل",
+  shadowColor: "لون الظل",
+  shadowBrightness: "سطوع الظل"
 };

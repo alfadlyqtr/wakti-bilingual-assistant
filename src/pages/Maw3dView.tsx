@@ -11,7 +11,7 @@ import { Maw3dService } from '@/services/maw3dService';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import YouTubeAudioPlayer from '@/components/audio/YouTubeAudioPlayer';
 import NativeAudioPlayer from '@/components/audio/NativeAudioPlayer';
-import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
+import { Maw3dEvent, Maw3dRsvp, EventStyle } from '@/types/maw3d';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import CalendarDropdown from '@/components/events/CalendarDropdown';
@@ -95,6 +95,76 @@ export default function Maw3dView() {
         console.log('Found existing localStorage RSVP:', { name, response });
       }
     }
+  };
+
+  const getButtonPreset = (section: 'card' | 'lower'): 'glass' | 'solid' | 'outline' => {
+    const s: EventStyle | null | undefined = (event as any)?.event_style;
+    const src = section === 'card' ? s?.card : s?.lowerSection;
+    return src?.buttonStyle || 'glass';
+  };
+
+  const getButtonClasses = (section: 'card' | 'lower'): string => {
+    const preset = getButtonPreset(section);
+    switch (preset) {
+      case 'glass':
+        // translucent glass, not fully white
+        return 'bg-white/20 text-foreground border border-white/30 shadow-soft hover:bg-white/30 backdrop-blur-md';
+      case 'solid':
+        return 'bg-primary text-primary-foreground hover:opacity-90';
+      case 'outline':
+      default:
+        return 'border border-border/60';
+    }
+  };
+
+  const getButtonVariant = (section: 'card' | 'lower'): 'default' | 'secondary' | 'destructive' | 'outline' | 'ghost' | 'link' => {
+    const preset = getButtonPreset(section);
+    if (preset === 'outline') return 'outline';
+    return 'default';
+  };
+
+  const hexToRgb = (hex?: string): { r: number; g: number; b: number } | null => {
+    if (!hex) return null;
+    const h = hex.replace('#', '');
+    if (h.length === 3) {
+      const r = parseInt(h[0] + h[0], 16);
+      const g = parseInt(h[1] + h[1], 16);
+      const b = parseInt(h[2] + h[2], 16);
+      return { r, g, b };
+    }
+    if (h.length === 6) {
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      return { r, g, b };
+    }
+    return null;
+  };
+  const getTextColorForBg = (hex?: string): string | undefined => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return undefined;
+    const srgb = [rgb.r, rgb.g, rgb.b].map(v => v / 255);
+    const toLin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    const [r, g, b] = srgb.map(toLin);
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luminance > 0.45 ? '#0f172a' : '#ffffff';
+  };
+  const getButtonStyle = (section: 'card' | 'lower'): React.CSSProperties => {
+    const s: EventStyle | null | undefined = (event as any)?.event_style;
+    const src = section === 'card' ? s?.card : s?.lowerSection;
+    const bb = src?.buttonBorder;
+    const style: React.CSSProperties = {};
+    if (bb) {
+      style.borderRadius = bb.radius !== undefined ? bb.radius : undefined;
+      style.borderWidth = bb.width !== undefined ? bb.width : undefined;
+      style.borderColor = bb.color;
+      style.borderStyle = bb.width ? 'solid' as const : undefined;
+    }
+    if (src?.buttonStyle === 'solid' && src.buttonColor) {
+      style.backgroundColor = src.buttonColor;
+      style.color = getTextColorForBg(src.buttonColor);
+    }
+    return style;
   };
 
   const fetchEvent = async () => {
@@ -315,6 +385,45 @@ export default function Maw3dView() {
     is_all_day: event.is_all_day
   };
 
+  const buildLowerSectionStyle = (): React.CSSProperties => {
+    const s: EventStyle | null | undefined = (event as any)?.event_style;
+    const sec = s?.lowerSection;
+    if (!sec) return {};
+    const base: React.CSSProperties = {
+      borderRadius: `${sec.border.radius}px`,
+      overflow: 'hidden'
+    };
+    const mode = sec.border.mode || 'border';
+    const w = sec.border.width;
+    const c = sec.border.color;
+    if (mode === 'border') {
+      base.borderWidth = `${w}px`;
+      base.borderStyle = 'solid';
+      base.borderColor = c;
+    } else if (mode === 'outline') {
+      base.borderWidth = 0;
+      base.boxShadow = `0 0 0 ${w}px ${c}`;
+      ;(base as any).outline = `${w}px solid ${c}`;
+      ;(base as any).outlineOffset = `-${w}px`;
+    } else if (mode === 'inline') {
+      base.borderWidth = 0;
+      base.boxShadow = `inset 0 0 0 ${w}px ${c}`;
+    }
+    if (sec.liquidGlass) {
+      const blur = sec.glassBlur ?? 10;
+      base.backdropFilter = `blur(${blur}px)`;
+      ;(base as any).WebkitBackdropFilter = `blur(${blur}px)`;
+      base.background = sec.glassTint || 'rgba(255,255,255,0.08)';
+    }
+    if (sec.background.type === 'solid' && sec.background.color) {
+      base.background = sec.background.color;
+    } else if (sec.background.type === 'gradient' && sec.background.gradient) {
+      const g = sec.background.gradient;
+      base.background = `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`;
+    }
+    return base;
+  };
+
   return (
     <div className="h-full flex flex-col bg-background">
       <Toaster />
@@ -332,11 +441,12 @@ export default function Maw3dView() {
               showAttendingCount={event.show_attending_count}
               language={eventLanguage}
               imageBlur={event.image_blur}
+              eventStyle={event.event_style || undefined}
             />
 
             {/* Audio playback (if event has audio) */}
             {event.audio_preview_url && (
-              <Card>
+              <Card style={buildLowerSectionStyle()}>
                 <CardContent className="p-3 space-y-1.5">
                   {(() => {
                     const isYouTube = /youtu\.be\//.test(event.audio_preview_url!) || /youtube\.com/.test(event.audio_preview_url!);
@@ -373,29 +483,36 @@ export default function Maw3dView() {
               </Card>
             )}
 
-            {/* Action Buttons - Fixed to be on same line */}
-            <div className="flex gap-3 justify-center">
-              <CalendarDropdown 
-                event={calendarEvent} 
-                eventId={event.id}
-                language={eventLanguage} 
-              />
-              
-              {event.google_maps_link && (
-                <Button
-                  variant="outline"
-                  onClick={() => window.open(event.google_maps_link, '_blank')}
-                  className="flex items-center gap-2"
-                >
-                  <MapPin className="w-4 h-4" />
-                  {t('getDirections', eventLanguage)}
-                </Button>
-              )}
-            </div>
+            {/* Action Buttons - styled as its own card */}
+            <Card style={buildLowerSectionStyle()}>
+              <CardContent className="p-4">
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <CalendarDropdown 
+                    event={calendarEvent} 
+                    eventId={event.id}
+                    language={eventLanguage}
+                    buttonVariant={getButtonVariant('lower')}
+                    buttonClassName={`rounded-full px-4 ${getButtonClasses('lower')}`}
+                    buttonStyle={getButtonStyle('lower')}
+                  />
+                  {event.google_maps_link && (
+                    <Button
+                      variant={getButtonVariant('lower')}
+                      className={`rounded-full flex items-center gap-2 ${getButtonClasses('lower')}`}
+                      style={getButtonStyle('lower')}
+                      onClick={() => window.open(event.google_maps_link, '_blank')}
+                    >
+                      <MapPin className="w-4 h-4" />
+                      {t('getDirections', eventLanguage)}
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             {/* RSVP Section */}
             {event.is_public && !hasAlreadyRsvped && (
-              <Card>
+              <Card style={buildLowerSectionStyle()}>
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-4">
                     {t('areYouAttending', eventLanguage)}
@@ -426,20 +543,22 @@ export default function Maw3dView() {
                         </p>
                       </div>
                     
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-3">
                       <Button
                         onClick={() => handleRsvp('accepted')}
                         disabled={isSubmitting || !guestName.trim()}
-                        className="flex-1 bg-green-500/20 border-green-500 text-green-700 hover:bg-green-500/30 hover:text-green-800"
-                        variant="outline"
+                        className={`flex-1 min-w-[120px] ${getButtonClasses('lower')}`}
+                        style={getButtonStyle('lower')}
+                        variant={getButtonVariant('lower')}
                       >
                         {eventLanguage === 'ar' ? 'قبول' : 'Accept'}
                       </Button>
                       <Button
                         onClick={() => handleRsvp('declined')}
                         disabled={isSubmitting || !guestName.trim()}
-                        className="flex-1 bg-red-500/20 border-red-500 text-red-700 hover:bg-red-500/30 hover:text-red-800"
-                        variant="outline"
+                        className={`flex-1 min-w-[120px] ${getButtonClasses('lower')}`}
+                        style={getButtonStyle('lower')}
+                        variant={getButtonVariant('lower')}
                       >
                         {eventLanguage === 'ar' ? 'رفض' : 'Decline'}
                       </Button>

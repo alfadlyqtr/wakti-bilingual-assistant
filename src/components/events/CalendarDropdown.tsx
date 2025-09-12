@@ -26,9 +26,12 @@ interface CalendarDropdownProps {
   event: Event;
   eventId?: string;
   language?: string;
+  buttonClassName?: string;
+  buttonVariant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'ghost' | 'link';
+  buttonStyle?: React.CSSProperties;
 }
 
-export default function CalendarDropdown({ event, eventId, language = 'en' }: CalendarDropdownProps) {
+export default function CalendarDropdown({ event, eventId, language = 'en', buttonClassName, buttonVariant = 'outline', buttonStyle }: CalendarDropdownProps) {
   const { user } = useAuth();
   const [isInCalendar, setIsInCalendar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -186,7 +189,7 @@ export default function CalendarDropdown({ event, eventId, language = 'en' }: Ca
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="flex items-center gap-2">
+        <Button variant={buttonVariant} className={`flex items-center gap-2 ${buttonClassName || ''}`} style={buttonStyle}>
           <Calendar className="h-4 w-4" />
           {t("addToCalendar", language)}
         </Button>

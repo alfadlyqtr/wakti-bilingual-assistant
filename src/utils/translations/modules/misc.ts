@@ -384,5 +384,7 @@ export const misc = {
   
   // Shadow settings
   shadowEnabled: "Enabled",
-  shadowDisabled: "Disabled"
+  shadowDisabled: "Disabled",
+  shadowColor: "Shadow Color",
+  shadowBrightness: "Shadow Brightness"
 };
