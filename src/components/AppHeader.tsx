@@ -255,18 +255,19 @@ export function AppHeader() {
               </Button>
             </DropdownMenuTrigger>
 
-            {/* Backdrop overlay when user menu is open */}
-            {userMenuOpen && (
+            {/* Backdrop overlay when user menu is open - portal below header to blur page only */}
+            {userMenuOpen && createPortal(
               <div 
                 onClick={() => setUserMenuOpen(false)}
-                className="fixed inset-0 z-[1150] bg-background/20 backdrop-blur-sm"
-              />
+                className="fixed inset-0 z-[980] bg-background/20 backdrop-blur-sm"
+              />,
+              document.body
             )}
 
             <DropdownMenuContent 
               align="end" 
               side="bottom"
-              sideOffset={24}
+              sideOffset={32}
               collisionPadding={16}
               className="z-[1200] bg-background/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border border-border/60 dark:border-white/20"
             >

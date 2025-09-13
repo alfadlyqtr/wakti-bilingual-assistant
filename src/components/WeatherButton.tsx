@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useQuery } from '@tanstack/react-query';
@@ -157,29 +158,30 @@ export function WeatherButton() {
           </div>
         </Button>
       </PopoverTrigger>
-      {/* Backdrop overlay when popover is open */}
-      {isOpen && (
+      {/* Backdrop overlay when popover is open - portal below header to blur page only */}
+      {isOpen && createPortal(
         <div
           onClick={() => setIsOpen(false)}
-          className="fixed inset-0 z-[1150] bg-background/20 backdrop-blur-sm"
-        />
+          className="fixed inset-0 z-[980] bg-background/20 backdrop-blur-sm"
+        />,
+        document.body
       )}
 
-        <PopoverContent 
-          className="w-80 p-0 border-0 shadow-2xl z-[1200]"
-          style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            backdropFilter: 'blur(40px)',
-            borderRadius: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 20px 80px rgba(0, 0, 0, 0.2)',
-          }}
-          side="bottom"
-          align="end"
-          sideOffset={24}
-          collisionPadding={16}
-          avoidCollisions={true}
-        >
+      <PopoverContent 
+        className="w-80 p-0 border-0 shadow-2xl z-[1200]"
+        style={{
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(40px)',
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 20px 80px rgba(0, 0, 0, 0.2)',
+        }}
+        side="bottom"
+        align="end"
+        sideOffset={32}
+        collisionPadding={16}
+        avoidCollisions={true}
+      >
         <div className={`relative ${language === 'ar' ? 'rtl' : 'ltr'}`}>
           {/* Close Button */}
           <button
