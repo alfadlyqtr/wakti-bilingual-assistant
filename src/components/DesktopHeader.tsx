@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Moon, Sun, Search } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
@@ -22,7 +22,6 @@ import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
-import { Input } from "@/components/ui/input";
 
 export function DesktopHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
@@ -96,16 +95,8 @@ export function DesktopHeader() {
   return (
     <div className="fixed top-0 left-[var(--sidebar-width)] right-0 z-[1000] bg-white/90 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-b border-border/60 dark:border-white/20">
       <div className="flex h-[var(--desktop-header-h)] items-center justify-between px-6">
-        {/* Search Bar */}
-        <div className="flex-1 max-w-md">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder={language === 'ar' ? 'البحث...' : 'Search...'}
-              className="pl-9 bg-background/50 border-border/40"
-            />
-          </div>
-        </div>
+        {/* Empty left space for balance */}
+        <div className="flex-1"></div>
 
         <div className="flex items-center space-x-4">
           {/* Weather Button */}

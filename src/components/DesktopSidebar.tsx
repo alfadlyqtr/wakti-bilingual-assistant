@@ -7,22 +7,14 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { 
-  LayoutDashboard,
-  ListChecks,
   Calendar,
-  MessageSquare,
-  Users,
-  Settings,
-  HelpCircle,
-  ChevronLeft,
-  ChevronRight,
-  Home,
-  CheckCircle2,
-  Clock,
   CalendarClock,
   Mic,
   Sparkles,
-  ListTodo
+  ListTodo,
+  ChevronLeft,
+  ChevronRight,
+  Home
 } from "lucide-react";
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
@@ -45,21 +37,14 @@ export function DesktopSidebar() {
   const { maw3dEventCount, contactCount } = useUnreadMessages();
 
   const navItems: NavItemProps[] = [
-    { icon: LayoutDashboard, label: "dashboard", path: "/" },
-    { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
-    { icon: CheckCircle2, label: "reminders", path: "/reminders" },
-    { icon: CalendarClock, label: "events", path: "/maw3d", badge: maw3dEventCount },
     { icon: Calendar, label: "calendar", path: "/calendar" },
+    { icon: CalendarClock, label: "events", path: "/maw3d", badge: maw3dEventCount },
+    { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
-    { icon: MessageSquare, label: "messages", path: "/messages", badge: contactCount },
-    { icon: Users, label: "contacts", path: "/contacts" },
   ];
 
-  const bottomNavItems: NavItemProps[] = [
-    { icon: Settings, label: "settings", path: "/settings" },
-    { icon: HelpCircle, label: "knowledge", path: "/knowledge" },
-  ];
+  const bottomNavItems: NavItemProps[] = [];  // Remove settings and knowledge
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -160,45 +145,6 @@ export function DesktopSidebar() {
             })}
           </nav>
         </ScrollArea>
-
-        <Separator />
-
-        {/* Bottom Navigation */}
-        <div className="p-3">
-          <nav className="space-y-1">
-            {bottomNavItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <Button
-                  key={item.label}
-                  variant="ghost"
-                  className={`w-full ${isCollapsed ? 'h-12 px-0' : 'h-10'} justify-start rounded-lg transition-all ${
-                    isActive
-                      ? "bg-primary/10 text-primary dark:bg-primary/20"
-                      : "hover:bg-muted/50"
-                  }`}
-                  onClick={() => handleNavigation(item.path)}
-                >
-                  <div className="flex items-center w-full">
-                    <item.icon className={`h-5 w-5 ${isCollapsed ? '' : 'mr-3'}`} />
-                    <AnimatePresence>
-                      {!isCollapsed && (
-                        <motion.span
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -10 }}
-                          className="truncate"
-                        >
-                          {t(item.label as any, language)}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </Button>
-              );
-            })}
-          </nav>
-        </div>
       </div>
     </motion.aside>
   );
