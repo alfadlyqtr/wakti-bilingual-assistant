@@ -34,17 +34,19 @@ export function SideSheet({
       {/* Overlay constrained between header and bottom bar */}
       <div
         aria-hidden
-        className={cn(
-          'fixed inset-y-0 z-[850] bg-black/20 backdrop-blur-md ios-reduce-blur transition-opacity duration-300',
-          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
-          overlayClassName,
-        )}
         style={{
           top: 'var(--app-header-h)',
           bottom: 'var(--app-bottom-tabs-h)',
           left: 0,
           right: 0,
         }}
+        // On desktop/tablet, override to position relative to viewport, not header
+        className={cn(
+          'fixed inset-y-0 z-[850] bg-black/20 backdrop-blur-md ios-reduce-blur transition-opacity duration-300',
+          'md:top-0 md:bottom-0',
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+          overlayClassName,
+        )}
         onClick={() => onOpenChange(false)}
       />
 
@@ -52,8 +54,14 @@ export function SideSheet({
       <aside
         role="dialog"
         aria-modal="true"
+        style={{
+          top: 'var(--app-header-h)',
+          bottom: 'var(--app-bottom-tabs-h)',
+        }}
+        // On desktop/tablet, extend full height to slide over everything
         className={cn(
           'fixed inset-y-0 z-[900] w-96 max-w-[92vw] bg-background shadow-lg focus:outline-none flex flex-col',
+          'md:top-0 md:bottom-0',
           side === 'right' ? 'right-0' : 'left-0',
           // Force horizontal slide only
           'translate-y-0',
@@ -65,10 +73,6 @@ export function SideSheet({
           'transition-transform duration-300 ease-out',
           className,
         )}
-        style={{
-          top: 'var(--app-header-h)',
-          bottom: 'var(--app-bottom-tabs-h)',
-        }}
       >
         <div
           className="flex-1 overflow-hidden px-3 sm:px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0)+12px)]"
