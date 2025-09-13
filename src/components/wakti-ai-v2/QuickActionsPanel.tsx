@@ -109,11 +109,16 @@ export function QuickActionsPanel({
               <Button
                 key={mode.id}
                 autoFocus={index === 0}
-                onClick={() => handleTriggerSelect(mode.id)}
+                // Use pointer events for reliable iOS tap behavior
+                onPointerUp={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleTriggerSelect(mode.id);
+                }}
                 variant="ghost"
                 role="radio"
                 aria-checked={isActive}
-                className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 touch-manipulation ${
                   isActive 
                     ? `${mode.dual ? 'bg-gradient-to-r from-green-500 to-red-500' : mode.activeColor} border ${mode.borderColor} text-white shadow-lg` 
                     : `bg-white/10 dark:bg-black/10 ${mode.dual ? 'hover:bg-gradient-to-r hover:from-green-50/40 hover:to-red-50/40' : mode.hoverColor} border ${mode.borderColor} text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`
@@ -160,8 +165,13 @@ export function QuickActionsPanel({
                 action.disabled 
                   ? 'opacity-60 cursor-not-allowed' 
                   : 'cursor-pointer hover:shadow-md hover:bg-white/30 dark:hover:bg-black/30 hover:border-white/40 dark:hover:border-white/30'
-              }`} 
-              onClick={action.disabled ? undefined : () => handleToolAction(action.action)}
+              } touch-manipulation`} 
+              // Use pointer events to avoid iOS ghost clicks / wrong targets
+              onPointerUp={action.disabled ? undefined : (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleToolAction(action.action);
+              }}
               role="button"
               tabIndex={action.disabled ? -1 : 0}
               onKeyDown={(e) => {

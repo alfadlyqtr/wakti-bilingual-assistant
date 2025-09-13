@@ -40,8 +40,8 @@ export function SideSheet({
           overlayClassName,
         )}
         style={{
-          top: 'calc(env(safe-area-inset-top, 0px) + 72px)',
-          bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)',
+          top: 'var(--app-header-h)',
+          bottom: 'var(--app-bottom-tabs-h)',
           left: 0,
           right: 0,
         }}
@@ -66,8 +66,8 @@ export function SideSheet({
           className,
         )}
         style={{
-          top: 'calc(env(safe-area-inset-top, 0px) + 72px)',
-          bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)',
+          top: 'var(--app-header-h)',
+          bottom: 'var(--app-bottom-tabs-h)',
         }}
       >
         <div
