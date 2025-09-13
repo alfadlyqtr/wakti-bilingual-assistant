@@ -148,12 +148,12 @@
   #root {
     @apply min-h-screen;
     background: var(--gradient-background);
-    /* Responsive width */
+    /* Full width for all screen sizes, no mobile constraint */
     width: 100%;
     max-width: none;
   }
   
-  /* Mobile-specific root styles */
+  /* Mobile-specific root styles only for mobile breakpoint */
   @media (max-width: 767px) {
     #root {
       @apply max-w-md mx-auto;
@@ -173,15 +173,15 @@
     /* REMOVED: overflow-hidden and h-full that were blocking scrolling */
   }
 
-  /* Desktop container */
+  /* Desktop container - full width layout */
   .desktop-container {
-    @apply w-full min-h-screen flex;
+    @apply w-full min-h-screen;
     background: var(--gradient-background);
   }
 
-  /* Tablet container */
+  /* Tablet container - full width layout */
   .tablet-container {
-    @apply w-full min-h-screen flex;
+    @apply w-full min-h-screen;
     background: var(--gradient-background);
   }
 
@@ -388,6 +388,13 @@
   /* Ensure anchor jumps and scrollIntoView land below the fixed header */
   html {
     scroll-padding-top: calc(var(--app-header-h) + var(--app-content-gap));
+  }
+  
+  /* Desktop/Tablet scroll padding for floating headers */
+  @media (min-width: 768px) {
+    html {
+      scroll-padding-top: 120px; /* Account for floating header height + spacing */
+    }
   }
 
   /* Spacing is handled in AppLayout <main> via pt/pb using the variables above */

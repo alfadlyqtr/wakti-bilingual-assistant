@@ -589,8 +589,9 @@ export default function Maw3dCreate() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-6 max-w-4xl">
-        <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <div className="w-full px-6 py-6">
+        <div className="max-w-6xl mx-auto">
+          <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Event Templates Section */}
           <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
             <Card className="backdrop-blur-xl bg-gradient-card border-border/50 shadow-vibrant hover:shadow-glow transition-all duration-500">
@@ -1238,6 +1239,8 @@ export default function Maw3dCreate() {
         onOpenChange={setLocModalOpen}
         onConfirm={onLocationPicked}
       />
+        </div>
+      </div>
     </div>
   );
 }

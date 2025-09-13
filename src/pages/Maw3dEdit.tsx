@@ -158,7 +158,8 @@ export default function Maw3dEdit() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-4 max-w-2xl">
+      <div className="w-full p-6">
+        <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Button
@@ -334,6 +335,7 @@ export default function Maw3dEdit() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   );

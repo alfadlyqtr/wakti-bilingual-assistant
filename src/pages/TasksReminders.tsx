@@ -63,7 +63,8 @@ export default function TasksReminders() {
   if (error) {
     return (
       <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95">
-        <div className="max-w-md mx-auto">
+        <div className="w-full">
+          <div className="max-w-4xl mx-auto">
           <div className="text-center py-8">
             <div className="text-red-500 mb-4">{t('error', language)}</div>
             <p className="text-muted-foreground mb-4">{error}</p>
@@ -78,7 +79,8 @@ export default function TasksReminders() {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95 scrollbar-hide">
-      <div className="max-w-md mx-auto space-y-4">
+      <div className="w-full space-y-6">
+        <div className="max-w-4xl mx-auto">
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
@@ -173,6 +175,8 @@ export default function TasksReminders() {
           reminder={editingReminder}
           onReminderSaved={handleDataChanged}
         />
+        </div>
+        </div>
       </div>
     </div>
   );

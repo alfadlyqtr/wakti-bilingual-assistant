@@ -14,12 +14,14 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-background flex w-full">
+      <div className="min-h-screen bg-background w-full">
         <DesktopSidebar />
-        <div className="flex-1 flex flex-col transition-all duration-300" style={{ marginLeft: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}>
+        <div className="w-full transition-all duration-300" style={{ paddingLeft: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}>
           <DesktopHeader />
-          <main className="flex-1 pt-20 p-6">
-            {children}
+          <main className="min-h-screen w-full pt-20 p-6 pb-8">
+            <div className="w-full max-w-none">
+              {children}
+            </div>
           </main>
         </div>
       </div>

@@ -178,7 +178,8 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-4 max-w-4xl">
+      <div className="w-full p-6">
+        <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">
             {t("settings", language)}
@@ -401,6 +402,7 @@ export default function Settings() {
             </Card>
           </TabsContent>
         </Tabs>
+        </div>
       </div>
     </div>
   );

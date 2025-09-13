@@ -15,12 +15,14 @@ export function TabletLayout({ children }: TabletLayoutProps) {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-background flex w-full">
+      <div className="min-h-screen bg-background w-full">
         <TabletSidebar />
-        <div className="flex-1 flex flex-col transition-all duration-300" style={{ marginLeft: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}>
+        <div className="w-full transition-all duration-300" style={{ paddingLeft: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}>
           <TabletHeader />
-          <main className="flex-1 pt-16 pb-[var(--tablet-bottom-nav-h)] p-4">
-            {children}
+          <main className="min-h-screen w-full pt-16 p-4 pb-20">
+            <div className="w-full max-w-none">
+              {children}
+            </div>
           </main>
           <TabletBottomNav />
         </div>
