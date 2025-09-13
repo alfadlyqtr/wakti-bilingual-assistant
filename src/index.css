@@ -393,7 +393,7 @@
   /* Desktop/Tablet scroll padding for floating headers */
   @media (min-width: 768px) {
     html {
-      scroll-padding-top: 120px; /* Account for floating header height + spacing */
+      scroll-padding-top: 140px; /* Account for floating header height + spacing + extra buffer */
     }
   }
 
