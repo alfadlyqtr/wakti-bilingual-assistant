@@ -93,7 +93,8 @@ export function DesktopHeader() {
   ];
 
   return (
-    <div className="fixed top-0 left-[var(--sidebar-width)] right-0 z-[1000] bg-white/90 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-b border-border/60 dark:border-white/20">
+    <div className="fixed top-0 right-0 z-[1000] bg-white/90 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-b border-border/60 dark:border-white/20 transition-all duration-300" 
+         style={{ left: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}>
       <div className="flex h-[var(--desktop-header-h)] items-center justify-between px-6">
         {/* Empty left space for balance */}
         <div className="flex-1"></div>

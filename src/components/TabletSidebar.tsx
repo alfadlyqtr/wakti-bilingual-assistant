@@ -49,46 +49,69 @@ export function TabletSidebar() {
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
+    // Update CSS custom property for dynamic layout
+    document.documentElement.style.setProperty(
+      '--current-tablet-sidebar-width', 
+      !isCollapsed ? 'var(--tablet-sidebar-mini-width)' : 'var(--tablet-sidebar-width)'
+    );
   };
 
   const sidebarVariants = {
-    expanded: { width: "var(--tablet-sidebar-width)" },
-    collapsed: { width: "var(--tablet-sidebar-mini-width)" },
+    expanded: { width: "180px" },
+    collapsed: { width: "60px" },
   };
+
+  // Set initial CSS variable
+  React.useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--current-tablet-sidebar-width', 
+      isCollapsed ? 'var(--tablet-sidebar-mini-width)' : 'var(--tablet-sidebar-width)'
+    );
+  }, [isCollapsed]);
 
   return (
     <motion.aside
-      className="fixed left-0 top-0 h-screen bg-background/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-r border-border/60 dark:border-white/20 z-[999]"
+      className="fixed left-3 top-3 bottom-3 bg-gradient-to-b from-background/95 to-background/90 dark:from-[#0b0f14]/95 dark:to-[#0b0f14]/90 backdrop-blur-xl border border-border/60 dark:border-white/10 z-[999] rounded-xl shadow-xl"
       variants={sidebarVariants}
       animate={isCollapsed ? "collapsed" : "expanded"}
       transition={{ duration: 0.3, ease: "easeInOut" }}
+      style={{
+        boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)'
+      }}
     >
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full p-3">
         {/* Toggle Button */}
-        <div className="flex items-center justify-center p-2 h-[var(--tablet-header-h)]">
-          <Link to="/dashboard" className="flex items-center justify-center hover:opacity-80 transition-opacity mr-2">
-            <Logo3D size="sm" />
-          </Link>
+        <div className="flex items-center justify-between mb-4">
+          <AnimatePresence>
+            {!isCollapsed && (
+              <Link to="/dashboard" className="flex items-center hover:opacity-80 transition-opacity">
+                <Logo3D size="sm" />
+              </Link>
+            )}
+            {isCollapsed && (
+              <Link to="/dashboard" className="flex items-center justify-center w-full hover:opacity-80 transition-opacity">
+                <Logo3D size="sm" />
+              </Link>
+            )}
+          </AnimatePresence>
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleCollapse}
-            className="rounded-lg h-8 w-8"
+            className="rounded-lg h-7 w-7 hover:bg-white/10 dark:hover:bg-white/5"
           >
             {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3 w-3" />
             ) : (
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-3 w-3" />
             )}
             <span className="sr-only">Toggle sidebar</span>
           </Button>
         </div>
 
-        <Separator />
-
         {/* Main Navigation */}
-        <ScrollArea className="flex-1 px-2">
-          <nav className="py-2 space-y-2">
+        <div className="flex-1">
+          <nav className="space-y-1">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path || 
                 (item.path === '/maw3d' && location.pathname.startsWith('/maw3d')) || 
@@ -110,27 +133,24 @@ export function TabletSidebar() {
                 <Button
                   key={item.label}
                   variant="ghost"
-                  className={`w-full ${isCollapsed ? 'h-14 px-1' : 'h-12'} justify-start rounded-xl transition-all duration-300 group ${
+                  className={`w-full ${isCollapsed ? 'h-12 px-1' : 'h-10'} justify-start rounded-lg transition-all duration-300 group ${
                     isActive
-                      ? "bg-gradient-card shadow-colored scale-105"
-                      : "hover:bg-gradient-card hover:shadow-glow hover:scale-105 active:scale-95"
+                      ? "bg-white/10 dark:bg-white/5 shadow-md"
+                      : "hover:bg-white/5 dark:hover:bg-white/[0.02] hover:scale-105 active:scale-95"
                   }`}
                   onClick={() => handleNavigation(item.path)}
                 >
-                  <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2`}>
+                  <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-1`}>
                     <div className="relative flex items-center justify-center">
-                      <item.icon className={`h-5 w-5 transition-all duration-300 ${getColorClass(item.path)} ${
+                      <item.icon className={`h-4 w-4 transition-all duration-300 ${getColorClass(item.path)} ${
                         isActive 
-                          ? "scale-110 brightness-125 nav-icon-active" 
+                          ? "scale-110 brightness-125" 
                           : "group-hover:scale-110 group-hover:brightness-110"
                       }`} />
                       {item.badge && item.badge > 0 && (
-                        <div className="absolute -top-1 -right-1 min-w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border border-background z-10 animate-pulse">
+                        <div className="absolute -top-1 -right-1 min-w-3 h-3 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border border-background z-10">
                           {item.badge > 99 ? '99+' : item.badge}
                         </div>
-                      )}
-                      {isActive && (
-                        <div className="absolute inset-0 rounded-full animate-glow-pulse opacity-50" />
                       )}
                     </div>
                     <AnimatePresence>
@@ -167,15 +187,12 @@ export function TabletSidebar() {
                         </motion.span>
                       )}
                     </AnimatePresence>
-                    {isActive && !isCollapsed && (
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-6 h-0.5 bg-gradient-vibrant rounded-full animate-shimmer" />
-                    )}
                   </div>
                 </Button>
               );
             })}
           </nav>
-        </ScrollArea>
+        </div>
       </div>
     </motion.aside>
   );

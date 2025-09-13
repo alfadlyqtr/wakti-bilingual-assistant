@@ -60,7 +60,8 @@ export function TabletBottomNav() {
   };
 
   return (
-    <div className="fixed bottom-0 left-[var(--tablet-sidebar-mini-width)] right-0 z-[1000] bg-white/90 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-t border-border/60 dark:border-white/20">
+    <div className="fixed bottom-0 right-0 z-[1000] bg-white/90 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-t border-border/60 dark:border-white/20 transition-all duration-300"
+         style={{ left: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}>
       <div className="flex h-[var(--tablet-bottom-nav-h)] items-center justify-around px-4">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;

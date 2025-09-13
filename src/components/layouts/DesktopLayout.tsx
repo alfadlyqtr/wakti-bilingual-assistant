@@ -16,7 +16,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
     <ProtectedRoute>
       <div className="min-h-screen bg-background flex w-full">
         <DesktopSidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col transition-all duration-300" style={{ marginLeft: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}>
           <DesktopHeader />
           <main className="flex-1 pt-[var(--desktop-header-h)] p-6">
             {children}

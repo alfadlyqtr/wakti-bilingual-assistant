@@ -4,8 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { 
   Calendar,
   CalendarClock,
@@ -44,31 +42,45 @@ export function DesktopSidebar() {
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
   ];
 
-  const bottomNavItems: NavItemProps[] = [];  // Remove settings and knowledge
-
   const handleNavigation = (path: string) => {
     navigate(path);
   };
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
+    // Update CSS custom property for dynamic layout
+    document.documentElement.style.setProperty(
+      '--current-sidebar-width', 
+      !isCollapsed ? 'var(--sidebar-mini-width)' : 'var(--sidebar-width)'
+    );
   };
 
   const sidebarVariants = {
-    expanded: { width: "var(--sidebar-width)" },
-    collapsed: { width: "var(--sidebar-mini-width)" },
+    expanded: { width: "240px" },
+    collapsed: { width: "70px" },
   };
+
+  // Set initial CSS variable
+  React.useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--current-sidebar-width', 
+      isCollapsed ? 'var(--sidebar-mini-width)' : 'var(--sidebar-width)'
+    );
+  }, [isCollapsed]);
 
   return (
     <motion.aside
-      className="fixed left-0 top-0 h-screen bg-background/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-r border-border/60 dark:border-white/20 z-[999]"
+      className="fixed left-4 top-4 bottom-4 bg-gradient-to-b from-background/95 to-background/90 dark:from-[#0b0f14]/95 dark:to-[#0b0f14]/90 backdrop-blur-xl border border-border/60 dark:border-white/10 z-[999] rounded-2xl shadow-2xl"
       variants={sidebarVariants}
       animate={isCollapsed ? "collapsed" : "expanded"}
       transition={{ duration: 0.3, ease: "easeInOut" }}
+      style={{
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)'
+      }}
     >
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full p-4">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 h-[var(--desktop-header-h)]">
+        <div className="flex items-center justify-between mb-6">
           <AnimatePresence>
             {!isCollapsed && (
               <motion.div
@@ -94,7 +106,7 @@ export function DesktopSidebar() {
             variant="ghost"
             size="icon"
             onClick={toggleCollapse}
-            className="rounded-lg h-8 w-8"
+            className="rounded-xl h-8 w-8 hover:bg-white/10 dark:hover:bg-white/5"
           >
             {isCollapsed ? (
               <ChevronRight className="h-4 w-4" />
@@ -105,11 +117,9 @@ export function DesktopSidebar() {
           </Button>
         </div>
 
-        <Separator />
-
         {/* Main Navigation */}
-        <ScrollArea className="flex-1 px-3">
-          <nav className="py-4 space-y-2">
+        <div className="flex-1">
+          <nav className="space-y-2">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path || 
                 (item.path === '/maw3d' && location.pathname.startsWith('/maw3d')) || 
@@ -131,27 +141,27 @@ export function DesktopSidebar() {
                 <Button
                   key={item.label}
                   variant="ghost"
-                  className={`w-full ${isCollapsed ? 'h-16 px-2' : 'h-14'} justify-start rounded-xl transition-all duration-300 group ${
+                  className={`w-full ${isCollapsed ? 'h-14 px-2' : 'h-12'} justify-start rounded-xl transition-all duration-300 group ${
                     isActive
-                      ? "bg-gradient-card shadow-colored scale-105"
-                      : "hover:bg-gradient-card hover:shadow-glow hover:scale-105 active:scale-95"
+                      ? "bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm"
+                      : "hover:bg-white/5 dark:hover:bg-white/[0.02] hover:scale-105 active:scale-95"
                   }`}
                   onClick={() => handleNavigation(item.path)}
                 >
                   <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2`}>
                     <div className="relative flex items-center justify-center">
-                      <item.icon className={`h-6 w-6 transition-all duration-300 ${getColorClass(item.path)} ${
+                      <item.icon className={`h-5 w-5 transition-all duration-300 ${getColorClass(item.path)} ${
                         isActive 
-                          ? "scale-110 brightness-125 nav-icon-active" 
+                          ? "scale-110 brightness-125" 
                           : "group-hover:scale-110 group-hover:brightness-110"
                       }`} />
                       {item.badge && item.badge > 0 && (
-                        <div className="absolute -top-2 -right-2 min-w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border-2 border-background z-10 animate-pulse">
+                        <div className="absolute -top-1 -right-1 min-w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border border-background z-10">
                           {item.badge > 99 ? '99+' : item.badge}
                         </div>
                       )}
                       {isActive && (
-                        <div className="absolute inset-0 rounded-full animate-glow-pulse opacity-50" />
+                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
                       )}
                     </div>
                     <AnimatePresence>
@@ -188,15 +198,12 @@ export function DesktopSidebar() {
                         </motion.span>
                       )}
                     </AnimatePresence>
-                    {isActive && !isCollapsed && (
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-gradient-vibrant rounded-full animate-shimmer" />
-                    )}
                   </div>
                 </Button>
               );
             })}
           </nav>
-        </ScrollArea>
+        </div>
       </div>
     </motion.aside>
   );

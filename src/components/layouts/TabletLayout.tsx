@@ -17,7 +17,7 @@ export function TabletLayout({ children }: TabletLayoutProps) {
     <ProtectedRoute>
       <div className="min-h-screen bg-background flex w-full">
         <TabletSidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col transition-all duration-300" style={{ marginLeft: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}>
           <TabletHeader />
           <main className="flex-1 pt-[var(--tablet-header-h)] pb-[var(--tablet-bottom-nav-h)] p-4">
             {children}

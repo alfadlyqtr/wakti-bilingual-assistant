@@ -136,7 +136,8 @@ export function TabletHeader() {
   const IconComponent = pageInfo.icon;
 
   return (
-    <div className="fixed top-0 left-[var(--tablet-sidebar-width)] right-0 z-[1000] bg-white/90 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-b border-border/60 dark:border-white/20">
+    <div className="fixed top-0 right-0 z-[1000] bg-white/90 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-b border-border/60 dark:border-white/20 transition-all duration-300"
+         style={{ left: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}>
       <div className="flex h-[var(--tablet-header-h)] items-center justify-between px-4">
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="flex items-center">

@@ -60,12 +60,16 @@
     
     /* Desktop/Tablet layout variables */
     --sidebar-width: 240px;
-    --sidebar-mini-width: 64px;
+    --sidebar-mini-width: 70px;
     --desktop-header-h: 60px;
     --tablet-header-h: 56px;
-    --tablet-sidebar-width: 200px;
-    --tablet-sidebar-mini-width: 64px;
+    --tablet-sidebar-width: 180px;
+    --tablet-sidebar-mini-width: 60px;
     --tablet-bottom-nav-h: 60px;
+    
+    /* Dynamic sidebar widths (updated by JavaScript) */
+    --current-sidebar-width: 240px;
+    --current-tablet-sidebar-width: 60px;
   }
 
   .dark {
