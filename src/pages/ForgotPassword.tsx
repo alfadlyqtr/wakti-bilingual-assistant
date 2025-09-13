@@ -80,24 +80,28 @@ export default function ForgotPassword() {
   const t = translations[language];
 
   return (
-    <div className="mobile-container">
-      <header className="mobile-header">
-        <div className="flex items-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-1 mr-2"
-            onClick={() => navigate("/")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="text-xs">{t.backToHome}</span>
-          </Button>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-white/80 dark:bg-background/80 backdrop-blur-sm border-b border-border/50">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-1 mr-2"
+              onClick={() => navigate("/")}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="text-xs">{t.backToHome}</span>
+            </Button>
+          </div>
+          <ThemeLanguageToggle />
         </div>
-        <ThemeLanguageToggle />
       </header>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex min-h-[80vh] flex-col justify-center py-12 px-6 sm:px-6 lg:px-8">
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex min-h-[calc(100vh-120px)] flex-col justify-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

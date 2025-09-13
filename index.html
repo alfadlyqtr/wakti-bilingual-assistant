@@ -91,53 +91,14 @@
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- Dev-only watchdog: show a minimal fallback bar only if real MobileNav doesn't paint -->
+    <!-- Cleanup: ensure any legacy mobile-nav-fallback element is removed if present -->
     <script>
-      (function(){
-        var isLocal = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
-        if (!isLocal) return;
-        var path = location.pathname;
-        var isAdminRoute = /^\/(mqtr|admindash|admin(?:\/|$))/i.test(path);
-        if (isAdminRoute) return;
-
-        function ensureMobileNav(){
-          try {
-            var nav = document.getElementById('mobile-nav');
-            var ok = !!nav;
-            if (ok) {
-              var r = nav.getBoundingClientRect();
-              ok = (r && r.height > 32);
-            }
-            var fb = document.getElementById('mobile-nav-fallback');
-            if (!ok) {
-              if (!fb) {
-                fb = document.createElement('div');
-                fb.id = 'mobile-nav-fallback';
-                fb.style.position = 'fixed';
-                fb.style.left = '0';
-                fb.style.right = '0';
-                fb.style.bottom = '0';
-                fb.style.height = '68px';
-                fb.style.zIndex = '2147483000';
-                fb.style.background = 'rgba(255,255,255,0.85)';
-                fb.style.backdropFilter = 'blur(18px)';
-                fb.style.borderTop = '1px solid rgba(255,255,255,0.2)';
-                document.body.appendChild(fb);
-              } else {
-                fb.style.display = 'block';
-              }
-            } else if (fb) {
-              fb.style.display = 'none';
-            }
-          } catch (e) {}
+      document.addEventListener('DOMContentLoaded', function(){
+        var fb = document.getElementById('mobile-nav-fallback');
+        if (fb && fb.parentNode) {
+          try { fb.parentNode.removeChild(fb); } catch (e) {}
         }
-
-        window.addEventListener('load', function(){
-          setTimeout(ensureMobileNav, 120);
-          setTimeout(ensureMobileNav, 600);
-          setTimeout(ensureMobileNav, 1200);
-        });
-      })();
+      });
     </script>
   </body>
 </html>

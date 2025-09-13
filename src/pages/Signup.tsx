@@ -250,29 +250,33 @@ export default function Signup() {
 
   return (
     <>
-      <div className="mobile-container">
-        <header className="mobile-header">
-          <div className="flex items-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-1 mr-2"
-              onClick={() => navigate("/")}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="text-xs">{t.backToHome}</span>
-            </Button>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">
+        {/* Header */}
+        <header className="sticky top-0 z-10 bg-white/80 dark:bg-background/80 backdrop-blur-sm border-b border-border/50">
+          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-1 mr-2"
+                onClick={() => navigate("/")}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span className="text-xs">{t.backToHome}</span>
+              </Button>
+            </div>
+            <ThemeLanguageToggle />
           </div>
-          <ThemeLanguageToggle />
         </header>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex min-h-[80vh] flex-col justify-center py-6 px-6">
+        {/* Main Content */}
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex min-h-[calc(100vh-120px)] flex-col justify-center">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="w-full max-w-md mx-auto"
+              className="w-full max-w-2xl mx-auto"
             >
               <div className="mb-6 text-center">
                 <div 
@@ -313,7 +317,7 @@ export default function Signup() {
                 </div>
 
                 {/* Country + City in one row */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Country */}
                   <div className="space-y-2">
                     <Label htmlFor="country" className="text-base">{t.country}</Label>
@@ -365,7 +369,7 @@ export default function Signup() {
                 </div>
                 
                 {/* Username + Email in one row */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Username */}
                   <div className="space-y-2">
                     <Label htmlFor="username" className="text-base">{t.username}</Label>
@@ -412,10 +416,6 @@ export default function Signup() {
                   </div>
                 </div>
                 
-                {/* Email moved next to Username above */}
-
-                {/* Country moved next to City above */}
-                
                 <div className="space-y-2">
                   <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
                   <div className="space-y-2">
@@ -461,7 +461,7 @@ export default function Signup() {
                 </div>
                 
                 {/* Password + Confirm Password in one row */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Password */}
                   <div className="space-y-2">
                     <Label htmlFor="password" className="text-base">{t.password}</Label>
