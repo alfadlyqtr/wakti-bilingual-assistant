@@ -1193,8 +1193,8 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto" 
-             style={{ maxHeight: 'calc(100vh - var(--desktop-header-h) - 24px)' }}
+        <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto"
+             style={{ height: 'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)' }}
              ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages.slice(-35)}
@@ -1215,7 +1215,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="fixed left-0 right-0 z-50 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg bottom-0 md:bottom-0">
+        <div className="fixed left-0 right-0 z-50 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg bottom-0 md:bottom-0" style={{ left: 'var(--current-sidebar-width, 0px)' }}>
           <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-3">
             <ChatInput
               message={message}
