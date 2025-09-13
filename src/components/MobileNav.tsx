@@ -106,7 +106,7 @@ export function MobileNav() {
       data-test="mobile-nav"
       aria-label="Mobile Navigation"
       className={`fixed bottom-0 left-0 right-0 glue-fixed glue-bottom glue-z`}
-      style={{ zIndex: 2147483647, pointerEvents: 'auto', minHeight: '68px', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{ position: 'fixed', bottom: '0', zIndex: 2147483647, pointerEvents: 'auto', minHeight: '68px', paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="bg-white/80 dark:bg-neutral-900/70 backdrop-blur-2xl ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-vibrant pb-[calc(env(safe-area-inset-bottom)+4px)]">
         <ul className="flex justify-around items-center h-[68px] min-h-[68px] px-2">
