@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -180,8 +181,8 @@ export function AppHeader() {
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  return (
-    <div className="bg-background border-b fixed top-0 left-0 right-0 z-[1000]">
+  return createPortal(
+    <div className="bg-background border-b fixed top-0 left-0 right-0 z-[1000] glue-fixed glue-top glue-z ios-reduce-blur">
       <div className="container flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="flex items-center">
@@ -291,6 +292,7 @@ export function AppHeader() {
           </DropdownMenu>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

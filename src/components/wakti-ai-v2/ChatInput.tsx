@@ -133,6 +133,15 @@ export function ChatInput({
     } catch {}
   }, []);
 
+  // Close any dropdown menus on global overlay close to avoid invisible blockers
+  useEffect(() => {
+    const closer = () => {
+      setIsModeMenuOpen(false);
+    };
+    window.addEventListener('wakti-close-all-overlays', closer as EventListener);
+    return () => window.removeEventListener('wakti-close-all-overlays', closer as EventListener);
+  }, []);
+
   // Dynamically measure input card height and expose as CSS var --chat-input-height
   useEffect(() => {
     const el = inputCardRef.current;
@@ -431,7 +440,7 @@ export function ChatInput({
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
               ${containerHighlight}
-              shadow-xl rounded-2xl backdrop-blur-2xl
+              shadow-xl rounded-2xl backdrop-blur-2xl ios-reduce-blur
               p-0 transition-all duration-300
               shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
               border-[2.5px] min-h-[70px] w-full
@@ -445,10 +454,10 @@ export function ChatInput({
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      onClick={() => setIsInputCollapsed(v => !v)}
+                      onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setIsInputCollapsed(v => !v); }}
                       aria-expanded={!isInputCollapsed}
                       aria-label={language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
-                      className="h-8 w-8 rounded-full flex items-center justify-center bg-white text-sky-600 dark:bg-neutral-900 dark:text-white/90 hover:bg-white active:bg-white transition-all border border-white/80 dark:border-white/10 shadow-lg hover:shadow-xl ring-2 ring-sky-500/60 dark:ring-sky-400/60 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 hover:scale-[1.03]"
+                      className="h-8 w-8 rounded-full flex items-center justify-center bg-white text-sky-600 dark:bg-neutral-900 dark:text-white/90 hover:bg-white active:bg-white transition-all border border-white/80 dark:border-white/10 shadow-lg hover:shadow-xl ring-2 ring-sky-500/60 dark:ring-sky-400/60 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 hover:scale-[1.03] touch-manipulation"
                     >
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isInputCollapsed ? 'rotate-180' : ''}`} />
                     </button>
@@ -463,8 +472,8 @@ export function ChatInput({
             <div className="flex items-center flex-nowrap whitespace-nowrap gap-2 px-3 pt-2 pb-2 w-full overflow-x-auto">
               {activeTrigger === 'video' ? (
                 <button
-                  onClick={() => setShowVideoUpload && setShowVideoUpload(true)}
-                  className="h-9 px-2 rounded-2xl flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0"
+                  onPointerUp={() => setShowVideoUpload && setShowVideoUpload(true)}
+                  className="h-9 px-2 rounded-2xl flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0 touch-manipulation"
                   disabled={isUploading}
                   type="button"
                   title={language === 'ar' ? 'إضافة فيديو' : 'Add Video'}
@@ -477,6 +486,7 @@ export function ChatInput({
                 onPointerUp={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
                   console.log('💬 EXTRA BUTTON: Dispatching custom event');
                   if (typeof window !== "undefined") {
                     const nativeEvent = new CustomEvent("open-wakti-conversations");
@@ -498,6 +508,7 @@ export function ChatInput({
                 onPointerUp={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
                   console.log('⚡ QUICK ACTIONS: Opening drawer');
                   if (onOpenPlusDrawer) onOpenPlusDrawer();
                 }}
@@ -525,7 +536,7 @@ export function ChatInput({
                       <button
                         type="button"
                         ref={searchModeBtnRef}
-                        onClick={() => {
+                        onPointerUp={() => {
                           setIsModeMenuOpen(v => {
                             const willOpen = !v;
                             if (willOpen) {
@@ -553,7 +564,7 @@ export function ChatInput({
                           });
                         }}
                         disabled={isUploading}
-                        className="inline-flex items-center gap-1 outline-none"
+                        className="inline-flex items-center gap-1 outline-none touch-manipulation"
                         aria-haspopup="menu"
                         aria-expanded={isModeMenuOpen}
                         aria-label={language === 'ar' ? 'وضع البحث' : 'Search Mode'}
@@ -576,7 +587,7 @@ export function ChatInput({
                       >
                         <button
                           role="menuitem"
-                          onClick={() => { setSearchSubmode('web'); setIsModeMenuOpen(false); }}
+                          onPointerUp={() => { setSearchSubmode('web'); setIsModeMenuOpen(false); }}
                           className={`w-full text-left px-3 py-2 text-sm transition-colors ${searchSubmode === 'web'
                             ? 'bg-green-200/70 dark:bg-green-800/60 text-green-900 dark:text-green-100 font-semibold'
                             : 'hover:bg-white/40 dark:hover:bg-white/10'}
@@ -586,7 +597,7 @@ export function ChatInput({
                         </button>
                         <button
                           role="menuitem"
-                          onClick={() => { setSearchSubmode('youtube'); setIsModeMenuOpen(false); }}
+                          onPointerUp={() => { setSearchSubmode('youtube'); setIsModeMenuOpen(false); }}
                           className={`w-full text-left px-3 py-2 text-sm transition-colors ${searchSubmode === 'youtube'
                             ? 'bg-red-200/70 text-red-900 dark:bg-red-800/60 dark:text-red-100 font-semibold'
                             : 'hover:bg-white/40 dark:hover:bg-white/10'
@@ -617,7 +628,7 @@ export function ChatInput({
                     <button
                       type="button"
                       ref={imageModeBtnRef}
-                      onClick={() => {
+                      onPointerUp={() => {
                         setIsModeMenuOpen(v => {
                           const willOpen = !v;
                           if (willOpen) {
@@ -641,7 +652,7 @@ export function ChatInput({
                         });
                       }}
                       disabled={isUploading}
-                      className="inline-flex items-center gap-1 outline-none"
+                      className="inline-flex items-center gap-1 outline-none touch-manipulation"
                       aria-haspopup="menu"
                       aria-expanded={isModeMenuOpen}
                       aria-label={language === 'ar' ? 'وضع الصورة' : 'Image'}
@@ -660,7 +671,7 @@ export function ChatInput({
                     >
                       <button
                         role="menuitem"
-                        onClick={() => { setImageMode('text2image'); setIsModeMenuOpen(false); }}
+                        onPointerUp={() => { setImageMode('text2image'); setIsModeMenuOpen(false); }}
                         className={`w-full text-left px-3 py-2 text-sm transition-colors
                           ${imageMode === 'text2image'
                             ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
@@ -671,7 +682,7 @@ export function ChatInput({
                       </button>
                       <button
                         role="menuitem"
-                        onClick={() => { setImageMode('image2image'); setIsModeMenuOpen(false); }}
+                        onPointerUp={() => { setImageMode('image2image'); setIsModeMenuOpen(false); }}
                         className={`w-full text-left px-3 py-2 text-sm transition-colors
                           ${imageMode === 'image2image'
                             ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
@@ -682,7 +693,7 @@ export function ChatInput({
                       </button>
                       <button
                         role="menuitem"
-                        onClick={() => { setImageMode('background-removal'); setIsModeMenuOpen(false); }}
+                        onPointerUp={() => { setImageMode('background-removal'); setIsModeMenuOpen(false); }}
                         className={`w-full text-left px-3 py-2 text-sm transition-colors
                           ${imageMode === 'background-removal'
                             ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
@@ -845,7 +856,7 @@ export function ChatInput({
                         <TooltipTrigger asChild>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); triggerSeedUpload(); }}
+                            onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); triggerSeedUpload(); }}
                             disabled={isUploading}
                             className="h-9 w-9 flex items-center justify-center rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors"
                             aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
@@ -866,7 +877,7 @@ export function ChatInput({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                          onClick={handleSendMessage}
+                          onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleSendMessage(); }}
                           disabled={!canSend}
                           className={`
                             h-11 w-11 rounded-xl p-0 flex-shrink-0

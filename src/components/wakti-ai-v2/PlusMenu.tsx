@@ -92,15 +92,22 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
     };
   }, [isOpen, language]);
 
+  // Close on global overlay close events to avoid stuck full-screen overlay
+  useEffect(() => {
+    const closeAll = () => setIsOpen(false);
+    window.addEventListener('wakti-close-all-overlays', closeAll as EventListener);
+    return () => window.removeEventListener('wakti-close-all-overlays', closeAll as EventListener);
+  }, []);
+
   return (
     <div className="relative" ref={menuRef}>
       {/* Main Plus Button */}
       <Button
         ref={triggerRef}
-        onClick={handleToggle}
+        onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleToggle(); }}
         disabled={isLoading}
         className={cn(
-          "h-9 w-9 rounded-2xl p-0 transition-all duration-200",
+          "h-9 w-9 rounded-2xl p-0 transition-all duration-200 touch-manipulation",
           "bg-white/20 dark:bg-white/15 hover:bg-white/30 dark:hover:bg-white/25",
           "border-2 border-white/30 dark:border-white/40 hover:border-white/50 dark:hover:border-white/60",
           "shadow-lg dark:shadow-xl shadow-black/10 dark:shadow-black/30",
@@ -168,8 +175,8 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
       {/* Click outside to close */}
       {isOpen && (
         <div 
-          className="fixed inset-0 z-[949]" 
-          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-[700]" 
+          onPointerUp={() => setIsOpen(false)}
         />
       )}
 

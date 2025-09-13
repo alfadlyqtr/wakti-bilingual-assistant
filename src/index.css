@@ -373,6 +373,31 @@
   }
 }
 
+/* Super-glue fixed bars to the viewport on iOS */
+.glue-fixed {
+  position: fixed !important;
+  transform: translateZ(0); /* create its own compositor layer */
+  backface-visibility: hidden;
+  will-change: transform;
+  contain: layout style size; /* isolate layout calculations */
+}
+
+.glue-top {
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+.glue-bottom {
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+.glue-z {
+  z-index: 2147480000 !important; /* extremely high to sit above any content */
+}
+
 /* Dark mode styles with enhanced vibrant visuals */
 .dark #root {
   background: var(--gradient-background);

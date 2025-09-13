@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
@@ -98,8 +99,8 @@ export function MobileNav() {
     navigate(path);
   };
   
-  return (
-    <nav className="fixed bottom-0 left-0 right-0 z-[1000]">
+  return createPortal(
+    <nav className="fixed bottom-0 left-0 right-0 z-[1000] glue-fixed glue-bottom glue-z">
       <div className="bg-gradient-nav backdrop-blur-lg ios-reduce-blur border-t border-border/50 shadow-vibrant pb-[env(safe-area-inset-bottom)]">
         <ul className="flex justify-around items-center h-16 px-2">
           {navItems.map((item) => {
@@ -162,6 +163,7 @@ export function MobileNav() {
           })}
         </ul>
       </div>
-    </nav>
+    </nav>,
+    document.body
   );
 }

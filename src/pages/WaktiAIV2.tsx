@@ -1213,7 +1213,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="fixed left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg bottom-[var(--app-bottom-tabs-h)]">
+        <div className="fixed left-0 right-0 z-50 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg bottom-[var(--app-bottom-tabs-h)]">
           <div className="max-w-4xl mx-auto p-4">
             <ChatInput
               message={message}
