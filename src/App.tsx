@@ -7,7 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import AdminRoute from "@/components/auth/AdminRoute";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { AppLayout } from "@/components/AppLayout";
-import { MobileNav } from "@/components/MobileNav";
+
 
 // Import all your existing components
 import Index from "./pages/Index";
@@ -200,8 +200,6 @@ function App() {
                 {/* 404 catch-all */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
-              {/* TEMP: Global MobileNav to guarantee presence while we stabilize layout */}
-              <MobileNav />
             </div>
             </BrowserRouter>
           </AuthProvider>

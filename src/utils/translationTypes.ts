@@ -48,6 +48,8 @@ export type TranslationKey =
   | "markAsIncomplete"
   | "eventTitle"
   | "eventDescription"
+  | "eventDetails"
+  | "enterEventTitle"
   | "eventDate"
   | "eventTime"
   | "eventLocation"
