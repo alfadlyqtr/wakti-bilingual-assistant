@@ -2,13 +2,17 @@ import React from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
+import { DesktopLayout } from "@/components/layouts/DesktopLayout";
+import { TabletLayout } from "@/components/layouts/TabletLayout";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useIsMobile, useIsTablet, useIsDesktop } from "@/hooks/use-mobile";
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+// Mobile Layout Component (preserves existing mobile layout exactly)
+function MobileAppLayout({ children }: AppLayoutProps) {
   // Initialize the unified notification system
   useUnreadMessages();
 
@@ -23,4 +27,19 @@ export function AppLayout({ children }: AppLayoutProps) {
       </div>
     </ProtectedRoute>
   );
+}
+
+export function AppLayout({ children }: AppLayoutProps) {
+  const { isMobile } = useIsMobile();
+  const { isTablet } = useIsTablet();
+  const { isDesktop } = useIsDesktop();
+
+  // Conditional rendering based on screen size
+  if (isMobile) {
+    return <MobileAppLayout>{children}</MobileAppLayout>;
+  } else if (isTablet) {
+    return <TabletLayout>{children}</TabletLayout>;
+  } else {
+    return <DesktopLayout>{children}</DesktopLayout>;
+  }
 }

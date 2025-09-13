@@ -57,6 +57,15 @@
     --app-header-h: calc(64px + env(safe-area-inset-top));          /* Fixed header + iOS top safe area */
     --app-bottom-tabs-h: calc(68px + env(safe-area-inset-bottom));  /* Fixed bottom nav + iOS bottom safe area */
     --app-content-gap: 8px;        /* Extra breathing space for anchor scrolls */
+    
+    /* Desktop/Tablet layout variables */
+    --sidebar-width: 240px;
+    --sidebar-mini-width: 64px;
+    --desktop-header-h: 60px;
+    --tablet-header-h: 56px;
+    --tablet-sidebar-width: 200px;
+    --tablet-sidebar-mini-width: 64px;
+    --tablet-bottom-nav-h: 60px;
   }
 
   .dark {
@@ -133,9 +142,18 @@
   }
 
   #root {
-    @apply max-w-md mx-auto min-h-screen;
+    @apply min-h-screen;
     background: var(--gradient-background);
-    /* REMOVED: h-full and flex that were constraining height */
+    /* Responsive width */
+    width: 100%;
+    max-width: none;
+  }
+  
+  /* Mobile-specific root styles */
+  @media (max-width: 767px) {
+    #root {
+      @apply max-w-md mx-auto;
+    }
   }
 
   /* App container with enhanced background */
@@ -149,6 +167,18 @@
     @apply max-w-md w-full mx-auto min-h-screen flex flex-col;
     background: var(--gradient-background);
     /* REMOVED: overflow-hidden and h-full that were blocking scrolling */
+  }
+
+  /* Desktop container */
+  .desktop-container {
+    @apply w-full min-h-screen flex;
+    background: var(--gradient-background);
+  }
+
+  /* Tablet container */
+  .tablet-container {
+    @apply w-full min-h-screen flex;
+    background: var(--gradient-background);
   }
 
   /* Enhanced mobile buttons with vibrant gradients */

@@ -9,5 +9,9 @@ export const navigation = {
   account: "Account",
   contacts: "Contacts",
   reminders: "Reminders",
-  activityMonitor: "Activity Monitor"
+  activityMonitor: "Activity Monitor",
+  messages: "Messages",
+  wakti_ai: "WAKTI AI",
+  tasjeel: "Tasjeel",
+  knowledge: "Knowledge"
 };

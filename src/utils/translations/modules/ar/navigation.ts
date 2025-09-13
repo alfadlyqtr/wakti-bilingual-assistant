@@ -9,5 +9,9 @@ export const navigationAr = {
   account: "الحساب",
   contacts: "جهات الاتصال",
   reminders: "التذكيرات",
-  activityMonitor: "مراقب النشاط"
+  activityMonitor: "مراقب النشاط",
+  messages: "الرسائل",
+  wakti_ai: "WAKTI AI",
+  tasjeel: "تسجيل",
+  knowledge: "المعرفة"
 };
