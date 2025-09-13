@@ -136,10 +136,17 @@ export function TabletHeader() {
   const IconComponent = pageInfo.icon;
 
   return (
-    <div className="fixed top-0 right-0 z-[1000] bg-white/90 dark:bg-[#0b0f14]/95 backdrop-blur-xl border-b border-border/60 dark:border-white/20 transition-all duration-300"
+    <div className="fixed top-3 right-3 z-[1000] transition-all duration-300"
          style={{ left: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}>
-      <div className="flex h-[var(--tablet-header-h)] items-center justify-between px-4">
-        <div className="flex items-center gap-3">
+      <div className="bg-gradient-to-r from-background/95 via-background/90 to-background/95 dark:from-[#0b0f14]/95 dark:via-[#0b0f14]/90 dark:to-[#0b0f14]/95 backdrop-blur-xl border border-border/40 dark:border-white/10 rounded-xl shadow-xl h-[var(--tablet-header-h)] flex items-center justify-between px-4"
+           style={{
+             boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+             background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)'
+           }}>
+        {/* Glass reflection overlay */}
+        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-30 pointer-events-none" />
+        
+        <div className="flex items-center gap-3 relative z-10">
           <Link to="/dashboard" className="flex items-center">
             <Logo3D size="sm" />
           </Link>
@@ -153,17 +160,22 @@ export function TabletHeader() {
           )}
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 relative z-10">
           {/* Weather Button */}
-          <WeatherButton />
+          <div className="relative">
+            <WeatherButton />
+          </div>
           
           {/* Language Toggle Button */}
           <Button 
             variant="ghost" 
             size="sm"
             onClick={toggleLanguage}
-            className="rounded-lg h-8 px-3 border border-border/40 bg-background/50 hover:bg-background/80"
+            className="rounded-lg h-8 px-3 bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 backdrop-blur-sm shadow-md transition-all duration-300 hover:scale-105"
             aria-label={language === 'en' ? 'Switch to Arabic' : 'Switch to English'}
+            style={{
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15)'
+            }}
           >
             <span className="text-sm font-medium">
               {language === 'en' ? 'ع' : 'E'}
@@ -175,7 +187,10 @@ export function TabletHeader() {
             variant="outline" 
             size="sm"
             onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            className="rounded-lg h-8 w-8 p-0"
+            className="rounded-lg h-8 w-8 p-0 bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 backdrop-blur-sm shadow-md transition-all duration-300 hover:scale-105"
+            style={{
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15)'
+            }}
           >
             <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -185,7 +200,10 @@ export function TabletHeader() {
           {/* User Menu */}
           <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0 rounded-lg relative">
+              <Button variant="ghost" className="h-8 w-8 p-0 rounded-lg relative bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 backdrop-blur-sm shadow-md transition-all duration-300 hover:scale-105"
+                      style={{
+                        boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15)'
+                      }}>
                 <span className="relative">
                   <Avatar 
                     className="h-7 w-7"
@@ -213,7 +231,10 @@ export function TabletHeader() {
               side="bottom"
               sideOffset={8}
               collisionPadding={16}
-              className="z-[1200] bg-background/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border border-border/60 dark:border-white/20"
+              className="z-[1200] bg-white/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-lg shadow-xl"
+              style={{
+                boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+              }}
             >
               <DropdownMenuLabel>{language === 'ar' ? 'الحساب' : 'Account'}</DropdownMenuLabel>
               <DropdownMenuSeparator />

@@ -18,7 +18,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
         <DesktopSidebar />
         <div className="flex-1 flex flex-col transition-all duration-300" style={{ marginLeft: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}>
           <DesktopHeader />
-          <main className="flex-1 pt-[var(--desktop-header-h)] p-6">
+          <main className="flex-1 pt-20 p-6">
             {children}
           </main>
         </div>

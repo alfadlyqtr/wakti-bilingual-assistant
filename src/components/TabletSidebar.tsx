@@ -71,15 +71,26 @@ export function TabletSidebar() {
 
   return (
     <motion.aside
-      className="fixed left-3 top-3 bottom-3 bg-gradient-to-b from-background/95 to-background/90 dark:from-[#0b0f14]/95 dark:to-[#0b0f14]/90 backdrop-blur-xl border border-border/60 dark:border-white/10 z-[999] rounded-xl shadow-xl"
+      className="fixed left-3 top-3 bottom-3 z-[999] rounded-xl shadow-xl transition-all duration-300"
       variants={sidebarVariants}
       animate={isCollapsed ? "collapsed" : "expanded"}
       transition={{ duration: 0.3, ease: "easeInOut" }}
       style={{
-        boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)'
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)',
+        backdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        boxShadow: `
+          0 20px 40px -12px rgba(0, 0, 0, 0.25),
+          0 0 0 1px rgba(255, 255, 255, 0.05),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1),
+          0 6px 24px rgba(0, 0, 0, 0.12)
+        `
       }}
     >
-      <div className="flex flex-col h-full p-3">
+      {/* Glass reflection overlay */}
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-30 pointer-events-none" />
+      
+      <div className="flex flex-col h-full p-3 relative z-10">
         {/* Toggle Button */}
         <div className="flex items-center justify-between mb-4">
           <AnimatePresence>
