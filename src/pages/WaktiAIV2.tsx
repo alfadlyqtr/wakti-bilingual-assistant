@@ -1155,7 +1155,7 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <div className="flex min-h-[100dvh] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
+    <div className="flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
@@ -1213,7 +1213,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="fixed left-0 right-0 z-50 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg bottom-[calc(var(--app-bottom-tabs-h)-9px)] md:relative md:bottom-auto md:left-auto md:right-auto md:z-auto md:bg-transparent md:backdrop-blur-none md:border-t-0 md:shadow-none md:mt-4">
+        <div className="fixed left-0 right-0 z-50 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg bottom-[calc(var(--app-bottom-tabs-h)-9px)] md:relative md:bottom-auto md:left-auto md:right-auto md:z-auto md:bg-transparent md:backdrop-blur-none md:border-t-0 md:shadow-none md:mt-10">
           <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-0">
             <ChatInput
               message={message}
