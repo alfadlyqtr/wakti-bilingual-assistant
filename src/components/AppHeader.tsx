@@ -182,8 +182,14 @@ export function AppHeader() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   return createPortal(
-    <div className="bg-background border-b fixed top-0 left-0 right-0 z-[1000] glue-fixed glue-top glue-z ios-reduce-blur">
-      <div className="container flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
+    <div className="fixed top-0 left-0 right-0 z-[1000] glue-fixed glue-top glue-z">
+      <div className="relative bg-white/90 dark:bg-[#0b0f14]/92 backdrop-blur-3xl border-b border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
+        {/* Tinted liquid-glass overlay */}
+        <div className="pointer-events-none absolute inset-0 opacity-95 mix-blend-normal">
+          <div className="absolute inset-0 bg-gradient-to-b from-white/6 via-white/3 to-white/0 dark:from-white/8 dark:via-white/6 dark:to-white/0" />
+          <div className="absolute -inset-x-8 -top-12 h-24 blur-2xl bg-[radial-gradient(60%_60%_at_50%_0%,rgba(255,255,255,0.12)_0%,rgba(255,255,255,0.02)_60%,transparent_100%)] dark:bg-[radial-gradient(60%_60%_at_50%_0%,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.06)_60%,transparent_100%)]" />
+        </div>
+        <div className="container relative flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="flex items-center">
             <Logo3D size="sm" />
@@ -292,7 +298,8 @@ export function AppHeader() {
           </DropdownMenu>
         </div>
       </div>
-    </div>,
+        </div>
+      </div>,
     document.body
   );
 }

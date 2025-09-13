@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
@@ -13,6 +12,8 @@ export function MobileNav() {
   const { language } = useTheme();
   const { taskCount, maw3dEventCount, contactCount, sharedTaskCount } = useUnreadMessages();
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
+
+  // No portal: ensure direct render inside AppLayout for guaranteed presence
 
   // Clear badges when navigating to specific pages
   useEffect(() => {
@@ -99,10 +100,16 @@ export function MobileNav() {
     navigate(path);
   };
   
-  return createPortal(
-    <nav className="fixed bottom-0 left-0 right-0 z-[1000] glue-fixed glue-bottom glue-z">
-      <div className="bg-gradient-nav backdrop-blur-lg ios-reduce-blur border-t border-border/50 shadow-vibrant pb-[env(safe-area-inset-bottom)]">
-        <ul className="flex justify-around items-center h-16 px-2">
+  return (
+    <nav
+      id="mobile-nav"
+      data-test="mobile-nav"
+      aria-label="Mobile Navigation"
+      className={`fixed bottom-0 left-0 right-0 glue-fixed glue-bottom glue-z`}
+      style={{ zIndex: 2147483647, pointerEvents: 'auto', minHeight: '68px', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      <div className="bg-white/80 dark:bg-neutral-900/70 backdrop-blur-2xl ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-vibrant pb-[calc(env(safe-area-inset-bottom)+4px)]">
+        <ul className="flex justify-around items-center h-[68px] min-h-[68px] px-2">
           {navItems.map((item) => {
             const IconComponent = iconMap[item.icon] || Calendar;
             const isActive = pathname === item.path || (item.path === '/maw3d' && pathname.startsWith('/maw3d')) || (item.path === '/tr' && pathname.startsWith('/tr'));
@@ -163,7 +170,6 @@ export function MobileNav() {
           })}
         </ul>
       </div>
-    </nav>,
-    document.body
+    </nav>
   );
 }

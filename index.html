@@ -43,21 +43,22 @@
       }
     </script>
     
-    <!-- Progressier integration -->
+    <!-- Progressier integration (disabled on localhost to avoid dev overlays hiding MobileNav) -->
     <link rel="manifest" href="https://progressier.app/JnUBjX03FyINDYcP2hjx/progressier.json"/>
     <script>
       (function () {
         var path = location.pathname;
         var isAdminRoute = /^\/(mqtr|admindash|admin(?:\/|$))/i.test(path);
+        var isLocal = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
 
-        if (!isAdminRoute) {
-          // Load Progressier PWA only for non-admin routes
+        if (!isAdminRoute && !isLocal) {
+          // Load Progressier PWA only for non-admin routes AND not on localhost
           var s = document.createElement('script');
           s.defer = true;
           s.src = 'https://progressier.app/JnUBjX03FyINDYcP2hjx/script.js';
           document.head.appendChild(s);
-        } else {
-          // On admin routes: ensure no SW/caches are active
+        } else if (isAdminRoute || isLocal) {
+          // On admin routes or localhost: ensure no SW/caches are active to avoid overlays
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(function (regs) {
               regs.forEach(function (r) { try { r.unregister(); } catch(e){} });
@@ -77,8 +78,66 @@
 
   <body>
     <div id="root"></div>
-    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+    <!-- IMPORTANT: Preview helper is disabled on localhost to prevent overlay conflicts with MobileNav -->
+    <script>
+      (function(){
+        var isLocal = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
+        if (!isLocal) {
+          var s = document.createElement('script');
+          s.type = 'module';
+          s.src = 'https://cdn.gpteng.co/gptengineer.js';
+          document.body.appendChild(s);
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Dev-only watchdog: show a minimal fallback bar only if real MobileNav doesn't paint -->
+    <script>
+      (function(){
+        var isLocal = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
+        if (!isLocal) return;
+        var path = location.pathname;
+        var isAdminRoute = /^\/(mqtr|admindash|admin(?:\/|$))/i.test(path);
+        if (isAdminRoute) return;
+
+        function ensureMobileNav(){
+          try {
+            var nav = document.getElementById('mobile-nav');
+            var ok = !!nav;
+            if (ok) {
+              var r = nav.getBoundingClientRect();
+              ok = (r && r.height > 32);
+            }
+            var fb = document.getElementById('mobile-nav-fallback');
+            if (!ok) {
+              if (!fb) {
+                fb = document.createElement('div');
+                fb.id = 'mobile-nav-fallback';
+                fb.style.position = 'fixed';
+                fb.style.left = '0';
+                fb.style.right = '0';
+                fb.style.bottom = '0';
+                fb.style.height = '68px';
+                fb.style.zIndex = '2147483000';
+                fb.style.background = 'rgba(255,255,255,0.85)';
+                fb.style.backdropFilter = 'blur(18px)';
+                fb.style.borderTop = '1px solid rgba(255,255,255,0.2)';
+                document.body.appendChild(fb);
+              } else {
+                fb.style.display = 'block';
+              }
+            } else if (fb) {
+              fb.style.display = 'none';
+            }
+          } catch (e) {}
+        }
+
+        window.addEventListener('load', function(){
+          setTimeout(ensureMobileNav, 120);
+          setTimeout(ensureMobileNav, 600);
+          setTimeout(ensureMobileNav, 1200);
+        });
+      })();
+    </script>
   </body>
 </html>

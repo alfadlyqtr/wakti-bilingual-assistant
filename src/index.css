@@ -55,7 +55,7 @@
     --glow-purple: 0 0 20px hsla(280, 60%, 75%, 0.6);
     /* Global layout offsets */
     --app-header-h: calc(64px + env(safe-area-inset-top));          /* Fixed header + iOS top safe area */
-    --app-bottom-tabs-h: calc(64px + env(safe-area-inset-bottom));  /* Fixed bottom nav + iOS bottom safe area */
+    --app-bottom-tabs-h: calc(68px + env(safe-area-inset-bottom));  /* Fixed bottom nav + iOS bottom safe area */
     --app-content-gap: 8px;        /* Extra breathing space for anchor scrolls */
   }
 
@@ -396,6 +396,21 @@
 
 .glue-z {
   z-index: 2147480000 !important; /* extremely high to sit above any content */
+}
+
+/* DEBUG/ENFORCE: ensure mobile nav cannot be hidden by global styles */
+#mobile-nav {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* DEV: shift nav up on desktop-pointer devices to avoid preview overlay bars */
+@media (hover: hover) and (pointer: fine) {
+  #mobile-nav.dev-shift-up {
+    bottom: 80px !important;
+  }
 }
 
 /* Dark mode styles with enhanced vibrant visuals */
