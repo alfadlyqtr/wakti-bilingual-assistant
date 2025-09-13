@@ -35,7 +35,7 @@ export function SideSheet({
       <div
         aria-hidden
         className={cn(
-          'fixed inset-y-0 z-[850] bg-black/20 backdrop-blur-md transition-opacity duration-300',
+          'fixed inset-y-0 z-[850] bg-black/20 backdrop-blur-md ios-reduce-blur transition-opacity duration-300',
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
           overlayClassName,
         )}

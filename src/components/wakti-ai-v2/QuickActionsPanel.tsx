@@ -109,12 +109,7 @@ export function QuickActionsPanel({
               <Button
                 key={mode.id}
                 autoFocus={index === 0}
-                // Use pointer events for reliable iOS tap behavior
-                onPointerUp={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleTriggerSelect(mode.id);
-                }}
+                onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleTriggerSelect(mode.id); }}
                 variant="ghost"
                 role="radio"
                 aria-checked={isActive}
@@ -166,12 +161,7 @@ export function QuickActionsPanel({
                   ? 'opacity-60 cursor-not-allowed' 
                   : 'cursor-pointer hover:shadow-md hover:bg-white/30 dark:hover:bg-black/30 hover:border-white/40 dark:hover:border-white/30'
               } touch-manipulation`} 
-              // Use pointer events to avoid iOS ghost clicks / wrong targets
-              onPointerUp={action.disabled ? undefined : (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleToolAction(action.action);
-              }}
+              onPointerUp={action.disabled ? undefined : (e) => { e.preventDefault(); e.stopPropagation(); handleToolAction(action.action); }}
               role="button"
               tabIndex={action.disabled ? -1 : 0}
               onKeyDown={(e) => {

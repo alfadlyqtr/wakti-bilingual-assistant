@@ -121,6 +121,9 @@
     @apply antialiased;
     background: var(--gradient-background);
     /* REMOVED: overflow-hidden that was blocking scrolling */
+    height: 100%;
+    min-height: 100dvh;
+    overscroll-behavior-y: contain;
   }
   
   body {
@@ -360,6 +363,14 @@
 .touch-manipulation {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS-specific: reduce heavy blur on fixed bars to avoid jank/freezes */
+@supports (-webkit-touch-callout: none) {
+  .ios-reduce-blur {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
 }
 
 /* Dark mode styles with enhanced vibrant visuals */

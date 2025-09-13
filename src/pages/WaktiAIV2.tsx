@@ -82,6 +82,8 @@ const WaktiAIV2 = () => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Track the latest request to avoid stale isLoading resets from older callbacks
+  const requestIdRef = useRef(0);
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
   const { canTranslate, refreshTranslationQuota } = useQuotaManagement();
@@ -224,6 +226,8 @@ const WaktiAIV2 = () => {
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    // Bump request id for this send cycle
+    const requestId = ++requestIdRef.current;
 
     const startTime = Date.now();
     console.log('🔥 DEBUG: About to set isLoading(true)');
@@ -421,7 +425,7 @@ const WaktiAIV2 = () => {
         
         console.log('🔥 DEBUG: Image mode completed, about to set isLoading(false)');
         console.log('✅ isLoading -> false (image mode completed)');
-        setIsLoading(false);
+        if (requestIdRef.current === requestId) setIsLoading(false);
         console.log('🔥 DEBUG: Image mode - isLoading set to false, returning');
         return;
       }
@@ -430,13 +434,13 @@ const WaktiAIV2 = () => {
 
       if (!messageContent || !messageContent.trim()) {
         showError(language === 'ar' ? 'يرجى كتابة رسالة' : 'Please enter a message');
-        setIsLoading(false);
+        if (requestIdRef.current === requestId) setIsLoading(false);
         return;
       }
 
       if (!userProfile?.id) {
         showError(language === 'ar' ? 'يرجى تسجيل الدخول' : 'Please login first');
-        setIsLoading(false);
+        if (requestIdRef.current === requestId) setIsLoading(false);
         return;
       }
 
@@ -519,7 +523,7 @@ const WaktiAIV2 = () => {
         });
         
         console.log('🔥 DEBUG: Vision mode completed, about to set isLoading(false)');
-        setIsLoading(false);
+        if (requestIdRef.current === requestId) setIsLoading(false);
         console.log('🔥 DEBUG: Vision mode - isLoading set to false, returning');
         return;
       }
@@ -594,7 +598,7 @@ const WaktiAIV2 = () => {
               }],
               workingConversationId
             );
-            setIsLoading(false);
+            if (requestIdRef.current === requestId) setIsLoading(false);
             return;
           }
 
@@ -610,7 +614,7 @@ const WaktiAIV2 = () => {
             EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
             return updated;
           });
-          setIsLoading(false);
+          if (requestIdRef.current === requestId) setIsLoading(false);
           return;
         }
 
@@ -647,7 +651,7 @@ const WaktiAIV2 = () => {
             // Fallback UI refresh after completion
             setTimeout(() => {
               console.log('🔥 DEBUG: Fallback UI refresh - ensuring loading state is reset');
-              setIsLoading(false);
+              if (requestIdRef.current === requestId) setIsLoading(false);
             }, 1000);
           },
           // onError
@@ -673,7 +677,7 @@ const WaktiAIV2 = () => {
             // Fallback UI refresh after error
             setTimeout(() => {
               console.log('🔥 DEBUG: Fallback UI refresh after error - ensuring loading state is reset');
-              setIsLoading(false);
+              if (requestIdRef.current === requestId) setIsLoading(false);
             }, 1000);
           },
           // signal
@@ -873,7 +877,7 @@ const WaktiAIV2 = () => {
     } finally {
       console.log('🔥 DEBUG: Entered finally block');
       console.log('🔚 finally: isLoading -> false (handleSendMessage end)');
-      setIsLoading(false);
+      if (requestIdRef.current === requestId) setIsLoading(false);
       
       // Mobile-safe AbortController cleanup
       if (abortControllerRef.current === controller) {
@@ -1189,7 +1193,7 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 overflow-y-auto pb-[180px]" ref={scrollAreaRef}>
+        <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+var(--app-bottom-tabs-h)+16px)]" ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages.slice(-35)}
             isLoading={isLoading}
