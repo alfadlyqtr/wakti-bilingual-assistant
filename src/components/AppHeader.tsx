@@ -259,16 +259,16 @@ export function AppHeader() {
             {userMenuOpen && (
               <div 
                 onClick={() => setUserMenuOpen(false)}
-                className="fixed inset-0 z-[1050] bg-background/20 backdrop-blur-sm"
+                className="fixed inset-0 z-[1150] bg-background/20 backdrop-blur-sm"
               />
             )}
 
             <DropdownMenuContent 
               align="end" 
               side="bottom"
-              sideOffset={10}
+              sideOffset={24}
               collisionPadding={16}
-              className="z-[1100]"
+              className="z-[1200] bg-background/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border border-border/60 dark:border-white/20"
             >
               <DropdownMenuLabel>{language === 'ar' ? 'الحساب' : 'Account'}</DropdownMenuLabel>
               <DropdownMenuSeparator />
