@@ -474,7 +474,9 @@ export function ChatInput({
               ) : null}
               
               <button
-                onClick={() => {
+                onPointerUp={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   console.log('💬 EXTRA BUTTON: Dispatching custom event');
                   if (typeof window !== "undefined") {
                     const nativeEvent = new CustomEvent("open-wakti-conversations");
@@ -482,7 +484,7 @@ export function ChatInput({
                   }
                 }}
                 aria-label={language === "ar" ? "إضافي" : "Extra"}
-                className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0 shrink-0"
+                className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0 shrink-0 touch-manipulation"
                 disabled={isUploading}
                 type="button"
               >
@@ -493,12 +495,14 @@ export function ChatInput({
               </button>
               
               <button
-                onClick={() => {
+                onPointerUp={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   console.log('⚡ QUICK ACTIONS: Opening drawer');
                   if (onOpenPlusDrawer) onOpenPlusDrawer();
                 }}
                 aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
-                className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0 flex-shrink-0"
+                className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 ml-0 flex-shrink-0 touch-manipulation"
                 disabled={isUploading}
                 type="button"
               >
