@@ -1239,7 +1239,6 @@ export default function Maw3dCreate() {
         onOpenChange={setLocModalOpen}
         onConfirm={onLocationPicked}
       />
-        </div>
       </div>
     </div>
   );
