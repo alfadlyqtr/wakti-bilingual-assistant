@@ -421,6 +421,31 @@
   backface-visibility: hidden;
   will-change: transform;
   contain: layout style size; /* isolate layout calculations */
+  /* iOS-specific: Force fixed positioning relative to initial viewport */
+  -webkit-transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  -webkit-perspective: 1000;
+}
+
+/* iOS Safari: Force header to stay at absolute top during keyboard */
+@supports (-webkit-touch-callout: none) {
+  .glue-top {
+    position: fixed !important;
+    top: env(safe-area-inset-top, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    /* Force viewport-relative positioning */
+    transform: translate3d(0, 0, 1000px) !important;
+  }
+  
+  .glue-bottom {
+    position: fixed !important;
+    bottom: env(safe-area-inset-bottom, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    /* Force viewport-relative positioning */
+    transform: translate3d(0, 0, 1000px) !important;
+  }
 }
 
 .glue-top {
@@ -437,21 +462,6 @@
 
 .glue-z {
   z-index: 2147480000 !important; /* extremely high to sit above any content */
-}
-
-/* DEBUG/ENFORCE: ensure mobile nav cannot be hidden by global styles */
-#mobile-nav {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-}
-
-/* DEV: shift nav up on desktop-pointer devices to avoid preview overlay bars */
-@media (hover: hover) and (pointer: fine) {
-  #mobile-nav.dev-shift-up {
-    bottom: 80px !important;
-  }
 }
 
 /* Dark mode styles with enhanced vibrant visuals */
@@ -536,5 +546,20 @@
   @keyframes brush-sweep {
     0% { background-position: -100% 0; }
     100% { background-position: 200% 0; }
+  }
+}
+
+/* DEBUG/ENFORCE: ensure mobile nav cannot be hidden by global styles */
+#mobile-nav {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* DEV: shift nav up on desktop-pointer devices to avoid preview overlay bars */
+@media (hover: hover) and (pointer: fine) {
+  #mobile-nav.dev-shift-up {
+    bottom: 80px !important;
   }
 }
