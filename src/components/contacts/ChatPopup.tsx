@@ -81,7 +81,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       if (!isUrl) return <span key={i}>{part}</span>;
       const href = part.startsWith('http') ? part : `https://${part}`;
       return (
-        <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 break-words">
+        <a
+          key={i}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 dark:hover:text-emerald-200 break-words"
+        >
           {part}
         </a>
       );
@@ -216,7 +222,14 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
     try {
       setIsUploading(true);
-      // ...
+      // Upload image then send as image message
+      const url = await uploadMessageAttachment(file, 'image');
+      sendMessageMutation.mutate({
+        message_type: 'image',
+        media_url: url,
+        media_type: file.type,
+        file_size: file.size,
+      });
     } catch (error) {
       console.error("Error uploading image:", error);
       toast.error("Error uploading file");
@@ -239,7 +252,14 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
     try {
       setIsUploading(true);
-      // ...
+      const url = await uploadMessageAttachment(file, 'pdf');
+      sendMessageMutation.mutate({
+        message_type: 'pdf',
+        content: file.name,
+        media_url: url,
+        media_type: file.type,
+        file_size: file.size,
+      });
     } catch (error) {
       console.error("Error uploading PDF:", error);
       toast.error("Error uploading file");
@@ -254,7 +274,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const handleVoiceRecording = async (audioBlob: Blob, duration: number) => {
     try {
       setIsUploading(true);
-      // ...
+      // Convert blob to File for upload
+      const file = new File([audioBlob], `voice-${Date.now()}.mp3`, { type: 'audio/mpeg' });
+      const url = await uploadMessageAttachment(file, 'voice');
+      sendMessageMutation.mutate({
+        message_type: 'voice',
+        media_url: url,
+        media_type: 'audio/mpeg',
+        voice_duration: Math.max(0, Math.round(duration || 0)),
+        file_size: file.size,
+      });
     } catch (error) {
       console.error("Error uploading voice:", error);
       toast.error("Error uploading file");

@@ -35,15 +35,33 @@ export function usePresence(currentUserId?: string | null) {
     return typingUsers.has(userId);
   }, [typingUsers]);
 
-  // Check if a user is online
+  // Consider a user online only if presence exists AND last_seen is fresh
   const isOnline = useCallback((userId: string) => {
-    return onlineUserIds.has(userId);
-  }, [onlineUserIds]);
+    if (!onlineUserIds.has(userId)) return false;
+    const ts = lastSeen[userId];
+    if (!ts) return false;
+    try {
+      const age = Date.now() - new Date(ts).getTime();
+      return age <= 60_000; // 60s freshness window
+    } catch {
+      return false;
+    }
+  }, [onlineUserIds, lastSeen]);
 
-  // Get formatted last seen time
+  // Get neutral presence label
   const getLastSeen = useCallback((userId: string) => {
-    if (isOnline(userId)) return 'Online now';
-    return lastSeen[userId] ? `Last seen ${formatLastSeen(lastSeen[userId])}` : 'Offline';
+    const ts = lastSeen[userId];
+    if (isOnline(userId)) return 'Active now';
+    if (ts) {
+      try {
+        const age = Date.now() - new Date(ts).getTime();
+        if (age <= 5 * 60_000) return 'Active recently';
+        return `Last seen ${formatLastSeen(ts)}`;
+      } catch {
+        return 'Offline';
+      }
+    }
+    return 'Offline';
   }, [isOnline, lastSeen, formatLastSeen]);
 
   // Set typing status for current user
