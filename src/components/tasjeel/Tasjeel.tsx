@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageContainer } from "@/components/PageContainer";
+import { PageTitle } from "@/components/PageTitle";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generatePDF } from "@/utils/pdfUtils";
@@ -181,6 +182,18 @@ const Tasjeel: React.FC = () => {
   const { theme, language } = useTheme();
   const navigate = useNavigate();
   const translationTexts = translations[language];
+  
+  // Ensure the page starts at the title area on load
+  useEffect(() => {
+    try {
+      const scroller = document.querySelector('main.flex-1');
+      if (scroller && 'scrollTo' in scroller) {
+        (scroller as HTMLElement).scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    } catch {}
+  }, []);
 
   // State variables
   const [isRecording, setIsRecording] = useState(false);
@@ -939,6 +952,8 @@ const Tasjeel: React.FC = () => {
   return (
     <PageContainer title={translationTexts.pageTitle} showBackButton={true} showHeader={false}>
       <div className="container py-4 space-y-6">
+        {/* Page title area above tabs, matching sidebar */}
+        <PageTitle title={translationTexts.pageTitle} Icon={Mic} colorClass="text-cyan-500" />
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved" | "quick")}>
           <TabsList className="grid grid-cols-3 w-full mb-6">
             <TabsTrigger value="record" className="flex items-center gap-2">

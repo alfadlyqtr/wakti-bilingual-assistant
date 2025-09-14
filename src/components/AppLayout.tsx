@@ -18,15 +18,15 @@ function MobileAppLayout({ children }: AppLayoutProps) {
 
   return (
     <ProtectedRoute>
-      {/* Flexbox container: full height, column direction */}
-      <div className="h-screen bg-background flex flex-col">
+      {/* Flexbox container: dynamic viewport height, column direction */}
+      <div className="h-dvh min-h-0 bg-background flex flex-col">
         {/* Header: fixed height, never shrinks */}
         <div className="flex-shrink-0">
           <AppHeader />
         </div>
         
-        {/* Content area: takes remaining space, scrollable */}
-        <main className="flex-1 overflow-auto">
+        {/* Content area: takes remaining space, scrollable, can shrink */}
+        <main className="flex-1 min-h-0 overflow-auto">
           {children}
         </main>
         

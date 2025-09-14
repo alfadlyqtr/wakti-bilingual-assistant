@@ -55,10 +55,38 @@ export function DesktopSidebar() {
     );
   };
 
+  // Smoother opening/closing with material-like ease
   const sidebarVariants = {
-    expanded: { width: "240px" },
-    collapsed: { width: "70px" },
+    expanded: {
+      width: 240,
+      x: 0,
+      opacity: 1,
+      transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
+    },
+    collapsed: {
+      width: 70,
+      x: 0,
+      opacity: 1,
+      transition: { duration: 0.24, ease: [0.4, 0, 0.2, 1] }
+    },
   };
+
+  // Stagger nav item entrance for premium feel
+  const navVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        when: 'beforeChildren',
+        staggerChildren: 0.03,
+      }
+    }
+  } as const;
+
+  const itemVariants = {
+    hidden: { opacity: 0, x: -6 },
+    show: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 480, damping: 34 } }
+  } as const;
 
   // Set initial CSS variable
   React.useEffect(() => {
@@ -69,11 +97,17 @@ export function DesktopSidebar() {
   }, [isCollapsed]);
 
   return (
-    <motion.aside
-      className="fixed left-4 top-4 bottom-4 z-[999] rounded-2xl shadow-2xl transition-all duration-300"
+    <>
+      {/* Desktop/Tablet mask to hide underlying content under the curved sidebar edge */}
+      <div
+        className="hidden md:block fixed inset-y-0 left-0 z-[998] bg-background pointer-events-none"
+        style={{ width: 'calc(var(--current-sidebar-width, 240px) + 1.75rem)' }}
+        aria-hidden
+      />
+      <motion.aside
+      className="fixed left-4 top-4 bottom-4 z-[999] rounded-2xl shadow-2xl"
       variants={sidebarVariants}
       animate={isCollapsed ? "collapsed" : "expanded"}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
       style={{
         background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)',
         backdropFilter: 'blur(20px)',
@@ -87,7 +121,12 @@ export function DesktopSidebar() {
       }}
     >
       {/* Glass reflection overlay */}
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-30 pointer-events-none" />
+      <motion.div
+        className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 via-transparent to-transparent pointer-events-none"
+        initial={{ opacity: 0.15 }}
+        animate={{ opacity: isCollapsed ? 0.15 : 0.3 }}
+        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      />
       
       <div className="flex flex-col h-full p-4 relative z-10">
         {/* Header */}
@@ -130,7 +169,7 @@ export function DesktopSidebar() {
 
         {/* Main Navigation */}
         <div className="flex-1">
-          <nav className="space-y-2">
+          <motion.nav className="space-y-2" variants={navVariants} initial="hidden" animate="show">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path || 
                 (item.path === '/maw3d' && location.pathname.startsWith('/maw3d')) || 
@@ -149,15 +188,15 @@ export function DesktopSidebar() {
               };
               
               return (
-                <Button
+                <motion.button
                   key={item.label}
-                  variant="ghost"
-                  className={`w-full ${isCollapsed ? 'h-14 px-2' : 'h-12'} justify-start rounded-xl transition-all duration-300 group ${
+                  className={`w-full ${isCollapsed ? 'h-14 px-2' : 'h-12'} justify-start rounded-xl group ${
                     isActive
                       ? "bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm"
-                      : "hover:bg-white/5 dark:hover:bg-white/[0.02] hover:scale-105 active:scale-95"
-                  }`}
+                      : "hover:bg-white/5 dark:hover:bg-white/[0.02]"
+                  } transition-transform duration-200 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-[1.02] active:scale-[0.98]`}
                   onClick={() => handleNavigation(item.path)}
+                  variants={itemVariants}
                 >
                   <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2`}>
                     <div className="relative flex items-center justify-center">
@@ -210,12 +249,13 @@ export function DesktopSidebar() {
                       )}
                     </AnimatePresence>
                   </div>
-                </Button>
+                </motion.button>
               );
             })}
-          </nav>
+          </motion.nav>
         </div>
       </div>
     </motion.aside>
+    </>
   );
 }

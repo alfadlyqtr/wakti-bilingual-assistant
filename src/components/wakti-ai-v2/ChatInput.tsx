@@ -435,21 +435,21 @@ export function ChatInput({
       )}
 
       {/* Main Input Area */}
-      <div className="w-full px-0 pb-3 pt-2 mt-0" ref={inputCardRef}>
-        <div className="w-full px-3">
+      <div className="w-full px-2 md:px-4 pb-1 md:pb-4 pt-3 mt-0" ref={inputCardRef}>
+        <div className="w-full px-4 md:px-6">
           <div
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
               ${containerHighlight}
               shadow-xl rounded-2xl backdrop-blur-2xl ios-reduce-blur
-              p-0 transition-all duration-300
+              p-0 transition-all duration-300 overflow-visible
               shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
               border-[2.5px] min-h-[70px] w-full
             `}
             ref={cardRef}
           >
             {/* Collapse toggle positioned above input */}
-            <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-10">
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>

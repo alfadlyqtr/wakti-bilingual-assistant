@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus } from 'lucide-react';
+import { Plus, ListTodo } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { TRTask, TRReminder } from '@/services/trService';
@@ -12,11 +12,24 @@ import { TaskList } from '@/components/tr/TaskList';
 import { ReminderList } from '@/components/tr/ReminderList';
 import { ActivityMonitor } from '@/components/tr/ActivityMonitor';
 import { useTRData } from '@/hooks/useTRData';
+import { PageTitle } from '@/components/PageTitle';
 
 export default function TasksReminders() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState('tasks');
   const { tasks, reminders, loading, error, refresh } = useTRData();
+  
+  // Ensure the page starts at the title area on load
+  useEffect(() => {
+    try {
+      const scroller = document.querySelector('main.flex-1');
+      if (scroller && 'scrollTo' in scroller) {
+        (scroller as HTMLElement).scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    } catch {}
+  }, []);
   
   // Form states
   const [taskFormOpen, setTaskFormOpen] = useState(false);
@@ -82,6 +95,15 @@ export default function TasksReminders() {
     <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95 scrollbar-hide">
       <div className="w-full space-y-6">
         <div className="max-w-4xl mx-auto">
+          {/* Ensure page starts at the title on load */}
+          <div>
+            <PageTitle
+              title={t('tasks', language)}
+              Icon={ListTodo}
+              colorClass="nav-icon-tr"
+            />
+          </div>
+
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
@@ -97,7 +119,7 @@ export default function TasksReminders() {
             {/* Tasks Tab */}
             <TabsContent value="tasks" className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">{t('tasks', language)}</h2>
+                <div />
                 <Button onClick={handleCreateTask} size="sm">
                   <Plus className="w-4 h-4 mr-2" />
                   {t('createTask', language)}

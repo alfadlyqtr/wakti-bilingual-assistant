@@ -1,13 +1,14 @@
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { OptimizedEventCard } from '@/components/optimized/OptimizedEventCard';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Heart, Plus } from 'lucide-react';
+import { Heart, Plus, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { t } from '@/utils/translations';
+import { PageHeader } from '@/components/PageHeader';
 
 // Ultra-fast skeleton component (reduced further)
 const EventsSkeleton = () => (
@@ -41,6 +42,18 @@ const OptimizedMaw3dEvents = React.memo(() => {
     navigate('/maw3d/create');
   }, [navigate]);
 
+  // Ensure the page starts at the title area on load
+  useEffect(() => {
+    try {
+      const scroller = document.querySelector('main.flex-1');
+      if (scroller && 'scrollTo' in scroller) {
+        (scroller as HTMLElement).scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    } catch {}
+  }, []);
+
   // Handle error state
   if (error) {
     return (
@@ -61,39 +74,25 @@ const OptimizedMaw3dEvents = React.memo(() => {
 
   return (
     <div className="min-h-screen p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col gap-4 mb-8">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg">
-              <Heart className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                {t('maw3dEvents', language)}
-              </h1>
-              <p className="text-muted-foreground">
-                {loading 
-                  ? t('loading', language)
-                  : language === 'ar' 
-                    ? `عرض ${events.length} أحداث`
-                    : `Showing ${events.length} events`
-                }
-              </p>
-            </div>
-          </div>
-          
-          <div className="w-full">
+      <div className="max-w-7xl mx-auto">
+        {/* Strong desktop/tablet header */}
+        <PageHeader
+          title={t('maw3dEvents', language)}
+          Icon={CalendarClock}
+          colorClass="nav-icon-maw3d"
+          subtitle={loading ? t('loading', language) : (language === 'ar' ? `عرض ${events.length} أحداث` : `Showing ${events.length} events`)}
+          actions={(
             <Button 
               onClick={handleCreateEvent}
-              className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
-              size="lg"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+              size="sm"
             >
-              <Plus className="h-5 w-5 mr-2" />
+              <Plus className="h-4 w-4 mr-2" />
               {t('createEvent', language)}
             </Button>
-          </div>
-        </div>
+          )}
+        />
+        <div className="max-w-4xl mx-auto mt-6">
 
         {/* Events content */}
         <Suspense fallback={<EventsSkeleton />}>
@@ -135,6 +134,8 @@ const OptimizedMaw3dEvents = React.memo(() => {
             </div>
           )}
         </Suspense>
+      </div>
+      {/* Close max-w-7xl container */}
       </div>
     </div>
   );

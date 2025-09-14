@@ -34,16 +34,11 @@ export function SideSheet({
       {/* Overlay constrained between header and bottom bar */}
       <div
         aria-hidden
-        style={{
-          top: 'var(--app-header-h)',
-          bottom: 'var(--app-bottom-tabs-h)',
-          left: 0,
-          right: 0,
-        }}
-        // On desktop/tablet, override to position relative to viewport and next to sidebar
+        // Mobile: between header and bottom tabs; Desktop/Tablet: full height next to sidebar
         className={cn(
-          'fixed inset-y-0 z-[850] bg-black/20 backdrop-blur-md ios-reduce-blur transition-opacity duration-300',
-          'md:top-0 md:bottom-0 md:left-[var(--current-sidebar-width,0px)]',
+          'fixed inset-x-0 z-[850] bg-black/20 backdrop-blur-md ios-reduce-blur transition-opacity duration-300',
+          'top-[var(--app-header-h)] bottom-[var(--app-bottom-tabs-h)]',
+          'md:top-0 md:bottom-0 md:left-[var(--current-sidebar-width,0px)] md:right-0',
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
           overlayClassName,
         )}
@@ -54,13 +49,10 @@ export function SideSheet({
       <aside
         role="dialog"
         aria-modal="true"
-        style={{
-          top: 'var(--app-header-h)',
-          bottom: 'var(--app-bottom-tabs-h)',
-        }}
-        // On desktop/tablet, extend full height and position next to sidebar
+        // Desktop/Tablet: full height; Mobile: constrained between header and tabs
         className={cn(
-          'fixed inset-y-0 z-[900] w-96 max-w-[92vw] bg-background shadow-lg focus:outline-none flex flex-col',
+          'fixed inset-x-auto z-[900] w-96 max-w-[92vw] bg-background shadow-lg focus:outline-none flex flex-col',
+          'top-[var(--app-header-h)] bottom-[var(--app-bottom-tabs-h)]',
           'md:top-0 md:bottom-0',
           side === 'right' ? 'right-0' : 'left-0 md:left-[var(--current-sidebar-width,0px)]',
           // Force horizontal slide only

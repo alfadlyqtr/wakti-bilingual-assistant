@@ -458,7 +458,7 @@ export function ChatMessages({
               <Bot className="w-4 h-4 text-white" />
             </div>
           </div>
-          <div className="rounded-lg px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border relative dark:from-slate-800/70 dark:to-slate-900/70 dark:text-slate-100 dark:border-slate-700">
+          <div className="rounded-lg px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border-2 relative dark:from-slate-800/70 dark:to-slate-900/70 dark:text-slate-100 dark:border-slate-700">
             {/* Mode Badge */}
             <div className="flex items-center gap-2 mb-2">
               <Badge variant="secondary" className="px-2 py-1 text-xs font-medium leading-none whitespace-nowrap align-middle">
@@ -796,7 +796,7 @@ export function ChatMessages({
                   <div className={`rounded-lg px-4 py-3 relative w-full min-h-24 ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
-                      : `bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border ${getAssistantBubbleClasses(message)}`
+                      : `bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border-2 ${getAssistantBubbleClasses(message)}`
                   }`}>
                     {/* FIXED: Mode Badge with proper logic */}
                     <div className="flex items-center gap-2 mb-2">

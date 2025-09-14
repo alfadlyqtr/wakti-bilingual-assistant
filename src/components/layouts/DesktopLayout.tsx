@@ -14,11 +14,20 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-background w-full">
+      <div className="h-screen bg-background w-full">
+        {/* Sidebar remains fixed at left; content area is padded to accommodate it */}
         <DesktopSidebar />
-        <div className="w-full transition-all duration-300" style={{ paddingLeft: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}>
-          <DesktopHeader />
-          <main className="min-h-screen w-full pt-20 p-6 pb-8">
+        {/* Content column: full height flex with header and scrollable main */}
+        <div
+          className="w-full h-screen flex flex-col transition-all duration-300"
+          style={{ paddingLeft: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}
+        >
+          {/* Header: non-shrinking */}
+          <div className="flex-shrink-0">
+            <DesktopHeader />
+          </div>
+          {/* Scrollable content area */}
+          <main className="flex-1 overflow-auto w-full p-6 pt-6">
             <div className="w-full max-w-none">
               {children}
             </div>
