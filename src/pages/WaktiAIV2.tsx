@@ -13,6 +13,7 @@ import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
+import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
 
 
 const useDebounceCallback = (callback: Function, delay: number) => {
@@ -89,6 +90,7 @@ const WaktiAIV2 = () => {
   const { canTranslate, refreshTranslationQuota } = useQuotaManagement();
   const { canUseVoice, refreshVoiceQuota } = useExtendedQuotaManagement();
   const { quota, fetchQuota } = useAIQuotaManagement();
+  const { isKeyboardVisible } = useMobileKeyboard();
   
   // Memoized values for performance
   const quotaStatus = useMemo(() => ({
@@ -1215,7 +1217,14 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg bottom-[72px] md:bottom-0 md:left-[var(--current-sidebar-width,0px)]">
+        <div 
+          className="fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg transition-all duration-300 ease-in-out md:left-[var(--current-sidebar-width,0px)]"
+          style={{
+            bottom: isKeyboardVisible 
+              ? 'var(--keyboard-height, 0px)' 
+              : 'calc(72px + env(safe-area-inset-bottom, 0px))',
+          }}
+        >
           <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-3">
             <ChatInput
               message={message}

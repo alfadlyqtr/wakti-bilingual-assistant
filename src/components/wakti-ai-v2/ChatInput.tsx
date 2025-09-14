@@ -875,6 +875,9 @@ export function ChatInput({
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder={getPlaceholderText()}
+                    autoExpand={true}
+                    maxLines={4}
+                    minLines={1}
                     className={`
                       flex-1 border-[2.5px]
                       bg-white/95 dark:bg-gray-800/90
@@ -883,7 +886,7 @@ export function ChatInput({
                       shadow-inner shadow-primary/10
                       backdrop-blur-[3px] resize-none
                       focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
-                      py-3 px-4 min-h-[42px] max-h-32 text-base leading-relaxed
+                      py-3 px-4 text-base leading-relaxed
                       placeholder:text-gray-500 dark:placeholder:text-gray-400
                       rounded-xl
                       outline-none transition-all duration-200
