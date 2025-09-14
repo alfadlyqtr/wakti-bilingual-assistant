@@ -36,18 +36,75 @@ function MobileAppLayout({ children }: AppLayoutProps) {
       } catch {}
     };
 
+    // TEMP: Diagnostics to capture state when keyboard/viewport changes
+    const isLikelyIOS = () => {
+      try {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
+      } catch { return false; }
+    };
+    let lastLog = 0;
+    const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const logDiagnostics = (reason: string) => {
+      // Throttle to avoid noise
+      const t = now();
+      if (t - lastLog < 200) return;
+      lastLog = t;
+      try {
+        const pick = (el: Element | null) => {
+          if (!el) return null as any;
+          const cs = getComputedStyle(el as HTMLElement);
+          return {
+            tag: (el as HTMLElement).tagName,
+            id: (el as HTMLElement).id || undefined,
+            cls: (el as HTMLElement).className || undefined,
+            position: cs.position,
+            transform: cs.transform,
+            top: cs.top,
+            bottom: cs.bottom,
+            overflow: cs.overflow,
+            height: cs.height,
+            willChange: cs.willChange,
+          };
+        };
+        const html = pick(document.documentElement);
+        const body = pick(document.body);
+        const root = pick(document.getElementById('root'));
+        const header = pick(document.querySelector('.glue-top'));
+        const nav = pick(document.getElementById('mobile-nav'));
+        // Grouped output for easy scanning in DevTools
+        // eslint-disable-next-line no-console
+        console.groupCollapsed(`📐 Mobile Diagnostics: ${reason}`);
+        // eslint-disable-next-line no-console
+        console.log({ html, body, root, header, nav });
+        // eslint-disable-next-line no-console
+        console.groupEnd();
+      } catch {}
+    };
+
     // Run once on mount
     clearTransforms();
+    if (isLikelyIOS()) logDiagnostics('mount');
 
     // Listen to viewport changes which often trigger the bug on iOS
     const vv = (window as any).visualViewport as VisualViewport | undefined;
-    const onVVResize = () => clearTransforms();
-    const onResize = () => clearTransforms();
-    const onVisibility = () => clearTransforms();
+    const onVVResize = () => { clearTransforms(); if (isLikelyIOS()) logDiagnostics('visualViewport resize/scroll'); };
+    const onResize = () => { clearTransforms(); if (isLikelyIOS()) logDiagnostics('window resize/orientation'); };
+    const onVisibility = () => { clearTransforms(); if (isLikelyIOS()) logDiagnostics('visibility change'); };
+    const onFocusIn = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as HTMLElement).isContentEditable) {
+        if (isLikelyIOS()) logDiagnostics('focusin on input/textarea');
+      }
+    };
+    const onFocusOut = () => { if (isLikelyIOS()) logDiagnostics('focusout'); };
 
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize as any);
     document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('focusin', onFocusIn, true);
+    document.addEventListener('focusout', onFocusOut, true);
     if (vv) {
       vv.addEventListener('resize', onVVResize);
       vv.addEventListener('scroll', onVVResize);
@@ -57,6 +114,8 @@ function MobileAppLayout({ children }: AppLayoutProps) {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize as any);
       document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('focusin', onFocusIn, true);
+      document.removeEventListener('focusout', onFocusOut, true);
       if (vv) {
         vv.removeEventListener('resize', onVVResize);
         vv.removeEventListener('scroll', onVVResize);
