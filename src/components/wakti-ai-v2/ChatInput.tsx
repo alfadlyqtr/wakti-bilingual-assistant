@@ -525,8 +525,7 @@ export function ChatInput({
             </div>
             
             {/* MOBILE: Top row with all buttons - Always visible */}
-            {!isInputCollapsed && (
-              <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10 md:hidden">
+            <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10 md:hidden">
                 {/* Left side: Extra + Tools + Upload */}
                 <div className="flex items-center gap-2">
                   <button
@@ -576,12 +575,11 @@ export function ChatInput({
                       type="button"
                       onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); triggerSeedUpload(); }}
                       disabled={isUploading}
-                      className="h-8 px-2.5 rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors flex items-center gap-1"
+                      className="h-8 w-8 rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors flex items-center justify-center"
                       aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload'}
                       title={language === 'ar' ? 'تحميل صورة' : 'Upload'}
                     >
-                      <Plus className="h-3 w-3" />
-                      <span className="text-xs">{language === 'ar' ? 'رفع' : 'Upload'}</span>
+                      <Plus className="h-4 w-4" />
                     </button>
                   )}
 
@@ -611,8 +609,8 @@ export function ChatInput({
                             const rect = searchModeBtnRef.current?.getBoundingClientRect();
                             if (rect) {
                               setSearchMenuPos({
-                                top: rect.bottom + 8,
-                                left: rect.left
+                                top: rect.bottom + 4,
+                                left: Math.max(8, rect.left - 20)
                               });
                             }
                           }}
@@ -671,8 +669,8 @@ export function ChatInput({
                             const rect = imageModeBtnRef.current?.getBoundingClientRect();
                             if (rect) {
                               setImageMenuPos({
-                                top: rect.bottom + 8,
-                                left: rect.left
+                                top: rect.bottom + 4,
+                                left: Math.max(8, rect.left - 20)
                               });
                             }
                           }}
@@ -737,8 +735,8 @@ export function ChatInput({
                     )}
                   </div>
 
-                  {/* Speed dropdown - only in Image modes */}
-                  {activeTrigger === 'image' && (
+                  {/* Speed dropdown - only in Text2Image mode */}
+                  {activeTrigger === 'image' && imageMode === 'text2image' && (
                     <div className="flex justify-center">
                       <div className="relative inline-flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 rounded-lg px-2 py-1 shadow-sm min-w-[56px]">
                         <select
@@ -758,9 +756,8 @@ export function ChatInput({
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
-            )}
+                 </div>
+               </div>
 
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION */}
             {uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
