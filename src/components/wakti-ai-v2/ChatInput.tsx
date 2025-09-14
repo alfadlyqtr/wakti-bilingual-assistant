@@ -515,13 +515,13 @@ export function ChatInput({
         </>
       )}
 
-      {/* Main Input Area - Native-like mobile positioning */}
+      {/* Main Input Area - Native mobile positioning flush with keyboard */}
       <div 
-        className="fixed bottom-0 left-0 right-0 z-50 w-full px-0 md:px-4 pb-1 md:pb-4 pt-0 transition-all duration-300 ease-out bg-white/95 dark:bg-black/95 backdrop-blur-sm"
+        className="fixed bottom-0 left-0 right-0 z-50 w-full px-0 md:px-4 pt-0 transition-all duration-300 ease-out bg-background border-t border-border/20"
         ref={inputCardRef}
         style={{
           transform: isKeyboardVisible ? `translateY(-${keyboardHeight}px)` : 'translateY(0px)',
-          paddingBottom: 'env(safe-area-inset-bottom)'
+          paddingBottom: isKeyboardVisible ? '0px' : 'env(safe-area-inset-bottom, 8px)'
         }}
       >
         <div className="w-full px-1 md:px-6">
