@@ -1,6 +1,4 @@
-
 import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -181,15 +179,20 @@ export function AppHeader() {
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  return createPortal(
-    <div className="fixed top-0 left-0 right-0 z-[2147483647] glue-fixed glue-top glue-z" style={{ position: 'fixed', top: '0', zIndex: 2147483647 }}>
-      <div className="relative bg-white/90 dark:bg-[#0b0f14] dark:bg-[#0b0f14]/98 backdrop-blur-3xl border-b border-white/20 dark:border-white/20 dark:shadow-[0_1px_0_0_rgba(255,255,255,0.08)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_-2px_rgba(0,0,0,0.9)]">
-        {/* Tinted liquid-glass overlay */}
-        <div className="pointer-events-none absolute inset-0 opacity-95 mix-blend-normal">
-          <div className="absolute inset-0 bg-gradient-to-b from-white/6 via-white/3 to-white/0 dark:from-white/4 dark:via-white/2 dark:to-white/0" />
-          <div className="absolute -inset-x-8 -top-12 h-24 blur-2xl bg-[radial-gradient(60%_60%_at_50%_0%,rgba(255,255,255,0.12)_0%,rgba(255,255,255,0.02)_60%,transparent_100%)] dark:bg-[radial-gradient(60%_60%_at_50%_0%,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_60%,transparent_100%)]" />
-        </div>
-        <div className="container relative flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
+  return (
+    <header
+      className={cn(
+        "h-16 bg-background/80 backdrop-blur-xl border-b border-border/50",
+        "supports-[backdrop-filter]:bg-background/60",
+        "ios-reduce-blur",
+        language === 'ar' ? 'font-arabic' : ''
+      )}
+      style={{
+        height: 'var(--app-header-h)',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+      }}
+    >
+      <div className="container relative flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="flex items-center">
             <Logo3D size="sm" />
@@ -299,8 +302,6 @@ export function AppHeader() {
           </DropdownMenu>
         </div>
       </div>
-        </div>
-      </div>,
-    document.body
+    </header>
   );
 }
