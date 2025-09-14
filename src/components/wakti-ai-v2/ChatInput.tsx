@@ -459,9 +459,9 @@ export function ChatInput({
         </>
       )}
 
-      {/* Main Input Area */}
-      <div className="w-full px-2 md:px-4 pb-1 md:pb-4 pt-3 mt-0" ref={inputCardRef}>
-        <div className="w-full px-4 md:px-6">
+      {/* Main Input Area - Edge to edge on mobile */}
+      <div className="w-full px-0 md:px-4 pb-1 md:pb-4 pt-3 mt-0" ref={inputCardRef}>
+        <div className="w-full px-1 md:px-6">
           <div
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
@@ -494,193 +494,118 @@ export function ChatInput({
                 </Tooltip>
               </TooltipProvider>
             </div>
-            {/* MODE INDICATOR - Only show if not image mode */}
-            {activeTrigger !== 'image' && (
-              <div className="flex items-center justify-center px-3 pt-2 pb-2">
-                {activeTrigger === 'search' ? (
-                  <div className="relative">
-                    <div
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 h-9 rounded-full text-[11px] font-medium leading-none border align-middle ${searchSubmode === 'youtube'
-                        ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
-                        : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
-                      }`}
+            
+            {/* MOBILE: Button row above input - Only on mobile */}
+            {!isInputCollapsed && (
+              <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10 md:hidden">
+                {/* Left side: Extra + Tools buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onPointerUp={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
+                      console.log('💬 EXTRA BUTTON: Dispatching custom event');
+                      if (typeof window !== "undefined") {
+                        const nativeEvent = new CustomEvent("open-wakti-conversations");
+                        window.dispatchEvent(nativeEvent);
+                      }
+                    }}
+                    aria-label={language === "ar" ? "إضافي" : "Extra"}
+                    className="h-8 px-3 rounded-xl flex items-center justify-center gap-1.5 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 shrink-0 touch-manipulation"
+                    disabled={isUploading}
+                    type="button"
+                  >
+                    <span className="text-sm" role="img" aria-label="Extra">💬</span>
+                    <span className="text-xs font-medium text-foreground/80">
+                      {language === 'ar' ? 'إضافي' : 'Extra'}
+                    </span>
+                  </button>
+                  
+                  <button
+                    onPointerUp={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
+                      console.log('⚡ TOOLS: Opening drawer');
+                      if (onOpenPlusDrawer) onOpenPlusDrawer();
+                    }}
+                    aria-label={language === "ar" ? "أدوات" : "Tools"}
+                    className="h-8 px-3 rounded-xl flex items-center justify-center gap-1.5 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 flex-shrink-0 touch-manipulation"
+                    disabled={isUploading}
+                    type="button"
+                  >
+                    <span className="text-sm" role="img" aria-label="Tools">⚡</span>
+                    <span className="text-xs font-medium text-foreground/80">
+                      {language === 'ar' ? 'أدوات' : 'Tools'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Right side: Upload + Mode Badge */}
+                <div className="flex items-center gap-2">
+                  {/* Upload button for different modes */}
+                  {activeTrigger === 'video' && (
+                    <button
+                      onPointerUp={() => setShowVideoUpload && setShowVideoUpload(true)}
+                      className="h-8 px-2.5 rounded-xl flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0 touch-manipulation"
+                      disabled={isUploading}
+                      type="button"
+                      title={language === 'ar' ? 'إضافة فيديو' : 'Add Video'}
                     >
-                      <button
-                        type="button"
-                        ref={searchModeBtnRef}
-                        onPointerUp={() => {
-                          setIsModeMenuOpen(v => {
-                            const willOpen = !v;
-                            if (willOpen) {
-                              const btn = searchModeBtnRef.current;
-                              if (btn) {
-                                const rect = btn.getBoundingClientRect();
-                                const width = 224;
-                                const padding = 8;
-                                const left = language === 'ar'
-                                  ? Math.max(padding, Math.min(window.innerWidth - width - padding, rect.right - width))
-                                  : Math.max(padding, Math.min(window.innerWidth - width - padding, rect.left));
-                                const top = Math.min(window.innerHeight - 200, rect.bottom + 8);
-                                setSearchMenuPos({ top, left });
-                                requestAnimationFrame(() => {
-                                  const rect2 = btn.getBoundingClientRect();
-                                  const left2 = language === 'ar'
-                                    ? Math.max(padding, Math.min(window.innerWidth - width - padding, rect2.right - width))
-                                    : Math.max(padding, Math.min(window.innerWidth - width - padding, rect2.left));
-                                  const top2 = Math.min(window.innerHeight - 200, rect2.bottom + 8);
-                                  setSearchMenuPos({ top: top2, left: left2 });
-                                });
-                              }
-                            }
-                            return willOpen;
-                          });
-                        }}
-                        disabled={isUploading}
-                        className="inline-flex items-center gap-1 outline-none touch-manipulation"
-                        aria-haspopup="menu"
-                        aria-expanded={isModeMenuOpen}
-                        aria-label={language === 'ar' ? 'وضع البحث' : 'Search Mode'}
-                      >
-                        <span className="text-[11px]">
-                          {searchSubmode === 'youtube' ? 'YouTube' : (language === 'ar' ? 'الويب' : 'Web')}
-                        </span>
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
+                      <Plus className="h-3 w-3 mr-1" />
+                      <span className="text-xs">Video</span>
+                    </button>
+                  )}
+
+                  {activeTrigger === 'chat' && (
+                    <div className="flex justify-center">
+                      <PlusMenu
+                        onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
+                        onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
+                        isLoading={isUploading}
+                      />
                     </div>
+                  )}
 
-                    {isModeMenuOpen && searchMenuPos && createPortal(
-                      <div
-                        role="menu"
-                        className={`fixed mt-0 w-56 rounded-xl shadow-2xl overflow-hidden z-[9999] backdrop-blur-md border ${searchSubmode === 'youtube'
-                          ? 'bg-red-50/95 text-red-900 dark:bg-red-950/60 dark:text-red-200 border-red-200/70 dark:border-red-800/60'
-                          : 'bg-green-50/95 text-green-900 dark:bg-green-950/60 dark:text-green-200 border-green-200/70 dark:border-green-800/60'
-                        }`}
-                        style={{ top: searchMenuPos.top, left: searchMenuPos.left }}
-                      >
-                        <button
-                          role="menuitem"
-                          onPointerUp={() => { setSearchSubmode('web'); setIsModeMenuOpen(false); }}
-                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${searchSubmode === 'web'
-                            ? 'bg-green-200/70 dark:bg-green-800/60 text-green-900 dark:text-green-100 font-semibold'
-                            : 'hover:bg-white/40 dark:hover:bg-white/10'}
-                          `}
-                        >
-                          {language === 'ar' ? 'الويب' : 'Web'}
-                        </button>
-                        <button
-                          role="menuitem"
-                          onPointerUp={() => { setSearchSubmode('youtube'); setIsModeMenuOpen(false); }}
-                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${searchSubmode === 'youtube'
-                            ? 'bg-red-200/70 text-red-900 dark:bg-red-800/60 dark:text-red-100 font-semibold'
-                            : 'hover:bg-white/40 dark:hover:bg-white/10'
-                          }`}
-                        >
-                          YouTube
-                        </button>
-                      </div>,
-                      document.body
-                    )}
-                  </div>
-                ) : (
-                  <ActiveModeIndicator activeTrigger={activeTrigger} />
-                )}
-              </div>
-            )}
-
-            {/* Image mode indicator - Only show when in image mode */}
-            {activeTrigger === 'image' && (
-              <div className="flex items-center justify-center px-3 pt-2 pb-2">
-                <div className="relative">
-                  {/* Hidden input for seed upload */}
-                  <input
-                    ref={seedFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleSeedFilesChange}
-                    className="hidden"
-                  />
-
-                  <div className="inline-flex items-center gap-1 px-2.5 py-1 h-7 rounded-full text-[11px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0">
+                  {activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal') && (
                     <button
                       type="button"
-                      ref={imageModeBtnRef}
-                      onPointerUp={() => {
-                        setIsModeMenuOpen(v => {
-                          const willOpen = !v;
-                          if (willOpen) {
-                            const btn = imageModeBtnRef.current;
-                            if (btn) {
-                              const rect = btn.getBoundingClientRect();
-                              const width = 224;
-                              const padding = 8;
-                              const left = Math.max(padding, Math.min(window.innerWidth - width - padding, rect.left));
-                              const top = Math.min(window.innerHeight - 200, rect.bottom + 8);
-                              setImageMenuPos({ top, left });
-                              requestAnimationFrame(() => {
-                                const rect2 = btn.getBoundingClientRect();
-                                const left2 = Math.max(padding, Math.min(window.innerWidth - width - padding, rect2.left));
-                                const top2 = Math.min(window.innerHeight - 200, rect2.bottom + 8);
-                                setImageMenuPos({ top: top2, left: left2 });
-                              });
-                            }
-                          }
-                          return willOpen;
-                        });
-                      }}
+                      onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); triggerSeedUpload(); }}
                       disabled={isUploading}
-                      className="inline-flex items-center gap-1 outline-none touch-manipulation"
-                      aria-haspopup="menu"
-                      aria-expanded={isModeMenuOpen}
-                      aria-label={language === 'ar' ? 'وضع الصورة' : 'Image'}
+                      className="h-8 px-2.5 rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors flex items-center gap-1"
+                      aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload'}
+                      title={language === 'ar' ? 'تحميل صورة' : 'Upload'}
                     >
-                      <ImagePlus className="h-3 w-3" />
-                      <span>{language === 'ar' ? 'وضع الصورة' : 'Image'}</span>
-                      <ChevronDown className="h-3 w-3" />
+                      <Plus className="h-3 w-3" />
+                      <span className="text-xs">{language === 'ar' ? 'رفع' : 'Upload'}</span>
                     </button>
-                  </div>
-
-                  {isModeMenuOpen && imageMenuPos && createPortal(
-                    <div
-                      role="menu"
-                      className={`fixed mt-0 w-56 max-w-[80vw] rounded-xl border border-orange-200/70 bg-orange-50/95 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-800/60 shadow-2xl overflow-hidden z-[9999] backdrop-blur-md`}
-                      style={{ top: imageMenuPos.top, left: imageMenuPos.left }}
-                    >
-                      <button
-                        role="menuitem"
-                        onPointerUp={() => { setImageMode('text2image'); setIsModeMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors
-                          ${imageMode === 'text2image'
-                            ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
-                            : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
-                        `}
-                      >
-                        {language === 'ar' ? 'نص → صورة' : 'text>image'}
-                      </button>
-                      <button
-                        role="menuitem"
-                        onPointerUp={() => { setImageMode('image2image'); setIsModeMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors
-                          ${imageMode === 'image2image'
-                            ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
-                            : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
-                        `}
-                      >
-                        {language === 'ar' ? 'صورة → صورة' : 'image>image'}
-                      </button>
-                      <button
-                        role="menuitem"
-                        onPointerUp={() => { setImageMode('background-removal'); setIsModeMenuOpen(false); }}
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors
-                          ${imageMode === 'background-removal'
-                            ? 'bg-orange-200/70 text-orange-900 dark:bg-orange-800/60 dark:text-orange-100 font-semibold'
-                            : 'hover:bg-orange-100/80 dark:hover:bg-orange-900/40'}
-                        `}
-                      >
-                        {language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}
-                      </button>
-                    </div>,
-                    document.body
                   )}
+                  
+                  {/* Mode Badge */}
+                  <div className="flex items-center">
+                    {activeTrigger === 'search' ? (
+                      <div className="relative">
+                        <div
+                          className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none border align-middle ${searchSubmode === 'youtube'
+                            ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
+                            : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
+                          }`}
+                        >
+                          <span className="text-[10px]">
+                            {searchSubmode === 'youtube' ? 'YouTube' : (language === 'ar' ? 'الويب' : 'Web')}
+                          </span>
+                        </div>
+                      </div>
+                    ) : activeTrigger === 'image' ? (
+                      <div className="inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0">
+                        <ImagePlus className="h-2.5 w-2.5" />
+                        <span className="text-[10px]">{language === 'ar' ? 'صورة' : 'Image'}</span>
+                      </div>
+                    ) : (
+                      <ActiveModeIndicator activeTrigger={activeTrigger} />
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -815,11 +740,11 @@ export function ChatInput({
               </div>
             )}
             
-            {/* INPUT ROW: Expanded textarea with buttons in same row */}
+            {/* INPUT ROW: Just textarea and send button */}
             {!isInputCollapsed && (
-              <div className="relative px-3 pb-3 pt-0.5">
-                {/* Expanded textarea for more typing space */}
-                <div className="flex items-end gap-3 mb-3">
+              <div className="relative px-3 pb-3 pt-1">
+                {/* Textarea with send button directly next to it */}
+                <div className="flex items-end gap-3">
                   <Textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
@@ -855,154 +780,57 @@ export function ChatInput({
                     }}
                     disabled={isUploading || !isTextareaEnabled}
                   />
-                </div>
 
-                {/* All buttons in one row */}
-                <div className="flex items-center justify-between gap-2">
-                  {/* Left side buttons: Extra + Quick Tools */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onPointerUp={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
-                        console.log('💬 EXTRA BUTTON: Dispatching custom event');
-                        if (typeof window !== "undefined") {
-                          const nativeEvent = new CustomEvent("open-wakti-conversations");
-                          window.dispatchEvent(nativeEvent);
-                        }
-                      }}
-                      aria-label={language === "ar" ? "إضافي" : "Extra"}
-                      className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 shrink-0 touch-manipulation"
-                      disabled={isUploading}
-                      type="button"
-                    >
-                      <span className="text-lg" role="img" aria-label="Extra">💬</span>
-                      <span className="text-xs font-medium text-foreground/80">
-                        {language === 'ar' ? 'إضافي' : 'Extra'}
-                      </span>
-                    </button>
-                    
-                    <button
-                      onPointerUp={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
-                        console.log('⚡ QUICK TOOLS: Opening drawer');
-                        if (onOpenPlusDrawer) onOpenPlusDrawer();
-                      }}
-                      aria-label={language === "ar" ? "أدوات سريعة" : "Quick Tools"}
-                      className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 flex-shrink-0 touch-manipulation"
-                      disabled={isUploading}
-                      type="button"
-                    >
-                      <span className="text-lg" role="img" aria-label="Quick Tools">⚡</span>
-                      <span className="text-xs font-medium text-foreground/80">
-                        {language === 'ar' ? 'أدوات سريعة' : 'Quick Tools'}
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Right side buttons: Upload + Send */}
-                  <div className="flex items-center gap-2">
-                    {/* Video mode add button */}
-                    {activeTrigger === 'video' && (
-                      <button
-                        onPointerUp={() => setShowVideoUpload && setShowVideoUpload(true)}
-                        className="h-9 px-2 rounded-2xl flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0 touch-manipulation"
-                        disabled={isUploading}
-                        type="button"
-                        title={language === 'ar' ? 'إضافة فيديو' : 'Add Video'}
-                      >
-                        <span className="text-base">+🎬</span>
-                      </button>
-                    )}
-
-                    {/* Chat Mode: Plus menu */}
-                    {activeTrigger === 'chat' && (
-                      <div className="flex justify-center">
-                        <PlusMenu
-                          onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
-                          onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
-                          isLoading={isUploading}
-                        />
+                  {/* Image Quality Dropdown - only for Image mode with text2image */}
+                  {activeTrigger === 'image' && imageMode === 'text2image' && (
+                    <div className="flex justify-center">
+                      <div className="relative inline-flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 rounded-lg px-2 py-1 shadow-sm min-w-[56px]">
+                        <select
+                          aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
+                          className="appearance-none text-[11px] leading-none bg-transparent outline-none text-orange-900 dark:text-orange-200 cursor-pointer text-center pb-3"
+                          value={imageQuality}
+                          onChange={(e) => setImageQuality(e.target.value as 'fast' | 'best_fast')}
+                        >
+                          <option value="fast">{language === 'ar' ? 'سريع' : 'Fast'}</option>
+                          <option value="best_fast">{language === 'ar' ? 'أفضل' : 'Best'}</option>
+                        </select>
+                        <span className="pointer-events-none absolute bottom-0.5 left-1/2 -translate-x-1/2 text-orange-900 dark:text-orange-200">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M7 10l5 5 5-5z" />
+                          </svg>
+                        </span>
                       </div>
-                    )}
-
-                    {/* Image Quality Dropdown - only for Image mode with text2image */}
-                    {activeTrigger === 'image' && imageMode === 'text2image' && (
-                      <div className="flex justify-center">
-                        <div className="relative inline-flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 rounded-lg px-2 py-1 shadow-sm min-w-[56px]">
-                          <select
-                            aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
-                            className="appearance-none text-[11px] leading-none bg-transparent outline-none text-orange-900 dark:text-orange-200 cursor-pointer text-center pb-3"
-                            value={imageQuality}
-                            onChange={(e) => setImageQuality(e.target.value as 'fast' | 'best_fast')}
-                          >
-                            <option value="fast">{language === 'ar' ? 'سريع' : 'Fast'}</option>
-                            <option value="best_fast">{language === 'ar' ? 'أفضل' : 'Best'}</option>
-                          </select>
-                          <span className="pointer-events-none absolute bottom-0.5 left-1/2 -translate-x-1/2 text-orange-900 dark:text-orange-200">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                              <path d="M7 10l5 5 5-5z" />
-                            </svg>
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Upload button - visible only for image->image and background-removal */}
-                    {activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal') && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); triggerSeedUpload(); }}
-                              disabled={isUploading}
-                              className="h-9 w-9 flex items-center justify-center rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors"
-                              aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
-                              title={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                            {language === 'ar' ? 'تحميل صورة' : 'Upload image'}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                    
-                    {/* Send button: always visible, disabled when cannot send */}
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleSendMessage(); }}
-                            disabled={!canSend}
-                            className={`
-                              h-11 w-11 rounded-xl p-0 flex-shrink-0
-                              ${sendBtnColors}
-                              border-0 shadow-2xl backdrop-blur-md
-                              transition-all duration-200 hover:scale-110 hover:shadow-2xl
-                              shadow-lg
-                            `}
-                            size="icon"
-                          >
-                            {isLoading || isUploading ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <Send className="h-5 w-5" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                          {language === 'ar' ? 'إرسال' : 'Send'}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
+                    </div>
+                  )}
+                  
+                  {/* Send button: always visible, disabled when cannot send */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleSendMessage(); }}
+                          disabled={!canSend}
+                          className={`
+                            h-11 w-11 rounded-xl p-0 flex-shrink-0
+                            ${sendBtnColors}
+                            border-0 shadow-2xl backdrop-blur-md
+                            transition-all duration-200 hover:scale-110 hover:shadow-2xl
+                            shadow-lg
+                          `}
+                          size="icon"
+                        >
+                          {isLoading || isUploading ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <Send className="h-5 w-5" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                        {language === 'ar' ? 'إرسال' : 'Send'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
             )}
