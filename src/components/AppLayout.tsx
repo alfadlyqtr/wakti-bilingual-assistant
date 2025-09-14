@@ -6,6 +6,7 @@ import { DesktopLayout } from "@/components/layouts/DesktopLayout";
 import { TabletLayout } from "@/components/layouts/TabletLayout";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useIsMobile, useIsTablet, useIsDesktop } from "@/hooks/use-mobile";
+import { PresenceBeacon } from "@/components/PresenceBeacon";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -20,6 +21,8 @@ function MobileAppLayout({ children }: AppLayoutProps) {
     <ProtectedRoute>
       {/* Flexbox container: dynamic viewport height, column direction */}
       <div className="h-dvh min-h-0 bg-background flex flex-col">
+        {/* Global presence broadcaster */}
+        <PresenceBeacon />
         {/* Header: fixed height, never shrinks */}
         <div className="flex-shrink-0">
           <AppHeader />
@@ -48,8 +51,18 @@ export function AppLayout({ children }: AppLayoutProps) {
   if (isMobile) {
     return <MobileAppLayout>{children}</MobileAppLayout>;
   } else if (isTablet) {
-    return <TabletLayout>{children}</TabletLayout>;
+    return (
+      <>
+        <PresenceBeacon />
+        <TabletLayout>{children}</TabletLayout>
+      </>
+    );
   } else {
-    return <DesktopLayout>{children}</DesktopLayout>;
+    return (
+      <>
+        <PresenceBeacon />
+        <DesktopLayout>{children}</DesktopLayout>
+      </>
+    );
   }
 }

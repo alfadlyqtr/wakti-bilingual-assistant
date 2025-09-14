@@ -71,11 +71,17 @@ export function TabletSidebar() {
 
   return (
     <motion.aside
+      id="tablet-sidebar"
       className="fixed left-3 top-3 bottom-3 z-[999] rounded-xl shadow-xl transition-all duration-300"
+      dir="ltr"
       variants={sidebarVariants}
       animate={isCollapsed ? "collapsed" : "expanded"}
       transition={{ duration: 0.3, ease: "easeInOut" }}
       style={{
+        left: '0.75rem',
+        right: 'auto',
+        top: '0.75rem',
+        bottom: '0.75rem',
         background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)',
         backdropFilter: 'blur(20px)',
         border: '1px solid rgba(255, 255, 255, 0.2)',

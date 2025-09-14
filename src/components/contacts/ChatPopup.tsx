@@ -5,9 +5,10 @@ import { t } from "@/utils/translations";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save, Bookmark, BookmarkCheck } from "lucide-react";
+import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save, Bookmark, BookmarkCheck, CheckCheck } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessages, sendMessage, markAsRead, uploadMessageAttachment } from "@/services/messageService";
 import { saveMessage, unsaveMessage, isMessageSaved as checkMessageSaved } from "@/services/savedMessagesService";
@@ -25,7 +26,7 @@ interface ChatPopupProps {
   contactAvatar?: string;
 }
 
-const MAX_CHARS = 300;
+const MAX_CHARS = 200;
 
 export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvatar }: ChatPopupProps) {
   const { language, theme } = useTheme();
@@ -45,7 +46,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const isOverLimit = charCount > MAX_CHARS;
 
   // Presence and typing indicators
-  const { isOnline, isTyping, getLastSeen, setUserTyping } = usePresence(currentUserId);
+  const { isOnline, isTyping, getLastSeen, setUserTyping, setExternalLastSeen } = usePresence(currentUserId);
   const [isContactTyping, setIsContactTyping] = useState(false);
   const [savedMessages, setSavedMessages] = useState<Set<string>>(new Set());
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
@@ -57,7 +58,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   };
 
   // Convert URLs in plain text into clickable links
-  const linkifyText = (text: string) => {
+  const linkifyText = (text: string, isSentByMe?: boolean) => {
     if (!text) return null;
     const urlRegex = /((https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w\-._~:/?#[\]@!$&'()*+,;=%]*)?)/gi;
     // Split text by URLs and interleave with anchors
@@ -80,18 +81,42 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       const isUrl = /^(https?:\/\/)?([\w-]+\.)+[\w-]+/.test(part);
       if (!isUrl) return <span key={i}>{part}</span>;
       const href = part.startsWith('http') ? part : `https://${part}`;
+      // Use high-contrast link colors depending on bubble background
+      const linkClass = isSentByMe
+        // Sent by me: blue bubble with white text -> use amber for strong contrast
+        ? 'underline underline-offset-2 text-amber-200 hover:text-amber-100 visited:text-yellow-200'
+        // Received: light surface -> deep blue for readability
+        : 'underline underline-offset-2 text-blue-700 hover:text-blue-800 visited:text-purple-700 dark:text-sky-300 dark:hover:text-sky-200';
       return (
         <a
           key={i}
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="underline underline-offset-2 text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 dark:hover:text-emerald-200 break-words"
+          className={`${linkClass} break-words`}
         >
           {part}
         </a>
       );
     });
+  // Seed last_seen for contact from profiles when dialog opens
+  useEffect(() => {
+    if (!contactId || !isOpen) return;
+    let active = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('last_seen')
+          .eq('id', contactId)
+          .maybeSingle();
+        if (!error && data?.last_seen && active) {
+          setExternalLastSeen(contactId, data.last_seen as unknown as string);
+        }
+      } catch (_) {}
+    })();
+    return () => { active = false };
+  }, [contactId, isOpen, setExternalLastSeen]);
   };
   
   // Get current user ID
@@ -336,12 +361,31 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }
   };
 
-  // Format message timestamp
+  // Format message timestamp (local)
   const formatMessageTime = (dateString: string) => {
     try {
-      // ...
+      const d = new Date(dateString);
+      const now = new Date();
+      const sameDay = d.toDateString() === now.toDateString();
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday = d.toDateString() === yesterday.toDateString();
+
+      const timeStr = new Intl.DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit'
+      }).format(d);
+
+      if (sameDay) return timeStr;
+      if (isYesterday) return `Yesterday ${timeStr}`;
+
+      const dateStr = new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric'
+      }).format(d);
+      return `${dateStr} ${timeStr}`;
     } catch (error) {
-      return "";
+      return '';
     }
   };
 
@@ -545,7 +589,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               ) : (
                 <div className="group relative">
                   <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
-                    {linkifyText(message.content)}
+                    {linkifyText(message.content, isSentByMe)}
                   </div>
                   <Button
                     size="sm"
@@ -572,11 +616,24 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               )}
             </div>
             
-            {/* Timestamp */}
-            <div className={`text-xs mt-1 ${
+            {/* Timestamp + saved indicator */}
+            <div className={`text-[11px] mt-1 ${
               isSentByMe ? 'self-end mr-1' : 'self-start ml-1'
-            } ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              {formatMessageTime(message.created_at)}
+            } ${isDark ? 'text-gray-300' : 'text-gray-600'} flex items-center gap-1`}>
+              <span>{formatMessageTime(message.created_at)}</span>
+              {isSentByMe && (
+                <span title={message.is_read ? 'Read' : 'Sent'} className="inline-flex items-center">
+                  <CheckCheck className={`h-3.5 w-3.5 ${message.is_read ? 'text-green-500' : 'text-gray-400'}`} />
+                </span>
+              )}
+              {savedMessages.has(message.id) && (
+                <span title="Saved" className="inline-flex items-center">
+                  <BookmarkCheck
+                    className="h-3.5 w-3.5 text-green-500"
+                    style={{ filter: 'drop-shadow(0 0 6px rgba(34,197,94,0.8))' }}
+                  />
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -588,7 +645,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent 
-          className={`w-full max-w-sm md:max-w-md mx-auto h-[80vh] p-0 gap-0 rounded-2xl overflow-hidden border-0 shadow-xl`}
+          className={`w-full max-w-sm md:max-w-md h-[80vh] p-0 gap-0 rounded-2xl overflow-hidden border-0 shadow-xl flex flex-col`}
           style={{
             background: colors.background,
             boxShadow: `0 10px 25px -5px ${isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'}`,
@@ -605,9 +662,11 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 : 'Messages auto-delete after 3 days for privacy'}
             </DialogDescription>
           </DialogHeader>
+          {/* Main content wrapper to ensure footer sticks to bottom */}
+          <div className="flex flex-col flex-1 h-full">
           {/* Glassmorphic header */}
           <div 
-            className="flex items-center justify-between p-4 border-b backdrop-blur-md sticky top-0 z-10"
+            className="flex items-center justify-between p-1 h-10 border-b backdrop-blur-md sticky top-0 z-10"
             style={{
               borderColor: `${colors.secondary}30`,
               background: isDark ? 
@@ -615,44 +674,44 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 `linear-gradient(to bottom, ${colors.surfaceLight}, transparent)`
             }}
           >
-            <div className="flex items-center gap-3 flex-1">
-              <Avatar className={`h-10 w-10 border-2 ${isDark ? 'border-dark-secondary' : 'border-light-secondary'}`}>
+            <div className="flex items-center gap-2 flex-1 min-w-0 h-full">
+              <Avatar className={`h-7 w-7 border-2 ${isDark ? 'border-dark-secondary' : 'border-light-secondary'}`}>
                 <AvatarImage src={contactAvatar || ""} />
                 <AvatarFallback className={`text-sm font-semibold ${isDark ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
                   {contactName.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <h3 className={`font-semibold text-base truncate ${isDark ? 'text-white' : 'text-light-primary'}`}>
+                <h3 className={`font-semibold text-sm truncate leading-tight ${isDark ? 'text-white' : 'text-light-primary'}`}>
                   {contactName}
                 </h3>
                 <div className="flex items-center gap-1">
-                  <span className={`inline-block h-2 w-2 rounded-full ${
-                    isContactOnline ? 'bg-green-500' : 'bg-gray-400'
-                  }`}></span>
-                  <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {isContactTyping 
-                      ? "Typing..."
-                      : isContactOnline 
-                        ? t("online", language) 
-                        : getLastSeen(contactId)
-                    }
+                  <span
+                    className={`inline-block h-2.5 w-2.5 rounded-full ${isContactOnline ? 'bg-green-500' : 'bg-red-500'}`}
+                    style={{ filter: isContactOnline ? 'drop-shadow(0 0 6px rgba(34,197,94,0.8))' : 'drop-shadow(0 0 6px rgba(239,68,68,0.7))' }}
+                  ></span>
+                  <p className={`text-[10px] ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                    {isContactTyping
+                      ? 'Typing...'
+                      : isContactOnline
+                        ? 'Online • now'
+                        : getLastSeen(contactId)}
                   </p>
                 </div>
               </div>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={onClose}
+                className={`h-7 w-7 rounded-full flex-none ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+              >
+                <X className="h-5 w-5" />
+              </Button>
             </div>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={onClose}
-              className={`h-9 w-9 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
-            >
-              <X className="h-5 w-5" />
-            </Button>
           </div>
 
           {/* Message area */}
-          <ScrollArea className="flex-1 px-4 pt-4 pb-2">
+          <ScrollArea className="flex-1 min-h-0 px-1 pt-1 pb-1">
             {isLoadingMessages ? (
               <div className="flex flex-col gap-3 p-4">
                 {[...Array(3)].map((_, i) => (
@@ -684,9 +743,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             )}
           </ScrollArea>
 
-          {/* Floating compose area */}
+          {/* Floating composer (auto height) */}
           <div 
-            className="p-4 pt-2 border-t"
+            className="p-1 border-t"
             style={{
               borderColor: `${colors.secondary}30`,
               background: isDark ? 
@@ -694,114 +753,84 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
             }}
           >
-            <div className="space-y-3">
-              {/* Auto-delete notification */}
-              <div className="text-center">
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'} leading-relaxed`}>
-                  {language === 'ar' 
-                    ? 'الرسائل تُحذف تلقائياً بعد 3 أيام للخصوصية'
-                    : 'Messages auto-delete after 3 days for privacy'
-                  }
-                </p>
-              </div>
+            {/* single notice above input */}
+            <div className="mb-1 text-center text-[11px] text-gray-500 dark:text-gray-400">
+              {language === 'ar' ? 'الرسائل غير المحفوظة تُحذف بعد 72 ساعة' : 'Messages not saved are deleted after 72 hours'}
+            </div>
 
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              {/* Left: attach icons */}
+              <div className="flex items-center gap-1 text-gray-500">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`h-8 w-8 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+                  className="h-7 w-7 rounded-md text-gray-500 hover:text-gray-700"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sendMessageMutation.isPending || isUploading}
                 >
                   <Image className="h-4 w-4" />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageSelected}
-                  />
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
                 </Button>
-
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`h-8 w-8 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+                  className="h-7 w-7 rounded-md text-gray-500 hover:text-gray-700"
                   onClick={() => pdfInputRef.current?.click()}
                   disabled={sendMessageMutation.isPending || isUploading}
                 >
                   <FileText className="h-4 w-4" />
-                  <input
-                    ref={pdfInputRef}
-                    type="file"
-                    accept=".pdf"
-                    className="hidden"
-                    onChange={handlePDFSelected}
-                  />
+                  <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} />
                 </Button>
-
-                <VoiceRecorder 
-                  onRecordingComplete={handleVoiceRecording}
-                  disabled={sendMessageMutation.isPending || isUploading}
-                />
+                <VoiceRecorder onRecordingComplete={handleVoiceRecording} disabled={sendMessageMutation.isPending || isUploading} />
               </div>
 
-              <div className="relative">
-                <div 
-                  className={`p-1 rounded-2xl backdrop-blur-sm ${isDark ? 'bg-dark-secondary/30' : 'bg-light-secondary/20'}`}
-                  style={{
-                    boxShadow: `0 4px 12px ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'}`
+              {/* Middle: auto-expanding textarea */}
+              <div className="flex-1 flex items-start">
+                <Textarea
+                  value={messageText}
+                  onChange={(e) => {
+                    // auto-expand
+                    e.currentTarget.style.height = 'auto';
+                    const nextH = Math.min(e.currentTarget.scrollHeight, 140);
+                    e.currentTarget.style.height = `${nextH}px`;
+                    handleInputChange(e as any);
                   }}
+                  placeholder={t('typeMessage', language)}
+                  maxLength={MAX_CHARS}
+                  className={`min-h-[32px] max-h-[140px] h-auto px-2 py-1 text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                  disabled={sendMessageMutation.isPending || isUploading}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendTextMessage();
+                    }
+                  }}
+                  onFocus={() => setUserTyping(true)}
+                  onBlur={() => {
+                    if (typingTimeoutRef.current) {
+                      clearTimeout(typingTimeoutRef.current);
+                    }
+                    setUserTyping(false);
+                  }}
+                />
+                {/* Inline tiny counter */}
+                <span className={`ml-2 mt-1 text-[10px] ${isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`}>{charCount}/{MAX_CHARS}</span>
+              </div>
+
+              {/* Right: send */}
+              <div className="flex items-center">
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={sendTextMessage}
+                  disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                  className={`rounded-md h-8 w-8 ${messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'} transition-colors`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={messageText}
-                      onChange={handleInputChange}
-                      placeholder={t("typeMessage", language)}
-                      className={`h-10 border-0 bg-transparent text-sm flex-1 ${isDark ? 'text-white placeholder:text-gray-400' : 'text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
-                      disabled={sendMessageMutation.isPending || isUploading}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          sendTextMessage();
-                        }
-                      }}
-                      onFocus={() => setUserTyping(true)}
-                      onBlur={() => {
-                        if (typingTimeoutRef.current) {
-                          clearTimeout(typingTimeoutRef.current);
-                        }
-                        setUserTyping(false);
-                      }}
-                    />
-                    <Button
-                      type="button" 
-                      size="icon"
-                      onClick={sendTextMessage}
-                      disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-                      className={`rounded-full h-9 w-9 ${
-                        messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading
-                          ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                          : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
-                      } transition-colors`}
-                    >
-                      <Send className={`h-4 w-4 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />
-                    </Button>
-                  </div>
-                </div>
-                
-                {/* Character counter */}
-                {messageText && (
-                  <div 
-                    className={`absolute right-14 bottom-3 text-xs ${
-                      isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'
-                    } transition-colors`}
-                  >
-                    {charCount}/{MAX_CHARS}
-                  </div>
-                )}
+                  <Send className={`h-4 w-4 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />
+                </Button>
               </div>
             </div>
+          </div>
           </div>
         </DialogContent>
       </Dialog>

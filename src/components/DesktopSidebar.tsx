@@ -100,15 +100,22 @@ export function DesktopSidebar() {
     <>
       {/* Desktop/Tablet mask to hide underlying content under the curved sidebar edge */}
       <div
+        id="desktop-sidebar-mask"
         className="hidden md:block fixed inset-y-0 left-0 z-[998] bg-background pointer-events-none"
-        style={{ width: 'calc(var(--current-sidebar-width, 240px) + 1.75rem)' }}
+        style={{ width: 'calc(var(--current-sidebar-width, 240px) + 1.75rem)', left: 0, right: 'auto' }}
         aria-hidden
       />
       <motion.aside
+      id="desktop-sidebar"
       className="fixed left-4 top-4 bottom-4 z-[999] rounded-2xl shadow-2xl"
+      dir="ltr"
       variants={sidebarVariants}
       animate={isCollapsed ? "collapsed" : "expanded"}
       style={{
+        left: '1rem',
+        right: 'auto',
+        top: '1rem',
+        bottom: '1rem',
         background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)',
         backdropFilter: 'blur(20px)',
         border: '1px solid rgba(255, 255, 255, 0.2)',

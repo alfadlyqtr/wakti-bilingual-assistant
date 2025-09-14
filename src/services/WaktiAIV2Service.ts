@@ -521,32 +521,13 @@ class WaktiAIV2ServiceClass {
         signal.addEventListener('abort', abortHandler, { once: true });
       }
 
-      // Add client-side idle timeout protection 
-      let clientIdleTimer: NodeJS.Timeout | null = null;
+      // Removed client-side idle timeout to avoid false timeouts on Safari/iOS
       let firstTokenReceived = false;
-      let lastTokenTime = Date.now();
-      const CLIENT_IDLE_TIMEOUT = 120000; // 120s client timeout
-
-      const resetIdleTimer = () => {
-        if (clientIdleTimer) clearTimeout(clientIdleTimer);
-        clientIdleTimer = setTimeout(() => {
-          console.error(`⏰ CLIENT: Stream idle timeout reached [${requestId}] - no tokens for 120s`);
-          try {
-            reader.cancel();
-            onError?.('Stream timeout - please try again');
-          } catch (e) {
-            console.error('Error during client timeout cleanup:', e);
-          }
-        }, CLIENT_IDLE_TIMEOUT);
-      };
-
-      resetIdleTimer(); // Start initial timer
 
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
-            if (clientIdleTimer) clearTimeout(clientIdleTimer);
             if (!isCompleted) onComplete?.(metadata);
             console.log(`✅ FRONTEND BOSS: Stream closed cleanly [${requestId}]`);
             break;
@@ -561,7 +542,6 @@ class WaktiAIV2ServiceClass {
             const data = line.slice(6);
 
             if (data === '[DONE]') {
-              if (clientIdleTimer) clearTimeout(clientIdleTimer);
               if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
               console.log(`🏁 FRONTEND BOSS: Received [DONE] [${requestId}]`);
               continue;
@@ -570,7 +550,6 @@ class WaktiAIV2ServiceClass {
             try {
               const parsed = JSON.parse(data);
               if (parsed.error) { 
-                if (clientIdleTimer) clearTimeout(clientIdleTimer);
                 encounteredError = parsed.error; 
                 continue; 
               }
@@ -585,8 +564,6 @@ class WaktiAIV2ServiceClass {
                   firstTokenReceived = true;
                   console.log(`🎯 CLIENT: First token received [${requestId}]`);
                 }
-                lastTokenTime = Date.now();
-                resetIdleTimer(); // Reset timer on every token
                 fullResponse += parsed.token; 
                 onToken?.(parsed.token); 
               }
@@ -595,8 +572,6 @@ class WaktiAIV2ServiceClass {
                   firstTokenReceived = true;
                   console.log(`🎯 CLIENT: First response chunk received [${requestId}]`);
                 }
-                lastTokenTime = Date.now();
-                resetIdleTimer(); // Reset timer on every chunk
                 fullResponse += parsed.response; 
                 onToken?.(parsed.response); 
               }
@@ -605,7 +580,6 @@ class WaktiAIV2ServiceClass {
                 metadata = { ...metadata, ...parsed.metadata };
               }
               if (parsed.done === true) {
-                if (clientIdleTimer) clearTimeout(clientIdleTimer);
                 if (!isCompleted) { onComplete?.(parsed.metadata || metadata); isCompleted = true; }
               }
             } catch {
@@ -614,15 +588,12 @@ class WaktiAIV2ServiceClass {
                 firstTokenReceived = true;
                 console.log(`🎯 CLIENT: First raw token received [${requestId}]`);
               }
-              lastTokenTime = Date.now();
-              resetIdleTimer(); // Reset timer on raw tokens too
               fullResponse += data;
               onToken?.(data);
             }
           }
         }
       } finally {
-        if (clientIdleTimer) clearTimeout(clientIdleTimer);
         try { reader.releaseLock(); } catch {}
         if (signal) signal.removeEventListener('abort', abortHandler as any);
         try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}

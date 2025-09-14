@@ -202,27 +202,43 @@ export function SimplifiedFileUpload({
           {/* Image Type Selectors */}
           <div className="space-y-2">
             {uploadedFiles.map((file, index) => (
-              <div key={file.id} className="flex items-center gap-2 p-2 bg-background/50 rounded-lg border border-border/50">
-                <Image className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium text-foreground/80 min-w-0 flex-shrink-0">
-                  {language === 'ar' ? `صورة ${index + 1}` : `Image ${index + 1}`}
-                </span>
-                <select
-                  value={file.imageType?.id || 'general'}
-                  onChange={(e) => {
-                    const selectedType = imageTypes.find(type => type.id === e.target.value);
-                    if (selectedType) {
-                      updateFileImageType(file.id, { id: selectedType.id, name: selectedType.name });
-                    }
-                  }}
-                  className="flex-1 bg-background text-foreground border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 dark:bg-popover dark:text-popover-foreground"
-                >
-                  {imageTypes.map((type) => (
-                    <option key={type.id} value={type.id} className="bg-background text-foreground dark:bg-popover dark:text-popover-foreground">
-                      {type.name} - {type.description}
-                    </option>
-                  ))}
-                </select>
+              <div key={file.id} className="p-2 bg-background/50 rounded-lg border border-border/50">
+                <div className="flex items-center gap-2">
+                  <Image className="h-4 w-4 text-primary flex-shrink-0" />
+                  <span className="text-sm font-medium text-foreground/80 min-w-0 flex-shrink-0">
+                    {language === 'ar' ? `صورة ${index + 1}` : `Image ${index + 1}`}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <select
+                    value={file.imageType?.id || 'general'}
+                    onChange={(e) => {
+                      const selectedType = imageTypes.find(type => type.id === e.target.value);
+                      if (selectedType) {
+                        updateFileImageType(file.id, { id: selectedType.id, name: selectedType.name });
+                      }
+                    }}
+                    dir={language === 'ar' ? 'rtl' : 'ltr'}
+                    className="w-full min-w-0 bg-background text-foreground border border-border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 dark:bg-popover dark:text-popover-foreground touch-manipulation pointer-events-auto"
+                  >
+                    {imageTypes.map((type) => (
+                      <option key={type.id} value={type.id} className="bg-background text-foreground dark:bg-popover dark:text-popover-foreground">
+                        {language === 'ar' ? (
+                          type.id === 'general' ? '🔍 عام - حلل أي شيء' :
+                          type.id === 'ids' ? '🆔 هويات ومستندات - استخراج النص والمعلومات' :
+                          type.id === 'bills' ? '💰 فواتير وإيصالات - حساب المصاريف' :
+                          type.id === 'food' ? '🍕 طعام وتغذية - السعرات والمكونات' :
+                          type.id === 'docs' ? '📚 أكاديمي وتقارير - أجب عن الأسئلة' :
+                          type.id === 'screens' ? '💻 لقطات الشاشة والأخطاء - تصحيح وإصلاح' :
+                          type.id === 'photos' ? '📸 صور وأشخاص - وصف وتعرف' :
+                          `${type.name}`
+                        ) : (
+                          `${type.name} - ${type.description}`
+                        )}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             ))}
           </div>

@@ -136,7 +136,7 @@ export function TabletHeader() {
   const IconComponent = pageInfo.icon;
 
   return (
-    <div className="w-full px-4 pt-3 pb-2 transition-all duration-300">
+    <div className="w-full px-4 pt-3 pb-2 transition-all duration-300" dir="ltr">
       <div
         className="relative bg-gradient-to-r from-background/95 via-background/90 to-background/95 dark:from-[#0b0f14]/95 dark:via-[#0b0f14]/90 dark:to-[#0b0f14]/95 backdrop-blur-xl border border-border/40 dark:border-white/10 rounded-xl shadow-xl h-[var(--tablet-header-h)] flex items-center justify-between px-4"
         style={{

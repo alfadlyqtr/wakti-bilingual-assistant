@@ -51,12 +51,12 @@ export function usePresence(currentUserId?: string | null) {
   // Get neutral presence label
   const getLastSeen = useCallback((userId: string) => {
     const ts = lastSeen[userId];
-    if (isOnline(userId)) return 'Active now';
+    if (isOnline(userId)) return 'Online • now';
     if (ts) {
       try {
         const age = Date.now() - new Date(ts).getTime();
-        if (age <= 5 * 60_000) return 'Active recently';
-        return `Last seen ${formatLastSeen(ts)}`;
+        if (age <= 60_000) return 'Last online just now';
+        return `Last online ${formatLastSeen(ts)}`;
       } catch {
         return 'Offline';
       }
@@ -133,6 +133,10 @@ export function usePresence(currentUserId?: string | null) {
             typing: false,
             last_seen: new Date().toISOString()
           } as PresencePayload);
+          // Persist last_seen to profiles table for reliable offline display
+          try {
+            await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', currentUserId);
+          } catch (_) {}
         }
       });
 
@@ -144,6 +148,10 @@ export function usePresence(currentUserId?: string | null) {
           typing: false,
           last_seen: new Date().toISOString()
         } as PresencePayload);
+        // Also persist to DB so other clients can show "last seen"
+        try {
+          await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', currentUserId);
+        } catch (_) {}
       }
     }, 30000);
 
@@ -161,5 +169,10 @@ export function usePresence(currentUserId?: string | null) {
     isTyping,
     getLastSeen,
     setUserTyping,
+    // Allow seeding last_seen from DB fetch when presence isn't available
+    setExternalLastSeen: (userId: string, isoTimestamp?: string) => {
+      if (!userId || !isoTimestamp) return;
+      setLastSeen(prev => ({ ...prev, [userId]: isoTimestamp }));
+    },
   };
 }

@@ -15,7 +15,7 @@ export function TabletLayout({ children }: TabletLayoutProps) {
 
   return (
     <ProtectedRoute>
-      <div className="h-screen bg-background w-full">
+      <div className="h-screen bg-background w-full" dir="ltr" data-layout-dir="ltr">
         {/* Sidebar remains as-is; content is padded to accommodate it */}
         <TabletSidebar />
         {/* Content column: full height, header/top + scrollable middle + bottom nav */}

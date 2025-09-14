@@ -302,6 +302,25 @@ export function ChatInput({
     }
     return modeHighlightStyles(activeTrigger);
   })();
+
+  // Send button color by mode
+  const sendBtnColors = (() => {
+    if (activeTrigger === 'search' && searchSubmode === 'youtube') return 'bg-red-600 hover:bg-red-700 text-white';
+    switch (activeTrigger) {
+      case 'chat':
+        return 'bg-blue-600 hover:bg-blue-700 text-white';
+      case 'search':
+        return 'bg-green-600 hover:bg-green-700 text-white';
+      case 'image':
+        return 'bg-orange-500 hover:bg-orange-600 text-white';
+      case 'video':
+        return 'bg-purple-600 hover:bg-purple-700 text-white';
+      case 'vision':
+        return 'bg-cyan-600 hover:bg-cyan-700 text-white';
+      default:
+        return 'bg-primary/90 hover:bg-primary text-primary-foreground';
+    }
+  })();
   const textareaHighlightClass = (() => {
     if (activeTrigger === 'search' && searchSubmode === 'youtube') {
       return 'border-red-300 shadow-[inset_0_2px_12px_0_rgba(248,113,113,0.10)]';
@@ -733,44 +752,114 @@ export function ChatInput({
                   <>
                     {uploadedFiles[0]?.imageType?.id === 'ids' && (
                       <>
-                        <button onClick={() => setMessage('What info is on this document?')} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm">🔍 What info is on this document?</button>
-                        <button onClick={() => setMessage('Extract all the text for me')} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm">📝 Extract all the text</button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'ما المعلومات الموجودة في هذا المستند؟' : 'What info is on this document?')}
+                          className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
+                        >
+                          🔍 {language === 'ar' ? 'ما المعلومات الموجودة في هذا المستند؟' : 'What info is on this document?'}
+                        </button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'استخرج كل النص' : 'Extract all the text for me')}
+                          className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
+                        >
+                          📝 {language === 'ar' ? 'استخرج كل النص' : 'Extract all the text'}
+                        </button>
                       </>
                     )}
                     {uploadedFiles[0]?.imageType?.id === 'bills' && (
                       <>
-                        <button onClick={() => setMessage('How much did I spend?')} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm">💰 How much did I spend?</button>
-                        <button onClick={() => setMessage('Split this bill between ___ people')} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm">➗ Split this bill</button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'كم أنفقت؟' : 'How much did I spend?')}
+                          className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm"
+                        >
+                          💰 {language === 'ar' ? 'كم أنفقت؟' : 'How much did I spend?'}
+                        </button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'قسّم هذه الفاتورة بين ___ أشخاص' : 'Split this bill between ___ people')}
+                          className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm"
+                        >
+                          ➗ {language === 'ar' ? 'قسّم هذه الفاتورة' : 'Split this bill'}
+                        </button>
                       </>
                     )}
                     {uploadedFiles[0]?.imageType?.id === 'food' && (
                       <>
-                        <button onClick={() => setMessage('How many calories is this?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🔥 How many calories?</button>
-                        <button onClick={() => setMessage('What ingredients do you see?')} className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm">🥗 What ingredients?</button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'كم عدد السعرات؟' : 'How many calories is this?')}
+                          className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
+                        >
+                          🔥 {language === 'ar' ? 'كم عدد السعرات؟' : 'How many calories?'}
+                        </button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'ما المكونات التي تراها؟' : 'What ingredients do you see?')}
+                          className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
+                        >
+                          🥗 {language === 'ar' ? 'ما المكونات؟' : 'What ingredients?'}
+                        </button>
                       </>
                     )}
                     {uploadedFiles[0]?.imageType?.id === 'docs' && (
                       <>
-                        <button onClick={() => setMessage('Answer the questions in this')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📚 Answer the questions</button>
-                        <button onClick={() => setMessage('Explain this chart/report')} className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm">📊 Explain this chart</button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'أجب عن الأسئلة في هذا' : 'Answer the questions in this')}
+                          className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
+                        >
+                          📚 {language === 'ar' ? 'أجب عن الأسئلة' : 'Answer the questions'}
+                        </button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'اشرح هذا المخطط/التقرير' : 'Explain this chart/report')}
+                          className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
+                        >
+                          📊 {language === 'ar' ? 'اشرح هذا المخطط' : 'Explain this chart'}
+                        </button>
                       </>
                     )}
                     {uploadedFiles[0]?.imageType?.id === 'screens' && (
                       <>
-                        <button onClick={() => setMessage('What\'s the error/problem here?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🚨 What's the error?</button>
-                        <button onClick={() => setMessage('How do I fix this step by step?')} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm">🛠️ How to fix this?</button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'ما الخطأ/المشكلة هنا؟' : "What's the error/problem here?")}
+                          className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm"
+                        >
+                          🚨 {language === 'ar' ? 'ما الخطأ هنا؟' : "What's the error?"}
+                        </button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'كيف أصلح ذلك خطوة بخطوة؟' : 'How do I fix this step by step?')}
+                          className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm"
+                        >
+                          🛠️ {language === 'ar' ? 'كيف أصلح ذلك؟' : 'How to fix this?'}
+                        </button>
                       </>
                     )}
                     {uploadedFiles[0]?.imageType?.id === 'photos' && (
                       <>
-                        <button onClick={() => setMessage('Describe the person/people')} className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm">👥 Describe the people</button>
-                        <button onClick={() => setMessage('Where was this taken?')} className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm">📍 Where was this taken?</button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'صف الشخص/الأشخاص' : 'Describe the person/people')}
+                          className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm"
+                        >
+                          👥 {language === 'ar' ? 'صف الأشخاص' : 'Describe the people'}
+                        </button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'أين تم التقاط هذه الصورة؟' : 'Where was this taken?')}
+                          className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm"
+                        >
+                          📍 {language === 'ar' ? 'أين تم التقاطها؟' : 'Where was this taken?'}
+                        </button>
                       </>
                     )}
                     {(!uploadedFiles[0]?.imageType || uploadedFiles[0]?.imageType?.id === 'general') && (
                       <>
-                        <button onClick={() => setMessage('Describe everything you see')} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm">👁️ Describe everything</button>
-                        <button onClick={() => setMessage('What\'s the main subject here?')} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm">🔍 What's the main subject?</button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'صف كل ما تراه' : 'Describe everything you see')}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
+                        >
+                          👁️ {language === 'ar' ? 'صف كل شيء' : 'Describe everything'}
+                        </button>
+                        <button
+                          onClick={() => setMessage(language === 'ar' ? 'ما الموضوع الرئيسي هنا؟' : "What's the main subject here?")}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
+                        >
+                          🔍 {language === 'ar' ? 'ما الموضوع الرئيسي؟' : "What's the main subject?"}
+                        </button>
                       </>
                     )}
                   </>
@@ -882,7 +971,7 @@ export function ChatInput({
                           disabled={!canSend}
                           className={`
                             h-11 w-11 rounded-xl p-0 flex-shrink-0
-                            ${activeTrigger === 'search' && searchSubmode === 'youtube' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary/90 hover:bg-primary'}
+                            ${sendBtnColors}
                             border-0 shadow-2xl backdrop-blur-md
                             transition-all duration-200 hover:scale-110 hover:shadow-2xl
                             shadow-lg

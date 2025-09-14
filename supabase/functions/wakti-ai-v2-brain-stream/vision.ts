@@ -324,7 +324,7 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
     return false;
   }
 
-  static buildVisionMessage(content: string, attachedFiles: any[], language: string = 'en'): any {
+  static buildVisionMessage(content: string, attachedFiles: any[], language: string = 'en', provider?: 'openai' | 'claude'): any {
     const imageFiles = attachedFiles.filter(file => file.type?.startsWith('image/'));
     
     if (imageFiles.length === 0) {
@@ -336,6 +336,30 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
       };
     }
 
+    // Provider-aware formatting
+    if (provider === 'openai') {
+      // OpenAI vision expects image_url objects. Use data URLs.
+      const headerText = language === 'ar' 
+        ? 'يرجى الرد باللغة العربية فقط. ' + content 
+        : 'Please respond in English only. ' + content;
+
+      const contentParts: any[] = [
+        { type: 'text', text: headerText }
+      ];
+
+      for (const file of imageFiles) {
+        const base64 = file?.data || file?.content || '';
+        const mime = file?.type || 'image/png';
+        const url = (typeof base64 === 'string' && base64.startsWith('data:'))
+          ? base64
+          : `data:${mime};base64,${base64}`;
+        contentParts.push({ type: 'image_url', image_url: { url } });
+      }
+
+      return { role: 'user', content: contentParts };
+    }
+
+    // Default to Claude formatting (base64 images)
     const messageContent = [
       {
         type: "text",
@@ -346,19 +370,18 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
     ];
 
     imageFiles.forEach(file => {
+      const base64 = file?.data || file?.content;
+      if (!base64) return;
       messageContent.push({
         type: "image",
         source: {
           type: "base64",
           media_type: file.type,
-          data: file.data
+          data: base64
         }
       });
     });
 
-    return {
-      role: "user",
-      content: messageContent
-    };
+    return { role: 'user', content: messageContent };
   }
 }

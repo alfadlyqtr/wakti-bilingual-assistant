@@ -525,7 +525,7 @@ async function streamAIResponse(
   // Use VisionSystem for proper message formatting
   let userMessage;
   if (isVisionMode || hasValidVisionImages) {
-    userMessage = VisionSystem.buildVisionMessage(textMessage, attachedFiles, responseLanguage);
+    userMessage = VisionSystem.buildVisionMessage(textMessage, attachedFiles, responseLanguage, provider as any);
   } else {
     // Build a generic language-preface that matches the chosen responseLanguage
     const langNames: Record<string, string> = {

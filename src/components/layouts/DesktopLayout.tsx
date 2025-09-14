@@ -14,7 +14,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
 
   return (
     <ProtectedRoute>
-      <div className="h-screen bg-background w-full">
+      <div className="h-screen bg-background w-full" dir="ltr" data-layout-dir="ltr">
         {/* Sidebar remains fixed at left; content area is padded to accommodate it */}
         <DesktopSidebar />
         {/* Content column: full height flex with header and scrollable main */}
