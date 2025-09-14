@@ -227,7 +227,7 @@ export default function Home() {
                 className="relative z-10 text-center max-w-6xl mx-auto"
               >
                 <motion.div variants={itemVariants} className="mb-12">
-                  <Logo3D size="xl" className="mx-auto mb-8" />
+                  <Logo3D size="lg" className="mx-auto mb-8" />
                   <div className="flex items-center justify-center gap-3 mb-6">
                     <h1 className="text-6xl lg:text-8xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
                       WAKTI

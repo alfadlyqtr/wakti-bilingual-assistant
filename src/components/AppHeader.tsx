@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -262,7 +263,7 @@ export function AppHeader() {
             {userMenuOpen && createPortal(
               <div 
                 onClick={() => setUserMenuOpen(false)}
-                className="fixed inset-0 z-[980] bg-background/20 backdrop-blur-sm"
+                className="fixed inset-0 z-[980] bg-background/20 backdrop-blur-sm pointer-events-none md:pointer-events-auto"
               />,
               document.body
             )}
@@ -272,7 +273,7 @@ export function AppHeader() {
               side="bottom"
               sideOffset={32}
               collisionPadding={16}
-              className="z-[1200] bg-background/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border border-border/60 dark:border-white/20"
+              className="z-[1200] bg-background/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border border-border/60 dark:border-white/20 md:min-w-[200px]"
             >
               <DropdownMenuLabel>{language === 'ar' ? 'الحساب' : 'Account'}</DropdownMenuLabel>
               <DropdownMenuSeparator />
