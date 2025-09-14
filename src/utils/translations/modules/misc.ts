@@ -315,6 +315,8 @@ export const misc = {
   getStarted: "Get Started",
   waktiAiTitle: "WAKTI AI",
   waktiAiDesc: "Talk or type, translate, search, generate text or reports, clone your voice — chat with smart AI.",
+  imageGenTitle: "Image Generator",
+  imageGenDesc: "Create beautiful images in seconds from plain text. Choose styles, refine with prompts, upscale for crisp results, and export in ready-to-share formats.",
   tasksRemindersTitle: "Tasks & Reminders",
   tasksRemindersDesc: "Stay organized with smart tasks. Add subtasks, set priorities, share, snooze, and track everything in a seamless flow.",
   maw3dEventsTitle: "Maw3d Events",

@@ -6,7 +6,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Image as ImageIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
@@ -70,6 +70,14 @@ export default function Index() {
       gradient: "from-blue-500 via-purple-500 to-indigo-600",
       bgGradient: "from-blue-50 to-purple-50",
       iconColor: "text-blue-600"
+    },
+    {
+      icon: ImageIcon,
+      title: t("imageGenTitle", language),
+      description: t("imageGenDesc", language),
+      gradient: "from-sky-500 via-cyan-500 to-emerald-600",
+      bgGradient: "from-sky-50 to-cyan-50",
+      iconColor: "text-sky-600"
     },
     {
       icon: Calendar,

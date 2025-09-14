@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
@@ -15,6 +15,54 @@ interface AppLayoutProps {
 function MobileAppLayout({ children }: AppLayoutProps) {
   // Initialize the unified notification system
   useUnreadMessages();
+
+  // Safety check: ensure no ancestor transform breaks fixed header/nav on iOS
+  useEffect(() => {
+    const clearTransforms = () => {
+      try {
+        const nodes: (HTMLElement | null)[] = [
+          document.documentElement as HTMLElement,
+          document.body as HTMLElement,
+          document.getElementById('root') as HTMLElement,
+        ];
+        for (const el of nodes) {
+          if (!el) continue;
+          const cs = getComputedStyle(el);
+          if (cs && cs.transform && cs.transform !== 'none') {
+            el.style.transform = 'none';
+            el.style.willChange = 'auto';
+          }
+        }
+      } catch {}
+    };
+
+    // Run once on mount
+    clearTransforms();
+
+    // Listen to viewport changes which often trigger the bug on iOS
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    const onVVResize = () => clearTransforms();
+    const onResize = () => clearTransforms();
+    const onVisibility = () => clearTransforms();
+
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize as any);
+    document.addEventListener('visibilitychange', onVisibility);
+    if (vv) {
+      vv.addEventListener('resize', onVVResize);
+      vv.addEventListener('scroll', onVVResize);
+    }
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize as any);
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (vv) {
+        vv.removeEventListener('resize', onVVResize);
+        vv.removeEventListener('scroll', onVVResize);
+      }
+    };
+  }, []);
 
   return (
     <ProtectedRoute>

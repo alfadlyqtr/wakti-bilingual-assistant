@@ -1191,6 +1191,8 @@ export type TranslationKey =
   | "getStarted"
   | "waktiAiTitle"
   | "waktiAiDesc"
+  | "imageGenTitle"
+  | "imageGenDesc"
   | "tasksRemindersTitle"
   | "tasksRemindersDesc"
   | "maw3dEventsTitle"

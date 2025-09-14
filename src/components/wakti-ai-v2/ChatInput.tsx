@@ -118,12 +118,13 @@ export function ChatInput({
     }
   }, [uploadedFiles.length, activeTrigger, wasAutoSwitchedToVision, onTriggerChange]);
 
-  // Focus textarea after expanding the input area
-  useEffect(() => {
-    if (!isInputCollapsed) {
-      textareaRef.current?.focus();
-    }
-  }, [isInputCollapsed]);
+  // Removed auto-focus to avoid programmatically opening the mobile keyboard
+  // Keyboard should appear only after explicit user interaction with the input
+  // useEffect(() => {
+  //   if (!isInputCollapsed) {
+  //     textareaRef.current?.focus();
+  //   }
+  // }, [isInputCollapsed]);
 
   // Initialize TTS Auto Play from localStorage
   useEffect(() => {
