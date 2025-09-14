@@ -23,28 +23,43 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
         const currentHeight = window.visualViewport?.height || window.innerHeight;
         const heightDifference = initialViewportHeight - currentHeight;
         
-        // Consider keyboard visible if viewport shrunk by more than 150px
-        // This threshold helps avoid false positives from browser UI changes
-        const keyboardVisible = heightDifference > 150;
+        // Consider keyboard visible if viewport shrunk by more than 100px
+        // Lower threshold for better detection
+        const keyboardVisible = heightDifference > 100;
         
         setIsKeyboardVisible(keyboardVisible);
         setKeyboardHeight(keyboardVisible ? heightDifference : 0);
         
-        // Update CSS custom properties for use in components
+        // Update CSS custom properties for precise positioning
         document.documentElement.style.setProperty(
           '--keyboard-height',
           keyboardVisible ? `${heightDifference}px` : '0px'
+        );
+        document.documentElement.style.setProperty(
+          '--viewport-height',
+          `${currentHeight}px`
         );
         document.documentElement.style.setProperty(
           '--is-keyboard-visible',
           keyboardVisible ? '1' : '0'
         );
         
+        // Add body class for additional styling control
+        if (keyboardVisible) {
+          document.body.classList.add('keyboard-visible');
+        } else {
+          document.body.classList.remove('keyboard-visible');
+        }
+        
         // Dispatch custom event for other components to listen to
         window.dispatchEvent(new CustomEvent('mobile-keyboard-change', {
-          detail: { isVisible: keyboardVisible, height: keyboardVisible ? heightDifference : 0 }
+          detail: { 
+            isVisible: keyboardVisible, 
+            height: keyboardVisible ? heightDifference : 0,
+            viewportHeight: currentHeight 
+          }
         }));
-      }, 100);
+      }, 50); // Reduced delay for faster response
     };
 
     // Listen to visual viewport changes (most reliable for keyboard detection)

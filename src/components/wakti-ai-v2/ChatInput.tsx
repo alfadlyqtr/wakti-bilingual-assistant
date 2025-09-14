@@ -886,11 +886,12 @@ export function ChatInput({
                       shadow-inner shadow-primary/10
                       backdrop-blur-[3px] resize-none
                       focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
-                      py-3 px-4 text-base leading-relaxed
+                      text-base leading-5
                       placeholder:text-gray-500 dark:placeholder:text-gray-400
                       rounded-xl
                       outline-none transition-all duration-200
                       ${!isTextareaEnabled ? 'opacity-50 cursor-not-allowed' : ''}
+                      py-3 px-4
                     `}
                     ref={textareaRef}
                     onKeyDown={(e) => {

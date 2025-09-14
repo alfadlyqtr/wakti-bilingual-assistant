@@ -14,6 +14,7 @@ import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSideba
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
 import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
+import { cn } from '@/lib/utils';
 
 
 const useDebounceCallback = (callback: Function, delay: number) => {
@@ -1196,7 +1197,15 @@ const WaktiAIV2 = () => {
 
       <div className="flex flex-col h-full w-full relative">
         <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto"
-             style={{ height: 'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)' }}
+             style={{ 
+               height: window.innerWidth < 768 && isKeyboardVisible 
+                 ? 'calc(var(--viewport-height, 100vh) - var(--chat-input-height,80px) - 16px)'
+                 : 'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)',
+               // Mobile: adjust scroll container when keyboard is visible  
+               ...(window.innerWidth < 768 && isKeyboardVisible && {
+                 maxHeight: 'calc(var(--viewport-height, 100vh) - var(--chat-input-height,80px) - 16px)'
+               })
+             }}
              ref={scrollAreaRef}>
           <ChatMessages
             sessionMessages={sessionMessages.slice(-35)}
@@ -1218,11 +1227,21 @@ const WaktiAIV2 = () => {
         </div>
 
         <div 
-          className="fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg transition-all duration-300 ease-in-out md:left-[var(--current-sidebar-width,0px)]"
+          className={cn(
+            "fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg transition-all duration-300 ease-in-out md:left-[var(--current-sidebar-width,0px)]",
+            // Mobile: ensure proper keyboard positioning
+            window.innerWidth < 768 && isKeyboardVisible ? "bottom-0" : ""
+          )}
           style={{
-            bottom: isKeyboardVisible 
-              ? 'var(--keyboard-height, 0px)' 
+            // Mobile: position flush with keyboard (no gap)
+            bottom: window.innerWidth < 768 && isKeyboardVisible 
+              ? '0px' 
               : 'calc(72px + env(safe-area-inset-bottom, 0px))',
+            // Mobile: additional keyboard compensation
+            ...(window.innerWidth < 768 && isKeyboardVisible && {
+              transform: `translateY(-${document.documentElement.style.getPropertyValue('--keyboard-height') || '0px'})`,
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)'
+            })
           }}
         >
           <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-3">

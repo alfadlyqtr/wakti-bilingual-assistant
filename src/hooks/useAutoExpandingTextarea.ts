@@ -19,28 +19,35 @@ export function useAutoExpandingTextarea({
     const textarea = textareaRef.current;
     if (!textarea || !enabled) return;
 
-    // Reset height to get the correct scrollHeight
+    // Only apply on mobile
+    if (window.innerWidth >= 768) return;
+
+    // Reset height to auto to get accurate scrollHeight
     textarea.style.height = 'auto';
     
-    // Calculate line height
+    // Get computed styles
     const computedStyle = window.getComputedStyle(textarea);
-    const lineHeight = parseInt(computedStyle.lineHeight) || 24;
-    const paddingTop = parseInt(computedStyle.paddingTop) || 0;
-    const paddingBottom = parseInt(computedStyle.paddingBottom) || 0;
+    const lineHeight = parseInt(computedStyle.lineHeight) || 20;
+    const paddingTop = parseInt(computedStyle.paddingTop) || 8;
+    const paddingBottom = parseInt(computedStyle.paddingBottom) || 8;
+    const borderTop = parseInt(computedStyle.borderTopWidth) || 0;
+    const borderBottom = parseInt(computedStyle.borderBottomWidth) || 0;
     
-    // Calculate min and max heights
-    const minHeight = (lineHeight * minLines) + paddingTop + paddingBottom;
-    const maxHeight = (lineHeight * maxLines) + paddingTop + paddingBottom;
+    // Calculate heights
+    const minHeight = (lineHeight * minLines) + paddingTop + paddingBottom + borderTop + borderBottom;
+    const maxHeight = (lineHeight * maxLines) + paddingTop + paddingBottom + borderTop + borderBottom;
     
-    // Set height based on content
+    // Get content height and apply constraints
     const scrollHeight = textarea.scrollHeight;
     const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
     
+    // Apply the new height
     textarea.style.height = `${newHeight}px`;
     
-    // Enable/disable scrolling based on whether we've reached max height
+    // Handle scrolling
     if (scrollHeight > maxHeight) {
       textarea.style.overflowY = 'auto';
+      textarea.scrollTop = textarea.scrollHeight; // Auto-scroll to bottom
     } else {
       textarea.style.overflowY = 'hidden';
     }
