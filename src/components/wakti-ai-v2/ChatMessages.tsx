@@ -262,28 +262,11 @@ export function ChatMessages({
       // Start showing spinner immediately for better feedback
       setFetchingIds(prev => { const n = new Set(prev); n.add(messageId); return n; });
 
-      // Reuse cached audio if available (in-memory first)
-      const cachedUrl = audioCacheRef.current.get(messageId);
-      if (cachedUrl) {
-        console.log('[TTS] using in-memory cache', { id: messageId });
-        const a = new Audio(cachedUrl);
-        audioRef.current = a;
-        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); };
-        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); };
-        a.onplay = () => setIsPaused(false);
-        a.onpause = () => setIsPaused(true);
-        try { await a.play(); } catch (e) { console.error('[TTS] play() failed from cache', e); }
-        // Clear spinner if we used cache
-        setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-        return;
-      }
-
       // Check persisted cache next
       const persisted = getPersisted(messageId);
       if (persisted?.b64) {
         console.log('[TTS] using persisted cache', { id: messageId });
         const url = base64ToBlobUrl(persisted.b64);
-        audioCacheRef.current.set(messageId, url);
         const a = new Audio(url);
         audioRef.current = a;
         a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} };
@@ -380,7 +363,6 @@ export function ChatMessages({
       const b64 = bufferToBase64(buf);
       setPersisted(messageId, b64, cleanText.length);
       const objectUrl = URL.createObjectURL(full);
-      audioCacheRef.current.set(messageId, objectUrl);
 
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
@@ -421,8 +403,14 @@ export function ChatMessages({
     return () => window.removeEventListener('wakti-tts-autoplay-changed', onAuto as EventListener);
   }, []);
 
-  // Best-effort iOS audio unlock on first user interaction
+  // Best-effort iOS audio unlock on first user interaction, persisted per session
   useEffect(() => {
+    try {
+      if (sessionStorage.getItem('wakti_tts_unlocked') === '1') {
+        audioUnlockedRef.current = true;
+      }
+    } catch {}
+
     const unlock = async () => {
       if (audioUnlockedRef.current) return;
       try {
@@ -432,6 +420,8 @@ export function ChatMessages({
         await a.play().catch(() => {});
         a.pause();
         audioUnlockedRef.current = true;
+        try { sessionStorage.setItem('wakti_tts_unlocked', '1'); } catch {}
+        try { window.dispatchEvent(new Event('wakti-tts-unlocked')); } catch {}
       } catch {
         // Ignore; autoplay will gracefully fail on iOS until the user taps the speaker once
       }
@@ -455,9 +445,26 @@ export function ChatMessages({
       if (autoPlayedIdsRef.current.has(last.id)) return;
       // Avoid overlapping
       if (speakingMessageIdRef.current) return;
+
+      // If audio is not yet unlocked (iOS), wait for unlock event once
+      if (!audioUnlockedRef.current) {
+        const onUnlock = () => {
+          try {
+            if (!autoPlayRef.current) return;
+            const _last = sessionMessages[sessionMessages.length - 1];
+            if (!_last || _last.role !== 'assistant') return;
+            if (autoPlayedIdsRef.current.has(_last.id)) return;
+            autoPlayedIdsRef.current.add(_last.id);
+            const txt = _last.content || '';
+            handleSpeak(txt, _last.id);
+          } catch {}
+        };
+        window.addEventListener('wakti-tts-unlocked', onUnlock as EventListener, { once: true } as any);
+        return;
+      }
+
       // Mark to avoid repeats
       autoPlayedIdsRef.current.add(last.id);
-      // Best-effort play; iOS may require prior unlock/gesture
       const text = last.content || '';
       // Debounce slightly to let DOM settle
       setTimeout(() => { handleSpeak(text, last.id); }, 150);
