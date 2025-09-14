@@ -256,6 +256,7 @@ export function ChatMessages({
       if (audioRef.current) {
         try { audioRef.current.pause(); } catch {}
         try { audioRef.current.currentTime = 0; } catch {}
+        try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {}
       }
       setSpeakingMessageId(messageId);
       setIsPaused(false);
@@ -269,9 +270,9 @@ export function ChatMessages({
         const url = base64ToBlobUrl(persisted.b64);
         const a = new Audio(url);
         audioRef.current = a;
-        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} };
-        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} };
-        a.onplay = () => setIsPaused(false);
+        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+        a.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
         a.onpause = () => setIsPaused(true);
         try { await a.play(); } catch (e) { console.error('[TTS] play() failed from persisted', e); }
         // Clear spinner if we used cache
@@ -366,9 +367,9 @@ export function ChatMessages({
 
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
-      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} };
-      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} };
-      audio.onplay = () => setIsPaused(false);
+      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+      audio.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
       audio.onpause = () => setIsPaused(true);
       console.log('[TTS] playing audio');
       try { await audio.play(); } catch (e) { console.error('[TTS] play() failed after fetch', e); }
@@ -428,9 +429,13 @@ export function ChatMessages({
       window.removeEventListener('touchend', unlock);
       window.removeEventListener('click', unlock);
     };
+    window.addEventListener('pointerdown', unlock, { once: true } as any);
+    window.addEventListener('touchstart', unlock, { once: true, passive: true } as any);
     window.addEventListener('touchend', unlock, { once: true, passive: true } as any);
     window.addEventListener('click', unlock, { once: true } as any);
     return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchstart', unlock);
       window.removeEventListener('touchend', unlock);
       window.removeEventListener('click', unlock);
     };

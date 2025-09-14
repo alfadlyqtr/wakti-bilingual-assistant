@@ -67,9 +67,13 @@ export const YouTubeAudioPlayer: React.FC<YouTubeAudioPlayerProps> = ({ videoId,
       }
       // Create a detached node under document.body so React never touches it
       const mountEl = document.createElement('div');
-      mountEl.style.position = 'absolute';
-      mountEl.style.width = '0px';
-      mountEl.style.height = '0px';
+      // Make the iframe minimally visible so iOS treats it as a real media element
+      mountEl.style.position = 'fixed';
+      mountEl.style.bottom = '0px';
+      mountEl.style.left = '0px';
+      mountEl.style.width = '1px';
+      mountEl.style.height = '1px';
+      mountEl.style.opacity = '0.001';
       mountEl.style.overflow = 'hidden';
       mountEl.style.pointerEvents = 'none';
       document.body.appendChild(mountEl);
@@ -122,8 +126,14 @@ export const YouTubeAudioPlayer: React.FC<YouTubeAudioPlayerProps> = ({ videoId,
           },
           onStateChange: (e: any) => {
             // 1 = playing, 2 = paused, 0 = ended
-            if (e.data === 1) setIsPlaying(true);
-            else if (e.data === 2) setIsPlaying(false);
+            if (e.data === 1) {
+              setIsPlaying(true);
+              try { window.dispatchEvent(new Event('wakti-youtube-playing')); } catch {}
+            }
+            else if (e.data === 2) {
+              setIsPlaying(false);
+              try { window.dispatchEvent(new Event('wakti-youtube-paused')); } catch {}
+            }
             else if (e.data === 0) {
               // ended: stop and reset without replaying
               try {
@@ -132,6 +142,7 @@ export const YouTubeAudioPlayer: React.FC<YouTubeAudioPlayerProps> = ({ videoId,
                 playerRef.current?.pauseVideo?.();
               } catch {}
               setIsPlaying(false);
+              try { window.dispatchEvent(new Event('wakti-youtube-paused')); } catch {}
             }
           }
         }
