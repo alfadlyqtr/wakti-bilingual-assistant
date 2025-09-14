@@ -11,6 +11,7 @@ import { SimplifiedFileUpload } from './SimplifiedFileUpload';
 import { ImageModeFileUpload } from './ImageModeFileUpload';
 import type { UploadedFile } from '@/types/fileUpload';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
+import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
 
 // Returns border/outline classes per mode for main container & textarea
 const modeHighlightStyles = (activeTrigger: string) => {
@@ -94,6 +95,9 @@ export function ChatInput({
   // Ref to the inner card to compute offset from viewport bottom to card top
   const cardRef = useRef<HTMLDivElement>(null);
   
+  // Mobile keyboard detection
+  const { isKeyboardVisible } = useMobileKeyboard();
+  
 
   // Use simplified file upload hook
   const {
@@ -138,9 +142,26 @@ export function ChatInput({
   useEffect(() => {
     const closer = () => {
       setIsModeMenuOpen(false);
+      setSearchMenuPos(null);
+      setImageMenuPos(null);
     };
     window.addEventListener('wakti-close-all-overlays', closer as EventListener);
-    return () => window.removeEventListener('wakti-close-all-overlays', closer as EventListener);
+    
+    // Close dropdowns when clicking outside
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-dropdown]') && !target.closest('[data-dropdown-menu]')) {
+        setSearchMenuPos(null);
+        setImageMenuPos(null);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      window.removeEventListener('wakti-close-all-overlays', closer as EventListener);
+      document.removeEventListener('click', handleClickOutside);
+    };
   }, []);
 
   // Dynamically measure input card height and expose as CSS var --chat-input-height
@@ -459,8 +480,16 @@ export function ChatInput({
         </>
       )}
 
-      {/* Main Input Area - Edge to edge on mobile */}
-      <div className="w-full px-0 md:px-4 pb-1 md:pb-4 pt-3 mt-0" ref={inputCardRef}>
+      {/* Main Input Area - Edge to edge on mobile, tight spacing, keyboard aware */}
+      <div 
+        className={`w-full px-0 md:px-4 pb-1 md:pb-4 pt-1 mt-0 transition-all duration-300 ${
+          isKeyboardVisible ? 'fixed bottom-0 left-0 right-0 z-50' : ''
+        }`} 
+        ref={inputCardRef}
+        style={{
+          paddingBottom: isKeyboardVisible ? 'env(safe-area-inset-bottom)' : undefined
+        }}
+      >
         <div className="w-full px-1 md:px-6">
           <div
             className={`
@@ -495,10 +524,10 @@ export function ChatInput({
               </TooltipProvider>
             </div>
             
-            {/* MOBILE: Button row above input - Only on mobile */}
+            {/* MOBILE: Top row with all buttons - Always visible */}
             {!isInputCollapsed && (
               <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10 md:hidden">
-                {/* Left side: Extra + Tools buttons */}
+                {/* Left side: Extra + Tools + Upload */}
                 <div className="flex items-center gap-2">
                   <button
                     onPointerUp={(e) => {
@@ -540,35 +569,9 @@ export function ChatInput({
                       {language === 'ar' ? 'أدوات' : 'Tools'}
                     </span>
                   </button>
-                </div>
 
-                {/* Right side: Upload + Mode Badge */}
-                <div className="flex items-center gap-2">
-                  {/* Upload button for different modes */}
-                  {activeTrigger === 'video' && (
-                    <button
-                      onPointerUp={() => setShowVideoUpload && setShowVideoUpload(true)}
-                      className="h-8 px-2.5 rounded-xl flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all border-0 touch-manipulation"
-                      disabled={isUploading}
-                      type="button"
-                      title={language === 'ar' ? 'إضافة فيديو' : 'Add Video'}
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      <span className="text-xs">Video</span>
-                    </button>
-                  )}
-
-                  {activeTrigger === 'chat' && (
-                    <div className="flex justify-center">
-                      <PlusMenu
-                        onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
-                        onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
-                        isLoading={isUploading}
-                      />
-                    </div>
-                  )}
-
-                  {activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal') && (
+                  {/* Upload button - shown in image modes (Text2Image optional, Image2Image/BG-X required), hidden in Chat/Web/YouTube */}
+                  {(activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal')) && (
                     <button
                       type="button"
                       onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); triggerSeedUpload(); }}
@@ -581,12 +584,38 @@ export function ChatInput({
                       <span className="text-xs">{language === 'ar' ? 'رفع' : 'Upload'}</span>
                     </button>
                   )}
-                  
-                  {/* Mode Badge */}
+
+                  {activeTrigger === 'chat' && (
+                    <div className="flex justify-center">
+                      <PlusMenu
+                        onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
+                        onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
+                        isLoading={isUploading}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Right side: Mode Badge + Speed */}
+                <div className="flex items-center gap-2">
+                  {/* Mode Badge with dropdowns */}
                   <div className="flex items-center">
                     {activeTrigger === 'search' ? (
                       <div className="relative">
-                        <div
+                        <button
+                          ref={searchModeBtnRef}
+                          data-dropdown
+                          onPointerUp={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const rect = searchModeBtnRef.current?.getBoundingClientRect();
+                            if (rect) {
+                              setSearchMenuPos({
+                                top: rect.bottom + 8,
+                                left: rect.left
+                              });
+                            }
+                          }}
                           className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none border align-middle ${searchSubmode === 'youtube'
                             ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
                             : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
@@ -595,17 +624,140 @@ export function ChatInput({
                           <span className="text-[10px]">
                             {searchSubmode === 'youtube' ? 'YouTube' : (language === 'ar' ? 'الويب' : 'Web')}
                           </span>
-                        </div>
+                          <ChevronDown className="h-2.5 w-2.5" />
+                        </button>
+                        
+                        {/* Search Mode Dropdown */}
+                        {searchMenuPos && createPortal(
+                          <div
+                            className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[100px]"
+                            style={{
+                              top: searchMenuPos.top,
+                              left: searchMenuPos.left,
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onPointerUp={() => {
+                                setSearchSubmode('web');
+                                setSearchMenuPos(null);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                            >
+                              <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                              {language === 'ar' ? 'الويب' : 'Web'}
+                            </button>
+                            <button
+                              onPointerUp={() => {
+                                setSearchSubmode('youtube');
+                                setSearchMenuPos(null);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                            >
+                              <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                              YouTube
+                            </button>
+                          </div>,
+                          document.body
+                        )}
                       </div>
                     ) : activeTrigger === 'image' ? (
-                      <div className="inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0">
-                        <ImagePlus className="h-2.5 w-2.5" />
-                        <span className="text-[10px]">{language === 'ar' ? 'صورة' : 'Image'}</span>
+                      <div className="relative">
+                        <button
+                          ref={imageModeBtnRef}
+                          onPointerUp={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const rect = imageModeBtnRef.current?.getBoundingClientRect();
+                            if (rect) {
+                              setImageMenuPos({
+                                top: rect.bottom + 8,
+                                left: rect.left
+                              });
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0"
+                        >
+                          <ImagePlus className="h-2.5 w-2.5" />
+                          <span className="text-[10px]">
+                            {imageMode === 'image2image' ? (language === 'ar' ? 'صورة 2' : 'Image 2') 
+                             : imageMode === 'background-removal' ? 'BG-X' 
+                             : (language === 'ar' ? 'صورة' : 'Image')}
+                          </span>
+                          <ChevronDown className="h-2.5 w-2.5" />
+                        </button>
+                        
+                        {/* Image Mode Dropdown */}
+                        {imageMenuPos && createPortal(
+                          <div
+                            className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px]"
+                            style={{
+                              top: imageMenuPos.top,
+                              left: imageMenuPos.left,
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onPointerUp={() => {
+                                setImageMode('text2image');
+                                setImageMenuPos(null);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              {language === 'ar' ? 'نص إلى صورة' : 'Text2Image'}
+                            </button>
+                            <button
+                              onPointerUp={() => {
+                                setImageMode('image2image');
+                                setImageMenuPos(null);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              {language === 'ar' ? 'صورة إلى صورة' : 'Image2Image'}
+                            </button>
+                            <button
+                              onPointerUp={() => {
+                                setImageMode('background-removal');
+                                setImageMenuPos(null);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              {language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}
+                            </button>
+                          </div>,
+                          document.body
+                        )}
+                      </div>
+                    ) : activeTrigger === 'chat' ? (
+                      <div className="inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50 align-middle">
+                        <span className="text-[10px]">{language === 'ar' ? 'دردشة' : 'Chat'}</span>
                       </div>
                     ) : (
                       <ActiveModeIndicator activeTrigger={activeTrigger} />
                     )}
                   </div>
+
+                  {/* Speed dropdown - only in Image modes */}
+                  {activeTrigger === 'image' && (
+                    <div className="flex justify-center">
+                      <div className="relative inline-flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 rounded-lg px-2 py-1 shadow-sm min-w-[56px]">
+                        <select
+                          aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
+                          className="appearance-none text-[11px] leading-none bg-transparent outline-none text-orange-900 dark:text-orange-200 cursor-pointer text-center"
+                          value={imageQuality}
+                          onChange={(e) => setImageQuality(e.target.value as 'fast' | 'best_fast')}
+                        >
+                          <option value="fast">{language === 'ar' ? 'سريع' : 'Fast'}</option>
+                          <option value="best_fast">{language === 'ar' ? 'أفضل' : 'Best'}</option>
+                        </select>
+                        <span className="pointer-events-none absolute right-1 text-orange-900 dark:text-orange-200">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M7 10l5 5 5-5z" />
+                          </svg>
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -780,28 +932,6 @@ export function ChatInput({
                     }}
                     disabled={isUploading || !isTextareaEnabled}
                   />
-
-                  {/* Image Quality Dropdown - only for Image mode with text2image */}
-                  {activeTrigger === 'image' && imageMode === 'text2image' && (
-                    <div className="flex justify-center">
-                      <div className="relative inline-flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 rounded-lg px-2 py-1 shadow-sm min-w-[56px]">
-                        <select
-                          aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
-                          className="appearance-none text-[11px] leading-none bg-transparent outline-none text-orange-900 dark:text-orange-200 cursor-pointer text-center pb-3"
-                          value={imageQuality}
-                          onChange={(e) => setImageQuality(e.target.value as 'fast' | 'best_fast')}
-                        >
-                          <option value="fast">{language === 'ar' ? 'سريع' : 'Fast'}</option>
-                          <option value="best_fast">{language === 'ar' ? 'أفضل' : 'Best'}</option>
-                        </select>
-                        <span className="pointer-events-none absolute bottom-0.5 left-1/2 -translate-x-1/2 text-orange-900 dark:text-orange-200">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <path d="M7 10l5 5 5-5z" />
-                          </svg>
-                        </span>
-                      </div>
-                    </div>
-                  )}
                   
                   {/* Send button: always visible, disabled when cannot send */}
                   <TooltipProvider>
