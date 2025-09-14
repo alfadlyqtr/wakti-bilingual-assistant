@@ -238,9 +238,11 @@ export function ChatMessages({
   // Google Cloud TTS via Edge Function (no ElevenLabs, no browser SpeechSynthesis)
   const handleSpeak = async (text: string, messageId: string) => {
     try {
+      console.log('[TTS] handleSpeak click', { id: messageId, len: text?.length || 0 });
       const cleanText = sanitizeForTTS(text);
       // Toggle off if already playing this message
       if (speakingMessageId === messageId) {
+        console.log('[TTS] toggling OFF current message', messageId);
         if (audioRef.current) {
           try { audioRef.current.pause(); } catch {}
           try { audioRef.current.currentTime = 0; } catch {}
@@ -257,23 +259,29 @@ export function ChatMessages({
       }
       setSpeakingMessageId(messageId);
       setIsPaused(false);
+      // Start showing spinner immediately for better feedback
+      setFetchingIds(prev => { const n = new Set(prev); n.add(messageId); return n; });
 
       // Reuse cached audio if available (in-memory first)
       const cachedUrl = audioCacheRef.current.get(messageId);
       if (cachedUrl) {
+        console.log('[TTS] using in-memory cache', { id: messageId });
         const a = new Audio(cachedUrl);
         audioRef.current = a;
         a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); };
         a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); };
         a.onplay = () => setIsPaused(false);
         a.onpause = () => setIsPaused(true);
-        await a.play();
+        try { await a.play(); } catch (e) { console.error('[TTS] play() failed from cache', e); }
+        // Clear spinner if we used cache
+        setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
         return;
       }
 
       // Check persisted cache next
       const persisted = getPersisted(messageId);
       if (persisted?.b64) {
+        console.log('[TTS] using persisted cache', { id: messageId });
         const url = base64ToBlobUrl(persisted.b64);
         audioCacheRef.current.set(messageId, url);
         const a = new Audio(url);
@@ -282,12 +290,13 @@ export function ChatMessages({
         a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} };
         a.onplay = () => setIsPaused(false);
         a.onpause = () => setIsPaused(true);
-        await a.play();
+        try { await a.play(); } catch (e) { console.error('[TTS] play() failed from persisted', e); }
+        // Clear spinner if we used cache
+        setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
         return;
       }
 
-      // Mark fetching for this message to drive spinners/percentages
-      setFetchingIds(prev => { const n = new Set(prev); n.add(messageId); return n; });
+      console.log('[TTS] fetching from edge function');
 
       // Determine voice_id from TalkBack settings
       const isArabicText = /[\u0600-\u06FF]/.test(cleanText);
@@ -297,7 +306,17 @@ export function ChatMessages({
       // Auth + endpoint
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
-      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+      const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+
+      // Guard: if URL missing, fail fast with clear UI and logs
+      if (!supabaseUrl || typeof supabaseUrl !== 'string') {
+        console.error('[TTS] Missing VITE_SUPABASE_URL env. Cannot call voice-tts function.');
+        setSpeakingMessageId(null);
+        setIsPaused(false);
+        // Clear spinner
+        setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
+        return;
+      }
 
       const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
         method: 'POST',
@@ -306,6 +325,7 @@ export function ChatMessages({
           'Accept': 'audio/mpeg',
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
+        mode: 'cors',
         body: JSON.stringify({ text: cleanText, voice_id, style: 'neutral' })
       });
 
@@ -313,6 +333,7 @@ export function ChatMessages({
         setSpeakingMessageId(null);
         setIsPaused(false);
         setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
+        try { console.error('[TTS] voice-tts failed', resp.status, await resp.text()); } catch {}
         return;
       }
 
@@ -367,8 +388,10 @@ export function ChatMessages({
       audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} };
       audio.onplay = () => setIsPaused(false);
       audio.onpause = () => setIsPaused(true);
-      await audio.play();
-    } catch {
+      console.log('[TTS] playing audio');
+      try { await audio.play(); } catch (e) { console.error('[TTS] play() failed after fetch', e); }
+    } catch (err) {
+      console.error('[TTS] Unexpected error while fetching/playing audio', err);
       setSpeakingMessageId(null);
       setIsPaused(false);
     } finally {
