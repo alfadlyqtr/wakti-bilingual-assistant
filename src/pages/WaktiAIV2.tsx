@@ -1234,8 +1234,8 @@ const WaktiAIV2 = () => {
             bottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
                   ? '0px' 
-                  : 'calc(72px + env(safe-area-inset-bottom, 0px))')
-              : 'calc(72px + env(safe-area-inset-bottom, 0px))',
+                  : 'var(--app-bottom-tabs-h)')
+              : 'var(--app-bottom-tabs-h)',
             // Ensure proper safe area handling
             paddingBottom: window.innerWidth < 768 && isKeyboardVisible 
               ? 'env(safe-area-inset-bottom, 0px)' 
