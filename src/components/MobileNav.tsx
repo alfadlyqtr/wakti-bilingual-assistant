@@ -108,7 +108,7 @@ export function MobileNav() {
       className={cn(
         "bg-background/80 backdrop-blur-xl border-t border-border/50",
         "supports-[backdrop-filter]:bg-background/60",
-        "ios-reduce-blur transition-transform duration-300 ease-in-out",
+        "ios-reduce-blur transition-transform duration-200 ease-out",
         language === 'ar' ? 'font-arabic' : '',
         'translate-y-0',
         
@@ -116,6 +116,11 @@ export function MobileNav() {
       style={{
         height: 'var(--app-bottom-tabs-h)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        // Mobile only: slide up with keyboard
+        transform: window.innerWidth < 768 
+          ? 'translateY(calc(-1 * var(--mobile-keyboard-height, 0px)))'
+          : 'translateY(0)',
+        willChange: 'transform',
       }}
     >
       <div className="bg-white/80 dark:bg-neutral-900/70 backdrop-blur-2xl ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-vibrant pb-[calc(env(safe-area-inset-bottom)+4px)]">

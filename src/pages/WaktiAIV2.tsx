@@ -1198,9 +1198,9 @@ const WaktiAIV2 = () => {
       <div className="flex flex-col h-full w-full relative">
         <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto"
               style={{ 
-                // Mobile: use mobile viewport height when keyboard is visible, full height when hidden
-                height: window.innerWidth < 768 && isKeyboardVisible 
-                  ? 'calc(var(--mobile-viewport-height, 100vh) - var(--chat-input-height, 80px) - 16px)'
+                // Mobile: account for input position above sliding nav + keyboard
+                height: window.innerWidth < 768 
+                  ? 'calc(100vh - var(--chat-input-height, 80px) - var(--app-bottom-tabs-h) - var(--mobile-keyboard-height, 0px) - 16px)'
                   : 'calc(100vh - var(--desktop-header-h) - var(--chat-input-height, 80px) - 24px)'
               }}
              ref={scrollAreaRef}>
@@ -1227,14 +1227,12 @@ const WaktiAIV2 = () => {
           className={cn(
             "fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg md:left-[var(--current-sidebar-width,0px)]",
             // Mobile: smooth keyboard transitions
-            "transition-all duration-300 ease-out"
+            "transition-bottom duration-200 ease-out"
           )}
           style={{
-            // Mobile-first native positioning: sit flush with keyboard when visible, above nav when hidden
+            // Mobile: always sit above the MobileNav (which slides with keyboard)
             bottom: window.innerWidth < 768 
-              ? (isKeyboardVisible 
-                  ? '0px' 
-                  : 'var(--app-bottom-tabs-h)')
+              ? 'calc(var(--app-bottom-tabs-h) + var(--mobile-keyboard-height, 0px))'
               : 'var(--app-bottom-tabs-h)',
             // Ensure proper safe area handling
             paddingBottom: window.innerWidth < 768 && isKeyboardVisible 
