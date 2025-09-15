@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Repeat, Maximize2, Minimize2, X } from 'lucide-react';
+import { useAudioSession } from '@/hooks/useAudioSession';
 
 interface YouTubePreviewProps {
   videoId: string;
@@ -28,6 +29,10 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   const isFullscreenRef = useRef<boolean>(false);
   // Use native YT controls on mobile portrait so PiP is available and continues in background
   const [useNativeControls, setUseNativeControls] = useState<boolean>(false);
+  
+  // Audio session management
+  const { register, unregister, requestPlayback, stopSession, isPlaying: isSessionPlaying } = useAudioSession();
+  const sessionId = `youtube-${videoId}`;
 
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
@@ -124,7 +129,10 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             if (state === 1) {
               setIsPlaying(true);
               setHasStarted(true);
-              try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+              // Only dispatch if we have audio session control
+              if (isSessionPlaying(sessionId)) {
+                try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+              }
               // Start progress polling every 1s while playing
               if (progressIntervalRef.current) window.clearInterval(progressIntervalRef.current);
               progressIntervalRef.current = window.setInterval(() => {
@@ -144,6 +152,8 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
                 window.clearInterval(progressIntervalRef.current);
                 progressIntervalRef.current = null;
               }
+              // Release audio session when paused/ended
+              stopSession(sessionId);
               // Do not force-exit fullscreen on natural loop end; YouTube will restart due to loop+playlist
             }
           }
@@ -158,27 +168,45 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       progressIntervalRef.current = null;
       try { playerRef.current?.destroy?.(); } catch {}
       playerRef.current = null;
+      unregister(sessionId);
     };
   }, [videoId, useNativeControls]);
 
-  // If Talk-Back TTS starts playing, pause YouTube to avoid mixed audio
+  // Register with audio session manager
   useEffect(() => {
-    const onTtsPlaying = () => {
-      try { if (playerRef.current) playerRef.current.pauseVideo?.(); } catch {}
-    };
-    window.addEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
-    return () => window.removeEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
-  }, []);
+    if (playerReady && playerRef.current) {
+      register(sessionId, 'youtube', playerRef.current, 2); // Higher priority than TTS
+    }
+    return () => unregister(sessionId);
+  }, [playerReady, sessionId]);
 
-  // Control handlers
-  const handlePlay = () => {
+  // Listen for audio session changes to pause when other audio starts
+  useEffect(() => {
+    const onSessionChange = (e: CustomEvent) => {
+      const { activeSource, sessionId: activeId } = e.detail;
+      if (activeSource !== 'youtube' && activeId !== sessionId && isPlaying) {
+        try { if (playerRef.current) playerRef.current.pauseVideo?.(); } catch {}
+      }
+    };
+    window.addEventListener('wakti-audio-session-changed', onSessionChange as EventListener);
+    return () => window.removeEventListener('wakti-audio-session-changed', onSessionChange as EventListener);
+  }, [sessionId, isPlaying]);
+
+  // Control handlers with audio session management
+  const handlePlay = async () => {
     if (!playerReady || !playerRef.current) return;
+    
+    // Request exclusive audio playback
+    const granted = await requestPlayback(sessionId);
+    if (!granted) return;
+    
     try { playerRef.current.unMute(); setMuted(false); } catch {}
     try { playerRef.current.playVideo(); } catch {}
   };
-  const handlePause = () => {
+  const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
     try { playerRef.current.pauseVideo(); } catch {}
+    await stopSession(sessionId);
   };
   const handlePlayPause = () => {
     if (isPlaying) handlePause(); else handlePlay();
@@ -350,7 +378,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           <button
             type="button"
             className="absolute inset-0 w-full h-full"
+            onTouchStart={(e) => { e.stopPropagation(); handlePlay(); }}
             onClick={(e) => { e.stopPropagation(); handlePlay(); }}
+            style={{ touchAction: 'manipulation' }}
             aria-label="Play YouTube preview"
           >
             <img
@@ -410,7 +440,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             className={`${isPlaying
               ? 'h-8 w-8 inline-flex items-center justify-center rounded-md border bg-green-50 text-green-700 border-green-300 shadow-[0_0_8px_rgba(34,197,94,0.7)] dark:bg-green-900/30 dark:text-green-300 dark:border-green-700/50'
               : 'h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white/70 dark:bg-white/10 border-border hover:bg-white'}`}
+            onTouchStart={handlePlayPause}
             onClick={handlePlayPause}
+            style={{ touchAction: 'manipulation' }}
             title={isPlaying ? 'Pause' : 'Play'}
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >

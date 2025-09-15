@@ -14,6 +14,7 @@ import { YouTubePreview } from './YouTubePreview';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
+import { useAudioSession } from '@/hooks/useAudioSession';
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -84,6 +85,9 @@ export function ChatMessages({
   // Talk Back Auto Play and iOS unlock helpers
   const autoPlayRef = useRef<boolean>(false);
   const audioUnlockedRef = useRef<boolean>(false);
+  
+  // Audio session management for TTS
+  const { register, unregister, requestPlayback, stopSession, unlockAudio } = useAudioSession();
 
   // Keep ref synchronized with state to avoid stale closures during async work
   useEffect(() => {
@@ -263,6 +267,8 @@ export function ChatMessages({
     try {
       console.log('[TTS] handleSpeak click', { id: messageId, len: text?.length || 0 });
       const cleanText = sanitizeForTTS(text);
+      const sessionId = `tts-${messageId}`;
+      
       // Toggle off if already playing this message
       if (speakingMessageId === messageId) {
         console.log('[TTS] toggling OFF current message', messageId);
@@ -272,8 +278,19 @@ export function ChatMessages({
         }
         setSpeakingMessageId(null);
         setIsPaused(false);
+        await stopSession(sessionId);
         return;
       }
+
+      // Request exclusive audio playback
+      const granted = await requestPlayback(sessionId);
+      if (!granted) {
+        console.log('[TTS] Audio session denied - another source is playing');
+        return;
+      }
+
+      // Unlock audio context on iOS
+      await unlockAudio();
 
       // Stop any current playback
       if (audioRef.current) {
@@ -293,8 +310,9 @@ export function ChatMessages({
         const url = base64ToBlobUrl(persisted.b64);
         const a = new Audio(url);
         audioRef.current = a;
-        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
-        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+        register(sessionId, 'tts', a, 1); // Lower priority than YouTube
+        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
         a.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
         a.onpause = () => setIsPaused(true);
         try { await a.play(); } catch (e) { console.error('[TTS] play() failed from persisted', e); }
@@ -390,8 +408,9 @@ export function ChatMessages({
 
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
-      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
-      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); try { URL.revokeObjectURL(objectUrl); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+      register(sessionId, 'tts', audio, 1); // Lower priority than YouTube
+      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
       audio.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
       audio.onpause = () => setIsPaused(true);
       console.log('[TTS] playing audio');
@@ -973,7 +992,9 @@ export function ChatMessages({
                             {/* TTS Button with Stop Functionality (assistant only) */}
                             {message.role === 'assistant' && (
                               <button
+                                onTouchStart={() => handleSpeak(message.content, message.id)}
                                 onClick={() => handleSpeak(message.content, message.id)}
+                                style={{ touchAction: 'manipulation' }}
                                 className={`p-2 rounded-md transition-colors ${speakingMessageId === message.id || fadeOutId === message.id ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                                 title={speakingMessageId === message.id 
                                   ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
@@ -995,17 +1016,31 @@ export function ChatMessages({
                                     <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                                   )}
                                 </span>
-                                {speakingMessageId === message.id && (
-                                  <span className="ml-1 inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border">
-                                    <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
-                                      {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                                    </button>
-                                    <button onClick={onRewindClick} className="p-0.5 hover:text-foreground" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
-                                      <RotateCcw className="h-3.5 w-3.5" />
-                                    </button>
-                                  </span>
-                                )}
                               </button>
+                            )}
+                            
+                            {/* Separate TTS Mini Controls - No nesting to fix mobile issues */}
+                            {message.role === 'assistant' && speakingMessageId === message.id && (
+                              <div className="inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border ml-1">
+                                <button 
+                                  onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); togglePauseResume(); }}
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePauseResume(); }}
+                                  style={{ touchAction: 'manipulation' }}
+                                  className="p-0.5 hover:text-foreground" 
+                                  title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}
+                                >
+                                  {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                                </button>
+                                <button 
+                                  onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); rewind(5); }}
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); rewind(5); }}
+                                  style={{ touchAction: 'manipulation' }}
+                                  className="p-0.5 hover:text-foreground" 
+                                  title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
