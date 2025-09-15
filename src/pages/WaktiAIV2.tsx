@@ -1228,12 +1228,12 @@ const WaktiAIV2 = () => {
 
         <div 
           className={cn(
-            "fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg transition-all duration-300 ease-in-out md:left-[var(--current-sidebar-width,0px)]"
+            "fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg md:left-[var(--current-sidebar-width,0px)]"
           )}
           style={{
-            bottom: isKeyboardVisible 
-              ? `${keyboardHeight}px`
-              : 'calc(72px + env(safe-area-inset-bottom, 0px))'
+            bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
+            transform: isKeyboardVisible ? `translateY(-${keyboardHeight}px)` : 'translateY(0px)',
+            transition: 'transform 300ms ease-out'
           }}
         >
           <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-3">
