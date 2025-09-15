@@ -91,7 +91,7 @@ const WaktiAIV2 = () => {
   const { canTranslate, refreshTranslationQuota } = useQuotaManagement();
   const { canUseVoice, refreshVoiceQuota } = useExtendedQuotaManagement();
   const { quota, fetchQuota } = useAIQuotaManagement();
-  const { isKeyboardVisible } = useMobileKeyboard();
+  const { isKeyboardVisible, keyboardHeight } = useMobileKeyboard();
   
   // Memoized values for performance
   const quotaStatus = useMemo(() => ({
@@ -1231,7 +1231,9 @@ const WaktiAIV2 = () => {
             "fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg transition-all duration-300 ease-in-out md:left-[var(--current-sidebar-width,0px)]"
           )}
           style={{
-            bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))'
+            bottom: isKeyboardVisible 
+              ? `${keyboardHeight}px`
+              : 'calc(72px + env(safe-area-inset-bottom, 0px))'
           }}
         >
           <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-3">
