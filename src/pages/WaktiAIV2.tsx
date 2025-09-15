@@ -1199,7 +1199,7 @@ const WaktiAIV2 = () => {
         <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto transition-all duration-300 ease-out"
              style={{ 
                height: window.innerWidth < 768 && isKeyboardVisible 
-                 ? `calc(100vh - ${keyboardHeight + 120}px)`
+                 ? `calc(100vh - ${keyboardHeight + 160}px)`
                  : 'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)',
                // Mobile: adjust scroll container when keyboard is visible  
                ...(window.innerWidth < 768 && isKeyboardVisible && {
