@@ -540,14 +540,8 @@ export function ChatInput({
 
       {/* Main Input Area - Edge to edge on mobile, tight spacing, keyboard aware */}
       <div 
-        className={`w-full px-0 md:px-4 pb-1 md:pb-4 pt-1 mt-0 transition-all duration-300 ease-out ${
-          isKeyboardVisible ? 'fixed bottom-0 left-0 right-0 z-50' : ''
-        }`}
+        className="w-full px-0 md:px-4 pb-1 md:pb-4 pt-1 mt-0"
         ref={inputCardRef}
-        style={{
-          bottom: isKeyboardVisible ? `${keyboardHeight}px` : undefined,
-          paddingBottom: isKeyboardVisible ? '0px' : undefined
-        }}
       >  
         <div className="w-full px-1 md:px-6">
           <div
