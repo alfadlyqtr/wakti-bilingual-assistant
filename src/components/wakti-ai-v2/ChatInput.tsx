@@ -96,7 +96,7 @@ export function ChatInput({
   const cardRef = useRef<HTMLDivElement>(null);
   
   // Mobile keyboard detection
-  const { isKeyboardVisible } = useMobileKeyboard();
+  const { isKeyboardVisible, keyboardHeight } = useMobileKeyboard();
   
 
   // Use simplified file upload hook
@@ -487,7 +487,7 @@ export function ChatInput({
         }`} 
         ref={inputCardRef}
         style={{
-          paddingBottom: isKeyboardVisible ? 'env(safe-area-inset-bottom)' : undefined
+          paddingBottom: isKeyboardVisible ? keyboardHeight : undefined
         }}
       >
         <div className="w-full px-1 md:px-6">
