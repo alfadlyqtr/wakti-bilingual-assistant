@@ -11,55 +11,65 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
   useEffect(() => {
     if (!enabled) return;
 
+    // Skip on desktop
+    if (window.innerWidth >= 768) return;
+
     let initialViewportHeight = window.visualViewport?.height || window.innerHeight;
     let timeoutId: NodeJS.Timeout;
+    let isInitialized = false;
 
     const handleViewportChange = () => {
       // Clear any pending updates
       if (timeoutId) clearTimeout(timeoutId);
       
-      // Small delay to ensure viewport measurement is stable
+      // Immediate update for better responsiveness, then stabilization check
       timeoutId = setTimeout(() => {
         const currentHeight = window.visualViewport?.height || window.innerHeight;
         const heightDifference = initialViewportHeight - currentHeight;
         
-        // Consider keyboard visible if viewport shrunk by more than 100px
-        // Lower threshold for better detection
-        const keyboardVisible = heightDifference > 100;
+        // More sensitive detection for mobile keyboards (80px threshold)
+        const keyboardVisible = heightDifference > 80;
         
-        setIsKeyboardVisible(keyboardVisible);
-        setKeyboardHeight(keyboardVisible ? heightDifference : 0);
-        
-        // Update CSS custom properties for precise positioning
-        document.documentElement.style.setProperty(
-          '--keyboard-height',
-          keyboardVisible ? `${heightDifference}px` : '0px'
-        );
-        document.documentElement.style.setProperty(
-          '--viewport-height',
-          `${currentHeight}px`
-        );
-        document.documentElement.style.setProperty(
-          '--is-keyboard-visible',
-          keyboardVisible ? '1' : '0'
-        );
-        
-        // Add body class for additional styling control
-        if (keyboardVisible) {
-          document.body.classList.add('keyboard-visible');
-        } else {
-          document.body.classList.remove('keyboard-visible');
-        }
-        
-        // Dispatch custom event for other components to listen to
-        window.dispatchEvent(new CustomEvent('mobile-keyboard-change', {
-          detail: { 
-            isVisible: keyboardVisible, 
-            height: keyboardVisible ? heightDifference : 0,
-            viewportHeight: currentHeight 
+        // Only update if there's a meaningful change to prevent flickering
+        if (!isInitialized || keyboardVisible !== isKeyboardVisible) {
+          setIsKeyboardVisible(keyboardVisible);
+          setKeyboardHeight(keyboardVisible ? heightDifference : 0);
+          
+          // Mobile-only CSS variables for native-like positioning
+          document.documentElement.style.setProperty(
+            '--mobile-keyboard-height',
+            keyboardVisible ? `${heightDifference}px` : '0px'
+          );
+          document.documentElement.style.setProperty(
+            '--mobile-viewport-height',
+            `${currentHeight}px`
+          );
+          document.documentElement.style.setProperty(
+            '--mobile-keyboard-visible',
+            keyboardVisible ? '1' : '0'
+          );
+          
+          // Body classes for mobile keyboard state
+          if (keyboardVisible) {
+            document.body.classList.add('mobile-keyboard-visible');
+            document.body.classList.remove('mobile-keyboard-hidden');
+          } else {
+            document.body.classList.remove('mobile-keyboard-visible');
+            document.body.classList.add('mobile-keyboard-hidden');
           }
-        }));
-      }, 50); // Reduced delay for faster response
+          
+          // Dispatch event for other components
+          window.dispatchEvent(new CustomEvent('mobile-keyboard-change', {
+            detail: { 
+              isVisible: keyboardVisible, 
+              height: keyboardVisible ? heightDifference : 0,
+              viewportHeight: currentHeight 
+            }
+          }));
+          
+          isInitialized = true;
+        }
+      }, 25); // Faster response for native feel
     };
 
     // Listen to visual viewport changes (most reliable for keyboard detection)
@@ -100,9 +110,11 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
       document.removeEventListener('focusin', handleFocusIn);
       document.removeEventListener('focusout', handleFocusOut);
       
-      // Clean up CSS properties
-      document.documentElement.style.removeProperty('--keyboard-height');
-      document.documentElement.style.removeProperty('--is-keyboard-visible');
+      // Clean up mobile CSS properties
+      document.documentElement.style.removeProperty('--mobile-keyboard-height');
+      document.documentElement.style.removeProperty('--mobile-viewport-height');
+      document.documentElement.style.removeProperty('--mobile-keyboard-visible');
+      document.body.classList.remove('mobile-keyboard-visible', 'mobile-keyboard-hidden');
     };
   }, [enabled]);
 
