@@ -395,7 +395,7 @@ class WaktiAIV2ServiceClass {
       let storedSummary: string | null = null;
       const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
       try {
-        if (uuidLike) {
+        if (uuidLike && conversationId) {
           const { data: row } = await supabase
             .from('ai_conversation_summaries')
             .select('summary_text')
@@ -476,8 +476,9 @@ class WaktiAIV2ServiceClass {
               pt_hash,
               clientLocalHour,
               isWelcomeBack,
-              requestId,
-              location
+              location,
+              visionPrimary: 'claude',
+              visionFallback: 'openai'
             }),
             signal
           });
@@ -827,7 +828,9 @@ class WaktiAIV2ServiceClass {
           conversationSummary: finalSummary,
           clientLocalHour,
           isWelcomeBack,
-          location
+          location,
+          visionPrimary: 'claude',
+          visionFallback: 'openai'
         };
 
         // Auth headers required for calling Edge Functions (mirror streaming path)

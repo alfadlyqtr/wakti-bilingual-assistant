@@ -541,10 +541,11 @@ export function ChatInput({
       {/* Main Input Area - Edge to edge on mobile, tight spacing, keyboard aware */}
       <div 
         className={`w-full px-0 md:px-4 pb-1 md:pb-4 pt-1 mt-0 transition-all duration-300 ${
-          isKeyboardVisible ? 'fixed left-0 right-0 bottom-0 z-50' : ''
+          isKeyboardVisible ? 'fixed left-0 right-0 z-50' : ''
         }`} 
         ref={inputCardRef}
         style={{
+          bottom: isKeyboardVisible ? `${keyboardHeight}px` : undefined,
           paddingBottom: isKeyboardVisible ? '0px' : undefined
         }}
       >  
@@ -583,8 +584,8 @@ export function ChatInput({
               </TooltipProvider>
             </div>
             
-            {/* MOBILE: Top row with all buttons - Always visible */}
-            <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10 md:hidden">
+            {/* Top row with all buttons - Always visible */}
+            <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10">
                 {/* Left side: Extra + Tools + Mode Badge (moved here) */}
                 <div className="flex items-center gap-2">
                   <button
