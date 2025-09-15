@@ -1196,15 +1196,11 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto transition-all duration-300 ease-out"
+        <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto"
              style={{ 
-               height: window.innerWidth < 768 && isKeyboardVisible 
-                 ? `calc(100vh - ${keyboardHeight + 160}px)`
-                 : 'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)',
-               // Mobile: adjust scroll container when keyboard is visible  
-               ...(window.innerWidth < 768 && isKeyboardVisible && {
-                 paddingBottom: '8px'
-               })
+               height: 'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)',
+               paddingBottom: isKeyboardVisible ? `${keyboardHeight + 80}px` : undefined,
+               transition: 'padding-bottom 300ms ease-out'
              }}
              ref={scrollAreaRef}>
           <ChatMessages
@@ -1231,9 +1227,10 @@ const WaktiAIV2 = () => {
             "fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg md:left-[var(--current-sidebar-width,0px)]"
           )}
           style={{
-            bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
-            transform: isKeyboardVisible ? `translateY(-${keyboardHeight}px)` : 'translateY(0px)',
-            transition: 'transform 300ms ease-out'
+            bottom: isKeyboardVisible 
+              ? `${keyboardHeight}px`
+              : 'calc(72px + env(safe-area-inset-bottom, 0px))',
+            transition: 'bottom 300ms ease-out'
           }}
         >
           <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-3">
