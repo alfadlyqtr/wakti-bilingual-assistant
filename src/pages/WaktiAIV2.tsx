@@ -1227,7 +1227,7 @@ const WaktiAIV2 = () => {
 
         <div 
           className={cn(
-            "fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg md:left-[var(--current-sidebar-width,0px)] glue-fixed glue-bottom glue-z"
+            "fixed left-0 right-0 z-40 bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg md:left-[var(--current-sidebar-width,0px)]"
           )}
           style={{
             bottom: isKeyboardVisible 
