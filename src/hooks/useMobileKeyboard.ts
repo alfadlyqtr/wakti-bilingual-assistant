@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface UseMobileKeyboardOptions {
   enabled?: boolean;
@@ -8,99 +8,104 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  const initialViewportHeightRef = useRef<number | null>(null);
+  const lastHeightRef = useRef<number>(0);
+  const rafIdRef = useRef<number | null>(null);
+  const debounceIdRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!enabled) return;
 
-    let initialViewportHeight = window.visualViewport?.height || window.innerHeight;
-    let timeoutId: NodeJS.Timeout;
+    initialViewportHeightRef.current = window.visualViewport?.height || window.innerHeight;
 
-    const handleViewportChange = () => {
-      // Clear any pending updates
-      if (timeoutId) clearTimeout(timeoutId);
-      
-      // Small delay to ensure viewport measurement is stable
-      timeoutId = setTimeout(() => {
-        const currentHeight = window.visualViewport?.height || window.innerHeight;
-        const heightDifference = initialViewportHeight - currentHeight;
-        
-        // Consider keyboard visible if viewport shrunk by more than 100px
-        // Lower threshold for better detection
-        const keyboardVisible = heightDifference > 100;
-        
-        setIsKeyboardVisible(keyboardVisible);
-        setKeyboardHeight(keyboardVisible ? heightDifference : 0);
-        
-        // Update CSS custom properties for precise positioning
-        document.documentElement.style.setProperty(
-          '--keyboard-height',
-          keyboardVisible ? `${heightDifference}px` : '0px'
-        );
-        document.documentElement.style.setProperty(
-          '--viewport-height',
-          `${currentHeight}px`
-        );
-        document.documentElement.style.setProperty(
-          '--is-keyboard-visible',
-          keyboardVisible ? '1' : '0'
-        );
-        
-        // Add body class for additional styling control
-        if (keyboardVisible) {
-          document.body.classList.add('keyboard-visible');
-        } else {
-          document.body.classList.remove('keyboard-visible');
-        }
-        
-        // Dispatch custom event for other components to listen to
-        window.dispatchEvent(new CustomEvent('mobile-keyboard-change', {
-          detail: { 
-            isVisible: keyboardVisible, 
-            height: keyboardVisible ? heightDifference : 0,
-            viewportHeight: currentHeight 
-          }
-        }));
-      }, 50); // Reduced delay for faster response
+    const cancelTimers = () => {
+      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+      if (debounceIdRef.current != null) window.clearTimeout(debounceIdRef.current);
+      rafIdRef.current = null;
+      debounceIdRef.current = null;
     };
 
-    // Listen to visual viewport changes (most reliable for keyboard detection)
+    const applyChange = () => {
+      const base = initialViewportHeightRef.current ?? (window.visualViewport?.height || window.innerHeight);
+      const currentHeight = window.visualViewport?.height || window.innerHeight;
+      const diffRaw = Math.max(0, base - currentHeight);
+
+      // Hysteresis to avoid flicker: ignore tiny oscillations < 24px
+      const last = lastHeightRef.current;
+      const diff = Math.abs(diffRaw - last) < 24 ? last : diffRaw;
+
+      const visible = diff > 100; // threshold for keyboard visibility
+      lastHeightRef.current = diff;
+
+      setIsKeyboardVisible(visible);
+      setKeyboardHeight(visible ? Math.min(Math.max(diff, 100), 500) : 0);
+
+      // Update CSS Custom Properties for layouts relying on them
+      document.documentElement.style.setProperty('--keyboard-height', visible ? `${Math.min(Math.max(diff, 100), 500)}px` : '0px');
+      document.documentElement.style.setProperty('--viewport-height', `${currentHeight}px`);
+      document.documentElement.style.setProperty('--is-keyboard-visible', visible ? '1' : '0');
+
+      if (visible) {
+        document.body.classList.add('keyboard-visible');
+      } else {
+        document.body.classList.remove('keyboard-visible');
+      }
+
+      window.dispatchEvent(new CustomEvent('mobile-keyboard-change', {
+        detail: {
+          isVisible: visible,
+          height: visible ? Math.min(Math.max(diff, 100), 500) : 0,
+          viewportHeight: currentHeight,
+        }
+      }));
+    };
+
+    const scheduleChange = () => {
+      // Debounce to 120ms to let the OS animation settle
+      if (debounceIdRef.current != null) window.clearTimeout(debounceIdRef.current);
+      debounceIdRef.current = window.setTimeout(() => {
+        if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = requestAnimationFrame(applyChange);
+      }, 120);
+    };
+
+    const handleViewportChange = () => scheduleChange();
+
+    // visualViewport is the most reliable API
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleViewportChange);
+      window.visualViewport.addEventListener('scroll', handleViewportChange);
     } else {
-      // Fallback for older browsers
       window.addEventListener('resize', handleViewportChange);
+      window.addEventListener('scroll', handleViewportChange, { passive: true });
     }
 
-    // Also listen to focus/blur events on input elements as additional signals
+    // Focus/blur hints
     const handleFocusIn = (e: FocusEvent) => {
       const target = e.target as HTMLElement;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-        // Small delay to let the keyboard animation start
-        setTimeout(handleViewportChange, 300);
+        scheduleChange();
       }
     };
-
-    const handleFocusOut = () => {
-      // Small delay to let the keyboard hide animation complete
-      setTimeout(handleViewportChange, 300);
-    };
+    const handleFocusOut = () => scheduleChange();
 
     document.addEventListener('focusin', handleFocusIn);
     document.addEventListener('focusout', handleFocusOut);
 
-    // Initial check
-    handleViewportChange();
+    // Initial measure (debounced)
+    scheduleChange();
 
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      cancelTimers();
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleViewportChange);
+        window.visualViewport.removeEventListener('scroll', handleViewportChange);
       } else {
         window.removeEventListener('resize', handleViewportChange);
+        window.removeEventListener('scroll', handleViewportChange);
       }
       document.removeEventListener('focusin', handleFocusIn);
       document.removeEventListener('focusout', handleFocusOut);
-      
-      // Clean up CSS properties
       document.documentElement.style.removeProperty('--keyboard-height');
       document.documentElement.style.removeProperty('--is-keyboard-visible');
     };
