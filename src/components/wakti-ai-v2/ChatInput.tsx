@@ -445,6 +445,41 @@ export function ChatInput({
     e.target.value = '';
   };
 
+  // Separate upload handler for Image2/BG-X modes (not Vision upload)
+  const handleImageModeUpload = () => {
+    if (!isLoading && !isUploading) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = false;
+      input.onchange = async (e) => {
+        const files = (e.target as HTMLInputElement).files;
+        if (files && files.length > 0) {
+          const file = files[0];
+          if (file.type.startsWith('image/') && file.size <= 5 * 1024 * 1024) {
+            try {
+              const base64DataUrl = await fileToBase64(file);
+              const newFile: UploadedFile = {
+                id: `${Date.now()}`,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                url: base64DataUrl,
+                preview: base64DataUrl,
+                base64: base64DataUrl,
+                imageType: { id: 'general', name: 'General' }
+              };
+              handleFilesUploaded([newFile]);
+            } catch (err) {
+              console.error('Image upload failed:', err);
+            }
+          }
+        }
+      };
+      input.click();
+    }
+  };
+
   return (
     <div className="w-full space-y-4">
       {/* File Upload Component - Different component based on mode */}
@@ -482,12 +517,12 @@ export function ChatInput({
 
       {/* Main Input Area - Edge to edge on mobile, tight spacing, keyboard aware */}
       <div 
-        className={`w-full px-0 md:px-4 pb-1 md:pb-4 pt-1 mt-0 transition-all duration-300 ${
-          isKeyboardVisible ? 'fixed bottom-0 left-0 right-0 z-50' : ''
+        className={`w-full px-0 md:px-4 pb-1 md:pb-4 pt-0 mt-0 transition-all duration-300 ${
+          isKeyboardVisible ? 'fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-black/95 backdrop-blur-sm' : ''
         }`} 
         ref={inputCardRef}
         style={{
-          paddingBottom: isKeyboardVisible ? 'env(safe-area-inset-bottom)' : undefined
+          paddingBottom: isKeyboardVisible ? `calc(var(--keyboard-height, 0px) + env(safe-area-inset-bottom))` : undefined
         }}
       >
         <div className="w-full px-1 md:px-6">
@@ -525,8 +560,7 @@ export function ChatInput({
             </div>
             
             {/* MOBILE: Top row with all buttons - Always visible */}
-            {!isInputCollapsed && (
-              <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10 md:hidden">
+            <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10 md:hidden">
                 {/* Left side: Extra + Tools + Upload */}
                 <div className="flex items-center gap-2">
                   <button
@@ -566,7 +600,7 @@ export function ChatInput({
                   >
                     <span className="text-sm" role="img" aria-label="Tools">⚡</span>
                     <span className="text-xs font-medium text-foreground/80">
-                      {language === 'ar' ? 'أدوات' : 'Tools'}
+                      {language === 'ar' ? 'أدوات سريعة' : 'Quick Tools'}
                     </span>
                   </button>
 
@@ -574,14 +608,13 @@ export function ChatInput({
                   {(activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal')) && (
                     <button
                       type="button"
-                      onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); triggerSeedUpload(); }}
+                      onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleImageModeUpload(); }}
                       disabled={isUploading}
-                      className="h-8 px-2.5 rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors flex items-center gap-1"
+                      className="h-8 w-8 rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors flex items-center justify-center"
                       aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload'}
                       title={language === 'ar' ? 'تحميل صورة' : 'Upload'}
                     >
-                      <Plus className="h-3 w-3" />
-                      <span className="text-xs">{language === 'ar' ? 'رفع' : 'Upload'}</span>
+                      <Plus className="h-4 w-4" />
                     </button>
                   )}
 
@@ -611,8 +644,8 @@ export function ChatInput({
                             const rect = searchModeBtnRef.current?.getBoundingClientRect();
                             if (rect) {
                               setSearchMenuPos({
-                                top: rect.bottom + 8,
-                                left: rect.left
+                                top: rect.bottom + 4,
+                                left: Math.max(8, rect.left - 20)
                               });
                             }
                           }}
@@ -671,8 +704,8 @@ export function ChatInput({
                             const rect = imageModeBtnRef.current?.getBoundingClientRect();
                             if (rect) {
                               setImageMenuPos({
-                                top: rect.bottom + 8,
-                                left: rect.left
+                                top: rect.bottom + 4,
+                                left: Math.max(8, rect.left - 20)
                               });
                             }
                           }}
@@ -737,8 +770,8 @@ export function ChatInput({
                     )}
                   </div>
 
-                  {/* Speed dropdown - only in Image modes */}
-                  {activeTrigger === 'image' && (
+                  {/* Speed dropdown - only in Text2Image mode */}
+                  {activeTrigger === 'image' && imageMode === 'text2image' && (
                     <div className="flex justify-center">
                       <div className="relative inline-flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 rounded-lg px-2 py-1 shadow-sm min-w-[56px]">
                         <select
@@ -758,9 +791,8 @@ export function ChatInput({
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
-            )}
+                 </div>
+               </div>
 
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION */}
             {uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
