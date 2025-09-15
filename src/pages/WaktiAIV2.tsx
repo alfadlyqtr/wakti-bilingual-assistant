@@ -596,8 +596,7 @@ const WaktiAIV2 = () => {
                 id: assistantId,
                 role: 'assistant',
                 content: ytResp.response || (language === 'ar' ? '🌐 تعذر الوصول إلى بحث يوتيوب حالياً.' : '🌐 Unable to reach YouTube search right now.'),
-                timestamp: new Date(),
-                intent: 'search'
+                timestamp: new Date()
               }],
               workingConversationId
             );
@@ -1233,7 +1232,11 @@ const WaktiAIV2 = () => {
           style={{
             bottom: isKeyboardVisible 
               ? `${keyboardHeight}px`
-              : 'calc(72px + env(safe-area-inset-bottom, 0px))'
+              : 'calc(72px + env(safe-area-inset-bottom, 0px))',
+            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            transition: 'bottom 180ms ease-out',
+            willChange: 'bottom',
+            transform: 'translateZ(0)'
           }}
         >
           <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-3">
