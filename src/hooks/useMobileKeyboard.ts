@@ -8,15 +8,12 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const initialViewportHeightRef = useRef<number | null>(null);
   const lastHeightRef = useRef<number>(0);
   const rafIdRef = useRef<number | null>(null);
   const debounceIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
-
-    initialViewportHeightRef.current = window.visualViewport?.height || window.innerHeight;
 
     const cancelTimers = () => {
       if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
@@ -25,53 +22,47 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
       debounceIdRef.current = null;
     };
 
-    const applyChange = () => {
-      const base = initialViewportHeightRef.current ?? (window.visualViewport?.height || window.innerHeight);
-      const currentHeight = window.visualViewport?.height || window.innerHeight;
-      const diffRaw = Math.max(0, base - currentHeight);
+    const measureKeyboard = () => {
+      const vv = window.visualViewport;
+      const vvH = vv?.height ?? window.innerHeight;
+      const vvTop = vv?.offsetTop ?? 0;
+      // Stable iOS/Android formula: free viewport space from bottom
+      const raw = Math.max(0, window.innerHeight - (vvH + vvTop));
 
-      // Hysteresis to avoid flicker: ignore tiny oscillations < 24px
+      // Hysteresis to ignore tiny oscillations (<24px)
       const last = lastHeightRef.current;
-      const diff = Math.abs(diffRaw - last) < 24 ? last : diffRaw;
-
-      const visible = diff > 100; // threshold for keyboard visibility
+      const diff = Math.abs(raw - last) < 24 ? last : raw;
       lastHeightRef.current = diff;
 
-      setIsKeyboardVisible(visible);
-      setKeyboardHeight(visible ? Math.min(Math.max(diff, 100), 500) : 0);
+      const visible = diff > 100; // threshold for visibility
+      const clamped = visible ? Math.min(Math.max(diff, 100), 500) : 0;
 
-      // Update CSS Custom Properties for layouts relying on them
-      document.documentElement.style.setProperty('--keyboard-height', visible ? `${Math.min(Math.max(diff, 100), 500)}px` : '0px');
-      document.documentElement.style.setProperty('--viewport-height', `${currentHeight}px`);
+      setIsKeyboardVisible(visible);
+      setKeyboardHeight(clamped);
+
+      // Expose as CSS vars for layout consumers
+      document.documentElement.style.setProperty('--keyboard-height', `${clamped}px`);
+      document.documentElement.style.setProperty('--viewport-height', `${vvH}px`);
       document.documentElement.style.setProperty('--is-keyboard-visible', visible ? '1' : '0');
 
-      if (visible) {
-        document.body.classList.add('keyboard-visible');
-      } else {
-        document.body.classList.remove('keyboard-visible');
-      }
+      if (visible) document.body.classList.add('keyboard-visible');
+      else document.body.classList.remove('keyboard-visible');
 
       window.dispatchEvent(new CustomEvent('mobile-keyboard-change', {
-        detail: {
-          isVisible: visible,
-          height: visible ? Math.min(Math.max(diff, 100), 500) : 0,
-          viewportHeight: currentHeight,
-        }
+        detail: { isVisible: visible, height: clamped, viewportHeight: vvH }
       }));
     };
 
-    const scheduleChange = () => {
-      // Debounce to 120ms to let the OS animation settle
+    const scheduleMeasure = () => {
       if (debounceIdRef.current != null) window.clearTimeout(debounceIdRef.current);
       debounceIdRef.current = window.setTimeout(() => {
         if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = requestAnimationFrame(applyChange);
-      }, 120);
+        rafIdRef.current = requestAnimationFrame(measureKeyboard);
+      }, 160); // allow OS animation to settle
     };
 
-    const handleViewportChange = () => scheduleChange();
+    const handleViewportChange = () => scheduleMeasure();
 
-    // visualViewport is the most reliable API
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleViewportChange);
       window.visualViewport.addEventListener('scroll', handleViewportChange);
@@ -80,20 +71,19 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
       window.addEventListener('scroll', handleViewportChange, { passive: true });
     }
 
-    // Focus/blur hints
     const handleFocusIn = (e: FocusEvent) => {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-        scheduleChange();
+      const t = e.target as HTMLElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.getAttribute('contenteditable') === 'true')) {
+        scheduleMeasure();
       }
     };
-    const handleFocusOut = () => scheduleChange();
+    const handleFocusOut = () => scheduleMeasure();
 
     document.addEventListener('focusin', handleFocusIn);
     document.addEventListener('focusout', handleFocusOut);
 
-    // Initial measure (debounced)
-    scheduleChange();
+    // Initial measurement (debounced)
+    scheduleMeasure();
 
     return () => {
       cancelTimers();
@@ -111,8 +101,5 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
     };
   }, [enabled]);
 
-  return {
-    isKeyboardVisible,
-    keyboardHeight
-  };
+  return { isKeyboardVisible, keyboardHeight };
 }
