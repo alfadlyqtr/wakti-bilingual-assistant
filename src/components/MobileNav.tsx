@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
-import { useMobileKeyboard } from "@/hooks/useMobileKeyboard";
+
 
 export function MobileNav() {
   const { pathname } = useLocation();
@@ -13,7 +13,7 @@ export function MobileNav() {
   const { language } = useTheme();
   const { taskCount, maw3dEventCount, contactCount, sharedTaskCount } = useUnreadMessages();
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
-  const { isKeyboardVisible } = useMobileKeyboard();
+  // Note: Nav stays always visible; no keyboard-based transforms
 
   // No portal: ensure direct render inside AppLayout for guaranteed presence
 
@@ -110,8 +110,8 @@ export function MobileNav() {
         "supports-[backdrop-filter]:bg-background/60",
         "ios-reduce-blur transition-transform duration-300 ease-in-out",
         language === 'ar' ? 'font-arabic' : '',
-        // Hide nav when keyboard is visible for native chat experience
-        isKeyboardVisible ? 'translate-y-full' : 'translate-y-0'
+        'translate-y-0',
+        
       )}
       style={{
         height: 'var(--app-bottom-tabs-h)',
