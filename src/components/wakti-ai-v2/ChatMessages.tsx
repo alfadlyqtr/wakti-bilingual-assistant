@@ -264,21 +264,14 @@ export function ChatMessages({
 
   // Google Cloud TTS via Edge Function (no ElevenLabs, no browser SpeechSynthesis)
   const handleSpeak = async (text: string, messageId: string) => {
-    const sessionId = `tts-${messageId}`;
     try {
-      console.log('[TTS-MOBILE] handleSpeak triggered', { 
-        id: messageId, 
-        isMobile: /iPad|iPhone|iPod|Android/i.test(navigator.userAgent),
-        textLength: text?.length || 0,
-        userAgent: navigator.userAgent.slice(0, 100)
-      });
-      
+      console.log('[TTS] handleSpeak click', { id: messageId, len: text?.length || 0 });
       const cleanText = sanitizeForTTS(text);
+      const sessionId = `tts-${messageId}`;
       
-
       // Toggle off if already playing this message
       if (speakingMessageId === messageId) {
-        console.log('[TTS-MOBILE] toggling OFF current message', messageId);
+        console.log('[TTS] toggling OFF current message', messageId);
         if (audioRef.current) {
           try { audioRef.current.pause(); } catch {}
           try { audioRef.current.currentTime = 0; } catch {}
@@ -289,41 +282,15 @@ export function ChatMessages({
         return;
       }
 
-      // Mobile-specific: unlock audio context first
-      const isMobile = /iPad|iPhone|iPod|Android/i.test(navigator.userAgent);
-      if (isMobile) {
-        console.log('[TTS-MOBILE] Attempting to unlock audio for mobile');
-        const unlocked = await unlockAudio();
-        console.log('[TTS-MOBILE] Audio unlock result:', unlocked);
-        if (!unlocked) {
-          console.warn('[TTS-MOBILE] Failed to unlock audio - may not play on this device');
-        }
-      }
-
-      // Helper: wait for playback start on mobile
-      const waitForPlaybackStart = (audio: HTMLAudioElement, timeout = 1200) => new Promise<boolean>((resolve) => {
-        let resolved = false;
-        const done = (ok: boolean) => { if (resolved) return; resolved = true; cleanup(); resolve(ok); };
-        const onPlaying = () => done(true);
-        const onTimeUpdate = () => { if (audio.currentTime > 0) done(true); };
-        const cleanup = () => {
-          audio.removeEventListener('playing', onPlaying);
-          audio.removeEventListener('timeupdate', onTimeUpdate);
-          clearTimeout(tid);
-        };
-        const tid = window.setTimeout(() => done(false), timeout);
-        audio.addEventListener('playing', onPlaying);
-        audio.addEventListener('timeupdate', onTimeUpdate);
-      });
-
       // Request exclusive audio playback
-      console.log('[TTS-MOBILE] Requesting audio session');
       const granted = await requestPlayback(sessionId);
-      console.log('[TTS-MOBILE] Audio session granted:', granted);
       if (!granted) {
-        console.log('[TTS-MOBILE] Audio session denied - another source is playing');
+        console.log('[TTS] Audio session denied - another source is playing');
         return;
       }
+
+      // Unlock audio context on iOS
+      await unlockAudio();
 
       // Stop any current playback
       if (audioRef.current) {
@@ -331,8 +298,6 @@ export function ChatMessages({
         try { audioRef.current.currentTime = 0; } catch {}
         try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {}
       }
-      
-      console.log('[TTS-MOBILE] Setting speaking message ID and visual state');
       setSpeakingMessageId(messageId);
       setIsPaused(false);
       // Start showing spinner immediately for better feedback
@@ -350,22 +315,7 @@ export function ChatMessages({
         a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
         a.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
         a.onpause = () => setIsPaused(true);
-        // iOS/mobile robustness
         try { await a.play(); } catch (e) { console.error('[TTS] play() failed from persisted', e); }
-        if (isMobile) {
-          const ok = await waitForPlaybackStart(a, 1200);
-          if (!ok) {
-            console.warn('[TTS-MOBILE] Playback did not start from persisted cache');
-            setSpeakingMessageId(null);
-            setIsPaused(false);
-            triggerFadeOut(messageId);
-            await stopSession(sessionId);
-            try { URL.revokeObjectURL(url); } catch {}
-            // Clear spinner if we used cache
-            setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-            return;
-          }
-        }
         // Clear spinner if we used cache
         setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
         return;
@@ -390,7 +340,6 @@ export function ChatMessages({
         setIsPaused(false);
         // Clear spinner
         setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-        await stopSession(sessionId);
         return;
       }
 
@@ -410,7 +359,6 @@ export function ChatMessages({
         setIsPaused(false);
         setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
         try { console.error('[TTS] voice-tts failed', resp.status, await resp.text()); } catch {}
-        await stopSession(sessionId);
         return;
       }
 
@@ -465,26 +413,12 @@ export function ChatMessages({
       audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
       audio.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
       audio.onpause = () => setIsPaused(true);
-      // iOS/mobile robustness
       console.log('[TTS] playing audio');
       try { await audio.play(); } catch (e) { console.error('[TTS] play() failed after fetch', e); }
-      if (isMobile) {
-        const ok = await waitForPlaybackStart(audio, 1200);
-        if (!ok) {
-          console.warn('[TTS-MOBILE] Playback did not start after fetch');
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-          triggerFadeOut(messageId);
-          await stopSession(sessionId);
-          try { URL.revokeObjectURL(objectUrl); } catch {}
-          return;
-        }
-      }
     } catch (err) {
       console.error('[TTS] Unexpected error while fetching/playing audio', err);
       setSpeakingMessageId(null);
       setIsPaused(false);
-      await stopSession(sessionId);
     } finally {
       setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
       const iv = progressIntervalRef.current.get(messageId);
@@ -1058,6 +992,7 @@ export function ChatMessages({
                             {/* TTS Button with Stop Functionality (assistant only) */}
                             {message.role === 'assistant' && (
                               <button
+                                onTouchStart={() => handleSpeak(message.content, message.id)}
                                 onClick={() => handleSpeak(message.content, message.id)}
                                 style={{ touchAction: 'manipulation' }}
                                 className={`p-2 rounded-md transition-colors ${speakingMessageId === message.id || fadeOutId === message.id ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
