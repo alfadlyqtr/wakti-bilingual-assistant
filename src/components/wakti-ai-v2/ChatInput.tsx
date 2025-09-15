@@ -85,9 +85,14 @@ export function ChatInput({
   });
   // Local-only UI state: image quality dropdown (visible only in image -> text2image)
   const [imageQuality, setImageQuality] = useState<'fast' | 'best_fast'>('fast');
+  // Custom dropdown position for Image quality (Fast/Best)
+  const qualityBtnRef = useRef<HTMLButtonElement>(null);
+  const [qualityMenuPos, setQualityMenuPos] = useState<{ top: number; left: number } | null>(null);
   // TTS Auto Play toggle (persisted)
   const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
   const seedFileInputRef = useRef<HTMLInputElement>(null);
+  // Hidden input for Chat mode image upload (+ button in Chat)
+  const chatUploadInputRef = useRef<HTMLInputElement>(null);
   const [isInputCollapsed, setIsInputCollapsed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Ref to measure the actual input card height for dynamic spacing
@@ -121,6 +126,16 @@ export function ChatInput({
       setWasAutoSwitchedToVision(false);
     }
   }, [uploadedFiles.length, activeTrigger, wasAutoSwitchedToVision, onTriggerChange]);
+
+  // When in Image mode and switching to Text2Image, clear any seed uploads from other submodes
+  useEffect(() => {
+    if (activeTrigger === 'image' && imageMode === 'text2image' && uploadedFiles.length > 0) {
+      try {
+        console.log('🧹 Clearing seed uploads: switched to Text2Image');
+        clearFiles();
+      } catch {}
+    }
+  }, [activeTrigger, imageMode]);
 
   // Removed auto-focus to avoid programmatically opening the mobile keyboard
   // Keyboard should appear only after explicit user interaction with the input
@@ -314,6 +329,43 @@ export function ChatInput({
       console.log('❌ SEND: No message or files to send');
     }
   };
+  // Chat mode: handle simple image uploads from '+' button
+  const handleChatUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const validFiles: UploadedFile[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/')) continue;
+        if (file.size > 5 * 1024 * 1024) continue;
+        try {
+          const base64DataUrl = await fileToBase64(file);
+          validFiles.push({
+            id: `${Date.now()}-${i}`,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            url: base64DataUrl,
+            preview: base64DataUrl,
+            base64: base64DataUrl,
+            imageType: { id: 'general', name: 'General' }
+          });
+        } catch (err) {
+          console.error('Chat image conversion failed:', err);
+        }
+      }
+      if (validFiles.length > 0) {
+        handleFilesUploaded(validFiles);
+        // Auto-switch to Vision to reflect image context when in Chat
+        if (activeTrigger === 'chat' && onTriggerChange) {
+          onTriggerChange('vision');
+          setWasAutoSwitchedToVision(true);
+        }
+      }
+    }
+    // reset input so same file can be chosen again
+    e.target.value = '';
+  };
 
   // Layout & Mode highlighting classes
   // Default highlights from activeTrigger, but override to YouTube-red when Search submode is YouTube
@@ -360,12 +412,17 @@ export function ChatInput({
     if (activeTrigger === 'video' && videoTemplate === 'image2video') {
       return language === 'ar' ? 'اكتب وصف الفيديو المخصص...' : 'Enter your custom video prompt...';
     }
-    
-    // Image mode: show example hint when message is empty, standard when typing
-    if (activeTrigger === 'image' && message.trim() === '') {
-      return language === 'ar' ? 'مثال: مقهى دافئ عند غروب الشمس، سينمائي، إضاءة ناعمة' : 'Ex: cozy cafe scene, cinematic, soft light';
+    // Search mode helpers
+    if (activeTrigger === 'search' && message.trim() === '') {
+      if (searchSubmode === 'youtube') {
+        return language === 'ar' ? 'ابحث على يوتيوب: عنوان، موضوع، أو قناة' : 'search youtube,  song title + artist  or vedio title';
+      }
+      return language === 'ar' ? 'ابحث في الويب: موضوع أو سؤال' : 'search the wen !! News, sport reaults, topics and more.';
     }
-    
+    // Image mode: adapt helper example to the selected imageMode when empty
+    if (activeTrigger === 'image' && message.trim() === '') {
+      return getImageModeExample();
+    }
     return language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...';
   };
 
@@ -374,22 +431,22 @@ export function ChatInput({
     if (language === 'ar') {
       switch (imageMode) {
         case 'text2image':
-          return 'مثال: مقهى دافئ عند غروب الشمس، سينمائي، بدقة 4K، إضاءة ناعمة';
+          return 'مثال: مقهى دافئ، سينمائي، إضاءة ناعمة';
         case 'image2image':
-          return 'مثال: حوّل الصورة المرفوعة إلى أسلوب الألوان المائية بتدرجات باستيل';
+          return 'مثال: حوّل الصورة إلى أسلوب ألوان مائية';
         case 'background-removal':
-          return 'مثال: إزالة الخلفية مع الحفاظ على العنصر فقط بصيغة PNG شفافة';
+          return 'مثال: إزالة الخلفية والإبقاء على العنصر فقط';
         default:
           return '';
       }
     } else {
       switch (imageMode) {
         case 'text2image':
-          return 'Example: A cozy cafe scene at golden hour, cinematic, 4k, soft lighting';
+          return 'Ex: cozy cafe, cinematic, soft light';
         case 'image2image':
-          return 'Example: Style the uploaded image as watercolor with pastel tones';
+          return 'Ex: style the uploaded image as watercolor';
         case 'background-removal':
-          return 'Example: Remove the background and keep the subject only with a transparent PNG';
+          return 'Ex: remove background, keep subject only';
         default:
           return '';
       }
@@ -446,6 +503,7 @@ export function ChatInput({
   };
 
   return (
+    <>
     <div className="w-full space-y-4">
       {/* File Upload Component - Different component based on mode */}
       {activeTrigger !== 'video' && (
@@ -527,7 +585,7 @@ export function ChatInput({
             
             {/* MOBILE: Top row with all buttons - Always visible */}
             <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10 md:hidden">
-                {/* Left side: Extra + Tools + Upload */}
+                {/* Left side: Extra + Tools + Mode Badge (moved here) */}
                 <div className="flex items-center gap-2">
                   <button
                     onPointerUp={(e) => {
@@ -569,33 +627,9 @@ export function ChatInput({
                       {language === 'ar' ? 'أدوات' : 'Tools'}
                     </span>
                   </button>
-
-                  {/* Upload button - shown in image modes (Text2Image optional, Image2Image/BG-X required), hidden in Chat/Web/YouTube */}
-                  {(activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal')) && (
-                    <button
-                      type="button"
-                      onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); triggerSeedUpload(); }}
-                      disabled={isUploading}
-                      className="h-8 w-8 rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60 transition-colors flex items-center justify-center"
-                      aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload'}
-                      title={language === 'ar' ? 'تحميل صورة' : 'Upload'}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  )}
-
-                  {activeTrigger === 'chat' && (
-                    <div className="flex justify-center">
-                      <PlusMenu
-                        onCamera={() => console.log('📸 CAMERA: Handled by PlusMenu')}
-                        onUpload={() => console.log('📁 UPLOAD: Handled by PlusMenu')}
-                        isLoading={isUploading}
-                      />
-                    </div>
-                  )}
                 </div>
 
-                {/* Right side: Mode Badge + Speed */}
+                {/* Right side: Mode Badge + Upload button + Speed */}
                 <div className="flex items-center gap-2">
                   {/* Mode Badge with dropdowns */}
                   <div className="flex items-center">
@@ -609,30 +643,35 @@ export function ChatInput({
                             e.stopPropagation();
                             const rect = searchModeBtnRef.current?.getBoundingClientRect();
                             if (rect) {
+                              const margin = 8; // small gap above badge
+                              const desiredLeft = rect.left - 40; // nudge left away from edge
+                              const clampedLeft = Math.max(12, desiredLeft);
                               setSearchMenuPos({
-                                top: rect.bottom + 4,
-                                left: Math.max(8, rect.left - 20)
+                                top: rect.top - margin,
+                                left: clampedLeft,
                               });
                             }
                           }}
-                          className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none border align-middle ${searchSubmode === 'youtube'
-                            ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
-                            : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
+                          className={`inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none border align-middle ${
+                            searchSubmode === 'youtube'
+                              ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
+                              : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
                           }`}
                         >
-                          <span className="text-[10px]">
+                          <span className="text-xs">
                             {searchSubmode === 'youtube' ? 'YouTube' : (language === 'ar' ? 'الويب' : 'Web')}
                           </span>
-                          <ChevronDown className="h-2.5 w-2.5" />
+                          <ChevronDown className="h-3 w-3" />
                         </button>
                         
                         {/* Search Mode Dropdown */}
                         {searchMenuPos && createPortal(
                           <div
-                            className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[100px]"
+                            className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px]"
                             style={{
                               top: searchMenuPos.top,
                               left: searchMenuPos.left,
+                              transform: 'translateY(-100%)',
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
                           >
@@ -664,35 +703,41 @@ export function ChatInput({
                       <div className="relative">
                         <button
                           ref={imageModeBtnRef}
+                          data-dropdown
                           onPointerUp={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             const rect = imageModeBtnRef.current?.getBoundingClientRect();
                             if (rect) {
+                              const margin = 8; // gap above badge
+                              const desiredLeft = rect.left - 20; // nudge left
+                              const clampedLeft = Math.max(12, desiredLeft);
                               setImageMenuPos({
-                                top: rect.bottom + 4,
-                                left: Math.max(8, rect.left - 20)
+                                top: rect.top - margin,
+                                left: clampedLeft,
                               });
                             }
                           }}
-                          className="inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0"
+                          className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0"
                         >
-                          <ImagePlus className="h-2.5 w-2.5" />
-                          <span className="text-[10px]">
-                            {imageMode === 'image2image' ? (language === 'ar' ? 'صورة 2' : 'Image 2') 
-                             : imageMode === 'background-removal' ? 'BG-X' 
+                          <ImagePlus className="h-3 w-3" />
+                          <span className="text-xs">
+                            {imageMode === 'image2image' ? (language === 'ar' ? 'صورة 2' : 'Image2Image') 
+                             : imageMode === 'background-removal' ? (language === 'ar' ? 'إزالة الخلفية' : 'BG-Removal') 
                              : (language === 'ar' ? 'صورة' : 'Image')}
                           </span>
-                          <ChevronDown className="h-2.5 w-2.5" />
+                          <ChevronDown className="h-3 w-3" />
                         </button>
                         
                         {/* Image Mode Dropdown */}
                         {imageMenuPos && createPortal(
                           <div
+                            data-dropdown-menu
                             className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px]"
                             style={{
                               top: imageMenuPos.top,
                               left: imageMenuPos.left,
+                              transform: 'translateY(-100%)',
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
                           >
@@ -728,32 +773,88 @@ export function ChatInput({
                         )}
                       </div>
                     ) : activeTrigger === 'chat' ? (
-                      <div className="inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-[10px] font-medium leading-none bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50 align-middle">
-                        <span className="text-[10px]">{language === 'ar' ? 'دردشة' : 'Chat'}</span>
+                      <div className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50 align-middle">
+                        <span className="text-xs">{language === 'ar' ? 'دردشة' : 'Chat'}</span>
                       </div>
                     ) : (
                       <ActiveModeIndicator activeTrigger={activeTrigger} />
                     )}
                   </div>
 
+                  {/* Upload button - Chat mode OR Image mode only for image2image/background-removal */}
+                  {(
+                    activeTrigger === 'chat' ||
+                    (activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal'))
+                  ) && (
+                    <button
+                      type="button"
+                      onPointerUp={(e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        if (activeTrigger === 'chat') {
+                          chatUploadInputRef.current?.click();
+                        } else {
+                          triggerSeedUpload();
+                        }
+                      }}
+                      disabled={isUploading}
+                      className={`h-8 w-8 rounded-xl transition-colors flex items-center justify-center
+                        ${activeTrigger === 'chat'
+                          ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200 border border-cyan-200 dark:bg-cyan-900/60 dark:text-cyan-300 dark:border-cyan-700/60'
+                          : 'bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60'}
+                      `}
+                      aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload'}
+                      title={language === 'ar' ? 'تحميل صورة' : 'Upload'}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
+
                   {/* Speed dropdown - only in Text2Image mode */}
                   {activeTrigger === 'image' && imageMode === 'text2image' && (
                     <div className="flex justify-center">
-                      <div className="relative inline-flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 rounded-lg px-2 py-1 shadow-sm min-w-[56px]">
-                        <select
+                      <div className="relative inline-flex items-center justify-center">
+                        <button
+                          ref={qualityBtnRef}
+                          data-dropdown
+                          onPointerUp={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const rect = qualityBtnRef.current?.getBoundingClientRect();
+                            if (rect) {
+                              const margin = 8;
+                              const desiredLeft = rect.left - 12;
+                              const clampedLeft = Math.max(12, desiredLeft);
+                              setQualityMenuPos({ top: rect.top - margin, left: clampedLeft });
+                            }
+                          }}
                           aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
-                          className="appearance-none text-[11px] leading-none bg-transparent outline-none text-orange-900 dark:text-orange-200 cursor-pointer text-center"
-                          value={imageQuality}
-                          onChange={(e) => setImageQuality(e.target.value as 'fast' | 'best_fast')}
+                          className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-lg text-xs font-medium leading-none bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
                         >
-                          <option value="fast">{language === 'ar' ? 'سريع' : 'Fast'}</option>
-                          <option value="best_fast">{language === 'ar' ? 'أفضل' : 'Best'}</option>
-                        </select>
-                        <span className="pointer-events-none absolute right-1 text-orange-900 dark:text-orange-200">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <path d="M7 10l5 5 5-5z" />
-                          </svg>
-                        </span>
+                          <span>{imageQuality === 'fast' ? (language === 'ar' ? 'سريع' : 'Fast') : (language === 'ar' ? 'أفضل' : 'Best')}</span>
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+                        {qualityMenuPos && createPortal(
+                          <div
+                            data-dropdown-menu
+                            className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px]"
+                            style={{ top: qualityMenuPos.top, left: qualityMenuPos.left, transform: 'translateY(-100%)' }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onPointerUp={() => { setImageQuality('fast'); setQualityMenuPos(null); }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              {language === 'ar' ? 'سريع' : 'Fast'}
+                            </button>
+                            <button
+                              onPointerUp={() => { setImageQuality('best_fast'); setQualityMenuPos(null); }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              {language === 'ar' ? 'أفضل' : 'Best'}
+                            </button>
+                          </div>,
+                          document.body
+                        )}
                       </div>
                     </div>
                   )}
@@ -771,6 +872,39 @@ export function ChatInput({
                   >
                     🧹 {language === 'ar' ? 'أزل الخلفية' : 'Remove the background'}
                   </button>
+                ) : activeTrigger === 'image' && imageMode === 'image2image' ? (
+                  <>
+                    <button
+                      onClick={() => setMessage(language === 'ar' ? 'حوّل الصورة إلى ألوان مائية' : 'Convert to watercolor style')}
+                      className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
+                    >
+                      🎨 {language === 'ar' ? 'ألوان مائية' : 'Watercolor'}
+                    </button>
+                    <button
+                      onClick={() => setMessage(language === 'ar' ? 'حوّلها إلى كرتون/أنمي' : 'Make it cartoon/anime')}
+                      className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
+                    >
+                      📺 {language === 'ar' ? 'كرتون/أنمي' : 'Cartoon/Anime'}
+                    </button>
+                    <button
+                      onClick={() => setMessage(language === 'ar' ? 'حسّن الحدة والتفاصيل' : 'Enhance sharpness and details')}
+                      className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
+                    >
+                      ✨ {language === 'ar' ? 'تحسين التفاصيل' : 'Enhance details'}
+                    </button>
+                    <button
+                      onClick={() => setMessage(language === 'ar' ? 'حوّلها إلى أبيض وأسود' : 'Change to black and white')}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
+                    >
+                      🖤 {language === 'ar' ? 'أبيض وأسود' : 'Black & White'}
+                    </button>
+                    <button
+                      onClick={() => setMessage(language === 'ar' ? 'ارفع السطوع قليلًا' : 'Increase brightness slightly')}
+                      className="px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-full text-sm"
+                    >
+                      ☀️ {language === 'ar' ? 'زيادة السطوع' : 'Increase brightness'}
+                    </button>
+                  </>
                 ) : (
                   <>
                     {uploadedFiles[0]?.imageType?.id === 'ids' && (
@@ -901,7 +1035,7 @@ export function ChatInput({
                     placeholder={getPlaceholderText()}
                     autoExpand={true}
                     maxLines={4}
-                    minLines={1}
+                    minLines={(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) ? 2 : 1}
                     className={`
                       flex-1 border-[2.5px]
                       bg-white/95 dark:bg-gray-800/90
@@ -914,9 +1048,9 @@ export function ChatInput({
                       rounded-xl
                       outline-none transition-all duration-200
                       ${!isTextareaEnabled ? 'opacity-50 cursor-not-allowed' : ''}
-                      ${activeTrigger === 'image' && message.trim() === '' 
-                        ? 'placeholder:text-sm placeholder:italic placeholder:text-gray-400 dark:placeholder:text-gray-500' 
-                        : 'placeholder:text-gray-500 dark:placeholder:text-gray-400'}
+                      ${(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) 
+                        ? 'placeholder:text-xs placeholder:italic placeholder:text-gray-400 dark:placeholder:text-gray-500' 
+                        : 'placeholder:text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400'}
                       py-3 px-4
                     `}
                     ref={textareaRef}
@@ -966,5 +1100,23 @@ export function ChatInput({
         </div>
       </div>
     </div>
+    {/* Hidden inputs for uploads */}
+    <input
+      type="file"
+      ref={seedFileInputRef}
+      onChange={handleSeedFilesChange}
+      accept="image/*"
+      multiple={false}
+      hidden
+    />
+    <input
+      type="file"
+      ref={chatUploadInputRef}
+      onChange={handleChatUploadChange}
+      accept="image/*"
+      multiple={false}
+      hidden
+    />
+    </>
   );
 }
