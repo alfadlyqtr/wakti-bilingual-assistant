@@ -265,13 +265,19 @@ export function ChatMessages({
   // Google Cloud TTS via Edge Function (no ElevenLabs, no browser SpeechSynthesis)
   const handleSpeak = async (text: string, messageId: string) => {
     try {
-      console.log('[TTS] handleSpeak click', { id: messageId, len: text?.length || 0 });
+      console.log('[TTS-MOBILE] handleSpeak triggered', { 
+        id: messageId, 
+        isMobile: /iPad|iPhone|iPod|Android/i.test(navigator.userAgent),
+        textLength: text?.length || 0,
+        userAgent: navigator.userAgent.slice(0, 100)
+      });
+      
       const cleanText = sanitizeForTTS(text);
       const sessionId = `tts-${messageId}`;
       
       // Toggle off if already playing this message
       if (speakingMessageId === messageId) {
-        console.log('[TTS] toggling OFF current message', messageId);
+        console.log('[TTS-MOBILE] toggling OFF current message', messageId);
         if (audioRef.current) {
           try { audioRef.current.pause(); } catch {}
           try { audioRef.current.currentTime = 0; } catch {}
@@ -282,15 +288,25 @@ export function ChatMessages({
         return;
       }
 
-      // Request exclusive audio playback
-      const granted = await requestPlayback(sessionId);
-      if (!granted) {
-        console.log('[TTS] Audio session denied - another source is playing');
-        return;
+      // Mobile-specific: unlock audio context first
+      const isMobile = /iPad|iPhone|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile) {
+        console.log('[TTS-MOBILE] Attempting to unlock audio for mobile');
+        const unlocked = await unlockAudio();
+        console.log('[TTS-MOBILE] Audio unlock result:', unlocked);
+        if (!unlocked) {
+          console.warn('[TTS-MOBILE] Failed to unlock audio - may not play on this device');
+        }
       }
 
-      // Unlock audio context on iOS
-      await unlockAudio();
+      // Request exclusive audio playback
+      console.log('[TTS-MOBILE] Requesting audio session');
+      const granted = await requestPlayback(sessionId);
+      console.log('[TTS-MOBILE] Audio session granted:', granted);
+      if (!granted) {
+        console.log('[TTS-MOBILE] Audio session denied - another source is playing');
+        return;
+      }
 
       // Stop any current playback
       if (audioRef.current) {
@@ -298,6 +314,8 @@ export function ChatMessages({
         try { audioRef.current.currentTime = 0; } catch {}
         try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {}
       }
+      
+      console.log('[TTS-MOBILE] Setting speaking message ID and visual state');
       setSpeakingMessageId(messageId);
       setIsPaused(false);
       // Start showing spinner immediately for better feedback

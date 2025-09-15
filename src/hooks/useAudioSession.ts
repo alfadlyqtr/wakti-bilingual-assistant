@@ -24,12 +24,30 @@ class AudioSessionManager {
       const audio = new Audio();
       audio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjmH0fPTgjMGHm7A7+OZURE';
       audio.volume = 0.01;
-      await audio.play();
+      audio.muted = false;
+      audio.preload = 'none';
+      
+      // Mobile-specific: ensure we're in a user gesture context
+      if (typeof window !== 'undefined' && window.navigator.userAgent.match(/iPad|iPhone|iPod|Android/)) {
+        console.log('[AudioSession] Unlocking mobile audio context');
+        // Try to play with user gesture
+        const playPromise = audio.play();
+        if (playPromise) {
+          await playPromise;
+        }
+      } else {
+        await audio.play();
+      }
+      
       audio.pause();
-      audio.remove();
+      audio.currentTime = 0;
+      if (audio.remove) audio.remove();
+      
       this.unlocked = true;
+      console.log('[AudioSession] Audio context unlocked successfully');
       return true;
-    } catch {
+    } catch (error) {
+      console.warn('[AudioSession] Failed to unlock audio context:', error);
       return false;
     }
   }
@@ -172,7 +190,9 @@ export function useAudioSession() {
     const unsubscribe = audioSessionManager.subscribe((session) => {
       // This will trigger re-renders when session changes
     });
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return {
