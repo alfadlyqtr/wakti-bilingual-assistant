@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Pause, StopCircle, RotateCcw, RotateCw, Volume2, VolumeX, Repeat, Maximize2, Minimize2, X } from 'lucide-react';
+import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Repeat, Maximize2, Minimize2, X } from 'lucide-react';
 import { useAudioSession } from '@/hooks/useAudioSession';
 
 interface YouTubePreviewProps {
@@ -213,17 +213,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   };
   const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
-    // Update UI immediately for better mobile responsiveness
-    setIsPlaying(false);
     try { playerRef.current.pauseVideo(); } catch {}
-    await stopSession(sessionId);
-  };
-  const handleStop = async () => {
-    if (!playerReady || !playerRef.current) return;
-    // Update UI immediately
-    setIsPlaying(false);
-    try { playerRef.current.pauseVideo(); } catch {}
-    try { playerRef.current.seekTo(0, true); } catch {}
     await stopSession(sessionId);
   };
   const handlePlayPause = () => {
@@ -465,16 +455,6 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </button>
-          <button
-            className="h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white/70 dark:bg-white/10 border-border hover:bg-white"
-            onTouchStart={handleStop}
-            onClick={handleStop}
-            style={{ touchAction: 'manipulation' }}
-            title="Stop"
-            aria-label="Stop"
-          >
-            <StopCircle className="h-4 w-4" />
           </button>
           <button
             className="h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white/70 dark:bg-white/10 border-border hover:bg-white"
