@@ -185,10 +185,11 @@ export function AppHeader() {
   return (
     <header
       className={cn(
-        "h-16 bg-background/80 backdrop-blur-xl border-b border-border/50",
-        "supports-[backdrop-filter]:bg-background/60",
+        "h-16 border-b border-border/50",
+        isMobile
+          ? "glue-fixed glue-top glue-z bg-background shadow-md"
+          : "bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60",
         "ios-reduce-blur",
-        isMobile ? "glue-fixed glue-top glue-z" : "",
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{

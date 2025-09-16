@@ -395,13 +395,13 @@ export default function VoiceTTS() {
         </div>
         <Textarea
           className="min-h-32 resize-none"
-          maxLength={1000}
+          maxLength={2000}
           value={text}
           onChange={(e) => { setText(e.target.value); if (isCorrected) setIsCorrected(false); }}
           placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بأي لغة...' : 'Type what you want to hear in any language...'}
         />
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{text.length} / 1000</span>
+          <span>{text.length} / 2000</span>
         </div>
       </div>
 
