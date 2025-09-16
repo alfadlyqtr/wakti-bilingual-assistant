@@ -348,7 +348,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         </div>
 
         {/* Body */}
-        <div className="px-6 md:pb-6 pb-[calc(var(--app-bottom-tabs-h)+100px)]">
+        <div className="px-6 md:pb-6 pb-[calc(var(--app-bottom-tabs-h)+16px)]">
           {activeTab === 'compose' && (
             <div className="space-y-4">
               <div className="grid gap-2">
@@ -557,16 +557,16 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           {error && (
             <div className="mt-4 text-sm text-destructive">{error}</div>
           )}
-        </div>
-        {/* Bottom action bar - offset above mobile nav to avoid overlap */}
-        <div className="px-6 py-4 border-t flex justify-end sticky md:bottom-0 bottom-[var(--app-bottom-tabs-h)] z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <button
-            className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
-            onClick={handleGenerate}
-            disabled={!canGenerate}
-          >
-            {isLoading ? (language === 'ar' ? 'جارٍ الإنشاء...' : 'Generating...') : (language === 'ar' ? 'توليد النص' : 'Generate Text')}
-          </button>
+          {/* Inline generate button at end of content (not sticky) */}
+          <div className="mt-6 flex justify-end">
+            <button
+              className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+            >
+              {isLoading ? (language === 'ar' ? 'جارٍ الإنشاء...' : 'Generating...') : (language === 'ar' ? 'توليد النص' : 'Generate Text')}
+            </button>
+          </div>
         </div>
       </div>
     </div>

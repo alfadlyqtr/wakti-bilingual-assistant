@@ -54,8 +54,8 @@
     --glow-orange: 0 0 20px hsla(25, 95%, 70%, 0.6);
     --glow-purple: 0 0 20px hsla(280, 60%, 75%, 0.6);
     /* Global layout offsets */
-    --app-header-h: calc(64px + env(safe-area-inset-top));          /* Fixed header + iOS top safe area */
-    --app-bottom-tabs-h: calc(68px + env(safe-area-inset-bottom));  /* Fixed bottom nav + iOS bottom safe area */
+    --app-header-h: calc(48px + env(safe-area-inset-top));          /* Fixed header + iOS top safe area */
+    --app-bottom-tabs-h: calc(52px + env(safe-area-inset-bottom));  /* Fixed bottom nav + iOS bottom safe area */
     --app-content-gap: 8px;        /* Extra breathing space for anchor scrolls */
     
     /* Desktop/Tablet layout variables */

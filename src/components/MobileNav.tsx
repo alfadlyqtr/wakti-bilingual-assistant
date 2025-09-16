@@ -125,8 +125,14 @@ export function MobileNav() {
         visibility: isKeyboardVisible ? 'hidden' : 'visible'
       }}
     >
-      <div className="bg-white/80 dark:bg-neutral-900/70 backdrop-blur-2xl ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-vibrant pb-[calc(env(safe-area-inset-bottom)+4px)]">
-        <ul className="flex justify-around items-center h-[68px] min-h-[68px] px-2">
+      <div className="bg-white/80 dark:bg-neutral-900/70 ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-soft pb-0">
+        <ul
+          className="flex justify-around items-center px-2"
+          style={{
+            height: 'calc(var(--app-bottom-tabs-h) - env(safe-area-inset-bottom, 0px))',
+            minHeight: 'calc(var(--app-bottom-tabs-h) - env(safe-area-inset-bottom, 0px))',
+          }}
+        >
           {navItems.map((item) => {
             const IconComponent = iconMap[item.icon] || Calendar;
             const isActive = pathname === item.path || (item.path === '/maw3d' && pathname.startsWith('/maw3d')) || (item.path === '/tr' && pathname.startsWith('/tr'));
@@ -136,24 +142,24 @@ export function MobileNav() {
                 <button
                   onClick={() => handleNavigation(item.path, item.badgeType)}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 p-2 rounded-xl w-full transition-all duration-300 relative group",
-                    "hover:bg-gradient-card hover:shadow-glow hover:scale-105 active:scale-95",
+                    "flex flex-col items-center justify-center gap-1 p-2 rounded-xl w-full transition-colors duration-150 relative group",
+                    "hover:bg-accent/10 active:opacity-90", 
                     isActive 
-                      ? "bg-gradient-card shadow-colored scale-105" 
-                      : "hover:bg-accent/10"
+                      ? "bg-gradient-card shadow-colored" 
+                      : ""
                   )}
                 >
                   <div className={cn(
-                    "relative transition-all duration-300",
+                    "relative transition-none",
                     isActive && "nav-icon-active"
                   )}>
                     <IconComponent 
                       className={cn(
-                        "h-6 w-6 transition-all duration-300",
+                        "h-5 w-5",
                         item.colorClass,
                         isActive 
                           ? "scale-110 brightness-125" 
-                          : "group-hover:scale-110 group-hover:brightness-110"
+                          : ""
                       )} 
                     />
                     {/* Real Badge System - Only show when data exists */}

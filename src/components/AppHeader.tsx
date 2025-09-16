@@ -193,12 +193,14 @@ export function AppHeader() {
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{
-        height: 'var(--app-header-h)',
-        paddingTop: 'env(safe-area-inset-top, 0px)',
+        height: 'calc(var(--app-header-h) - env(safe-area-inset-top, 0px))',
         width: '100%'
       }}
     >
-      <div className="container relative flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
+      <div className={cn(
+        "container relative flex items-center justify-between",
+        isMobile ? "h-12 py-2" : "h-16 py-3"
+      )}>
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="flex items-center">
             <Logo3D size="sm" />
