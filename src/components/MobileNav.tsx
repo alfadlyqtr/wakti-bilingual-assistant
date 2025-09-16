@@ -112,11 +112,11 @@ export function MobileNav() {
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{
-        bottom: isKeyboardVisible ? `${keyboardHeight}px` : '0px',
+        bottom: '0px',
         height: 'var(--app-bottom-tabs-h)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         transform: 'translateZ(0)',
-        willChange: 'bottom'
+        willChange: 'auto'
       }}
     >
       <div className="bg-white/80 dark:bg-neutral-900/70 backdrop-blur-2xl ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-vibrant pb-[calc(env(safe-area-inset-bottom)+4px)]">
