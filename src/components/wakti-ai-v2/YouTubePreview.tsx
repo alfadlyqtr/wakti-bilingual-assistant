@@ -129,22 +129,26 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             if (state === 1) {
               setIsPlaying(true);
               setHasStarted(true);
-              // Ensure we hold the audio session even if user tapped inside the iframe
-              const claimSession = async () => {
-                if (!isSessionPlaying(sessionId)) {
-                  const granted = await requestPlayback(sessionId);
-                  if (granted) {
-                    try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
-                    try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+              if (!useNativeControls) {
+                // Desktop/tablet: ensure we hold a session if the user tapped inside the iframe
+                const claimSession = async () => {
+                  if (!isSessionPlaying(sessionId)) {
+                    const granted = await requestPlayback(sessionId);
+                    if (granted) {
+                      try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
+                      try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+                    } else {
+                      try { playerRef.current?.pauseVideo?.(); } catch {}
+                    }
                   } else {
-                    // If focus not granted (e.g., TTS has higher priority), pause to avoid silent playback
-                    try { playerRef.current?.pauseVideo?.(); } catch {}
+                    try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
                   }
-                } else {
-                  try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
-                }
-              };
-              claimSession();
+                };
+                claimSession();
+              } else {
+                // Simple Mode: just announce playing for coordination
+                try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+              }
               // Start progress polling every 1s while playing
               if (progressIntervalRef.current) window.clearInterval(progressIntervalRef.current);
               progressIntervalRef.current = window.setInterval(() => {
@@ -184,42 +188,55 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
     };
   }, [videoId, useNativeControls]);
 
-  // Register with audio session manager
+  // Register with audio session manager only on non-mobile (no native controls)
   useEffect(() => {
-    if (playerReady && playerRef.current) {
-      register(sessionId, 'youtube', playerRef.current, 2); // Higher priority than TTS
+    if (playerReady && playerRef.current && !useNativeControls) {
+      register(sessionId, 'youtube', playerRef.current, 2); // Higher priority than TTS on desktop/tablet
+      return () => unregister(sessionId);
     }
-    return () => unregister(sessionId);
-  }, [playerReady, sessionId]);
+    return () => {};
+  }, [playerReady, sessionId, useNativeControls]);
 
-  // Listen for audio session changes to pause when other audio starts
+  // Listen for competing audio: pause YouTube when TTS starts (Simple Mode friendly)
   useEffect(() => {
+    const onTtsPlaying = () => {
+      try { playerRef.current?.pauseVideo?.(); } catch {}
+    };
+    window.addEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
+    return () => window.removeEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
+  }, []);
+
+  // On non-mobile, still respect the session manager changes (back-compat)
+  useEffect(() => {
+    if (useNativeControls) return; // skip in Simple Mode
     const onSessionChange = (e: CustomEvent) => {
       const { activeSource, sessionId: activeId } = e.detail;
       if (activeSource !== 'youtube' && activeId !== sessionId && isPlaying) {
-        try { if (playerRef.current) playerRef.current.pauseVideo?.(); } catch {}
+        try { playerRef.current?.pauseVideo?.(); } catch {}
       }
     };
     window.addEventListener('wakti-audio-session-changed', onSessionChange as EventListener);
     return () => window.removeEventListener('wakti-audio-session-changed', onSessionChange as EventListener);
-  }, [sessionId, isPlaying]);
+  }, [sessionId, isPlaying, useNativeControls]);
 
   // Control handlers with audio session management
   const handlePlay = async () => {
     if (!playerReady || !playerRef.current) return;
     const player = playerRef.current;
 
-    // 1) Start playback immediately within the same user-gesture stack (muted already)
-    // This preserves the mobile gesture and avoids the "dead" button effect
-    try { player.playVideo(); } catch {}
+    // Simple Mode on mobile: just play and unmute, no gating
+    if (useNativeControls) {
+      try { player.playVideo(); } catch {}
+      try { player.unMute(); setMuted(false); } catch {}
+      return;
+    }
 
-    // 2) Then request the audio session asynchronously
+    // Desktop/tablet: keep session flow
+    try { player.playVideo(); } catch {}
     const granted = await requestPlayback(sessionId);
     if (granted) {
-      // We now have focus; unmute and continue
       try { player.unMute(); setMuted(false); } catch {}
     } else {
-      // Not granted; pause to avoid silent background playback
       try { player.pauseVideo(); } catch {}
     }
   };
