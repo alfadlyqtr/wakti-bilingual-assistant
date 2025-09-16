@@ -195,13 +195,21 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Control handlers with audio session management
   const handlePlay = async () => {
     if (!playerReady || !playerRef.current) return;
-    
-    // Request exclusive audio playback
+    const player = playerRef.current;
+
+    // 1) Start playback immediately within the same user-gesture stack (muted already)
+    // This preserves the mobile gesture and avoids the "dead" button effect
+    try { player.playVideo(); } catch {}
+
+    // 2) Then request the audio session asynchronously
     const granted = await requestPlayback(sessionId);
-    if (!granted) return;
-    
-    try { playerRef.current.unMute(); setMuted(false); } catch {}
-    try { playerRef.current.playVideo(); } catch {}
+    if (granted) {
+      // We now have focus; unmute and continue
+      try { player.unMute(); setMuted(false); } catch {}
+    } else {
+      // Not granted; pause to avoid silent background playback
+      try { player.pauseVideo(); } catch {}
+    }
   };
   const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
