@@ -129,10 +129,22 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             if (state === 1) {
               setIsPlaying(true);
               setHasStarted(true);
-              // Only dispatch if we have audio session control
-              if (isSessionPlaying(sessionId)) {
-                try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
-              }
+              // Ensure we hold the audio session even if user tapped inside the iframe
+              const claimSession = async () => {
+                if (!isSessionPlaying(sessionId)) {
+                  const granted = await requestPlayback(sessionId);
+                  if (granted) {
+                    try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
+                    try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+                  } else {
+                    // If focus not granted (e.g., TTS has higher priority), pause to avoid silent playback
+                    try { playerRef.current?.pauseVideo?.(); } catch {}
+                  }
+                } else {
+                  try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+                }
+              };
+              claimSession();
               // Start progress polling every 1s while playing
               if (progressIntervalRef.current) window.clearInterval(progressIntervalRef.current);
               progressIntervalRef.current = window.setInterval(() => {
@@ -382,7 +394,8 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             </>
           )}
         </div>
-        {!hasStarted && (
+        {/* On mobile with native controls, rely on the iframe's own play button to honor gesture */}
+        {!hasStarted && !useNativeControls && (
           <button
             type="button"
             className="absolute inset-0 w-full h-full"
