@@ -337,7 +337,14 @@ export function ChatMessages({
           // Safety: release session if paused so other audio (e.g., YouTube) can play
           try { stopSession(sessionId); unregister(sessionId); } catch {}
         };
-        try { await a.play(); } catch (e) { console.error('[TTS] play() failed from persisted', e); }
+        try { await a.play(); } catch (e) {
+          console.error('[TTS] play() failed from persisted', e);
+          // Cleanup: release session and reset UI so other audio (e.g., YouTube) can request playback
+          try { stopSession(sessionId); unregister(sessionId); } catch {}
+          try { URL.revokeObjectURL(url); } catch {}
+          setSpeakingMessageId(null);
+          setIsPaused(false);
+        }
         // Clear spinner if we used cache
         setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
         return;
@@ -451,7 +458,14 @@ export function ChatMessages({
         try { stopSession(sessionId); unregister(sessionId); } catch {}
       };
       console.log('[TTS] playing audio');
-      try { await audio.play(); } catch (e) { console.error('[TTS] play() failed after fetch', e); }
+      try { await audio.play(); } catch (e) {
+        console.error('[TTS] play() failed after fetch', e);
+        // Cleanup: release session and reset UI so other audio (e.g., YouTube) can request playback
+        try { stopSession(sessionId); unregister(sessionId); } catch {}
+        try { URL.revokeObjectURL(objectUrl); } catch {}
+        setSpeakingMessageId(null);
+        setIsPaused(false);
+      }
     } catch (err) {
       console.error('[TTS] Unexpected error while fetching/playing audio', err);
       setSpeakingMessageId(null);
