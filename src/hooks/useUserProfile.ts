@@ -22,10 +22,11 @@ export function useUserProfile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const IS_DEV = !import.meta.env.PROD;
 
   const createProfileIfMissing = async (userId: string) => {
     try {
-      console.log('Creating missing profile for user:', userId);
+      if (IS_DEV) console.debug('Creating missing profile for user:', userId);
       
       const { data, error } = await supabase
         .from('profiles')
@@ -66,7 +67,7 @@ export function useUserProfile() {
         throw error;
       }
 
-      console.log('Successfully created profile:', data);
+      if (IS_DEV) console.debug('Successfully created profile:', data);
       return data;
     } catch (error) {
       console.error('Failed to create profile:', error);
@@ -84,7 +85,7 @@ export function useUserProfile() {
       setLoading(true);
       setError(null);
       
-      console.log('Fetching profile for user:', user.id);
+      if (IS_DEV) console.debug('Fetching profile for user:', user.id);
       
       const { data, error } = await supabase
         .from('profiles')
@@ -95,7 +96,7 @@ export function useUserProfile() {
       if (error) {
         if (error.code === 'PGRST116') {
           // Profile doesn't exist, create it
-          console.log('Profile not found, creating new profile...');
+          if (IS_DEV) console.debug('Profile not found, creating new profile...');
           const newProfile = await createProfileIfMissing(user.id);
           setProfile(newProfile);
         } else {
@@ -103,7 +104,7 @@ export function useUserProfile() {
           setError(error.message);
         }
       } else {
-        console.log('Profile fetched successfully:', data);
+        if (IS_DEV) console.debug('Profile fetched successfully:', data);
         setProfile(data);
       }
     } catch (err) {
@@ -133,7 +134,8 @@ export function useUserProfile() {
           filter: `id=eq.${user.id}`
         },
         (payload) => {
-          console.log('Profile updated:', payload);
+          // Gate verbose logs in production to avoid exposing profile payload in user consoles
+          if (IS_DEV) console.debug('Profile updated (realtime):', { eventType: payload.eventType, when: payload.commit_timestamp });
           if (payload.new) {
             setProfile(payload.new as UserProfile);
           }

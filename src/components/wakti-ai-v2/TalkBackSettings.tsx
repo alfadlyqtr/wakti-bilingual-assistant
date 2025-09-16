@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 const LS_AR = 'wakti_tts_voice_ar';
 const LS_EN = 'wakti_tts_voice_en';
 const LS_AUTOPLAY = 'wakti_tts_autoplay';
+const LS_PREEMPT = 'wakti_tts_preempt';
 
 // Default voice IDs (provided by user)
 export const DEFAULT_VOICES = {
@@ -57,6 +58,7 @@ export const TalkBackSettings: React.FC<TalkBackSettingsProps> = ({ compact = fa
   const [arVoice, setArVoice] = useState<VoiceId>(DEFAULT_VOICES.ar.male);
   const [enVoice, setEnVoice] = useState<VoiceId>(DEFAULT_VOICES.en.male);
   const [autoPlay, setAutoPlay] = useState<boolean>(false);
+  const [preempt, setPreempt] = useState<boolean>(false);
 
   // Load saved selections on mount
   useEffect(() => {
@@ -64,6 +66,7 @@ export const TalkBackSettings: React.FC<TalkBackSettingsProps> = ({ compact = fa
     setArVoice(ar);
     setEnVoice(en);
     try { setAutoPlay(localStorage.getItem(LS_AUTOPLAY) === '1'); } catch {}
+    try { setPreempt(localStorage.getItem(LS_PREEMPT) === '1'); } catch {}
   }, []);
 
   const saveAr = (val: VoiceId) => {
@@ -120,6 +123,32 @@ export const TalkBackSettings: React.FC<TalkBackSettingsProps> = ({ compact = fa
               aria-hidden="true"
             />
             <span>{compact ? (language === 'ar' ? 'تلقائي' : 'Auto') : (language === 'ar' ? 'تشغيل تلقائي' : 'Auto Play')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPreempt(prev => {
+                const next = !prev;
+                try { localStorage.setItem(LS_PREEMPT, next ? '1' : '0'); } catch {}
+                // Broadcast for listeners (ChatMessages will update priority/confirm)
+                try { window.dispatchEvent(new CustomEvent('wakti-tts-preempt-changed', { detail: { value: next } })); } catch {}
+                return next;
+              });
+            }}
+            className={`${compact ? 'h-5 px-1.5 text-[9px]' : 'h-6 px-2 text-[10px]'} rounded-md leading-none flex items-center gap-1 border transition-colors
+              ${preempt
+                ? 'bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700/40'
+                : 'bg-white/60 text-foreground/80 border-white/60 dark:bg-white/10 dark:text-white/80 dark:border-white/10'}`}
+            aria-pressed={preempt}
+            aria-label={language === 'ar' ? 'السماح بإيقاف يوتيوب' : 'Allow preempt YouTube'}
+            title={language === 'ar' ? 'السماح لميزة الصوت بإيقاف يوتيوب مؤقتًا عند النقر' : 'Allow Talk Back to pause YouTube on tap'}
+          >
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: preempt ? '#f59e0b' : '#9ca3af' }}
+              aria-hidden="true"
+            />
+            <span>{compact ? (language === 'ar' ? 'إيقاف يوت.' : 'Preempt YT') : (language === 'ar' ? 'إيقاف يوتيوب عند التشغيل' : 'Preempt YouTube')}</span>
           </button>
         </div>
       </div>

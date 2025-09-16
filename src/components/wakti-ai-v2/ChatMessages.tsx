@@ -85,9 +85,12 @@ export function ChatMessages({
   // Talk Back Auto Play and iOS unlock helpers
   const autoPlayRef = useRef<boolean>(false);
   const audioUnlockedRef = useRef<boolean>(false);
-  
+  const preemptRef = useRef<boolean>(false);
+  const activeSourceRef = useRef<'youtube' | 'tts' | 'voice-recording' | 'other' | null>(null);
+  const [preemptPromptId, setPreemptPromptId] = useState<string | null>(null);
+
   // Audio session management for TTS
-  const { register, unregister, requestPlayback, stopSession, unlockAudio } = useAudioSession();
+  const { register, unregister, requestPlayback, stopSession, unlockAudio, currentSession } = useAudioSession();
 
   // Keep ref synchronized with state to avoid stale closures during async work
   useEffect(() => {
@@ -231,7 +234,6 @@ export function ChatMessages({
     return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
   }, [scrollAreaRef]);
 
-
   // Cleanup all progress intervals on unmount
   useEffect(() => {
     return () => {
@@ -263,7 +265,7 @@ export function ChatMessages({
   }, []);
 
   // Google Cloud TTS via Edge Function (no ElevenLabs, no browser SpeechSynthesis)
-  const handleSpeak = async (text: string, messageId: string) => {
+  const handleSpeak = async (text: string, messageId: string, userInitiated = false, forcePreempt = false) => {
     try {
       console.log('[TTS] handleSpeak click', { id: messageId, len: text?.length || 0 });
       const cleanText = sanitizeForTTS(text);
@@ -278,16 +280,21 @@ export function ChatMessages({
         }
         setSpeakingMessageId(null);
         setIsPaused(false);
+        setPreemptPromptId(null);
         await stopSession(sessionId);
+        await unregister(sessionId);
         return;
       }
 
-      // Request exclusive audio playback
-      const granted = await requestPlayback(sessionId);
-      if (!granted) {
-        console.log('[TTS] Audio session denied - another source is playing');
+      // Option C: allow preempting YouTube on user tap with small in-app confirmation
+      let priority = 1; // normal TTS priority
+      try { preemptRef.current = (localStorage.getItem('wakti_tts_preempt') === '1') || preemptRef.current; } catch {}
+      const youtubeActive = (activeSourceRef.current === 'youtube') || (currentSession?.source === 'youtube');
+      if (!forcePreempt && userInitiated && preemptRef.current && youtubeActive) {
+        setPreemptPromptId(messageId);
         return;
       }
+      if (forcePreempt) priority = 3; // elevate to preempt YouTube
 
       // Unlock audio context on iOS
       await unlockAudio();
@@ -308,11 +315,22 @@ export function ChatMessages({
       if (persisted?.b64) {
         console.log('[TTS] using persisted cache', { id: messageId });
         const url = base64ToBlobUrl(persisted.b64);
-        const a = new Audio(url);
+        const a = new Audio();
         audioRef.current = a;
-        register(sessionId, 'tts', a, 1); // Lower priority than YouTube
-        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
-        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { URL.revokeObjectURL(url); } catch {} try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+        register(sessionId, 'tts', a, priority);
+        const granted = await requestPlayback(sessionId);
+        if (!granted) {
+          console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
+          try { URL.revokeObjectURL(url); } catch {}
+          setSpeakingMessageId(null);
+          setIsPaused(false);
+          await unregister(sessionId);
+          return;
+        }
+        // set src only after granted to avoid blob 404s
+        a.src = url;
+        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(url); } catch {} };
+        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(url); } catch {} };
         a.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
         a.onpause = () => setIsPaused(true);
         try { await a.play(); } catch (e) { console.error('[TTS] play() failed from persisted', e); }
@@ -406,11 +424,22 @@ export function ChatMessages({
       setPersisted(messageId, b64, cleanText.length);
       const objectUrl = URL.createObjectURL(full);
 
-      const audio = new Audio(objectUrl);
+      const audio = new Audio();
       audioRef.current = audio;
-      register(sessionId, 'tts', audio, 1); // Lower priority than YouTube
-      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
-      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} };
+      register(sessionId, 'tts', audio, priority);
+      const granted2 = await requestPlayback(sessionId);
+      if (!granted2) {
+        console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
+        try { URL.revokeObjectURL(objectUrl); } catch {}
+        setSpeakingMessageId(null);
+        setIsPaused(false);
+        await unregister(sessionId);
+        return;
+      }
+      // set src only after granted to avoid blob 404s
+      audio.src = objectUrl;
+      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(objectUrl); } catch {} };
+      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(objectUrl); } catch {} };
       audio.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
       audio.onpause = () => setIsPaused(true);
       console.log('[TTS] playing audio');
@@ -444,6 +473,17 @@ export function ChatMessages({
     };
     window.addEventListener('wakti-tts-autoplay-changed', onAuto as EventListener);
     return () => window.removeEventListener('wakti-tts-autoplay-changed', onAuto as EventListener);
+  }, []);
+
+  // Listen for preempt setting changes (Option C)
+  useEffect(() => {
+    try { preemptRef.current = (localStorage.getItem('wakti_tts_preempt') === '1'); } catch {}
+    const onPreempt = (e: Event) => {
+      const ce = e as CustomEvent<{ value: boolean }>;
+      if (typeof ce?.detail?.value === 'boolean') preemptRef.current = ce.detail.value;
+    };
+    window.addEventListener('wakti-tts-preempt-changed', onPreempt as EventListener);
+    return () => window.removeEventListener('wakti-tts-preempt-changed', onPreempt as EventListener);
   }, []);
 
   // Best-effort iOS audio unlock on first user interaction, persisted per session
@@ -569,7 +609,7 @@ export function ChatMessages({
                 <button
                   onClick={() => handleSpeak(language === 'ar' 
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                    : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
+                    : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome', true
                   )}
                   className={`p-2 rounded-md transition-colors ${speakingMessageId === 'welcome' || fadeOutId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
@@ -596,6 +636,33 @@ export function ChatMessages({
                   </button>
                   <button onClick={onRewindClick} className="p-0.5 hover:text-foreground" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
                     <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              {preemptPromptId === 'welcome' && (
+                <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/50 bg-background/70 text-[11px]">
+                  <span>{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
+                  <button
+                    onClick={() => {
+                      setPreemptPromptId(null);
+                      handleSpeak(
+                        language === 'ar'
+                          ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
+                          : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`,
+                        'welcome',
+                        true,
+                        true
+                      );
+                    }}
+                    className="px-1 py-0 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
+                  >
+                    {language === 'ar' ? 'إيقاف وتشغيل' : 'Pause & Play'}
+                  </button>
+                  <button
+                    onClick={() => setPreemptPromptId(null)}
+                    className="px-1 py-0 rounded hover:bg-background/80"
+                  >
+                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
                   </button>
                 </div>
               )}
@@ -858,6 +925,16 @@ export function ChatMessages({
     rewind(5);
   };
 
+  // Track active audio source via global session change events (more reliable than snapshot)
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const ce = e as CustomEvent<{ activeSource: 'youtube'|'tts'|'voice-recording'|'other'|null }>; 
+      activeSourceRef.current = (ce?.detail?.activeSource ?? null) as any;
+    };
+    window.addEventListener('wakti-audio-session-changed', onChange as EventListener);
+    return () => window.removeEventListener('wakti-audio-session-changed', onChange as EventListener);
+  }, []);
+
   return (
     <>
       <div ref={scrollAreaRef} className="flex-1 overflow-y-auto p-4 space-y-4 pb-[calc(var(--chat-input-height,80px)+8px)]" style={{ ['--chat-input-height' as any]: `${inputHeight}px` }}>
@@ -992,8 +1069,8 @@ export function ChatMessages({
                             {/* TTS Button with Stop Functionality (assistant only) */}
                             {message.role === 'assistant' && (
                               <button
-                                onTouchStart={() => handleSpeak(message.content, message.id)}
-                                onClick={() => handleSpeak(message.content, message.id)}
+                                onTouchStart={() => handleSpeak(message.content, message.id, true)}
+                                onClick={() => handleSpeak(message.content, message.id, true)}
                                 style={{ touchAction: 'manipulation' }}
                                 className={`p-2 rounded-md transition-colors ${speakingMessageId === message.id || fadeOutId === message.id ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                                 title={speakingMessageId === message.id 
@@ -1004,18 +1081,16 @@ export function ChatMessages({
                                 {fetchingIds.has(message.id) && typeof progressMap.get(message.id) === 'number' ? (
                                   <span className="text-[10px] text-muted-foreground mr-1 align-middle">{progressMap.get(message.id)}%</span>
                                 ) : null}
-                                <span className={`inline-flex items-center ${speakingMessageId === message.id ? 'text-green-500' : ''}`}>
-                                  {speakingMessageId === message.id ? (
-                                    <Volume2 className="h-4 w-4 animate-pulse" />
-                                  ) : fetchingIds.has(message.id) ? (
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-[10px] text-muted-foreground">{progressMap.get(message.id)}%</span>
-                                      <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
-                                    </div>
-                                  ) : (
-                                    <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                                  )}
-                                </span>
+                                {speakingMessageId === message.id ? (
+                                  <Volume2 className="h-4 w-4 animate-pulse" />
+                                ) : fetchingIds.has(message.id) ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-muted-foreground">{progressMap.get(message.id)}%</span>
+                                    <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                                  </div>
+                                ) : (
+                                  <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                )}
                               </button>
                             )}
                             
@@ -1043,6 +1118,23 @@ export function ChatMessages({
                               </div>
                             )}
                           </div>
+                          {message.role === 'assistant' && preemptPromptId === message.id && (
+                            <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/50 bg-background/70 text-[11px]">
+                              <span>{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
+                              <button
+                                onClick={() => { setPreemptPromptId(null); handleSpeak(message.content, message.id, true, true); }}
+                                className="px-1 py-0 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
+                              >
+                                {language === 'ar' ? 'إيقاف وتشغيل' : 'Pause & Play'}
+                              </button>
+                              <button
+                                onClick={() => setPreemptPromptId(null)}
+                                className="px-1 py-0 rounded hover:bg-background/80"
+                              >
+                                {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
