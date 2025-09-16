@@ -23,6 +23,7 @@ import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
@@ -179,6 +180,7 @@ export function AppHeader() {
   const IconComponent = pageInfo.icon;
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { isMobile } = useIsMobile();
 
   return (
     <header
@@ -186,11 +188,13 @@ export function AppHeader() {
         "h-16 bg-background/80 backdrop-blur-xl border-b border-border/50",
         "supports-[backdrop-filter]:bg-background/60",
         "ios-reduce-blur",
+        isMobile ? "glue-fixed glue-top glue-z" : "",
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{
         height: 'var(--app-header-h)',
         paddingTop: 'env(safe-area-inset-top, 0px)',
+        width: '100%'
       }}
     >
       <div className="container relative flex h-16 items-center justify-between py-3 pt-[env(safe-area-inset-top)]">
