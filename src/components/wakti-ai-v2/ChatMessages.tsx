@@ -332,7 +332,11 @@ export function ChatMessages({
         a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(url); } catch {} };
         a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(url); } catch {} };
         a.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
-        a.onpause = () => setIsPaused(true);
+        a.onpause = () => {
+          setIsPaused(true);
+          // Safety: release session if paused so other audio (e.g., YouTube) can play
+          try { stopSession(sessionId); unregister(sessionId); } catch {}
+        };
         try { await a.play(); } catch (e) { console.error('[TTS] play() failed from persisted', e); }
         // Clear spinner if we used cache
         setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
@@ -441,7 +445,11 @@ export function ChatMessages({
       audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(objectUrl); } catch {} };
       audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(objectUrl); } catch {} };
       audio.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
-      audio.onpause = () => setIsPaused(true);
+      audio.onpause = () => {
+        setIsPaused(true);
+        // Safety: release session if paused so other audio (e.g., YouTube) can play
+        try { stopSession(sessionId); unregister(sessionId); } catch {}
+      };
       console.log('[TTS] playing audio');
       try { await audio.play(); } catch (e) { console.error('[TTS] play() failed after fetch', e); }
     } catch (err) {
@@ -640,8 +648,8 @@ export function ChatMessages({
                 </div>
               )}
               {preemptPromptId === 'welcome' && (
-                <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/50 bg-background/70 text-[11px]">
-                  <span>{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
+                <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/40 bg-background/60 text-[11px]">
+                  <span className="text-foreground/80">{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
                   <button
                     onClick={() => {
                       setPreemptPromptId(null);
@@ -654,13 +662,15 @@ export function ChatMessages({
                         true
                       );
                     }}
-                    className="px-1 py-0 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
+                    className="inline-flex items-center justify-center h-5 w-5 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
+                    aria-label={language === 'ar' ? 'تشغيل' : 'Play'}
+                    title={language === 'ar' ? 'تشغيل' : 'Play'}
                   >
-                    {language === 'ar' ? 'إيقاف وتشغيل' : 'Pause & Play'}
+                    <Play className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => setPreemptPromptId(null)}
-                    className="px-1 py-0 rounded hover:bg-background/80"
+                    className="px-1 py-0 rounded hover:bg-background/80 text-foreground/70"
                   >
                     {language === 'ar' ? 'إلغاء' : 'Cancel'}
                   </button>
@@ -1119,17 +1129,19 @@ export function ChatMessages({
                             )}
                           </div>
                           {message.role === 'assistant' && preemptPromptId === message.id && (
-                            <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/50 bg-background/70 text-[11px]">
-                              <span>{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
+                            <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/40 bg-background/60 text-[11px]">
+                              <span className="text-foreground/80">{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
                               <button
                                 onClick={() => { setPreemptPromptId(null); handleSpeak(message.content, message.id, true, true); }}
-                                className="px-1 py-0 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
+                                className="inline-flex items-center justify-center h-5 w-5 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
+                                aria-label={language === 'ar' ? 'تشغيل' : 'Play'}
+                                title={language === 'ar' ? 'تشغيل' : 'Play'}
                               >
-                                {language === 'ar' ? 'إيقاف وتشغيل' : 'Pause & Play'}
+                                <Play className="h-3.5 w-3.5" />
                               </button>
                               <button
                                 onClick={() => setPreemptPromptId(null)}
-                                className="px-1 py-0 rounded hover:bg-background/80"
+                                className="px-1 py-0 rounded hover:bg-background/80 text-foreground/70"
                               >
                                 {language === 'ar' ? 'إلغاء' : 'Cancel'}
                               </button>
