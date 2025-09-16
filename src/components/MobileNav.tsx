@@ -48,6 +48,9 @@ export function MobileNav() {
       }
     });
   }, [taskCount, maw3dEventCount, contactCount, sharedTaskCount]);
+
+  // No-op effect to reference keyboardHeight so TS doesn't warn if not used elsewhere
+  useEffect(() => { /* keep */ }, [keyboardHeight]);
   
   // Navigation items
   const navItems = [
@@ -106,7 +109,7 @@ export function MobileNav() {
     <nav
       id="mobile-nav"
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-30 bg-background/80 backdrop-blur-xl border-t border-border/50",
+        "fixed bottom-0 left-0 right-0 z-30 bg-background/80 backdrop-blur-xl border-t border-border/50 glue-fixed glue-bottom",
         "supports-[backdrop-filter]:bg-background/60",
         "ios-reduce-blur transition-all duration-180 ease-out",
         language === 'ar' ? 'font-arabic' : ''
@@ -116,7 +119,7 @@ export function MobileNav() {
         height: 'var(--app-bottom-tabs-h)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         transform: 'translateZ(0)',
-        willChange: 'auto'
+        willChange: isKeyboardVisible ? 'auto' : 'auto'
       }}
     >
       <div className="bg-white/80 dark:bg-neutral-900/70 backdrop-blur-2xl ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-vibrant pb-[calc(env(safe-area-inset-bottom)+4px)]">

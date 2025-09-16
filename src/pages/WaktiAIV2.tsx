@@ -1195,17 +1195,31 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex flex-col h-full w-full relative">
-        <div className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto"
-             style={{ 
-               height: window.innerWidth < 768 && isKeyboardVisible 
-                 ? 'calc(var(--viewport-height, 100vh) - var(--chat-input-height,80px) - 16px)'
-                 : 'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)',
-               // Mobile: adjust scroll container when keyboard is visible  
-               ...(window.innerWidth < 768 && isKeyboardVisible && {
-                 maxHeight: 'calc(var(--viewport-height, 100vh) - var(--chat-input-height,80px) - 16px)'
-               })
-             }}
-             ref={scrollAreaRef}>
+        <div
+          className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto"
+          style={{
+            ...(window.innerWidth < 768
+              ? (isKeyboardVisible
+                  ? {
+                      // Mobile + keyboard visible: use visual viewport and subtract fixed header + input
+                      height:
+                        'calc(var(--viewport-height, 100vh) - var(--app-header-h) - var(--chat-input-height,80px) - 8px)',
+                      maxHeight:
+                        'calc(var(--viewport-height, 100vh) - var(--app-header-h) - var(--chat-input-height,80px) - 8px)',
+                    }
+                  : {
+                      // Mobile + keyboard hidden: subtract fixed header + input + fixed bottom nav
+                      height:
+                        'calc(100vh - var(--app-header-h) - var(--chat-input-height,80px) - var(--app-bottom-tabs-h) - 8px)',
+                    })
+              : {
+                  // Desktop/Tablet: keep prior logic
+                  height:
+                    'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)',
+                }),
+          }}
+          ref={scrollAreaRef}
+        >
           <ChatMessages
             sessionMessages={sessionMessages.slice(-35)}
             isLoading={isLoading}
