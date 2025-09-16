@@ -1246,7 +1246,7 @@ const WaktiAIV2 = () => {
           style={{
             bottom: isKeyboardVisible 
               ? `${keyboardHeight}px`
-              : 'calc(72px + env(safe-area-inset-bottom, 0px))',
+              : 'var(--app-bottom-tabs-h)',
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             transition: 'bottom 180ms ease-out',
             willChange: 'bottom',

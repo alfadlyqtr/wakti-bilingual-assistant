@@ -549,13 +549,7 @@
   }
 }
 
-/* DEBUG/ENFORCE: ensure mobile nav cannot be hidden by global styles */
-#mobile-nav {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-}
+/* removed: forced visibility for #mobile-nav which interfered with keyboard-hide behavior */
 
 /* DEV: shift nav up on desktop-pointer devices to avoid preview overlay bars */
 @media (hover: hover) and (pointer: fine) {

@@ -319,6 +319,7 @@ export function ChatMessages({
         audioRef.current = a;
         register(sessionId, 'tts', a, priority);
         const granted = await requestPlayback(sessionId);
+        if (granted) { try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} }
         if (!granted) {
           console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
           try { URL.revokeObjectURL(url); } catch {}
@@ -439,6 +440,7 @@ export function ChatMessages({
       audioRef.current = audio;
       register(sessionId, 'tts', audio, priority);
       const granted2 = await requestPlayback(sessionId);
+      if (granted2) { try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} }
       if (!granted2) {
         console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
         try { URL.revokeObjectURL(objectUrl); } catch {}
