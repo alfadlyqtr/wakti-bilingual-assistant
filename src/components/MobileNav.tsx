@@ -119,7 +119,10 @@ export function MobileNav() {
         height: 'var(--app-bottom-tabs-h)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         transform: 'translateZ(0)',
-        willChange: isKeyboardVisible ? 'auto' : 'auto'
+        willChange: isKeyboardVisible ? 'auto' : 'auto',
+        opacity: isKeyboardVisible ? 0 : 1,
+        pointerEvents: isKeyboardVisible ? 'none' as const : 'auto',
+        visibility: isKeyboardVisible ? 'hidden' : 'visible'
       }}
     >
       <div className="bg-white/80 dark:bg-neutral-900/70 backdrop-blur-2xl ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-vibrant pb-[calc(env(safe-area-inset-bottom)+4px)]">
