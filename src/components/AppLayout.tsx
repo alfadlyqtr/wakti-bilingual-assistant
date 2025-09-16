@@ -20,7 +20,7 @@ function MobileAppLayout({ children }: AppLayoutProps) {
   return (
     <ProtectedRoute>
       {/* Flexbox container: dynamic viewport height, column direction */}
-      <div className="h-dvh min-h-0 bg-background flex flex-col">
+      <div className="h-[100svh] min-h-0 bg-background flex flex-col">
         {/* Global presence broadcaster */}
         <PresenceBeacon />
         {/* Header: fixed height, never shrinks */}
@@ -29,7 +29,7 @@ function MobileAppLayout({ children }: AppLayoutProps) {
         </div>
         
         {/* Content area: takes remaining space, scrollable, can shrink */}
-        <main className="flex-1 min-h-0 overflow-auto pt-[var(--app-header-h)] pb-[var(--app-bottom-tabs-h)]">
+        <main className="flex-1 min-h-0 overflow-auto overscroll-none touch-manipulation pt-[var(--app-header-h)] pb-[var(--app-bottom-tabs-h)]">
           {children}
         </main>
         
