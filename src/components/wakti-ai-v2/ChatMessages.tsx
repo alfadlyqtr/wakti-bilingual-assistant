@@ -134,22 +134,7 @@ export function ChatMessages({
     }
   };
 
-  // If YouTube starts playing, pause any ongoing TTS to avoid overlapping audio
-  useEffect(() => {
-    const onYouTubePlaying = () => {
-      const a = audioRef.current;
-      try {
-        if (a && !a.paused) {
-          a.pause();
-          a.currentTime = 0;
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-        }
-      } catch {}
-    };
-    window.addEventListener('wakti-youtube-playing', onYouTubePlaying as EventListener);
-    return () => window.removeEventListener('wakti-youtube-playing', onYouTubePlaying as EventListener);
-  }, []);
+  // Session manager now arbitrates audio; no event-based coupling needed here.
 
   // Trigger a short fade-out glow after audio ends
   const triggerFadeOut = (id: string) => {
@@ -292,15 +277,12 @@ export function ChatMessages({
         return;
       }
 
-      // Option C: allow preempting YouTube on user tap with small in-app confirmation
-      let priority = 1; // normal TTS priority
-      try { preemptRef.current = (localStorage.getItem('wakti_tts_preempt') === '1') || preemptRef.current; } catch {}
+      // Preempt policy: on user-initiated taps, always elevate TTS priority to take over YouTube
+      let priority = 1; // default
       const youtubeActive = (activeSourceRef.current === 'youtube') || (currentSession?.source === 'youtube');
-      if (!forcePreempt && userInitiated && preemptRef.current && youtubeActive) {
-        setPreemptPromptId(messageId);
-        return;
+      if (userInitiated || forcePreempt || youtubeActive) {
+        priority = 3; // take control from YouTube reliably
       }
-      if (forcePreempt) priority = 3; // elevate to preempt YouTube
 
       // Unlock audio context on iOS
       await unlockAudio();
@@ -322,6 +304,7 @@ export function ChatMessages({
         console.log('[TTS] using persisted cache', { id: messageId });
         const url = base64ToBlobUrl(persisted.b64);
         const a = new Audio();
+        try { a.muted = false; a.volume = 1; } catch {}
         audioRef.current = a;
         if (!isMobile) {
           register(sessionId, 'tts', a, priority);
@@ -461,6 +444,7 @@ export function ChatMessages({
       const objectUrl = URL.createObjectURL(full);
 
       const audio = new Audio();
+      try { audio.muted = false; audio.volume = 1; } catch {}
       audioRef.current = audio;
       if (!isMobile) {
         register(sessionId, 'tts', audio, priority);
@@ -1004,7 +988,7 @@ export function ChatMessages({
 
   return (
     <>
-      <div ref={scrollAreaRef} className="flex-1 overflow-y-auto p-4 space-y-4 pb-[calc(var(--chat-input-height,80px)+8px)]" style={{ ['--chat-input-height' as any]: `${inputHeight}px` }}>
+      <div className="min-h-full px-4 pt-4 pb-0 space-y-4 flex flex-col justify-end" style={{ ['--chat-input-height' as any]: `${inputHeight}px` }}>
         <div className="max-w-6xl mx-auto w-full px-2 space-y-4">
           {/* Welcome Message */}
           {renderWelcomeMessage()}
