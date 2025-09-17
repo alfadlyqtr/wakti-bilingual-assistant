@@ -92,9 +92,7 @@ export function ChatMessages({
 
   // Audio session management for TTS
   const { register, unregister, requestPlayback, stopSession, unlockAudio, currentSession } = useAudioSession();
-  const { isMobile: _isMobile } = useIsMobile();
-  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
-  const isMobile = false;
+  const { isMobile } = useIsMobile();
 
   // Keep ref synchronized with state to avoid stale closures during async work
   useEffect(() => {
@@ -309,7 +307,6 @@ export function ChatMessages({
         if (!isMobile) {
           register(sessionId, 'tts', a, priority);
           const granted = await requestPlayback(sessionId);
-          if (granted) { try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} }
           if (!granted) {
             console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
             try { URL.revokeObjectURL(url); } catch {}
