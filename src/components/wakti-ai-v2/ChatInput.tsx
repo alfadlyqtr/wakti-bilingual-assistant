@@ -579,7 +579,7 @@ export function ChatInput({
             </div>
             
             {/* Top row with all buttons - Always visible */}
-            <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-white/10">
+            <div className="flex items-center justify-between px-3 pt-2 pb-0">
                 {/* Left side: Extra + Tools + Mode Badge (moved here) */}
                 <div className="flex items-center gap-2">
                   <button

@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
 import { useAudioSession } from '@/hooks/useAudioSession';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -91,6 +92,7 @@ export function ChatMessages({
 
   // Audio session management for TTS
   const { register, unregister, requestPlayback, stopSession, unlockAudio, currentSession } = useAudioSession();
+  const { isMobile } = useIsMobile();
 
   // Keep ref synchronized with state to avoid stale closures during async work
   useEffect(() => {
@@ -281,8 +283,10 @@ export function ChatMessages({
         setSpeakingMessageId(null);
         setIsPaused(false);
         setPreemptPromptId(null);
-        await stopSession(sessionId);
-        await unregister(sessionId);
+        if (!isMobile) {
+          await stopSession(sessionId);
+          await unregister(sessionId);
+        }
         return;
       }
 
@@ -317,31 +321,49 @@ export function ChatMessages({
         const url = base64ToBlobUrl(persisted.b64);
         const a = new Audio();
         audioRef.current = a;
-        register(sessionId, 'tts', a, priority);
-        const granted = await requestPlayback(sessionId);
-        if (granted) { try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} }
-        if (!granted) {
-          console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
-          try { URL.revokeObjectURL(url); } catch {}
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-          await unregister(sessionId);
-          return;
+        if (!isMobile) {
+          register(sessionId, 'tts', a, priority);
+          const granted = await requestPlayback(sessionId);
+          if (granted) { try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} }
+          if (!granted) {
+            console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
+            try { URL.revokeObjectURL(url); } catch {}
+            setSpeakingMessageId(null);
+            setIsPaused(false);
+            await unregister(sessionId);
+            return;
+          }
         }
         // set src only after granted to avoid blob 404s
         a.src = url;
-        a.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(url); } catch {} };
-        a.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(url); } catch {} };
-        a.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
+        a.onended = () => { 
+          setSpeakingMessageId(null); 
+          setIsPaused(false); 
+          triggerFadeOut(messageId); 
+          if (!isMobile) { stopSession(sessionId); unregister(sessionId); }
+          try { URL.revokeObjectURL(url); } catch {} 
+        };
+        a.onerror = () => { 
+          setSpeakingMessageId(null); 
+          setIsPaused(false); 
+          triggerFadeOut(messageId); 
+          if (!isMobile) { stopSession(sessionId); unregister(sessionId); }
+          try { URL.revokeObjectURL(url); } catch {} 
+        };
+        a.onplay = () => { setIsPaused(false); };
         a.onpause = () => {
           setIsPaused(true);
-          // Safety: release session if paused so other audio (e.g., YouTube) can play
-          try { stopSession(sessionId); unregister(sessionId); } catch {}
+          if (!isMobile) {
+            // Safety: release session if paused so other audio (e.g., YouTube) can play
+            try { stopSession(sessionId); unregister(sessionId); } catch {}
+          }
         };
         try { await a.play(); } catch (e) {
           console.error('[TTS] play() failed from persisted', e);
           // Cleanup: release session and reset UI so other audio (e.g., YouTube) can request playback
-          try { stopSession(sessionId); unregister(sessionId); } catch {}
+          if (!isMobile) {
+            try { stopSession(sessionId); unregister(sessionId); } catch {}
+          }
           try { URL.revokeObjectURL(url); } catch {}
           setSpeakingMessageId(null);
           setIsPaused(false);
@@ -438,32 +460,49 @@ export function ChatMessages({
 
       const audio = new Audio();
       audioRef.current = audio;
-      register(sessionId, 'tts', audio, priority);
-      const granted2 = await requestPlayback(sessionId);
-      if (granted2) { try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} }
-      if (!granted2) {
-        console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
-        try { URL.revokeObjectURL(objectUrl); } catch {}
-        setSpeakingMessageId(null);
-        setIsPaused(false);
-        await unregister(sessionId);
-        return;
+      if (!isMobile) {
+        register(sessionId, 'tts', audio, priority);
+        const granted2 = await requestPlayback(sessionId);
+        if (!granted2) {
+          console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
+          try { URL.revokeObjectURL(objectUrl); } catch {}
+          setSpeakingMessageId(null);
+          setIsPaused(false);
+          await unregister(sessionId);
+          return;
+        }
       }
       // set src only after granted to avoid blob 404s
       audio.src = objectUrl;
-      audio.onended = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(objectUrl); } catch {} };
-      audio.onerror = () => { setSpeakingMessageId(null); setIsPaused(false); triggerFadeOut(messageId); stopSession(sessionId); unregister(sessionId); try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {} try { URL.revokeObjectURL(objectUrl); } catch {} };
-      audio.onplay = () => { setIsPaused(false); try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} };
+      audio.onended = () => { 
+        setSpeakingMessageId(null); 
+        setIsPaused(false); 
+        triggerFadeOut(messageId); 
+        if (!isMobile) { stopSession(sessionId); unregister(sessionId); }
+        try { URL.revokeObjectURL(objectUrl); } catch {} 
+      };
+      audio.onerror = () => { 
+        setSpeakingMessageId(null); 
+        setIsPaused(false); 
+        triggerFadeOut(messageId); 
+        if (!isMobile) { stopSession(sessionId); unregister(sessionId); }
+        try { URL.revokeObjectURL(objectUrl); } catch {} 
+      };
+      audio.onplay = () => { setIsPaused(false); };
       audio.onpause = () => {
         setIsPaused(true);
-        // Safety: release session if paused so other audio (e.g., YouTube) can play
-        try { stopSession(sessionId); unregister(sessionId); } catch {}
+        if (!isMobile) {
+          // Safety: release session if paused so other audio (e.g., YouTube) can play
+          try { stopSession(sessionId); unregister(sessionId); } catch {}
+        }
       };
       console.log('[TTS] playing audio');
       try { await audio.play(); } catch (e) {
         console.error('[TTS] play() failed after fetch', e);
         // Cleanup: release session and reset UI so other audio (e.g., YouTube) can request playback
-        try { stopSession(sessionId); unregister(sessionId); } catch {}
+        if (!isMobile) {
+          try { stopSession(sessionId); unregister(sessionId); } catch {}
+        }
         try { URL.revokeObjectURL(objectUrl); } catch {}
         setSpeakingMessageId(null);
         setIsPaused(false);

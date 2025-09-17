@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Repeat, Maximize2, Minimize2, X } from 'lucide-react';
 import { useAudioSession } from '@/hooks/useAudioSession';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface YouTubePreviewProps {
   videoId: string;
@@ -33,6 +34,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Audio session management
   const { register, unregister, requestPlayback, stopSession, isPlaying: isSessionPlaying } = useAudioSession();
   const sessionId = `youtube-${videoId}`;
+  const { isMobile } = useIsMobile();
 
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
@@ -144,10 +146,17 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
                     try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
                   }
                 };
-                claimSession();
+                if (!isMobile) {
+                  claimSession();
+                } else {
+                  // Mobile: simple play, no session management
+                  try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
+                }
               } else {
                 // Simple Mode: just announce playing for coordination
-                try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+                if (!isMobile) {
+                  try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+                }
               }
               // Start progress polling every 1s while playing
               if (progressIntervalRef.current) window.clearInterval(progressIntervalRef.current);
@@ -163,13 +172,17 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
               }, 1000) as unknown as number;
             } else if (state === 2 || state === 0) {
               setIsPlaying(false);
-              try { window.dispatchEvent(new CustomEvent('wakti-youtube-paused', { detail: { videoId, ended: state === 0 } })); } catch {}
+              if (!isMobile) {
+                try { window.dispatchEvent(new CustomEvent('wakti-youtube-paused', { detail: { videoId, ended: state === 0 } })); } catch {}
+              }
               if (progressIntervalRef.current) {
                 window.clearInterval(progressIntervalRef.current);
                 progressIntervalRef.current = null;
               }
               // Release audio session when paused/ended
-              stopSession(sessionId);
+              if (!isMobile) {
+                stopSession(sessionId);
+              }
               // Do not force-exit fullscreen on natural loop end; YouTube will restart due to loop+playlist
             }
           }
@@ -184,7 +197,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       progressIntervalRef.current = null;
       try { playerRef.current?.destroy?.(); } catch {}
       playerRef.current = null;
-      unregister(sessionId);
+      if (!isMobile) {
+        unregister(sessionId);
+      }
     };
   }, [videoId, useNativeControls]);
 
@@ -199,11 +214,14 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
   // Listen for competing audio: pause YouTube when TTS starts (Simple Mode friendly)
   useEffect(() => {
-    const onTtsPlaying = () => {
-      try { playerRef.current?.pauseVideo?.(); } catch {}
-    };
-    window.addEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
-    return () => window.removeEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
+    if (!isMobile) {
+      const onTtsPlaying = () => {
+        try { playerRef.current?.pauseVideo?.(); } catch {}
+      };
+      window.addEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
+      return () => window.removeEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
+    }
+    return () => {};
   }, []);
 
   // On non-mobile, still respect the session manager changes (back-compat)
@@ -233,17 +251,24 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
     // Desktop/tablet: keep session flow
     try { player.playVideo(); } catch {}
-    const granted = await requestPlayback(sessionId);
-    if (granted) {
-      try { player.unMute(); setMuted(false); } catch {}
+    if (!isMobile) {
+      const granted = await requestPlayback(sessionId);
+      if (granted) {
+        try { player.unMute(); setMuted(false); } catch {}
+      } else {
+        try { player.pauseVideo(); } catch {}
+      }
     } else {
-      try { player.pauseVideo(); } catch {}
+      // Mobile: simple play
+      try { player.unMute(); setMuted(false); } catch {}
     }
   };
   const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
     try { playerRef.current.pauseVideo(); } catch {}
-    await stopSession(sessionId);
+    if (!isMobile) {
+      await stopSession(sessionId);
+    }
   };
   const handlePlayPause = () => {
     if (isPlaying) handlePause(); else handlePlay();
@@ -516,7 +541,6 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       </div>
     </div>
   );
-}
-;
+};
 
 export default YouTubePreview;
