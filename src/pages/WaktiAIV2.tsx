@@ -1217,7 +1217,12 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 z-50">
+        <div 
+          className="fixed bottom-0 right-0 z-50"
+          style={{
+            left: 'var(--current-sidebar-width, 0px)'
+          }}
+        >
           <ChatInput
             message={message}
             setMessage={setMessage}
