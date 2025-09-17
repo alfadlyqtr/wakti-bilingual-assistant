@@ -1195,7 +1195,7 @@ const WaktiAIV2 = () => {
 
       <div className="flex flex-col h-full w-full relative">
         <div
-          className="flex-1 overflow-y-auto scrollbar-hide"
+          className="flex-1 overflow-y-auto scrollbar-hide overscroll-contain touch-pan-y"
           style={{
             ...(window.innerWidth < 768
               ? (isKeyboardVisible
@@ -1240,7 +1240,7 @@ const WaktiAIV2 = () => {
 
         <div 
           className={cn(
-            "fixed left-0 right-0 z-[2147483000] bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 shadow-lg md:left-[var(--current-sidebar-width,0px)]"
+            "fixed left-0 right-0 z-[2147483000] bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation border-t border-border/50 md:left-[var(--current-sidebar-width,0px)]"
           )}
           style={{
             bottom: isKeyboardVisible 

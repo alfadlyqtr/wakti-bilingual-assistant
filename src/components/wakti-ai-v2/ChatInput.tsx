@@ -548,10 +548,9 @@ export function ChatInput({
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
               ${containerHighlight}
-              shadow-xl rounded-2xl backdrop-blur-2xl ios-reduce-blur
+              rounded-2xl backdrop-blur-2xl ios-reduce-blur
 {{ ... }}
               p-0 transition-all duration-300 overflow-visible
-              shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
               border-[2.5px] min-h-[70px] w-full
             `}
             ref={cardRef}
