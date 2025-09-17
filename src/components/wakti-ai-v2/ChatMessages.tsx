@@ -988,7 +988,7 @@ export function ChatMessages({
 
   return (
     <>
-      <div className="min-h-full px-4 pt-4 pb-0 space-y-4 flex flex-col justify-end" style={{ ['--chat-input-height' as any]: `${inputHeight}px` }}>
+      <div className="px-4 pt-4 pb-0 space-y-4" style={{ ['--chat-input-height' as any]: `${inputHeight}px` }}>
         <div className="max-w-6xl mx-auto w-full px-2 space-y-4">
           {/* Welcome Message */}
           {renderWelcomeMessage()}
