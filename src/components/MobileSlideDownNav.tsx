@@ -130,12 +130,18 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
 
   return (
     <>
-      {/* Backdrop blur */}
+      {/* Backdrop blur - exclude header area */}
       <div 
         className={cn(
-          "fixed inset-0 z-40 transition-all duration-300",
+          "fixed z-40 transition-all duration-300",
           isOpen ? "backdrop-blur-md bg-black/20" : "backdrop-blur-none bg-transparent pointer-events-none"
         )}
+        style={{
+          top: 'var(--app-header-h)',
+          left: 0,
+          right: 0,
+          bottom: 0
+        }}
         onClick={onClose}
       />
       
@@ -150,7 +156,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
         style={{
           left: logoPosition.x,
           top: logoPosition.y + logoPosition.height + 8,
-          width: logoPosition.width * 6, // Make container wider than logo
+          width: logoPosition.width * 4, // Reduced from 6 to 4 for narrower width
           transformOrigin: 'top left'
         }}
       >

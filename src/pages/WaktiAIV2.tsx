@@ -1208,9 +1208,9 @@ const WaktiAIV2 = () => {
                         'calc(var(--viewport-height, 100vh) - var(--app-header-h) - var(--chat-input-height,80px) - 8px)',
                     }
                   : {
-                      // Mobile + keyboard hidden: subtract fixed header + input + fixed bottom nav
+                      // Mobile + keyboard hidden: subtract fixed header + input (no bottom nav anymore)
                       height:
-                        'calc(100vh - var(--app-header-h) - var(--chat-input-height,80px) - var(--app-bottom-tabs-h) - 8px)',
+                        'calc(100vh - var(--app-header-h) - var(--chat-input-height,80px) - 8px)',
                     })
               : {
                   // Desktop/Tablet: keep prior logic
@@ -1246,7 +1246,7 @@ const WaktiAIV2 = () => {
           style={{
             bottom: isKeyboardVisible 
               ? `${keyboardHeight}px`
-              : 'var(--app-bottom-tabs-h)',
+              : '0px', // Changed from var(--app-bottom-tabs-h) to 0px since no bottom nav
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             transition: 'bottom 180ms ease-out',
             willChange: 'bottom',

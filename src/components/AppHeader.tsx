@@ -218,7 +218,7 @@ export function AppHeader() {
     >
       <div className={cn(
         "container relative flex items-center justify-between",
-        isMobile ? "h-12 py-2" : "h-16 py-3"
+        isMobile ? "h-14 py-3" : "h-16 py-3"
       )}>
         <div className="flex items-center gap-3">
           {isMobile ? (
