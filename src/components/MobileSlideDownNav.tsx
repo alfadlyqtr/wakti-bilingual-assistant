@@ -134,7 +134,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       <div 
         className={cn(
           "fixed z-40 transition-all duration-300",
-          isOpen ? "backdrop-blur-md bg-black/20" : "backdrop-blur-none bg-transparent pointer-events-none"
+          isOpen ? "backdrop-blur-lg bg-black/30" : "backdrop-blur-none bg-transparent pointer-events-none"
         )}
         style={{
           top: 'var(--app-header-h)',
@@ -194,6 +194,32 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                         isActive ? "scale-110 brightness-125" : ""
                       )} 
                     />
+                    {/* Glow effect for active item with matching colors */}
+                    {isActive && (
+                      <div 
+                        className="absolute inset-0 rounded-full animate-pulse"
+                        style={{
+                          filter: 'blur(8px)',
+                          opacity: 0.7,
+                          zIndex: -1,
+                          backgroundColor: 
+                            item.path === '/dashboard' ? '#3b82f6' :
+                            item.path === '/calendar' ? 'hsl(var(--accent-blue))' :
+                            item.path === '/maw3d' ? 'hsl(var(--accent-purple))' :
+                            item.path === '/tr' ? 'hsl(var(--accent-green))' :
+                            item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
+                            item.path === '/tasjeel' ? '#06b6d4' : '#3b82f6',
+                          boxShadow: `0 0 20px ${
+                            item.path === '/dashboard' ? '#3b82f6' :
+                            item.path === '/calendar' ? 'hsl(var(--accent-blue))' :
+                            item.path === '/maw3d' ? 'hsl(var(--accent-purple))' :
+                            item.path === '/tr' ? 'hsl(var(--accent-green))' :
+                            item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
+                            item.path === '/tasjeel' ? '#06b6d4' : '#3b82f6'
+                          }`
+                        }}
+                      />
+                    )}
                     {/* Badge System */}
                     {item.badgeType && badgeStates[item.badgeType]?.show && (
                       <div className={cn(
@@ -207,7 +233,9 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                   <span className={cn(
                     "text-sm font-medium",
                     item.path === '/tasjeel' ? "text-cyan-500" : "",
-                    isActive ? "text-foreground font-semibold" : "text-muted-foreground"
+                    isActive ? "text-foreground font-semibold" : "text-muted-foreground",
+                    // Add glow to active text
+                    isActive && "drop-shadow-[0_0_8px_currentColor]"
                   )}>
                     {item.name}
                   </span>

@@ -11,7 +11,6 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
-import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 import { TRService } from '@/services/trService';
 import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
 import { cn } from '@/lib/utils';
@@ -1268,12 +1267,6 @@ const WaktiAIV2 = () => {
           </div>
         </div>
       </div>
-
-      <NotificationBars
-        searchConfirmationRequired={false}
-        onSearchConfirmation={() => {}}
-        onQuotaRefresh={checkQuotas}
-      />
     </div>
   );
 };
