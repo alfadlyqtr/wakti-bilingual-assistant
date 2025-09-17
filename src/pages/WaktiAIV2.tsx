@@ -1195,7 +1195,7 @@ const WaktiAIV2 = () => {
 
       <div className="flex flex-col h-full w-full relative">
         <div
-          className="flex-1 overflow-y-scroll overscroll-contain touch-pan-y pb-24"
+          className="flex-1"
           ref={scrollAreaRef}
         >
           <ChatMessages
@@ -1217,33 +1217,17 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div 
-          className={cn(
-            "fixed left-0 right-0 z-[2147483000] bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation shadow-lg md:left-[var(--current-sidebar-width,0px)]"
-          )}
-          style={{
-            bottom: isKeyboardVisible 
-              ? `${keyboardHeight}px`
-              : '0px', // Changed from var(--app-bottom-tabs-h) to 0px since no bottom nav
-            // Remove bottom safe-area padding so input sits flush at all times
-            paddingBottom: '0px',
-            transition: 'bottom 180ms ease-out',
-            willChange: 'bottom',
-            transform: 'translateZ(0)'
-          }}
-        >
-          <ChatInput
-            message={message}
-            setMessage={setMessage}
-            isLoading={isLoading}
-            sessionMessages={sessionMessages}
-            onSendMessage={handleSendMessage}
-            onClearChat={handleClearChat}
-            onOpenPlusDrawer={handleOpenPlusDrawer}
-            activeTrigger={activeTrigger}
-            onTriggerChange={handleTriggerChange}
-          />
-        </div>
+        <ChatInput
+          message={message}
+          setMessage={setMessage}
+          isLoading={isLoading}
+          sessionMessages={sessionMessages}
+          onSendMessage={handleSendMessage}
+          onClearChat={handleClearChat}
+          onOpenPlusDrawer={handleOpenPlusDrawer}
+          activeTrigger={activeTrigger}
+          onTriggerChange={handleTriggerChange}
+        />
       </div>
     </div>
   );
