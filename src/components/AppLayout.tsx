@@ -28,7 +28,7 @@ function MobileAppLayout({ children }: AppLayoutProps) {
         </div>
         
         {/* Content area: takes remaining space, scrollable, can shrink */}
-        <main className="flex-1 min-h-0 overflow-auto overscroll-none touch-manipulation pt-[var(--app-header-h)] pb-0">
+        <main className="flex-1 min-h-0 overflow-auto overscroll-none touch-manipulation pt-[var(--app-header-h)] pb-0 relative z-[1]">
           {children}
         </main>
       </div>
