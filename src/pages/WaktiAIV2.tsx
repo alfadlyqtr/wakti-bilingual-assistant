@@ -1195,7 +1195,7 @@ const WaktiAIV2 = () => {
 
       <div className="flex flex-col h-full w-full relative">
         <div
-          className="flex-1"
+          className="flex-1 pb-24"
           ref={scrollAreaRef}
         >
           <ChatMessages
@@ -1217,17 +1217,19 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <ChatInput
-          message={message}
-          setMessage={setMessage}
-          isLoading={isLoading}
-          sessionMessages={sessionMessages}
-          onSendMessage={handleSendMessage}
-          onClearChat={handleClearChat}
-          onOpenPlusDrawer={handleOpenPlusDrawer}
-          activeTrigger={activeTrigger}
-          onTriggerChange={handleTriggerChange}
-        />
+        <div className="fixed bottom-0 left-0 right-0 z-50">
+          <ChatInput
+            message={message}
+            setMessage={setMessage}
+            isLoading={isLoading}
+            sessionMessages={sessionMessages}
+            onSendMessage={handleSendMessage}
+            onClearChat={handleClearChat}
+            onOpenPlusDrawer={handleOpenPlusDrawer}
+            activeTrigger={activeTrigger}
+            onTriggerChange={handleTriggerChange}
+          />
+        </div>
       </div>
     </div>
   );
