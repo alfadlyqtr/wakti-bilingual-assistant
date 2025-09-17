@@ -1196,27 +1196,6 @@ const WaktiAIV2 = () => {
       <div className="flex flex-col h-full w-full relative">
         <div
           className="flex-1 overflow-y-scroll overscroll-contain touch-pan-y"
-          style={{
-            ...(window.innerWidth < 768
-              ? (isKeyboardVisible
-                  ? {
-                      // Mobile + keyboard visible: use visual viewport and subtract fixed header + input
-                      height:
-                        'calc(var(--viewport-height, 100vh) - var(--app-header-h) - var(--chat-input-height,80px) - 20px)',
-                      maxHeight:
-                        'calc(var(--viewport-height, 100vh) - var(--app-header-h) - var(--chat-input-height,80px) - 20px)',
-                    }
-                  : {
-                      // Mobile + keyboard hidden: subtract fixed header + input (no bottom nav anymore)
-                      height:
-                        'calc(100vh - var(--app-header-h) - var(--chat-input-height,80px) - 40px)',
-                    })
-               : {
-                 // Desktop/Tablet: keep prior logic
-                 height:
-                   'calc(100vh - var(--desktop-header-h) - var(--chat-input-height,80px) - 24px)',
-               }),
-           }}
           ref={scrollAreaRef}
         >
           <ChatMessages
@@ -1240,12 +1219,12 @@ const WaktiAIV2 = () => {
 
         <div 
           className={cn(
-            "fixed left-0 right-0 z-[2147483647] bg-background touch-manipulation md:left-[var(--current-sidebar-width,0px)]"
+            "fixed left-0 right-0 z-[2147483000] bg-background/95 backdrop-blur-md ios-reduce-blur touch-manipulation shadow-lg md:left-[var(--current-sidebar-width,0px)]"
           )}
           style={{
             bottom: isKeyboardVisible 
               ? `${keyboardHeight}px`
-              : '20px', // Lift input up from bottom edge
+              : '0px', // Changed from var(--app-bottom-tabs-h) to 0px since no bottom nav
             // Remove bottom safe-area padding so input sits flush at all times
             paddingBottom: '0px',
             transition: 'bottom 180ms ease-out',
