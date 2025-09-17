@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
+import { MobileSlideDownNav } from "@/components/MobileSlideDownNav";
 import { t } from "@/utils/translations";
 import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
 import { UnreadBadge } from "./UnreadBadge";
@@ -180,7 +181,25 @@ export function AppHeader() {
   const IconComponent = pageInfo.icon;
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [logoPosition, setLogoPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const logoRef = useRef<HTMLDivElement>(null);
   const { isMobile } = useIsMobile();
+
+  const handleLogoClick = () => {
+    if (!isMobile) return;
+    
+    if (logoRef.current) {
+      const rect = logoRef.current.getBoundingClientRect();
+      setLogoPosition({
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+    setMobileNavOpen(!mobileNavOpen);
+  };
 
   return (
     <header
@@ -202,9 +221,15 @@ export function AppHeader() {
         isMobile ? "h-12 py-2" : "h-16 py-3"
       )}>
         <div className="flex items-center gap-3">
-          <Link to="/dashboard" className="flex items-center">
-            <Logo3D size="sm" />
-          </Link>
+          {isMobile ? (
+            <div ref={logoRef}>
+              <Logo3D size="sm" onClick={handleLogoClick} />
+            </div>
+          ) : (
+            <Link to="/dashboard" className="flex items-center">
+              <Logo3D size="sm" />
+            </Link>
+          )}
           {pageInfo.title && (
             <div className="flex items-center gap-2">
               {IconComponent && (
@@ -310,6 +335,15 @@ export function AppHeader() {
           </DropdownMenu>
         </div>
       </div>
+      
+      {/* Mobile Slide Down Nav */}
+      {isMobile && (
+        <MobileSlideDownNav 
+          isOpen={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          logoPosition={logoPosition}
+        />
+      )}
     </header>
   );
 }

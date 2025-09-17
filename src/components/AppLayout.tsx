@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
-import { MobileNav } from "@/components/MobileNav";
 import { DesktopLayout } from "@/components/layouts/DesktopLayout";
 import { TabletLayout } from "@/components/layouts/TabletLayout";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
@@ -29,14 +28,9 @@ function MobileAppLayout({ children }: AppLayoutProps) {
         </div>
         
         {/* Content area: takes remaining space, scrollable, can shrink */}
-        <main className="flex-1 min-h-0 overflow-auto overscroll-none touch-manipulation pt-[var(--app-header-h)] pb-[var(--app-bottom-tabs-h)]">
+        <main className="flex-1 min-h-0 overflow-auto overscroll-none touch-manipulation pt-[var(--app-header-h)] pb-4">
           {children}
         </main>
-        
-        {/* Bottom nav: fixed height, never shrinks */}
-        <div className="flex-shrink-0">
-          <MobileNav />
-        </div>
       </div>
     </ProtectedRoute>
   );
