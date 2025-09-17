@@ -34,15 +34,27 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Audio session management
   const { register, unregister, requestPlayback, stopSession, isPlaying: isSessionPlaying } = useAudioSession();
   const sessionId = `youtube-${videoId}`;
-  const { isMobile } = useIsMobile();
+  const { isMobile: _isMobile } = useIsMobile();
+  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
+  const isMobile = false;
 
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
 
-  // Use native controls on mobile for reliable gesture/unlock; custom controls elsewhere
+  // Compute whether we should use native controls (mobile portrait)
   useEffect(() => {
-    setUseNativeControls(!!isMobile);
-  }, [isMobile]);
+    const calc = () => {
+      // Force: always use custom controls so session manager can arbitrate audio
+      setUseNativeControls(false);
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    window.addEventListener('orientationchange', calc as any);
+    return () => {
+      window.removeEventListener('resize', calc);
+      window.removeEventListener('orientationchange', calc as any);
+    };
+  }, []);
 
   // Load YT Iframe API and create player
   useEffect(() => {
@@ -97,13 +109,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             if (cancelled) return;
             setPlayerReady(true);
             try {
-              // Only auto-mute in custom-controls mode (desktop/tablet). On mobile with native controls, don't force mute.
-              if (!useNativeControls) {
-                ev.target.mute();
-                setMuted(true);
-              } else {
-                setMuted(false);
-              }
+              // Initial mute to satisfy autoplay policies; user can unmute anytime
+              ev.target.mute();
+              setMuted(true);
               const d = ev.target.getDuration?.() || 0;
               if (d) setDuration(d);
               // Allow PiP and fullscreen on the iframe element
@@ -135,10 +143,17 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
                     try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
                   }
                 };
-                claimSession();
+                if (!isMobile) {
+                  claimSession();
+                } else {
+                  // Mobile: simple play, no session management
+                  try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
+                }
               } else {
                 // Simple Mode: just announce playing for coordination
-                // No-op on mobile with native controls
+                if (!isMobile) {
+                  try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+                }
               }
               // Start progress polling every 1s while playing
               if (progressIntervalRef.current) window.clearInterval(progressIntervalRef.current);
@@ -154,14 +169,17 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
               }, 1000) as unknown as number;
             } else if (state === 2 || state === 0) {
               setIsPlaying(false);
-              // Desktop/tablet may coordinate; mobile with native controls does not need events
-              if (!isMobile) { try { window.dispatchEvent(new CustomEvent('wakti-youtube-paused', { detail: { videoId, ended: state === 0 } })); } catch {} }
+              if (!isMobile) {
+                try { window.dispatchEvent(new CustomEvent('wakti-youtube-paused', { detail: { videoId, ended: state === 0 } })); } catch {}
+              }
               if (progressIntervalRef.current) {
                 window.clearInterval(progressIntervalRef.current);
                 progressIntervalRef.current = null;
               }
               // Release audio session when paused/ended
-              if (!isMobile) { stopSession(sessionId); }
+              if (!isMobile) {
+                stopSession(sessionId);
+              }
               // Do not force-exit fullscreen on natural loop end; YouTube will restart due to loop+playlist
             }
           }

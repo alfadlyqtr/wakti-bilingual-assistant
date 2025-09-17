@@ -141,7 +141,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
           top: 'var(--app-header-h)',
           left: 0,
           right: 0,
-          bottom: 0,
+          bottom: 'var(--chat-input-height, 80px)',
           // Sit just below the header (header uses 2147480000 via .glue-z)
           zIndex: 2147470000,
           // Force blur across browsers
