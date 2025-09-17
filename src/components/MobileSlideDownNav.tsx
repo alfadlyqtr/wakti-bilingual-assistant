@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
@@ -128,19 +129,24 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
 
   if (!isOpen || !logoPosition) return null;
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop blur - ONLY page content, NOT header */}
       <div 
         className={cn(
-          "fixed z-40 transition-all duration-300",
+          "fixed transition-all duration-300",
           isOpen ? "backdrop-blur-md bg-black/50" : "backdrop-blur-none bg-transparent pointer-events-none"
         )}
         style={{
           top: 'var(--app-header-h)',
           left: 0,
           right: 0,
-          bottom: 0
+          bottom: 0,
+          // Sit just below the header (header uses 2147480000 via .glue-z)
+          zIndex: 2147470000,
+          // Force blur across browsers
+          backdropFilter: isOpen ? 'blur(12px) saturate(120%)' : 'none',
+          WebkitBackdropFilter: isOpen ? 'blur(12px) saturate(120%)' : 'none'
         }}
         onClick={onClose}
       />
@@ -148,7 +154,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       {/* Slide down container */}
       <div
         className={cn(
-          "fixed z-50 bg-background/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl transition-all duration-300 ease-out",
+          "fixed bg-background/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl transition-all duration-300 ease-out",
           animationStage === 'closed' && "opacity-0 scale-95 -translate-y-4",
           animationStage === 'sliding' && "opacity-100 scale-100 translate-y-0",
           animationStage === 'icons' && "opacity-100 scale-100 translate-y-0"
@@ -157,7 +163,9 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
           left: logoPosition.x,
           top: logoPosition.y + logoPosition.height + 8,
           width: logoPosition.width * 4, // Reduced from 6 to 4 for narrower width
-          transformOrigin: 'top left'
+          transformOrigin: 'top left',
+          // Sit above the overlay but below/next to the header
+          zIndex: 2147483647
         }}
       >
         <div className="p-4">
@@ -249,6 +257,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

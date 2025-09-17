@@ -1246,7 +1246,8 @@ const WaktiAIV2 = () => {
             bottom: isKeyboardVisible 
               ? `${keyboardHeight}px`
               : '0px', // Changed from var(--app-bottom-tabs-h) to 0px since no bottom nav
-            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            // Remove bottom safe-area padding so input sits flush at all times
+            paddingBottom: '0px',
             transition: 'bottom 180ms ease-out',
             willChange: 'bottom',
             transform: 'translateZ(0)'
