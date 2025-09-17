@@ -34,7 +34,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Audio session management
   const { register, unregister, requestPlayback, stopSession, isPlaying: isSessionPlaying } = useAudioSession();
   const sessionId = `youtube-${videoId}`;
-  const { isMobile } = useIsMobile();
+  const { isMobile: _isMobile } = useIsMobile();
+  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
+  const isMobile = false;
 
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
@@ -42,13 +44,8 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Compute whether we should use native controls (mobile portrait)
   useEffect(() => {
     const calc = () => {
-      try {
-        const isCoarse = window.matchMedia('(pointer: coarse)').matches;
-        // Force native controls for all mobile scenarios to support PiP/background on lock
-        setUseNativeControls(!!isCoarse);
-      } catch {
-        setUseNativeControls(false);
-      }
+      // Force: always use custom controls so session manager can arbitrate audio
+      setUseNativeControls(false);
     };
     calc();
     window.addEventListener('resize', calc);
