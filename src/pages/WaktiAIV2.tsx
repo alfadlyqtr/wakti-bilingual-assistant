@@ -1195,7 +1195,7 @@ const WaktiAIV2 = () => {
 
       <div className="flex flex-col h-full w-full relative">
         <div
-          className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto"
+          className="flex-1 pb-[calc(var(--chat-input-height,80px)+16px)] md:pb-[calc(var(--chat-input-height,80px)+24px)] overflow-y-auto scrollbar-hide"
           style={{
             ...(window.innerWidth < 768
               ? (isKeyboardVisible

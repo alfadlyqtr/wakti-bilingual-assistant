@@ -552,7 +552,7 @@ export function ChatInput({
 {{ ... }}
               p-0 transition-all duration-300 overflow-visible
               shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
-              border-[2.5px] min-h-[62px] w-full
+              border-[2.5px] min-h-[70px] w-full
             `}
             ref={cardRef}
           >
