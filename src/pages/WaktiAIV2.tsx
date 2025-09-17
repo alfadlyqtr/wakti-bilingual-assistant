@@ -1252,7 +1252,7 @@ const WaktiAIV2 = () => {
             transform: 'translateZ(0)'
           }}
         >
-          <div className="w-full max-w-none px-2 sm:px-3 py-2 md:px-4 md:py-3">
+          <div className="w-full max-w-none px-2 sm:px-3 py-0 md:px-4 md:py-0">
             <ChatInput
               message={message}
               setMessage={setMessage}

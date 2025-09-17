@@ -130,11 +130,11 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
 
   return (
     <>
-      {/* Backdrop blur - exclude header area */}
+      {/* Backdrop blur - ONLY page content, NOT header */}
       <div 
         className={cn(
           "fixed z-40 transition-all duration-300",
-          isOpen ? "backdrop-blur-lg bg-black/30" : "backdrop-blur-none bg-transparent pointer-events-none"
+          isOpen ? "backdrop-blur-md bg-black/50" : "backdrop-blur-none bg-transparent pointer-events-none"
         )}
         style={{
           top: 'var(--app-header-h)',
@@ -174,13 +174,17 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                   onClick={() => handleNavigation(item.path, item.badgeType)}
                   className={cn(
                     "flex items-center gap-3 p-3 rounded-lg transition-all duration-200 relative group w-full text-left",
-                    "hover:bg-accent/10 active:opacity-90",
-                    isActive ? "bg-gradient-card shadow-colored" : "",
-                    // Pop-up animation with staggered delay
-                    animationStage === 'icons' 
-                      ? "opacity-100 translate-y-0" 
-                      : "opacity-0 translate-y-4",
-                    "transition-all duration-300 ease-out"
+                    "hover:bg-accent/10 active:opacity-90", 
+                    isActive 
+                      ? "bg-gradient-to-r shadow-2xl" 
+                      : "",
+                    // Add specific glow colors for active buttons
+                    isActive && item.path === '/dashboard' && "from-blue-500/20 to-blue-600/20 shadow-blue-500/50 border border-blue-500/30",
+                    isActive && item.path === '/calendar' && "from-blue-400/20 to-blue-500/20 shadow-blue-400/50 border border-blue-400/30",
+                    isActive && item.path === '/maw3d' && "from-purple-500/20 to-purple-600/20 shadow-purple-500/50 border border-purple-500/30",
+                    isActive && item.path === '/tr' && "from-green-500/20 to-green-600/20 shadow-green-500/50 border border-green-500/30",
+                    isActive && item.path === '/wakti-ai' && "from-orange-500/20 to-orange-600/20 shadow-orange-500/50 border border-orange-500/30",
+                    isActive && item.path === '/tasjeel' && "from-cyan-500/20 to-cyan-600/20 shadow-cyan-500/50 border border-cyan-500/30"
                   )}
                   style={{
                     transitionDelay: animationStage === 'icons' ? `${index * 100}ms` : '0ms'
