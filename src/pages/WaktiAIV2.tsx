@@ -1195,7 +1195,7 @@ const WaktiAIV2 = () => {
 
       <div className="flex flex-col h-full w-full relative">
         <div
-          className="flex-1 overflow-y-scroll overscroll-contain touch-pan-y"
+          className="flex-1 overflow-y-scroll overscroll-contain touch-pan-y pb-24"
           ref={scrollAreaRef}
         >
           <ChatMessages
