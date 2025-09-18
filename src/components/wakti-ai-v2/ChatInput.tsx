@@ -226,6 +226,11 @@ export function ChatInput({
       if (ro) {
         try { ro.disconnect(); } catch {}
       }
+      // IMPORTANT: Clear chat height on unmount so other pages don't reserve space
+      try {
+        document.documentElement.style.setProperty('--chat-input-height', '0px');
+        document.body?.style?.setProperty?.('--chat-input-height', '0px');
+      } catch {}
     };
   }, [isInputCollapsed, activeTrigger]);
 
@@ -252,7 +257,14 @@ export function ChatInput({
       window.addEventListener('resize', onResize);
       return () => window.removeEventListener('resize', onResize);
     }
-    return () => { try { ro && ro.disconnect(); } catch {} };
+    return () => {
+      try { ro && ro.disconnect(); } catch {}
+      // IMPORTANT: Clear chat offset on unmount to avoid leaking into other routes
+      try {
+        document.documentElement.style.setProperty('--chat-input-offset', '0px');
+        document.body?.style?.setProperty?.('--chat-input-offset', '0px');
+      } catch {}
+    };
   }, [isInputCollapsed, activeTrigger]);
   // Persist on change
   useEffect(() => {

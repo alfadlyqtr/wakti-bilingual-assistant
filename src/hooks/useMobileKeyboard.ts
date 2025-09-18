@@ -99,8 +99,12 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
       }
       document.removeEventListener('focusin', handleFocusIn);
       document.removeEventListener('focusout', handleFocusOut);
-      document.documentElement.style.removeProperty('--keyboard-height');
-      document.documentElement.style.removeProperty('--is-keyboard-visible');
+      // Ensure variables are explicitly reset so no layout reserves space after unmount
+      try {
+        document.documentElement.style.setProperty('--keyboard-height', '0px');
+        document.documentElement.style.setProperty('--is-keyboard-visible', '0');
+        document.documentElement.style.removeProperty('--viewport-height');
+      } catch {}
     };
   }, [enabled]);
 
