@@ -1207,7 +1207,7 @@ const WaktiAIV2 = () => {
           ref={scrollAreaRef}
           style={{
             paddingBottom: window.innerWidth < 768 
-              ? 'calc(env(safe-area-inset-bottom, 0px) + 16px + var(--chat-input-height, 80px))'
+              ? 'calc(env(safe-area-inset-bottom, 0px) + 19px + var(--chat-input-height, 80px))'
               : 'calc(24px + var(--chat-input-height, 80px))',
             WebkitOverflowScrolling: 'touch'
           }}
@@ -1236,7 +1236,7 @@ const WaktiAIV2 = () => {
           style={{
             left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
             right: '0px',
-            bottom: window.innerWidth < 768 ? 'calc(env(safe-area-inset-bottom, 0px) + 16px)' : '8px'
+            bottom: window.innerWidth < 768 ? 'calc(env(safe-area-inset-bottom, 0px) + 19px)' : '8px'
           }}
         >
           <ChatInput
