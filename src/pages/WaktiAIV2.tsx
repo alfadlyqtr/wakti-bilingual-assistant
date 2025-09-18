@@ -1190,7 +1190,7 @@ const WaktiAIV2 = () => {
   return (
     <div
       className="wakti-ai-container flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white"
-      style={{ ['--keyboard-bump' as any]: (typeof window !== 'undefined' && window.innerWidth < 768 && isKeyboardVisible) ? '72px' : '0px' }}
+      style={{ ['--keyboard-bump' as any]: (typeof window !== 'undefined' && window.innerWidth < 768 && isKeyboardVisible) ? '80px' : '0px' }}
     >
       <ChatDrawers
         showConversations={showConversations}
