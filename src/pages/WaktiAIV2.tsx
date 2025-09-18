@@ -1206,7 +1206,7 @@ const WaktiAIV2 = () => {
           style={{
             paddingBottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
-                  ? 'calc(var(--keyboard-height) + var(--chat-input-height, 80px))'
+                  ? 'calc(var(--keyboard-height) + var(--keyboard-bump, 18px) + var(--chat-input-height, 80px))'
                   : 'calc(env(safe-area-inset-bottom, 0px) + var(--chat-input-height, 80px))')
               : '24px',
             WebkitOverflowScrolling: 'touch'
@@ -1238,7 +1238,7 @@ const WaktiAIV2 = () => {
             right: '0px',
             bottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
-                  ? 'calc(var(--keyboard-height) + 12px)'
+                  ? 'calc(var(--keyboard-height) + var(--keyboard-bump, 18px))'
                   : 'calc(env(safe-area-inset-bottom, 0px) + 8px)')
               : '8px',
             transition: 'bottom 0.2s ease-out'
