@@ -52,6 +52,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           document.body.style.paddingBottom = "0px";
           document.documentElement.style.setProperty("--keyboard-height", "0px");
           document.documentElement.style.setProperty("--is-keyboard-visible", "0");
+          document.documentElement.style.removeProperty("--viewport-height");
+          document.documentElement.style.setProperty("--chat-input-height", "0px");
+          document.documentElement.style.setProperty("--chat-input-offset", "0px");
+          document.body.classList.remove('keyboard-visible');
         } catch {}
       }
     };

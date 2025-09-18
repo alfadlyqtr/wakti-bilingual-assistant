@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { AppHeader } from '@/components/AppHeader';
-import { MobileNav } from '@/components/MobileNav';
 import { SimpleContactFormModal } from '@/components/support/SimpleContactFormModal';
 import { ChatThread } from '@/components/support/ChatThread';
 import { formatDistanceToNow } from 'date-fns';
@@ -364,8 +363,9 @@ export default function Help() {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
-      <main className="pb-16">
-        <div className="flex-1 overflow-y-auto p-4 pb-8 scrollbar-hide bg-gradient-background min-h-screen">
+      <main>
+        <div className="flex-1 overflow-y-auto p-4 scrollbar-hide bg-gradient-background min-h-screen">
+
           <div className="max-w-2xl mx-auto space-y-8">
             {/* Header */}
             <div className="text-center relative">
@@ -673,7 +673,6 @@ export default function Help() {
           />
         </div>
       </main>
-      <MobileNav />
     </div>
   );
 }

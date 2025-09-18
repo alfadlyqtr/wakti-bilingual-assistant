@@ -1161,6 +1161,32 @@ const WaktiAIV2 = () => {
     return () => { try { document.body.style.paddingBottom = '0px'; } catch {} };
   }, []);
 
+  // Track visualViewport bottom inset precisely (works best on iOS PWA)
+  const [vvInset, setVvInset] = React.useState(0);
+  React.useEffect(() => {
+    const update = () => {
+      try {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const vvH = vv.height || window.innerHeight;
+        const vvTop = vv.offsetTop || 0;
+        const inset = Math.max(0, window.innerHeight - (vvH + vvTop));
+        setVvInset(Math.ceil(inset));
+      } catch {}
+    };
+    update();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', update);
+      window.visualViewport.addEventListener('scroll', update);
+      return () => {
+        try {
+          window.visualViewport?.removeEventListener('resize', update);
+          window.visualViewport?.removeEventListener('scroll', update);
+        } catch {}
+      };
+    }
+  }, []);
+
   return (
     <div className="wakti-ai-container flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -1206,7 +1232,7 @@ const WaktiAIV2 = () => {
           style={{
             paddingBottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
-                  ? 'calc(var(--keyboard-height) + var(--keyboard-bump, 18px) + var(--chat-input-height, 80px))'
+                  ? `calc(${vvInset}px + max(var(--keyboard-bump, 36px), env(safe-area-inset-bottom, 0px)) + var(--chat-input-height, 80px))`
                   : 'calc(env(safe-area-inset-bottom, 0px) + var(--chat-input-height, 80px))')
               : '24px',
             WebkitOverflowScrolling: 'touch'
@@ -1238,7 +1264,7 @@ const WaktiAIV2 = () => {
             right: '0px',
             bottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
-                  ? 'calc(var(--keyboard-height) + var(--keyboard-bump, 18px))'
+                  ? `calc(${vvInset}px + max(var(--keyboard-bump, 36px), env(safe-area-inset-bottom, 0px)))`
                   : 'calc(env(safe-area-inset-bottom, 0px) + 8px)')
               : '8px',
             transition: 'bottom 0.2s ease-out'

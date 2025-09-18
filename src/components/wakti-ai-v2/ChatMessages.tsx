@@ -57,13 +57,7 @@ export function ChatMessages({
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { isKeyboardVisible } = useMobileKeyboard();
-  const [inputHeight, setInputHeight] = useState<number>(() => {
-    try {
-      const v = getComputedStyle(document.documentElement).getPropertyValue('--chat-input-height');
-      const n = parseInt(v || '0', 10);
-      return Number.isFinite(n) && n > 0 ? n : 80;
-    } catch { return 80; }
-  });
+  const [inputHeight, setInputHeight] = useState<number>(80);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   // Always-accurate ref mirror to avoid stale state in async guards
   const speakingMessageIdRef = useRef<string | null>(null);
@@ -209,7 +203,9 @@ export function ChatMessages({
         if (ce?.detail?.height && Number.isFinite(ce.detail.height)) {
           setInputHeight(ce.detail.height);
         } else {
-          const v = getComputedStyle(document.documentElement).getPropertyValue('--chat-input-height');
+          const container = scrollAreaRef?.current?.closest('.wakti-ai-container') as HTMLElement | null;
+          const root: HTMLElement = container ?? document.documentElement;
+          const v = getComputedStyle(root).getPropertyValue('--chat-input-height');
           const n = parseInt(v || '0', 10);
           if (Number.isFinite(n) && n > 0) setInputHeight(n);
         }
@@ -222,6 +218,17 @@ export function ChatMessages({
     window.addEventListener('wakti-chat-input-resized', handler as EventListener);
     return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
   }, [scrollAreaRef]);
+
+  // Initialize input height from the nearest chat container after mount
+  useEffect(() => {
+    try {
+      const container = scrollAreaRef?.current?.closest('.wakti-ai-container') as HTMLElement | null;
+      const root: HTMLElement = container ?? document.documentElement;
+      const v = getComputedStyle(root).getPropertyValue('--chat-input-height');
+      const n = parseInt(v || '0', 10);
+      if (Number.isFinite(n) && n > 0) setInputHeight(n);
+    } catch {}
+  }, [scrollAreaRef?.current]);
 
   // Cleanup all progress intervals on unmount
   useEffect(() => {

@@ -8,7 +8,7 @@ export default function Calendar() {
   const { language } = useTheme();
 
   return (
-    <div className="flex-1 overflow-hidden scrollbar-hide pb-16">
+    <div className="flex-1 overflow-hidden scrollbar-hide">
       <UnifiedCalendar />
     </div>
   );
