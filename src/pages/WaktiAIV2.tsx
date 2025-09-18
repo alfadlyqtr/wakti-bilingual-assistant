@@ -1195,8 +1195,15 @@ const WaktiAIV2 = () => {
 
       <div className="flex flex-col h-full w-full relative">
         <div
-          className="flex-1 pb-24"
+          className="flex-1 overflow-auto"
           ref={scrollAreaRef}
+          style={{
+            paddingBottom: window.innerWidth < 768 
+              ? (isKeyboardVisible 
+                  ? `${keyboardHeight + 80}px` 
+                  : 'calc(var(--app-bottom-tabs-h) + 80px + env(safe-area-inset-bottom, 0px))')
+              : '24px'
+          }}
         >
           <ChatMessages
             sessionMessages={sessionMessages.slice(-35)}
@@ -1221,7 +1228,11 @@ const WaktiAIV2 = () => {
           className="fixed bottom-0 right-0 z-50"
           style={{
             left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
-            bottom: window.innerWidth < 768 ? 'calc(var(--app-bottom-tabs-h) + env(safe-area-inset-bottom, 0px) + 8px)' : '0px'
+            bottom: window.innerWidth < 768 
+              ? (isKeyboardVisible 
+                  ? `${keyboardHeight}px` 
+                  : 'calc(var(--app-bottom-tabs-h) + env(safe-area-inset-bottom, 0px) + 8px)')
+              : '0px'
           }}
         >
           <ChatInput
