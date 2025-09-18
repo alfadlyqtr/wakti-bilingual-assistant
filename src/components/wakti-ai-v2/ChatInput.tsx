@@ -198,11 +198,8 @@ export function ChatInput({
     const applyHeight = () => {
       const h = el.offsetHeight || 0;
       try {
-        // Scope to container first
+        // Scope to container only (no global fallbacks)
         if (container) container.style.setProperty('--chat-input-height', `${h}px`);
-        // Fallbacks
-        document.documentElement.style.setProperty('--chat-input-height', `${h}px`);
-        document.body?.style?.setProperty?.('--chat-input-height', `${h}px`);
       } catch {}
       try {
         const ev = new CustomEvent('wakti-chat-input-resized', { detail: { height: h } });
@@ -234,8 +231,6 @@ export function ChatInput({
       // IMPORTANT: Clear chat height on unmount so other pages don't reserve space
       try {
         if (container) container.style.setProperty('--chat-input-height', '0px');
-        document.documentElement.style.setProperty('--chat-input-height', '0px');
-        document.body?.style?.setProperty?.('--chat-input-height', '0px');
       } catch {}
     };
   }, [isInputCollapsed, activeTrigger]);
@@ -250,8 +245,6 @@ export function ChatInput({
         const rect = card.getBoundingClientRect();
         const offset = Math.max(0, window.innerHeight - rect.top);
         if (container) container.style.setProperty('--chat-input-offset', `${offset}px`);
-        document.documentElement.style.setProperty('--chat-input-offset', `${offset}px`);
-        document.body?.style?.setProperty?.('--chat-input-offset', `${offset}px`);
         window.dispatchEvent(new CustomEvent('wakti-chat-input-offset', { detail: { offset } }));
       } catch {}
     };
@@ -270,8 +263,6 @@ export function ChatInput({
       // IMPORTANT: Clear chat offset on unmount to avoid leaking into other routes
       try {
         if (container) container.style.setProperty('--chat-input-offset', '0px');
-        document.documentElement.style.setProperty('--chat-input-offset', '0px');
-        document.body?.style?.setProperty?.('--chat-input-offset', '0px');
       } catch {}
     };
   }, [isInputCollapsed, activeTrigger]);

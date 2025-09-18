@@ -1155,6 +1155,12 @@ const WaktiAIV2 = () => {
     setShowQuickActions(true);
   };
 
+  // Ensure no global bottom padding leaks in/from Safari safe-area when entering or leaving chat
+  React.useEffect(() => {
+    try { document.body.style.paddingBottom = '0px'; } catch {}
+    return () => { try { document.body.style.paddingBottom = '0px'; } catch {} };
+  }, []);
+
   return (
     <div className="wakti-ai-container flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -1201,7 +1207,7 @@ const WaktiAIV2 = () => {
             paddingBottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
                   ? 'calc(var(--keyboard-height) + var(--chat-input-height, 80px))'
-                  : 'calc(var(--app-bottom-tabs-h, 0px) + var(--chat-input-height, 80px))')
+                  : 'calc(env(safe-area-inset-bottom, 0px) + var(--chat-input-height, 80px))')
               : '24px',
             WebkitOverflowScrolling: 'touch'
           }}
@@ -1233,7 +1239,7 @@ const WaktiAIV2 = () => {
             bottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
                   ? 'calc(var(--keyboard-height) + 12px)'
-                  : 'calc(var(--app-bottom-tabs-h, 0px) + 8px)')
+                  : 'calc(env(safe-area-inset-bottom, 0px) + 8px)')
               : '8px',
             transition: 'bottom 0.2s ease-out'
           }}

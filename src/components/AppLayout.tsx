@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
 import { DesktopLayout } from "@/components/layouts/DesktopLayout";
@@ -40,6 +41,22 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { isMobile } = useIsMobile();
   const { isTablet } = useIsTablet();
   const { isDesktop } = useIsDesktop();
+  const location = useLocation();
+
+  // On any route change, ensure global padding/keyboard vars are reset if not on Wakti AI
+  useEffect(() => {
+    const onRoute = () => {
+      const onWaktiAI = location.pathname === "/wakti-ai";
+      if (!onWaktiAI) {
+        try {
+          document.body.style.paddingBottom = "0px";
+          document.documentElement.style.setProperty("--keyboard-height", "0px");
+          document.documentElement.style.setProperty("--is-keyboard-visible", "0");
+        } catch {}
+      }
+    };
+    onRoute();
+  }, [location.pathname]);
 
   // Conditional rendering based on screen size
   if (isMobile) {

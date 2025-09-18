@@ -33,8 +33,18 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
       const height = Math.ceil(raw);
       lastHeightRef.current = height;
 
-      const visible = height > 60; // detect earlier and reliably
-      const clamped = visible ? Math.min(Math.max(height, 60), 700) : 0;
+      // Only consider keyboard visible when an editable is focused
+      const ae = document.activeElement as HTMLElement | null;
+      const isEditableActive = !!ae && (
+        ae.tagName === 'INPUT' ||
+        ae.tagName === 'TEXTAREA' ||
+        ae.getAttribute('contenteditable') === 'true'
+      );
+
+      // Use a higher threshold to avoid misreading iOS bottom bars as keyboard
+      const threshold = 100; // px
+      const visible = isEditableActive && height > threshold;
+      const clamped = visible ? Math.min(Math.max(height, threshold), 700) : 0;
 
       setIsKeyboardVisible(visible);
       setKeyboardHeight(clamped);
