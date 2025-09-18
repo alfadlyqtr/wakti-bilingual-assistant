@@ -1220,8 +1220,8 @@ const WaktiAIV2 = () => {
         <div 
           className="fixed bottom-0 right-0 z-50"
           style={{
-            left: 'var(--current-sidebar-width, 0px)',
-            bottom: window.innerWidth < 768 ? '16px' : '0px'
+            left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
+            bottom: '0px'
           }}
         >
           <ChatInput

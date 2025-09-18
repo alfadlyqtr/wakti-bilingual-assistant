@@ -544,7 +544,7 @@ export function ChatInput({
         className="w-full px-0 md:px-4 pb-0 md:pb-0 pt-1 mt-0"
         ref={inputCardRef}
       >  
-        <div className="w-full px-1 md:px-6">
+        <div className="w-full px-0 md:px-6">
           <div
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
