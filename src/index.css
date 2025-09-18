@@ -419,17 +419,6 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Simple fixed chat input bar (WhatsApp-like) */
-.chat-input {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  background: #111; /* matches dark theme; light mode components inside handle contrast */
-  z-index: 2147480000; /* above content but below header portal if needed */
-}
-
 /* iOS-specific: reduce heavy blur on fixed bars to avoid jank/freezes */
 @supports (-webkit-touch-callout: none) {
   .ios-reduce-blur {

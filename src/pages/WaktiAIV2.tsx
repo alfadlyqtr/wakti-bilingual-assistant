@@ -12,7 +12,7 @@ import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { TRService } from '@/services/trService';
-import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
+// removed page-level mobile keyboard hook; ChatInput handles keyboard UI details
 import { cn } from '@/lib/utils';
 
 
@@ -90,7 +90,7 @@ const WaktiAIV2 = () => {
   const { canTranslate, refreshTranslationQuota } = useQuotaManagement();
   const { canUseVoice, refreshVoiceQuota } = useExtendedQuotaManagement();
   const { quota, fetchQuota } = useAIQuotaManagement();
-  const { isKeyboardVisible, keyboardHeight } = useMobileKeyboard();
+  // Page no longer listens to mobile keyboard; fixed bar + safe-area handles layout
   
   // Memoized values for performance
   const quotaStatus = useMemo(() => ({
@@ -1161,61 +1161,7 @@ const WaktiAIV2 = () => {
     return () => { try { document.body.style.paddingBottom = '0px'; } catch {} };
   }, []);
 
-  // Track visualViewport bottom inset precisely (works best on iOS PWA)
-  const [vvInset, setVvInset] = React.useState(0);
-  React.useEffect(() => {
-    const update = () => {
-      try {
-        const vv = window.visualViewport;
-        if (!vv) return;
-        const vvH = vv.height || window.innerHeight;
-        const vvTop = vv.offsetTop || 0;
-        const inset = Math.max(0, window.innerHeight - (vvH + vvTop));
-        setVvInset(Math.ceil(inset));
-      } catch {}
-    };
-    update();
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', update);
-      window.visualViewport.addEventListener('scroll', update);
-      return () => {
-        try {
-          window.visualViewport?.removeEventListener('resize', update);
-          window.visualViewport?.removeEventListener('scroll', update);
-        } catch {}
-      };
-    }
-  }, []);
-
-  // WhatsApp-like: pin the chat input bar and move it with visualViewport (simple and robust)
-  const chatInputContainerRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    const adjust = () => {
-      const el = chatInputContainerRef.current;
-      if (!el) return;
-      const vv = window.visualViewport;
-      if (!vv) {
-        el.style.bottom = '0px';
-        return;
-      }
-      // Follow the user's required snippet: lift the bar while keyboard is showing
-      const offset = vv.height - window.innerHeight;
-      el.style.bottom = `${offset}px`;
-    };
-    adjust();
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', adjust);
-      window.visualViewport.addEventListener('scroll', adjust);
-    }
-    return () => {
-      if (window.visualViewport) {
-        try {
-          window.visualViewport.removeEventListener('resize', adjust);
-          window.visualViewport.removeEventListener('scroll', adjust);
-        } catch {}
-      }
-    };
-  }, []);
+  // Removed page-level visualViewport adjustments; we use a fixed bar with safe-area
 
   return (
     <div className="wakti-ai-container flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
@@ -1261,8 +1207,8 @@ const WaktiAIV2 = () => {
           ref={scrollAreaRef}
           style={{
             paddingBottom: window.innerWidth < 768 
-              ? 'var(--chat-input-height, 80px)'
-              : '24px',
+              ? 'calc(env(safe-area-inset-bottom, 0px) + var(--chat-input-height, 80px))'
+              : 'calc(24px + var(--chat-input-height, 80px))',
             WebkitOverflowScrolling: 'touch'
           }}
         >
@@ -1286,8 +1232,12 @@ const WaktiAIV2 = () => {
         </div>
 
         <div 
-          ref={chatInputContainerRef}
-          className="chat-input"
+          className="fixed z-50"
+          style={{
+            left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
+            right: '0px',
+            bottom: 'env(safe-area-inset-bottom, 0px)'
+          }}
         >
           <ChatInput
             message={message}
