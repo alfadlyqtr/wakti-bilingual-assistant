@@ -192,10 +192,15 @@ export function ChatInput({
   useEffect(() => {
     const el = inputCardRef.current;
     if (!el) return;
+    // Find nearest container to scope variables
+    const container = el.closest('.wakti-ai-container') as HTMLElement | null;
 
     const applyHeight = () => {
       const h = el.offsetHeight || 0;
       try {
+        // Scope to container first
+        if (container) container.style.setProperty('--chat-input-height', `${h}px`);
+        // Fallbacks
         document.documentElement.style.setProperty('--chat-input-height', `${h}px`);
         document.body?.style?.setProperty?.('--chat-input-height', `${h}px`);
       } catch {}
@@ -228,6 +233,7 @@ export function ChatInput({
       }
       // IMPORTANT: Clear chat height on unmount so other pages don't reserve space
       try {
+        if (container) container.style.setProperty('--chat-input-height', '0px');
         document.documentElement.style.setProperty('--chat-input-height', '0px');
         document.body?.style?.setProperty?.('--chat-input-height', '0px');
       } catch {}
@@ -238,10 +244,12 @@ export function ChatInput({
   useEffect(() => {
     const card = cardRef.current;
     if (!card) return;
+    const container = card.closest('.wakti-ai-container') as HTMLElement | null;
     const applyOffset = () => {
       try {
         const rect = card.getBoundingClientRect();
         const offset = Math.max(0, window.innerHeight - rect.top);
+        if (container) container.style.setProperty('--chat-input-offset', `${offset}px`);
         document.documentElement.style.setProperty('--chat-input-offset', `${offset}px`);
         document.body?.style?.setProperty?.('--chat-input-offset', `${offset}px`);
         window.dispatchEvent(new CustomEvent('wakti-chat-input-offset', { detail: { offset } }));
@@ -261,6 +269,7 @@ export function ChatInput({
       try { ro && ro.disconnect(); } catch {}
       // IMPORTANT: Clear chat offset on unmount to avoid leaking into other routes
       try {
+        if (container) container.style.setProperty('--chat-input-offset', '0px');
         document.documentElement.style.setProperty('--chat-input-offset', '0px');
         document.body?.style?.setProperty?.('--chat-input-offset', '0px');
       } catch {}

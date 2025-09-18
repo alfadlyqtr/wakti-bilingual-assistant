@@ -165,7 +165,8 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
           top: 'var(--app-header-h)',
           left: 0,
           right: 0,
-          bottom: 'var(--chat-input-height, 80px)',
+          // Do NOT depend on chat variables; use tabs height + safe area only
+          bottom: 'max(var(--app-bottom-tabs-h, 64px), env(safe-area-inset-bottom, 0px))',
           // Sit just below the header (header uses 2147480000 via .glue-z)
           zIndex: 2147470000,
           // Force blur across browsers

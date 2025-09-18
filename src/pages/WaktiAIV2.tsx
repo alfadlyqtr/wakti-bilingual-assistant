@@ -1156,7 +1156,7 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <div className="flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
+    <div className="wakti-ai-container flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
@@ -1200,8 +1200,8 @@ const WaktiAIV2 = () => {
           style={{
             paddingBottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
-                  ? 'var(--chat-input-height, 80px)'
-                  : 'calc(var(--app-bottom-tabs-h) + var(--chat-input-height, 80px))')
+                  ? 'calc(var(--keyboard-height) + var(--chat-input-height, 80px))'
+                  : 'calc(var(--app-bottom-tabs-h, 0px) + var(--chat-input-height, 80px))')
               : '24px',
             WebkitOverflowScrolling: 'touch'
           }}

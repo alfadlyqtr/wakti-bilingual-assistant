@@ -104,6 +104,7 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
         document.documentElement.style.setProperty('--keyboard-height', '0px');
         document.documentElement.style.setProperty('--is-keyboard-visible', '0');
         document.documentElement.style.removeProperty('--viewport-height');
+        document.body.classList.remove('keyboard-visible');
       } catch {}
     };
   }, [enabled]);
