@@ -1187,6 +1187,36 @@ const WaktiAIV2 = () => {
     }
   }, []);
 
+  // WhatsApp-like: pin the chat input bar and move it with visualViewport (simple and robust)
+  const chatInputContainerRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const adjust = () => {
+      const el = chatInputContainerRef.current;
+      if (!el) return;
+      const vv = window.visualViewport;
+      if (!vv) {
+        el.style.bottom = '0px';
+        return;
+      }
+      // Follow the user's required snippet: lift the bar while keyboard is showing
+      const offset = vv.height - window.innerHeight;
+      el.style.bottom = `${offset}px`;
+    };
+    adjust();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', adjust);
+      window.visualViewport.addEventListener('scroll', adjust);
+    }
+    return () => {
+      if (window.visualViewport) {
+        try {
+          window.visualViewport.removeEventListener('resize', adjust);
+          window.visualViewport.removeEventListener('scroll', adjust);
+        } catch {}
+      }
+    };
+  }, []);
+
   return (
     <div className="wakti-ai-container flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
       <ChatDrawers
@@ -1231,9 +1261,7 @@ const WaktiAIV2 = () => {
           ref={scrollAreaRef}
           style={{
             paddingBottom: window.innerWidth < 768 
-              ? (isKeyboardVisible 
-                  ? `calc(${vvInset}px + max(var(--keyboard-bump, 36px), env(safe-area-inset-bottom, 0px)) + var(--chat-input-height, 80px))`
-                  : 'calc(env(safe-area-inset-bottom, 0px) + var(--chat-input-height, 80px))')
+              ? 'var(--chat-input-height, 80px)'
               : '24px',
             WebkitOverflowScrolling: 'touch'
           }}
@@ -1258,17 +1286,8 @@ const WaktiAIV2 = () => {
         </div>
 
         <div 
-          className="fixed right-0 z-50"
-          style={{
-            left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
-            right: '0px',
-            bottom: window.innerWidth < 768 
-              ? (isKeyboardVisible 
-                  ? `calc(${vvInset}px + max(var(--keyboard-bump, 36px), env(safe-area-inset-bottom, 0px)))`
-                  : 'calc(env(safe-area-inset-bottom, 0px) + 8px)')
-              : '8px',
-            transition: 'bottom 0.2s ease-out'
-          }}
+          ref={chatInputContainerRef}
+          className="chat-input"
         >
           <ChatInput
             message={message}
