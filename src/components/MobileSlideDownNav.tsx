@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2 } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
 
@@ -108,6 +108,28 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'text-cyan-500',
     }
   ];
+
+  // Quick action items (tools)
+  const quickItems = [
+    {
+      name: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
+      path: '/tools/text',
+      icon: 'pen',
+      colorClass: 'text-purple-500',
+    },
+    {
+      name: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
+      path: '/tools/voice-studio',
+      icon: 'mic',
+      colorClass: 'text-pink-500',
+    },
+    {
+      name: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
+      path: '/tools/game',
+      icon: 'gamepad',
+      colorClass: 'text-red-500',
+    },
+  ];
   
   const iconMap: { [key: string]: React.ComponentType<any> } = {
     dashboard: LayoutDashboard,
@@ -116,6 +138,8 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     'list-todo': ListTodo,
     sparkles: Sparkles,
     mic: Mic,
+    pen: PenTool,
+    gamepad: Gamepad2,
   };
 
   const handleNavigation = (path: string, badgeType?: string) => {
@@ -248,6 +272,43 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     isActive ? "text-foreground font-semibold" : "text-muted-foreground",
                     // Add glow to active text
                     isActive && "drop-shadow-[0_0_8px_currentColor]"
+                  )}>
+                    {item.name}
+                  </span>
+                </button>
+              );
+            })}
+
+            {/* Quick actions (tools) */}
+            {quickItems.map((item, qIndex) => {
+              const IconComponent = iconMap[item.icon] || PenTool;
+              const isActive = pathname === item.path;
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => handleNavigation(item.path)}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg transition-all duration-200 relative group w-full text-left",
+                    "hover:bg-accent/10 active:opacity-90",
+                    isActive ? "bg-gradient-to-r shadow-2xl" : "",
+                    isActive && item.path === '/tools/text' && "from-purple-500/15 to-purple-600/15 shadow-purple-500/40 border border-purple-500/20",
+                    isActive && item.path === '/tools/voice-studio' && "from-pink-500/15 to-pink-600/15 shadow-pink-500/40 border border-pink-500/20",
+                    isActive && item.path === '/tools/game' && "from-red-500/15 to-red-600/15 shadow-red-500/40 border border-red-500/20"
+                  )}
+                  style={{ transitionDelay: animationStage === 'icons' ? `${(navItems.length + qIndex) * 100}ms` : '0ms' }}
+                >
+                  <div className="relative">
+                    <IconComponent 
+                      className={cn(
+                        "h-5 w-5",
+                        item.colorClass,
+                        isActive ? "scale-110 brightness-125" : ""
+                      )}
+                    />
+                  </div>
+                  <span className={cn(
+                    "text-sm font-medium",
+                    isActive ? "text-foreground font-semibold" : "text-muted-foreground"
                   )}>
                     {item.name}
                   </span>

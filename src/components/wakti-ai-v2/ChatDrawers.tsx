@@ -53,9 +53,8 @@ export function ChatDrawers({
     setShowQuickActions(false);
     setTimeout(() => {
       if (tool === 'text') navigate('/tools/text');
-      // Open the full Voice Studio page with tabs
-      if (tool === 'voice') navigate('/tools/voice-studio');
-      if (tool === 'game') navigate('/tools/game');
+      else if (tool === 'voice') navigate('/tools/voice-studio');
+      else if (tool === 'game') navigate('/tools/game');
     }, 150);
   }, [setShowQuickActions, navigate]);
 
@@ -88,10 +87,6 @@ export function ChatDrawers({
           {language === 'ar' ? 'اختر من أدوات الذكاء الاصطناعي السريعة لإنشاء محتوى أو تحسينه' : 'Choose from quick AI tools to create or enhance content'}
         </div>
         <QuickActionsPanel 
-          onSendMessage={onSendMessage} 
-          activeTrigger={activeTrigger} 
-          onTriggerChange={onTriggerChange} 
-          onTextGenerated={onTextGenerated} 
           onClose={() => setShowQuickActions(false)} 
           onOpenTool={openTool}
         />

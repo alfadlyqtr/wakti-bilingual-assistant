@@ -12,15 +12,22 @@ import {
   ListTodo,
   ChevronLeft,
   ChevronRight,
-  Home
+  Home,
+  LucideIcon
 } from "lucide-react";
+
+type IconComponent = React.ComponentType<{ 
+  className?: string;
+  style?: React.CSSProperties;
+}>;
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
 import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { QuickActionsPanel } from "./wakti-ai-v2/QuickActionsPanel";
 
 interface NavItemProps {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: IconComponent;
   label: string;
   path: string;
   badge?: number;
@@ -35,6 +42,7 @@ export function DesktopSidebar() {
   const { maw3dEventCount, contactCount } = useUnreadMessages();
 
   const navItems: NavItemProps[] = [
+    { icon: Home, label: "dashboard", path: "/dashboard" },
     { icon: Calendar, label: "calendar", path: "/calendar" },
     { icon: CalendarClock, label: "events", path: "/maw3d", badge: maw3dEventCount },
     { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
@@ -182,36 +190,52 @@ export function DesktopSidebar() {
                 (item.path === '/maw3d' && location.pathname.startsWith('/maw3d')) || 
                 (item.path === '/tr' && location.pathname.startsWith('/tr'));
               
-              // Define color classes matching mobile nav
+              // Define color classes and glow effects matching mobile nav
               const getColorClass = (path: string) => {
                 switch (path) {
-                  case '/calendar': return 'nav-icon-calendar';
-                  case '/maw3d': return 'nav-icon-maw3d';
-                  case '/tr': return 'nav-icon-tr';
-                  case '/wakti-ai': return 'nav-icon-ai';
+                  case '/calendar': return 'nav-icon-calendar text-blue-500';
+                  case '/maw3d': return 'nav-icon-maw3d text-purple-500';
+                  case '/tr': return 'nav-icon-tr text-emerald-500';
+                  case '/wakti-ai': return 'nav-icon-ai text-amber-500';
                   case '/tasjeel': return 'text-cyan-500';
-                  default: return '';
+                  default: return 'text-gray-500';
+                }
+              };
+              
+              const getGlowColor = (path: string) => {
+                switch (path) {
+                  case '/calendar': return 'shadow-[0_0_15px_rgba(59,130,246,0.7)]';
+                  case '/maw3d': return 'shadow-[0_0_15px_rgba(168,85,247,0.7)]';
+                  case '/tr': return 'shadow-[0_0_15px_rgba(16,185,129,0.7)]';
+                  case '/wakti-ai': return 'shadow-[0_0_15px_rgba(245,158,11,0.7)]';
+                  case '/tasjeel': return 'shadow-[0_0_15px_rgba(6,182,212,0.7)]';
+                  default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
                 }
               };
               
               return (
                 <motion.button
                   key={item.label}
-                  className={`w-full ${isCollapsed ? 'h-14 px-2' : 'h-12'} justify-start rounded-xl group ${
+                  className={`w-full ${isCollapsed ? 'h-14 px-1' : 'h-12 px-3'} justify-start rounded-xl group ${
                     isActive
-                      ? "bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm"
+                      ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowColor(item.path)}`
                       : "hover:bg-white/5 dark:hover:bg-white/[0.02]"
-                  } transition-transform duration-200 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-[1.02] active:scale-[0.98]`}
+                  } transition-all duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-[1.02] active:scale-[0.98]`}
                   onClick={() => handleNavigation(item.path)}
                   variants={itemVariants}
                 >
-                  <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2`}>
+                  <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2 overflow-hidden`}>
                     <div className="relative flex items-center justify-center">
-                      <item.icon className={`h-5 w-5 transition-all duration-300 ${getColorClass(item.path)} ${
-                        isActive 
-                          ? "scale-110 brightness-125" 
-                          : "group-hover:scale-110 group-hover:brightness-110"
-                      }`} />
+                      <item.icon 
+                        className={`h-5 w-5 transition-all duration-300 ${getColorClass(item.path)} ${
+                          isActive 
+                            ? "scale-110 brightness-125 drop-shadow-[0_0_8px]" 
+                            : "group-hover:scale-110 group-hover:brightness-110"
+                        }`} 
+                        style={{
+                          filter: isActive ? 'drop-shadow(0 0 8px currentColor)' : 'none'
+                        }}
+                      />
                       {item.badge && item.badge > 0 && (
                         <div className="absolute -top-1 -right-1 min-w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border border-background z-10">
                           {item.badge > 99 ? '99+' : item.badge}
@@ -243,7 +267,7 @@ export function DesktopSidebar() {
                           initial={{ opacity: 0, y: 5 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 5 }}
-                          className={`text-xs font-medium transition-all duration-300 ${
+                          className={`text-xs font-medium transition-all duration-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[90%] ${
                             item.path === '/tasjeel' ? "text-cyan-500" : ""
                           } ${
                             isActive 
@@ -259,8 +283,18 @@ export function DesktopSidebar() {
                 </motion.button>
               );
             })}
+            {/* Quick Actions inserted directly after nav items to match styling and spacing */}
+            <QuickActionsPanel
+              isCollapsed={isCollapsed}
+              onOpenTool={(tool) => {
+                if (tool === 'text') navigate('/tools/text');
+                else if (tool === 'voice') navigate('/tools/voice-studio');
+                else if (tool === 'game') navigate('/tools/game');
+              }}
+            />
           </motion.nav>
         </div>
+
       </div>
     </motion.aside>
     </>

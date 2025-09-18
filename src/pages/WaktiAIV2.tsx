@@ -1226,17 +1226,16 @@ const WaktiAIV2 = () => {
         </div>
 
         <div 
-          className="glue-fixed glue-z right-0"
+          className="fixed right-0 z-50"
           style={{
             left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
             right: '0px',
-            // On mobile with keyboard visible, anchor using visual viewport top to avoid iOS fixed-bottom quirks
-            top: window.innerWidth < 768 && isKeyboardVisible 
-              ? 'calc(var(--viewport-height) - var(--chat-input-height, 80px))' 
-              : 'auto',
             bottom: window.innerWidth < 768 
-              ? (isKeyboardVisible ? 'auto' : 'calc(var(--app-bottom-tabs-h))')
-              : '0px'
+              ? (isKeyboardVisible 
+                  ? 'calc(var(--keyboard-height) + 12px)'
+                  : 'calc(var(--app-bottom-tabs-h, 0px) + 8px)')
+              : '8px',
+            transition: 'bottom 0.2s ease-out'
           }}
         >
           <ChatInput

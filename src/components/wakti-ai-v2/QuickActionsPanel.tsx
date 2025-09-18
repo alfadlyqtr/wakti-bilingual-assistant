@@ -1,196 +1,126 @@
 import React, { useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { MessageSquare, Search, Image, PenTool, Mic, Gamepad2 } from 'lucide-react';
-
+import { motion } from 'framer-motion';
+import { PenTool, Mic, Gamepad2 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
 interface QuickActionsProps {
-  onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
-  activeTrigger: string;
-  onTriggerChange: (trigger: string) => void;
-  onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
-  onClose?: () => void;
   onOpenTool?: (tool: 'text' | 'voice' | 'game') => void;
+  onClose?: () => void;
+  isCollapsed?: boolean;
 }
 
 export function QuickActionsPanel({
-  onSendMessage,
-  activeTrigger,
-  onTriggerChange,
-  onTextGenerated,
+  onOpenTool,
   onClose,
-  onOpenTool
+  isCollapsed = false
 }: QuickActionsProps) {
   const { language } = useTheme();
-  
-  // Memoized trigger modes for performance
-  const triggerModes = useMemo(() => [{
-    id: 'chat',
-    label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
-    icon: <MessageSquare className="h-4 w-4" />,
-    activeColor: 'bg-blue-500',
-    hoverColor: 'hover:bg-blue-500/20',
-    borderColor: 'border-blue-500',
-    description: language === 'ar' ? 'محادثة عادية مع الذكاء الاصطناعي' : 'Normal chat with AI'
-  }, {
-    id: 'search',
-    label: language === 'ar' ? 'بحث' : 'Search',
-    icon: <Search className="h-4 w-4" />,
-    activeColor: 'bg-gradient-to-r from-green-500 to-red-500',
-    hoverColor: 'hover:from-green-500 hover:to-red-500 hover:bg-gradient-to-r',
-    borderColor: 'border-green-500',
-    description: language === 'ar' ? 'الويب – يوتيوب' : 'Web – YouTube',
-    dual: true
-  }, {
-    id: 'image',
-    label: language === 'ar' ? 'صورة' : 'Image',
-    icon: <Image className="h-4 w-4" />,
-    activeColor: 'bg-orange-500',
-    hoverColor: 'hover:bg-orange-500/20',
-    borderColor: 'border-orange-500',
-    description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
-  }], [language]);
+  const { pathname } = useLocation();
   
   // Memoized quick actions for performance
   const quickActions = useMemo(() => [{
-    icon: <PenTool className="h-5 w-5" />,
+    id: 'text',
+    icon: <PenTool />,
     label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
-    description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
     action: () => onOpenTool && onOpenTool('text'),
-    color: 'bg-purple-500',
-    disabled: false
+    color: 'text-purple-500',
+    path: '/tools/text'
   }, {
-    icon: <Mic className="h-5 w-5" />,
+    id: 'voice',
+    icon: <Mic />,
     label: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
-    description: language === 'ar' ? 'استنسخ صوتك، ترجم واتكلم بلغات مختلفة' : 'Clone your voice, translate and speak in different languages',
     action: () => onOpenTool && onOpenTool('voice'),
-    color: 'bg-pink-500',
-    disabled: false
+    color: 'text-pink-500',
+    path: '/tools/voice-studio'
   }, {
-    icon: <Gamepad2 className="h-5 w-5" />,
+    id: 'game',
+    icon: <Gamepad2 />,
     label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
-    description: language === 'ar' ? 'العب ألعاب ذكية مع الذكاء الاصطناعي' : 'Play smart games with AI',
     action: () => onOpenTool && onOpenTool('game'),
-    color: 'bg-red-500',
-    disabled: false
-  }], [language]);
+    color: 'text-red-500',
+    path: '/tools/game'
+  }], [language, onOpenTool]);
   
-  const handleTriggerSelect = useCallback((triggerId: string) => {
-    onTriggerChange(triggerId);
-    console.log('✨ Quick Actions: Trigger changed to:', triggerId);
-    // Auto-close drawer after mode selection
-    if (onClose) {
-      setTimeout(() => {
-        onClose();
-      }, 300);
-    }
-  }, [onTriggerChange, onClose]);
+  // Quick actions are non-routing helpers; no active state
 
   const handleToolAction = useCallback((action: () => void) => {
-    // Delegate to parent to close drawer and open tool modal globally
     action();
-  }, []);
+    if (onClose) setTimeout(onClose, 300);
+  }, [onClose]);
 
-  // Tool popups are controlled by parent (ChatDrawers) so no local close handlers are needed here.
+  const itemVariants = {
+    hidden: { opacity: 0, y: 10 },
+    show: (i: number) => ({
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: i * 0.03,
+        type: 'spring',
+        stiffness: 300,
+        damping: 24
+      }
+    })
+  };
+  
+  const getGlowByTool = (toolId: string) => {
+    switch(toolId) {
+      case 'text': return 'shadow-[0_0_15px_rgba(168,85,247,0.7)]';
+      case 'voice': return 'shadow-[0_0_15px_rgba(236,72,153,0.7)]';
+      case 'game': return 'shadow-[0_0_15px_rgba(239,68,68,0.7)]';
+      default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
+    }
+  };
   
   return (
-    <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-center text-foreground">
-          {language === 'ar' ? 'أدوات سريعة' : 'Quick Tools'}
-        </h2>
-        
-        <div className="space-y-3" role="radiogroup" aria-label={language === 'ar' ? 'أوضاع المحادثة' : 'Chat modes'}>
-          {triggerModes.map((mode, index) => {
-            const isActive = activeTrigger === mode.id;
-            return (
-              <Button
-                key={mode.id}
-                autoFocus={index === 0}
-                onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleTriggerSelect(mode.id); }}
-                variant="ghost"
-                role="radio"
-                aria-checked={isActive}
-                className={`w-full justify-start h-auto p-3 transition-all duration-300 min-w-0 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 touch-manipulation ${
+    <>
+      {quickActions.map((action, index) => {
+        const isActive = pathname.startsWith(action.path);
+        return (
+        <motion.button
+          key={action.id}
+          className={`w-full ${isCollapsed ? 'h-14 px-1' : 'h-12 px-3'} justify-start rounded-xl group ${
+            isActive
+              ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowByTool(action.id)}`
+              : 'hover:bg-white/5 dark:hover:bg-white/[0.02]'
+          } transition-all duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-[1.02] active:scale-[0.98] ${(!isCollapsed && index === 0) ? '-mt-2' : ''}`}
+          onClick={() => handleToolAction(action.action)}
+          variants={itemVariants}
+          initial="hidden"
+          animate="show"
+          custom={index}
+        >
+          <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2 overflow-hidden`}>
+            <div className="relative flex items-center justify-center">
+              {React.cloneElement(action.icon, { 
+                className: `h-5 w-5 transition-all duration-300 ${action.color} ${
                   isActive 
-                    ? `${mode.dual ? 'bg-gradient-to-r from-green-500 to-red-500' : mode.activeColor} border ${mode.borderColor} text-white shadow-lg` 
-                    : `bg-white/10 dark:bg-black/10 ${mode.dual ? 'hover:bg-gradient-to-r hover:from-green-50/40 hover:to-red-50/40' : mode.hoverColor} border ${mode.borderColor} text-slate-700 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200`
+                    ? 'scale-110 brightness-125 drop-shadow-[0_0_8px]' 
+                    : 'group-hover:scale-110 group-hover:brightness-110'
+                }`,
+                style: { filter: isActive ? 'drop-shadow(0 0 8px currentColor)' : 'none' }
+              })}
+            </div>
+            {(!isCollapsed) && (
+              <span className={`text-sm font-medium transition-all duration-300 ${
+                isActive ? 'text-foreground font-semibold' : 'text-muted-foreground group-hover:text-foreground'
+              }`}>
+                {action.label}
+              </span>
+            )}
+            {isCollapsed && (
+              <span
+                className={`text-xs font-medium transition-all duration-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[90%] ${
+                  isActive ? 'text-foreground font-semibold' : 'text-muted-foreground group-hover:text-foreground'
                 }`}
-                aria-describedby={`${mode.id}-desc`}
               >
-                <div 
-                  className={`p-2 rounded-lg ${
-                    mode.dual
-                      ? (isActive ? 'bg-white/20' : 'bg-gradient-to-r from-green-500 to-red-500')
-                      : (isActive ? 'bg-white/20' : mode.activeColor)
-                  } text-white mr-3 flex-shrink-0`}
-                  aria-hidden="true"
-                >
-                  {mode.icon}
-                </div>
-                <div className="text-left flex-1 min-w-0">
-                  <div className="font-medium text-sm whitespace-normal break-words leading-tight">
-                    {mode.label}
-                  </div>
-                  <div 
-                    id={`${mode.id}-desc`}
-                    className="text-xs opacity-70 whitespace-normal break-words leading-tight"
-                  >
-                    {mode.description}
-                  </div>
-                </div>
-              </Button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Quick Tools */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
-          {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
-        </h3>
-        <div className="grid gap-3">
-          {quickActions.map((action, index) => (
-            <Card 
-              key={index} 
-              className={`transition-all duration-300 bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/20 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 ${
-                action.disabled 
-                  ? 'opacity-60 cursor-not-allowed' 
-                  : 'cursor-pointer hover:shadow-md hover:bg-white/30 dark:hover:bg-black/30 hover:border-white/40 dark:hover:border-white/30'
-              } touch-manipulation`} 
-              onPointerUp={action.disabled ? undefined : (e) => { e.preventDefault(); e.stopPropagation(); handleToolAction(action.action); }}
-              role="button"
-              tabIndex={action.disabled ? -1 : 0}
-              onKeyDown={(e) => {
-                if ((e.key === 'Enter' || e.key === ' ') && !action.disabled) {
-                  e.preventDefault();
-                  handleToolAction(action.action);
-                }
-              }}
-              aria-label={`${action.label}: ${action.description}`}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-3">
-                  <div className={`p-2 rounded-lg ${action.color} text-white ${action.disabled ? 'opacity-70' : ''}`}>
-                    {action.icon}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-sm text-slate-700 dark:text-slate-300">{action.label}</h3>
-                    </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">{action.description}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Tool popups are rendered by parent (ChatDrawers) to avoid drawer backdrop/blur */}
-    </div>
+                {action.label}
+              </span>
+            )}
+          </div>
+        </motion.button>
+        );
+      })}
+    </>
   );
 }
