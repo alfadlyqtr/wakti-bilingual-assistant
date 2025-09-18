@@ -1200,7 +1200,7 @@ const WaktiAIV2 = () => {
           style={{
             paddingBottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
-                  ? 'calc(max(0px, calc(var(--keyboard-height) - env(safe-area-inset-bottom, 0px))) + var(--chat-input-height, 80px))' 
+                  ? 'calc(var(--keyboard-height) + var(--chat-input-height, 80px))' 
                   : 'calc(var(--app-bottom-tabs-h) + var(--chat-input-height, 80px) + env(safe-area-inset-bottom, 0px))')
               : '24px'
           }}
@@ -1230,7 +1230,7 @@ const WaktiAIV2 = () => {
             left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
             bottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
-                  ? 'max(0px, calc(var(--keyboard-height) - env(safe-area-inset-bottom, 0px)))' 
+                  ? 'var(--keyboard-height)' 
                   : 'calc(var(--app-bottom-tabs-h) + env(safe-area-inset-bottom, 0px) + 8px)')
               : '0px'
           }}
