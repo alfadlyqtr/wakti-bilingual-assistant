@@ -103,7 +103,15 @@ export function ChatInput({
   
   // Mobile keyboard detection
   const { isKeyboardVisible, keyboardHeight } = useMobileKeyboard();
+  const isKeyboardMode = (typeof window !== 'undefined' && window.innerWidth < 768) && isKeyboardVisible;
   
+  // Ensure input row is always visible when keyboard is open
+  useEffect(() => {
+    if (isKeyboardMode) {
+      try { setIsInputCollapsed(false); } catch {}
+    }
+  }, [isKeyboardMode]);
+
 
   // Use simplified file upload hook
   const {
@@ -506,8 +514,8 @@ export function ChatInput({
   return (
     <>
     <div className="w-full space-y-4">
-      {/* File Upload Component - Different component based on mode */}
-      {activeTrigger !== 'video' && (
+      {/* File Upload Component - Different component based on mode (hidden during mobile keyboard) */}
+      {!isKeyboardMode && activeTrigger !== 'video' && (
         <>
           {activeTrigger === 'image' ? (
             <ImageModeFileUpload
@@ -557,7 +565,8 @@ export function ChatInput({
             `}
             ref={cardRef}
           >
-            {/* Collapse toggle positioned above input */}
+            {/* Collapse toggle positioned above input (hidden when keyboard is visible) */}
+            {!isKeyboardMode && (
             <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20">
               <TooltipProvider>
                 <Tooltip>
@@ -578,8 +587,10 @@ export function ChatInput({
                 </Tooltip>
               </TooltipProvider>
             </div>
+            )}
             
-            {/* Top row with all buttons - Always visible */}
+            {/* Top row with all buttons - hidden during mobile keyboard */}
+            { !isKeyboardMode && (
             <div className="flex items-center justify-between px-3 pt-2 pb-0">
                 {/* Left side: Extra + Tools + Mode Badge (moved here) */}
                 <div className="flex items-center gap-2">
@@ -856,9 +867,10 @@ export function ChatInput({
                   )}
                  </div>
                </div>
+            )}
 
-            {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION */}
-            {uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
+            {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION (hidden during mobile keyboard) */}
+            {!isKeyboardMode && uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
               <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20">
                 {/* Background Removal: show only a single bilingual chip */}
                 {activeTrigger === 'image' && imageMode === 'background-removal' ? (
