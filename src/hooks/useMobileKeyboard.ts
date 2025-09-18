@@ -26,16 +26,15 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
       const vv = window.visualViewport;
       const vvH = vv?.height ?? window.innerHeight;
       const vvTop = vv?.offsetTop ?? 0;
-      // Stable iOS/Android formula: free viewport space from bottom
+      // Exact free viewport space from bottom (includes iOS accessory bar)
       const raw = Math.max(0, window.innerHeight - (vvH + vvTop));
 
-      // Hysteresis to ignore tiny oscillations (<24px)
-      const last = lastHeightRef.current;
-      const diff = Math.abs(raw - last) < 24 ? last : raw;
-      lastHeightRef.current = diff;
+      // Remove hysteresis to avoid underestimation gaps; round up to prevent 1px seams
+      const height = Math.ceil(raw);
+      lastHeightRef.current = height;
 
-      const visible = diff > 100; // threshold for visibility
-      const clamped = visible ? Math.min(Math.max(diff, 100), 500) : 0;
+      const visible = height > 60; // detect earlier and reliably
+      const clamped = visible ? Math.min(Math.max(height, 60), 700) : 0;
 
       setIsKeyboardVisible(visible);
       setKeyboardHeight(clamped);
@@ -57,8 +56,12 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
       if (debounceIdRef.current != null) window.clearTimeout(debounceIdRef.current);
       debounceIdRef.current = window.setTimeout(() => {
         if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = requestAnimationFrame(measureKeyboard);
-      }, 160); // allow OS animation to settle
+        rafIdRef.current = requestAnimationFrame(() => {
+          measureKeyboard();
+          // Second pass to catch iOS accessory/prediction bar settling
+          window.setTimeout(measureKeyboard, 140);
+        });
+      }, 100);
     };
 
     const handleViewportChange = () => scheduleMeasure();

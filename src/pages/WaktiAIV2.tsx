@@ -1201,8 +1201,9 @@ const WaktiAIV2 = () => {
             paddingBottom: window.innerWidth < 768 
               ? (isKeyboardVisible 
                   ? 'calc(var(--keyboard-height) + var(--chat-input-height, 80px))' 
-                  : 'calc(var(--app-bottom-tabs-h) + var(--chat-input-height, 80px) + env(safe-area-inset-bottom, 0px))')
-              : '24px'
+                  : 'calc(var(--app-bottom-tabs-h) + var(--chat-input-height, 80px))')
+              : '24px',
+            WebkitOverflowScrolling: 'touch'
           }}
         >
           <ChatMessages
@@ -1225,15 +1226,16 @@ const WaktiAIV2 = () => {
         </div>
 
         <div 
-          className="fixed bottom-0 right-0 z-50"
-          style={{
+          className="glue-fixed glue-bottom glue-z right-0"
+           style={{
             left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
-            bottom: window.innerWidth < 768 
-              ? (isKeyboardVisible 
-                  ? 'var(--keyboard-height)' 
-                  : 'calc(var(--app-bottom-tabs-h) + env(safe-area-inset-bottom, 0px) + 8px)')
-              : '0px'
-          }}
+            right: '0px',
+             bottom: window.innerWidth < 768 
+               ? (isKeyboardVisible 
+                  ? 'var(--keyboard-height)'
+                  : 'calc(var(--app-bottom-tabs-h))')
+               : '0px'
+           }}
         >
           <ChatInput
             message={message}
