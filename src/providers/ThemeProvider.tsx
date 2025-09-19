@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
 type Theme = "dark" | "light";
@@ -54,13 +53,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem("language", language);
-    if (language === "ar") {
-      document.documentElement.classList.add("rtl");
-      document.dir = "rtl";
-    } else {
-      document.documentElement.classList.remove("rtl");
-      document.dir = "ltr";
-    }
+    // Keep the app layout LTR regardless of language; only change language metadata
+    document.documentElement.setAttribute("lang", language);
+    document.documentElement.classList.remove("rtl");
+    document.dir = "ltr";
   }, [language]);
 
   const toggleTheme = () => {
