@@ -2,15 +2,12 @@ import React, { useCallback } from 'react';
 import { SideSheet } from "@/components/ui/side-sheet";
 import { ExtraPanel } from './ExtraPanel';
 import { useTheme } from '@/providers/ThemeProvider';
-import { QuickActionsPanel } from './QuickActionsPanel';
 import { AIConversation } from '@/services/WaktiAIV2Service';
 import { useNavigate } from 'react-router-dom';
 
 interface ChatDrawersProps {
   showConversations: boolean;
   setShowConversations: (show: boolean) => void;
-  showQuickActions: boolean;
-  setShowQuickActions: (show: boolean) => void;
   conversations: AIConversation[];
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
@@ -29,8 +26,6 @@ interface ChatDrawersProps {
 export function ChatDrawers({
   showConversations,
   setShowConversations,
-  showQuickActions,
-  setShowQuickActions,
   conversations,
   currentConversationId,
   onSelectConversation,
@@ -48,15 +43,7 @@ export function ChatDrawers({
   const { language } = useTheme();
   const navigate = useNavigate();
 
-  const openTool = useCallback((tool: 'text' | 'voice' | 'game') => {
-    // Close drawer, then navigate to dedicated pages instead of modals
-    setShowQuickActions(false);
-    setTimeout(() => {
-      if (tool === 'text') navigate('/tools/text');
-      else if (tool === 'voice') navigate('/tools/voice-studio');
-      else if (tool === 'game') navigate('/tools/game');
-    }, 150);
-  }, [setShowQuickActions, navigate]);
+  // Quick actions drawer removed. Tools are now accessible inline from the input area.
 
   return (
     <>
@@ -80,19 +67,7 @@ export function ChatDrawers({
         />
       </SideSheet>
 
-      {/* Quick Actions Drawer - right side */}
-      <SideSheet open={showQuickActions} onOpenChange={setShowQuickActions} side="right">
-        <div className="sr-only" id="quick-actions-title">{language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}</div>
-        <div className="sr-only" id="quick-actions-desc">
-          {language === 'ar' ? 'اختر من أدوات الذكاء الاصطناعي السريعة لإنشاء محتوى أو تحسينه' : 'Choose from quick AI tools to create or enhance content'}
-        </div>
-        <QuickActionsPanel 
-          onClose={() => setShowQuickActions(false)} 
-          onOpenTool={openTool}
-        />
-      </SideSheet>
-
-      {/* Tool popups removed – now dedicated pages via routes */}
+      {/* Quick Actions drawer removed – quick modes shown inline in ChatInput */}
     </>
   );
 }

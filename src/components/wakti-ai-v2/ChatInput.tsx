@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, Plus, ImagePlus } from 'lucide-react';
+import { Send, Loader2, ChevronDown, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PlusMenu } from './PlusMenu';
@@ -71,6 +72,7 @@ export function ChatInput({
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
   const [imageMode, setImageMode] = useState<ImageMode>('text2image');
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  const [showQuickModes, setShowQuickModes] = useState(false);
   // Button ref and viewport position for Search submode dropdown (Web/YouTube)
   const searchModeBtnRef = useRef<HTMLButtonElement>(null);
   const [searchMenuPos, setSearchMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -168,15 +170,17 @@ export function ChatInput({
       setIsModeMenuOpen(false);
       setSearchMenuPos(null);
       setImageMenuPos(null);
+      setShowQuickModes(false);
     };
     window.addEventListener('wakti-close-all-overlays', closer as EventListener);
     
     // Close dropdowns when clicking outside
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('[data-dropdown]') && !target.closest('[data-dropdown-menu]')) {
+      if (!target.closest('[data-dropdown]') && !target.closest('[data-dropdown-menu]') && !target.closest('[data-quickmodes]')) {
         setSearchMenuPos(null);
         setImageMenuPos(null);
+        setShowQuickModes(false);
       }
     };
     
@@ -570,7 +574,6 @@ export function ChatInput({
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
               ${containerHighlight}
               shadow-xl rounded-2xl backdrop-blur-2xl ios-reduce-blur
-{{ ... }}
               p-0 transition-all duration-300 overflow-visible
               shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
               border-[2.5px] min-h-[70px] w-full
@@ -603,9 +606,9 @@ export function ChatInput({
             
             {/* Top row with all buttons - hidden during mobile keyboard */}
             { !isKeyboardMode && (
-            <div className="flex items-center justify-between px-3 pt-2 pb-0">
-                {/* Left side: Extra + Tools + Mode Badge (moved here) */}
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between px-3 pt-2 pb-0 isolate">
+                {/* Left side: Extra + Modes + Quick Modes + Mode Badge (moved here) */}
+                <div className="flex items-center gap-2" >
                   <button
                     onPointerUp={(e) => {
                       e.preventDefault();
@@ -628,47 +631,101 @@ export function ChatInput({
                     </span>
                   </button>
                   
-                  <button
-                    onPointerUp={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
-                      console.log('⚡ TOOLS: Opening drawer');
-                      if (onOpenPlusDrawer) onOpenPlusDrawer();
-                    }}
-                    aria-label={language === "ar" ? "أدوات" : "Tools"}
-                    className="h-8 px-3 rounded-xl flex items-center justify-center gap-1.5 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 flex-shrink-0 touch-manipulation"
-                    disabled={isUploading}
-                    type="button"
-                  >
-                    <span className="text-sm" role="img" aria-label="Tools">⚡</span>
-                    <span className="text-xs font-medium text-foreground/80">
-                      {language === 'ar' ? 'أدوات' : 'Tools'}
-                    </span>
-                  </button>
+                  <div className="relative" data-quickmodes>
+                    <button
+                      onPointerUp={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
+                        setShowQuickModes((v) => !v);
+                      }}
+                      aria-label={language === "ar" ? "أوضاع" : "Modes"}
+                      className="h-8 px-3 rounded-xl flex items-center justify-center gap-1.5 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 flex-shrink-0 touch-manipulation text-foreground/80 dark:text-white/85"
+                      disabled={isUploading}
+                      type="button"
+                    >
+                      <SlidersHorizontal className="h-4 w-4" />
+                      <span className="text-xs font-medium text-foreground/80">{language === 'ar' ? 'أوضاع' : 'Modes'}</span>
+                    </button>
+
+                    {/* Inline Quick Modes Panel anchored to Tools */}
+                    <AnimatePresence>
+                      {showQuickModes && !isKeyboardMode && (
+                        <motion.div
+                          key="quick-modes"
+                          initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                          transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                          className="absolute left-0 bottom-[calc(100%+8px)] z-50 pointer-events-none"
+                          style={{ transformOrigin: 'bottom left' }}
+                        >
+                          <div className="pointer-events-auto rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 p-2 pr-3 flex flex-col gap-2">
+                            {/* Stacked buttons with delayed pop-in from behind (z-depth via shadow) */}
+                            <motion.button
+                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                              transition={{ delay: 0.00, type: 'spring', stiffness: 380, damping: 24 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('chat'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:shadow-[0_12px_30px_rgba(37,99,235,0.45)] transition-shadow active:scale-[0.98]"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                              <span className="text-xs font-semibold">{language === 'ar' ? 'دردشة' : 'Chat'}</span>
+                            </motion.button>
+
+                            <motion.button
+                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                              transition={{ delay: 0.07, type: 'spring', stiffness: 380, damping: 24 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('search'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-green-600 text-white shadow-[0_10px_24px_rgba(22,163,74,0.35)] hover:shadow-[0_12px_30px_rgba(22,163,74,0.45)] transition-shadow active:scale-[0.98]"
+                            >
+                              <SearchIcon className="h-4 w-4" />
+                              <span className="text-xs font-semibold">{language === 'ar' ? 'بحث' : 'Search'}</span>
+                            </motion.button>
+
+                            <motion.button
+                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                              transition={{ delay: 0.14, type: 'spring', stiffness: 380, damping: 24 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('image'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-orange-500 text-white shadow-[0_10px_24px_rgba(234,88,12,0.35)] hover:shadow-[0_12px_30px_rgba(234,88,12,0.45)] transition-shadow active:scale-[0.98]"
+                            >
+                              <ImageIcon className="h-4 w-4" />
+                              <span className="text-xs font-semibold">{language === 'ar' ? 'صورة' : 'Image'}</span>
+                            </motion.button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
 
                 {/* Right side: Mode Badge + Upload button + Speed */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 relative z-[80] pointer-events-auto">
                   {/* Mode Badge with dropdowns */}
-                  <div className="flex items-center">
+                  <div className="flex items-center relative z-[81] pointer-events-auto">
                     {activeTrigger === 'search' ? (
                       <div className="relative">
                         <button
                           ref={searchModeBtnRef}
                           data-dropdown
-                          onPointerUp={(e) => {
+                          onPointerDown={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            // Hard stop native bubbling to our document click listener
+                            // @ts-ignore
+                            if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
                             const rect = searchModeBtnRef.current?.getBoundingClientRect();
-                            if (rect) {
-                              const margin = 8; // small gap above badge
-                              const desiredLeft = rect.left - 40; // nudge left away from edge
-                              const clampedLeft = Math.max(12, desiredLeft);
-                              setSearchMenuPos({
-                                top: rect.top - margin,
-                                left: clampedLeft,
-                              });
+                            if (searchMenuPos) {
+                              setSearchMenuPos(null);
+                            } else if (rect) {
+                              const margin = 8; // gap above badge
+                              const rightEdge = Math.min(window.innerWidth - 12, rect.right);
+                              setSearchMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
                             }
                           }}
                           className={`inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none border align-middle ${
@@ -677,173 +734,120 @@ export function ChatInput({
                               : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
                           }`}
                         >
+                          <span className={`w-2 h-2 rounded-full ${searchSubmode === 'youtube' ? 'bg-red-500' : 'bg-green-500'}`}></span>
                           <span className="text-xs">
                             {searchSubmode === 'youtube' ? 'YouTube' : (language === 'ar' ? 'الويب' : 'Web')}
                           </span>
                           <ChevronDown className="h-3 w-3" />
                         </button>
-                        
-                        {/* Search Mode Dropdown */}
-                        {searchMenuPos && createPortal(
-                          <div
-                            className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px]"
-                            style={{
-                              top: searchMenuPos.top,
-                              left: searchMenuPos.left,
-                              transform: 'translateY(-100%)',
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              onPointerUp={() => {
-                                setSearchSubmode('web');
-                                setSearchMenuPos(null);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                            >
-                              <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-                              {language === 'ar' ? 'الويب' : 'Web'}
-                            </button>
-                            <button
-                              onPointerUp={() => {
-                                setSearchSubmode('youtube');
-                                setSearchMenuPos(null);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                            >
-                              <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                              YouTube
-                            </button>
-                          </div>,
+                        {createPortal(
+                          <AnimatePresence>
+                            {searchMenuPos && (
+                              <motion.div
+                                key="search-menu"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                                className="fixed z-[9999] min-w-[140px]"
+                                data-dropdown-menu
+                                style={{ top: searchMenuPos.top, left: searchMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
+                                onPointerDown={(e) => e.stopPropagation()}
+                              >
+                                <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
+                                  <button onPointerUp={() => { setSearchSubmode('web'); setSearchMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"><span className="w-3 h-3 bg-green-500 rounded-full"></span>{language === 'ar' ? 'الويب' : 'Web'}</button>
+                                  <button onPointerUp={() => { setSearchSubmode('youtube'); setSearchMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"><span className="w-3 h-3 bg-red-500 rounded-full"></span>YouTube</button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>,
                           document.body
                         )}
                       </div>
                     ) : activeTrigger === 'image' ? (
-                      <div className="relative">
+                      <div className="relative flex items-center gap-2">
                         <button
                           ref={imageModeBtnRef}
                           data-dropdown
-                          onPointerUp={(e) => {
+                          onPointerDown={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            // @ts-ignore
+                            if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
                             const rect = imageModeBtnRef.current?.getBoundingClientRect();
-                            if (rect) {
-                              const margin = 8; // gap above badge
-                              const desiredLeft = rect.left - 20; // nudge left
-                              const clampedLeft = Math.max(12, desiredLeft);
-                              setImageMenuPos({
-                                top: rect.top - margin,
-                                left: clampedLeft,
-                              });
+                            if (imageMenuPos) {
+                              setImageMenuPos(null);
+                            } else if (rect) {
+                              const margin = 8;
+                              const rightEdge = Math.min(window.innerWidth - 12, rect.right);
+                              setImageMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
                             }
                           }}
                           className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0"
                         >
                           <ImagePlus className="h-3 w-3" />
                           <span className="text-xs">
-                            {imageMode === 'image2image' ? (language === 'ar' ? 'صورة 2' : 'Image2Image') 
-                             : imageMode === 'background-removal' ? (language === 'ar' ? 'إزالة الخلفية' : 'BG-Removal') 
-                             : (language === 'ar' ? 'صورة' : 'Image')}
+                            {imageMode === 'image2image'
+                              ? (language === 'ar' ? 'صورة إلى صورة' : 'Image2Image')
+                              : imageMode === 'background-removal'
+                                ? (language === 'ar' ? 'إزالة الخلفية' : 'BG Removal')
+                                : (language === 'ar' ? 'نص إلى صورة' : 'Text2Image')}
                           </span>
                           <ChevronDown className="h-3 w-3" />
                         </button>
-                        
-                        {/* Image Mode Dropdown */}
-                        {imageMenuPos && createPortal(
-                          <div
-                            data-dropdown-menu
-                            className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px]"
-                            style={{
-                              top: imageMenuPos.top,
-                              left: imageMenuPos.left,
-                              transform: 'translateY(-100%)',
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              onPointerUp={() => {
-                                setImageMode('text2image');
-                                setImageMenuPos(null);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              {language === 'ar' ? 'نص إلى صورة' : 'Text2Image'}
-                            </button>
-                            <button
-                              onPointerUp={() => {
-                                setImageMode('image2image');
-                                setImageMenuPos(null);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              {language === 'ar' ? 'صورة إلى صورة' : 'Image2Image'}
-                            </button>
-                            <button
-                              onPointerUp={() => {
-                                setImageMode('background-removal');
-                                setImageMenuPos(null);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              {language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}
-                            </button>
-                          </div>,
+                        {createPortal(
+                          <AnimatePresence>
+                            {imageMenuPos && (
+                              <motion.div
+                                key="image-menu"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                                className="fixed z-[9999] min-w-[160px]"
+                                data-dropdown-menu
+                                style={{ top: imageMenuPos.top, left: imageMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
+                                onPointerDown={(e) => e.stopPropagation()}
+                              >
+                                <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
+                                  <button onPointerUp={() => { setImageMode('text2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'نص إلى صورة' : 'Text2Image'}</button>
+                                  <button onPointerUp={() => { setImageMode('image2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'صورة إلى صورة' : 'Image2Image'}</button>
+                                  <button onPointerUp={() => { setImageMode('background-removal'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}</button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>,
                           document.body
                         )}
-                      </div>
-                    ) : activeTrigger === 'chat' ? (
-                      <div className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50 align-middle">
-                        <span className="text-xs">{language === 'ar' ? 'دردشة' : 'Chat'}</span>
-                      </div>
-                    ) : (
-                      <ActiveModeIndicator activeTrigger={activeTrigger} />
-                    )}
-                  </div>
 
-                  {/* Upload button - Chat mode OR Image mode only for image2image/background-removal */}
-                  {(
-                    activeTrigger === 'chat' ||
-                    (activeTrigger === 'image' && (imageMode === 'image2image' || imageMode === 'background-removal'))
-                  ) && (
-                    <button
-                      type="button"
-                      onPointerUp={(e) => {
-                        e.preventDefault(); e.stopPropagation();
-                        if (activeTrigger === 'chat') {
-                          chatUploadInputRef.current?.click();
-                        } else {
-                          triggerSeedUpload();
-                        }
-                      }}
-                      disabled={isUploading}
-                      className={`h-8 w-8 rounded-xl transition-colors flex items-center justify-center
-                        ${activeTrigger === 'chat'
-                          ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200 border border-cyan-200 dark:bg-cyan-900/60 dark:text-cyan-300 dark:border-cyan-700/60'
-                          : 'bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 dark:bg-orange-900/60 dark:text-orange-300 dark:border-orange-700/60'}
-                      `}
-                      aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload'}
-                      title={language === 'ar' ? 'تحميل صورة' : 'Upload'}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  )}
+                        {/* Seed image upload for Image Mode submodes that require an input image */}
+                        {imageMode !== 'text2image' && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-lg text-xs font-medium leading-none bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
+                            onClick={(e) => { e.stopPropagation(); seedFileInputRef.current?.click(); }}
+                            aria-label={language === 'ar' ? 'رفع صورة مرجعية' : 'Upload reference image'}
+                          >
+                            <Plus className="h-3 w-3" />
+                            <span className="text-xs">{language === 'ar' ? 'رفع' : 'Upload'}</span>
+                          </button>
+                        )}
 
-                  {/* Speed dropdown - only in Text2Image mode */}
-                  {activeTrigger === 'image' && imageMode === 'text2image' && (
-                    <div className="flex justify-center">
-                      <div className="relative inline-flex items-center justify-center">
                         <button
                           ref={qualityBtnRef}
                           data-dropdown
-                          onPointerUp={(e) => {
+                          onPointerDown={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            // @ts-ignore
+                            if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
                             const rect = qualityBtnRef.current?.getBoundingClientRect();
-                            if (rect) {
+                            if (qualityMenuPos) {
+                              setQualityMenuPos(null);
+                            } else if (rect) {
                               const margin = 8;
-                              const desiredLeft = rect.left - 12;
-                              const clampedLeft = Math.max(12, desiredLeft);
-                              setQualityMenuPos({ top: rect.top - margin, left: clampedLeft });
+                              const rightEdge = Math.min(window.innerWidth - 12, rect.right);
+                              setQualityMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
                             }
                           }}
                           aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
@@ -852,32 +856,48 @@ export function ChatInput({
                           <span>{imageQuality === 'fast' ? (language === 'ar' ? 'سريع' : 'Fast') : (language === 'ar' ? 'أفضل' : 'Best')}</span>
                           <ChevronDown className="h-3 w-3" />
                         </button>
-                        {qualityMenuPos && createPortal(
-                          <div
-                            data-dropdown-menu
-                            className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px]"
-                            style={{ top: qualityMenuPos.top, left: qualityMenuPos.left, transform: 'translateY(-100%)' }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              onPointerUp={() => { setImageQuality('fast'); setQualityMenuPos(null); }}
-                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              {language === 'ar' ? 'سريع' : 'Fast'}
-                            </button>
-                            <button
-                              onPointerUp={() => { setImageQuality('best_fast'); setQualityMenuPos(null); }}
-                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              {language === 'ar' ? 'أفضل' : 'Best'}
-                            </button>
-                          </div>,
+                        {createPortal(
+                          <AnimatePresence>
+                            {qualityMenuPos && (
+                              <motion.div
+                                key="quality-menu"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                                className="fixed z-[9999] min-w-[160px]"
+                                data-dropdown-menu
+                                style={{ top: qualityMenuPos.top, left: qualityMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
+                                onPointerDown={(e) => e.stopPropagation()}
+                              >
+                                <div className="rounded-xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
+                                  <button onPointerUp={() => { setImageQuality('fast'); setQualityMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'سريع' : 'Fast'}</button>
+                                  <button onPointerUp={() => { setImageQuality('best_fast'); setQualityMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'أفضل' : 'Best'}</button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>,
                           document.body
                         )}
                       </div>
-                    </div>
-                  )}
-                 </div>
+                    ) : activeTrigger === 'chat' ? (
+                      <div className="relative flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50">
+                          {language === 'ar' ? 'دردشة' : 'Chat'}
+                        </span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-lg text-xs font-medium leading-none bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-200 shadow-sm"
+                          onClick={(e) => { e.stopPropagation(); chatUploadInputRef.current?.click(); }}
+                          aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span className="text-xs">{language === 'ar' ? 'رفع' : 'Upload'}</span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
                </div>
             )}
 

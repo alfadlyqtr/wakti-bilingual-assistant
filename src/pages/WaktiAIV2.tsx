@@ -57,7 +57,6 @@ const WaktiAIV2 = () => {
   const [error, setError] = useState<string | null>(null);
   const [archivedConversations, setArchivedConversations] = useState<ConversationMetadata[]>([]);
   const [showConversations, setShowConversations] = useState(false);
-  const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [activeTrigger, setActiveTrigger] = useState('chat');
 
@@ -1151,9 +1150,8 @@ const WaktiAIV2 = () => {
     setMessage(text);
   };
 
-  const handleOpenPlusDrawer = () => {
-    setShowQuickActions(true);
-  };
+  // Quick Actions drawer removed; Tools now opens inline quick modes in ChatInput
+  const handleOpenPlusDrawer = () => {};
 
   // Ensure no global bottom padding leaks in/from Safari safe-area when entering or leaving chat
   React.useEffect(() => {
@@ -1168,8 +1166,6 @@ const WaktiAIV2 = () => {
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
-        showQuickActions={showQuickActions}
-        setShowQuickActions={setShowQuickActions}
         conversations={archivedConversations.map(conv => ({
           id: conv.id,
           title: conv.title,
