@@ -30,11 +30,34 @@ class EnhancedFrontendMemoryClass {
     try {
       // Normalize input defensively
       const safeMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
-      const normalized = safeMessages.map(m => ({
-        ...m,
-        role: m?.role || 'assistant',
-        content: typeof m?.content === 'string' ? m.content : ''
-      }));
+      // Create a lightweight snapshot for storage (drop large/transient fields)
+      const normalized = safeMessages.map((m: any) => {
+        const base = {
+          id: m?.id,
+          role: m?.role || 'assistant',
+          content: typeof m?.content === 'string' ? m.content : '',
+          timestamp: m?.timestamp || Date.now(),
+          intent: m?.intent,
+          // keep confidence only if small literal
+          confidence: (m?.confidence === 'high' || m?.confidence === 'medium' || m?.confidence === 'low') ? m.confidence : undefined,
+          // crucial for image messages
+          imageUrl: typeof m?.imageUrl === 'string' ? m.imageUrl : undefined,
+          browsingUsed: m?.browsingUsed === true ? true : undefined,
+        } as any;
+
+        // Avoid storing heavy metadata
+        // If metadata exists, keep only tiny whitelisted fields
+        if (m?.metadata && typeof m.metadata === 'object') {
+          const md = m.metadata;
+          const lightMd: any = {};
+          if (typeof md.imageMode === 'string') lightMd.imageMode = md.imageMode;
+          if (typeof md.prompt === 'string') lightMd.prompt = md.prompt.slice(0, 160);
+          if (typeof md.loading === 'boolean') lightMd.loading = md.loading;
+          if (Object.keys(lightMd).length > 0) base.metadata = lightMd;
+        }
+
+        return base;
+      });
 
       const actualId = conversationId || this.generateConversationId();
       const title = normalized.length > 0 ? this.generateConversationTitle(normalized[0].content) : 'New Conversation';
@@ -42,7 +65,7 @@ class EnhancedFrontendMemoryClass {
       const activeData = {
         id: actualId,
         title,
-        messages: normalized.slice(-20), // Keep last 20 messages
+        messages: normalized.slice(-20), // Keep last 20 lightweight messages
         lastMessageAt: Date.now(),
         messageCount: normalized.length,
         createdAt: Date.now()

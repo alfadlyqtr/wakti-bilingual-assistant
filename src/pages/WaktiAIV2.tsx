@@ -376,7 +376,82 @@ const WaktiAIV2 = () => {
           metadata: { loading: true, prompt: messageContent, imageMode }
         };
         setSessionMessages(prev => [...prev, placeholderAssistant]);
-        
+
+        // Image2Image: call dedicated edge function and return early
+        if (imageMode === 'image2image') {
+          try {
+            // pick first image seed's raw base64 data (processed earlier)
+            const imageSeed = Array.isArray(processedAttachedFiles) && processedAttachedFiles.length > 0
+              ? (processedAttachedFiles[0].data || '')
+              : '';
+
+            if (!imageSeed) {
+              throw new Error(language === 'ar' ? 'يرجى رفع صورة واحدة لاستخدام التحويل.' : 'Please upload one image to transform.');
+            }
+
+            const { data, error } = await supabase.functions.invoke('wakti-image2image', {
+              body: {
+                image_base64: imageSeed,
+                user_prompt: messageContent,
+                user_id: userProfile?.id,
+              }
+            });
+
+            if (error) {
+              throw new Error(error.message || 'Edge function error');
+            }
+
+            const publicUrl = data?.url as string | undefined;
+            if (!publicUrl) {
+              throw new Error(language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image');
+            }
+
+            // Update the placeholder with the final image result
+            setSessionMessages(prev => {
+              const updated = prev.map(m => m.id === assistantId ? {
+                ...m,
+                content: '',
+                intent: 'image',
+                confidence: 'high' as 'high',
+                imageUrl: publicUrl,
+                metadata: {
+                  ...(m.metadata || {}),
+                  loading: false,
+                  imageMode,
+                  modelUsed: 'gpt-image-1',
+                }
+              } : m);
+              EnhancedFrontendMemory.saveActiveConversation(updated, currentConversationId);
+              return updated;
+            });
+
+            if (requestIdRef.current === requestId) setIsLoading(false);
+            return;
+          } catch (e: any) {
+            // Update placeholder with error
+            setSessionMessages(prev => prev.map(m => m.id === assistantId ? {
+              ...m,
+              content: language === 'ar'
+                ? '❌ تعذر تحويل الصورة. حاول مرة أخرى.'
+                : '❌ Could not transform the image. Please try again.',
+              metadata: { ...(m.metadata || {}), loading: false, imageMode }
+            } : m));
+            EnhancedFrontendMemory.saveActiveConversation(
+              [...newMessages, {
+                id: assistantId,
+                role: 'assistant',
+                content: language === 'ar'
+                  ? '❌ تعذر تحويل الصورة. حاول مرة أخرى.'
+                  : '❌ Could not transform the image. Please try again.',
+                timestamp: new Date()
+              }],
+              currentConversationId
+            );
+            if (requestIdRef.current === requestId) setIsLoading(false);
+            return;
+          }
+        }
+
         const imageResponse = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile?.id,

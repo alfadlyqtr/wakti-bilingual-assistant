@@ -348,7 +348,7 @@ export function ChatInput({
         finalTrigger, // Use the final trigger (could be auto-switched to vision)
         outgoingFiles,
         activeTrigger === 'image' ? imageMode : undefined, // Only pass imageMode if in image mode
-        activeTrigger === 'image' ? imageQuality : undefined // Only pass imageQuality if in image mode
+        activeTrigger === 'image' && imageMode === 'text2image' ? imageQuality : undefined // Only pass imageQuality for Text2Image
       );
     } else {
       console.log('❌ SEND: No message or files to send');
@@ -833,51 +833,55 @@ export function ChatInput({
                           </button>
                         )}
 
-                        <button
-                          ref={qualityBtnRef}
-                          data-dropdown
-                          onPointerDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // @ts-ignore
-                            if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
-                            const rect = qualityBtnRef.current?.getBoundingClientRect();
-                            if (qualityMenuPos) {
-                              setQualityMenuPos(null);
-                            } else if (rect) {
-                              const margin = 8;
-                              const rightEdge = Math.min(window.innerWidth - 12, rect.right);
-                              setQualityMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
-                            }
-                          }}
-                          aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
-                          className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-lg text-xs font-medium leading-none bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
-                        >
-                          <span>{imageQuality === 'fast' ? (language === 'ar' ? 'سريع' : 'Fast') : (language === 'ar' ? 'أفضل' : 'Best')}</span>
-                          <ChevronDown className="h-3 w-3" />
-                        </button>
-                        {createPortal(
-                          <AnimatePresence>
-                            {qualityMenuPos && (
-                              <motion.div
-                                key="quality-menu"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                                className="fixed z-[9999] min-w-[160px]"
-                                data-dropdown-menu
-                                style={{ top: qualityMenuPos.top, left: qualityMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              >
-                                <div className="rounded-xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
-                                  <button onPointerUp={() => { setImageQuality('fast'); setQualityMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'سريع' : 'Fast'}</button>
-                                  <button onPointerUp={() => { setImageQuality('best_fast'); setQualityMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'أفضل' : 'Best'}</button>
-                                </div>
-                              </motion.div>
+                        {imageMode === 'text2image' && (
+                          <>
+                            <button
+                              ref={qualityBtnRef}
+                              data-dropdown
+                              onPointerDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                // @ts-ignore
+                                if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
+                                const rect = qualityBtnRef.current?.getBoundingClientRect();
+                                if (qualityMenuPos) {
+                                  setQualityMenuPos(null);
+                                } else if (rect) {
+                                  const margin = 8;
+                                  const rightEdge = Math.min(window.innerWidth - 12, rect.right);
+                                  setQualityMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
+                                }
+                              }}
+                              aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
+                              className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-lg text-xs font-medium leading-none bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
+                            >
+                              <span>{imageQuality === 'fast' ? (language === 'ar' ? 'سريع' : 'Fast') : (language === 'ar' ? 'أفضل' : 'Best')}</span>
+                              <ChevronDown className="h-3 w-3" />
+                            </button>
+                            {createPortal(
+                              <AnimatePresence>
+                                {qualityMenuPos && (
+                                  <motion.div
+                                    key="quality-menu"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                                    className="fixed z-[9999] min-w-[160px]"
+                                    data-dropdown-menu
+                                    style={{ top: qualityMenuPos.top, left: qualityMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="rounded-xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
+                                      <button onPointerUp={() => { setImageQuality('fast'); setQualityMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'سريع' : 'Fast'}</button>
+                                      <button onPointerUp={() => { setImageQuality('best_fast'); setQualityMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'أفضل' : 'Best'}</button>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>,
+                              document.body
                             )}
-                          </AnimatePresence>,
-                          document.body
+                          </>
                         )}
                       </div>
                     ) : activeTrigger === 'chat' ? (
