@@ -1021,21 +1021,47 @@ export function ChatMessages({
                       {(() => {
                         const isImageLoading = message.role === 'assistant' && message.intent === 'image' && (message as any)?.metadata?.loading;
                         const isVisionLoading = message.role === 'assistant' && message.intent === 'vision' && (message as any)?.metadata?.loading;
+                        const stage = (message as any)?.metadata?.loadingStage as 'uploading'|'generating'|'saving'|undefined;
+                        const hasImageUrl = !!(message as any)?.imageUrl;
                         if (isImageLoading) {
+                          // Stage-specific rendering: uploading -> generating (skeleton), saving -> preview with blur+wipe
+                          const label = stage === 'uploading'
+                            ? (language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...')
+                            : stage === 'saving'
+                              ? (language === 'ar' ? 'جارٍ حفظ الصورة...' : 'Saving image...')
+                              : (language === 'ar' ? 'جارٍ توليد الصورة...' : 'Generating image...');
+
+                          if (stage === 'saving' && hasImageUrl) {
+                            return (
+                              <div className="w-full">
+                                <div className="relative overflow-hidden rounded-lg border border-border/50 shadow-sm max-w-xs">
+                                  <img
+                                    src={(message as any).imageUrl}
+                                    alt="Generated image"
+                                    className="max-w-full h-auto rounded-lg img-blur-reveal"
+                                  />
+                                  <div className="reveal-wipe" />
+                                </div>
+                                <div className="mt-2 text-xs text-muted-foreground">
+                                  <span>{label}</span>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Default skeleton for uploading/generating
                           return (
                             <div className="w-full">
                               {/* Skeleton image box with subtle blur */}
                               <div className="relative overflow-hidden rounded-lg border border-border/50 shadow-sm max-w-xs">
                                 <div className="brush-skeleton" style={{ width: '100%', height: 256 }} />
-                                {/* subtle overlay, no heavy blur to keep it light */}
                                 <div className="absolute inset-0 pointer-events-none" />
-                                {/* tiny progress bar pinned to bottom */}
                                 <div className="absolute bottom-0 left-0 right-0 p-2">
                                   <div className="tiny-progress" />
                                 </div>
                               </div>
                               <div className="mt-2 text-xs text-muted-foreground">
-                                <span>{language === 'ar' ? 'جارٍ توليد الصورة...' : 'Generating image...'}</span>
+                                <span>{label}</span>
                               </div>
                             </div>
                           );
@@ -1054,7 +1080,8 @@ export function ChatMessages({
                             </div>
                           );
                         }
-                        if (message.role === 'assistant' && !message.content) {
+                        // Show thinking bubbles only when no content, no imageUrl, and not loading
+                        if (message.role === 'assistant' && !message.content && !hasImageUrl && !(message as any)?.metadata?.loading) {
                           return (
                             <div className="flex items-center gap-2">
                               <div className="flex space-x-1">

@@ -373,9 +373,15 @@ const WaktiAIV2 = () => {
           content: '',
           timestamp: new Date(),
           intent: 'image',
-          metadata: { loading: true, prompt: messageContent, imageMode }
+          metadata: { loading: true, loadingStage: 'uploading', prompt: messageContent, imageMode }
         };
         setSessionMessages(prev => [...prev, placeholderAssistant]);
+
+        // Move to generating stage before calling the edge function
+        setSessionMessages(prev => prev.map(m => m.id === assistantId ? {
+          ...m,
+          metadata: { ...(m.metadata || {}), loading: true, loadingStage: 'generating' }
+        } : m));
 
         // Image2Image: call dedicated edge function and return early
         if (imageMode === 'image2image') {
@@ -406,7 +412,7 @@ const WaktiAIV2 = () => {
               throw new Error(language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image');
             }
 
-            // Update the placeholder with the final image result
+            // Update the placeholder with the image URL and show a brief 'saving' stage
             setSessionMessages(prev => {
               const updated = prev.map(m => m.id === assistantId ? {
                 ...m,
@@ -416,7 +422,8 @@ const WaktiAIV2 = () => {
                 imageUrl: publicUrl,
                 metadata: {
                   ...(m.metadata || {}),
-                  loading: false,
+                  loading: true,
+                  loadingStage: 'saving',
                   imageMode,
                   modelUsed: 'gpt-image-1',
                 }
@@ -424,6 +431,26 @@ const WaktiAIV2 = () => {
               EnhancedFrontendMemory.saveActiveConversation(updated, currentConversationId);
               return updated;
             });
+
+            // After a short delay, flip off loading and trigger reveal animation once
+            setTimeout(() => {
+              setSessionMessages(prev => {
+                const updated2 = prev.map(m => m.id === assistantId ? {
+                  ...m,
+                  metadata: {
+                    ...(m.metadata || {}),
+                    loading: false,
+                    // clear stage and set a one-shot flag for UI reveal
+                    loadingStage: undefined,
+                    imageMode,
+                    modelUsed: 'gpt-image-1',
+                    justLoaded: true,
+                  }
+                } : m);
+                EnhancedFrontendMemory.saveActiveConversation(updated2, currentConversationId);
+                return updated2;
+              });
+            }, 650);
 
             if (requestIdRef.current === requestId) setIsLoading(false);
             return;

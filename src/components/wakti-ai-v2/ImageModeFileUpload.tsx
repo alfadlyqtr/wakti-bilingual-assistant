@@ -116,7 +116,7 @@ export function ImageModeFileUpload({
 
 
   return (
-    <div className="w-full">
+    <div className="w-full relative z-[120] isolate pointer-events-auto px-0 md:px-6 max-w-6xl mx-auto">
       <input
         type="file"
         ref={fileInputRef}
@@ -134,17 +134,29 @@ export function ImageModeFileUpload({
           {uploadedFiles.map((file) => (
             <div
               key={file.id}
-              className="flex items-center justify-between p-2 bg-muted/30 rounded-md"
+              className="flex items-center justify-between p-2 rounded-md border border-border/50 bg-white/70 dark:bg-neutral-900/40 backdrop-blur-md shadow-sm"
             >
               <div className="flex items-center space-x-2">
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                {/* Small image preview (prefer base64 preview, fallback to object URL) */}
+                <img
+                  src={file.preview || file.url}
+                  alt={file.name}
+                  className="w-12 h-12 rounded-md object-cover border border-border/50"
+                  onError={(e) => {
+                    // Fallback to icon if image fails
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
                 <span className="text-sm truncate max-w-[200px]">
                   {file.name}
                 </span>
               </div>
               <button
                 type="button"
-                onClick={() => onRemoveFile(file.id)}
+                onClick={() => {
+                  try { if (file.url) URL.revokeObjectURL(file.url); } catch {}
+                  onRemoveFile(file.id);
+                }}
                 className="text-muted-foreground hover:text-foreground"
                 disabled={disabled || isUploading}
               >

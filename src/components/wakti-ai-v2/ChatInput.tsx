@@ -824,12 +824,11 @@ export function ChatInput({
                         {imageMode !== 'text2image' && (
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-lg text-xs font-medium leading-none bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
                             onClick={(e) => { e.stopPropagation(); seedFileInputRef.current?.click(); }}
                             aria-label={language === 'ar' ? 'رفع صورة مرجعية' : 'Upload reference image'}
                           >
                             <Plus className="h-3 w-3" />
-                            <span className="text-xs">{language === 'ar' ? 'رفع' : 'Upload'}</span>
                           </button>
                         )}
 
@@ -891,12 +890,11 @@ export function ChatInput({
                         </span>
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-lg text-xs font-medium leading-none bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-200 shadow-sm"
+                          className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-200 shadow-sm"
                           onClick={(e) => { e.stopPropagation(); chatUploadInputRef.current?.click(); }}
                           aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
                         >
                           <Plus className="h-3 w-3" />
-                          <span className="text-xs">{language === 'ar' ? 'رفع' : 'Upload'}</span>
                         </button>
                       </div>
                     ) : null}
