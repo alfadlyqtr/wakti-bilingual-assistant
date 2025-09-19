@@ -485,8 +485,27 @@ export function ChatInput({
     if (!isLoading && !isUploading) seedFileInputRef.current?.click();
   };
   // Local base64 converter
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
+  const fileToBase64 = async (file: File): Promise<string> => {
+    const mime = file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg';
+    // Try to bake EXIF orientation into pixels using createImageBitmap if available
+    try {
+      if (typeof createImageBitmap === 'function') {
+        // @ts-ignore - some browsers don't type the options
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        const canvas = document.createElement('canvas');
+        canvas.width = bmp.width;
+        canvas.height = bmp.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('no-ctx');
+        ctx.drawImage(bmp, 0, 0);
+        // @ts-ignore close may exist
+        try { (bmp as any)?.close?.(); } catch {}
+        return canvas.toDataURL(mime, 0.95);
+      }
+    } catch {}
+
+    // Fallback: simple FileReader (may preserve sideways orientation on some devices)
+    return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => resolve(reader.result as string);
