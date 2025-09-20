@@ -155,31 +155,37 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
 
   return createPortal(
     <>
-      {/* Backdrop blur - ONLY page content, NOT header */}
+      {/* Backdrop blur - cover full page content (beneath header) down to absolute bottom */}
       <div 
         className={cn(
           "fixed transition-all duration-300",
-          isOpen ? "backdrop-blur-md bg-black/50" : "backdrop-blur-none bg-transparent pointer-events-none"
+          isOpen ? "backdrop-blur-xl bg-black/50" : "backdrop-blur-none bg-transparent pointer-events-none"
         )}
         style={{
           top: 'var(--app-header-h)',
           left: 0,
           right: 0,
-          // Do NOT depend on chat variables; use tabs height + safe area only
-          bottom: 'max(var(--app-bottom-tabs-h, 64px), env(safe-area-inset-bottom, 0px))',
+          // Reach the visual bottom including under tabs for full-page blur
+          bottom: 0,
           // Sit just below the header (header uses 2147480000 via .glue-z)
           zIndex: 2147470000,
           // Force blur across browsers
-          backdropFilter: isOpen ? 'blur(12px) saturate(120%)' : 'none',
-          WebkitBackdropFilter: isOpen ? 'blur(12px) saturate(120%)' : 'none'
+          backdropFilter: isOpen ? 'blur(16px) saturate(120%)' : 'none',
+          WebkitBackdropFilter: isOpen ? 'blur(16px) saturate(120%)' : 'none'
         }}
         onClick={onClose}
       />
       
-      {/* Slide down container */}
+      {/* Slide down container (Liquid Glass + Glow) */}
       <div
         className={cn(
-          "fixed bg-background/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl transition-all duration-300 ease-out",
+          // Base glass card
+          "fixed rounded-xl transition-all duration-300 ease-out overflow-visible",
+          // Liquid glass surface: layered translucent gradients + blur + soft border
+          "backdrop-blur-2xl bg-[linear-gradient(135deg,rgba(255,255,255,0.20),rgba(255,255,255,0.08))] bg-white/85 dark:bg-neutral-900/75",
+          "border border-white/30 dark:border-white/10 ring-1 ring-white/20 backdrop-brightness-110 dark:backdrop-brightness-90",
+          // Soft outer glow
+          "shadow-[0_14px_34px_rgba(0,0,0,0.28),0_16px_60px_rgba(255,153,0,0.10)]",
           animationStage === 'closed' && "opacity-0 scale-95 -translate-y-4",
           animationStage === 'sliding' && "opacity-100 scale-100 translate-y-0",
           animationStage === 'icons' && "opacity-100 scale-100 translate-y-0"
@@ -193,7 +199,30 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
           zIndex: 2147483647
         }}
       >
-        <div className="p-4">
+        {/* Bottom halo shadow to create a floating 3D effect */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -inset-x-6 -bottom-6 h-12 rounded-[28px] bg-black/40 blur-2xl opacity-50"
+          style={{ zIndex: -1 }}
+        />
+        {/* Subtle bevel for 3D edge */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-xl"
+          style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.22)' }}
+        />
+        {/* Subtle inner highlight & vignette for glass depth */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-xl"
+          style={{
+            background:
+              'radial-gradient(120% 80% at 0% -10%, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.08) 40%, rgba(255,255,255,0.02) 70%, rgba(255,255,255,0) 100%),\
+               radial-gradient(140% 90% at 100% 0%, rgba(255,170,85,0.18) 0%, rgba(255,170,85,0.06) 40%, rgba(255,170,85,0.00) 70%)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)'
+          }}
+        />
+        <div className="p-4 text-foreground">
           <div className="flex flex-col space-y-3">
             {navItems.map((item, index) => {
               const IconComponent = iconMap[item.icon] || Calendar;
@@ -206,8 +235,10 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                   key={item.path}
                   onClick={() => handleNavigation(item.path, item.badgeType)}
                   className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg transition-all duration-200 relative group w-full text-left",
-                    "hover:bg-accent/10 active:opacity-90", 
+                    // Staggered slide-down + pop-in per item
+                    "flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ease-out relative group w-full text-left text-foreground",
+                    // Base readable background and hover for contrast on glass
+                    "bg-white/5 dark:bg-black/10 hover:bg-white/10 dark:hover:bg-white/5 active:opacity-95",
                     isActive 
                       ? "bg-gradient-to-r shadow-2xl" 
                       : "",
@@ -217,16 +248,18 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     isActive && item.path === '/maw3d' && "from-purple-500/20 to-purple-600/20 shadow-purple-500/50 border border-purple-500/30",
                     isActive && item.path === '/tr' && "from-green-500/20 to-green-600/20 shadow-green-500/50 border border-green-500/30",
                     isActive && item.path === '/wakti-ai' && "from-orange-500/20 to-orange-600/20 shadow-orange-500/50 border border-orange-500/30",
-                    isActive && item.path === '/tasjeel' && "from-cyan-500/20 to-cyan-600/20 shadow-cyan-500/50 border border-cyan-500/30"
+                    isActive && item.path === '/tasjeel' && "from-cyan-500/20 to-cyan-600/20 shadow-cyan-500/50 border border-cyan-500/30",
+                    // Initial off-screen state until icons stage
+                    animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
                   style={{
-                    transitionDelay: animationStage === 'icons' ? `${index * 100}ms` : '0ms'
+                    transitionDelay: animationStage === 'icons' ? `${index * 90}ms` : '0ms'
                   }}
                 >
                   <div className="relative">
                     <IconComponent 
                       className={cn(
-                        "h-5 w-5",
+                        "h-5 w-5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]",
                         item.colorClass,
                         isActive ? "scale-110 brightness-125" : ""
                       )} 
@@ -236,8 +269,8 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                       <div 
                         className="absolute inset-0 rounded-full animate-pulse"
                         style={{
-                          filter: 'blur(8px)',
-                          opacity: 0.7,
+                          filter: 'blur(14px)',
+                          opacity: 0.9,
                           zIndex: -1,
                           backgroundColor: 
                             item.path === '/dashboard' ? '#3b82f6' :
@@ -246,7 +279,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                             item.path === '/tr' ? 'hsl(var(--accent-green))' :
                             item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
                             item.path === '/tasjeel' ? '#06b6d4' : '#3b82f6',
-                          boxShadow: `0 0 20px ${
+                          boxShadow: `0 0 28px ${
                             item.path === '/dashboard' ? '#3b82f6' :
                             item.path === '/calendar' ? 'hsl(var(--accent-blue))' :
                             item.path === '/maw3d' ? 'hsl(var(--accent-purple))' :
@@ -268,7 +301,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     )}
                   </div>
                   <span className={cn(
-                    "text-sm font-medium",
+                    "text-sm font-medium drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]",
                     item.path === '/tasjeel' ? "text-cyan-500" : "",
                     isActive ? "text-foreground font-semibold" : "text-muted-foreground",
                     // Add glow to active text
@@ -289,14 +322,15 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                   key={item.path}
                   onClick={() => handleNavigation(item.path)}
                   className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg transition-all duration-200 relative group w-full text-left",
-                    "hover:bg-accent/10 active:opacity-90",
+                    "flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ease-out relative group w-full text-left",
+                    "bg-white/5 dark:bg-black/10 hover:bg-white/10 dark:hover:bg-white/5 active:opacity-95",
                     isActive ? "bg-gradient-to-r shadow-2xl" : "",
                     isActive && item.path === '/tools/text' && "from-purple-500/15 to-purple-600/15 shadow-purple-500/40 border border-purple-500/20",
                     isActive && item.path === '/tools/voice-studio' && "from-pink-500/15 to-pink-600/15 shadow-pink-500/40 border border-pink-500/20",
-                    isActive && item.path === '/tools/game' && "from-red-500/15 to-red-600/15 shadow-red-500/40 border border-red-500/20"
+                    isActive && item.path === '/tools/game' && "from-red-500/15 to-red-600/15 shadow-red-500/40 border border-red-500/20",
+                    animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
-                  style={{ transitionDelay: animationStage === 'icons' ? `${(navItems.length + qIndex) * 100}ms` : '0ms' }}
+                  style={{ transitionDelay: animationStage === 'icons' ? `${(navItems.length + qIndex) * 90}ms` : '0ms' }}
                 >
                   <div className="relative">
                     <IconComponent 
@@ -308,7 +342,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     />
                   </div>
                   <span className={cn(
-                    "text-sm font-medium",
+                    "text-sm font-medium drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]",
                     isActive ? "text-foreground font-semibold" : "text-muted-foreground"
                   )}>
                     {item.name}

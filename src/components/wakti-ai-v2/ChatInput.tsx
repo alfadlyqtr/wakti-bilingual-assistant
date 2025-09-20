@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal } from 'lucide-react';
+import { Send, Loader2, ChevronDown, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -105,6 +105,7 @@ export function ChatInput({
   const cardRef = useRef<HTMLDivElement>(null);
   // Image2Image inline translation state
   const [isTranslatingI2I, setIsTranslatingI2I] = useState(false);
+  const [isAmping, setIsAmping] = useState(false);
   
   // Mobile keyboard detection
   const { isKeyboardVisible, keyboardHeight } = useMobileKeyboard();
@@ -428,6 +429,11 @@ export function ChatInput({
     }
     return textareaHighlight(activeTrigger);
   })();
+
+  // While processing (translating or amping), highlight the textarea content
+  const processingHighlightClass = isTranslatingI2I
+    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 animate-pulse'
+    : (isAmping ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-400 animate-pulse' : '');
 
   // Determine if textarea should be enabled
   const isTextareaEnabled = activeTrigger !== 'video' || (activeTrigger === 'video' && videoTemplate === 'image2video');
@@ -1089,6 +1095,7 @@ export function ChatInput({
                         bg-white/95 dark:bg-gray-800/90
                         text-gray-900 dark:text-gray-100
                         ${textareaHighlightClass}
+                        ${processingHighlightClass}
                         shadow-inner shadow-primary/10
                         backdrop-blur-[3px] resize-none
                         focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
@@ -1114,68 +1121,121 @@ export function ChatInput({
                     />
                     {activeTrigger === 'image' && imageMode === 'image2image' && (
                       <div className="mt-1 flex items-center gap-2">
-                        <div className="text-[11px] text-gray-500 dark:text-gray-400 italic leading-tight">
-                          {language === 'ar'
-                            ? 'ملاحظة: العربية غير مدعومة هنا؛ سنرسل النص بالإنجليزية.'
-                            : "Note: Arabic isn’t supported here; text will be sent in English."}
-                        </div>
-                        {hasArabic(message) && (
-                          <button
-                            type="button"
-                            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:pointer-events-none"
-                            disabled={isTranslatingI2I}
-                            onClick={async () => {
-                              if (!message || isTranslatingI2I) return;
-                              try {
-                                setIsTranslatingI2I(true);
-                                const { data, error } = await supabase.functions.invoke('image2image-ar2en', { body: { text: message } });
-                                if (!error && data?.text) {
-                                  setMessage(data.text as string);
-                                } else {
-                                  console.error('Translate failed:', error || data);
-                                }
-                              } catch (e) {
-                                console.error('Translate exception:', e);
-                              } finally {
-                                setIsTranslatingI2I(false);
-                              }
-                            }}
-                          >
-                            {language === 'ar' ? 'ترجمة' : 'Translate'}
-                          </button>
+                        {language === 'ar' && (
+                          <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400 leading-tight">
+                            {hasArabic(message)
+                              ? 'ترجم طلبك →'
+                              : 'ملاحظة: العربية غير مدعومة هنا؛ سنرسل النص بالإنجليزية.'}
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
                   
                   {/* Send button: always visible, disabled when cannot send */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleSendMessage(); }}
-                          disabled={!canSend}
-                          className={`
-                            h-11 w-11 rounded-xl p-0 flex-shrink-0
-                            ${sendBtnColors}
-                            border-0 shadow-2xl backdrop-blur-md
-                            transition-all duration-200 hover:scale-110 hover:shadow-2xl
-                            shadow-lg
-                          `}
-                          size="icon"
-                        >
-                          {isLoading || isUploading ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                          ) : (
-                            <Send className="h-5 w-5" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                        {language === 'ar' ? 'إرسال' : 'Send'}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <div className="relative inline-flex flex-col items-end gap-1">
+                    {/* Small Translate button placed above the send button (only for Arabic in Image2Image) */}
+                    {activeTrigger === 'image' && imageMode === 'image2image' && language === 'ar' && hasArabic(message) && (
+                      <button
+                        type="button"
+                        className={`h-6 px-2 rounded-full text-[10px] font-semibold text-white shadow-md disabled:opacity-50 disabled:pointer-events-none 
+                          ${isTranslatingI2I ? 'bg-blue-500 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'}`}
+                        disabled={isTranslatingI2I}
+                        onClick={async () => {
+                          if (!message || isTranslatingI2I) return;
+                          try {
+                            setIsTranslatingI2I(true);
+                            const { data, error } = await supabase.functions.invoke('image2image-ar2en', { body: { text: message } });
+                            if (!error && data?.text) {
+                              setMessage(data.text as string);
+                            } else {
+                              console.error('Translate failed:', error || data);
+                            }
+                          } catch (e) {
+                            console.error('Translate exception:', e);
+                          } finally {
+                            setIsTranslatingI2I(false);
+                          }
+                        }}
+                        aria-busy={isTranslatingI2I}
+                        aria-live="polite"
+                      >
+                        {isTranslatingI2I ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <span>{language === 'ar' ? '...جارٍ الترجمة' : 'Translating...'}</span>
+                          </span>
+                        ) : (
+                          <>{language === 'ar' ? 'ترجمة' : 'Translate'}</>
+                        )}
+                      </button>
+                    )}
+
+                    {/* Amp button for prompt enhancement (image modes) */}
+                    {activeTrigger === 'image' && (imageMode === 'text2image' || imageMode === 'image2image') && message.trim().length > 0 && (
+                      <button
+                        type="button"
+                        className={`
+                          h-11 w-11 rounded-xl p-0 flex-shrink-0 text-white inline-flex items-center justify-center
+                          border-0 shadow-2xl backdrop-blur-md shadow-lg
+                          transition-all duration-200 hover:scale-110 hover:shadow-2xl
+                          disabled:opacity-50 disabled:pointer-events-none
+                          ${isAmping ? 'bg-orange-500 animate-pulse' : 'bg-orange-500 hover:bg-orange-600'}
+                        `}
+                        disabled={isAmping || isTranslatingI2I}
+                        onClick={async () => {
+                          if (!message || isAmping) return;
+                          try {
+                            setIsAmping(true);
+                            const { data, error } = await supabase.functions.invoke('prompt-amp', { body: { text: message } });
+                            if (!error && data?.text) {
+                              setMessage(String(data.text));
+                            } else {
+                              console.error('Amp failed:', error || data);
+                            }
+                          } catch (e) {
+                            console.error('Amp exception:', e);
+                          } finally {
+                            setIsAmping(false);
+                          }
+                        }}
+                        aria-busy={isAmping}
+                        aria-live="polite"
+                        title={language === 'ar' ? 'تحسين' : 'Amp'}
+                        aria-label={language === 'ar' ? 'تحسين' : 'Amp'}
+                      >
+                        <Wand2 className={`h-5 w-5 ${isAmping ? 'animate-spin' : ''}`} />
+                      </button>
+                    )}
+
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleSendMessage(); }}
+                            disabled={!canSend}
+                            className={`
+                              h-11 w-11 rounded-xl p-0 flex-shrink-0
+                              ${sendBtnColors}
+                              border-0 shadow-2xl backdrop-blur-md
+                              transition-all duration-200 hover:scale-110 hover:shadow-2xl
+                              shadow-lg
+                            `}
+                            size="icon"
+                          >
+                            {isLoading || isUploading ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <Send className="h-5 w-5" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                          {language === 'ar' ? 'إرسال' : 'Send'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                 </div>
               </div>
             )}
