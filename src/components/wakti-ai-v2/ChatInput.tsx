@@ -14,6 +14,7 @@ import { ImageModeFileUpload } from './ImageModeFileUpload';
 import type { UploadedFile } from '@/types/fileUpload';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
 import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
+import { supabase } from '@/integrations/supabase/client';
 
 // Returns border/outline classes per mode for main container & textarea
 const modeHighlightStyles = (activeTrigger: string) => {
@@ -102,6 +103,8 @@ export function ChatInput({
   const inputCardRef = useRef<HTMLDivElement>(null);
   // Ref to the inner card to compute offset from viewport bottom to card top
   const cardRef = useRef<HTMLDivElement>(null);
+  // Image2Image inline translation state
+  const [isTranslatingI2I, setIsTranslatingI2I] = useState(false);
   
   // Mobile keyboard detection
   const { isKeyboardVisible, keyboardHeight } = useMobileKeyboard();
@@ -430,7 +433,9 @@ export function ChatInput({
   const isTextareaEnabled = activeTrigger !== 'video' || (activeTrigger === 'video' && videoTemplate === 'image2video');
   
   // Determine if send button should be enabled
-  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading && isTextareaEnabled;
+  const hasArabic = (s: string) => /[\u0600-\u06FF]/.test(s || '');
+  const isArabicI2I = activeTrigger === 'image' && imageMode === 'image2image' && hasArabic(message);
+  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading && isTextareaEnabled && !isArabicI2I;
 
   // Get appropriate placeholder text
   const getPlaceholderText = () => {
@@ -909,7 +914,7 @@ export function ChatInput({
                 {/* Background Removal: show only a single bilingual chip */}
                 {activeTrigger === 'image' && imageMode === 'background-removal' ? (
                   <button
-                    onClick={() => setMessage(language === 'ar' ? 'أزل الخلفية' : 'Remove the background')}
+                    onClick={() => setMessage('Remove the background')}
                     className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
                   >
                     🧹 {language === 'ar' ? 'أزل الخلفية' : 'Remove the background'}
@@ -917,31 +922,31 @@ export function ChatInput({
                 ) : activeTrigger === 'image' && imageMode === 'image2image' ? (
                   <>
                     <button
-                      onClick={() => setMessage(language === 'ar' ? 'حوّل الصورة إلى ألوان مائية' : 'Convert to watercolor style')}
+                      onClick={() => setMessage('Convert to watercolor style')}
                       className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
                     >
                       🎨 {language === 'ar' ? 'ألوان مائية' : 'Watercolor'}
                     </button>
                     <button
-                      onClick={() => setMessage(language === 'ar' ? 'حوّلها إلى كرتون/أنمي' : 'Make it cartoon/anime')}
+                      onClick={() => setMessage('Make it cartoon/anime')}
                       className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
                     >
                       📺 {language === 'ar' ? 'كرتون/أنمي' : 'Cartoon/Anime'}
                     </button>
                     <button
-                      onClick={() => setMessage(language === 'ar' ? 'حسّن الحدة والتفاصيل' : 'Enhance sharpness and details')}
+                      onClick={() => setMessage('Enhance sharpness and details')}
                       className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
                     >
                       ✨ {language === 'ar' ? 'تحسين التفاصيل' : 'Enhance details'}
                     </button>
                     <button
-                      onClick={() => setMessage(language === 'ar' ? 'حوّلها إلى أبيض وأسود' : 'Change to black and white')}
+                      onClick={() => setMessage('Change to black and white')}
                       className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
                     >
                       🖤 {language === 'ar' ? 'أبيض وأسود' : 'Black & White'}
                     </button>
                     <button
-                      onClick={() => setMessage(language === 'ar' ? 'ارفع السطوع قليلًا' : 'Increase brightness slightly')}
+                      onClick={() => setMessage('Increase brightness slightly')}
                       className="px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-full text-sm"
                     >
                       ☀️ {language === 'ar' ? 'زيادة السطوع' : 'Increase brightness'}
@@ -952,13 +957,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'ids' && (
                       <>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'ما المعلومات الموجودة في هذا المستند؟' : 'What info is on this document?')}
+                          onClick={() => setMessage('What info is on this document?')}
                           className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
                         >
                           🔍 {language === 'ar' ? 'ما المعلومات الموجودة في هذا المستند؟' : 'What info is on this document?'}
                         </button>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'استخرج كل النص' : 'Extract all the text for me')}
+                          onClick={() => setMessage('Extract all the text for me')}
                           className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
                         >
                           📝 {language === 'ar' ? 'استخرج كل النص' : 'Extract all the text'}
@@ -968,13 +973,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'bills' && (
                       <>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'كم أنفقت؟' : 'How much did I spend?')}
+                          onClick={() => setMessage('How much did I spend?')}
                           className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm"
                         >
                           💰 {language === 'ar' ? 'كم أنفقت؟' : 'How much did I spend?'}
                         </button>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'قسّم هذه الفاتورة بين ___ أشخاص' : 'Split this bill between ___ people')}
+                          onClick={() => setMessage('Split this bill between ___ people')}
                           className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm"
                         >
                           ➗ {language === 'ar' ? 'قسّم هذه الفاتورة' : 'Split this bill'}
@@ -984,13 +989,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'food' && (
                       <>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'كم عدد السعرات؟' : 'How many calories is this?')}
+                          onClick={() => setMessage('How many calories is this?')}
                           className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
                         >
                           🔥 {language === 'ar' ? 'كم عدد السعرات؟' : 'How many calories?'}
                         </button>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'ما المكونات التي تراها؟' : 'What ingredients do you see?')}
+                          onClick={() => setMessage('What ingredients do you see?')}
                           className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
                         >
                           🥗 {language === 'ar' ? 'ما المكونات؟' : 'What ingredients?'}
@@ -1000,13 +1005,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'docs' && (
                       <>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'أجب عن الأسئلة في هذا' : 'Answer the questions in this')}
+                          onClick={() => setMessage('Answer the questions in this')}
                           className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
                         >
                           📚 {language === 'ar' ? 'أجب عن الأسئلة' : 'Answer the questions'}
                         </button>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'اشرح هذا المخطط/التقرير' : 'Explain this chart/report')}
+                          onClick={() => setMessage('Explain this chart/report')}
                           className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
                         >
                           📊 {language === 'ar' ? 'اشرح هذا المخطط' : 'Explain this chart'}
@@ -1016,13 +1021,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'screens' && (
                       <>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'ما الخطأ/المشكلة هنا؟' : "What's the error/problem here?")}
+                          onClick={() => setMessage("What's the error/problem here?")}
                           className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm"
                         >
                           🚨 {language === 'ar' ? 'ما الخطأ هنا؟' : "What's the error?"}
                         </button>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'كيف أصلح ذلك خطوة بخطوة؟' : 'How do I fix this step by step?')}
+                          onClick={() => setMessage('How do I fix this step by step?')}
                           className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm"
                         >
                           🛠️ {language === 'ar' ? 'كيف أصلح ذلك؟' : 'How to fix this?'}
@@ -1032,13 +1037,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'photos' && (
                       <>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'صف الشخص/الأشخاص' : 'Describe the person/people')}
+                          onClick={() => setMessage('Describe the person/people')}
                           className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm"
                         >
                           👥 {language === 'ar' ? 'صف الأشخاص' : 'Describe the people'}
                         </button>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'أين تم التقاط هذه الصورة؟' : 'Where was this taken?')}
+                          onClick={() => setMessage('Where was this taken?')}
                           className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm"
                         >
                           📍 {language === 'ar' ? 'أين تم التقاطها؟' : 'Where was this taken?'}
@@ -1048,13 +1053,13 @@ export function ChatInput({
                     {(!uploadedFiles[0]?.imageType || uploadedFiles[0]?.imageType?.id === 'general') && (
                       <>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'صف كل ما تراه' : 'Describe everything you see')}
+                          onClick={() => setMessage('Describe everything you see')}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
                         >
                           👁️ {language === 'ar' ? 'صف كل شيء' : 'Describe everything'}
                         </button>
                         <button
-                          onClick={() => setMessage(language === 'ar' ? 'ما الموضوع الرئيسي هنا؟' : "What's the main subject here?")}
+                          onClick={() => setMessage("What's the main subject here?")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
                         >
                           🔍 {language === 'ar' ? 'ما الموضوع الرئيسي؟' : "What's the main subject?"}
@@ -1071,41 +1076,77 @@ export function ChatInput({
               <div className="relative px-3 pb-3 pt-1">
                 {/* Textarea with send button directly next to it */}
                 <div className="flex items-end gap-3">
-                  <Textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder={getPlaceholderText()}
-                    autoExpand={true}
-                    maxLines={4}
-                    minLines={(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) ? 2 : 1}
-                    className={`
-                      flex-1 border-[2.5px]
-                      bg-white/95 dark:bg-gray-800/90
-                      text-gray-900 dark:text-gray-100
-                      ${textareaHighlightClass}
-                      shadow-inner shadow-primary/10
-                      backdrop-blur-[3px] resize-none
-                      focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
-                      text-base leading-5
-                      rounded-xl
-                      outline-none transition-all duration-200
-                      ${!isTextareaEnabled ? 'opacity-50 cursor-not-allowed' : ''}
-                      ${(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) 
-                        ? 'placeholder:text-xs placeholder:italic placeholder:text-gray-400 dark:placeholder:text-gray-500' 
-                        : 'placeholder:text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400'}
-                      py-3 px-4
-                    `}
-                    ref={textareaRef}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (canSend) {
-                          handleSendMessage();
+                  <div className="flex-1">
+                    <Textarea
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder={getPlaceholderText()}
+                      autoExpand={true}
+                      maxLines={4}
+                      minLines={(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) ? 2 : 1}
+                      className={`
+                        flex-1 border-[2.5px]
+                        bg-white/95 dark:bg-gray-800/90
+                        text-gray-900 dark:text-gray-100
+                        ${textareaHighlightClass}
+                        shadow-inner shadow-primary/10
+                        backdrop-blur-[3px] resize-none
+                        focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
+                        text-base leading-5
+                        rounded-xl
+                        outline-none transition-all duration-200
+                        ${!isTextareaEnabled ? 'opacity-50 cursor-not-allowed' : ''}
+                        ${(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) 
+                          ? 'placeholder:text-xs placeholder:italic placeholder:text-gray-400 dark:placeholder:text-gray-500' 
+                          : 'placeholder:text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400'}
+                        py-3 px-4
+                      `}
+                      ref={textareaRef}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (canSend) {
+                            handleSendMessage();
+                          }
                         }
-                      }
-                    }}
-                    disabled={isUploading || !isTextareaEnabled}
-                  />
+                      }}
+                      disabled={isUploading || !isTextareaEnabled}
+                    />
+                    {activeTrigger === 'image' && imageMode === 'image2image' && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400 italic leading-tight">
+                          {language === 'ar'
+                            ? 'ملاحظة: العربية غير مدعومة هنا؛ سنرسل النص بالإنجليزية.'
+                            : "Note: Arabic isn’t supported here; text will be sent in English."}
+                        </div>
+                        {hasArabic(message) && (
+                          <button
+                            type="button"
+                            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:pointer-events-none"
+                            disabled={isTranslatingI2I}
+                            onClick={async () => {
+                              if (!message || isTranslatingI2I) return;
+                              try {
+                                setIsTranslatingI2I(true);
+                                const { data, error } = await supabase.functions.invoke('image2image-ar2en', { body: { text: message } });
+                                if (!error && data?.text) {
+                                  setMessage(data.text as string);
+                                } else {
+                                  console.error('Translate failed:', error || data);
+                                }
+                              } catch (e) {
+                                console.error('Translate exception:', e);
+                              } finally {
+                                setIsTranslatingI2I(false);
+                              }
+                            }}
+                          >
+                            {language === 'ar' ? 'ترجمة' : 'Translate'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   
                   {/* Send button: always visible, disabled when cannot send */}
                   <TooltipProvider>
