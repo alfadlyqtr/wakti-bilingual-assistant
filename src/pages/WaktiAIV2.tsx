@@ -408,6 +408,7 @@ const WaktiAIV2 = () => {
             }
 
             const publicUrl = data?.url as string | undefined;
+            const modelName = (data?.model as string | undefined) || 'runware:106@1';
             if (!publicUrl) {
               throw new Error(language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image');
             }
@@ -425,7 +426,7 @@ const WaktiAIV2 = () => {
                   loading: true,
                   loadingStage: 'saving',
                   imageMode,
-                  modelUsed: 'gpt-image-1',
+                  modelUsed: modelName,
                 }
               } : m);
               EnhancedFrontendMemory.saveActiveConversation(updated, currentConversationId);
@@ -443,7 +444,7 @@ const WaktiAIV2 = () => {
                     // clear stage and set a one-shot flag for UI reveal
                     loadingStage: undefined,
                     imageMode,
-                    modelUsed: 'gpt-image-1',
+                    modelUsed: modelName,
                     justLoaded: true,
                   }
                 } : m);

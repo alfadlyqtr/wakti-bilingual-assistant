@@ -34,28 +34,15 @@ export function ImageModeFileUpload({
   const { showError } = useToastHelper();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fileToBase64 = async (file: File): Promise<string> => {
-    const mime = file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg';
-    try {
-      if (typeof createImageBitmap === 'function') {
-        // @ts-ignore options may not be typed
-        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
-        const canvas = document.createElement('canvas');
-        canvas.width = bmp.width;
-        canvas.height = bmp.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('no-ctx');
-        ctx.drawImage(bmp, 0, 0);
-        // @ts-ignore close may exist
-        try { (bmp as any)?.close?.(); } catch {}
-        return canvas.toDataURL(mime, 0.95);
-      }
-    } catch {}
-    return await new Promise<string>((resolve, reject) => {
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result);
+      };
+      reader.onerror = error => reject(error);
     });
   };
 

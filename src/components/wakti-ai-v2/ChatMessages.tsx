@@ -874,13 +874,57 @@ export function ChatMessages({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigator.clipboard.writeText(imageUrl);
-                  // Could add a toast here if needed
+                  (async () => {
+                    try {
+                      if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(imageUrl);
+                      } else {
+                        const ta = document.createElement('textarea');
+                        ta.value = imageUrl;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.focus();
+                        ta.select();
+                        try { document.execCommand('copy'); } catch {}
+                        document.body.removeChild(ta);
+                      }
+                    } catch (err) {
+                      console.error('Copy image URL failed:', err);
+                    }
+                  })();
                 }}
                 className="absolute top-2 right-2 p-2 bg-black/50 hover:bg-black/70 text-white rounded-md transition-colors"
                 title={language === 'ar' ? 'نسخ رابط الصورة' : 'Copy image URL'}
               >
                 <ExternalLink className="h-3 w-3" />
+              </button>
+              
+              {/* Save button overlay (small, below copy) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  (async () => {
+                    try {
+                      const resp = await fetch(imageUrl, { mode: 'cors' });
+                      const blob = await resp.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'wakti-image.jpg';
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      setTimeout(() => URL.revokeObjectURL(url), 1200);
+                    } catch (err) {
+                      console.error('Save image failed:', err);
+                    }
+                  })();
+                }}
+                className="absolute top-10 right-2 px-2 py-1 bg-black/40 hover:bg-black/60 text-white rounded-md text-[10px] leading-none transition-colors"
+                title={language === 'ar' ? 'حفظ الصورة' : 'Save image'}
+              >
+                {language === 'ar' ? 'حفظ' : 'Save'}
               </button>
             </div>
           </div>
