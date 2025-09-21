@@ -118,7 +118,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'text-purple-500',
     },
     {
-      name: language === 'ar' ? 'استوديو الصوت' : 'Voice Studio',
+      name: language === 'ar' ? 'الصوت والمترجم' : 'Voice & Translator',
       path: '/tools/voice-studio',
       icon: 'mic',
       colorClass: 'text-pink-500',

@@ -5,8 +5,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { TRService, TRSubtask } from '@/services/trService';
 import { TRSharedService, TRSharedResponse } from '@/services/trSharedService';
 import { toast } from 'sonner';
-import { CheckCircle, User, Users } from 'lucide-react';
+import { CheckCircle, User, Users, XCircle, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
 
 interface SimpleSubtaskManagerProps {
   taskId: string;
@@ -31,34 +33,27 @@ export const SimpleSubtaskManager: React.FC<SimpleSubtaskManagerProps> = ({
     loadData();
 
     // Real-time subscription
-    const channel = TRSharedService.subscribeToTaskUpdates(taskId, loadResponses);
+    const channel = TRSharedService.subscribeToTaskUpdates(taskId, () => {
+      // Small debounce to coalesce bursts
+      setTimeout(() => {
+        if (isMounted.current) {
+          loadData();
+        }
+      }, 150);
+    });
     return () => {
       isMounted.current = false;
       channel.unsubscribe();
     };
   }, [taskId]);
 
-  // Every time real responses arrive, if they match the optimisticCompleted, clear that subtask's optimistic state
+  // Reconcile optimistic state against server truth on any response/subtask change.
+  // We clear any optimistic entries so UI reflects backend immediately (prevents stale 'You' counts).
   useEffect(() => {
-    // If optimisticCompleted doesn't match the latest server state, clear it
-    const newOptimistic = { ...optimisticCompleted };
-    let changed = false;
-    for (const subtaskId of Object.keys(optimisticCompleted)) {
-      const isNowCompleted = responses.some(
-        r =>
-          r.subtask_id === subtaskId &&
-          r.visitor_name === visitorName &&
-          r.response_type === 'completion' &&
-          r.is_completed
-      );
-      if (typeof optimisticCompleted[subtaskId] === 'boolean' && isNowCompleted === optimisticCompleted[subtaskId]) {
-        delete newOptimistic[subtaskId];
-        changed = true;
-      }
-    }
-    if (changed) setOptimisticCompleted(newOptimistic);
+    if (Object.keys(optimisticCompleted).length === 0) return;
+    setOptimisticCompleted({});
     // eslint-disable-next-line
-  }, [responses]);
+  }, [responses, subtasks]);
 
   const loadData = async () => {
     try {
@@ -88,21 +83,28 @@ export const SimpleSubtaskManager: React.FC<SimpleSubtaskManagerProps> = ({
   };
 
   // OPTIMISTIC: Update both server & UI immediately
-  const handleToggleSubtask = async (subtaskId: string, completed: boolean) => {
-    // Update local optimistic state instantly
-    setOptimisticCompleted(prev => ({ ...prev, [subtaskId]: completed }));
-    try {
-      await TRSharedService.markSubtaskCompleted(taskId, subtaskId, visitorName, completed);
-      if (!completed) {
-        toast.success('Subtask marked incomplete');
-      } else {
-        toast.success('Subtask completed!');
+  const handleToggleSubtask = async (subtask: TRSubtask, completed: boolean) => {
+    // Rule: Only owner can uncheck once subtask is completed (owner state)
+    if (!completed && subtask.completed) {
+      try {
+        await TRSharedService.requestUncheck(taskId, subtask.id, visitorName);
+        toast.success('Request to uncheck sent to owner');
+      } catch (e) {
+        console.error(e);
+        toast.error('Failed to send uncheck request');
       }
+      return; // do not modify local optimistic state
+    }
+
+    // Normal toggle flow (completion from assignee)
+    setOptimisticCompleted(prev => ({ ...prev, [subtask.id]: completed }));
+    try {
+      await TRSharedService.markSubtaskCompleted(taskId, subtask.id, visitorName, completed);
+      toast.success(completed ? 'Subtask completed!' : 'Subtask marked incomplete');
     } catch (error) {
-      // If error, revert the local optimistic update
       setOptimisticCompleted(prev => {
         const clone = { ...prev };
-        delete clone[subtaskId];
+        delete clone[subtask.id];
         return clone;
       });
       console.error('Error toggling subtask:', error);
@@ -124,11 +126,10 @@ export const SimpleSubtaskManager: React.FC<SimpleSubtaskManagerProps> = ({
     );
   };
 
-  // Server state for overall/others
+  // Overall completion should follow owner truth only
   const isSubtaskCompletedByAnyone = (subtaskId: string): boolean => {
-    return responses.some(
-      r => r.subtask_id === subtaskId && r.response_type === 'completion' && r.is_completed
-    );
+    const st = subtasks.find(s => s.id === subtaskId);
+    return !!st?.completed;
   };
 
   const getSubtaskCompletedBy = (subtaskId: string): string[] => {
@@ -146,8 +147,9 @@ export const SimpleSubtaskManager: React.FC<SimpleSubtaskManagerProps> = ({
     return <div className="text-sm text-muted-foreground">No subtasks</div>;
   }
 
-  const myCompletedCount = subtasks.filter(s => isSubtaskCompletedByMe(s.id)).length;
-  const totalCompletedCount = subtasks.filter(s => isSubtaskCompletedByAnyone(s.id)).length;
+  // Count 'You' only when the owner also has the subtask completed
+  const myCompletedCount = subtasks.filter(s => s.completed && isSubtaskCompletedByMe(s.id)).length;
+  const totalCompletedCount = subtasks.filter(s => s.completed).length;
 
   return (
     <div className="space-y-3">
@@ -162,54 +164,95 @@ export const SimpleSubtaskManager: React.FC<SimpleSubtaskManagerProps> = ({
             <CheckCircle className="h-3 w-3" />
             You: {myCompletedCount} of {subtasks.length}
           </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => loadData()}
+            title="Refresh"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
 
       <ScrollArea className="h-[300px] w-full rounded-md border">
         <div className="p-3 space-y-2">
           {subtasks.map((subtask) => {
-            // Prefer optimistic result if available, otherwise use backend data
+            // Personal completion state (optimistic-aware)
             const isCompletedByMe = isSubtaskCompletedByMe(subtask.id);
-            const isCompletedByAnyone = isSubtaskCompletedByAnyone(subtask.id);
+            // Owner is the source of truth for overall/lock state
+            const ownerCompleted = !!subtask.completed;
             const completedBy = getSubtaskCompletedBy(subtask.id);
 
             return (
               <div key={subtask.id} className="space-y-2">
                 <div
                   className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
-                    isCompletedByMe
+                    ownerCompleted && isCompletedByMe
                       ? 'bg-green-50 border-green-200'
-                      : isCompletedByAnyone
+                      : ownerCompleted
                       ? 'bg-gray-50 border-gray-200'
                       : 'bg-card border-border'
                   }`}
-                  onClick={() => handleToggleSubtask(subtask.id, !isCompletedByMe)}
+                  onClick={() => handleToggleSubtask(subtask, !isCompletedByMe)}
                 >
                   <Checkbox
                     checked={isCompletedByMe}
-                    onCheckedChange={(checked) => handleToggleSubtask(subtask.id, checked as boolean)}
+                    onCheckedChange={(checked) => handleToggleSubtask(subtask, !!checked)}
                   />
 
                   <span
                     className={`flex-1 text-sm ${
-                      isCompletedByMe || (isCompletedByAnyone && !optimisticCompleted.hasOwnProperty(subtask.id))
-                        ? 'line-through text-muted-foreground'
-                        : 'text-foreground'
+                      ownerCompleted ? 'line-through text-muted-foreground' : 'text-foreground'
                     }`}
                   >
                     {subtask.title}
                   </span>
 
-                  {(isCompletedByMe ||
-                    (isCompletedByAnyone && !optimisticCompleted.hasOwnProperty(subtask.id))) &&
-                    !isCompletedByMe && (
-                      <Badge variant="secondary" className="text-xs">
-                        Completed
-                      </Badge>
-                    )}
+                  {subtask.due_date && (
+                    <span
+                      className={`text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                        ownerCompleted ? 'text-muted-foreground border-muted-foreground/30' : 'text-foreground/80 border-border'
+                      }`}
+                      title="Due date"
+                    >
+                      {format(new Date(subtask.due_date), 'MMM d')}
+                      {subtask.due_time ? ` ${subtask.due_time}` : ''}
+                    </span>
+                  )}
+
+                  {ownerCompleted && (
+                    <div className="flex items-center gap-2">
+                      {!isCompletedByMe && (
+                        <Badge variant="secondary" className="text-xs">
+                          Completed
+                        </Badge>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await TRSharedService.requestUncheck(taskId, subtask.id, visitorName);
+                            toast.success('Uncheck request sent to owner');
+                          } catch (err) {
+                            console.error(err);
+                            toast.error('Failed to send uncheck request');
+                          }
+                        }}
+                        title="Request owner to uncheck"
+                      >
+                        <XCircle className="h-3.5 w-3.5 mr-1" />
+                        Request uncheck
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
-                {completedBy.length > 0 && (
+                {ownerCompleted && completedBy.length > 0 && (
                   <div className="ml-7 flex items-center gap-1 text-xs text-green-600">
                     <User className="h-3 w-3" />
                     <span>Completed by: {completedBy.join(', ')}</span>

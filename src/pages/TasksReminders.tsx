@@ -13,11 +13,24 @@ import { ReminderList } from '@/components/tr/ReminderList';
 import { ActivityMonitor } from '@/components/tr/ActivityMonitor';
 import { useTRData } from '@/hooks/useTRData';
 import { PageTitle } from '@/components/PageTitle';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function TasksReminders() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState('tasks');
   const { tasks, reminders, loading, error, refresh } = useTRData();
+  // Auto-delete toggle (24h after completion). Default ON. Persist to localStorage.
+  const [autoDelete24h, setAutoDelete24h] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('tr:autoDelete24hEnabled');
+      return saved === null ? true : saved === 'true';
+    } catch { return true; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('tr:autoDelete24hEnabled', String(autoDelete24h)); } catch {}
+  }, [autoDelete24h]);
   
   // Ensure the page starts at the title area on load
   useEffect(() => {
@@ -119,7 +132,37 @@ export default function TasksReminders() {
             {/* Tasks Tab */}
             <TabsContent value="tasks" className="space-y-4">
               <div className="flex items-center justify-between">
-                <div />
+                <div className="flex items-center gap-3 text-xs">
+                  <Button
+                    variant={autoDelete24h ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setAutoDelete24h((v) => {
+                        const next = !v;
+                        (async () => {
+                          try {
+                            const { data: { user } } = await supabase.auth.getUser();
+                            const uid = user?.id;
+                            if (uid) {
+                              const { error } = await supabase
+                                .from('tr_settings')
+                                .upsert({ user_id: uid, auto_delete_24h_enabled: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+                              if (error) throw error;
+                            }
+                          } catch (e) {
+                            console.warn('Failed to persist auto-delete setting', e);
+                          }
+                          toast.success(next ? 'Auto-delete: ON (delete completed tasks after 24h)' : 'Auto-delete: OFF');
+                        })();
+                        return next;
+                      });
+                    }}
+                    className="h-8"
+                    title="Auto-delete completed tasks after 24 hours"
+                  >
+                    {autoDelete24h ? 'Auto-delete 24h: ON' : 'Auto-delete 24h: OFF'}
+                  </Button>
+                </div>
                 <Button onClick={handleCreateTask} size="sm">
                   <Plus className="w-4 h-4 mr-2" />
                   {t('createTask', language)}
@@ -168,9 +211,7 @@ export default function TasksReminders() {
             <TabsContent value="activity" className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">{t('activityMonitor', language)}</h2>
-                <Button onClick={refresh} variant="outline" size="sm">
-                  {t('refresh', language)}
-                </Button>
+                {/* Removed outer Refresh to avoid duplicate with ActivityMonitor's internal refresh */}
               </div>
 
               {loading ? (

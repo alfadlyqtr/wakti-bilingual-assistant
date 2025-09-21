@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Calendar, Clock, User, AlertTriangle, CheckCircle, XCircle, Pause } from 'lucide-react';
+import { Calendar, Clock, User, AlertTriangle, CheckCircle, XCircle, Pause, RefreshCw } from 'lucide-react';
 import { TRService, TRTask } from '@/services/trService';
 import { TRSharedService, TRSharedResponse } from '@/services/trSharedService';
 import { PriorityBadge } from '@/components/tr/PriorityBadge';
@@ -26,6 +26,7 @@ export default function SharedTask() {
   const [task, setTask] = useState<TRTask | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   
   // Simple visitor state
   const [visitorName, setVisitorName] = useState<string>('');
@@ -101,6 +102,16 @@ export default function SharedTask() {
     }
   };
 
+  const handleManualRefresh = async () => {
+    try {
+      setManualRefreshing(true);
+      await loadSharedTask();
+      await loadResponses();
+    } finally {
+      setManualRefreshing(false);
+    }
+  };
+
   const handleNameSubmit = (name: string) => {
     if (task) {
       // Store the name using the task ID
@@ -147,13 +158,14 @@ export default function SharedTask() {
     return isAfter(now, dueDateTime);
   };
 
-  // Check if I completed the task
+  // Check if I completed the task (for info only)
   const isTaskCompletedByMe = responses.some(
-    r => r.visitor_name === visitorName && 
-        r.response_type === 'completion' && 
-        r.is_completed && 
-        !r.subtask_id
+    r => r.visitor_name === visitorName &&
+      r.response_type === 'completion' &&
+      r.is_completed &&
+      !r.subtask_id
   );
+  const ownerCompleted = !!task?.completed; // owner truth (guard task may be null during refresh)
 
   // Get who completed the task
   const taskCompletedBy = responses
@@ -205,17 +217,26 @@ export default function SharedTask() {
                 <User className="h-4 w-4" />
                 <span>Shared Task • {visitorName || 'Loading...'}</span>
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleManualRefresh}
+                disabled={manualRefreshing}
+                className="h-7 px-2"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${manualRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
             <h1 className="text-2xl font-bold">Interactive Task View</h1>
           </div>
 
           {/* Main Task Card */}
-          <Card className="w-full">
+          <Card className="w-full relative">
             <CardHeader className="pb-4">
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className={`text-lg leading-tight break-words ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                    <CardTitle className={`text-lg leading-tight break-words ${task?.completed ? 'line-through text-muted-foreground' : ''}`}>
                       {task.title}
                     </CardTitle>
                   </div>
@@ -239,15 +260,43 @@ export default function SharedTask() {
                   </div>
                 )}
 
-                {taskCompletedBy.length > 0 && (
-                  <Badge variant="outline" className="text-xs w-fit">
-                    ✓ Completed by: {taskCompletedBy.join(', ')}
-                  </Badge>
-                )}
+                {(() => {
+                  const latest = responses
+                    .filter(r => r.response_type === 'completion' && r.is_completed && !r.subtask_id)
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                  if (!latest || !task.completed) return null;
+                  const stamp = `${latest.visitor_name}${latest.created_at ? ` • ${format(parseISO(latest.created_at), 'MMM dd, HH:mm')}` : ''}`;
+                  return (
+                    <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 w-fit">
+                      ✓ Completed by: {stamp}
+                    </Badge>
+                  );
+                })()}
               </div>
             </CardHeader>
 
-            <CardContent className="space-y-6">
+            {/* Overlay when task is completed (assignee view locked) */}
+            {ownerCompleted && (() => {
+              const latest = responses
+                .filter(r => r.response_type === 'completion' && r.is_completed && !r.subtask_id)
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+              const who = latest?.visitor_name || 'Someone';
+              const when = latest?.created_at ? format(parseISO(latest.created_at), 'MMM dd, HH:mm') : '';
+              return (
+                <div className="absolute inset-0 z-10 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
+                  <div className="relative z-10 px-6 py-4 rounded-2xl border border-emerald-300 bg-emerald-50 text-emerald-800 shadow-[0_0_3rem_rgba(16,185,129,0.35)] flex items-center gap-3">
+                    <CheckCircle className="h-6 w-6 text-emerald-600" />
+                    <div className="text-center">
+                      <div className="font-semibold">Task completed</div>
+                      <div className="text-xs">by {who}{when ? ` • ${when}` : ''}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <CardContent className={`space-y-6 ${ownerCompleted ? 'pointer-events-none' : ''}`}>
               {/* Description */}
               {task.description && (
                 <div>
@@ -256,29 +305,30 @@ export default function SharedTask() {
                 </div>
               )}
 
-              {/* Task Completion Actions */}
+              {/* Task Completion Actions (assignee cannot mark incomplete) */}
               <div className="border rounded-lg p-4 space-y-4">
                 <div className="flex items-center gap-3">
-                  {isTaskCompletedByMe ? (
+                  {ownerCompleted ? (
                     <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
                   ) : (
                     <XCircle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                   )}
                   <span className="font-medium text-sm">
-                    {isTaskCompletedByMe ? 'You marked this task as complete' : 'Mark this task as complete'}
+                    {ownerCompleted ? 'Task is completed' : 'Mark this task as complete'}
                   </span>
                 </div>
-                
+
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Button
-                    variant={isTaskCompletedByMe ? "secondary" : "default"}
+                    variant={ownerCompleted ? "secondary" : "default"}
                     size="sm"
-                    onClick={() => handleTaskToggle(!isTaskCompletedByMe)}
+                    onClick={() => !ownerCompleted && handleTaskToggle(true)}
+                    disabled={ownerCompleted}
                     className="flex-1 w-full"
                   >
-                    {isTaskCompletedByMe ? 'Mark Incomplete' : 'Mark Complete'}
+                    {ownerCompleted ? 'Completed' : 'Mark Complete'}
                   </Button>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -302,6 +352,20 @@ export default function SharedTask() {
               {/* Comments */}
               {visitorName && (
                 <div className="border-t pt-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">
+                      {t('comments', language)} ({responses.filter(r => r.response_type === 'comment').length})
+                    </h3>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={loadResponses}
+                      disabled={manualRefreshing}
+                      className="h-7 px-2"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${manualRefreshing ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
                   <SimpleComments
                     taskId={task.id}
                     visitorName={visitorName}

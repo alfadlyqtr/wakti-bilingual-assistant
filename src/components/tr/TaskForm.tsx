@@ -11,13 +11,14 @@ import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CalendarIcon, X, Plus, Trash2, Copy, ExternalLink } from 'lucide-react';
+import { CalendarIcon, X, Plus, Trash2, Copy, ExternalLink, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { TRService, TRTask } from '@/services/trService';
 import { toast } from 'sonner';
+import { SubtaskManager } from '@/components/tr/SubtaskManager';
 
 // PHASE 2 FIX: Updated schema to make due_date truly optional
 const taskSchema = z.object({
@@ -42,8 +43,11 @@ interface TaskFormProps {
 export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) {
   const { language } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
-  const [subtasks, setSubtasks] = useState<string[]>([]);
+  type SubtaskDraft = { title: string; due_date?: string | null; due_time?: string | null };
+  const [subtasks, setSubtasks] = useState<SubtaskDraft[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
+  const [openDueIndex, setOpenDueIndex] = useState<number | null>(null);
+  const [bulkInput, setBulkInput] = useState('');
 
   const {
     register,
@@ -134,9 +138,11 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
           for (let i = 0; i < subtasks.length; i++) {
             await TRService.createSubtask({
               task_id: newTask.id,
-              title: subtasks[i],
+              title: subtasks[i].title,
               completed: false,
               order_index: i,
+              due_date: subtasks[i].due_date || null,
+              due_time: subtasks[i].due_time || null,
             });
           }
         }
@@ -156,13 +162,75 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
 
   const addSubtask = () => {
     if (newSubtask.trim()) {
-      setSubtasks([...subtasks, newSubtask.trim()]);
+      setSubtasks([...subtasks, { title: newSubtask.trim(), due_date: null, due_time: null }]);
+      setNewSubtask('');
+    }
+  };
+
+  // Parse helper: split by commas/newlines/bullets, trim, dedupe, drop empties
+  const parseItems = (text: string): string[] => {
+    const cleaned = text
+      .replace(/\r\n/g, '\n')
+      .replace(/[•·►→\-]\s+/g, '') // remove common bullet prefixes
+      .replace(/\u2022|\u25CF/g, '');
+    const parts = cleaned
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    // dedupe preserving order
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of parts) {
+      if (!seen.has(p)) { seen.add(p); out.push(p); }
+    }
+    return out;
+  };
+
+  // Merge helper with limit
+  const mergeSubtasks = (items: string[]) => {
+    if (items.length === 0) return;
+    const existingTitles = new Set(subtasks.map(s => s.title));
+    const next: SubtaskDraft[] = [...subtasks];
+    for (const it of items) {
+      if (!existingTitles.has(it)) {
+        next.push({ title: it, due_date: null, due_time: null });
+        existingTitles.add(it);
+      }
+      if (next.length >= 100) break; // safety limit
+    }
+    setSubtasks(next);
+  };
+
+  const handleBulkCreate = () => {
+    const items = parseItems(bulkInput).slice(0, 100);
+    mergeSubtasks(items);
+    setBulkInput('');
+  };
+
+  const handleSubtaskPaste: React.ClipboardEventHandler<HTMLInputElement> = (e) => {
+    const text = e.clipboardData.getData('text');
+    const items = parseItems(text);
+    if (items.length > 1) {
+      e.preventDefault();
+      mergeSubtasks(items);
       setNewSubtask('');
     }
   };
 
   const removeSubtask = (index: number) => {
     setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
+
+  const setDraftDueDate = (index: number, date: Date | null) => {
+    const next = [...subtasks];
+    next[index] = { ...next[index], due_date: date ? format(date, 'yyyy-MM-dd') : null };
+    setSubtasks(next);
+  };
+
+  const setDraftDueTime = (index: number, value: string) => {
+    const next = [...subtasks];
+    next[index] = { ...next[index], due_time: value || null };
+    setSubtasks(next);
   };
 
   const copyShareLink = async () => {
@@ -313,7 +381,53 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
               <div className="space-y-2">
                 {subtasks.map((subtask, index) => (
                   <div key={index} className="flex items-center gap-2">
-                    <Input value={subtask} readOnly className="flex-1" />
+                    <Input value={subtask.title} readOnly className="flex-1" />
+                    {/* tiny due pill if set */}
+                    {subtask.due_date && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full border text-muted-foreground whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {format(new Date(subtask.due_date), 'MMM d')}{subtask.due_time ? ` ${subtask.due_time}` : ''}
+                        </span>
+                      </span>
+                    )}
+                    {/* due editor */}
+                    <Popover open={openDueIndex === index} onOpenChange={(open) => setOpenDueIndex(open ? index : null)}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <CalendarIcon className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-3" align="end">
+                        <div className="space-y-2">
+                          <div className="text-[11px] text-muted-foreground">{language === 'ar' ? 'تاريخ ووقت المهمة الفرعية' : 'Subtask due date & time'}</div>
+                          <Calendar
+                            mode="single"
+                            selected={subtask.due_date ? new Date(subtask.due_date) : undefined}
+                            onSelect={(date) => setDraftDueDate(index, date || null)}
+                            initialFocus
+                          />
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={subtask.due_time || ''}
+                              placeholder="HH:mm"
+                              type="time"
+                              className="h-8 text-[12px]"
+                              onChange={(e) => setDraftDueTime(index, e.target.value)}
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-[12px]"
+                              onClick={() => { setDraftDueDate(index, null); setDraftDueTime(index, ''); setOpenDueIndex(null); }}
+                            >
+                              {language === 'ar' ? 'مسح' : 'Clear'}
+                            </Button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                     <Button
                       type="button"
                       variant="outline"
@@ -329,10 +443,17 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                     value={newSubtask}
                     onChange={(e) => setNewSubtask(e.target.value)}
                     placeholder={t('addSubtask', language)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
+                    onPaste={handleSubtaskPaste}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
                         e.preventDefault();
-                        addSubtask();
+                        const items = parseItems(newSubtask);
+                        if (items.length > 1) {
+                          mergeSubtasks(items);
+                          setNewSubtask('');
+                        } else {
+                          addSubtask();
+                        }
                       }
                     }}
                   />
@@ -340,7 +461,60 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
+
+                {/* Bulk Subtasks */}
+                <div className="mt-3 rounded-lg border bg-muted/10 p-3">
+                  <Label className="text-sm">
+                    {language === 'ar' ? 'إضافة مجمّعة' : 'Bulk Subtasks'}
+                  </Label>
+                  <Textarea
+                    className="mt-2"
+                    rows={3}
+                    value={bulkInput}
+                    onChange={(e) => setBulkInput(e.target.value)}
+                    placeholder={language === 'ar' ? 'ألصق أو اكتب عناصر مفصولة بفواصل أو أسطر جديدة' : 'Paste or type items separated by commas or new lines'}
+                  />
+                  {/* Preview */}
+                  {bulkInput.trim() && (
+                    <div className="mt-2">
+                      <div className="text-xs text-muted-foreground mb-1">
+                        {(() => {
+                          const count = parseItems(bulkInput).length;
+                          return language === 'ar' ? `${count} جاهزة` : `${count} ready`;
+                        })()}
+                        {parseItems(bulkInput).length > 100 && (
+                          <span className="ml-2 text-destructive">{language === 'ar' ? 'تم تحديد الحد الأقصى 100' : 'Max 100 will be added'}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {parseItems(bulkInput).slice(0, 30).map((it, idx) => (
+                          <span key={idx} className="px-2 py-0.5 text-xs rounded-full border bg-white/60 dark:bg-white/5">
+                            {it}
+                          </span>
+                        ))}
+                        {parseItems(bulkInput).length > 30 && (
+                          <span className="text-xs text-muted-foreground">…</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-2 flex justify-end">
+                    <Button type="button" size="sm" onClick={handleBulkCreate} disabled={!bulkInput.trim()}>
+                      {language === 'ar' ? 'إنشاء المهام الفرعية' : 'Create Subtasks'}
+                    </Button>
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">
+                    {language === 'ar' ? 'تلميح: اللصق يحوِّل العناصر تلقائيًا إلى بطاقات.' : 'Tip: Pasting a list auto-splits into chips.'}
+                  </div>
+                </div>
               </div>
+            </div>
+          )}
+
+          {/* Subtasks (edit existing task) */}
+          {task && (
+            <div className="space-y-2">
+              <SubtaskManager taskId={task.id} onSubtasksChange={() => {}} readOnly={false} />
             </div>
           )}
 

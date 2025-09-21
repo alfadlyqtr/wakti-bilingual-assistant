@@ -25,6 +25,9 @@ export interface TRSubtask {
   title: string;
   completed: boolean;
   order_index: number;
+  // Optional scheduling fields (local day string and HH:mm)
+  due_date?: string | null;
+  due_time?: string | null;
   created_at: string;
   updated_at: string;
 }

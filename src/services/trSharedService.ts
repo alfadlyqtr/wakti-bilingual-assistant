@@ -5,7 +5,7 @@ export interface TRSharedResponse {
   id: string;
   task_id: string;
   visitor_name: string;
-  response_type: 'completion' | 'comment' | 'snooze_request';
+  response_type: 'completion' | 'comment' | 'snooze_request' | 'uncheck_request';
   content?: string;
   is_completed?: boolean;
   subtask_id?: string;
@@ -37,6 +37,78 @@ export class TRSharedService {
       return [];
     }
   }
+
+  // Clear all completion responses for a specific subtask (owner uncheck policy)
+  static async clearAllSubtaskCompletions(taskId: string, subtaskId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('tr_shared_responses')
+        .delete()
+        .eq('task_id', taskId)
+        .eq('subtask_id', subtaskId)
+        .eq('response_type', 'completion');
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error clearing subtask completions:', error);
+      throw error;
+    }
+  }
+
+  // Approve uncheck request: owner sets the real subtask to incomplete and stamps the request
+  static async approveUncheckRequest(requestId: string, taskId: string, subtaskId: string): Promise<void> {
+    try {
+      const { error: updateError } = await supabase
+        .from('tr_shared_responses')
+        .update({ content: JSON.stringify({ status: 'approved', actionTime: new Date().toISOString() }) })
+        .eq('id', requestId);
+      if (updateError) throw updateError;
+
+      const { error: subErr } = await supabase
+        .from('tr_subtasks')
+        .update({ completed: false })
+        .eq('id', subtaskId)
+        .eq('task_id', taskId);
+      if (subErr) throw subErr;
+    } catch (error) {
+      console.error('Error approving uncheck request:', error);
+      throw error;
+    }
+  }
+
+  // Deny uncheck request
+  static async denyUncheckRequest(requestId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('tr_shared_responses')
+        .update({ content: JSON.stringify({ status: 'denied', actionTime: new Date().toISOString() }) })
+        .eq('id', requestId);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error denying uncheck request:', error);
+      throw error;
+    }
+  }
+
+
+  // Request to uncheck a subtask (assignee cannot directly uncheck)
+  static async requestUncheck(taskId: string, subtaskId: string, visitorName: string, reason?: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('tr_shared_responses')
+        .insert({
+          task_id: taskId,
+          subtask_id: subtaskId,
+          visitor_name: visitorName,
+          response_type: 'uncheck_request',
+          content: reason || null
+        });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error requesting uncheck:', error);
+      throw error;
+    }
+  }
+  
 
   // Get visitor access information for a task
   static async getTaskVisitors(taskId: string): Promise<TRSharedAccess[]> {
@@ -87,6 +159,13 @@ export class TRSharedService {
           });
 
         if (error) throw error;
+
+        // Also mark the owner task as completed so everyone sees it as done immediately
+        const { error: taskErr } = await supabase
+          .from('tr_tasks')
+          .update({ completed: true, completed_at: new Date().toISOString() })
+          .eq('id', taskId);
+        if (taskErr) throw taskErr;
       } else {
         // Remove completion response
         const { error } = await supabase
@@ -98,6 +177,7 @@ export class TRSharedService {
           .is('subtask_id', null);
 
         if (error) throw error;
+        // Do NOT auto-uncomplete the owner task here; owner can override from their side.
       }
     } catch (error) {
       console.error('Error marking task completed:', error);
@@ -121,17 +201,25 @@ export class TRSharedService {
           });
 
         if (error) throw error;
+
+        // Auto-sync: mark the real subtask as completed for the owner view
+        const { error: subErr } = await supabase
+          .from('tr_subtasks')
+          .update({ completed: true })
+          .eq('id', subtaskId)
+          .eq('task_id', taskId);
+        if (subErr) throw subErr;
       } else {
-        // Remove subtask completion response
-        const { error } = await supabase
+        // By policy: only owner can uncheck. Visitors should request uncheck instead.
+        // We'll still allow explicit calls (owner tools) to clear a completion response if needed.
+        const { error: delErr } = await supabase
           .from('tr_shared_responses')
           .delete()
           .eq('task_id', taskId)
           .eq('subtask_id', subtaskId)
           .eq('visitor_name', visitorName)
           .eq('response_type', 'completion');
-
-        if (error) throw error;
+        if (delErr) throw delErr;
       }
     } catch (error) {
       console.error('Error marking subtask completed:', error);
@@ -246,20 +334,15 @@ export class TRSharedService {
   // Subscribe to real-time updates
   static subscribeToTaskUpdates(taskId: string, onUpdate: () => void) {
     const channel = supabase
-      .channel(`task-responses-${taskId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tr_shared_responses',
-          filter: `task_id=eq.${taskId}`
-        },
-        (payload) => {
-          console.log('Real-time update received:', payload);
-          onUpdate();
-        }
-      )
+      .channel(`task-activity-${taskId}`)
+      // Shared responses (comments, completions, requests)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_shared_responses', filter: `task_id=eq.${taskId}` }, () => onUpdate())
+      // Subtasks (title/complete/due updates)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_subtasks', filter: `task_id=eq.${taskId}` }, () => onUpdate())
+      // Visitors / access pings
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_shared_access', filter: `task_id=eq.${taskId}` }, () => onUpdate())
+      // Parent task updates (e.g., task completed, snoozed)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_tasks', filter: `id=eq.${taskId}` }, () => onUpdate())
       .subscribe();
 
     return channel;

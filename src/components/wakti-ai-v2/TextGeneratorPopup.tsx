@@ -7,6 +7,7 @@ interface TextGeneratorPopupProps {
   onClose: () => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
   renderAsPage?: boolean;
+  initialTab?: 'compose' | 'reply' | 'generated';
 }
 
 type Mode = 'compose' | 'reply';
@@ -17,7 +18,8 @@ type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 // Stable keys for option values; labels are localized at render time
 type ContentTypeKey =
   | 'email' | 'text_message' | 'message' | 'blog_post' | 'story' | 'press_release' | 'cover_letter'
-  | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'essay' | 'proposal' | 'official_letter' | 'poem';
+  | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'essay' | 'proposal' | 'official_letter' | 'poem'
+  | 'school_project' | 'questionnaire';
 type ToneKey =
   | 'professional' | 'casual' | 'formal' | 'friendly' | 'persuasive' | 'romantic' | 'neutral' | 'empathetic' | 'confident' | 'humorous' | 'urgent'
   | 'apologetic' | 'inspirational' | 'motivational' | 'sympathetic' | 'sincere' | 'informative' | 'concise' | 'dramatic' | 'suspenseful' | 'authoritative' | 'educational';
@@ -30,11 +32,12 @@ type LanguageVariantKey =
   | 'australian_english'
   | 'msa'            // Modern Standard Arabic
   | 'gulf_arabic';   // Gulf Arabic
-type EmojisKey = 'auto' | 'none' | 'light' | 'rich';
+type EmojisKey = 'auto' | 'none' | 'light' | 'rich' | 'extra';
 
 const CONTENT_TYPE_KEYS: ContentTypeKey[] = [
   'email', 'text_message', 'message', 'blog_post', 'story', 'press_release', 'cover_letter',
-  'research_brief', 'research_report', 'case_study', 'how_to_guide', 'policy_note', 'product_description', 'essay', 'proposal', 'official_letter', 'poem'
+  'research_brief', 'research_report', 'case_study', 'how_to_guide', 'policy_note', 'product_description', 'essay', 'proposal', 'official_letter', 'poem',
+  'school_project', 'questionnaire'
 ];
 const TONE_KEYS: ToneKey[] = [
   'professional', 'casual', 'formal', 'friendly', 'persuasive', 'romantic', 'neutral', 'empathetic', 'confident', 'humorous', 'urgent',
@@ -44,16 +47,18 @@ const REGISTER_KEYS: RegisterKey[] = ['auto', 'formal', 'neutral', 'casual', 'sl
 // Base English variants. For Arabic UI we will present Arabic-specific variants instead.
 const LANGUAGE_VARIANT_KEYS_EN: LanguageVariantKey[] = ['auto', 'us_english', 'uk_english', 'canadian_english', 'australian_english'];
 const LANGUAGE_VARIANT_KEYS_AR: LanguageVariantKey[] = ['auto', 'msa', 'gulf_arabic'];
-const EMOJIS_KEYS: EmojisKey[] = ['auto', 'none', 'light', 'rich'];
+const EMOJIS_KEYS: EmojisKey[] = ['auto', 'none', 'light', 'rich', 'extra'];
 
 const ctLabel = (k: ContentTypeKey, lang: 'en' | 'ar') => {
   const en: Record<ContentTypeKey, string> = {
     email: 'Email', text_message: 'Text Message', message: 'Message', blog_post: 'Blog Post', story: 'Story', press_release: 'Press Release', cover_letter: 'Cover Letter',
-    research_brief: 'Research Brief', research_report: 'Research Report', case_study: 'Case Study', how_to_guide: 'How-to Guide', policy_note: 'Policy Note', product_description: 'Product Description', essay: 'Essay', proposal: 'Proposal', official_letter: 'Official Letter', poem: 'Poem'
+    research_brief: 'Research Brief', research_report: 'Research Report', case_study: 'Case Study', how_to_guide: 'How-to Guide', policy_note: 'Policy Note', product_description: 'Product Description', essay: 'Essay', proposal: 'Proposal', official_letter: 'Official Letter', poem: 'Poem',
+    school_project: 'School Project', questionnaire: 'Questionnaire'
   };
   const ar: Record<ContentTypeKey, string> = {
     email: 'بريد إلكتروني', text_message: 'رسالة نصية', message: 'رسالة', blog_post: 'مقال مدونة', story: 'قصة', press_release: 'بيان صحفي', cover_letter: 'خطاب تقديم', poem: 'قصيدة',
-    research_brief: 'موجز بحثي', research_report: 'تقرير بحثي', case_study: 'دراسة حالة', how_to_guide: 'دليل إرشادي', policy_note: 'مذكرة سياسات', product_description: 'وصف منتج', essay: 'مقال', proposal: 'اقتراح', official_letter: 'خطاب رسمي'
+    research_brief: 'موجز بحثي', research_report: 'تقرير بحثي', case_study: 'دراسة حالة', how_to_guide: 'دليل إرشادي', policy_note: 'مذكرة سياسات', product_description: 'وصف منتج', essay: 'مقال', proposal: 'اقتراح', official_letter: 'خطاب رسمي',
+    school_project: 'مشروع مدرسي', questionnaire: 'استبيان'
   };
   return lang === 'ar' ? ar[k] : en[k];
 };
@@ -115,8 +120,8 @@ const langVariantLabel = (k: LanguageVariantKey, lang: 'en' | 'ar') => {
   return lang === 'ar' ? ar[k] : en[k];
 };
 const emojisLabel = (k: EmojisKey, lang: 'en' | 'ar') => {
-  const en: Record<EmojisKey, string> = { auto: 'Auto', none: 'None', light: 'Light', rich: 'Rich' };
-  const ar: Record<EmojisKey, string> = { auto: 'تلقائي', none: 'بدون', light: 'قليل', rich: 'كثير' };
+  const en: Record<EmojisKey, string> = { auto: 'Auto', none: 'None', light: 'Light', rich: 'Rich', extra: 'Extra' };
+  const ar: Record<EmojisKey, string> = { auto: 'تلقائي', none: 'بدون', light: 'قليل', rich: 'كثير', extra: 'كثيف جدًا' };
   return lang === 'ar' ? ar[k] : en[k];
 };
 
@@ -124,8 +129,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   isOpen = true,
   onClose,
   onTextGenerated,
+  initialTab = 'compose',
 }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('compose');
+  const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'compose');
   const [mode, setMode] = useState<Mode>('compose');
   const { language } = useTheme();
   const [modelPreference, setModelPreference] = useState<ModelPreference>('auto');
@@ -164,6 +170,16 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         if (Array.isArray(arr)) setCachedTexts(arr.filter((s) => typeof s === 'string').slice(0, 3));
       }
     } catch { }
+  }, []);
+
+  // Ensure initialTab is respected on first mount
+  useEffect(() => {
+    if (initialTab && ['compose','reply','generated'].includes(initialTab)) {
+      setActiveTab(initialTab as Tab);
+      setMode(initialTab === 'reply' ? 'reply' : 'compose');
+    }
+    // run only once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // If user opens Generated tab and there's no current text, auto-load newest cached
@@ -427,7 +443,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 <label className="text-sm font-medium">{language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key Points & Keywords'}</label>
                 <textarea
                   className="w-full border rounded px-3 py-2 min-h-[96px]"
-                  placeholder={language === 'ar' ? 'أدخل النقاط أو الكلمات المفتاحية...' : 'Enter key points or keywords you want to include in the reply...'}
+                  placeholder={
+                    language === 'ar'
+                      ? 'نقاط أساسية مفصولة بفواصل. مثال: اعتذار عن التأخير، رقم الطلب #1234، إرسال البديل، رقم التتبع، خصم 10%'
+                      : 'Must‑have points, comma‑separated. e.g., apologize for delay, order #1234, send replacement, tracking no., 10% coupon'
+                  }
                   value={keyPoints}
                   onChange={(e) => setKeyPoints(e.target.value)}
                 />

@@ -191,6 +191,11 @@ function App() {
                     <AppLayout><VoiceStudio /></AppLayout>
                   </GiftNotificationProvider>
                 } />
+                <Route path="/tools/voice" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><VoiceStudio /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
                 <Route path="/tools/game" element={
                   <GiftNotificationProvider>
                     <AppLayout><GameMode /></AppLayout>

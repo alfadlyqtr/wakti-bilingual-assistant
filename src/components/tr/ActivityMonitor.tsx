@@ -170,6 +170,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     }
   }, [sharedTasks, activeViews]);
 
+  // Uncheck requests are informational only; owner manually unchecks from their task view.
+
   const getTaskStats = useCallback((taskId: string) => {
     const taskResponses = responses[taskId] || [];
     const taskSubtaskList = subtasks[taskId] || [];
@@ -178,13 +180,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     // Get unique assignees
     const uniqueAssignees = [...new Set(taskResponses.map(r => r.visitor_name))];
     
-    // Count unique subtask completions (not completion events)
-    const completedSubtaskIds = new Set<string>();
-    taskResponses.forEach(r => {
-      if (r.response_type === 'completion' && r.is_completed && r.subtask_id) {
-        completedSubtaskIds.add(r.subtask_id);
-      }
-    });
+    // Count completed subtasks based on owner truth from tr_subtasks
+    const completedSubtasksCount = taskSubtaskList.filter(s => s.completed).length;
     
     // Count task completions (main task, not subtasks)
     const taskCompletions = taskResponses.filter(
@@ -194,14 +191,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     // Count comments and requests
     const comments = taskResponses.filter(r => r.response_type === 'comment');
     const snoozeRequests = taskResponses.filter(r => r.response_type === 'snooze_request');
+    const uncheckRequests = taskResponses.filter(r => r.response_type === 'uncheck_request');
     
     return {
       assignees: uniqueAssignees,
-      completedSubtasksCount: completedSubtaskIds.size,
+      completedSubtasksCount,
       taskCompletionsCount: taskCompletions.length,
       totalSubtasksCount: taskSubtaskList.length,
       comments: comments,
       snoozeRequests: snoozeRequests,
+      uncheckRequests: uncheckRequests,
       allResponses: taskResponses,
       subtasks: taskSubtaskList,
       visitors: taskVisitors
@@ -572,11 +571,25 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         <Badge variant="outline" className="text-xs">
                           {t('sharedTask', language)}
                         </Badge>
+                        {/* Airport-stamp style badge for main task completion */}
+                        {task.completed && (() => {
+                          const latestTaskCompletion = stats.allResponses
+                            .filter(r => r.response_type === 'completion' && r.is_completed && !r.subtask_id)
+                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                          const who = latestTaskCompletion?.visitor_name || 'Someone';
+                          const when = latestTaskCompletion?.created_at ? format(parseISO(latestTaskCompletion.created_at), 'MMM dd, HH:mm') : '';
+                          return (
+                            <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
+                              ✓ Completed by: {who}{when ? ` • ${when}` : ''}
+                            </Badge>
+                          );
+                        })()}
                         <Badge variant="secondary" className="text-xs">
                           {stats.totalSubtasksCount > 0 
                             ? `${stats.completedSubtasksCount} ${language === 'ar' ? 'من' : 'of'} ${stats.totalSubtasksCount} ${language === 'ar' ? 'مهمة فرعية مكتملة' : 'subtasks completed'}`
                             : stats.taskCompletionsCount > 0 ? (language === 'ar' ? 'المهمة مكتملة' : 'Task completed') : (language === 'ar' ? 'غير مكتملة' : 'Not completed')}
                         </Badge>
+                        
                         {/* Show activity indicators when collapsed */}
                         {isCollapsed && (
                           <>
@@ -649,16 +662,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       className={`${
                         activeView === 'requests' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
                       } ${
-                        stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length > 0 ? 'ring-2 ring-orange-400 ring-offset-2' : ''
+                        (stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length) > 0 ? 'ring-2 ring-orange-400 ring-offset-2' : ''
                       } transition-colors rounded-lg p-3 text-center border-2 border-transparent relative`}
                       onClick={() => handleViewChange(task.id, 'requests')}
                     >
-                      {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length > 0 && (
+                      {(stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length) > 0 && (
                         <Badge className="absolute -top-2 -right-2 bg-orange-500 h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs">
-                          {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length}
+                          {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length}
                         </Badge>
                       )}
-                      <div className="text-lg font-semibold">{stats.snoozeRequests.length}</div>
+                      <div className="text-lg font-semibold">{stats.snoozeRequests.length + stats.uncheckRequests.length}</div>
                       <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                         <AlertCircle className="h-3 w-3" />
                         {t('requests', language)}
@@ -890,9 +903,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                     r.subtask_id === subtask.id &&
                                     r.is_completed
                                   );
-                                  
                                   const completedBy = [...new Set(completions.map(c => c.visitor_name))];
-                                  const isCompleted = completedBy.length > 0;
+                                  const isCompleted = !!subtask.completed; // owner truth for visual state
+                                  const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
                                   
                                   return (
                                     <div 
@@ -913,11 +926,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                         <p className={`text-sm ${isCompleted ? 'line-through text-muted-foreground' : ''}`} dir="auto">
                                           {subtask.title}
                                         </p>
-                                      
-                                        {isCompleted && (
-                                          <p className="text-xs text-green-600 flex items-center gap-1 mt-1" dir="auto">
-                                            <User className="h-3 w-3" />
-                                            {completedBy.join(', ')}
+                                        
+                                        {isCompleted && latest && (
+                                          <p className="text-[11px] text-green-700 flex items-center gap-2 mt-0.5" dir="auto">
+                                            <span>{format(parseISO(latest.created_at), 'MMM dd, HH:mm')}</span>
+                                            <span className="inline-flex items-center gap-1">
+                                              <User className="h-3 w-3" />
+                                              {completedBy.join(', ')}
+                                            </span>
                                           </p>
                                         )}
                                       </div>
@@ -928,39 +944,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             </div>
                           )}
                           
-                          {/* Completion activity history */}
-                          <div className="space-y-3">
-                            <h4 className="text-base font-medium">{t('completionHistory', language)}</h4>
-                            <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                              {stats.allResponses
-                                .filter(r => r.response_type === 'completion')
-                                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                                .map((completion) => {
-                                  let subtaskInfo = null;
-                                  if (completion.subtask_id) {
-                                    subtaskInfo = stats.subtasks.find(s => s.id === completion.subtask_id);
-                                  }
-                                  
-                                  return (
-                                    <div key={completion.id} className="bg-muted/30 rounded-lg p-3">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <CheckCircle className={`h-4 w-4 ${completion.is_completed ? 'text-green-600' : 'text-muted-foreground'}`} />
-                                        <span className="font-medium text-sm" dir="auto">{completion.visitor_name}</span>
-                                        <span className="text-xs text-muted-foreground">
-                                          {format(parseISO(completion.created_at), 'MMM dd, HH:mm')}
-                                        </span>
-                                      </div>
-                                      
-                                      <p className="text-sm text-muted-foreground ml-6" dir="auto">
-                                        {completion.subtask_id 
-                                          ? `${completion.is_completed ? (language === 'ar' ? 'أكمل' : 'Completed') : (language === 'ar' ? 'وضع علامة كغير مكتمل' : 'Marked incomplete')}: "${subtaskInfo?.title || 'subtask'}"` 
-                                          : `${completion.is_completed ? (language === 'ar' ? 'وضع علامة على المهمة الرئيسية كمكتملة' : 'Marked main task as complete') : (language === 'ar' ? 'وضع علامة على المهمة الرئيسية كغير مكتملة' : 'Marked main task as incomplete')}`}
-                                      </p>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          </div>
+                          {/* Completion activity history removed to keep view compact; info is inline on subtask cards. */}
                         </div>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground text-sm">
@@ -972,45 +956,86 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
                   {/* Requests View */}
                   {activeView === 'requests' && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-medium flex items-center gap-2 text-orange-600">
-                        <AlertCircle className="h-5 w-5" />
-                        {t('snoozeRequestsTitle', language)} ({stats.snoozeRequests.length})
-                      </h3>
-                      
-                      {stats.snoozeRequests.length > 0 ? (
-                        <div className="space-y-4 max-h-[400px] overflow-y-auto">
-                          {stats.snoozeRequests
-                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                            .map((request) => (
-                              <div key={request.id} className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Pause className="h-4 w-4 text-orange-600" />
-                                  <span className="font-medium" dir="auto">{request.visitor_name}</span>
-                                  <Badge variant="secondary" className="text-xs">{t('snoozeRequests', language)}</Badge>
-                                </div>
-                                
-                                <div className="text-xs text-muted-foreground mb-2">
-                                  {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
-                                </div>
-                                
-                                {request.content && !parseSnoozeStatus(request.content) && (
-                                  <div className="bg-background/50 p-3 rounded border mb-3" dir="auto">
-                                    <p className="text-sm">{t('reason', language)}: {request.content}</p>
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium flex items-center gap-2 text-orange-600">
+                          <AlertCircle className="h-5 w-5" />
+                          {t('snoozeRequestsTitle', language)} ({stats.snoozeRequests.length})
+                        </h3>
+                        {stats.snoozeRequests.length > 0 ? (
+                          <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                            {stats.snoozeRequests
+                              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                              .map((request) => (
+                                <div key={request.id} className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Pause className="h-4 w-4 text-orange-600" />
+                                    <span className="font-medium" dir="auto">{request.visitor_name}</span>
+                                    <Badge variant="secondary" className="text-xs">{t('snoozeRequests', language)}</Badge>
                                   </div>
-                                )}
-                                
-                                <div className="flex gap-2">
-                                  {renderSnoozeRequestStatus(request)}
+                                  <div className="text-xs text-muted-foreground mb-2">
+                                    {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
+                                  </div>
+                                  {request.content && !parseSnoozeStatus(request.content) && (
+                                    <div className="bg-background/50 p-3 rounded border mb-3" dir="auto">
+                                      <p className="text-sm">{t('reason', language)}: {request.content}</p>
+                                    </div>
+                                  )}
+                                  <div className="flex gap-2">
+                                    {renderSnoozeRequestStatus(request)}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                          {t('noSnoozeRequests', language)}
-                        </div>
-                      )}
+                              ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground text-sm">
+                            {t('noSnoozeRequests', language)}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium flex items-center gap-2 text-blue-700">
+                          <AlertCircle className="h-5 w-5" />
+                          {language === 'ar' ? 'طلبات إلغاء التحديد' : 'Uncheck Requests'} ({stats.uncheckRequests.length})
+                        </h3>
+                        {stats.uncheckRequests.length > 0 ? (
+                          <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                            {stats.uncheckRequests
+                              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                              .map((request) => {
+                                const st = stats.subtasks.find(s => s.id === request.subtask_id);
+                                return (
+                                  <div key={request.id} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <CheckCircle className="h-4 w-4 text-blue-600" />
+                                      <span className="font-medium" dir="auto">{request.visitor_name}</span>
+                                      <Badge variant="secondary" className="text-xs">{language === 'ar' ? 'طلب إلغاء' : 'Uncheck request'}</Badge>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mb-2">
+                                      {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
+                                    </div>
+                                    <p className="text-sm mb-2" dir="auto">{language === 'ar' ? 'المهمة الفرعية' : 'Subtask'}: "{st?.title || 'subtask'}"</p>
+                                    {request.content && (
+                                      <div className="bg-background/50 p-3 rounded border mb-3" dir="auto">
+                                        <p className="text-sm">{t('reason', language)}: {request.content}</p>
+                                      </div>
+                                    )}
+                                    <div className="text-xs text-muted-foreground">
+                                      {language === 'ar'
+                                        ? 'تنبيه: سيقوم المالك بإلغاء التحديد من جانبه عند المراجعة.'
+                                        : 'FYI: The owner will uncheck from their side after review.'}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground text-sm">
+                            {language === 'ar' ? 'لا توجد طلبات إلغاء' : 'No uncheck requests'}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </CardContent>
