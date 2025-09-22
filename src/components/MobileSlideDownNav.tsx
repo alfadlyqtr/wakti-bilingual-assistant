@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2 } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
+import { motion } from "framer-motion";
 
 interface MobileSlideDownNavProps {
   isOpen: boolean;
@@ -176,29 +177,37 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
         onClick={onClose}
       />
       
-      {/* Slide down container (Liquid Glass + Glow) */}
+      {/* Slide down container (Liquid Glass + Glow) with 3D pop-out */}
+      {/* Perspective wrapper to create real depth; positioned at the logo anchor */}
       <div
-        className={cn(
-          // Base glass card
-          "fixed rounded-xl transition-all duration-300 ease-out overflow-visible",
-          // Liquid glass surface: layered translucent gradients + blur + soft border
-          "backdrop-blur-2xl bg-[linear-gradient(135deg,rgba(255,255,255,0.20),rgba(255,255,255,0.08))] bg-white/85 dark:bg-neutral-900/75",
-          "border border-white/30 dark:border-white/10 ring-1 ring-white/20 backdrop-brightness-110 dark:backdrop-brightness-90",
-          // Soft outer glow
-          "shadow-[0_14px_34px_rgba(0,0,0,0.28),0_16px_60px_rgba(255,153,0,0.10)]",
-          animationStage === 'closed' && "opacity-0 scale-95 -translate-y-4",
-          animationStage === 'sliding' && "opacity-100 scale-100 translate-y-0",
-          animationStage === 'icons' && "opacity-100 scale-100 translate-y-0"
-        )}
+        className="fixed"
         style={{
           left: logoPosition.x,
-          top: logoPosition.y + logoPosition.height + 8,
-          width: logoPosition.width * 4, // Reduced from 6 to 4 for narrower width
+          top: logoPosition.y + logoPosition.height + 8, // a hair below header
+          width: logoPosition.width * 4,
+          zIndex: 2147483647,
+          // Apply perspective on a non-transforming parent
+          perspective: 1000,
+          WebkitPerspective: 1000,
           transformOrigin: 'top left',
-          // Sit above the overlay but below/next to the header
-          zIndex: 2147483647
         }}
       >
+        <motion.div
+          className={cn(
+            // Base glass card
+            "rounded-xl overflow-visible",
+            // Liquid glass surface: layered translucent gradients + blur + soft border
+            "backdrop-blur-2xl bg-[linear-gradient(135deg,rgba(255,255,255,0.20),rgba(255,255,255,0.08))] bg-white/85 dark:bg-neutral-900/75",
+            "border border-white/30 dark:border-white/10 ring-1 ring-white/20 backdrop-brightness-110 dark:backdrop-brightness-90",
+            // Soft outer glow
+            "shadow-[0_14px_34px_rgba(0,0,0,0.28),0_16px_60px_rgba(255,153,0,0.10)]"
+          )}
+          style={{ transformOrigin: 'top left' }}
+          initial={{ opacity: 0, scale: 0.92, y: -8, rotateX: 4 }}
+          animate={{ opacity: 1, scale: 1, y: 8, rotateX: 0 }}
+          exit={{ opacity: 0, scale: 0.94, y: -6, rotateX: 3 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 26, mass: 0.7 }}
+        >
         {/* Bottom halo shadow to create a floating 3D effect */}
         <div
           aria-hidden
@@ -352,6 +361,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
             })}
           </div>
         </div>
+        </motion.div>
       </div>
     </>,
     document.body

@@ -48,18 +48,32 @@ const SortableWidget = ({ widget, isDragging }: { widget: WidgetType; isDragging
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    // During drag mode, prevent native scrolling interference
+    touchAction: isDragging ? 'none' as const : 'auto' as const,
   };
 
   return (
     <Card 
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
+      // Only attach DnD attributes/listeners while in drag mode
+      {...(isDragging ? attributes : {})}
+      {...(isDragging ? listeners : {})}
       className={`shadow-sm relative transition-all duration-200 ${
         isSortableDragging ? 'ring-2 ring-primary shadow-lg scale-102 z-50' : ''
-      } ${isDragging ? 'border-dashed border-primary/70' : ''}`}
+      } ${isDragging ? 'border-dashed border-primary/70 cursor-grab active:cursor-grabbing' : ''}`}
     >
+      <CardContent className="p-0">
+        {widget.component}
+      </CardContent>
+    </Card>
+  );
+};
+
+// Static (non-draggable) Widget Item Component
+const StaticWidget = ({ widget }: { widget: WidgetType }) => {
+  return (
+    <Card className="shadow-sm relative transition-all duration-200">
       <CardContent className="p-0">
         {widget.component}
       </CardContent>
@@ -72,7 +86,12 @@ export const WidgetGrid: React.FC<WidgetGridProps> = ({ widgets, isDragging, onD
   const visibleWidgets = widgets.filter(widget => widget.visible);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    // Add activation constraint to avoid accidental drags on touch
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -98,6 +117,18 @@ export const WidgetGrid: React.FC<WidgetGridProps> = ({ widgets, isDragging, onD
     }
   };
 
+  // When not in drag mode, render a simple static list without DnD contexts
+  if (!isDragging) {
+    return (
+      <div className="space-y-4">
+        {visibleWidgets.map((widget) => (
+          <StaticWidget key={widget.id} widget={widget} />
+        ))}
+      </div>
+    );
+  }
+
+  // Drag mode: enable DnD contexts and sortable items
   return (
     <DndContext
       sensors={sensors}
