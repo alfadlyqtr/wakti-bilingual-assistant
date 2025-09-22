@@ -71,6 +71,15 @@ export function QuickActionsPanel({
       default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
     }
   };
+
+  const getBorderByTool = (toolId: string) => {
+    switch(toolId) {
+      case 'text': return 'border-purple-500/40';
+      case 'voice': return 'border-pink-500/40';
+      case 'game': return 'border-red-500/40';
+      default: return 'border-gray-400/30';
+    }
+  };
   
   return (
     <>
@@ -81,7 +90,7 @@ export function QuickActionsPanel({
           key={action.id}
           className={`w-full ${isCollapsed ? 'h-14 px-1' : 'h-12 px-3'} justify-start rounded-xl group ${
             isActive
-              ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowByTool(action.id)}`
+              ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowByTool(action.id)} border ${getBorderByTool(action.id)}`
               : 'hover:bg-white/5 dark:hover:bg-white/[0.02]'
           } transition-all duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-[1.02] active:scale-[0.98] ${(!isCollapsed && index === 0) ? '-mt-2' : ''}`}
           onClick={() => handleToolAction(action.action)}
@@ -108,15 +117,7 @@ export function QuickActionsPanel({
                 {action.label}
               </span>
             )}
-            {isCollapsed && (
-              <span
-                className={`text-xs font-medium transition-all duration-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[90%] ${
-                  isActive ? 'text-foreground font-semibold' : 'text-muted-foreground group-hover:text-foreground'
-                }`}
-              >
-                {action.label}
-              </span>
-            )}
+            {/* In collapsed mode, hide labels entirely (icon-only). */}
           </div>
         </motion.button>
         );

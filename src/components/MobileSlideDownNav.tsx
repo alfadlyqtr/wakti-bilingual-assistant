@@ -60,7 +60,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       setAnimationStage('sliding');
       const timer = setTimeout(() => {
         setAnimationStage('icons');
-      }, 600); // Wait a bit longer so icons start after expand+slide completes
+      }, 520); // Start icons right after the faster 0.5s container animation
       return () => clearTimeout(timer);
     } else {
       setAnimationStage('closed');
@@ -221,7 +221,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
           }}
           exit={{ opacity: 0, scale: 0.94, y: -6, rotateX: 4 }}
           transition={{
-            duration: 0.7,
+            duration: 0.5,
             ease: 'easeOut',
             times: [0, 0.6, 1],
           }}

@@ -213,12 +213,23 @@ export function DesktopSidebar() {
                 }
               };
               
+              const getBorderClass = (path: string) => {
+                switch (path) {
+                  case '/calendar': return 'border-blue-500/40';
+                  case '/maw3d': return 'border-purple-500/40';
+                  case '/tr': return 'border-emerald-500/40';
+                  case '/wakti-ai': return 'border-amber-500/40';
+                  case '/tasjeel': return 'border-cyan-500/40';
+                  default: return 'border-gray-400/30';
+                }
+              };
+              
               return (
                 <motion.button
                   key={item.label}
                   className={`w-full ${isCollapsed ? 'h-14 px-1' : 'h-12 px-3'} justify-start rounded-xl group ${
                     isActive
-                      ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowColor(item.path)}`
+                      ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowColor(item.path)} border ${getBorderClass(item.path)}`
                       : "hover:bg-white/5 dark:hover:bg-white/[0.02]"
                   } transition-all duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-[1.02] active:scale-[0.98]`}
                   onClick={() => handleNavigation(item.path)}
@@ -262,22 +273,7 @@ export function DesktopSidebar() {
                           {t(item.label as any, language)}
                         </motion.span>
                       )}
-                      {isCollapsed && (
-                        <motion.span
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 5 }}
-                          className={`text-xs font-medium transition-all duration-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[90%] ${
-                            item.path === '/tasjeel' ? "text-cyan-500" : ""
-                          } ${
-                            isActive 
-                              ? "text-foreground font-semibold" 
-                              : "text-muted-foreground group-hover:text-foreground"
-                          }`}
-                        >
-                          {t(item.label as any, language)}
-                        </motion.span>
-                      )}
+                      {/* In collapsed mode, hide labels entirely (icon-only). */}
                     </AnimatePresence>
                   </div>
                 </motion.button>

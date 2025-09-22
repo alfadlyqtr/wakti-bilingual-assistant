@@ -161,6 +161,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const CACHE_KEY = 'wakti_generated_text_cache_v1';
   const [cachedTexts, setCachedTexts] = useState<string[]>([]);
 
+  // Local accent for this page (match purple Text Generator icon)
+  const fieldAccent = "border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500";
+
   // Load cache on mount
   useEffect(() => {
     try {
@@ -370,7 +373,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid gap-2">
                 <label className="text-sm font-medium">{language === 'ar' ? 'الموضوع' : 'Topic to write'}</label>
                 <textarea
-                  className="w-full border rounded p-3 min-h-[120px]"
+                  className={`w-full border rounded p-3 min-h-[120px] ${fieldAccent}`}
                   placeholder={language === 'ar' ? 'أدخل الموضوع أو الفكرة...' : 'Topic or idea you want to write about...'}
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
@@ -381,13 +384,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</label>
-                  <select className="border rounded px-3 py-2" value={contentType} onChange={(e) => setContentType(e.target.value as ContentTypeKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={contentType} onChange={(e) => setContentType(e.target.value as ContentTypeKey)}>
                     {CONTENT_TYPE_KEYS.map((k) => (<option key={k} value={k}>{ctLabel(k, language)}</option>))}
                   </select>
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
-                  <select className="border rounded px-3 py-2" value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
                     <option value="">{language === 'ar' ? 'اختر النبرة' : 'Select tone'}</option>
                     {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
                   </select>
@@ -398,7 +401,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
-                  <select className="border rounded px-3 py-2" value={length} onChange={(e) => setLength(e.target.value as any)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={length} onChange={(e) => setLength(e.target.value as any)}>
                     <option value="">{language === 'ar' ? 'اختر الطول' : 'Select length'}</option>
                     <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
                     <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
@@ -409,7 +412,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
-                  <select className="border rounded px-3 py-2" value={register} onChange={(e) => setRegister(e.target.value as RegisterKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={register} onChange={(e) => setRegister(e.target.value as RegisterKey)}>
                     {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -419,7 +422,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
-                  <select className="border rounded px-3 py-2" value={languageVariant} onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={languageVariant} onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}>
                     {(language === 'ar' ? LANGUAGE_VARIANT_KEYS_AR : LANGUAGE_VARIANT_KEYS_EN).map((k) => (
                       <option key={k} value={k}>{langVariantLabel(k, language)}</option>
                     ))}
@@ -427,7 +430,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">Emojis</label>
-                  <select className="border rounded px-3 py-2" value={emojis} onChange={(e) => setEmojis(e.target.value as EmojisKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={emojis} onChange={(e) => setEmojis(e.target.value as EmojisKey)}>
                     {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -442,7 +445,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid gap-3 mb-3">
                 <label className="text-sm font-medium">{language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key Points & Keywords'}</label>
                 <textarea
-                  className="w-full border rounded px-3 py-2 min-h-[96px]"
+                  className={`w-full border rounded px-3 py-2 min-h-[96px] ${fieldAccent}`}
                   placeholder={
                     language === 'ar'
                       ? 'نقاط أساسية مفصولة بفواصل. مثال: اعتذار عن التأخير، رقم الطلب #1234، إرسال البديل، رقم التتبع، خصم 10%'
@@ -455,7 +458,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid gap-2">
                 <label className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
                 <textarea
-                  className="w-full border rounded p-3 min-h-[140px]"
+                  className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent}`}
                   placeholder={language === 'ar' ? 'الرسالة التي تريد الرد عليها...' : 'Original message you want to reply to...'}
                   value={originalMessage}
                   onChange={(e) => setOriginalMessage(e.target.value)}
@@ -466,14 +469,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
-                  <select className="border rounded px-3 py-2" value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
                     <option value="">{language === 'ar' ? 'اختر النبرة' : 'Select tone'}</option>
                     {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
                   </select>
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
-                  <select className="border rounded px-3 py-2" value={replyLength} onChange={(e) => setReplyLength(e.target.value as any)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={replyLength} onChange={(e) => setReplyLength(e.target.value as any)}>
                     <option value="">{language === 'ar' ? 'اختر الطول' : 'Select length'}</option>
                     <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
                     <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
@@ -488,7 +491,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
-                  <select className="border rounded px-3 py-2" value={languageVariant} onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={languageVariant} onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}>
                     {(language === 'ar' ? LANGUAGE_VARIANT_KEYS_AR : LANGUAGE_VARIANT_KEYS_EN).map((k) => (
                       <option key={k} value={k}>{langVariantLabel(k, language)}</option>
                     ))}
@@ -496,7 +499,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">Emojis</label>
-                  <select className="border rounded px-3 py-2" value={emojis} onChange={(e) => setEmojis(e.target.value as EmojisKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={emojis} onChange={(e) => setEmojis(e.target.value as EmojisKey)}>
                     {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -506,7 +509,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
-                  <select className="border rounded px-3 py-2" value={register} onChange={(e) => setRegister(e.target.value as RegisterKey)}>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={register} onChange={(e) => setRegister(e.target.value as RegisterKey)}>
                     {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -519,7 +522,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             <div className="space-y-3">
               <div className="grid gap-2">
                 <label className="text-sm font-medium">{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</label>
-                <textarea className="w-full border rounded p-3 min-h-[220px]" readOnly value={generatedText} />
+                <textarea className={`w-full border rounded p-3 min-h-[220px] ${fieldAccent}`} readOnly value={generatedText} />
               </div>
               {/* Cached texts: show up to 3 previous results */}
               {cachedTexts.length > 0 && (

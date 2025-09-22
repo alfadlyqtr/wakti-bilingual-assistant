@@ -124,6 +124,27 @@
   }
 }
 
+/* Ensure form field text is visible in all themes */
+input, textarea, select {
+  color: hsl(var(--foreground));
+  caret-color: hsl(var(--foreground));
+}
+
+/* Placeholder contrast */
+input::placeholder,
+textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+  opacity: 1; /* avoid extra dimming on some browsers */
+}
+
+/* Autofill in dark mode can force light text; normalize it */
+.dark input:-webkit-autofill,
+.dark textarea:-webkit-autofill,
+.dark select:-webkit-autofill {
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  transition: background-color 100000s ease-in-out 0s; /* neutralize yellow autofill */
+}
+
 /* Mobile-specific styles with enhanced artistic touches - FIXED SCROLLING */
 @layer base {
   * {
@@ -595,4 +616,30 @@
   #mobile-nav.dev-shift-up {
     bottom: 80px !important;
   }
+}
+
+/* Hint the browser to use light-themed native controls in light mode */
+:root {
+  color-scheme: light;
+}
+
+/* Critically: enable dark-themed native form controls (select dropdown, date, etc.) */
+.dark {
+  color-scheme: dark;
+}
+
+/* Dark mode: force readable backgrounds and text for form fields */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+
+/* Dark mode: ensure native option/optgroup colors are readable */
+.dark select option,
+.dark select optgroup {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--foreground));
 }

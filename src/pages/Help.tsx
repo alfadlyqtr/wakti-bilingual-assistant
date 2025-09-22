@@ -361,17 +361,14 @@ export default function Help() {
   }, [activeTab, userEmail]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="desktop-container">
       <AppHeader />
-      <main>
-        <div className="flex-1 overflow-y-auto p-4 scrollbar-hide bg-gradient-background min-h-screen">
-
-          <div className="max-w-2xl mx-auto space-y-8">
+      <main className="px-4 md:px-6 lg:px-8 py-4 md:py-6">
+        <div className="flex-1 scrollbar-hide">
+          <div className="max-w-6xl mx-auto space-y-8">
             {/* Header */}
-            <div className="text-center relative">
-              <div className="absolute inset-0 bg-gradient-primary rounded-3xl blur-2xl opacity-20 scale-110"></div>
-              <div className="absolute inset-0 bg-gradient-card rounded-3xl blur-xl opacity-40 scale-105"></div>
-              <div className="relative bg-gradient-card/30 backdrop-blur-2xl border border-border/30 rounded-3xl p-10 shadow-2xl">
+            <div className="text-center">
+              <div className="enhanced-card rounded-2xl p-8 md:p-10">
                 <h1 className="text-4xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
                   {t('howToUseWakti', language)}
                 </h1>
@@ -381,7 +378,7 @@ export default function Help() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2 bg-gradient-card/50 backdrop-blur-sm">
+              <TabsList className="enhanced-card grid w-full grid-cols-2">
                 <TabsTrigger value="guides" className="data-[state=active]:bg-primary/20">
                   {language === 'ar' ? 'الأدلة' : 'Guides'}
                 </TabsTrigger>
@@ -393,13 +390,13 @@ export default function Help() {
               <TabsContent value="guides" className="space-y-6">
 
                 {/* Collapsible Navigation Tips - Moved to Top */}
-                <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                <Card className="enhanced-card">
                   <Collapsible 
                     open={openSections.includes('navigation')}
                     onOpenChange={() => toggleSection('navigation')}
                   >
                     <CollapsibleTrigger asChild>
-                      <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                      <CardHeader className="cursor-pointer hover:bg-muted/40 transition-all duration-500">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
@@ -425,7 +422,7 @@ export default function Help() {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <CardContent>
-                        <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                        <div className="rounded-2xl border p-6">
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
                               <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
@@ -468,13 +465,13 @@ export default function Help() {
                 </Card>
 
                 {/* Collapsible Tips & Best Practices - Moved to Top */}
-                <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                <Card className="enhanced-card">
                   <Collapsible 
                     open={openSections.includes('tips')}
                     onOpenChange={() => toggleSection('tips')}
                   >
                     <CollapsibleTrigger asChild>
-                      <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                      <CardHeader className="cursor-pointer hover:bg-muted/40 transition-all duration-500">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <div className="p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40">
@@ -500,7 +497,7 @@ export default function Help() {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <CardContent>
-                        <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                        <div className="rounded-2xl border p-6">
                           <div className="space-y-4">
                             {tips.map((tip, index) => (
                               <div key={index} className="flex items-start gap-3">
@@ -520,13 +517,13 @@ export default function Help() {
                 {/* Main Sections */}
                 <div className="space-y-6">
                   {sections.map((section) => (
-                    <Card key={section.id} className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                    <Card key={section.id} className="enhanced-card">
                       <Collapsible 
                         open={openSections.includes(section.id)}
                         onOpenChange={() => toggleSection(section.id)}
                       >
                         <CollapsibleTrigger asChild>
-                          <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500">
+                          <CardHeader className="cursor-pointer hover:bg-muted/40 transition-all duration-500">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
                                 <div className={cn("p-3 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40", section.colorClass)}>
@@ -552,7 +549,7 @@ export default function Help() {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <CardContent>
-                            <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30">
+                            <div className="rounded-2xl border p-6">
                               {section.content}
                             </div>
                           </CardContent>
@@ -574,7 +571,7 @@ export default function Help() {
                 ) : (
                   <>
                     {/* Contact Support Button */}
-                    <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                    <Card className="enhanced-card">
                       <CardContent className="p-6">
                         <Button 
                           onClick={() => setShowContactModal(true)}
@@ -588,7 +585,7 @@ export default function Help() {
                     </Card>
 
                     {/* Your Messages */}
-                    <Card className="bg-gradient-card/40 backdrop-blur-2xl border-border/40">
+                    <Card className="enhanced-card">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2 bg-gradient-primary bg-clip-text text-transparent">
                           <MessageCircle className="h-5 w-5 text-primary" />
@@ -625,7 +622,7 @@ export default function Help() {
                                 <div
                                   key={submission.id}
                                   onClick={() => setSelectedSubmission(submission)}
-                                  className="p-4 bg-gradient-card/30 rounded-lg border border-border/40 cursor-pointer hover:bg-gradient-card/50 transition-all duration-200"
+                                  className="p-4 rounded-lg border cursor-pointer hover:bg-muted/40 transition-all duration-200"
                                 >
                                   <div className="flex items-start gap-3">
                                     <div className="mt-0.5">
