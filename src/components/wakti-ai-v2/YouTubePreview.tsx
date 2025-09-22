@@ -101,8 +101,8 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           modestbranding: 1,
           playsinline: 1,
           disablekb: 1,
-          loop: 1,
-          playlist: videoId,
+          // Do not auto-loop by default. We'll handle looping manually when enabled.
+          loop: 0,
         },
         events: {
           onReady: (ev: any) => {
@@ -180,7 +180,14 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
               if (!isMobile) {
                 stopSession(sessionId);
               }
-              // Do not force-exit fullscreen on natural loop end; YouTube will restart due to loop+playlist
+              // Manual loop: if ended and loop is enabled, restart from 0
+              try {
+                if (state === 0 && loopRef.current) {
+                  playerRef.current?.seekTo?.(0, true);
+                  playerRef.current?.playVideo?.();
+                  return; // exit handler so play branch will take over next tick
+                }
+              } catch {}
             }
           }
         }
@@ -392,12 +399,15 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           ref={playerContainerRef}
           style={{ position: isFullscreen ? 'fixed' : 'absolute', top: 0, left: 0, width: '100%', height: isFullscreen ? '100%' : '100%' }}
         />
-        {/* Non-interactive overlay to block iframe interactions and capture clicks for fullscreen */}
+        {/* Non-interactive overlay to block iframe interactions and capture clicks for play/pause */}
         {hasStarted && !useNativeControls && (
           <div
             className="absolute inset-0"
-            style={{ pointerEvents: 'auto' }}
-            onClick={enterFullscreen}
+            style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+            onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handlePlayPause(); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); handlePlayPause(); }}
+            aria-label={isPlaying ? 'Pause video' : 'Play video'}
+            title={isPlaying ? 'Pause' : 'Play'}
           />
         )}
         {/* YouTube pill badge top-left */}
