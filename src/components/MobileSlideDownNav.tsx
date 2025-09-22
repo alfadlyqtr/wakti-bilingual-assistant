@@ -60,7 +60,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       setAnimationStage('sliding');
       const timer = setTimeout(() => {
         setAnimationStage('icons');
-      }, 300); // Wait for slide animation to complete
+      }, 600); // Wait a bit longer so icons start after expand+slide completes
       return () => clearTimeout(timer);
     } else {
       setAnimationStage('closed');
@@ -184,7 +184,6 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
         style={{
           left: logoPosition.x,
           top: logoPosition.y + logoPosition.height + 8, // a hair below header
-          width: logoPosition.width * 4,
           zIndex: 2147483647,
           // Apply perspective on a non-transforming parent
           perspective: 1000,
@@ -203,10 +202,29 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
             "shadow-[0_14px_34px_rgba(0,0,0,0.28),0_16px_60px_rgba(255,153,0,0.10)]"
           )}
           style={{ transformOrigin: 'top left' }}
-          initial={{ opacity: 0, scale: 0.92, y: -8, rotateX: 4 }}
-          animate={{ opacity: 1, scale: 1, y: 8, rotateX: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: -6, rotateX: 3 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 26, mass: 0.7 }}
+          initial={{
+            opacity: 0,
+            scale: 1, // start at same logo visual scale
+            y: -8,
+            rotateX: 8,
+            width: logoPosition.width,
+            height: logoPosition.width, // start perfectly square like the logo
+          }}
+          animate={{
+            // Sequence: emerge (opacity), expand (scale bump), then slide down to settle
+            opacity: [0, 0.85, 1],
+            width: [logoPosition.width, logoPosition.width * 4],
+            height: 'auto',
+            scale: [1, 1.02, 1.0],
+            y: [-8, -2, 8],
+            rotateX: [8, 2, 0],
+          }}
+          exit={{ opacity: 0, scale: 0.94, y: -6, rotateX: 4 }}
+          transition={{
+            duration: 0.7,
+            ease: 'easeOut',
+            times: [0, 0.6, 1],
+          }}
         >
         {/* Bottom halo shadow to create a floating 3D effect */}
         <div
