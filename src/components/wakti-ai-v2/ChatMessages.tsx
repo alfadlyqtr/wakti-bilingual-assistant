@@ -604,10 +604,18 @@ export function ChatMessages({
               </div>
               {speakingMessageId === 'welcome' && (
                 <div className="ml-1 inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border text-foreground/80 dark:bg-white/5 dark:border-white/10 dark:text-white/80">
-                  <button onClick={onPauseResumeClick} className="p-0.5 hover:text-foreground" title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}>
+                  <button
+                    onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); togglePauseResume(); }}
+                    className="p-0.5 hover:text-foreground"
+                    title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}
+                  >
                     {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
                   </button>
-                  <button onClick={onRewindClick} className="p-0.5 hover:text-foreground" title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}>
+                  <button
+                    onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); rewind(5); }}
+                    className="p-0.5 hover:text-foreground"
+                    title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}
+                  >
                     <RotateCcw className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -616,7 +624,7 @@ export function ChatMessages({
                 <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/40 bg-background/60 text-[11px]">
                   <span className="text-foreground/80">{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
                   <button
-                    onClick={() => {
+                    onPointerUp={() => {
                       setPreemptPromptId(null);
                       handleSpeak(
                         language === 'ar'
@@ -634,7 +642,7 @@ export function ChatMessages({
                     <Play className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    onClick={() => setPreemptPromptId(null)}
+                    onPointerUp={() => setPreemptPromptId(null)}
                     className="px-1 py-0 rounded hover:bg-background/80 text-foreground/70"
                   >
                     {language === 'ar' ? 'إلغاء' : 'Cancel'}
