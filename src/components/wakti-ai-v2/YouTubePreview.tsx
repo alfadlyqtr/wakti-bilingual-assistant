@@ -28,9 +28,10 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Refs to avoid stale values inside YouTube API callbacks
   const loopRef = useRef<boolean>(false);
   const isFullscreenRef = useRef<boolean>(false);
-  // Use native YT controls on mobile portrait so PiP is available and continues in background
-  const { isMobile } = useIsMobile();
-  const [useNativeControls, setUseNativeControls] = useState<boolean>(!!isMobile);
+  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
+  const { isMobile: _isMobile } = useIsMobile();
+  const isMobile = false;
+  const [useNativeControls, setUseNativeControls] = useState<boolean>(false);
   
   // Audio session management
   const { register, unregister, requestPlayback, stopSession, isPlaying: isSessionPlaying } = useAudioSession();
@@ -39,10 +40,11 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
 
-  // Compute whether we should use native controls (enable on mobile for OS integration)
+  // Compute whether we should use native controls (mobile portrait)
   useEffect(() => {
     const calc = () => {
-      setUseNativeControls(!!isMobile);
+      // Force: always use custom controls so session manager can arbitrate audio
+      setUseNativeControls(false);
     };
     calc();
     window.addEventListener('resize', calc);
@@ -51,7 +53,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       window.removeEventListener('resize', calc);
       window.removeEventListener('orientationchange', calc as any);
     };
-  }, [isMobile]);
+  }, []);
 
   // Load YT Iframe API and create player
   useEffect(() => {
@@ -125,7 +127,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             if (state === 1) {
               setIsPlaying(true);
               setHasStarted(true);
-              if (!useNativeControls) {
+              if (!isMobile) {
                 // Desktop/tablet: ensure we hold a session if the user tapped inside the iframe
                 const claimSession = async () => {
                   if (!isSessionPlaying(sessionId)) {
@@ -140,17 +142,10 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
                     try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
                   }
                 };
-                if (!isMobile) {
-                  claimSession();
-                } else {
-                  // Mobile: simple play, no session management
-                  try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
-                }
+                claimSession();
               } else {
-                // Simple Mode: just announce playing for coordination
-                if (!isMobile) {
-                  try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
-                }
+                // Mobile: simple play, no session management
+                try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
               }
               // Start progress polling every 1s while playing
               if (progressIntervalRef.current) window.clearInterval(progressIntervalRef.current);
@@ -174,7 +169,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
                 progressIntervalRef.current = null;
               }
               // Release audio session when paused/ended
-              if (!useNativeControls) {
+              if (!isMobile) {
                 stopSession(sessionId);
               }
               // Manual loop: if ended and loop is enabled, restart from 0
@@ -199,7 +194,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       try { playerRef.current?.destroy?.(); } catch {}
       playerRef.current = null;
       // Unregister only if we registered (i.e., when not using native controls)
-      if (!useNativeControls) {
+      if (!isMobile) {
         unregister(sessionId);
       }
     };
@@ -207,12 +202,12 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
   // Register with audio session manager only on non-mobile (no native controls)
   useEffect(() => {
-    if (playerReady && playerRef.current && !useNativeControls) {
+    if (playerReady && playerRef.current && !isMobile) {
       register(sessionId, 'youtube', playerRef.current, 2); // Higher priority than TTS on desktop/tablet
       return () => unregister(sessionId);
     }
     return () => {};
-  }, [playerReady, sessionId, useNativeControls]);
+  }, [playerReady, sessionId]);
 
   // Listen for competing audio: pause YouTube when TTS starts (Simple Mode friendly)
   useEffect(() => {
@@ -244,16 +239,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
     if (!playerReady || !playerRef.current) return;
     const player = playerRef.current;
 
-    // Simple Mode on mobile: just play and unmute, no gating
-    if (useNativeControls) {
-      try { player.playVideo(); } catch {}
-      try { player.unMute(); setMuted(false); } catch {}
-      return;
-    }
-
     // Desktop/tablet: keep session flow
     try { player.playVideo(); } catch {}
-    if (!useNativeControls) {
+    if (!isMobile) {
       const granted = await requestPlayback(sessionId);
       if (granted) {
         try { player.unMute(); setMuted(false); } catch {}
@@ -268,7 +256,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
     try { playerRef.current.pauseVideo(); } catch {}
-    if (!useNativeControls) {
+    if (!isMobile) {
       await stopSession(sessionId);
     }
   };
@@ -381,37 +369,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
     return `${m}:${sec}`;
   };
 
-  // Media Session API: expose metadata and actions to device controls
-  useEffect(() => {
-    if (!('mediaSession' in navigator)) return;
-    try {
-      // Set metadata
-      (navigator as any).mediaSession.metadata = new (window as any).MediaMetadata({
-        title: title || 'YouTube',
-        artist: 'YouTube',
-        album: 'Wakti',
-        artwork: thumbnail ? [{ src: thumbnail, sizes: '512x288', type: 'image/jpeg' }] : undefined,
-      });
-
-      // Action handlers
-      (navigator as any).mediaSession.setActionHandler?.('play', async () => { try { await handlePlay(); } catch {} });
-      (navigator as any).mediaSession.setActionHandler?.('pause', async () => { try { await handlePause(); } catch {} });
-      (navigator as any).mediaSession.setActionHandler?.('seekbackward', (details: any) => { handleRewind(details?.seekOffset || 10); });
-      (navigator as any).mediaSession.setActionHandler?.('seekforward', (details: any) => { handleForward(details?.seekOffset || 10); });
-      (navigator as any).mediaSession.setActionHandler?.('seekto', (details: any) => {
-        if (!playerRef.current || !playerReady) return;
-        try { playerRef.current.seekTo?.(details.seekTime || 0, true); } catch {}
-      });
-    } catch {}
-  }, [playerReady, title, thumbnail]);
-
-  // Keep playback state in sync for Media Session
-  useEffect(() => {
-    try {
-      if (!('mediaSession' in navigator)) return;
-      (navigator as any).mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-    } catch {}
-  }, [isPlaying]);
+  // (Reverted) No Media Session integration; retain prior stable behavior.
 
   return (
     <div className="space-y-2">

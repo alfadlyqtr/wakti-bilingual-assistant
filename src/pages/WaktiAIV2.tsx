@@ -122,13 +122,13 @@ const WaktiAIV2 = () => {
     
     // Load active conversation
     const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
-    setSessionMessages(messages);
+    setSessionMessages(Array.isArray(messages) ? messages : []);
     setCurrentConversationId(conversationId);
     setIsNewConversation(!conversationId || messages.length === 0);
     
     // Load archived conversations for sidebar
     const archived = EnhancedFrontendMemory.loadArchivedConversations();
-    setArchivedConversations(archived);
+    setArchivedConversations(Array.isArray(archived) ? archived : []);
     
     console.log('✅ FRONTEND BOSS: Loaded', messages.length, 'active messages and', archived.length, 'archived conversations');
   };
@@ -1238,7 +1238,7 @@ const WaktiAIV2 = () => {
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
-        conversations={archivedConversations.map(conv => ({
+        conversations={(Array.isArray(archivedConversations) ? archivedConversations : []).map(conv => ({
           id: conv.id,
           title: conv.title,
           lastMessageAt: conv.lastMessageAt,
@@ -1281,7 +1281,7 @@ const WaktiAIV2 = () => {
           }}
         >
           <ChatMessages
-            sessionMessages={sessionMessages.slice(-35)}
+            sessionMessages={(sessionMessages ?? []).slice(-35)}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}
@@ -1311,7 +1311,7 @@ const WaktiAIV2 = () => {
             message={message}
             setMessage={setMessage}
             isLoading={isLoading}
-            sessionMessages={sessionMessages}
+            sessionMessages={sessionMessages ?? []}
             onSendMessage={handleSendMessage}
             onClearChat={handleClearChat}
             onOpenPlusDrawer={handleOpenPlusDrawer}
