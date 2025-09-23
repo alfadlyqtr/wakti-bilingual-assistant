@@ -127,8 +127,26 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             if (state === 1) {
               setIsPlaying(true);
               setHasStarted(true);
-              // Simple mode on all devices: play/unmute without session logic
-              try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
+              if (!isMobile) {
+                // Desktop/tablet: ensure we hold a session if the user tapped inside the iframe
+                const claimSession = async () => {
+                  if (!isSessionPlaying(sessionId)) {
+                    const granted = await requestPlayback(sessionId);
+                    if (granted) {
+                      try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
+                      try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+                    } else {
+                      try { playerRef.current?.pauseVideo?.(); } catch {}
+                    }
+                  } else {
+                    try { window.dispatchEvent(new CustomEvent('wakti-youtube-playing', { detail: { videoId } })); } catch {}
+                  }
+                };
+                claimSession();
+              } else {
+                // Mobile: simple play, no session management
+                try { playerRef.current?.unMute?.(); setMuted(false); } catch {}
+              }
               // Start progress polling every 1s while playing
               if (progressIntervalRef.current) window.clearInterval(progressIntervalRef.current);
               progressIntervalRef.current = window.setInterval(() => {
@@ -143,13 +161,17 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
               }, 1000) as unknown as number;
             } else if (state === 2 || state === 0) {
               setIsPlaying(false);
-              // Optional: keep event if other parts listen; harmless if unused
-              try { window.dispatchEvent(new CustomEvent('wakti-youtube-paused', { detail: { videoId, ended: state === 0 } })); } catch {}
+              if (!isMobile) {
+                try { window.dispatchEvent(new CustomEvent('wakti-youtube-paused', { detail: { videoId, ended: state === 0 } })); } catch {}
+              }
               if (progressIntervalRef.current) {
                 window.clearInterval(progressIntervalRef.current);
                 progressIntervalRef.current = null;
               }
-              // No session manager: nothing else to do here
+              // Release audio session when paused/ended
+              if (!isMobile) {
+                stopSession(sessionId);
+              }
               // Manual loop: if ended and loop is enabled, restart from 0
               try {
                 if (state === 0 && loopRef.current) {
@@ -178,8 +200,16 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
     };
   }, [videoId, useNativeControls, unregister]);
 
-  // No session manager: keep effect for compatibility but do nothing
-  useEffect(() => { return () => {}; }, [playerReady, sessionId]);
+  // Register with audio session manager only on non-mobile (no native controls)
+  useEffect(() => {
+    if (playerReady && playerRef.current && !isMobile) {
+      register(sessionId, 'youtube', playerRef.current, 2); // Higher priority than TTS on desktop/tablet
+      return () => unregister(sessionId);
+    }
+    return () => {};
+  }, [playerReady, sessionId]);
+
+  // Decoupled: no TTS→YouTube auto-pausing. Play/pause are independent.
 
   // On non-mobile, still respect the session manager changes (back-compat)
   useEffect(() => {
@@ -198,11 +228,27 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   const handlePlay = async () => {
     if (!playerReady || !playerRef.current) return;
     const player = playerRef.current;
-    try { player.playVideo(); player.unMute(); setMuted(false); } catch {}
+
+    // Desktop/tablet: keep session flow
+    try { player.playVideo(); } catch {}
+    if (!isMobile) {
+      const granted = await requestPlayback(sessionId);
+      if (granted) {
+        try { player.unMute(); setMuted(false); } catch {}
+      } else {
+        try { player.pauseVideo(); } catch {}
+      }
+    } else {
+      // Mobile: simple play
+      try { player.unMute(); setMuted(false); } catch {}
+    }
   };
   const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
     try { playerRef.current.pauseVideo(); } catch {}
+    if (!isMobile) {
+      await stopSession(sessionId);
+    }
   };
   const handlePlayPause = () => {
     if (isPlaying) handlePause(); else handlePlay();
@@ -331,12 +377,13 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           ref={playerContainerRef}
           style={{ position: isFullscreen ? 'fixed' : 'absolute', top: 0, left: 0, width: '100%', height: isFullscreen ? '100%' : '100%' }}
         />
-        {/* Non-interactive overlay: single pointer handler to avoid double events */}
+        {/* Non-interactive overlay only when using custom controls (desktop). Do not block on mobile. */}
         {hasStarted && !useNativeControls && (
           <div
             className="absolute inset-0"
             style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-            onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); handlePlayPause(); }}
+            onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handlePlayPause(); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); handlePlayPause(); }}
             aria-label={isPlaying ? 'Pause video' : 'Play video'}
             title={isPlaying ? 'Pause' : 'Play'}
           />

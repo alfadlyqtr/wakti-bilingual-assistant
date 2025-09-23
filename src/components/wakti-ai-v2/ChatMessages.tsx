@@ -663,7 +663,7 @@ export function ChatMessages({
                 
                 {/* TTS Button - No preloading, only on click */}
                 <button
-                  onPointerUp={() => handleSpeak(language === 'ar' 
+                  onClick={() => handleSpeak(language === 'ar' 
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
                     : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome', true
                   )}
@@ -1198,7 +1198,8 @@ export function ChatMessages({
                             {/* TTS Button with Stop Functionality (assistant only) */}
                             {message.role === 'assistant' && (
                               <button
-                                onPointerUp={() => handleSpeak(message.content, message.id, true)}
+                                onTouchStart={() => handleSpeak(message.content, message.id, true)}
+                                onClick={() => handleSpeak(message.content, message.id, true)}
                                 style={{ touchAction: 'manipulation' }}
                                 className={`p-2 rounded-md transition-colors ${speakingMessageId === message.id || fadeOutId === message.id ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                                 title={speakingMessageId === message.id 
