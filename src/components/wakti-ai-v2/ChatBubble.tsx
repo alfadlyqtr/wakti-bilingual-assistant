@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +9,7 @@ import { useState } from 'react';
 import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
+import { useAudioSession } from '@/hooks/useAudioSession';
 
 interface ChatBubbleProps {
   message: any;
@@ -22,6 +22,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
   const isUser = message.role === 'user';
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const { register, unregister, requestPlayback, stopSession, unlockAudio } = useAudioSession();
 
   // Format message content with enhanced buddy-chat features
   const formatContent = (content: string) => {
@@ -80,6 +81,10 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       setIsSpeaking(true);
       setIsPaused(false);
 
+      // Prepare an audio session for this bubble playback
+      const sessionId = `tts-bubble-${message.id || 'unknown'}`;
+      await unlockAudio();
+
       // Determine voice from TalkBack settings
       const isArabicText = /[\u0600-\u06FF]/.test(text);
       const { ar, en } = getSelectedVoices();
@@ -112,9 +117,22 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       const objectUrl = URL.createObjectURL(blob);
       const audio = new Audio(objectUrl);
       audioRef.current = audio;
-      audio.onended = () => { setIsSpeaking(false); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
-      audio.onerror = () => { setIsSpeaking(false); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
-      audio.onpause = () => setIsPaused(true);
+
+      // Register and request playback with higher priority to preempt YouTube if needed
+      register(sessionId, 'tts', audio, 3);
+      const granted = await requestPlayback(sessionId);
+      if (!granted) {
+        // Cleanup and exit if another higher-priority session is active
+        try { URL.revokeObjectURL(objectUrl); } catch {}
+        setIsSpeaking(false);
+        setIsPaused(false);
+        await unregister(sessionId);
+        return;
+      }
+
+      audio.onended = () => { setIsSpeaking(false); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {}; try { stopSession(sessionId); unregister(sessionId); } catch {} };
+      audio.onerror = () => { setIsSpeaking(false); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {}; try { stopSession(sessionId); unregister(sessionId); } catch {} };
+      audio.onpause = () => { setIsPaused(true); try { stopSession(sessionId); unregister(sessionId); } catch {} };
       audio.onplay = () => setIsPaused(false);
       await audio.play();
     } catch (error) {

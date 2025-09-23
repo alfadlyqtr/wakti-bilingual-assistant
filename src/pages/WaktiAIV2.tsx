@@ -192,30 +192,9 @@ const WaktiAIV2 = () => {
   }, [currentConversationId]);
 
   const isExplicitTaskCommand = (messageContent: string): boolean => {
-    const lowerMessage = messageContent.toLowerCase().trim();
-    
-    const englishTaskPatterns = [
-      /^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*(.{5,})/i,
-      /^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to|that)\s+(.{5,})/i,
-      /^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to|that)\s+(.{5,})/i,
-      /^task\s*:\s*(.{5,})/i,
-      /^add\s+task\s*:?\s*(.{5,})/i,
-      /^create\s+task\s*:?\s*(.{5,})/i,
-      /^make\s+task\s*:?\s*(.{5,})/i
-    ];
-    
-    const arabicTaskPatterns = [
-      /^(من\s+فضلك\s+)?(أنشئ|اعمل|أضف|مهمة\s+جديدة)\s*(مهمة)?\s*:?\s*(.{5,})/i,
-      /^(هل\s+يمكنك\s+)?(إنشاء|عمل|إضافة)\s+(مهمة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{5,})/i,
-      /^(أحتاج\s+)?(إلى\s+)?(مهمة\s+جديدة)\s+(لـ|حول|من\s+أجل|بخصوص)\s+(.{5,})/i,
-      /^مهمة\s*:\s*(.{5,})/i,
-      /^أضف\s+مهمة\s*:?\s*(.{5,})/i,
-      /^أنشئ\s+مهمة\s*:?\s*(.{5,})/i,
-      /^اعمل\s+مهمة\s*:?\s*(.{5,})/i
-    ];
-
-    const allPatterns = [...englishTaskPatterns, ...arabicTaskPatterns];
-    return allPatterns.some(pattern => pattern.test(messageContent));
+    // Chat-only mode: disable AI-driven task/reminder parsing.
+    // Always return false so we never branch into the explicit task path.
+    return false;
   };
 
   const handleSendMessage = useCallback(async (messageContent: string, trigger: string, attachedFiles?: any[], imageMode?: string, imageQuality?: 'fast' | 'best_fast') => {
@@ -686,12 +665,17 @@ const WaktiAIV2 = () => {
           }
 
           if (ytResp.error) {
-            setSessionMessages(prev => prev.map(m => m.id === assistantId ? {
+            throw new Error(ytResp.error);
+          }
+          
+          // Update the placeholder with the final search result
+          setSessionMessages(prev => {
+            const updated = prev.map(m => m.id === assistantId ? {
               ...m,
               content: ytResp.response || (language === 'ar' ? '🌐 تعذر الوصول إلى بحث يوتيوب حالياً.' : '🌐 Unable to reach YouTube search right now.'),
               intent: 'search',
               metadata: { ...(m.metadata || {}), ...(ytResp.metadata || {}) }
-            } : m));
+            } : m);
             EnhancedFrontendMemory.saveActiveConversation(
               [...newMessages, {
                 id: assistantId,
@@ -703,22 +687,7 @@ const WaktiAIV2 = () => {
             );
             if (requestIdRef.current === requestId) setIsLoading(false);
             return;
-          }
-
-          setSessionMessages(prev => {
-            const updated = prev.map(m => m.id === assistantId ? {
-              ...m,
-              content: ytResp.response || '',
-              intent: 'search',
-              browsingUsed: ytResp.browsingUsed ?? true,
-              browsingData: ytResp.browsingData,
-              metadata: { ...(m.metadata || {}), ...(ytResp.metadata || {}) }
-            } : m);
-            EnhancedFrontendMemory.saveActiveConversation(updated, workingConversationId);
-            return updated;
           });
-          if (requestIdRef.current === requestId) setIsLoading(false);
-          return;
         }
 
         console.log('🔥 DEBUG: About to call sendStreamingMessage for search mode');

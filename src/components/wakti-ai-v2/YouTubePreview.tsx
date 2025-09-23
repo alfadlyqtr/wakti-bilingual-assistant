@@ -29,23 +29,20 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   const loopRef = useRef<boolean>(false);
   const isFullscreenRef = useRef<boolean>(false);
   // Use native YT controls on mobile portrait so PiP is available and continues in background
-  const [useNativeControls, setUseNativeControls] = useState<boolean>(false);
+  const { isMobile } = useIsMobile();
+  const [useNativeControls, setUseNativeControls] = useState<boolean>(!!isMobile);
   
   // Audio session management
   const { register, unregister, requestPlayback, stopSession, isPlaying: isSessionPlaying } = useAudioSession();
   const sessionId = `youtube-${videoId}`;
-  const { isMobile: _isMobile } = useIsMobile();
-  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
-  const isMobile = false;
 
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
 
-  // Compute whether we should use native controls (mobile portrait)
+  // Compute whether we should use native controls (enable on mobile for OS integration)
   useEffect(() => {
     const calc = () => {
-      // Force: always use custom controls so session manager can arbitrate audio
-      setUseNativeControls(false);
+      setUseNativeControls(!!isMobile);
     };
     calc();
     window.addEventListener('resize', calc);
@@ -54,7 +51,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       window.removeEventListener('resize', calc);
       window.removeEventListener('orientationchange', calc as any);
     };
-  }, []);
+  }, [isMobile]);
 
   // Load YT Iframe API and create player
   useEffect(() => {
@@ -177,7 +174,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
                 progressIntervalRef.current = null;
               }
               // Release audio session when paused/ended
-              if (!isMobile) {
+              if (!useNativeControls) {
                 stopSession(sessionId);
               }
               // Manual loop: if ended and loop is enabled, restart from 0
@@ -201,11 +198,12 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       progressIntervalRef.current = null;
       try { playerRef.current?.destroy?.(); } catch {}
       playerRef.current = null;
-      if (!isMobile) {
+      // Unregister only if we registered (i.e., when not using native controls)
+      if (!useNativeControls) {
         unregister(sessionId);
       }
     };
-  }, [videoId, useNativeControls]);
+  }, [videoId, useNativeControls, unregister]);
 
   // Register with audio session manager only on non-mobile (no native controls)
   useEffect(() => {
@@ -255,7 +253,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
     // Desktop/tablet: keep session flow
     try { player.playVideo(); } catch {}
-    if (!isMobile) {
+    if (!useNativeControls) {
       const granted = await requestPlayback(sessionId);
       if (granted) {
         try { player.unMute(); setMuted(false); } catch {}
@@ -270,7 +268,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
     try { playerRef.current.pauseVideo(); } catch {}
-    if (!isMobile) {
+    if (!useNativeControls) {
       await stopSession(sessionId);
     }
   };
@@ -383,6 +381,38 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
     return `${m}:${sec}`;
   };
 
+  // Media Session API: expose metadata and actions to device controls
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      // Set metadata
+      (navigator as any).mediaSession.metadata = new (window as any).MediaMetadata({
+        title: title || 'YouTube',
+        artist: 'YouTube',
+        album: 'Wakti',
+        artwork: thumbnail ? [{ src: thumbnail, sizes: '512x288', type: 'image/jpeg' }] : undefined,
+      });
+
+      // Action handlers
+      (navigator as any).mediaSession.setActionHandler?.('play', async () => { try { await handlePlay(); } catch {} });
+      (navigator as any).mediaSession.setActionHandler?.('pause', async () => { try { await handlePause(); } catch {} });
+      (navigator as any).mediaSession.setActionHandler?.('seekbackward', (details: any) => { handleRewind(details?.seekOffset || 10); });
+      (navigator as any).mediaSession.setActionHandler?.('seekforward', (details: any) => { handleForward(details?.seekOffset || 10); });
+      (navigator as any).mediaSession.setActionHandler?.('seekto', (details: any) => {
+        if (!playerRef.current || !playerReady) return;
+        try { playerRef.current.seekTo?.(details.seekTime || 0, true); } catch {}
+      });
+    } catch {}
+  }, [playerReady, title, thumbnail]);
+
+  // Keep playback state in sync for Media Session
+  useEffect(() => {
+    try {
+      if (!('mediaSession' in navigator)) return;
+      (navigator as any).mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    } catch {}
+  }, [isPlaying]);
+
   return (
     <div className="space-y-2">
       <div className="font-medium" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
@@ -399,7 +429,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           ref={playerContainerRef}
           style={{ position: isFullscreen ? 'fixed' : 'absolute', top: 0, left: 0, width: '100%', height: isFullscreen ? '100%' : '100%' }}
         />
-        {/* Non-interactive overlay to block iframe interactions and capture clicks for play/pause */}
+        {/* Non-interactive overlay only when using custom controls (desktop). Do not block on mobile. */}
         {hasStarted && !useNativeControls && (
           <div
             className="absolute inset-0"
@@ -443,7 +473,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             </>
           )}
         </div>
-        {/* On mobile with native controls, rely on the iframe's own play button to honor gesture */}
+        {/* On mobile with native controls, rely on the iframe's native play button; on desktop show thumbnail play */}
         {!hasStarted && !useNativeControls && (
           <button
             type="button"
