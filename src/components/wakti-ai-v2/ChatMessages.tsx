@@ -86,8 +86,10 @@ export function ChatMessages({
 
   // Audio session management for TTS
   const { register, unregister, requestPlayback, stopSession, unlockAudio, currentSession } = useAudioSession();
-  const { isMobile: isMobileWidth } = useIsMobile();
-  const isMobile = isMobileWidth || (typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+  const { isMobile: _isMobile } = useIsMobile();
+  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
+  const isMobile = false;
+
   // Keep ref synchronized with state to avoid stale closures during async work
   useEffect(() => {
     speakingMessageIdRef.current = speakingMessageId;

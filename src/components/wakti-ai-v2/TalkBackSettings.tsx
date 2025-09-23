@@ -69,34 +69,6 @@ export const TalkBackSettings: React.FC<TalkBackSettingsProps> = ({ compact = fa
     try { setPreempt(localStorage.getItem(LS_PREEMPT) === '1'); } catch {}
   }, []);
 
-  // Mobile audio context unlock for TTS
-  useEffect(() => {
-    const unlockAudio = () => {
-      try {
-        const AudioCtx: any = (window as any).AudioContext || (window as any).webkitAudioContext;
-        if (!AudioCtx) return;
-        const audioContext = new AudioCtx();
-        if (audioContext && audioContext.state === 'suspended') {
-          audioContext.resume?.();
-        }
-      } catch (e) {
-        console.log('Audio context unlock failed:', e);
-      }
-    };
-
-    if (typeof window !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent)) {
-      window.addEventListener('touchstart', unlockAudio, { once: true } as any);
-      window.addEventListener('click', unlockAudio, { once: true } as any);
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('touchstart', unlockAudio as any);
-        window.removeEventListener('click', unlockAudio as any);
-      }
-    };
-  }, []);
-
   const saveAr = (val: VoiceId) => {
     setArVoice(val);
     try { localStorage.setItem(LS_AR, val); } catch {}

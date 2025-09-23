@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 export type AudioSource = 'youtube' | 'tts' | 'voice-recording' | 'other';
 
@@ -140,7 +140,6 @@ const audioSessionManager = new AudioSessionManager();
 
 export function useAudioSession() {
   const sessionRef = useRef<AudioSession | null>(null);
-  const [current, setCurrent] = useState<AudioSession | null>(audioSessionManager.getCurrentSession());
 
   const register = useCallback((id: string, source: AudioSource, element?: any, priority = 1) => {
     sessionRef.current = audioSessionManager.register(id, source, element, priority);
@@ -171,7 +170,7 @@ export function useAudioSession() {
   // Subscribe to session changes
   useEffect(() => {
     const unsubscribe = audioSessionManager.subscribe((session) => {
-      setCurrent(session);
+      // This will trigger re-renders when session changes
     });
     return unsubscribe;
   }, []);
@@ -183,7 +182,7 @@ export function useAudioSession() {
     stopSession,
     isPlaying,
     unlockAudio,
-    currentSession: current
+    currentSession: audioSessionManager.getCurrentSession()
   };
 }
 

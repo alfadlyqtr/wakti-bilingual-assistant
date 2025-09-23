@@ -28,8 +28,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Refs to avoid stale values inside YouTube API callbacks
   const loopRef = useRef<boolean>(false);
   const isFullscreenRef = useRef<boolean>(false);
-  const { isMobile } = useIsMobile();
-  const isMobileDevice = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
+  const { isMobile: _isMobile } = useIsMobile();
+  const isMobile = false;
   const [useNativeControls, setUseNativeControls] = useState<boolean>(false);
   
   // Audio session management
@@ -42,11 +43,8 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Compute whether we should use native controls (mobile portrait)
   useEffect(() => {
     const calc = () => {
-      if (isMobileDevice || isMobile) {
-        setUseNativeControls(true);
-      } else {
-        setUseNativeControls(false);
-      }
+      // Force: always use custom controls so session manager can arbitrate audio
+      setUseNativeControls(false);
     };
     calc();
     window.addEventListener('resize', calc);
@@ -129,7 +127,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
             if (state === 1) {
               setIsPlaying(true);
               setHasStarted(true);
-              if (!isMobileDevice) {
+              if (!isMobile) {
                 // Desktop/tablet: ensure we hold a session if the user tapped inside the iframe
                 const claimSession = async () => {
                   if (!isSessionPlaying(sessionId)) {
@@ -163,7 +161,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
               }, 1000) as unknown as number;
             } else if (state === 2 || state === 0) {
               setIsPlaying(false);
-              if (!isMobileDevice) {
+              if (!isMobile) {
                 try { window.dispatchEvent(new CustomEvent('wakti-youtube-paused', { detail: { videoId, ended: state === 0 } })); } catch {}
               }
               if (progressIntervalRef.current) {
@@ -171,7 +169,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
                 progressIntervalRef.current = null;
               }
               // Release audio session when paused/ended
-              if (!isMobileDevice) {
+              if (!isMobile) {
                 stopSession(sessionId);
               }
               // Manual loop: if ended and loop is enabled, restart from 0
@@ -196,7 +194,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       try { playerRef.current?.destroy?.(); } catch {}
       playerRef.current = null;
       // Unregister only if we registered (i.e., when not using native controls)
-      if (!isMobileDevice) {
+      if (!isMobile) {
         unregister(sessionId);
       }
     };
@@ -204,7 +202,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
   // Register with audio session manager only on non-mobile (no native controls)
   useEffect(() => {
-    if (playerReady && playerRef.current && !isMobileDevice && !useNativeControls) {
+    if (playerReady && playerRef.current && !isMobile) {
       register(sessionId, 'youtube', playerRef.current, 2); // Higher priority than TTS on desktop/tablet
       return () => unregister(sessionId);
     }
@@ -213,7 +211,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
   // Listen for competing audio: pause YouTube when TTS starts (Simple Mode friendly)
   useEffect(() => {
-    if (!isMobileDevice) {
+    if (!isMobile) {
       const onTtsPlaying = () => {
         try { playerRef.current?.pauseVideo?.(); } catch {}
       };
@@ -226,17 +224,14 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // On non-mobile, still respect the session manager changes (back-compat)
   useEffect(() => {
     if (useNativeControls) return; // skip in Simple Mode
-    if (!isMobileDevice) {
-      const onSessionChange = (e: CustomEvent) => {
-        const { activeSource, sessionId: activeId } = e.detail;
-        if (activeSource !== 'youtube' && activeId !== sessionId && isPlaying) {
-          try { playerRef.current?.pauseVideo?.(); } catch {}
-        }
-      };
-      window.addEventListener('wakti-audio-session-changed', onSessionChange as EventListener);
-      return () => window.removeEventListener('wakti-audio-session-changed', onSessionChange as EventListener);
-    }
-    return () => {};
+    const onSessionChange = (e: CustomEvent) => {
+      const { activeSource, sessionId: activeId } = e.detail;
+      if (activeSource !== 'youtube' && activeId !== sessionId && isPlaying) {
+        try { playerRef.current?.pauseVideo?.(); } catch {}
+      }
+    };
+    window.addEventListener('wakti-audio-session-changed', onSessionChange as EventListener);
+    return () => window.removeEventListener('wakti-audio-session-changed', onSessionChange as EventListener);
   }, [sessionId, isPlaying, useNativeControls]);
 
   // Control handlers with audio session management
@@ -246,7 +241,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
     // Desktop/tablet: keep session flow
     try { player.playVideo(); } catch {}
-    if (!isMobileDevice) {
+    if (!isMobile) {
       const granted = await requestPlayback(sessionId);
       if (granted) {
         try { player.unMute(); setMuted(false); } catch {}
@@ -261,7 +256,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
     try { playerRef.current.pauseVideo(); } catch {}
-    if (!isMobileDevice) {
+    if (!isMobile) {
       await stopSession(sessionId);
     }
   };
@@ -393,7 +388,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           style={{ position: isFullscreen ? 'fixed' : 'absolute', top: 0, left: 0, width: '100%', height: isFullscreen ? '100%' : '100%' }}
         />
         {/* Non-interactive overlay only when using custom controls (desktop). Do not block on mobile. */}
-        {hasStarted && !useNativeControls && !isMobileDevice && (
+        {hasStarted && !useNativeControls && (
           <div
             className="absolute inset-0"
             style={{ pointerEvents: 'auto', cursor: 'pointer' }}
