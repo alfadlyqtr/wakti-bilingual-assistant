@@ -14,8 +14,6 @@ import { YouTubePreview } from './YouTubePreview';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
-import { useAudioSession } from '@/hooks/useAudioSession';
-import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -81,14 +79,9 @@ export function ChatMessages({
   const autoPlayRef = useRef<boolean>(false);
   const audioUnlockedRef = useRef<boolean>(false);
   const preemptRef = useRef<boolean>(false);
-  const activeSourceRef = useRef<'youtube' | 'tts' | 'voice-recording' | 'other' | null>(null);
   const [preemptPromptId, setPreemptPromptId] = useState<string | null>(null);
 
-  // Audio session management for TTS
-  const { register, unregister, requestPlayback, stopSession, unlockAudio, currentSession } = useAudioSession();
-  const { isMobile: _isMobile } = useIsMobile();
-  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
-  const isMobile = false;
+  // No audio session manager: direct play/pause everywhere
 
   // Keep ref synchronized with state to avoid stale closures during async work
   useEffect(() => {
@@ -277,22 +270,10 @@ export function ChatMessages({
         setSpeakingMessageId(null);
         setIsPaused(false);
         setPreemptPromptId(null);
-        if (!isMobile) {
-          await stopSession(sessionId);
-          await unregister(sessionId);
-        }
         return;
       }
 
-      // Preempt policy: on user-initiated taps, always elevate TTS priority to take over YouTube
-      let priority = 1; // default
-      const youtubeActive = (activeSourceRef.current === 'youtube') || (currentSession?.source === 'youtube');
-      if (userInitiated || forcePreempt || youtubeActive) {
-        priority = 3; // take control from YouTube reliably
-      }
-
-      // Unlock audio context on iOS
-      await unlockAudio();
+      // Simplified: no preempt logic and no platform unlock gate
 
       // Stop any current playback
       if (audioRef.current) {
@@ -313,49 +294,26 @@ export function ChatMessages({
         const a = new Audio();
         try { a.muted = false; a.volume = 1; } catch {}
         audioRef.current = a;
-        if (!isMobile) {
-          register(sessionId, 'tts', a, priority);
-          const granted = await requestPlayback(sessionId);
-          if (granted) { try { window.dispatchEvent(new Event('wakti-tts-playing')); } catch {} }
-          if (!granted) {
-            console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
-            try { URL.revokeObjectURL(url); } catch {}
-            setSpeakingMessageId(null);
-            setIsPaused(false);
-            await unregister(sessionId);
-            return;
-          }
-        }
-        // set src only after granted to avoid blob 404s
+        // set src
         a.src = url;
         a.onended = () => { 
           setSpeakingMessageId(null); 
           setIsPaused(false); 
           triggerFadeOut(messageId); 
-          if (!isMobile) { stopSession(sessionId); unregister(sessionId); }
           try { URL.revokeObjectURL(url); } catch {} 
         };
         a.onerror = () => { 
           setSpeakingMessageId(null); 
           setIsPaused(false); 
           triggerFadeOut(messageId); 
-          if (!isMobile) { stopSession(sessionId); unregister(sessionId); }
           try { URL.revokeObjectURL(url); } catch {} 
         };
         a.onplay = () => { setIsPaused(false); };
         a.onpause = () => {
           setIsPaused(true);
-          if (!isMobile) {
-            // Safety: release session if paused so other audio (e.g., YouTube) can play
-            try { stopSession(sessionId); unregister(sessionId); } catch {}
-          }
         };
         try { await a.play(); } catch (e) {
           console.error('[TTS] play() failed from persisted', e);
-          // Cleanup: release session and reset UI so other audio (e.g., YouTube) can request playback
-          if (!isMobile) {
-            try { stopSession(sessionId); unregister(sessionId); } catch {}
-          }
           try { URL.revokeObjectURL(url); } catch {}
           setSpeakingMessageId(null);
           setIsPaused(false);
@@ -453,49 +411,25 @@ export function ChatMessages({
       const audio = new Audio();
       try { audio.muted = false; audio.volume = 1; } catch {}
       audioRef.current = audio;
-      if (!isMobile) {
-        register(sessionId, 'tts', audio, priority);
-        const granted2 = await requestPlayback(sessionId);
-        if (!granted2) {
-          console.log('[TTS] Playback denied (higher-priority source is active). Enable Preempt in Talk Back to allow pausing YouTube.');
-          try { URL.revokeObjectURL(objectUrl); } catch {}
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-          await unregister(sessionId);
-          return;
-        }
-      }
-      // set src only after granted to avoid blob 404s
+      // set src
       audio.src = objectUrl;
       audio.onended = () => { 
         setSpeakingMessageId(null); 
         setIsPaused(false); 
         triggerFadeOut(messageId); 
-        if (!isMobile) { stopSession(sessionId); unregister(sessionId); }
         try { URL.revokeObjectURL(objectUrl); } catch {} 
       };
       audio.onerror = () => { 
         setSpeakingMessageId(null); 
         setIsPaused(false); 
         triggerFadeOut(messageId); 
-        if (!isMobile) { stopSession(sessionId); unregister(sessionId); }
         try { URL.revokeObjectURL(objectUrl); } catch {} 
       };
       audio.onplay = () => { setIsPaused(false); };
-      audio.onpause = () => {
-        setIsPaused(true);
-        if (!isMobile) {
-          // Safety: release session if paused so other audio (e.g., YouTube) can play
-          try { stopSession(sessionId); unregister(sessionId); } catch {}
-        }
-      };
+      audio.onpause = () => { setIsPaused(true); };
       console.log('[TTS] playing audio');
       try { await audio.play(); } catch (e) {
         console.error('[TTS] play() failed after fetch', e);
-        // Cleanup: release session and reset UI so other audio (e.g., YouTube) can request playback
-        if (!isMobile) {
-          try { stopSession(sessionId); unregister(sessionId); } catch {}
-        }
         try { URL.revokeObjectURL(objectUrl); } catch {}
         setSpeakingMessageId(null);
         setIsPaused(false);
@@ -589,23 +523,6 @@ export function ChatMessages({
       // Avoid overlapping
       if (speakingMessageIdRef.current) return;
 
-      // If audio is not yet unlocked (iOS), wait for unlock event once
-      if (!audioUnlockedRef.current) {
-        const onUnlock = () => {
-          try {
-            if (!autoPlayRef.current) return;
-            const _last = sessionMessages[sessionMessages.length - 1];
-            if (!_last || _last.role !== 'assistant') return;
-            if (autoPlayedIdsRef.current.has(_last.id)) return;
-            autoPlayedIdsRef.current.add(_last.id);
-            const txt = _last.content || '';
-            handleSpeak(txt, _last.id);
-          } catch {}
-        };
-        window.addEventListener('wakti-tts-unlocked', onUnlock as EventListener, { once: true } as any);
-        return;
-      }
-
       // Mark to avoid repeats
       autoPlayedIdsRef.current.add(last.id);
       const text = last.content || '';
@@ -663,7 +580,7 @@ export function ChatMessages({
                 
                 {/* TTS Button - No preloading, only on click */}
                 <button
-                  onClick={() => handleSpeak(language === 'ar' 
+                  onPointerUp={() => handleSpeak(language === 'ar' 
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
                     : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome', true
                   )}
@@ -1027,15 +944,7 @@ export function ChatMessages({
     rewind(5);
   };
 
-  // Track active audio source via global session change events (more reliable than snapshot)
-  useEffect(() => {
-    const onChange = (e: Event) => {
-      const ce = e as CustomEvent<{ activeSource: 'youtube'|'tts'|'voice-recording'|'other'|null }>; 
-      activeSourceRef.current = (ce?.detail?.activeSource ?? null) as any;
-    };
-    window.addEventListener('wakti-audio-session-changed', onChange as EventListener);
-    return () => window.removeEventListener('wakti-audio-session-changed', onChange as EventListener);
-  }, []);
+  // Session manager removed: no global session change tracking needed
 
   return (
     <>
@@ -1227,8 +1136,7 @@ export function ChatMessages({
                             {message.role === 'assistant' && speakingMessageId === message.id && (
                               <div className="inline-flex items-center gap-1 bg-background/80 backdrop-blur px-1.5 py-0.5 rounded-md border border-border ml-1">
                                 <button 
-                                  onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); togglePauseResume(); }}
-                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePauseResume(); }}
+                                  onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); togglePauseResume(); }}
                                   style={{ touchAction: 'manipulation' }}
                                   className="p-0.5 hover:text-foreground" 
                                   title={isPaused ? (language==='ar'?'تشغيل':'Play') : (language==='ar'?'إيقاف مؤقت':'Pause')}
@@ -1236,8 +1144,7 @@ export function ChatMessages({
                                   {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
                                 </button>
                                 <button 
-                                  onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); rewind(5); }}
-                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); rewind(5); }}
+                                  onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); rewind(5); }}
                                   style={{ touchAction: 'manipulation' }}
                                   className="p-0.5 hover:text-foreground" 
                                   title={language==='ar'?'إرجاع 5 ثوانٍ':'Rewind 5s'}
@@ -1251,7 +1158,7 @@ export function ChatMessages({
                             <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/40 bg-background/60 text-[11px]">
                               <span className="text-foreground/80">{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
                               <button
-                                onClick={() => { setPreemptPromptId(null); handleSpeak(message.content, message.id, true, true); }}
+                                onPointerUp={() => { setPreemptPromptId(null); handleSpeak(message.content, message.id, true, true); }}
                                 className="inline-flex items-center justify-center h-5 w-5 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
                                 aria-label={language === 'ar' ? 'تشغيل' : 'Play'}
                                 title={language === 'ar' ? 'تشغيل' : 'Play'}
