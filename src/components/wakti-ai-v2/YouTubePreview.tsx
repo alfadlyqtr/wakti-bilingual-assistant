@@ -28,9 +28,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Refs to avoid stale values inside YouTube API callbacks
   const loopRef = useRef<boolean>(false);
   const isFullscreenRef = useRef<boolean>(false);
-  // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
-  const { isMobile: _isMobile } = useIsMobile();
-  const isMobile = false;
+  const { isMobile } = useIsMobile();
   const [useNativeControls, setUseNativeControls] = useState<boolean>(false);
   
   // Audio session management
@@ -43,8 +41,11 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Compute whether we should use native controls (mobile portrait)
   useEffect(() => {
     const calc = () => {
-      // Force: always use custom controls so session manager can arbitrate audio
-      setUseNativeControls(false);
+      if (isMobile) {
+        setUseNativeControls(true);
+      } else {
+        setUseNativeControls(false);
+      }
     };
     calc();
     window.addEventListener('resize', calc);
@@ -202,7 +203,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
   // Register with audio session manager only on non-mobile (no native controls)
   useEffect(() => {
-    if (playerReady && playerRef.current && !isMobile) {
+    if (playerReady && playerRef.current && !isMobile && !useNativeControls) {
       register(sessionId, 'youtube', playerRef.current, 2); // Higher priority than TTS on desktop/tablet
       return () => unregister(sessionId);
     }
@@ -388,7 +389,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           style={{ position: isFullscreen ? 'fixed' : 'absolute', top: 0, left: 0, width: '100%', height: isFullscreen ? '100%' : '100%' }}
         />
         {/* Non-interactive overlay only when using custom controls (desktop). Do not block on mobile. */}
-        {hasStarted && !useNativeControls && (
+        {hasStarted && !useNativeControls && !isMobile && (
           <div
             className="absolute inset-0"
             style={{ pointerEvents: 'auto', cursor: 'pointer' }}
