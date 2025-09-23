@@ -209,17 +209,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
     return () => {};
   }, [playerReady, sessionId]);
 
-  // Listen for competing audio: pause YouTube when TTS starts (Simple Mode friendly)
-  useEffect(() => {
-    if (!isMobile) {
-      const onTtsPlaying = () => {
-        try { playerRef.current?.pauseVideo?.(); } catch {}
-      };
-      window.addEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
-      return () => window.removeEventListener('wakti-tts-playing', onTtsPlaying as EventListener);
-    }
-    return () => {};
-  }, []);
+  // Decoupled: no TTS→YouTube auto-pausing. Play/pause are independent.
 
   // On non-mobile, still respect the session manager changes (back-compat)
   useEffect(() => {
