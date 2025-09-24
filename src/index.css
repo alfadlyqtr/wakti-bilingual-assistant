@@ -448,21 +448,40 @@ textarea::placeholder {
     height: var(--visual-viewport-height, 100vh);
   }
 
-  /* Chat input positioning */
+  /* Chat input positioning - SOLID & FIXED */
   .chat-input-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 50;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 9999 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    background: var(--background, #111827) !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
   }
 
+  /* Ensure solid background for chat input */
+  .chat-input-container.solid-bg {
+    background: var(--background, #111827) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Ensure chat input stays at bottom and flush with keyboard when visible */
   .wakti-ai-container.keyboard-visible .chat-input-container {
-    position: fixed;
-    bottom: 0;
-    padding-bottom: 0;
-    transform: translateY(0);
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    padding-bottom: 0 !important;
+    transform: translateY(0) !important;
+    z-index: 9999 !important;
+    background: var(--background, #111827) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3) !important;
   }
 
   /* Removed mobile-nav CSS rules - component deleted */
@@ -544,30 +563,73 @@ html, body, #root {
   position: fixed !important;
 }
 
-/* Fix header positioning - mobile only gets full width header */
+/* Fix header positioning - mobile gets full width header */
 .app-layout-mobile header, .app-layout-mobile .header, .app-layout-mobile [class*="header"] {
   position: fixed !important;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
-  background-color: var(--background, #ffffff) !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 100 !important;
+  background-color: var(--background, #111827) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  height: var(--app-header-h, 56px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Desktop header - account for sidebar */
+/* Desktop header - account for sidebar and elevated position */
 .app-layout-desktop header, .app-layout-desktop .header,
 .app-layout-tablet header, .app-layout-tablet .header {
   position: fixed !important;
-  top: 0;
-  left: var(--sidebar-width, 240px) !important; /* Account for sidebar width */
-  right: 0;
-  z-index: 50;
-  background-color: var(--background, #ffffff) !important;
+  top: 0.5rem !important;
+  left: calc(var(--sidebar-width, 240px) + 0.5rem) !important; /* Account for sidebar width */
+  right: 1rem !important;
+  z-index: 100 !important;
+  background: transparent !important;
+  height: auto !important;
+  box-shadow: none !important;
+  border: none !important;
+  width: calc(100% - var(--sidebar-width, 240px) - 1.5rem) !important; /* Set explicit width */
+}
+
+/* Make Wakti AI container match header width in desktop/tablet view */
+@media (min-width: 768px) {
+  .app-layout-desktop .wakti-ai-container, 
+  .app-layout-tablet .wakti-ai-container {
+    max-width: calc(100% - var(--sidebar-width, 240px) - 1.5rem) !important;
+    margin-left: calc(var(--sidebar-width, 240px) + 0.5rem) !important;
+    margin-right: 1rem !important;
+    width: auto !important;
+  }
+  
+  /* Fix container width for Wakti AI chat input */
+  .app-layout-desktop .chat-input-container,
+  .app-layout-tablet .chat-input-container {
+    width: calc(100% - var(--sidebar-width, 240px) - 1.5rem) !important;
+    left: calc(var(--sidebar-width, 240px) + 0.5rem) !important;
+    right: 1rem !important;
+    margin: 0 !important;
+  }
 }
 
 /* For tablet, use tablet sidebar width */
 .app-layout-tablet header, .app-layout-tablet .header {
   left: var(--tablet-sidebar-width, 180px) !important;
+  width: calc(100% - var(--tablet-sidebar-width, 180px) - 1.5rem) !important; /* Set explicit width */
+}
+
+/* Tablet-specific Wakti AI container width */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-layout-tablet .wakti-ai-container {
+    max-width: calc(100% - var(--tablet-sidebar-width, 180px) - 1.5rem) !important;
+    margin-left: calc(var(--tablet-sidebar-width, 180px) + 0.5rem) !important;
+  }
+  
+  .app-layout-tablet .chat-input-container {
+    width: calc(100% - var(--tablet-sidebar-width, 180px) - 1.5rem) !important;
+    left: calc(var(--tablet-sidebar-width, 180px) + 0.5rem) !important;
+  }
 }
 
 /* Add proper spacing below header for scrollable content - Mobile view */

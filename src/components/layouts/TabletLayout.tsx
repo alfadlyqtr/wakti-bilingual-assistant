@@ -15,7 +15,7 @@ export function TabletLayout({ children }: TabletLayoutProps) {
 
   return (
     <ProtectedRoute>
-      <div className="h-screen bg-background w-full app-layout-tablet" dir="ltr" data-layout-dir="ltr">
+      <div className="h-screen bg-background w-full app-layout-tablet overflow-hidden" dir="ltr" data-layout-dir="ltr">
         {/* Sidebar remains as-is; content is padded to accommodate it */}
         <TabletSidebar />
         {/* Content column: full height, header/top + scrollable middle + bottom nav */}
@@ -23,12 +23,12 @@ export function TabletLayout({ children }: TabletLayoutProps) {
           className="w-full h-screen flex flex-col transition-all duration-300"
           style={{ paddingLeft: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}
         >
-          {/* Header: non-shrinking */}
+          {/* Header: non-shrinking - positioned absolutely */}
           <div className="flex-shrink-0">
             <TabletHeader />
           </div>
-          {/* Scrollable content area between header and bottom nav */}
-          <main className="flex-1 overflow-auto w-full p-4">
+          {/* Scrollable content area between header and bottom nav - account for elevated header */}
+          <main className="flex-1 overflow-auto w-full p-4 pt-[calc(var(--tablet-header-h,56px)+2rem)]">
             <div className="w-full max-w-none">
               {children}
             </div>

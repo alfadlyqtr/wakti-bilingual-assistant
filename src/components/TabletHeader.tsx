@@ -136,12 +136,20 @@ export function TabletHeader() {
   const IconComponent = pageInfo.icon;
 
   return (
-    <div className="w-full px-4 pt-3 pb-2 transition-all duration-300" dir="ltr">
+    <div className="w-full px-4 pt-4 pb-0 transition-all duration-300" dir="ltr">
       <div
-        className="relative bg-gradient-to-r from-background/95 via-background/90 to-background/95 dark:from-[#0b0f14]/95 dark:via-[#0b0f14]/90 dark:to-[#0b0f14]/95 backdrop-blur-xl border border-border/40 dark:border-white/10 rounded-xl shadow-xl h-[var(--tablet-header-h)] flex items-center justify-between px-4"
+        className="relative bg-background rounded-2xl shadow-2xl h-[var(--tablet-header-h)] flex items-center justify-between px-4"
         style={{
-          boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)'
+          marginTop: '0.75rem',
+          boxShadow: `
+            0 25px 50px -12px rgba(0, 0, 0, 0.25),
+            0 0 0 1px rgba(255, 255, 255, 0.05),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1),
+            0 8px 32px rgba(0, 0, 0, 0.12)
+          `,
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)'
         }}
       >
         {/* Glass reflection overlay */}

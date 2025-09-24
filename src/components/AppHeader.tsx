@@ -204,16 +204,16 @@ export function AppHeader() {
   return (
     <header
       className={cn(
-        "h-16 border-b border-border/50",
-        isMobile
-          ? "glue-fixed glue-top glue-z bg-background shadow-md"
-          : "bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60",
+        "h-16 border-b border-white/10",
+        "glue-fixed glue-top glue-z shadow-md",
         "ios-reduce-blur",
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{
-        height: 'calc(var(--app-header-h) - env(safe-area-inset-top, 0px))',
-        width: '100%'
+        height: 'var(--app-header-h)',
+        width: '100%',
+        background: 'var(--background, #111827)',
+        boxShadow: '0 4px 12px -2px rgba(0, 0, 0, 0.2)'
       }}
     >
       <div className={cn(
