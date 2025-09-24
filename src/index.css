@@ -480,11 +480,39 @@ textarea::placeholder {
   }
 }
 
-/* Fix scrolling for ALL pages */
-html, body, #root {
-  height: 100%;
-  min-height: 100%;
-  overflow: auto;
+/* FORCE SCROLLING FOR ALL PAGES - AGGRESSIVE FIX */
+html, body, #root, main, div, section, article {
+  overflow: visible !important;
+  overflow-y: visible !important;
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  position: static !important;
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Only fixed elements should remain fixed */
+.chat-input-container, header, .fixed, [class*="fixed"] {
+  position: fixed !important;
+}
+
+/* Emergency scroll fix class */
+.force-scroll {
+  overflow: auto !important;
+  overflow-y: auto !important;
+  height: auto !important;
+  min-height: 100% !important;
+  position: static !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+body.keyboard-visible {
+  /* Clear out any lingering issues */
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 100% !important;
 }
 
 /* PWA standalone adjustments: lock viewport height and disable overscroll bounce */

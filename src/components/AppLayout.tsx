@@ -36,9 +36,29 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { isDesktop } = useIsDesktop();
   const location = useLocation();
 
-  // No longer need to clean up keyboard-visible class as it's scoped to containers
+  // ENFORCE SCROLLING on all pages and fix any bottom space
   useEffect(() => {
-    // Each page component manages its own state
+    // Force scrolling on every page change
+    document.body.style.cssText = '';
+    document.documentElement.style.cssText = '';
+    
+    // Reset all CSS custom properties
+    document.documentElement.style.removeProperty('--chat-input-height');
+    document.documentElement.style.removeProperty('--chat-input-offset');
+    document.documentElement.style.removeProperty('--keyboard-height');
+    document.documentElement.style.removeProperty('--visual-viewport-height');
+    document.documentElement.style.removeProperty('--is-keyboard-visible');
+    
+    // Ensure body has no restriction on scrolling
+    document.body.classList.remove('keyboard-visible');
+    document.body.classList.add('force-scroll');
+    
+    // Small delay to make sure styles are applied
+    const timeout = setTimeout(() => {
+      document.body.classList.remove('force-scroll');
+    }, 100);
+    
+    return () => clearTimeout(timeout);
   }, [location.pathname]);
 
   // Conditional rendering based on screen size

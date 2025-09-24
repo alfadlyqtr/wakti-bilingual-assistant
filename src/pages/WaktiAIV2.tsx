@@ -1256,16 +1256,38 @@ const WaktiAIV2 = () => {
   // Quick Actions drawer removed; Tools now opens inline quick modes in ChatInput
   const handleOpenPlusDrawer = () => {};
 
-  // Add thorough cleanup to prevent page freezing when navigating away
+  // ULTRA AGGRESSIVE cleanup code to prevent ANY persistence when leaving the page
   useEffect(() => {
-    // Make sure this component doesn't affect other pages
+    // Make sure this component doesn't affect other pages at all
     return () => {
-      // Clear any container elements with keyboard-visible class
       try {
-        const containers = document.querySelectorAll('.wakti-ai-container');
+        // Reset ALL classes and inline styles
+        const containers = document.querySelectorAll('.wakti-ai-container, .chat-input-container, .chat-messages-container');
         containers.forEach(container => {
+          // Remove all classes that might be causing issues
           container.classList.remove('keyboard-visible');
+          
+          // Clear all inline styles
+          if (container instanceof HTMLElement) {
+            container.style.cssText = '';
+          }
         });
+
+        // AGGRESSIVELY reset BODY styles
+        document.body.style.cssText = '';
+        document.body.classList.remove('keyboard-visible');
+        document.documentElement.style.cssText = '';
+        
+        // Reset all CSS custom properties that could be causing problems
+        document.documentElement.style.removeProperty('--chat-input-height');
+        document.documentElement.style.removeProperty('--chat-input-offset');
+        document.documentElement.style.removeProperty('--keyboard-height');
+        document.documentElement.style.removeProperty('--visual-viewport-height');
+        document.documentElement.style.removeProperty('--is-keyboard-visible');
+        
+        // Force global styles to take effect immediately
+        document.body.classList.add('force-scroll');
+        setTimeout(() => document.body.classList.remove('force-scroll'), 100);
       } catch {}
     };
   }, []);
