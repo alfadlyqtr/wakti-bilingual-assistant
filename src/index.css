@@ -48,18 +48,15 @@
     --shadow-colored: 0 4px 20px hsla(243, 84%, 14%, 0.2), 0 2px 8px hsla(210, 100%, 75%, 0.15);
     --shadow-soft: 0 2px 12px hsla(220, 13%, 60%, 0.3), 0 1px 4px hsla(200, 20%, 70%, 0.2);
     --shadow-vibrant: 0 8px 32px hsla(210, 100%, 75%, 0.3), 0 4px 16px hsla(280, 60%, 75%, 0.2);
-    --glow-primary: 0 0 30px hsla(243, 84%, 14%, 0.4), 0 0 60px hsla(210, 100%, 75%, 0.2);
     --glow-blue: 0 0 20px hsla(210, 100%, 75%, 0.6);
     --glow-green: 0 0 20px hsla(142, 76%, 65%, 0.6);
     --glow-orange: 0 0 20px hsla(25, 95%, 70%, 0.6);
     --glow-purple: 0 0 20px hsla(280, 60%, 75%, 0.6);
     /* Global layout offsets */
-    --app-header-h: calc(56px + env(safe-area-inset-top));          /* Fixed header + iOS top safe area - made taller */
-    --app-content-gap: 8px;        /* Extra breathing space for anchor scrolls */
-    
-    /* Desktop/Tablet layout variables */
-    --sidebar-width: 240px;
-    --sidebar-mini-width: 70px;
+body, html {
+  --app-header-h: calc(56px + env(safe-area-inset-top, 0px));
+  --app-bottom-tabs-h: calc(64px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden !important; /* Prevent scrollbar on body/html */
     --desktop-header-h: 60px;
     --tablet-header-h: 56px;
     --tablet-sidebar-width: 180px;
@@ -738,7 +735,7 @@ html, body, #root {
   scroll-behavior: smooth !important;
 }
 
-/* Make Dashboard match the DesktopLayout main width */
+/* Make Dashboard match the DesktopLayout main width and scroll within itself */
 .app-layout-desktop .dashboard-container,
 .app-layout-tablet .dashboard-container {
   max-width: 100% !important;
@@ -747,6 +744,89 @@ html, body, #root {
   padding-right: 0 !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
+  overflow-y: auto !important; /* Vertical scrolling only */
+  overflow-x: hidden !important; /* No horizontal scrolling */
+  max-height: calc(100vh - var(--desktop-header-h) - 2rem) !important; /* Account for header height + spacing */
+  scrollbar-width: thin !important; /* For Firefox */
+  -webkit-overflow-scrolling: touch !important; /* Smooth scrolling on iOS */
+}
+
+/* WaktiAIV2 self-contained scrolling for all devices */
+.wakti-ai-container {
+  max-width: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding-top: var(--app-header-h) !important; /* Add padding for header */
+}
+
+.wakti-ai-container > div {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: thin !important;
+  max-height: calc(100vh - var(--app-header-h) - var(--app-bottom-tabs-h, 0px) - 1rem) !important;
+}
+
+/* Handle scrolling on different screen types */
+.app-layout-desktop .wakti-ai-container > div,
+.app-layout-tablet .wakti-ai-container > div {
+  max-height: calc(100vh - var(--desktop-header-h) - 2rem) !important;
+}
+
+.app-layout-mobile .wakti-ai-container > div {
+  max-height: calc(100vh - var(--app-header-h) - var(--app-bottom-tabs-h, 0px) - 1rem) !important;
+}
+
+/* Make header solid with no transparency */
+.container > div > header,
+.flex-shrink-0,
+.fixed-header,
+div[data-lov-name="AppHeader"] {
+  background-color: hsl(var(--background)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Make chat input container solid with no transparency */
+.chat-input-container.solid-bg {
+  background-color: hsl(var(--background)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-top: 1px solid hsl(var(--border)) !important;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Fix MobileSlideDownNav rendering and positioning */
+.mobile-slide-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.mobile-slide-nav-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  overflow: hidden;
+}
+
+/* Mobile specific dashboard container styles */
+.app-layout-mobile .dashboard-container {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  overflow: auto !important;
+  height: 100% !important;
 }
 
 /* Emergency scroll fix class */
@@ -1013,4 +1093,7 @@ body.keyboard-visible {
   body.keyboard-visible #root {
     height: var(--visual-viewport-height, 100vh);
   }
+}
+
+/* End of second @layer base block */
 }

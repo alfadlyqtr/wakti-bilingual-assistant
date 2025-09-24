@@ -1328,13 +1328,15 @@ const WaktiAIV2 = () => {
         onRefreshConversations={handleRefreshConversations}
       />
 
-      <div className="flex flex-col h-full w-full relative wakti-ai-container">
+      <div className="flex flex-col h-full w-full relative wakti-ai-container overflow-hidden">
         <div
-          className="flex-1 overflow-auto"
+          className="flex-1 overflow-auto h-full scroll-smooth"
           ref={scrollAreaRef}
           style={{
             paddingBottom: '104px',
-            WebkitOverflowScrolling: 'touch'
+            WebkitOverflowScrolling: 'touch',
+            msOverflowStyle: 'none',
+            scrollbarWidth: 'thin'
           }}
         >
           <ChatMessages

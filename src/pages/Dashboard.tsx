@@ -60,9 +60,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-4 space-y-4 dashboard-container" key={refreshKey}>
-      <div className="w-full space-y-6">
-        <div className="w-full">
+    <div className="px-4 pb-4 pt-0 space-y-4 dashboard-container overflow-auto h-full" key={refreshKey}>
         <DragModeToggle
           isDragging={isDragging}
           onToggle={toggleDragMode}
@@ -71,8 +69,6 @@ export default function Dashboard() {
         />
 
         <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} />
-        </div>
-      </div>
     </div>
   );
 }

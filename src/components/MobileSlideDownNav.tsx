@@ -48,24 +48,25 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       }, 
       contact: { 
         show: contactCount > 0, 
-        count: contactCount > 99 ? '99+' : contactCount.toString(),
         priority: contactCount > 0 ? 'normal' : 'low'
       }
     });
   }, [taskCount, maw3dEventCount, contactCount, sharedTaskCount]);
 
-  // Animation sequence
+  // Animation sequence for slide and menu items
   useEffect(() => {
     if (isOpen) {
       setAnimationStage('sliding');
-      const timer = setTimeout(() => {
-        setAnimationStage('icons');
-      }, 520); // Start icons right after the faster 0.5s container animation
-      return () => clearTimeout(timer);
+      // After slide animation, show icons
+      const iconTimer = setTimeout(() => setAnimationStage('icons'), 380);
+      return () => clearTimeout(iconTimer);
     } else {
       setAnimationStage('closed');
     }
   }, [isOpen]);
+  
+  // Don't render anything if nav is closed
+  if (!isOpen && animationStage === 'closed') return null;
 
   // Navigation items with Dashboard added
   const navItems = [

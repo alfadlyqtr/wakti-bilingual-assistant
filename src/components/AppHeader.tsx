@@ -181,7 +181,7 @@ export function AppHeader() {
   const IconComponent = pageInfo.icon;
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false); // Always starts closed
   const [logoPosition, setLogoPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const logoRef = useRef<HTMLDivElement>(null);
   const { isMobile } = useIsMobile();

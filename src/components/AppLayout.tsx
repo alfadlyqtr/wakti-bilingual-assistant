@@ -17,7 +17,7 @@ function MobileAppLayout({ children }: AppLayoutProps) {
 
   return (
     <ProtectedRoute>
-      <div className="app-layout-mobile bg-background">
+      <div className="app-layout-mobile bg-background" style={{ overflow: 'hidden', height: '100%', width: '100%' }}>
         <PresenceBeacon />
         <div className="flex-shrink-0">
           <AppHeader />
