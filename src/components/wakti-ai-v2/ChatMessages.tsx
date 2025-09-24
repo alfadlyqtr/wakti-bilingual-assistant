@@ -13,7 +13,7 @@ import { ImageModal } from './ImageModal';
 import { YouTubePreview } from './YouTubePreview';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
-import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
+// Removed useMobileKeyboard - no longer needed
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -54,7 +54,7 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { isKeyboardVisible } = useMobileKeyboard();
+  // No longer need keyboard detection in ChatMessages
   const [inputHeight, setInputHeight] = useState<number>(80);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   // Always-accurate ref mirror to avoid stale state in async guards
@@ -165,27 +165,6 @@ export function ChatMessages({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [sessionMessages, showTaskConfirmation]);
-
-  // Auto-scroll to the latest message when the mobile keyboard opens (native chat feel)
-  useEffect(() => {
-    if (!isKeyboardVisible) return;
-    const doScroll = () => {
-      try {
-        // Prefer scrolling the outer scroll area if provided
-        if (scrollAreaRef?.current) {
-          scrollAreaRef.current.scrollTo({
-            top: scrollAreaRef.current.scrollHeight,
-            behavior: 'smooth',
-          });
-        }
-        // Ensure the absolute last anchor is in view
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      } catch {}
-    };
-    // Slight delay to allow layout to settle after viewport shrink
-    const t = window.setTimeout(doScroll, 60);
-    return () => window.clearTimeout(t);
-  }, [isKeyboardVisible, scrollAreaRef]);
 
   // Keep scrolled to bottom when input height changes (maintain consistent gap)
   useEffect(() => {

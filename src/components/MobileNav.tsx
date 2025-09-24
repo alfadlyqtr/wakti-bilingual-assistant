@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
-import { useMobileKeyboard } from "@/hooks/useMobileKeyboard";
+// Removed useMobileKeyboard - no longer needed
 
 export function MobileNav() {
   const { pathname } = useLocation();
@@ -13,7 +13,7 @@ export function MobileNav() {
   const { language } = useTheme();
   const { taskCount, maw3dEventCount, contactCount, sharedTaskCount } = useUnreadMessages();
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
-  const { isKeyboardVisible, keyboardHeight } = useMobileKeyboard();
+  // No longer need keyboard detection - CSS handles hiding via body.keyboard-visible class
 
   // No portal: ensure direct render inside AppLayout for guaranteed presence
 
@@ -49,8 +49,7 @@ export function MobileNav() {
     });
   }, [taskCount, maw3dEventCount, contactCount, sharedTaskCount]);
 
-  // No-op effect to reference keyboardHeight so TS doesn't warn if not used elsewhere
-  useEffect(() => { /* keep */ }, [keyboardHeight]);
+  // Removed keyboard height reference - no longer needed
   
   // Navigation items
   const navItems = [
@@ -119,10 +118,7 @@ export function MobileNav() {
         height: 'var(--app-bottom-tabs-h)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         transform: 'translateZ(0)',
-        willChange: isKeyboardVisible ? 'auto' : 'auto',
-        opacity: isKeyboardVisible ? 0 : 1,
-        pointerEvents: isKeyboardVisible ? 'none' as const : 'auto',
-        visibility: isKeyboardVisible ? 'hidden' : 'visible'
+        willChange: 'auto'
       }}
     >
       <div className="bg-white/80 dark:bg-neutral-900/70 ios-reduce-blur border-t border-white/20 dark:border-white/10 shadow-soft pb-0">
