@@ -56,7 +56,6 @@
     /* Global layout offsets */
     --app-header-h: calc(56px + env(safe-area-inset-top));          /* Fixed header + iOS top safe area - made taller */
     --app-content-gap: 8px;        /* Extra breathing space for anchor scrolls */
-    --app-bottom-tabs-h: 56px;     /* Mobile bottom tab bar height */
     
     /* Desktop/Tablet layout variables */
     --sidebar-width: 240px;
@@ -466,29 +465,9 @@ textarea::placeholder {
     transform: translateY(0);
   }
 
-  /* Mobile navigation adjustments */
-  .mobile-nav {
-    transition: transform 0.3s ease, opacity 0.3s ease;
-  }
+  /* Removed mobile-nav CSS rules - component deleted */
 
-  body.keyboard-visible .mobile-nav {
-    transform: translateY(100%);
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .chat-messages-container {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-top: var(--app-header-h, 56px);
-    padding-bottom: calc(var(--app-bottom-tabs-h, 56px) + env(safe-area-inset-bottom, 0px));
-  }
-
-  body.keyboard-visible .chat-messages-container {
-    padding-bottom: calc(var(--chat-input-height, 80px) + 20px);
-    max-height: calc(var(--visual-viewport-height, 100vh) - var(--app-header-h, 56px) - var(--chat-input-height, 80px));
-  }
+  /* Removed global chat-messages-container rules - causing bottom space pollution */
 
   /* Utility classes */
   .hide-on-keyboard {

@@ -22,10 +22,8 @@ function MobileAppLayout({ children }: AppLayoutProps) {
         <div className="flex-shrink-0">
           <AppHeader />
         </div>
-        <main className="flex-1 min-h-0 overflow-hidden relative z-[1]">
-          <div className="chat-messages-container h-full">
-            {children}
-          </div>
+        <main className="flex-1 min-h-0 overflow-hidden relative z-[1] h-full">
+          {children}
         </main>
       </div>
     </ProtectedRoute>
