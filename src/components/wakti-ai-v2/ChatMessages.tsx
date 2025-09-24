@@ -175,11 +175,8 @@ export function ChatMessages({
         if (ce?.detail?.height && Number.isFinite(ce.detail.height)) {
           setInputHeight(ce.detail.height);
         } else {
-          const container = scrollAreaRef?.current?.closest('.wakti-ai-container') as HTMLElement | null;
-          const root: HTMLElement = container ?? document.documentElement;
-          const v = getComputedStyle(root).getPropertyValue('--chat-input-height');
-          const n = parseInt(v || '0', 10);
-          if (Number.isFinite(n) && n > 0) setInputHeight(n);
+          // Use fixed height instead of CSS variable
+          setInputHeight(80);
         }
       } catch {}
       // Always pin to bottom so the visual gap remains exact after resize
@@ -193,13 +190,8 @@ export function ChatMessages({
 
   // Initialize input height from the nearest chat container after mount
   useEffect(() => {
-    try {
-      const container = scrollAreaRef?.current?.closest('.wakti-ai-container') as HTMLElement | null;
-      const root: HTMLElement = container ?? document.documentElement;
-      const v = getComputedStyle(root).getPropertyValue('--chat-input-height');
-      const n = parseInt(v || '0', 10);
-      if (Number.isFinite(n) && n > 0) setInputHeight(n);
-    } catch {}
+    // Use fixed height instead of CSS variable to avoid global pollution
+    setInputHeight(80);
   }, [scrollAreaRef?.current]);
 
   // Cleanup all progress intervals on unmount
@@ -935,7 +927,7 @@ export function ChatMessages({
 
   return (
     <>
-      <div className="px-4 pt-4 pb-0 space-y-4" style={{ ['--chat-input-height' as any]: `${inputHeight}px` }}>
+      <div className="px-4 pt-4 pb-0 space-y-4">
         <div className="max-w-6xl mx-auto w-full px-2 space-y-4">
           {/* Welcome Message */}
           {renderWelcomeMessage()}

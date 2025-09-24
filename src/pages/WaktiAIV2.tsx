@@ -1302,8 +1302,8 @@ const WaktiAIV2 = () => {
           ref={scrollAreaRef}
           style={{
             paddingBottom: window.innerWidth < 768 
-              ? 'calc(env(safe-area-inset-bottom, 0px) + 24.5px + var(--chat-input-height, 80px))'
-              : 'calc(24px + var(--chat-input-height, 80px))',
+              ? 'calc(env(safe-area-inset-bottom, 0px) + 104px)'
+              : '104px',
             WebkitOverflowScrolling: 'touch'
           }}
         >
