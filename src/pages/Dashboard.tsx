@@ -60,9 +60,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-4 space-y-4" key={refreshKey}>
+    <div className="p-4 space-y-4 dashboard-container" key={refreshKey}>
       <div className="w-full space-y-6">
-        <div className="max-w-6xl mx-auto">
+        <div className="w-full">
         <DragModeToggle
           isDragging={isDragging}
           onToggle={toggleDragMode}

@@ -93,11 +93,10 @@ export function DesktopHeader() {
   ];
 
   return (
-    <div className="w-full px-6 pt-4 pb-0 transition-all duration-300" dir="ltr">
+    <div className="w-full px-6 py-0 transition-all duration-300" dir="ltr">
       <div
         className="relative bg-background rounded-2xl shadow-2xl h-[var(--desktop-header-h)] flex items-center justify-between px-6"
         style={{
-          marginTop: '0.75rem',
           boxShadow: `
             0 25px 50px -12px rgba(0, 0, 0, 0.25),
             0 0 0 1px rgba(255, 255, 255, 0.05),

@@ -1293,7 +1293,7 @@ const WaktiAIV2 = () => {
   }, []);
 
   return (
-    <div className="wakti-ai-container flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white w-full">
+    <div className="wakti-ai-container flex flex-col min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+1rem)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white w-full">
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}

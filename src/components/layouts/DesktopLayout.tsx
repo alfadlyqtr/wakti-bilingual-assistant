@@ -22,13 +22,13 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
           className="w-full h-screen flex flex-col transition-all duration-300"
           style={{ paddingLeft: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}
         >
-          {/* Header: non-shrinking - positioned absolutely */}
-          <div className="flex-shrink-0">
+          {/* Header: fixed position, separate from scrollable content */}
+          <header className="fixed-header">
             <DesktopHeader />
-          </div>
+          </header>
           {/* Scrollable content area - account for elevated header */}
-          <main className="flex-1 overflow-auto w-full p-6 pt-[calc(var(--desktop-header-h,60px)+2.5rem)]">
-            <div className="w-full max-w-none">
+          <main className="flex-1 overflow-auto w-full p-4 md:p-6 pt-[calc(var(--desktop-header-h,60px)+1rem)]">
+            <div className="w-full max-w-full">
               {children}
             </div>
           </main>

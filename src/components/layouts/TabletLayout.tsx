@@ -23,13 +23,13 @@ export function TabletLayout({ children }: TabletLayoutProps) {
           className="w-full h-screen flex flex-col transition-all duration-300"
           style={{ paddingLeft: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}
         >
-          {/* Header: non-shrinking - positioned absolutely */}
-          <div className="flex-shrink-0">
+          {/* Header: fixed position, separate from scrollable content */}
+          <header className="fixed-header">
             <TabletHeader />
-          </div>
+          </header>
           {/* Scrollable content area between header and bottom nav - account for elevated header */}
-          <main className="flex-1 overflow-auto w-full p-4 pt-[calc(var(--tablet-header-h,56px)+2rem)]">
-            <div className="w-full max-w-none">
+          <main className="flex-1 overflow-auto w-full p-3 sm:p-4 pt-[calc(var(--tablet-header-h,56px)+1rem)]">
+            <div className="w-full max-w-full">
               {children}
             </div>
           </main>

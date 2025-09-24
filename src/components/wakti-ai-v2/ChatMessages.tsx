@@ -927,8 +927,8 @@ export function ChatMessages({
 
   return (
     <>
-      <div className="px-4 pt-4 pb-0 space-y-4">
-        <div className="max-w-6xl mx-auto w-full px-2 space-y-4">
+      <div className="px-2 sm:px-3 md:px-4 pt-4 pb-0 space-y-4 chat-messages-wrapper">
+        <div className="w-full px-0 space-y-4">
           {/* Welcome Message */}
           {renderWelcomeMessage()}
           
