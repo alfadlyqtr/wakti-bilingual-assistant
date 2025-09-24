@@ -36,29 +36,31 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { isDesktop } = useIsDesktop();
   const location = useLocation();
 
-  // ENFORCE SCROLLING on all pages and fix any bottom space
+  // LIGHTWEIGHT CLEANUP - preserves styling
   useEffect(() => {
-    // Force scrolling on every page change
-    document.body.style.cssText = '';
-    document.documentElement.style.cssText = '';
-    
-    // Reset all CSS custom properties
+    // Clean up only problematic CSS properties
     document.documentElement.style.removeProperty('--chat-input-height');
-    document.documentElement.style.removeProperty('--chat-input-offset');
     document.documentElement.style.removeProperty('--keyboard-height');
     document.documentElement.style.removeProperty('--visual-viewport-height');
-    document.documentElement.style.removeProperty('--is-keyboard-visible');
     
-    // Ensure body has no restriction on scrolling
+    // Remove keyboard-visible class
     document.body.classList.remove('keyboard-visible');
-    document.body.classList.add('force-scroll');
     
-    // Small delay to make sure styles are applied
-    const timeout = setTimeout(() => {
-      document.body.classList.remove('force-scroll');
-    }, 100);
+    // Ensure bottom space is gone
+    document.body.style.paddingBottom = '0';
+    document.body.style.marginBottom = '0';
     
-    return () => clearTimeout(timeout);
+    return () => {};
+  }, [location.pathname]);
+  
+  // Detect when we're on dashboard page to apply special styling
+  useEffect(() => {
+    const isDashboardPage = location.pathname === '/' || location.pathname === '/dashboard';
+    if (isDashboardPage) {
+      document.body.classList.add('dashboard-page');
+    } else {
+      document.body.classList.remove('dashboard-page');
+    }
   }, [location.pathname]);
 
   // Conditional rendering based on screen size

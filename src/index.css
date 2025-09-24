@@ -480,21 +480,113 @@ textarea::placeholder {
   }
 }
 
-/* FORCE SCROLLING FOR ALL PAGES - AGGRESSIVE FIX */
-html, body, #root, main, div, section, article {
-  overflow: visible !important;
-  overflow-y: visible !important;
-  height: auto !important;
-  min-height: auto !important;
-  max-height: none !important;
-  position: static !important;
+/* SMOOTH SCROLLING FIX - less aggressive */
+html, body, #root {
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: 100%;
+  min-height: 100%;
   padding-bottom: 0 !important;
   margin-bottom: 0 !important;
 }
 
-/* Only fixed elements should remain fixed */
-.chat-input-container, header, .fixed, [class*="fixed"] {
+/* WIDGET STYLING - Enhanced liquid glass effects */
+.widget, [class*="widget"], [class*="Widget"] {
+  position: relative !important;
+  overflow: visible !important;
+  height: auto !important;
+  min-height: auto !important;
+  border-radius: 1rem !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(15px) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  transition: transform 0.2s, box-shadow 0.3s !important;
+}
+
+/* Widget hover effect */
+.widget:hover, [class*="widget"]:hover, [class*="Widget"]:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Dashboard page specific styling */
+.dashboard-page, [class*="dashboard"] {
+  padding-top: calc(var(--app-header-h, 56px) + 16px) !important;
+  overflow-y: auto !important;
+  height: 100% !important;
+  background: linear-gradient(180deg, rgba(13, 26, 38, 0.8) 0%, rgba(20, 30, 48, 0.8) 100%) !important;
+}
+
+/* Widget colors by type */
+.TRWidget, [class*="tr-widget"] {
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.05), rgba(239, 68, 68, 0.05)) !important;
+  border-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.CalendarWidget, [class*="calendar-widget"] {
+  background: linear-gradient(145deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05)) !important;
+  border-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+.EventsWidget, [class*="events-widget"] {
+  background: linear-gradient(145deg, rgba(139, 92, 246, 0.05), rgba(236, 72, 153, 0.05)) !important;
+  border-color: rgba(139, 92, 246, 0.15) !important;
+}
+
+.QuoteWidget, [class*="quote-widget"] {
+  background: linear-gradient(145deg, rgba(139, 92, 246, 0.05), rgba(59, 130, 246, 0.05)) !important;
+  border-color: rgba(139, 92, 246, 0.15) !important;
+}
+
+/* Properly fix header and other fixed elements */
+.chat-input-container, .fixed, [class*="fixed"] {
   position: fixed !important;
+}
+
+/* Fix header positioning - mobile only gets full width header */
+.app-layout-mobile header, .app-layout-mobile .header, .app-layout-mobile [class*="header"] {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background-color: var(--background, #ffffff) !important;
+}
+
+/* Desktop header - account for sidebar */
+.app-layout-desktop header, .app-layout-desktop .header,
+.app-layout-tablet header, .app-layout-tablet .header {
+  position: fixed !important;
+  top: 0;
+  left: var(--sidebar-width, 240px) !important; /* Account for sidebar width */
+  right: 0;
+  z-index: 50;
+  background-color: var(--background, #ffffff) !important;
+}
+
+/* For tablet, use tablet sidebar width */
+.app-layout-tablet header, .app-layout-tablet .header {
+  left: var(--tablet-sidebar-width, 180px) !important;
+}
+
+/* Add proper spacing below header for scrollable content - Mobile view */
+.app-layout-mobile main {
+  padding-top: var(--app-header-h, 56px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: calc(100% - var(--app-header-h, 56px)) !important;
+  width: 100% !important;
+  position: relative !important;
+  -webkit-overflow-scrolling: touch !important;
+  scroll-behavior: smooth !important;
+}
+
+/* Desktop/Tablet main content layout - already handled by their own layouts */
+.app-layout-desktop main, .app-layout-tablet main {
+  /* Override any problematic global styles but keep the built-in layout */
+  -webkit-overflow-scrolling: touch !important;
+  scroll-behavior: smooth !important;
 }
 
 /* Emergency scroll fix class */
