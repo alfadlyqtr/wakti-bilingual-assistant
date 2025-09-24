@@ -107,11 +107,20 @@ export function ChatInput({
   const [isTranslatingI2I, setIsTranslatingI2I] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
   
-  // Self-contained mobile keyboard detection
+  // Self-contained mobile keyboard detection - scoped to container only
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const isKeyboardMode = (typeof window !== 'undefined' && window.innerWidth < 768) && isKeyboardVisible;
   
-  // Handle keyboard detection and body class management
+  // Get parent container for scoping changes
+  const containerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = inputCardRef.current;
+    if (el) {
+      containerRef.current = el.closest('.wakti-ai-container') as HTMLElement;
+    }
+  }, []);
+  
+  // Handle keyboard detection - scope changes to container only
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -131,11 +140,14 @@ export function ChatInput({
       const visible = isEditableActive && viewportShrank;
       setIsKeyboardVisible(visible);
       
-      // Manage body class for CSS styling
-      if (visible) {
-        document.body.classList.add('keyboard-visible');
-      } else {
-        document.body.classList.remove('keyboard-visible');
+      // Apply class to closest parent container only, NOT document.body
+      const container = containerRef.current;
+      if (container) {
+        if (visible) {
+          container.classList.add('keyboard-visible');
+        } else {
+          container.classList.remove('keyboard-visible');
+        }
       }
     };
 
@@ -168,8 +180,10 @@ export function ChatInput({
       document.removeEventListener('focusin', handleFocusIn);
       document.removeEventListener('focusout', handleFocusOut);
       
-      // Clean up body class when component unmounts
-      document.body.classList.remove('keyboard-visible');
+      // Clean up keyboard-visible class from container when component unmounts
+      if (containerRef.current) {
+        containerRef.current.classList.remove('keyboard-visible');
+      }
     };
   }, []);
   
@@ -262,15 +276,9 @@ export function ChatInput({
   useEffect(() => {
     const el = inputCardRef.current;
     if (!el) return;
-    // Find nearest container to scope variables
-    const container = el.closest('.wakti-ai-container') as HTMLElement | null;
-
+    // Don't use CSS variables anymore - emit events only
     const applyHeight = () => {
       const h = el.offsetHeight || 0;
-      try {
-        // Scope to container only (no global fallbacks)
-        if (container) container.style.setProperty('--chat-input-height', `${h}px`);
-      } catch {}
       try {
         const ev = new CustomEvent('wakti-chat-input-resized', { detail: { height: h } });
         window.dispatchEvent(ev);
@@ -298,9 +306,9 @@ export function ChatInput({
       if (ro) {
         try { ro.disconnect(); } catch {}
       }
-      // IMPORTANT: Clear chat height on unmount so other pages don't reserve space
+      // No CSS variables to clean up - just emit final event
       try {
-        if (container) container.style.setProperty('--chat-input-height', '0px');
+        window.dispatchEvent(new CustomEvent('wakti-chat-input-resized', { detail: { height: 0 } }));
       } catch {}
     };
   }, [isInputCollapsed, activeTrigger]);
@@ -309,12 +317,10 @@ export function ChatInput({
   useEffect(() => {
     const card = cardRef.current;
     if (!card) return;
-    const container = card.closest('.wakti-ai-container') as HTMLElement | null;
     const applyOffset = () => {
       try {
         const rect = card.getBoundingClientRect();
         const offset = Math.max(0, window.innerHeight - rect.top);
-        if (container) container.style.setProperty('--chat-input-offset', `${offset}px`);
         window.dispatchEvent(new CustomEvent('wakti-chat-input-offset', { detail: { offset } }));
       } catch {}
     };
@@ -330,9 +336,9 @@ export function ChatInput({
     }
     return () => {
       try { ro && ro.disconnect(); } catch {}
-      // IMPORTANT: Clear chat offset on unmount to avoid leaking into other routes
+      // No CSS variables to clean up - just emit final event
       try {
-        if (container) container.style.setProperty('--chat-input-offset', '0px');
+        window.dispatchEvent(new CustomEvent('wakti-chat-input-offset', { detail: { offset: 0 } }));
       } catch {}
     };
   }, [isInputCollapsed, activeTrigger]);

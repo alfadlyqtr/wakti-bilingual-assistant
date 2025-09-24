@@ -36,17 +36,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { isDesktop } = useIsDesktop();
   const location = useLocation();
 
-  // Clean up any keyboard-visible class when leaving Wakti AI
+  // No longer need to clean up keyboard-visible class as it's scoped to containers
   useEffect(() => {
-    const onRoute = () => {
-      const onWaktiAI = location.pathname === "/wakti-ai";
-      if (!onWaktiAI) {
-        try {
-          document.body.classList.remove('keyboard-visible');
-        } catch {}
-      }
-    };
-    onRoute();
+    // Each page component manages its own state
   }, [location.pathname]);
 
   // Conditional rendering based on screen size

@@ -206,7 +206,7 @@ textarea::placeholder {
     min-height: 100dvh;
   }
 
-  body.keyboard-visible .mobile-container {
+  .container.keyboard-visible .mobile-container {
     height: var(--visual-viewport-height, 100vh);
   }
 
@@ -458,7 +458,7 @@ textarea::placeholder {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  body.keyboard-visible .chat-input-container {
+  .wakti-ai-container.keyboard-visible .chat-input-container {
     position: fixed;
     bottom: 0;
     padding-bottom: 0;
@@ -474,10 +474,17 @@ textarea::placeholder {
     transition: opacity 0.3s ease, visibility 0.3s ease;
   }
 
-  body.keyboard-visible .hide-on-keyboard {
+  .wakti-ai-container.keyboard-visible .hide-on-keyboard {
     opacity: 0;
     visibility: hidden;
   }
+}
+
+/* Fix scrolling for ALL pages */
+html, body, #root {
+  height: 100%;
+  min-height: 100%;
+  overflow: auto;
 }
 
 /* PWA standalone adjustments: lock viewport height and disable overscroll bounce */

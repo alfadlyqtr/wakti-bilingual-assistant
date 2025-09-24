@@ -1256,9 +1256,19 @@ const WaktiAIV2 = () => {
   // Quick Actions drawer removed; Tools now opens inline quick modes in ChatInput
   const handleOpenPlusDrawer = () => {};
 
-  // No longer needed - ChatInput handles its own keyboard detection without global body manipulation
-
-  // Removed page-level visualViewport adjustments; we use a fixed bar with safe-area
+  // Add thorough cleanup to prevent page freezing when navigating away
+  useEffect(() => {
+    // Make sure this component doesn't affect other pages
+    return () => {
+      // Clear any container elements with keyboard-visible class
+      try {
+        const containers = document.querySelectorAll('.wakti-ai-container');
+        containers.forEach(container => {
+          container.classList.remove('keyboard-visible');
+        });
+      } catch {}
+    };
+  }, []);
 
   return (
     <div className="wakti-ai-container flex min-h-[100dvh] md:pt-[calc(var(--desktop-header-h)+24px)] antialiased text-slate-900 selection:bg-blue-500 selection:text-white">
@@ -1296,14 +1306,12 @@ const WaktiAIV2 = () => {
         onRefreshConversations={handleRefreshConversations}
       />
 
-      <div className="flex flex-col h-full w-full relative">
+      <div className="flex flex-col h-full w-full relative wakti-ai-container">
         <div
           className="flex-1 overflow-auto"
           ref={scrollAreaRef}
           style={{
-            paddingBottom: window.innerWidth < 768 
-              ? 'calc(env(safe-area-inset-bottom, 0px) + 104px)'
-              : '104px',
+            paddingBottom: '104px',
             WebkitOverflowScrolling: 'touch'
           }}
         >
