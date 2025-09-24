@@ -23,17 +23,16 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
     };
 
     const measureKeyboard = () => {
+      // Use visual viewport when available (iOS Safari 13+)
       const vv = window.visualViewport;
       const vvH = vv?.height ?? window.innerHeight;
       const vvTop = vv?.offsetTop ?? 0;
-      // Exact free viewport space from bottom (includes iOS accessory bar)
+      
+      // Calculate keyboard height more accurately
       const raw = Math.max(0, window.innerHeight - (vvH + vvTop));
-
-      // Remove hysteresis to avoid underestimation gaps; round up to prevent 1px seams
       const height = Math.ceil(raw);
-      lastHeightRef.current = height;
 
-      // Only consider keyboard visible when an editable is focused
+      // Check if an editable element is focused
       const ae = document.activeElement as HTMLElement | null;
       const isEditableActive = !!ae && (
         ae.tagName === 'INPUT' ||
@@ -41,24 +40,40 @@ export function useMobileKeyboard({ enabled = true }: UseMobileKeyboardOptions =
         ae.getAttribute('contenteditable') === 'true'
       );
 
-      // Use a higher threshold to avoid misreading iOS bottom bars as keyboard
-      const threshold = 100; // px
-      const visible = isEditableActive && height > threshold;
-      const clamped = visible ? Math.min(Math.max(height, threshold), 700) : 0;
+      // More reliable keyboard detection
+      const threshold = 150;
+      const viewportShrank = window.innerHeight - vvH > threshold;
+      const visible = isEditableActive && (height > threshold || viewportShrank);
+      const clamped = visible ? Math.max(height, 0) : 0;
 
       setIsKeyboardVisible(visible);
       setKeyboardHeight(clamped);
 
-      // Expose as CSS vars for layout consumers
-      document.documentElement.style.setProperty('--keyboard-height', `${clamped}px`);
-      document.documentElement.style.setProperty('--viewport-height', `${vvH}px`);
-      document.documentElement.style.setProperty('--is-keyboard-visible', visible ? '1' : '0');
+      // Set CSS custom properties
+      const root = document.documentElement;
+      root.style.setProperty('--keyboard-height', `${clamped}px`);
+      root.style.setProperty('--viewport-height', `${vvH}px`);
+      root.style.setProperty('--visual-viewport-height', `${vvH}px`);
+      root.style.setProperty('--is-keyboard-visible', visible ? '1' : '0');
+      
+      document.body.style.setProperty('--keyboard-height', `${clamped}px`);
+      document.body.style.setProperty('--viewport-height', `${vvH}px`);
 
-      if (visible) document.body.classList.add('keyboard-visible');
-      else document.body.classList.remove('keyboard-visible');
+      if (visible) {
+        document.body.classList.add('keyboard-visible');
+        document.body.style.height = `${vvH}px`;
+      } else {
+        document.body.classList.remove('keyboard-visible');
+        document.body.style.height = '';
+      }
 
       window.dispatchEvent(new CustomEvent('mobile-keyboard-change', {
-        detail: { isVisible: visible, height: clamped, viewportHeight: vvH }
+        detail: { 
+          isVisible: visible, 
+          height: clamped, 
+          viewportHeight: vvH,
+          windowHeight: window.innerHeight 
+        }
       }));
     };
 

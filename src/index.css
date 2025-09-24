@@ -154,10 +154,16 @@ textarea::placeholder {
   html, body {
     @apply antialiased;
     background: var(--gradient-background);
-    /* REMOVED: overflow-hidden that was blocking scrolling */
-    height: 100%;
+    /* Use dynamic viewport units that work with mobile keyboards */
     min-height: 100dvh;
+    height: 100dvh;
     overscroll-behavior-y: contain;
+  }
+
+  /* When keyboard is visible, use visual viewport height */
+  body.keyboard-visible {
+    height: var(--visual-viewport-height, 100vh);
+    overflow: hidden;
   }
   
   body {
@@ -172,6 +178,12 @@ textarea::placeholder {
     /* Full width for all screen sizes, no mobile constraint */
     width: 100%;
     max-width: none;
+    min-height: 100dvh;
+    height: 100dvh;
+  }
+
+  body.keyboard-visible #root {
+    height: var(--visual-viewport-height, 100vh);
   }
   
   /* Mobile-specific root styles only for mobile breakpoint */
@@ -191,7 +203,12 @@ textarea::placeholder {
   .mobile-container {
     @apply max-w-md w-full mx-auto min-h-screen flex flex-col;
     background: var(--gradient-background);
-    /* REMOVED: overflow-hidden and h-full that were blocking scrolling */
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  body.keyboard-visible .mobile-container {
+    height: var(--visual-viewport-height, 100vh);
   }
 
   /* Desktop container - full width layout */
@@ -419,6 +436,68 @@ textarea::placeholder {
   }
 
   /* Spacing is handled in AppLayout <main> via pt/pb using the variables above */
+
+  /* Mobile keyboard support - proper viewport handling */
+  /* App Layout adjustments */
+  .app-layout-mobile {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body.keyboard-visible .app-layout-mobile {
+    height: var(--visual-viewport-height, 100vh);
+  }
+
+  /* Chat input positioning */
+  .chat-input-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  body.keyboard-visible .chat-input-container {
+    position: fixed;
+    bottom: 0;
+    padding-bottom: 0;
+    transform: translateY(0);
+  }
+
+  /* Mobile navigation adjustments */
+  .mobile-nav {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+
+  body.keyboard-visible .mobile-nav {
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chat-messages-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: calc(var(--app-bottom-tabs-h, 56px) + env(safe-area-inset-bottom, 0px) + 100px);
+  }
+
+  body.keyboard-visible .chat-messages-container {
+    padding-bottom: calc(var(--chat-input-height, 80px) + 20px);
+    max-height: calc(var(--visual-viewport-height, 100vh) - var(--app-header-h, 56px) - var(--chat-input-height, 80px));
+  }
+
+  /* Utility classes */
+  .hide-on-keyboard {
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+
+  body.keyboard-visible .hide-on-keyboard {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 
 /* PWA standalone adjustments: lock viewport height and disable overscroll bounce */
@@ -642,4 +721,29 @@ textarea::placeholder {
 .dark select optgroup {
   background-color: hsl(var(--popover));
   color: hsl(var(--foreground));
+}
+
+/* iOS specific fixes */
+@supports (-webkit-touch-callout: none) {
+  html, body {
+    position: fixed;
+    overflow: hidden;
+    width: 100%;
+    height: 100dvh;
+  }
+
+  body.keyboard-visible {
+    height: var(--visual-viewport-height, 100vh);
+  }
+
+  #root {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 100dvh;
+  }
+
+  body.keyboard-visible #root {
+    height: var(--visual-viewport-height, 100vh);
+  }
 }

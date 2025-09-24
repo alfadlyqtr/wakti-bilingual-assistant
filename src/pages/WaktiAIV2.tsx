@@ -1330,14 +1330,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div 
-          className="fixed z-50"
-          style={{
-            left: window.innerWidth < 768 ? '0px' : 'var(--current-sidebar-width, 0px)',
-            right: '0px',
-            bottom: window.innerWidth < 768 ? 'calc(env(safe-area-inset-bottom, 0px) + 24.5px)' : '8px'
-          }}
-        >
+        <div className="chat-input-container">
           <ChatInput
             message={message}
             setMessage={setMessage}

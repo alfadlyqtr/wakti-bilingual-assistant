@@ -12,25 +12,20 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-// Mobile Layout Component (preserves existing mobile layout exactly)
 function MobileAppLayout({ children }: AppLayoutProps) {
-  // Initialize the unified notification system
   useUnreadMessages();
 
   return (
     <ProtectedRoute>
-      {/* Flexbox container: dynamic viewport height, column direction */}
-      <div className="h-[100svh] min-h-0 bg-background flex flex-col">
-        {/* Global presence broadcaster */}
+      <div className="app-layout-mobile bg-background">
         <PresenceBeacon />
-        {/* Header: fixed height, never shrinks */}
         <div className="flex-shrink-0">
           <AppHeader />
         </div>
-        
-        {/* Content area: takes remaining space, scrollable, can shrink */}
-        <main className="flex-1 min-h-0 overflow-auto overscroll-none touch-manipulation pt-[var(--app-header-h)] pb-0 relative z-[1]">
-          {children}
+        <main className="flex-1 min-h-0 overflow-hidden relative z-[1]">
+          <div className="chat-messages-container h-full">
+            {children}
+          </div>
         </main>
       </div>
     </ProtectedRoute>

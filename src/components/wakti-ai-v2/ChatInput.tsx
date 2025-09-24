@@ -593,7 +593,7 @@ export function ChatInput({
           >
             {/* Collapse toggle positioned above input (hidden when keyboard is visible) */}
             {!isKeyboardMode && (
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20">
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20 hide-on-keyboard">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -617,7 +617,7 @@ export function ChatInput({
             
             {/* Top row with all buttons - hidden during mobile keyboard */}
             { !isKeyboardMode && (
-            <div className="flex items-center justify-between px-3 pt-2 pb-0 isolate">
+            <div className="flex items-center justify-between px-3 pt-2 pb-0 isolate hide-on-keyboard">
                 {/* Left side: Extra + Modes + Quick Modes + Mode Badge (moved here) */}
                 <div className="flex items-center gap-2" >
                   <button
@@ -916,7 +916,7 @@ export function ChatInput({
 
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION (hidden during mobile keyboard) */}
             {!isKeyboardMode && uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
-              <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20">
+              <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20 hide-on-keyboard">
                 {/* Background Removal: show only a single bilingual chip */}
                 {activeTrigger === 'image' && imageMode === 'background-removal' ? (
                   <button

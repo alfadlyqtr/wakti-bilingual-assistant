@@ -109,7 +109,7 @@ export function MobileNav() {
     <nav
       id="mobile-nav"
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-30 bg-background/80 backdrop-blur-xl border-t border-border/50 glue-fixed glue-bottom",
+        "mobile-nav fixed bottom-0 left-0 right-0 z-30 bg-background/80 backdrop-blur-xl border-t border-border/50 glue-fixed glue-bottom",
         "supports-[backdrop-filter]:bg-background/60",
         "ios-reduce-blur transition-all duration-180 ease-out",
         language === 'ar' ? 'font-arabic' : ''
