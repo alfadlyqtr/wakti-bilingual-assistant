@@ -13,7 +13,7 @@ import { SimplifiedFileUpload } from './SimplifiedFileUpload';
 import { ImageModeFileUpload } from './ImageModeFileUpload';
 import type { UploadedFile } from '@/types/fileUpload';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
-import { useMobileKeyboard } from '@/hooks/useMobileKeyboard';
+// Removed useMobileKeyboard hook - ChatInput now handles its own keyboard detection
 import { supabase } from '@/integrations/supabase/client';
 
 // Returns border/outline classes per mode for main container & textarea
@@ -107,9 +107,71 @@ export function ChatInput({
   const [isTranslatingI2I, setIsTranslatingI2I] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
   
-  // Mobile keyboard detection
-  const { isKeyboardVisible, keyboardHeight } = useMobileKeyboard();
+  // Self-contained mobile keyboard detection
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const isKeyboardMode = (typeof window !== 'undefined' && window.innerWidth < 768) && isKeyboardVisible;
+  
+  // Handle keyboard detection and body class management
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleKeyboardDetection = () => {
+      const vv = window.visualViewport;
+      const vvH = vv?.height ?? window.innerHeight;
+      const threshold = 150;
+      const viewportShrank = window.innerHeight - vvH > threshold;
+      
+      const ae = document.activeElement as HTMLElement | null;
+      const isEditableActive = !!ae && (
+        ae.tagName === 'INPUT' ||
+        ae.tagName === 'TEXTAREA' ||
+        ae.getAttribute('contenteditable') === 'true'
+      );
+      
+      const visible = isEditableActive && viewportShrank;
+      setIsKeyboardVisible(visible);
+      
+      // Manage body class for CSS styling
+      if (visible) {
+        document.body.classList.add('keyboard-visible');
+      } else {
+        document.body.classList.remove('keyboard-visible');
+      }
+    };
+
+    const handleFocusIn = (e: FocusEvent) => {
+      const t = e.target as HTMLElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.getAttribute('contenteditable') === 'true')) {
+        setTimeout(handleKeyboardDetection, 150);
+      }
+    };
+    
+    const handleFocusOut = () => {
+      setTimeout(handleKeyboardDetection, 150);
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleKeyboardDetection);
+    } else {
+      window.addEventListener('resize', handleKeyboardDetection);
+    }
+    
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleKeyboardDetection);
+      } else {
+        window.removeEventListener('resize', handleKeyboardDetection);
+      }
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+      
+      // Clean up body class when component unmounts
+      document.body.classList.remove('keyboard-visible');
+    };
+  }, []);
   
   // Ensure input row is always visible when keyboard is open
   useEffect(() => {

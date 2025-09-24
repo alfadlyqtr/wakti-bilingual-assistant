@@ -1256,11 +1256,7 @@ const WaktiAIV2 = () => {
   // Quick Actions drawer removed; Tools now opens inline quick modes in ChatInput
   const handleOpenPlusDrawer = () => {};
 
-  // Ensure no global bottom padding leaks in/from Safari safe-area when entering or leaving chat
-  React.useEffect(() => {
-    try { document.body.style.paddingBottom = '0px'; } catch {}
-    return () => { try { document.body.style.paddingBottom = '0px'; } catch {} };
-  }, []);
+  // No longer needed - ChatInput handles its own keyboard detection without global body manipulation
 
   // Removed page-level visualViewport adjustments; we use a fixed bar with safe-area
 
