@@ -59,6 +59,9 @@
     /* Allow page content to scroll; keep only horizontal hidden */
     overflow-x: hidden;
     overflow-y: visible;
+    /* Desktop sidebar sizes */
+    --sidebar-width: 220px;
+    --sidebar-mini-width: 70px;
     --desktop-header-h: 60px;
     --tablet-header-h: 56px;
     --tablet-sidebar-width: 180px;
@@ -624,8 +627,8 @@ textarea::placeholder {
   /* Fix container width for Wakti AI chat input */
   .app-layout-desktop .chat-input-container,
   .app-layout-tablet .chat-input-container {
-    width: calc(100% - var(--sidebar-width, 240px) - 1.5rem) !important;
-    left: calc(var(--sidebar-width, 240px) + 0.5rem) !important;
+    width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 2rem) !important;
+    left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 1rem) !important;
     right: 1rem !important;
     margin: 0 !important;
   }
@@ -1083,6 +1086,24 @@ body.keyboard-visible {
   -webkit-backdrop-filter: none !important;
   border-top: 1px solid rgba(0,0,0,0.08) !important;
   box-shadow: 0 -2px 10px rgba(0,0,0,0.08) !important;
+  border-top-left-radius: 1rem !important;
+  border-top-right-radius: 1rem !important;
+  overflow: hidden !important; /* clean rounded top */
+  isolation: isolate !important; /* create new stacking context to avoid backdrop bleed */
+}
+
+/* Solid overlay underneath all children to guarantee opacity */
+.chat-input-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--background));
+  z-index: 0;
+}
+
+.chat-input-container > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* Force the inner ChatInput card to be solid (no glass/blur) */
