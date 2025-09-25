@@ -138,12 +138,15 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
     }
 
+    const inputType = trigger === 'vision' || (attachedFiles && attachedFiles.length > 0) ? 'vision' : 'text';
+
     const userMessage: AIMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
       content: messageContent,
       timestamp: new Date(),
       intent: trigger,
+      inputType,
       attachedFiles: attachedFiles,
     };
     const newMessages = [...sessionMessages, userMessage];
@@ -161,44 +164,88 @@ const WaktiAIV2 = () => {
     setSessionMessages([...newMessages, assistantPlaceholder]);
 
     try {
-      const response = await WaktiAIV2Service.sendMessage(
-        messageContent,
-        userProfile.id,
-        language,
-        convId,
-        'text', // inputType
-        newMessages,
-        false, // isVoice
-        trigger,
-        '', // voiceId
-        attachedFiles,
-        controller.signal
-      );
+      if (inputType === 'vision') {
+        let streamed = '';
+        let streamMeta: any = {};
+        const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
+          messageContent,
+          userProfile.id,
+          language,
+          convId,
+          inputType, // 'vision'
+          newMessages,
+          false, // skipContextLoad
+          trigger,
+          '', // conversationSummary
+          attachedFiles,
+          (token: string) => {
+            streamed += token;
+            setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
+          },
+          (metadata: any) => { streamMeta = metadata || {}; },
+          (err: string) => { console.error('Vision stream error:', err); },
+          controller.signal
+        );
 
-      const finalAssistantMessage: AIMessage = {
-        ...assistantPlaceholder,
-        content: response.response,
-        metadata: { loading: false, ...response.metadata },
-        intent: response.intent,
-        actionTaken: response.actionTaken,
-        confidence: response.confidence,
-      };
+        const finalAssistantMessage: AIMessage = {
+          ...assistantPlaceholder,
+          content: streamedResp?.response ?? streamed,
+          metadata: { loading: false, ...streamMeta },
+          intent: trigger,
+        };
 
-      setSessionMessages(prev => {
-        const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
-        EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
-        return finalMessages;
-      });
+        setSessionMessages(prev => {
+          const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
+          EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
+          return finalMessages;
+        });
+      } else {
+        const response = await WaktiAIV2Service.sendMessage(
+          messageContent,
+          userProfile.id,
+          language,
+          convId,
+          inputType, // inputType
+          newMessages,
+          false, // isVoice
+          trigger,
+          '', // voiceId
+          attachedFiles,
+          controller.signal
+        );
+
+        const finalAssistantMessage: AIMessage = {
+          ...assistantPlaceholder,
+          content: response.response,
+          metadata: { loading: false, ...response.metadata },
+          intent: response.intent,
+          actionTaken: response.actionTaken,
+          confidence: response.confidence,
+        };
+
+        setSessionMessages(prev => {
+          const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
+          EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
+          return finalMessages;
+        });
+      }
 
     } catch (error: any) {
       console.error('Error sending message:', error);
-      const errorMessage: AIMessage = {
-        ...assistantPlaceholder,
-        content: 'Sorry, I encountered an error. Please try again.',
-        metadata: { loading: false, error: true },
-      };
+      // If we already streamed some content (e.g., fallback provider succeeded), keep it.
       setSessionMessages(prev => {
-        const finalMessages = prev.map(m => m.id === assistantMessageId ? errorMessage : m);
+        const hadStream = !!prev.find(m => m.id === assistantMessageId)?.content;
+        const finalMessages = prev.map(m => {
+          if (m.id !== assistantMessageId) return m;
+          if (hadStream) {
+            return { ...m, metadata: { ...(m.metadata || {}), loading: false } };
+          }
+          return {
+            ...m,
+            content: 'Sorry, I encountered an error. Please try again.',
+            metadata: { loading: false, error: true },
+          };
+        });
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
         return finalMessages;
       });

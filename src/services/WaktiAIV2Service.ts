@@ -428,219 +428,240 @@ class WaktiAIV2ServiceClass {
         maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
       }
 
-      // Mobile-optimized SSE request with retry logic
-      const maxRetries = 2;
-      let response;
-      
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          const pt = this.ensurePersonalTouch();
-          const pt_version = pt?.pt_version ?? null;
-          const pt_updated_at = pt?.pt_updated_at ?? null;
-          const pt_hash = this.hashPersonalTouch(pt);
+      // Inner attempt function: parameterize primary provider and stream
+      const attemptStream = async (primary: 'claude' | 'openai') => {
+        // Mobile-optimized SSE request with retry logic
+        const maxRetries = 2;
+        let response;
 
-          console.log('🎛️ PT_OUT:', {
-            tone: pt?.tone || null,
-            style: pt?.style || null,
-            pt_version,
-            pt_updated_at,
-            pt_hash
-          });
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            const pt = this.ensurePersonalTouch();
+            const pt_version = pt?.pt_version ?? null;
+            const pt_updated_at = pt?.pt_updated_at ?? null;
+            const pt_hash = this.hashPersonalTouch(pt);
 
-          response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
-            method: 'POST',
-            mode: 'cors',
-            cache: 'no-cache',
-            credentials: 'omit',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json',
-              'Accept': 'text/event-stream',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'x-request-id': requestId,
-              'x-mobile-request': 'true',
-              'apikey': maybeAnonKey
-            },
-            body: JSON.stringify({
-              message,
-              language,
-              conversationId,
-              inputType,
-              activeTrigger,
-              attachedFiles,
-              recentMessages: enhancedMessages,
-              conversationSummary: finalSummary,
-              personalTouch: pt,
+            console.log('🎛️ PT_OUT:', {
+              tone: pt?.tone || null,
+              style: pt?.style || null,
               pt_version,
               pt_updated_at,
-              pt_hash,
-              clientLocalHour,
-              isWelcomeBack,
-              location,
-              visionPrimary: 'claude',
-              visionFallback: 'openai'
-            }),
-            signal
-          });
-          
-          if (response.ok) break;
-          
-          if (attempt === maxRetries) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          
-          // Brief delay before retry on mobile networks
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          
-        } catch (error: any) {
-          if (attempt === maxRetries || error.name === 'AbortError') {
-            throw error;
-          }
-          console.warn(`🔄 Retry attempt ${attempt}/${maxRetries} for mobile request [${requestId}]`);
-        }
-      }
+              pt_hash
+            });
 
-      if (!response.ok) throw new Error(`Streaming request failed: ${response.status}`);
+            response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
+              method: 'POST',
+              mode: 'cors',
+              cache: 'no-cache',
+              credentials: 'omit',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'x-request-id': requestId,
+                'x-mobile-request': 'true',
+                'apikey': maybeAnonKey
+              },
+              body: JSON.stringify({
+                message,
+                language,
+                conversationId,
+                inputType,
+                activeTrigger,
+                attachedFiles,
+                recentMessages: enhancedMessages,
+                conversationSummary: finalSummary,
+                personalTouch: pt,
+                pt_version,
+                pt_updated_at,
+                pt_hash,
+                clientLocalHour,
+                isWelcomeBack,
+                location,
+                visionPrimary: primary,
+                visionFallback: primary === 'claude' ? 'openai' : 'claude'
+              }),
+              signal
+            });
 
-      // SSE parsing
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body reader available');
+            if (response.ok) break;
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullResponse = '';
-      let metadata: any = {};
-      let encounteredError: string | null = null;
-      let isCompleted = false;
-
-      const abortHandler = async () => { try { await reader.cancel(); } catch {} };
-      if (signal) {
-        if (signal.aborted) {
-          await abortHandler();
-          throw new Error('Streaming aborted');
-        }
-        signal.addEventListener('abort', abortHandler, { once: true });
-      }
-
-      // Removed client-side idle timeout to avoid false timeouts on Safari/iOS
-      let firstTokenReceived = false;
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            if (!isCompleted) onComplete?.(metadata);
-            console.log(`✅ FRONTEND BOSS: Stream closed cleanly [${requestId}]`);
-            break;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6);
-
-            if (data === '[DONE]') {
-              if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
-              console.log(`🏁 FRONTEND BOSS: Received [DONE] [${requestId}]`);
-              continue;
+            if (attempt === maxRetries) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.error) { 
-                encounteredError = parsed.error; 
-                continue; 
+            // Brief delay before retry on mobile networks
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+
+          } catch (error: any) {
+            if (attempt === maxRetries || error.name === 'AbortError') {
+              throw error;
+            }
+            console.warn(`🔄 Retry attempt ${attempt}/${maxRetries} for mobile request [${requestId}]`);
+          }
+        }
+
+        if (!response.ok) throw new Error(`Streaming request failed: ${response.status}`);
+
+        // SSE parsing
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response body reader available');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponse = '';
+        let metadata: any = {};
+        let encounteredError: string | null = null;
+        let isCompleted = false;
+
+        const abortHandler = async () => { try { await reader.cancel(); } catch {} };
+        if (signal) {
+          if (signal.aborted) {
+            await abortHandler();
+            throw new Error('Streaming aborted');
+          }
+          signal.addEventListener('abort', abortHandler, { once: true });
+        }
+
+        // Removed client-side idle timeout to avoid false timeouts on Safari/iOS
+        let firstTokenReceived = false;
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              if (!isCompleted) onComplete?.(metadata);
+              console.log(`✅ FRONTEND BOSS: Stream closed cleanly [${requestId}] (primary=${primary})`);
+              break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const data = line.slice(6);
+
+              if (data === '[DONE]') {
+                if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
+                console.log(`🏁 FRONTEND BOSS: Received [DONE] [${requestId}] (primary=${primary})`);
+                continue;
               }
-              
-              // Log server-applied PT metadata when received
-              if (parsed.metadata?.pt_applied) {
-                console.log('🧩 PT_IN_APPLIED:', parsed.metadata.pt_applied);
-              }
-              
-              if (typeof parsed.token === 'string') { 
+
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.error) {
+                  const errObj = parsed.error;
+                  const errMsg = typeof errObj === 'string'
+                    ? errObj
+                    : (errObj?.message || errObj?.type || JSON.stringify(errObj));
+                  encounteredError = errMsg;
+                  // If overload or Claude-specific error surfaces inside SSE, bubble up immediately
+                  const low = errMsg.toLowerCase();
+                  if (low.includes('overloaded') || low.includes('529') || low.includes('claude')) {
+                    throw new Error(errMsg);
+                  }
+                  continue;
+                }
+
+                if (parsed.metadata?.pt_applied) {
+                  console.log('🧩 PT_IN_APPLIED:', parsed.metadata.pt_applied);
+                }
+
+                if (typeof parsed.token === 'string') { 
+                  if (!firstTokenReceived) {
+                    firstTokenReceived = true;
+                    console.log(`🎯 CLIENT: First token received [${requestId}] (primary=${primary})`);
+                  }
+                  fullResponse += parsed.token; 
+                  onToken?.(parsed.token); 
+                }
+                else if (typeof parsed.response === 'string') { 
+                  if (!firstTokenReceived) {
+                    firstTokenReceived = true;
+                    console.log(`🎯 CLIENT: First response chunk received [${requestId}] (primary=${primary})`);
+                  }
+                  fullResponse += parsed.response; 
+                  onToken?.(parsed.response); 
+                }
+
+                if (parsed.metadata && typeof parsed.metadata === 'object') {
+                  metadata = { ...metadata, ...parsed.metadata };
+                }
+                if (parsed.done === true) {
+                  if (!isCompleted) { onComplete?.(parsed.metadata || metadata); isCompleted = true; }
+                }
+              } catch {
                 if (!firstTokenReceived) {
                   firstTokenReceived = true;
-                  console.log(`🎯 CLIENT: First token received [${requestId}]`);
+                  console.log(`🎯 CLIENT: First raw token received [${requestId}] (primary=${primary})`);
                 }
-                fullResponse += parsed.token; 
-                onToken?.(parsed.token); 
+                fullResponse += data;
+                onToken?.(data);
               }
-              else if (typeof parsed.response === 'string') { 
-                if (!firstTokenReceived) {
-                  firstTokenReceived = true;
-                  console.log(`🎯 CLIENT: First response chunk received [${requestId}]`);
-                }
-                fullResponse += parsed.response; 
-                onToken?.(parsed.response); 
-              }
-              
-              if (parsed.metadata && typeof parsed.metadata === 'object') {
-                metadata = { ...metadata, ...parsed.metadata };
-              }
-              if (parsed.done === true) {
-                if (!isCompleted) { onComplete?.(parsed.metadata || metadata); isCompleted = true; }
-              }
-            } catch {
-              // Not JSON? Treat as raw token
-              if (!firstTokenReceived) {
-                firstTokenReceived = true;
-                console.log(`🎯 CLIENT: First raw token received [${requestId}]`);
-              }
-              fullResponse += data;
-              onToken?.(data);
             }
           }
+        } finally {
+          try { reader.releaseLock(); } catch {}
+          if (signal) signal.removeEventListener('abort', abortHandler as any);
+          try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
         }
-      } finally {
-        try { reader.releaseLock(); } catch {}
-        if (signal) signal.removeEventListener('abort', abortHandler as any);
-        try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
-      }
 
-      // Apply deterministic Personal Touch enforcement (nickname, signature)
-      // Deprecated: Frontend post-processing for Personal Touch was removed.
-      // Enforcement now happens server-side in VisionSystem system prompts.
+        // Persist updated rolling summary after stream
+        try {
+          const msgsForSummary: AIMessage[] = [
+            ...enhancedMessages,
+            { id: `user-${Date.now()}`, role: 'user', content: message, timestamp: new Date() } as AIMessage,
+            { id: `assistant-${Date.now()}`, role: 'assistant', content: fullResponse, timestamp: new Date() } as AIMessage
+          ];
+          const updatedSummary = this.generateConversationSummary(msgsForSummary);
+          if (updatedSummary && updatedSummary.trim()) {
+            const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
+            if (uuidLike && conversationId) {
+              const { data: existing } = await supabase
+                .from('ai_conversation_summaries')
+                .select('id')
+                .eq('conversation_id', conversationId)
+                .limit(1)
+                .maybeSingle();
+              if (existing?.id) {
+                await supabase
+                  .from('ai_conversation_summaries')
+                  .update({ summary_text: updatedSummary, message_count: msgsForSummary.length })
+                  .eq('id', existing.id);
+              } else {
+                await supabase
+                  .from('ai_conversation_summaries')
+                  .insert({ user_id: userId, conversation_id: conversationId, summary_text: updatedSummary, message_count: msgsForSummary.length });
+              }
+            } else if (conversationId) {
+              localStorage.setItem(`wakti_local_summary_${conversationId}`, updatedSummary);
+            }
+          }
+        } catch {}
 
-      // Best-effort: persist updated rolling summary after stream
+        if (encounteredError) throw new Error(String(encounteredError));
+
+        console.log(`✅ FRONTEND BOSS: Streaming completed successfully [${requestId}] (primary=${primary})`);
+        return { response: fullResponse, metadata };
+      };
+
+      // Try Claude first, then auto-fallback to OpenAI on 529/overloaded errors
       try {
-        const msgsForSummary: AIMessage[] = [
-          ...enhancedMessages,
-          { id: `user-${Date.now()}`, role: 'user', content: message, timestamp: new Date() } as AIMessage,
-          { id: `assistant-${Date.now()}`, role: 'assistant', content: fullResponse, timestamp: new Date() } as AIMessage
-        ];
-        const updatedSummary = this.generateConversationSummary(msgsForSummary);
-        if (updatedSummary && updatedSummary.trim()) {
-          const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
-          if (uuidLike && conversationId) {
-            const { data: existing } = await supabase
-              .from('ai_conversation_summaries')
-              .select('id')
-              .eq('conversation_id', conversationId)
-              .limit(1)
-              .maybeSingle();
-            if (existing?.id) {
-              await supabase
-                .from('ai_conversation_summaries')
-                .update({ summary_text: updatedSummary, message_count: msgsForSummary.length })
-                .eq('id', existing.id);
-            } else {
-              await supabase
-                .from('ai_conversation_summaries')
-                .insert({ user_id: userId, conversation_id: conversationId, summary_text: updatedSummary, message_count: msgsForSummary.length });
-            }
-          } else if (conversationId) {
-            localStorage.setItem(`wakti_local_summary_${conversationId}`, updatedSummary);
-          }
+        const res = await attemptStream('claude');
+        return { response: res.response, conversationId, metadata: res.metadata };
+      } catch (err: any) {
+        const msg = String(err?.message || err || '').toLowerCase();
+        const shouldFallback = msg.includes('overloaded') || msg.includes('529') || msg.includes('claude');
+        if (shouldFallback) {
+          console.warn('⚠️ Claude overloaded, auto-falling back to OpenAI Vision...');
+          const res2 = await attemptStream('openai');
+          return { response: res2.response, conversationId, metadata: res2.metadata };
         }
-      } catch {}
-
-      if (encounteredError) throw new Error(encounteredError);
-
-      console.log(`✅ FRONTEND BOSS: Streaming completed successfully [${requestId}]`);
-      return { response: fullResponse, conversationId, metadata };
+        throw err;
+      }
     } catch (error: any) {
       console.error('❌ FRONTEND BOSS: Streaming failed:', error);
       onError?.(error.message || 'Streaming failed');

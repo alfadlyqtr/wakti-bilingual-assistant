@@ -74,6 +74,8 @@ export function ChatInput({
   const [imageMode, setImageMode] = useState<ImageMode>('text2image');
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showQuickModes, setShowQuickModes] = useState(false);
+  const quickModesAnchorRef = useRef<HTMLButtonElement>(null);
+  const [quickModesPos, setQuickModesPos] = useState<{ top: number; left: number } | null>(null);
   // Button ref and viewport position for Search submode dropdown (Web/YouTube)
   const searchModeBtnRef = useRef<HTMLButtonElement>(null);
   const [searchMenuPos, setSearchMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -119,6 +121,33 @@ export function ChatInput({
       containerRef.current = el.closest('.wakti-ai-container') as HTMLElement;
     }
   }, []);
+
+  // Recompute Quick Modes anchor position when opened/resized/scrolled
+  useEffect(() => {
+    if (!showQuickModes) return;
+    const updatePos = () => {
+      // Prefer anchoring to the chat messages area so the popup overlaps bubbles
+      const host = document.querySelector('.wakti-ai-messages-area') as HTMLElement | null;
+      if (host) {
+        const r = host.getBoundingClientRect();
+        setQuickModesPos({ top: r.bottom - 12, left: r.left + r.width / 2 });
+        return;
+      }
+      // Fallback to button rect
+      const el = quickModesAnchorRef.current;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        setQuickModesPos({ top: rect.top, left: rect.left });
+      }
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
+  }, [showQuickModes]);
   
   // Handle keyboard detection - scope changes to container only
   useEffect(() => {
@@ -257,7 +286,12 @@ export function ChatInput({
     // Close dropdowns when clicking outside
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('[data-dropdown]') && !target.closest('[data-dropdown-menu]') && !target.closest('[data-quickmodes]')) {
+      if (
+        !target.closest('[data-dropdown]') &&
+        !target.closest('[data-dropdown-menu]') &&
+        !target.closest('[data-quickmodes]') &&
+        !target.closest('[data-quickmodes-menu]')
+      ) {
         setSearchMenuPos(null);
         setImageMenuPos(null);
         setShowQuickModes(false);
@@ -265,10 +299,12 @@ export function ChatInput({
     };
     
     document.addEventListener('click', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside);
     
     return () => {
       window.removeEventListener('wakti-close-all-overlays', closer as EventListener);
       document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
     };
   }, []);
 
@@ -393,14 +429,22 @@ export function ChatInput({
       }
 
       // PROPERLY CONVERT UPLOADED FILES TO ATTACHED FILES FORMAT
-      const enhancedFiles = uploadedFiles.length > 0 ? uploadedFiles.map(file => ({
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        url: file.url,
-        preview: file.preview,
-        imageType: file.imageType || { id: 'general', name: 'General' }
-      })) : undefined;
+      // Include raw base64 as `data` and `content` for backend VisionSystem (Claude/OpenAI)
+      const enhancedFiles = uploadedFiles.length > 0 ? uploadedFiles.map(file => {
+        const dataUrl = file.base64 || file.url || '';
+        const commaIdx = typeof dataUrl === 'string' ? dataUrl.indexOf(',') : -1;
+        const rawB64 = commaIdx !== -1 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+        return {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          url: file.url,
+          preview: file.preview,
+          imageType: file.imageType || { id: 'general', name: 'General' },
+          data: rawB64,
+          content: rawB64
+        };
+      }) : undefined;
 
       console.log('📎 ENHANCED FILES:', enhancedFiles);
 
@@ -683,9 +727,8 @@ export function ChatInput({
             </div>
             )}
             
-            {/* Top row with all buttons - hidden during mobile keyboard */}
-            { !isKeyboardMode && (
-            <div className="flex items-center justify-between px-3 pt-2 pb-0 isolate hide-on-keyboard">
+            {/* Top row with all buttons - always visible (even during mobile keyboard) */}
+            <div className="flex items-center justify-between px-3 pt-2 pb-0 isolate relative z-[200] pointer-events-auto">
                 {/* Left side: Extra + Modes + Quick Modes + Mode Badge (moved here) */}
                 <div className="flex items-center gap-2" >
                   <button
@@ -712,32 +755,63 @@ export function ChatInput({
                   
                   <div className="relative" data-quickmodes>
                     <button
-                      onPointerUp={(e) => {
+                      ref={quickModesAnchorRef}
+                      onPointerDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        // Stop the subsequent click from bubbling to the document outside-closer
+                        // @ts-ignore
+                        if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') {
+                          // @ts-ignore
+                          e.nativeEvent.stopImmediatePropagation();
+                        }
                         try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
+                        console.log('🔘 Modes button toggled');
+                        setShowQuickModes((v) => {
+                          const next = !v;
+                          if (next) {
+                            const host = document.querySelector('.wakti-ai-messages-area') as HTMLElement | null;
+                            if (host) {
+                              const r = host.getBoundingClientRect();
+                              setQuickModesPos({ top: r.bottom - 12, left: r.left + r.width / 2 });
+                            } else {
+                              const el = quickModesAnchorRef.current;
+                              if (el) {
+                                const rect = el.getBoundingClientRect();
+                                setQuickModesPos({ top: rect.top, left: rect.left });
+                              }
+                            }
+                          }
+                          return next;
+                        });
+                      }}
+                      onClick={(e) => {
+                        // Fallback toggle for environments where pointer events are delayed
+                        e.preventDefault();
+                        e.stopPropagation();
                         setShowQuickModes((v) => !v);
                       }}
+                      aria-expanded={showQuickModes}
                       aria-label={language === "ar" ? "أوضاع" : "Modes"}
                       className="h-8 px-3 rounded-xl flex items-center justify-center gap-1.5 bg-white/10 dark:bg-white/5 hover:bg-white/20 active:bg-white/30 transition-all border-0 flex-shrink-0 touch-manipulation text-foreground/80 dark:text-white/85"
-                      disabled={isUploading}
+                      disabled={false}
                       type="button"
                     >
                       <SlidersHorizontal className="h-4 w-4" />
                       <span className="text-xs font-medium text-foreground/80">{language === 'ar' ? 'أوضاع' : 'Modes'}</span>
                     </button>
-
-                    {/* Inline Quick Modes Panel anchored to Tools */}
+                    {/* Quick Modes Panel rendered via Portal above ChatInput container */}
                     <AnimatePresence>
-                      {showQuickModes && !isKeyboardMode && (
+                      {showQuickModes && quickModesPos && createPortal(
                         <motion.div
-                          key="quick-modes"
+                          key="quick-modes-portal"
                           initial={{ opacity: 0, y: 10, scale: 0.98 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.98 }}
                           transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                          className="absolute left-0 bottom-[calc(100%+8px)] z-50 pointer-events-none"
-                          style={{ transformOrigin: 'bottom left' }}
+                          className="pointer-events-none"
+                          data-quickmodes-menu
+                          style={{ position: 'fixed', top: quickModesPos.top, left: quickModesPos.left, transform: 'translate(-50%, -100%) translateY(-8px)', zIndex: 99999 }}
                         >
                           <div className="pointer-events-auto rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 p-2 pr-3 flex flex-col gap-2">
                             {/* Stacked buttons with delayed pop-in from behind (z-depth via shadow) */}
@@ -765,6 +839,57 @@ export function ChatInput({
                               <span className="text-xs font-semibold">{language === 'ar' ? 'بحث' : 'Search'}</span>
                             </motion.button>
 
+                            <motion.button
+                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                              transition={{ delay: 0.14, type: 'spring', stiffness: 380, damping: 24 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('image'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-orange-500 text-white shadow-[0_10px_24px_rgba(234,88,12,0.35)] hover:shadow-[0_12px_30px_rgba(234,88,12,0.45)] transition-shadow active:scale-[0.98]"
+                            >
+                              <ImageIcon className="h-4 w-4" />
+                              <span className="text-xs font-semibold">{language === 'ar' ? 'صورة' : 'Image'}</span>
+                            </motion.button>
+                          </div>
+                        </motion.div>,
+                        document.body
+                      )}
+                    </AnimatePresence>
+                    {/* Fallback inline render if position missing (rare) */}
+                    <AnimatePresence>
+                      {showQuickModes && !quickModesPos && (
+                        <motion.div
+                          key="quick-modes-fallback"
+                          initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                          transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                          className="absolute left-0 bottom-[calc(100%+8px)] z-[4010]"
+                          style={{ transformOrigin: 'bottom left' }}
+                        >
+                          <div className="pointer-events-auto rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 p-2 pr-3 flex flex-col gap-2">
+                            <motion.button
+                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                              transition={{ delay: 0.00, type: 'spring', stiffness: 380, damping: 24 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('chat'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:shadow-[0_12px_30px_rgba(37,99,235,0.45)] transition-shadow active:scale-[0.98]"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                              <span className="text-xs font-semibold">{language === 'ar' ? 'دردشة' : 'Chat'}</span>
+                            </motion.button>
+                            <motion.button
+                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                              transition={{ delay: 0.07, type: 'spring', stiffness: 380, damping: 24 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('search'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-green-600 text-white shadow-[0_10px_24px_rgba(22,163,74,0.35)] hover:shadow-[0_12px_30px_rgba(22,163,74,0.45)] transition-shadow active:scale-[0.98]"
+                            >
+                              <SearchIcon className="h-4 w-4" />
+                              <span className="text-xs font-semibold">{language === 'ar' ? 'بحث' : 'Search'}</span>
+                            </motion.button>
                             <motion.button
                               initial={{ opacity: 0, y: 14, scale: 0.98 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -980,7 +1105,6 @@ export function ChatInput({
                   </div>
                 </div>
                </div>
-            )}
 
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION (hidden during mobile keyboard) */}
             {!isKeyboardMode && uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
