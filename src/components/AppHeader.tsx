@@ -206,14 +206,12 @@ export function AppHeader() {
       className={cn(
         "h-16 border-b border-white/10",
         "glue-fixed glue-top glue-z shadow-md",
-        "ios-reduce-blur",
+        "solid-bg", // Make header solid
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{
         height: 'var(--app-header-h)',
-        width: '100%',
-        background: 'var(--background, #111827)',
-        boxShadow: '0 4px 12px -2px rgba(0, 0, 0, 0.2)'
+        width: '100%'
       }}
     >
       <div className={cn(

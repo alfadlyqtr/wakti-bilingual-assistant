@@ -723,41 +723,31 @@ html, body, #root {
   }
 }
 
-/* Add proper spacing below header for scrollable content - Mobile view */
-.app-layout-mobile main {
-  padding-top: var(--app-header-h, 56px) !important;
+/* --- DEFINITIVE GLOBAL LAYOUT & SCROLLING FIX --- */
+
+/* Prevent the entire page from scrolling */
+html, body, #root {
+  overflow: hidden !important;
+  height: 100dvh;
+}
+
+/* The <main> element is the ONLY scrollable container */
+main {
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  height: calc(100% - var(--app-header-h, 56px)) !important;
-  width: 100% !important;
-  position: relative !important;
   -webkit-overflow-scrolling: touch !important;
-  scroll-behavior: smooth !important;
+  height: 100% !important;
+  /* Add padding to push content below fixed headers/footers */
+  padding-top: var(--app-header-h, 56px) !important;
+  padding-bottom: var(--app-bottom-tabs-h, 64px) !important;
 }
 
-/* Desktop/Tablet main content layout - already handled by their own layouts */
-.app-layout-desktop main, .app-layout-tablet main {
-  /* Add padding to push content below the fixed header */
-  padding-top: calc(var(--desktop-header-h) + 1.5rem) !important;
-  /* Override any problematic global styles but keep the built-in layout */
-  -webkit-overflow-scrolling: touch !important;
-  scroll-behavior: smooth !important;
-}
-
-/* Make Dashboard match the DesktopLayout main width and scroll within itself */
-.app-layout-desktop .dashboard-container,
-.app-layout-tablet .dashboard-container {
-  max-width: 100% !important;
-  width: 100% !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  overflow-y: auto !important; /* Vertical scrolling only */
-  overflow-x: hidden !important; /* No horizontal scrolling */
-  max-height: calc(100vh - var(--desktop-header-h) - 2rem) !important; /* Account for header height + spacing */
-  scrollbar-width: thin !important; /* For Firefox */
-  -webkit-overflow-scrolling: touch !important; /* Smooth scrolling on iOS */
+/* Desktop/Tablet specific header padding */
+@media (min-width: 768px) {
+  main {
+    padding-top: calc(var(--desktop-header-h) + 1.5rem) !important;
+    padding-bottom: 1rem !important; /* Reset bottom padding for desktop */
+  }
 }
 
 /* WaktiAIV2 self-contained scrolling for all devices */
@@ -798,7 +788,7 @@ div[data-lov-name="AppHeader"] {
 
 /* WAKTI AI PAGE LAYOUT - FIXED HEADER/FOOTER */
 
-/* Main page container */
+/* Main page container for Wakti AI */
 .wakti-ai-page-container {
   display: flex;
   flex-direction: column;
@@ -811,125 +801,16 @@ div[data-lov-name="AppHeader"] {
 .wakti-ai-messages-area {
   flex: 1; /* Takes up all available space */
   overflow-y: auto; /* Allows vertical scrolling */
-  padding-top: calc(var(--desktop-header-h, 60px) + 1rem); /* Space for the header */
-  padding-bottom: 120px; /* Space for the chat input */
+  /* Add padding to push content below the fixed header */
+  padding-top: calc(var(--desktop-header-h) + 1.5rem) !important;
+  padding-bottom: 150px; /* Increased space for the chat input */
 }
 
 /* Mobile-specific padding */
 @media (max-width: 767px) {
   .wakti-ai-messages-area {
     padding-top: calc(var(--app-header-h, 56px) + 1rem);
-    padding-bottom: 100px;
-  }
-}
-
-/* This class makes elements SOLID and NOT see-through */
-.solid-bg {
-  background: var(--gradient-background) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: 0 0 20px rgba(0,0,0,0.1) !important;
-  border-color: rgba(0,0,0,0.1) !important;
-}
-
-/* Ensure the header is fixed and solid */
-.fixed-header {
-  position: fixed !important;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-}
-
-/* Ensure the chat input is fixed and solid */
-.chat-input-container {
-  position: fixed !important;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* WAKTI AI PAGE LAYOUT - FIXED HEADER/FOOTER */
-
-/* Main page container */
-.wakti-ai-page-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh; /* Full viewport height */
-  width: 100%;
-  background: var(--gradient-background);
-}
-
-/* The scrollable area for messages */
-.wakti-ai-messages-area {
-  flex: 1; /* Takes up all available space */
-  overflow-y: auto; /* Allows vertical scrolling */
-  padding-top: calc(var(--desktop-header-h, 60px) + 2rem); /* Space for the header */
-  padding-bottom: 120px; /* Space for the chat input */
-}
-
-/* Mobile-specific padding */
-@media (max-width: 767px) {
-  .wakti-ai-messages-area {
-    padding-top: calc(var(--app-header-h, 56px) + 1rem);
-    padding-bottom: 100px;
-  }
-}
-
-/* This class makes elements SOLID and NOT see-through */
-.solid-bg {
-  background: var(--gradient-background) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: 0 0 20px rgba(0,0,0,0.1) !important;
-  border-color: rgba(0,0,0,0.1) !important;
-}
-
-/* Ensure the header is fixed and solid */
-.fixed-header {
-  position: fixed !important;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-}
-
-/* Ensure the chat input is fixed and solid */
-.chat-input-container {
-  position: fixed !important;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* WAKTI AI PAGE LAYOUT - FIXED HEADER/FOOTER */
-
-/* Main page container */
-.wakti-ai-page-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh; /* Full viewport height */
-  width: 100%;
-  background: var(--gradient-background);
-}
-
-/* The scrollable area for messages */
-.wakti-ai-messages-area {
-  flex: 1; /* Takes up all available space */
-  overflow-y: auto; /* Allows vertical scrolling */
-  padding-top: calc(var(--desktop-header-h, 60px) + 2rem); /* Space for the header */
-  padding-bottom: 120px; /* Space for the chat input */
-}
-
-/* Mobile-specific padding */
-@media (max-width: 767px) {
-  .wakti-ai-messages-area {
-    padding-top: calc(var(--app-header-h, 56px) + 1rem);
-    padding-bottom: 100px;
+    padding-bottom: 120px; /* Space for mobile chat input */
   }
 }
 
