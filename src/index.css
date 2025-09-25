@@ -750,6 +750,13 @@ body.wakti-ai-page main {
   padding-bottom: 0 !important;
 }
 
+/* Desktop: smaller reserve so the visible gap is tiny */
+@media (min-width: 1024px) {
+  body.wakti-ai-page main {
+    padding-bottom: 112px !important;
+  }
+}
+
 /* 4. CHAT INPUT: This is fixed to the bottom and MUST be solid. */
 .chat-input-container {
   position: fixed !important;
