@@ -737,7 +737,7 @@ main {
 
 /* Wakti AI: use main as scroller but reserve input space */
 body.wakti-ai-page main {
-  padding-bottom: 140px !important;
+  padding-bottom: 0 !important;
 }
 
 /* 3. WAKTI AI PAGE LAYOUT: This page is special and does NOT use <main>. */
@@ -753,7 +753,7 @@ body.wakti-ai-page main {
 /* Desktop: smaller reserve so the visible gap is tiny */
 @media (min-width: 1024px) {
   body.wakti-ai-page main {
-    padding-bottom: 112px !important;
+    padding-bottom: 0 !important;
   }
 }
 
@@ -771,6 +771,23 @@ body.wakti-ai-page main {
   -webkit-backdrop-filter: none !important;
   box-shadow: 0 -2px 10px rgba(0,0,0,0.1) !important;
   border-top: 1px solid rgba(128,128,128,0.2) !important;
+}
+
+/* When portaled to <body>, still align with sidebar widths on larger screens */
+@media (min-width: 1024px) {
+  .chat-input-container {
+    left: calc(var(--current-sidebar-width, var(--sidebar-width, 220px)) + 1rem) !important;
+    right: 1rem !important;
+    width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 220px)) - 2rem) !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .chat-input-container {
+    left: calc(var(--tablet-sidebar-width, 180px) + 0.5rem) !important;
+    right: 1rem !important;
+    width: calc(100% - var(--tablet-sidebar-width, 180px) - 1.5rem) !important;
+  }
 }
 
 /* Fix MobileSlideDownNav rendering and positioning */

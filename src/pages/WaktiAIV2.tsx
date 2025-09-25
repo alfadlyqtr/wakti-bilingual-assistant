@@ -9,6 +9,7 @@ import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { cn } from '@/lib/utils';
+import { createPortal } from 'react-dom';
 
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
@@ -25,7 +26,9 @@ const WaktiAIV2 = () => {
   const [pendingTaskData, setPendingTaskData] = useState<any>(null);
   const [pendingReminderData, setPendingReminderData] = useState<any>(null);
   const [taskConfirmationLoading, setTaskConfirmationLoading] = useState(false);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [inputReservePx, setInputReservePx] = useState<number>(120);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -73,6 +76,24 @@ const WaktiAIV2 = () => {
     setIsNewConversation(!conversationId || messages.length === 0);
     handleRefreshConversations();
   }, [handleRefreshConversations]);
+
+  // Always portal to document.body to avoid iOS fixed-inside-scroller bugs
+  useEffect(() => {
+    setPortalRoot(document.body);
+  }, []);
+
+  // Listen for ChatInput resize and adjust bottom reserve with a tiny gap (2px)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const ce = e as CustomEvent<{ height: number }>;
+        const h = Number(ce?.detail?.height ?? 0);
+        if (Number.isFinite(h) && h > 0) setInputReservePx(Math.max(60, Math.round(h) + 6));
+      } catch {}
+    };
+    window.addEventListener('wakti-chat-input-resized', handler as EventListener);
+    return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
+  }, []);
 
   const handleSelectConversation = useCallback((id: string) => {
     if (currentConversationId && sessionMessages.length > 0) {
@@ -224,7 +245,15 @@ const WaktiAIV2 = () => {
         onRefreshConversations={handleRefreshConversations}
       />
 
-      <div className="wakti-ai-messages-area" ref={scrollAreaRef}>
+      <div
+        className="wakti-ai-messages-area"
+        ref={scrollAreaRef}
+        style={{
+          height: `calc(100dvh - var(--app-header-h) - ${inputReservePx}px)`,
+          overflowY: 'auto',
+          paddingBottom: '6px'
+        }}
+      >
         <ChatMessages
           sessionMessages={sessionMessages}
           isLoading={isLoading}
@@ -244,19 +273,36 @@ const WaktiAIV2 = () => {
         />
       </div>
 
-      <div className='chat-input-container solid-bg'>
-        <ChatInput
-          message={message}
-          setMessage={setMessage}
-          isLoading={canSendMessage ? isLoading : true}
-          sessionMessages={sessionMessages}
-          onSendMessage={handleSendMessage}
-          onClearChat={handleClearChat}
-          onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-          activeTrigger={activeTrigger}
-          onTriggerChange={setActiveTrigger}
-        />
-      </div>
+      {portalRoot ? createPortal(
+        <div className='chat-input-container solid-bg'>
+          <ChatInput
+            message={message}
+            setMessage={setMessage}
+            isLoading={canSendMessage ? isLoading : true}
+            sessionMessages={sessionMessages}
+            onSendMessage={handleSendMessage}
+            onClearChat={handleClearChat}
+            onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+            activeTrigger={activeTrigger}
+            onTriggerChange={setActiveTrigger}
+          />
+        </div>,
+        portalRoot
+      ) : (
+        <div className='chat-input-container solid-bg'>
+          <ChatInput
+            message={message}
+            setMessage={setMessage}
+            isLoading={canSendMessage ? isLoading : true}
+            sessionMessages={sessionMessages}
+            onSendMessage={handleSendMessage}
+            onClearChat={handleClearChat}
+            onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+            activeTrigger={activeTrigger}
+            onTriggerChange={setActiveTrigger}
+          />
+        </div>
+      )}
     </div>
   );
 };
