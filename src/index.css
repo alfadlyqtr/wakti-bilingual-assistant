@@ -550,7 +550,7 @@ textarea::placeholder {
   left: 0 !important;
   right: 0 !important;
   z-index: 100 !important;
-  background-color: var(--background, #111827) !important;
+  background-color: hsl(var(--background)) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   height: var(--app-header-h, 56px) !important;
@@ -566,10 +566,12 @@ textarea::placeholder {
   left: calc(var(--sidebar-width, 240px) + 0.5rem) !important; /* Account for sidebar width */
   right: 1rem !important;
   z-index: 100 !important;
-  background: transparent !important;
-  height: auto !important;
-  box-shadow: none !important;
-  border: none !important;
+  background-color: hsl(var(--background)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  height: var(--app-header-h, 56px) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
   width: calc(100% - var(--sidebar-width, 240px) - 1.5rem) !important; /* Set explicit width */
 }
 
@@ -1059,4 +1061,38 @@ body.keyboard-visible {
   }
 
 /* End of second @layer base block */
+}
+
+/* FINAL OPAQUE OVERRIDES — ensure header and chat input are solid everywhere */
+.app-layout-mobile header,
+.app-layout-mobile .header,
+.app-layout-desktop header,
+.app-layout-desktop .header,
+.app-layout-tablet header,
+.app-layout-tablet .header {
+  background: hsl(var(--background)) !important;
+  background-color: hsl(var(--background)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.chat-input-container {
+  background: hsl(var(--background)) !important;
+  background-color: hsl(var(--background)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-top: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.08) !important;
+}
+
+/* Force the inner ChatInput card to be solid (no glass/blur) */
+.chat-input-container .group {
+  background: hsl(var(--card, var(--background))) !important;
+  background-color: hsl(var(--card, var(--background))) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.wakti-ai-page-container {
+  background: hsl(var(--background)) !important;
 }
