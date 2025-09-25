@@ -22,7 +22,7 @@ function MobileAppLayout({ children }: AppLayoutProps) {
         <div className="flex-shrink-0">
           <AppHeader />
         </div>
-        <main className="flex-1 min-h-0 overflow-hidden relative z-[1] h-full">
+        <main className="flex-1 min-h-0 overflow-auto relative z-[1] h-full">
           {children}
         </main>
       </div>
@@ -60,6 +60,16 @@ export function AppLayout({ children }: AppLayoutProps) {
       document.body.classList.add('dashboard-page');
     } else {
       document.body.classList.remove('dashboard-page');
+    }
+  }, [location.pathname]);
+
+  // Tag body when on Wakti AI so CSS can scope a single scroller
+  useEffect(() => {
+    const isWaktiAIPage = location.pathname === '/wakti-ai';
+    if (isWaktiAIPage) {
+      document.body.classList.add('wakti-ai-page');
+    } else {
+      document.body.classList.remove('wakti-ai-page');
     }
   }, [location.pathname]);
 
