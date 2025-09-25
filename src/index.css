@@ -435,7 +435,7 @@ textarea::placeholder {
   /* Mobile keyboard support - proper viewport handling */
   /* App Layout adjustments */
   .app-layout-mobile {
-    height: 100dvh;
+    height: 100%; /* This was the missing piece */
     display: flex;
     flex-direction: column;
   }
@@ -495,16 +495,6 @@ textarea::placeholder {
   }
 }
 
-/* SMOOTH SCROLLING FIX - less aggressive */
-html, body, #root {
-  overflow-x: hidden;
-  overflow-y: auto;
-  height: 100%;
-  min-height: 100%;
-  padding-bottom: 0 !important;
-  margin-bottom: 0 !important;
-}
-
 /* WIDGET STYLING - Enhanced liquid glass effects */
 .widget, [class*="widget"], [class*="Widget"] {
   position: relative !important;
@@ -523,13 +513,6 @@ html, body, #root {
 .widget:hover, [class*="widget"]:hover, [class*="Widget"]:hover {
   transform: translateY(-2px) !important;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15) !important;
-}
-
-/* Dashboard page specific styling */
-.dashboard-page, [class*="dashboard"] {
-  padding-top: calc(var(--app-header-h, 56px) + 16px) !important;
-  overflow-y: auto !important;
-  height: 100% !important;
 }
 
 /* Widget colors by type */
@@ -723,7 +706,8 @@ html, body, #root {
   }
 }
 
-/* --- THE FINAL, CORRECT, AND ONLY LAYOUT --- */
+
+/* --- THE GREAT SIMPLIFICATION --- */
 
 /* 1. GLOBAL SETUP: Prevent the page itself from scrolling. */
 html, body, #root {
@@ -731,24 +715,24 @@ html, body, #root {
   height: 100dvh;
 }
 
-/* 2. DEFAULT LAYOUT: For all pages that use <main>, make it the scrollable container. */
+/* 2. DEFAULT LAYOUT: For all pages that use <main> (e.g., Dashboard) */
 main {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   height: 100% !important;
+  /* Add space for fixed header and bottom nav */
   padding-top: var(--app-header-h) !important;
   padding-bottom: var(--app-bottom-tabs-h) !important;
 }
 
 /* 3. WAKTI AI PAGE LAYOUT: This page is special and does NOT use <main>. */
-/* Make its main container the scrollable area. */
 .wakti-ai-page-container {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   height: 100% !important;
-  /* Add padding for the fixed header and fixed chat input */
+  /* Add space for fixed header and fixed chat input */
   padding-top: var(--app-header-h) !important;
-  padding-bottom: 140px !important; /* Space for the input */
+  padding-bottom: 140px !important; /* Generous space for input */
 }
 
 /* 4. CHAT INPUT: This is fixed to the bottom and MUST be solid. */
@@ -765,25 +749,6 @@ main {
   -webkit-backdrop-filter: none !important;
   box-shadow: 0 -2px 10px rgba(0,0,0,0.1) !important;
   border-top: 1px solid rgba(128,128,128,0.2) !important;
-}
-
-/* Ensure the header is fixed and solid */
-.fixed-header {
-  position: fixed !important;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-}
-
-/* Ensure the chat input is fixed and solid */
-.chat-input-container {
-  position: fixed !important;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Fix MobileSlideDownNav rendering and positioning */
