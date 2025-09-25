@@ -13,7 +13,7 @@ interface DragModeToggleProps {
 
 export const DragModeToggle: React.FC<DragModeToggleProps> = ({ isDragging, onToggle, language, displayName }) => {
   return (
-    <div className="flex justify-between items-center mb-2">
+    <div className="flex justify-between items-center">
       <div className="flex items-center gap-2">
         <Button 
           size="sm" 

@@ -19,10 +19,10 @@ import { supabase } from '@/integrations/supabase/client';
 // Returns border/outline classes per mode for main container & textarea
 const modeHighlightStyles = (activeTrigger: string) => {
   switch (activeTrigger) {
-    case 'chat': return 'border-blue-400 ring-2 ring-blue-200/70 shadow-blue-200/10';
-    case 'search': return 'border-green-400 ring-2 ring-green-200/70 shadow-green-100/10';
-    case 'image': return 'border-orange-400 ring-2 ring-orange-200/70 shadow-orange-100/15';
-    case 'video': return 'border-purple-400 ring-2 ring-purple-200/70 shadow-purple-100/15';
+    case 'chat': return 'border-blue-300 ring-2 ring-blue-200/70 shadow-blue-200/10';
+    case 'search': return 'border-green-300 ring-2 ring-green-200/70 shadow-green-100/10';
+    case 'image': return 'border-orange-300 ring-2 ring-orange-200/70 shadow-orange-100/15';
+    case 'video': return 'border-purple-300 ring-2 ring-purple-200/70 shadow-purple-100/15';
     default: return 'border-primary/40';
   }
 };
@@ -468,7 +468,7 @@ export function ChatInput({
   // Default highlights from activeTrigger, but override to YouTube-red when Search submode is YouTube
   const containerHighlight = (() => {
     if (activeTrigger === 'search' && searchSubmode === 'youtube') {
-      return 'border-red-400 ring-2 ring-red-200/70 shadow-red-100/10';
+      return 'border-red-300 ring-2 ring-red-200/70 shadow-red-100/10';
     }
     return modeHighlightStyles(activeTrigger);
   })();

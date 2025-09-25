@@ -60,7 +60,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="px-4 pb-4 pt-0 space-y-4 dashboard-container overflow-auto h-full" key={refreshKey}>
+    <div className="px-4 pb-4 pt-0 dashboard-container" key={refreshKey}>
         <DragModeToggle
           isDragging={isDragging}
           onToggle={toggleDragMode}
