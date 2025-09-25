@@ -54,9 +54,11 @@
 
 /* Global layout offsets */
   body, html {
-    --app-header-h: calc(56px + env(safe-area-inset-top, 0px));
+    --app-header-h: calc(64px + env(safe-area-inset-top, 0px));
     --app-bottom-tabs-h: calc(64px + env(safe-area-inset-bottom, 0px));
-    overflow: hidden !important; /* Prevent scrollbar on body/html */
+    /* Allow page content to scroll; keep only horizontal hidden */
+    overflow-x: hidden;
+    overflow-y: visible;
     --desktop-header-h: 60px;
     --tablet-header-h: 56px;
     --tablet-sidebar-width: 180px;
@@ -709,9 +711,10 @@ textarea::placeholder {
 
 /* --- THE GREAT SIMPLIFICATION --- */
 
-/* 1. GLOBAL SETUP: Prevent the page itself from scrolling. */
+/* 1. GLOBAL SETUP: Allow inner content to scroll; hide horizontal overflow only. */
 html, body, #root {
-  overflow: hidden !important;
+  overflow-x: hidden;
+  overflow-y: visible;
   height: 100dvh;
 }
 
@@ -719,6 +722,8 @@ html, body, #root {
 main {
   overflow-y: auto !important;
   overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   height: 100% !important;
   /* Add space for fixed header and bottom nav */
   padding-top: var(--app-header-h) !important;
@@ -785,8 +790,8 @@ body.wakti-ai-page main {
   padding-right: 0 !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
-  overflow: auto !important;
-  height: 100% !important;
+  overflow: visible !important;
+  height: auto !important;
 }
 
 /* Emergency scroll fix class */
