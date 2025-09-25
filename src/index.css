@@ -1096,3 +1096,17 @@ body.keyboard-visible {
 .wakti-ai-page-container {
   background: hsl(var(--background)) !important;
 }
+
+/* Strengthen: kill any glass/translucency inside the ChatInput on all themes */
+.chat-input-container [class*="backdrop-blur"],
+.chat-input-container [class*="backdrop-filter"],
+.chat-input-container .ios-reduce-blur {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Override Tailwind translucent utility classes used by ChatInput */
+.chat-input-container .bg-white\/40,
+.chat-input-container .dark\:bg-black\/30 {
+  background-color: hsl(var(--card, var(--background))) !important;
+}
