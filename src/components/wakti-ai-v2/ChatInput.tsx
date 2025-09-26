@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2 } from 'lucide-react';
+import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -46,6 +46,7 @@ interface ChatInputProps {
   onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode, imageQuality?: 'fast' | 'best_fast') => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
+  onOpenConversations?: () => void;
   activeTrigger: string;
   onTriggerChange?: (trigger: string) => void;
   showVideoUpload?: boolean;
@@ -62,6 +63,7 @@ export function ChatInput({
   onSendMessage,
   onClearChat,
   onOpenPlusDrawer,
+  onOpenConversations,
   activeTrigger,
   onTriggerChange,
   showVideoUpload = false,
@@ -108,6 +110,67 @@ export function ChatInput({
   // Image2Image inline translation state
   const [isTranslatingI2I, setIsTranslatingI2I] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
+
+  // Compute a safe, clamped viewport position for the QuickModes portal
+  const getQuickModesPortalPos = () => {
+    const anchor = quickModesAnchorRef.current?.getBoundingClientRect();
+    const rawTop = quickModesPos?.top ?? (anchor ? anchor.top : window.innerHeight - 80);
+    const rawLeft = quickModesPos?.left ?? (anchor ? (anchor.left + anchor.width / 2) : (window.innerWidth / 2));
+    const top = Math.max(12, Math.min(rawTop - 16, window.innerHeight - 12));
+    const left = Math.max(12, Math.min(rawLeft, window.innerWidth - 12));
+    return { top, left };
+  };
+
+  // Modes Stepper (Option B)
+  const [showModesStepper, setShowModesStepper] = useState(false);
+  const [stepperIndex, setStepperIndex] = useState(0); // 0: chat, 1: search, 2: image
+  const modesOrder: Array<{ key: 'chat' | 'search' | 'image'; labelEn: string; labelAr: string; color: string }> = [
+    { key: 'chat', labelEn: 'Chat', labelAr: 'دردشة', color: 'bg-blue-600' },
+    { key: 'search', labelEn: 'Search', labelAr: 'بحث', color: 'bg-green-600' },
+    { key: 'image', labelEn: 'Image', labelAr: 'صورة', color: 'bg-orange-500' },
+  ];
+  const currentMode = modesOrder[stepperIndex];
+  const attachDebugOverlay = () => {
+    try {
+      const id = 'wakti-modes-debug-overlay';
+      if (document.getElementById(id)) return;
+      const el = document.createElement('div');
+      el.id = id;
+      el.setAttribute('data-wakti-debug', '1');
+      el.style.position = 'fixed';
+      el.style.inset = '0';
+      el.style.background = 'rgba(255,0,0,0.08)';
+      el.style.zIndex = '2147483647';
+      el.style.pointerEvents = 'none';
+      el.innerHTML = '<div style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border:2px dashed #f00;padding:8px 12px;border-radius:12px;font-weight:700;font-family:sans-serif;color:#c00;">Modes Stepper DEBUG</div>';
+      document.body.appendChild(el);
+    } catch {}
+  };
+  const removeDebugOverlay = () => {
+    try {
+      const el = document.getElementById('wakti-modes-debug-overlay');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    } catch {}
+  };
+  const openModesStepper = () => {
+    // Initialize index based on current activeTrigger
+    const idx = Math.max(0, modesOrder.findIndex(m => m.key === (activeTrigger as any)));
+    setStepperIndex(idx === -1 ? 0 : idx);
+    setShowQuickModes(false);
+    setShowModesStepper(true);
+  };
+  const closeModesStepper = () => { setShowModesStepper(false); };
+  const cycleLeft = () => setStepperIndex((i) => (i + modesOrder.length - 1) % modesOrder.length);
+  const cycleRight = () => setStepperIndex((i) => (i + 1) % modesOrder.length);
+  // Position stepper just above textarea center
+  const getStepperPos = () => {
+    const rect = textareaRef.current?.getBoundingClientRect();
+    const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+    const topRaw = rect ? rect.top : (window.innerHeight - 200);
+    const top = Math.max(12, Math.min(topRaw - 16, window.innerHeight - 12));
+    const left = Math.max(12, Math.min(cx, window.innerWidth - 12));
+    return { top, left };
+  };
   
   // Self-contained mobile keyboard detection - scoped to container only
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -290,11 +353,13 @@ export function ChatInput({
         !target.closest('[data-dropdown]') &&
         !target.closest('[data-dropdown-menu]') &&
         !target.closest('[data-quickmodes]') &&
-        !target.closest('[data-quickmodes-menu]')
+        !target.closest('[data-quickmodes-menu]') &&
+        !target.closest('[data-stepper-menu]')
       ) {
         setSearchMenuPos(null);
         setImageMenuPos(null);
         setShowQuickModes(false);
+        // Do not forcibly close the stepper here; it has its own backdrop closer
       }
     };
     
@@ -736,10 +801,11 @@ export function ChatInput({
                       e.preventDefault();
                       e.stopPropagation();
                       try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
-                      console.log('💬 EXTRA BUTTON: Dispatching custom event');
-                      if (typeof window !== "undefined") {
-                        const nativeEvent = new CustomEvent("open-wakti-conversations");
-                        window.dispatchEvent(nativeEvent);
+                      if (onOpenConversations) {
+                        console.log('💬 EXTRA BUTTON: Opening conversations via prop');
+                        onOpenConversations();
+                      } else {
+                        console.log('💬 EXTRA BUTTON: No onOpenConversations prop provided');
                       }
                     }}
                     aria-label={language === "ar" ? "إضافي" : "Extra"}
@@ -753,43 +819,26 @@ export function ChatInput({
                     </span>
                   </button>
                   
-                  <div className="relative" data-quickmodes>
+                  <div className="relative z-[100000]" data-quickmodes>
                     <button
                       ref={quickModesAnchorRef}
                       onPointerDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        // Stop the subsequent click from bubbling to the document outside-closer
+                        // Ensure no outside closers run before our click
                         // @ts-ignore
                         if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') {
                           // @ts-ignore
                           e.nativeEvent.stopImmediatePropagation();
                         }
                         try { window.dispatchEvent(new CustomEvent('wakti-close-all-overlays')); } catch {}
-                        console.log('🔘 Modes button toggled');
-                        setShowQuickModes((v) => {
-                          const next = !v;
-                          if (next) {
-                            const host = document.querySelector('.wakti-ai-messages-area') as HTMLElement | null;
-                            if (host) {
-                              const r = host.getBoundingClientRect();
-                              setQuickModesPos({ top: r.bottom - 12, left: r.left + r.width / 2 });
-                            } else {
-                              const el = quickModesAnchorRef.current;
-                              if (el) {
-                                const rect = el.getBoundingClientRect();
-                                setQuickModesPos({ top: rect.top, left: rect.left });
-                              }
-                            }
-                          }
-                          return next;
-                        });
                       }}
                       onClick={(e) => {
-                        // Fallback toggle for environments where pointer events are delayed
                         e.preventDefault();
                         e.stopPropagation();
-                        setShowQuickModes((v) => !v);
+                        console.log('🔘 Modes button: toggle Quick Modes mini panel');
+                        setShowModesStepper(false);
+                        setShowQuickModes(v => !v);
                       }}
                       aria-expanded={showQuickModes}
                       aria-label={language === "ar" ? "أوضاع" : "Modes"}
@@ -800,109 +849,109 @@ export function ChatInput({
                       <SlidersHorizontal className="h-4 w-4" />
                       <span className="text-xs font-medium text-foreground/80">{language === 'ar' ? 'أوضاع' : 'Modes'}</span>
                     </button>
-                    {/* Quick Modes Panel rendered via Portal above ChatInput container */}
+                    {/* Quick Modes mini panel directly below the button */}
                     <AnimatePresence>
-                      {showQuickModes && quickModesPos && createPortal(
+                      {showQuickModes && (
                         <motion.div
-                          key="quick-modes-portal"
-                          initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                          key="quick-modes-inline"
+                          initial={{ opacity: 0, y: -8, scale: 0.98 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                          transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                          className="pointer-events-none"
+                          exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                          transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                          className="absolute left-1/2 -translate-x-1/2 top-[calc(100%-8px)] z-[100001]"
                           data-quickmodes-menu
-                          style={{ position: 'fixed', top: quickModesPos.top, left: quickModesPos.left, transform: 'translate(-50%, -100%) translateY(-8px)', zIndex: 99999 }}
+                          style={{ maxWidth: 'min(92vw, 560px)' }}
                         >
-                          <div className="pointer-events-auto rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 p-2 pr-3 flex flex-col gap-2">
-                            {/* Stacked buttons with delayed pop-in from behind (z-depth via shadow) */}
+                          <div className="pointer-events-auto rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/95 to-white/85 dark:from-neutral-900/90 dark:to-neutral-900/70 backdrop-blur-2xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 p-2 pr-3 flex flex-col gap-2">
                             <motion.button
-                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              initial={{ opacity: 0, y: -10, scale: 0.98 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                              exit={{ opacity: 0, y: -6, scale: 0.98 }}
                               transition={{ delay: 0.00, type: 'spring', stiffness: 380, damping: 24 }}
                               onPointerUp={() => { onTriggerChange && onTriggerChange('chat'); setShowQuickModes(false); }}
-                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:shadow-[0_12px_30px_rgba(37,99,235,0.45)] transition-shadow active:scale-[0.98]"
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                              <span className="text-xs font-semibold">{language === 'ar' ? 'دردشة' : 'Chat'}</span>
-                            </motion.button>
-
-                            <motion.button
-                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                              transition={{ delay: 0.07, type: 'spring', stiffness: 380, damping: 24 }}
-                              onPointerUp={() => { onTriggerChange && onTriggerChange('search'); setShowQuickModes(false); }}
-                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-green-600 text-white shadow-[0_10px_24px_rgba(22,163,74,0.35)] hover:shadow-[0_12px_30px_rgba(22,163,74,0.45)] transition-shadow active:scale-[0.98]"
-                            >
-                              <SearchIcon className="h-4 w-4" />
-                              <span className="text-xs font-semibold">{language === 'ar' ? 'بحث' : 'Search'}</span>
-                            </motion.button>
-
-                            <motion.button
-                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                              transition={{ delay: 0.14, type: 'spring', stiffness: 380, damping: 24 }}
-                              onPointerUp={() => { onTriggerChange && onTriggerChange('image'); setShowQuickModes(false); }}
-                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-orange-500 text-white shadow-[0_10px_24px_rgba(234,88,12,0.35)] hover:shadow-[0_12px_30px_rgba(234,88,12,0.45)] transition-shadow active:scale-[0.98]"
-                            >
-                              <ImageIcon className="h-4 w-4" />
-                              <span className="text-xs font-semibold">{language === 'ar' ? 'صورة' : 'Image'}</span>
-                            </motion.button>
-                          </div>
-                        </motion.div>,
-                        document.body
-                      )}
-                    </AnimatePresence>
-                    {/* Fallback inline render if position missing (rare) */}
-                    <AnimatePresence>
-                      {showQuickModes && !quickModesPos && (
-                        <motion.div
-                          key="quick-modes-fallback"
-                          initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                          transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                          className="absolute left-0 bottom-[calc(100%+8px)] z-[4010]"
-                          style={{ transformOrigin: 'bottom left' }}
-                        >
-                          <div className="pointer-events-auto rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 p-2 pr-3 flex flex-col gap-2">
-                            <motion.button
-                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                              transition={{ delay: 0.00, type: 'spring', stiffness: 380, damping: 24 }}
-                              onPointerUp={() => { onTriggerChange && onTriggerChange('chat'); setShowQuickModes(false); }}
-                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:shadow-[0_12px_30px_rgba(37,99,235,0.45)] transition-shadow active:scale-[0.98]"
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] hover:shadow-[0_12px_30px_rgba(37,99,235,0.45)] active:scale-[0.98]"
                             >
                               <MessageSquare className="h-4 w-4" />
                               <span className="text-xs font-semibold">{language === 'ar' ? 'دردشة' : 'Chat'}</span>
                             </motion.button>
                             <motion.button
-                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              initial={{ opacity: 0, y: -10, scale: 0.98 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                              transition={{ delay: 0.07, type: 'spring', stiffness: 380, damping: 24 }}
+                              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                              transition={{ delay: 0.06, type: 'spring', stiffness: 380, damping: 24 }}
                               onPointerUp={() => { onTriggerChange && onTriggerChange('search'); setShowQuickModes(false); }}
-                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-green-600 text-white shadow-[0_10px_24px_rgba(22,163,74,0.35)] hover:shadow-[0_12px_30px_rgba(22,163,74,0.45)] transition-shadow active:scale-[0.98]"
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-green-600 text-white shadow-[0_10px_24px_rgba(22,163,74,0.35)] hover:shadow-[0_12px_30px_rgba(22,163,74,0.45)] active:scale-[0.98]"
                             >
                               <SearchIcon className="h-4 w-4" />
                               <span className="text-xs font-semibold">{language === 'ar' ? 'بحث' : 'Search'}</span>
                             </motion.button>
                             <motion.button
-                              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                              initial={{ opacity: 0, y: -10, scale: 0.98 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                              transition={{ delay: 0.14, type: 'spring', stiffness: 380, damping: 24 }}
+                              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                              transition={{ delay: 0.12, type: 'spring', stiffness: 380, damping: 24 }}
                               onPointerUp={() => { onTriggerChange && onTriggerChange('image'); setShowQuickModes(false); }}
-                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-orange-500 text-white shadow-[0_10px_24px_rgba(234,88,12,0.35)] hover:shadow-[0_12px_30px_rgba(234,88,12,0.45)] transition-shadow active:scale-[0.98]"
+                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-orange-500 text-white shadow-[0_10px_24px_rgba(234,88,12,0.35)] hover:shadow-[0_12px_30px_rgba(234,88,12,0.45)] active:scale-[0.98]"
                             >
                               <ImageIcon className="h-4 w-4" />
                               <span className="text-xs font-semibold">{language === 'ar' ? 'صورة' : 'Image'}</span>
                             </motion.button>
                           </div>
                         </motion.div>
+                      )}
+                    </AnimatePresence>
+                    {/* Modes Stepper (Option B) via portal - full-screen overlay to guarantee visibility */}
+                    <AnimatePresence>
+                      {showModesStepper && createPortal(
+                        <motion.div
+                          key="modes-stepper"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.12 }}
+                          className="fixed inset-0 z-[2147483647] flex items-center justify-center"
+                          style={{ zIndex: 2147483647, opacity: 1 }}
+                          data-stepper-menu
+                        >
+                          {/* click-away area with faint backdrop to confirm visibility */}
+                          <button
+                            aria-label="Close stepper"
+                            onPointerDown={(e) => { e.stopPropagation(); closeModesStepper(); }}
+                            className="absolute inset-0 bg-black/10 pointer-events-auto"
+                            style={{ cursor: 'default' }}
+                          />
+                          {/* stepper bubble centered in viewport to avoid clipping */}
+                          <div
+                            className="pointer-events-auto flex items-center gap-2 px-2 py-1.5 rounded-2xl border border-red-400 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.25)]"
+                            style={{ maxWidth: 'min(92vw, 560px)' }}
+                          >
+                            <button
+                              aria-label="Prev mode"
+                              onPointerUp={(e) => { e.stopPropagation(); cycleLeft(); }}
+                              className="h-8 w-8 rounded-full bg-white/70 dark:bg-neutral-800/60 border border-white/60 dark:border-white/10 flex items-center justify-center hover:bg-white active:scale-[0.98]"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <motion.button
+                              key={currentMode.key}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange(currentMode.key); closeModesStepper(); }}
+                              className={`px-4 py-2 rounded-xl text-white font-semibold ${currentMode.color} shadow-[0_10px_24px_rgba(0,0,0,0.25)] active:scale-[0.98]`}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+                            >
+                              {language === 'ar' ? currentMode.labelAr : currentMode.labelEn}
+                            </motion.button>
+                            <button
+                              aria-label="Next mode"
+                              onPointerUp={(e) => { e.stopPropagation(); cycleRight(); }}
+                              className="h-8 w-8 rounded-full bg-white/70 dark:bg-neutral-800/60 border border-white/60 dark:border-white/10 flex items-center justify-center hover:bg-white active:scale-[0.98]"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </motion.div>,
+                        document.body
                       )}
                     </AnimatePresence>
                   </div>

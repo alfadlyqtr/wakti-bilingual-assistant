@@ -320,36 +320,38 @@ const WaktiAIV2 = () => {
         />
       </div>
 
-      {portalRoot ? createPortal(
-        <div className='chat-input-container solid-bg'>
-          <ChatInput
-            message={message}
-            setMessage={setMessage}
-            isLoading={canSendMessage ? isLoading : true}
-            sessionMessages={sessionMessages}
-            onSendMessage={handleSendMessage}
-            onClearChat={handleClearChat}
-            onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-            activeTrigger={activeTrigger}
-            onTriggerChange={setActiveTrigger}
-          />
-        </div>,
-        portalRoot
-      ) : (
-        <div className='chat-input-container solid-bg'>
-          <ChatInput
-            message={message}
-            setMessage={setMessage}
-            isLoading={canSendMessage ? isLoading : true}
-            sessionMessages={sessionMessages}
-            onSendMessage={handleSendMessage}
-            onClearChat={handleClearChat}
-            onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-            activeTrigger={activeTrigger}
-            onTriggerChange={setActiveTrigger}
-          />
-        </div>
-      )}
+        {portalRoot ? createPortal(
+          <div className='chat-input-container solid-bg'>
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              isLoading={canSendMessage ? isLoading : true}
+              sessionMessages={sessionMessages}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat}
+              onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+              onOpenConversations={() => setShowConversations(true)}
+              activeTrigger={activeTrigger}
+              onTriggerChange={setActiveTrigger}
+            />
+          </div>,
+          portalRoot
+        ) : (
+          <div className='chat-input-container solid-bg'>
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              isLoading={canSendMessage ? isLoading : true}
+              sessionMessages={sessionMessages}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat}
+              onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+              onOpenConversations={() => setShowConversations(true)}
+              activeTrigger={activeTrigger}
+              onTriggerChange={setActiveTrigger}
+            />
+          </div>
+        )}
     </div>
   );
 };
