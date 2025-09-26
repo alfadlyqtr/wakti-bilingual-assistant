@@ -1474,8 +1474,8 @@ export function ChatInput({
                       </button>
                     )}
 
-                    {/* Amp button for prompt enhancement (image modes) */}
-                    {activeTrigger === 'image' && (imageMode === 'text2image' || imageMode === 'image2image') && message.trim().length > 0 && (
+                    {/* Amp button for prompt enhancement (image modes, including background-removal) */}
+                    {activeTrigger === 'image' && (imageMode === 'text2image' || imageMode === 'image2image' || imageMode === 'background-removal') && message.trim().length > 0 && (
                       <button
                         type="button"
                         className={`
@@ -1490,7 +1490,7 @@ export function ChatInput({
                           if (!message || isAmping) return;
                           try {
                             setIsAmping(true);
-                            const { data, error } = await supabase.functions.invoke('prompt-amp', { body: { text: message } });
+                            const { data, error } = await supabase.functions.invoke('prompt-amp', { body: { text: message, mode: imageMode } });
                             if (!error && data?.text) {
                               setMessage(String(data.text));
                             } else {

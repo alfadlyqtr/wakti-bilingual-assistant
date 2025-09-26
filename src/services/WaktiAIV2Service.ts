@@ -865,7 +865,7 @@ class WaktiAIV2ServiceClass {
             response: language === 'ar' ? 'تم إنشاء الصورة.' : 'Image generated.',
             imageUrl: json.url,
             error: false,
-            metadata: { provider: 'runware', model: 'runware:106@1', mode }
+            metadata: { provider: 'runware', model: (json as any)?.model || 'runware:108@20', mode }
           } as any;
         }
 
