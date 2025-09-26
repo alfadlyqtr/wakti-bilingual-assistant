@@ -121,7 +121,13 @@ const WaktiAIV2 = () => {
   }, [currentConversationId, handleClearChat, handleRefreshConversations]);
 
 
-  const handleSendMessage = useCallback(async (messageContent: string, trigger: string, attachedFiles?: any[]) => {
+  const handleSendMessage = useCallback(async (
+    messageContent: string,
+    trigger: string,
+    attachedFiles?: any[],
+    imageMode?: string,
+    imageQuality?: 'fast' | 'best_fast'
+  ) => {
     if (!messageContent.trim() && (!attachedFiles || attachedFiles.length === 0)) {
       showError('Please enter a message or attach a file.');
       return;
@@ -140,7 +146,8 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
     }
 
-    const inputType = trigger === 'vision' || (attachedFiles && attachedFiles.length > 0) ? 'vision' : 'text';
+    // Do NOT auto-force 'vision' when files exist; ChatInput already controls trigger.
+    const inputType = trigger === 'vision' ? 'vision' : 'text';
 
     const userMessage: AIMessage = {
       id: `user-${Date.now()}`,
@@ -166,7 +173,38 @@ const WaktiAIV2 = () => {
     setSessionMessages([...newMessages, assistantPlaceholder]);
 
     try {
-      if (inputType === 'vision') {
+      if (trigger === 'image') {
+        // Non-streaming image pipeline (text2image / image2image / background-removal)
+        const response = await WaktiAIV2Service.sendMessage(
+          messageContent,
+          userProfile.id,
+          language,
+          convId,
+          'text',
+          newMessages,
+          false,
+          trigger,
+          '',
+          attachedFiles,
+          controller.signal,
+          imageMode,
+          imageQuality
+        );
+
+        const finalAssistantMessage: AIMessage = {
+          ...assistantPlaceholder,
+          content: response.response,
+          metadata: { loading: false, ...response.metadata },
+          intent: trigger,
+          ...(response as any)?.imageUrl ? { imageUrl: (response as any).imageUrl } : {}
+        };
+
+        setSessionMessages(prev => {
+          const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
+          EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
+          return finalMessages;
+        });
+      } else if (inputType === 'vision') {
         let streamed = '';
         let streamMeta: any = {};
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
@@ -202,27 +240,33 @@ const WaktiAIV2 = () => {
           return finalMessages;
         });
       } else {
-        const response = await WaktiAIV2Service.sendMessage(
+        let streamed = '';
+        let streamMeta: any = {};
+        const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile.id,
           language,
           convId,
-          inputType, // inputType
+          inputType, // 'text' or other non-vision types
           newMessages,
-          false, // isVoice
+          false, // skipContextLoad
           trigger,
-          '', // voiceId
+          '', // conversationSummary
           attachedFiles,
+          (token: string) => {
+            streamed += token;
+            setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
+          },
+          (metadata: any) => { streamMeta = metadata || {}; },
+          (err: string) => { console.error('Stream error:', err); },
           controller.signal
         );
 
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
-          content: response.response,
-          metadata: { loading: false, ...response.metadata },
-          intent: response.intent,
-          actionTaken: response.actionTaken,
-          confidence: response.confidence,
+          content: streamedResp?.response ?? streamed,
+          metadata: { loading: false, ...streamMeta },
+          intent: trigger,
         };
 
         setSessionMessages(prev => {

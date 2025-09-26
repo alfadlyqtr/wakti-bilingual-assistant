@@ -826,8 +826,50 @@ class WaktiAIV2ServiceClass {
         }
       }
 
-      // Image generation uses non-streaming function; others can reuse streaming and return the final object
+      // Image generation uses dedicated non-streaming functions
       if (activeTrigger === 'image') {
+        const mode = (imageMode as any) || 'text2image';
+        // Common auth
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error('No valid session for non-streaming');
+        }
+        const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+
+        if (mode === 'image2image') {
+          // Extract first image base64 (raw) from attachedFiles
+          const firstImg = Array.isArray(attachedFiles) ? attachedFiles.find((f: any) => f?.type?.startsWith('image/')) : undefined;
+          const rawB64 = firstImg?.data || firstImg?.content || '';
+          if (!rawB64) {
+            return { response: language === 'ar' ? 'الرجاء إرفاق صورة لاستخدام التحويل صورة-إلى-صورة.' : 'Please attach an image to use image-to-image.', error: true };
+          }
+          const resp = await fetch(`${supabaseUrl}/functions/v1/wakti-image2image`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              user_prompt: message,
+              image_base64: rawB64, // function accepts raw base64 or dataURI
+              user_id: userId
+            }),
+            signal
+          });
+          const json = await resp.json().catch(() => ({} as any));
+          if (!resp.ok || !json?.success || !json?.url) {
+            console.error('wakti-image2image failed', resp.status, json);
+            return { response: language === 'ar' ? 'فشل إنشاء الصورة. يرجى المحاولة مرة أخرى.' : 'Image generation failed. Please try again.', error: true };
+          }
+          return {
+            response: language === 'ar' ? 'تم إنشاء الصورة.' : 'Image generated.',
+            imageUrl: json.url,
+            error: false,
+            metadata: { provider: 'runware', model: 'runware:106@1', mode }
+          } as any;
+        }
+
+        // Fallback to previous pipeline for other modes (t2i, background removal handled elsewhere)
         const pt_version = pt?.pt_version ?? null;
         const pt_updated_at = pt?.pt_updated_at ?? null;
         const pt_hash = this.hashPersonalTouch(pt);
@@ -854,11 +896,6 @@ class WaktiAIV2ServiceClass {
           visionFallback: 'openai'
         };
 
-        // Auth headers required for calling Edge Functions (mirror streaming path)
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-          throw new Error('No valid session for non-streaming');
-        }
         let maybeAnonKey;
         try {
           maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
@@ -867,7 +904,7 @@ class WaktiAIV2ServiceClass {
           maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
         }
 
-        const resp = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain`, {
+        const resp = await fetch(`${supabaseUrl}/functions/v1/wakti-ai-v2-brain`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -884,7 +921,6 @@ class WaktiAIV2ServiceClass {
         }
 
         const data = await resp.json();
-
         // Best-effort: persist updated rolling summary after completion
         try {
           const msgsForSummary: AIMessage[] = [
