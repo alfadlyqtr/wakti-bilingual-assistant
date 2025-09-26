@@ -42,9 +42,9 @@ export function ExtraPanel({
   }));
 
   return (
-    <div className="h-full overflow-hidden">
-      <div className="px-2 pb-2 pt-0 h-full flex flex-col">
-        <Tabs defaultValue="personal" className="h-full flex flex-col">
+    <div className="md:h-full overflow-hidden">
+      <div className="px-2 pb-0 md:pb-2 pt-0 md:h-full flex flex-col">
+        <Tabs defaultValue="personal" className="flex flex-col md:h-full">
           {/* Sticky compact tabs header (inside the same Tabs) */}
           <div className="sticky top-0 z-10 px-1 pt-1 pb-1">
             <TabsList className="flex gap-2 h-8 p-0 bg-transparent !rounded-none justify-start">
@@ -57,8 +57,8 @@ export function ExtraPanel({
             </TabsList>
           </div>
 
-          {/* Personal tab content: scrollable area */}
-          <TabsContent value="personal" className="flex-1">
+          {/* Personal tab content: natural height on mobile, full on desktop */}
+          <TabsContent value="personal" className="md:flex-1">
             <div className="mt-2 mb-3 grid grid-cols-1 gap-2 w-full">
               <TalkBackSettings compact />
             </div>
@@ -68,8 +68,8 @@ export function ExtraPanel({
             </div>
           </TabsContent>
 
-          {/* Conversations tab content: scrollable list */}
-          <TabsContent value="conversations" className="flex-1 mt-2">
+          {/* Conversations tab content: natural height on mobile, full on desktop */}
+          <TabsContent value="conversations" className="md:flex-1 mt-2">
             <ConversationsList
               conversations={mappedConversations}
               currentConversationId={currentConversationId}

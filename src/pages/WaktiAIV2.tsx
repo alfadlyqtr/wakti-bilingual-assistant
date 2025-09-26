@@ -10,6 +10,7 @@ import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
+import { useIsDesktop } from '@/hooks/use-mobile';
 
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
@@ -34,6 +35,7 @@ const WaktiAIV2 = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const { language } = useTheme();
   const { showError } = useToastHelper();
+  const { isDesktop } = useIsDesktop();
 
   const canSendMessage = useMemo(() => !isLoading && userProfile?.id, [isLoading, userProfile?.id]);
 
@@ -281,16 +283,18 @@ const WaktiAIV2 = () => {
         isLoading={isLoading}
       />
 
-      <ConversationSidebar
-        isOpen={showConversations}
-        onClose={() => setShowConversations(false)}
-        conversations={archivedConversations}
-        onSelectConversation={handleSelectConversation}
-        onDeleteConversation={handleDeleteConversation}
-        onNewConversation={handleClearChat}
-        currentConversationId={currentConversationId}
-        onRefreshConversations={handleRefreshConversations}
-      />
+      {isDesktop && (
+        <ConversationSidebar
+          isOpen={showConversations}
+          onClose={() => setShowConversations(false)}
+          conversations={archivedConversations}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
+          onNewConversation={handleClearChat}
+          currentConversationId={currentConversationId}
+          onRefreshConversations={handleRefreshConversations}
+        />
+      )}
 
       <div
         className="wakti-ai-messages-area"

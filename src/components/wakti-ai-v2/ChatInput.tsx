@@ -78,6 +78,7 @@ export function ChatInput({
   const [showQuickModes, setShowQuickModes] = useState(false);
   const quickModesAnchorRef = useRef<HTMLButtonElement>(null);
   const [quickModesPos, setQuickModesPos] = useState<{ top: number; left: number } | null>(null);
+  const [quickModesDirection, setQuickModesDirection] = useState<'up' | 'down'>('down');
   // Button ref and viewport position for Search submode dropdown (Web/YouTube)
   const searchModeBtnRef = useRef<HTMLButtonElement>(null);
   const [searchMenuPos, setSearchMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -838,6 +839,15 @@ export function ChatInput({
                         e.stopPropagation();
                         console.log('🔘 Modes button: toggle Quick Modes mini panel');
                         setShowModesStepper(false);
+                        try {
+                          const rect = quickModesAnchorRef.current?.getBoundingClientRect();
+                          const estimatedHeight = 130; // approx height of the mini panel
+                          const spaceBelow = Math.max(0, window.innerHeight - (rect?.bottom ?? 0));
+                          const spaceAbove = Math.max(0, (rect?.top ?? 0));
+                          // Prefer down if there is enough space, otherwise up
+                          const dir = (spaceBelow >= estimatedHeight || spaceBelow > spaceAbove) ? 'down' : 'up';
+                          setQuickModesDirection(dir);
+                        } catch {}
                         setShowQuickModes(v => !v);
                       }}
                       aria-expanded={showQuickModes}
@@ -849,7 +859,7 @@ export function ChatInput({
                       <SlidersHorizontal className="h-4 w-4" />
                       <span className="text-xs font-medium text-foreground/80">{language === 'ar' ? 'أوضاع' : 'Modes'}</span>
                     </button>
-                    {/* Quick Modes mini panel directly below the button */}
+                    {/* Quick Modes mini panel directly below the button (legacy desktop dropdown) */}
                     <AnimatePresence>
                       {showQuickModes && (
                         <motion.div
@@ -858,7 +868,7 @@ export function ChatInput({
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: -6, scale: 0.98 }}
                           transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-                          className="absolute left-1/2 -translate-x-1/2 top-[calc(100%-8px)] z-[100001]"
+                          className={`hidden`}
                           data-quickmodes-menu
                           style={{ maxWidth: 'min(92vw, 560px)' }}
                         >
@@ -1323,10 +1333,10 @@ export function ChatInput({
               <div className="relative px-3 pb-3 pt-1">
                 {/* Textarea with send button directly next to it */}
                 <div className="flex items-end gap-3">
-                  <div className="flex-1">
+                  <div className="flex-1 relative">
                     <Textarea
                       value={message}
-                      onChange={(e) => setMessage(e.target.value)}
+                      onChange={(e) => { setMessage(e.target.value); if (showQuickModes) setShowQuickModes(false); }}
                       placeholder={getPlaceholderText()}
                       autoExpand={true}
                       maxLines={4}
@@ -1360,6 +1370,58 @@ export function ChatInput({
                       }}
                       disabled={isUploading || !isTextareaEnabled}
                     />
+                    {/* Inline Quick Modes bar inside the textarea area (all breakpoints) */}
+                    <AnimatePresence>
+                      {showQuickModes && (
+                        <motion.div
+                          key="quick-modes-inline-mobile"
+                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                          transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                          className="absolute left-3 right-3 top-2 z-[100002]"
+                        >
+                          <div className="pointer-events-auto rounded-xl border border-white/70 dark:border-white/10 bg-white/95 dark:bg-neutral-900/90 backdrop-blur-xl shadow-[0_10px_28px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 px-2 py-1 flex items-center gap-2 overflow-hidden">
+                            <motion.button
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                              transition={{ delay: 0.00, type: 'spring', stiffness: 420, damping: 26 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('chat'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold shadow"
+                              type="button"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                              <span>{language === 'ar' ? 'دردشة' : 'Chat'}</span>
+                            </motion.button>
+                            <motion.button
+                              initial={{ opacity: 0, x: -18, scale: 0.94 }}
+                              animate={{ opacity: 1, x: 0, scale: 1 }}
+                              exit={{ opacity: 0, x: -10, scale: 0.96 }}
+                              transition={{ delay: 0.08, type: 'spring', stiffness: 420, damping: 26 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('search'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 bg-green-600 text-white text-xs font-semibold shadow -ml-0.5"
+                              type="button"
+                            >
+                              <SearchIcon className="h-4 w-4" />
+                              <span>{language === 'ar' ? 'بحث' : 'Search'}</span>
+                            </motion.button>
+                            <motion.button
+                              initial={{ opacity: 0, x: 16, scale: 0.94 }}
+                              animate={{ opacity: 1, x: 0, scale: 1 }}
+                              exit={{ opacity: 0, x: 10, scale: 0.96 }}
+                              transition={{ delay: 0.16, type: 'spring', stiffness: 420, damping: 26 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('image'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold shadow"
+                              type="button"
+                            >
+                              <ImageIcon className="h-4 w-4" />
+                              <span>{language === 'ar' ? 'صورة' : 'Image'}</span>
+                            </motion.button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     {activeTrigger === 'image' && imageMode === 'image2image' && (
                       <div className="mt-1 flex items-center gap-2">
                         {language === 'ar' && (
