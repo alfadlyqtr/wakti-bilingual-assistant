@@ -836,6 +836,54 @@ class WaktiAIV2ServiceClass {
         }
         const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co';
 
+        // Background removal/replace mode: send exact Runware shape via Edge Function
+        if (mode === 'background-removal') {
+          const firstImg = Array.isArray(attachedFiles) ? attachedFiles.find((f: any) => f?.type?.startsWith('image/')) : undefined;
+          const rawB64 = firstImg?.data || firstImg?.content || '';
+          if (!rawB64) {
+            return { response: language === 'ar' ? 'الرجاء إرفاق صورة لإزالة/استبدال الخلفية.' : 'Please attach an image for background removal/replacement.', error: true };
+          }
+          // Normalize to data URI if needed (Runware expects URL or dataURI)
+          const mime = (firstImg?.type && typeof firstImg.type === 'string') ? firstImg.type : 'image/jpeg';
+          const imageParam = (typeof rawB64 === 'string' && (rawB64.startsWith('data:') || rawB64.startsWith('http')))
+            ? rawB64
+            : `data:${mime};base64,${rawB64}`;
+
+          const resp = await fetch(`${supabaseUrl}/functions/v1/image-background-removal`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              referenceImages: [imageParam],
+              positivePrompt: (message || '').toString().replace(/"\s*$/,'').trim(),
+              outputType: ["dataURI","URL"],
+              outputFormat: 'JPEG',
+              outputQuality: 85
+            }),
+            signal
+          });
+
+          const json = await resp.json().catch(() => ({} as any));
+          if (!resp.ok) {
+            console.error('image-background-removal failed', resp.status, json);
+            return { response: language === 'ar' ? 'تعذر تنفيذ تحرير الخلفية حالياً.' : 'Background edit failed.', error: true } as any;
+          }
+          const outUrl = (json as any)?.imageUrl || (json as any)?.URL || null;
+          const outData = (json as any)?.imageDataURI || (json as any)?.dataURI || null;
+          if (!outUrl && !outData) {
+            console.error('image-background-removal no output', json);
+            return { response: language === 'ar' ? 'لم يتم توليد صورة. حاول تعديل التعليمات.' : 'No image generated. Please refine your instruction.', error: true } as any;
+          }
+          return {
+            response: language === 'ar' ? 'تم تعديل الخلفية.' : 'Background edited.',
+            imageUrl: outUrl || outData,
+            error: false,
+            metadata: { provider: 'runware', model: (json as any)?.model || 'google:4@1', mode }
+          } as any;
+        }
+
         if (mode === 'image2image') {
           // Extract first image base64 (raw) from attachedFiles
           const firstImg = Array.isArray(attachedFiles) ? attachedFiles.find((f: any) => f?.type?.startsWith('image/')) : undefined;
