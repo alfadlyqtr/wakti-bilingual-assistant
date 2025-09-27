@@ -84,6 +84,46 @@ const WaktiAIV2 = () => {
     setPortalRoot(document.body);
   }, []);
 
+  // Inject glass-edge CSS overrides for the chat input container
+  useEffect(() => {
+    const id = 'wakti-glass-edge-css';
+    let style = document.getElementById(id) as HTMLStyleElement | null;
+    const css = `
+      .chat-input-container.solid-bg.glass-edge {\n\
+        background: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.10) 100%), var(--gradient-background) !important;\n\
+        backdrop-filter: blur(18px) !important;\n\
+        -webkit-backdrop-filter: blur(18px) !important;\n\
+        border-top: 1px solid rgba(255,255,255,0.20) !important;\n\
+        box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255,255,255,0.10) !important;\n\
+        border-top-left-radius: 16px !important;\n\
+        border-top-right-radius: 16px !important;\n\
+        overflow: hidden !important;\n\
+      }\n\
+      .chat-input-container.solid-bg.glass-edge::before {\n\
+        content: "";\n\
+        position: absolute;\n\
+        inset: 0 0 auto 0;\n\
+        height: 100%;\n\
+        pointer-events: none;\n\
+        border-top-left-radius: 16px;\n\
+        border-top-right-radius: 16px;\n\
+        background: linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.00) 40%, rgba(255,255,255,0.18) 100%);\n\
+        opacity: 0.25;\n\
+      }\n`;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = id;
+      style.textContent = css;
+      document.head.appendChild(style);
+    } else {
+      style.textContent = css;
+    }
+    return () => {
+      const el = document.getElementById(id);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    };
+  }, []);
+
   // Listen for ChatInput resize and adjust bottom reserve with a tiny gap (2px)
   useEffect(() => {
     const handler = (e: Event) => {
@@ -369,7 +409,7 @@ const WaktiAIV2 = () => {
       </div>
 
         {portalRoot ? createPortal(
-          <div className='chat-input-container solid-bg'>
+          <div className='chat-input-container solid-bg glass-edge'>
             <ChatInput
               message={message}
               setMessage={setMessage}
@@ -385,7 +425,7 @@ const WaktiAIV2 = () => {
           </div>,
           portalRoot
         ) : (
-          <div className='chat-input-container solid-bg'>
+          <div className='chat-input-container solid-bg glass-edge'>
             <ChatInput
               message={message}
               setMessage={setMessage}

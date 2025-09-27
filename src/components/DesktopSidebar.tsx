@@ -115,7 +115,7 @@ export function DesktopSidebar() {
       />
       <motion.aside
       id="desktop-sidebar"
-      className="fixed left-4 top-4 bottom-4 z-[999] rounded-3xl shadow-2xl"
+      className="fixed left-4 top-4 bottom-4 z-[999] rounded-[2rem] shadow-2xl"
       dir="ltr"
       variants={sidebarVariants}
       animate={isCollapsed ? "collapsed" : "expanded"}
@@ -137,7 +137,7 @@ export function DesktopSidebar() {
     >
       {/* Glass reflection overlay */}
       <motion.div
-        className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 via-transparent to-transparent pointer-events-none"
+        className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-white/20 via-transparent to-transparent pointer-events-none"
         initial={{ opacity: 0.15 }}
         animate={{ opacity: isCollapsed ? 0.15 : 0.3 }}
         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}

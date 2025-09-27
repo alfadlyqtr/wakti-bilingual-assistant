@@ -93,12 +93,18 @@ export function DesktopHeader() {
   ];
 
   return (
-    <div className="w-full px-6 py-0 transition-all duration-300" dir="ltr">
+    <div className="w-full px-6 py-0 transition-all duration-300 md:mt-1 lg:mt-1" dir="ltr">
       <div
-        className="relative bg-background rounded-2xl shadow-2xl h-[var(--desktop-header-h)] flex items-center justify-between px-6 solid-bg"
+        className="relative bg-background rounded-3xl shadow-2xl h-[var(--desktop-header-h)] flex items-center justify-between px-6 solid-bg mx-2 md:mx-4 lg:mx-6"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 28px 56px -12px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 10px 36px rgba(0, 0, 0, 0.14)'
+        }}
       >
         {/* Glass reflection overlay */}
-        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-30 pointer-events-none" />
+        <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-30 pointer-events-none" />
         
         {/* Empty left space for balance */}
         <div className="flex-1"></div>
