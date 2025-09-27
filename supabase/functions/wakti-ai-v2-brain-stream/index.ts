@@ -302,7 +302,7 @@ async function streamAIResponse(
         ? ['openai', 'deepseek', 'claude']
         : ['openai', 'claude', 'deepseek'];
     for (const p of pref) {
-      if (p === 'openai' && OPENAI_API_KEY) { provider = 'openai'; model = 'gpt-4o-mini'; break; }
+      if (p === 'openai' && OPENAI_API_KEY) { provider = 'openai'; model = 'gpt-5-nano'; break; }
       if (p === 'claude' && ANTHROPIC_API_KEY) { provider = 'claude'; model = 'claude-3-5-sonnet-20241022'; break; }
       if (p === 'deepseek' && DEEPSEEK_API_KEY) { provider = 'deepseek'; model = 'deepseek-chat'; break; }
     }
