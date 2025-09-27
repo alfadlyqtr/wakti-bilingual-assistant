@@ -299,13 +299,26 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const handleVoiceRecording = async (audioBlob: Blob, duration: number) => {
     try {
       setIsUploading(true);
-      // Convert blob to File for upload
-      const file = new File([audioBlob], `voice-${Date.now()}.mp3`, { type: 'audio/mpeg' });
+      // Use the real recording MIME type and matching extension to avoid mismatches
+      const recordedType = (audioBlob as Blob).type || 'audio/webm';
+      const ext = recordedType.includes('webm')
+        ? 'webm'
+        : recordedType.includes('ogg')
+          ? 'ogg'
+          : recordedType.includes('wav')
+            ? 'wav'
+            : (recordedType.includes('mpeg') || recordedType.includes('mp3'))
+              ? 'mp3'
+              : (recordedType.includes('mp4') || recordedType.includes('aac'))
+                ? 'm4a'
+                : 'webm';
+
+      const file = new File([audioBlob], `voice-${Date.now()}.${ext}`, { type: recordedType });
       const url = await uploadMessageAttachment(file, 'voice');
       sendMessageMutation.mutate({
         message_type: 'voice',
         media_url: url,
-        media_type: 'audio/mpeg',
+        media_type: recordedType,
         voice_duration: Math.max(0, Math.round(duration || 0)),
         file_size: file.size,
       });
