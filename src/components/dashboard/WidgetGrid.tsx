@@ -58,7 +58,7 @@ const SortableWidget = ({ widget, isDragging }: { widget: WidgetType; isDragging
       // Only attach DnD attributes/listeners while in drag mode
       {...(isDragging ? attributes : {})}
       {...(isDragging ? listeners : {})}
-      className={`relative transition-all duration-200 w-full mx-2 md:mx-4 lg:mx-6 rounded-3xl overflow-hidden backdrop-blur-xl border border-white/10 bg-background/60 shadow-2xl ${
+      className={`relative transition-all duration-200 w-full mx-3 md:mx-4 lg:mx-6 rounded-3xl overflow-hidden backdrop-blur-xl border border-white/10 bg-background/60 shadow-2xl ${
         isSortableDragging ? 'ring-2 ring-primary shadow-lg scale-102 z-50' : ''
       } ${isDragging ? 'border-dashed border-primary/70 cursor-grab active:cursor-grabbing' : ''}`}
     >
@@ -74,7 +74,7 @@ const SortableWidget = ({ widget, isDragging }: { widget: WidgetType; isDragging
 // Static (non-draggable) Widget Item Component
 const StaticWidget = ({ widget }: { widget: WidgetType }) => {
   return (
-    <Card className="relative transition-all duration-200 w-full mx-2 md:mx-4 lg:mx-6 rounded-3xl overflow-hidden backdrop-blur-xl border border-white/10 bg-background/60 shadow-2xl">
+    <Card className="relative transition-all duration-200 w-full mx-3 md:mx-4 lg:mx-6 rounded-3xl overflow-hidden backdrop-blur-xl border border-white/10 bg-background/60 shadow-2xl">
       {/* Glass reflection overlay */}
       <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-25 pointer-events-none" />
       <CardContent className="p-0 w-full relative z-10">
