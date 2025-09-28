@@ -72,9 +72,10 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in auto-delete function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Auto-delete failed';
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { 
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

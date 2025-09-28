@@ -160,9 +160,10 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('🚨 CRITICAL FAWRAN ANALYSIS ERROR:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
     return new Response(JSON.stringify({ 
       success: false, 
-      error: error.message,
+      error: errorMessage,
       paymentId: null
     }), {
       status: 500,
@@ -194,12 +195,12 @@ async function performEnhancedAnalysisWithVision(payment: any): Promise<PaymentA
         }
         
         // Check for specific vision findings
-        if (visionAnalysis.findings.amount_mismatch) {
+        if (visionAnalysis.findings?.amount_mismatch) {
           issues.push('Vision AI detected amount mismatch in screenshot');
           confidence *= 0.2;
         }
         
-        if (visionAnalysis.findings.tampered_detected) {
+        if (visionAnalysis.findings?.tampered_detected) {
           issues.push('Vision AI detected potential tampering');
           confidence *= 0.1;
         }
@@ -264,7 +265,7 @@ async function performEnhancedAnalysisWithVision(payment: any): Promise<PaymentA
       .gte('submitted_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .neq('id', payment.id);
     
-    duplicateDetected = (duplicates && duplicates.length > 0);
+    duplicateDetected = Boolean(duplicates && duplicates.length > 0);
     if (duplicateDetected) {
       issues.push('Duplicate payment detected');
       confidence *= 0.1;
@@ -432,9 +433,10 @@ async function analyzeScreenshotWithVision(screenshotUrl: string, expectedAmount
     
   } catch (error) {
     console.error('❌ VISION AI: Analysis failed:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Vision analysis failed';
     return {
       success: false,
-      error: error.message,
+      error: errorMessage,
       confidence_score: 0
     };
   }

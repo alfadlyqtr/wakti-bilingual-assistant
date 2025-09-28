@@ -68,7 +68,8 @@ serve(async (req) => {
         console.log(`🧹 VOICE CLEANUP: Successfully deleted voice ${voice.voice_id} from ElevenLabs`);
       } catch (elevenLabsError) {
         console.error(`🧹 VOICE CLEANUP: Error deleting voice ${voice.voice_id} from ElevenLabs:`, elevenLabsError);
-        errors.push(`ElevenLabs deletion failed for ${voice.voice_name}: ${elevenLabsError.message}`);
+        const errorMsg = elevenLabsError instanceof Error ? elevenLabsError.message : 'Unknown error';
+        errors.push(`ElevenLabs deletion failed for ${voice.voice_name}: ${errorMsg}`);
         // Continue with database cleanup even if ElevenLabs deletion fails
       }
     }
@@ -96,10 +97,11 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('🧹 VOICE CLEANUP: Error during cleanup:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Voice cleanup failed';
     
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'Voice cleanup failed'
+      error: errorMessage
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

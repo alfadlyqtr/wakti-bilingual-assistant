@@ -140,9 +140,10 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Admin activate subscription error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Failed to activate subscription';
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Failed to activate subscription' 
+        error: errorMessage 
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
