@@ -44,22 +44,12 @@
     --accent-cyan: 180 80% 70%;
     --accent-amber: 45 100% 70%;
     --accent-emerald: 160 75% 65%;
+    
     --shadow-colored: 0 4px 20px hsla(243, 84%, 14%, 0.2), 0 2px 8px hsla(210, 100%, 75%, 0.15);
     --shadow-vibrant: 0 8px 32px hsla(210, 100%, 75%, 0.3), 0 4px 16px hsla(280, 60%, 75%, 0.2);
     --glow-green: 0 0 20px hsla(142, 76%, 65%, 0.6);
     --glow-orange: 0 0 20px hsla(25, 95%, 70%, 0.6);
     --glow-purple: 0 0 20px hsla(280, 60%, 75%, 0.6);
-  }
-
-  /* Page-specific: hide scrollbars but keep scrolling (Dashboard, Wakti AI) */
-  body.dashboard-page main,
-  body.wakti-ai-page main {
-    -ms-overflow-style: none; /* IE/Edge legacy */
-    scrollbar-width: none;    /* Firefox */
-  }
-  body.dashboard-page main::-webkit-scrollbar,
-  body.wakti-ai-page main::-webkit-scrollbar {
-    display: none;            /* Chrome/Safari/Edge (Chromium) */
   }
 
 /* Global layout offsets */
