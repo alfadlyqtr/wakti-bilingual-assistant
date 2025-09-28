@@ -358,10 +358,9 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
             const parsed = JSON.parse(data);
             
             if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-              // Stream the text content directly
+              // Stream the text content in the format expected by the frontend
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 
-                content: parsed.delta.text,
-                type: 'text'
+                token: parsed.delta.text
               })}\n\n`));
             }
           } catch (e) {
