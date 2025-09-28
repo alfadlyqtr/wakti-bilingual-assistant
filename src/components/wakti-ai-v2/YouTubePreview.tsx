@@ -20,6 +20,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   const playerRef = useRef<any>(null);
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const progressIntervalRef = useRef<number | null>(null);
+  const pendingPlayRef = useRef<boolean>(false);
   const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
   const [hasStarted, setHasStarted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -31,7 +32,8 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // Force: use full session manager on all devices (mobile behaves like desktop/tablet)
   const { isMobile: _isMobile } = useIsMobile();
   const isMobile = false;
-  const [useNativeControls, setUseNativeControls] = useState<boolean>(false);
+  // Hybrid: default to native controls while keeping custom controls available
+  const [useNativeControls, setUseNativeControls] = useState<boolean>(true);
   
   // Audio session management
   const { register, unregister, requestPlayback, stopSession, isPlaying: isSessionPlaying } = useAudioSession();
@@ -40,20 +42,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
 
-  // Compute whether we should use native controls (mobile portrait)
-  useEffect(() => {
-    const calc = () => {
-      // Force: always use custom controls so session manager can arbitrate audio
-      setUseNativeControls(false);
-    };
-    calc();
-    window.addEventListener('resize', calc);
-    window.addEventListener('orientationchange', calc as any);
-    return () => {
-      window.removeEventListener('resize', calc);
-      window.removeEventListener('orientationchange', calc as any);
-    };
-  }, []);
+  // Keep native controls enabled by default; advanced toggling can be added later
 
   // Load YT Iframe API and create player
   useEffect(() => {
@@ -89,6 +78,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       if (cancelled) return;
       const w = window as any;
       if (!playerContainerRef.current) return;
+      const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'https://wakti.qa';
       playerRef.current = new w.YT.Player(playerContainerRef.current, {
         videoId,
         height: '100%',
@@ -99,7 +89,10 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
-          disablekb: 1,
+          disablekb: useNativeControls ? 0 : 1,
+          enablejsapi: 1,
+          origin,
+          host: 'https://www.youtube.com',
           // Do not auto-loop by default. We'll handle looping manually when enabled.
           loop: 0,
         },
@@ -119,6 +112,11 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
                 iframe?.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
                 iframe?.setAttribute('allowfullscreen', '');
               } catch {}
+              // If user tapped before player was ready, honor the pending play now
+              if (pendingPlayRef.current) {
+                try { ev.target.playVideo?.(); ev.target.unMute?.(); setMuted(false); setHasStarted(true); setIsPlaying(true); } catch {}
+                pendingPlayRef.current = false;
+              }
             } catch {}
           },
           onStateChange: (ev: any) => {
@@ -226,11 +224,36 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
 
   // Control handlers with audio session management
   const handlePlay = async () => {
-    if (!playerReady || !playerRef.current) return;
+    // Hard fallback: if player is not ready yet, inject a plain embed iframe with autoplay
+    if (!playerReady || !playerRef.current) {
+      try {
+        const container = playerContainerRef.current as HTMLElement | null;
+        if (container && !container.querySelector('iframe')) {
+          const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'https://wakti.qa';
+          const iframe = document.createElement('iframe');
+          iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(origin)}`;
+          iframe.style.position = 'absolute';
+          iframe.style.top = '0';
+          iframe.style.left = '0';
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.setAttribute('frameborder', '0');
+          (iframe as any).allowFullscreen = true;
+          iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+          container.appendChild(iframe);
+          setHasStarted(true);
+          setIsPlaying(true);
+          setMuted(false);
+        }
+      } catch {}
+      // Also set pending so if API arrives later we upgrade to API control
+      pendingPlayRef.current = true;
+      return;
+    }
     const player = playerRef.current;
 
     // Desktop/tablet: keep session flow
-    try { player.playVideo(); } catch {}
+    try { player.playVideo(); } catch (e) { /* transient */ }
     if (!isMobile) {
       const granted = await requestPlayback(sessionId);
       if (granted) {
@@ -242,6 +265,17 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
       // Mobile: simple play
       try { player.unMute(); setMuted(false); } catch {}
     }
+    // Fallback: if state doesn't transition to playing shortly, retry once
+    setTimeout(() => {
+      try {
+        if (!isPlaying && player && player.playVideo) player.playVideo();
+      } catch {}
+    }, 300);
+    setTimeout(() => {
+      try {
+        if (!isPlaying && player && player.playVideo) player.playVideo();
+      } catch {}
+    }, 800);
   };
   const handlePause = async () => {
     if (!playerReady || !playerRef.current) return;
@@ -380,12 +414,16 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
         {/* Non-interactive overlay only when using custom controls (desktop). Do not block on mobile. */}
         {hasStarted && !useNativeControls && (
           <div
-            className="absolute inset-0"
+            className="absolute inset-0 z-30"
             style={{ pointerEvents: 'auto', cursor: 'pointer' }}
             onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handlePlayPause(); }}
             onClick={(e) => { e.stopPropagation(); e.preventDefault(); handlePlayPause(); }}
             aria-label={isPlaying ? 'Pause video' : 'Play video'}
             title={isPlaying ? 'Pause' : 'Play'}
+            
+            // Ensure overlay stays above the iframe for reliable clicks
+            
+            
           />
         )}
         {/* YouTube pill badge top-left */}
@@ -425,9 +463,9 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
         {!hasStarted && !useNativeControls && (
           <button
             type="button"
-            className="absolute inset-0 w-full h-full"
-            onTouchStart={(e) => { e.stopPropagation(); handlePlay(); }}
-            onClick={(e) => { e.stopPropagation(); handlePlay(); }}
+            className="absolute inset-0 w-full h-full z-30"
+            onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); pendingPlayRef.current = true; handlePlay(); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); pendingPlayRef.current = true; handlePlay(); }}
             style={{ touchAction: 'manipulation' }}
             aria-label="Play YouTube preview"
           >

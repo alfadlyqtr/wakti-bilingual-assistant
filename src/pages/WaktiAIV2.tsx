@@ -202,13 +202,15 @@ const WaktiAIV2 = () => {
     setSessionMessages(newMessages);
 
     const assistantMessageId = `assistant-${Date.now()}`;
+    // Detect YouTube-prefixed query to style the loading bubble correctly
+    const isYouTubeQuery = (typeof messageContent === 'string') && /^(?:\s*yt:\s*|\s*yt\s+)/i.test(messageContent);
     const assistantPlaceholder: AIMessage = {
       id: assistantMessageId,
       role: 'assistant',
       content: '',
       timestamp: new Date(),
       intent: trigger,
-      metadata: { loading: true },
+      metadata: { loading: true, ...(trigger === 'search' && isYouTubeQuery ? { youtubeLoading: true } : {}) },
     };
     setSessionMessages([...newMessages, assistantPlaceholder]);
 
@@ -282,6 +284,38 @@ const WaktiAIV2 = () => {
       } else {
         let streamed = '';
         let streamMeta: any = {};
+        // If Search mode and message is a YouTube query, use the non-streaming YouTube path
+        const ytPrefix = /^(?:\s*yt:\s*|\s*yt\s+).*/i.test(messageContent || '');
+        if (trigger === 'search' && ytPrefix) {
+          const response = await WaktiAIV2Service.sendMessage(
+            messageContent,
+            userProfile.id,
+            language,
+            convId,
+            inputType,
+            newMessages,
+            false,
+            trigger,
+            '',
+            attachedFiles,
+            controller.signal
+          );
+
+          const finalAssistantMessage: AIMessage = {
+            ...assistantPlaceholder,
+            content: (response as any)?.response || '',
+            metadata: { loading: false, ...(response as any)?.metadata },
+            intent: trigger,
+          };
+
+          setSessionMessages(prev => {
+            const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
+            EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
+            return finalMessages;
+          });
+          return; // Done (skip streaming path)
+        }
+
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile.id,

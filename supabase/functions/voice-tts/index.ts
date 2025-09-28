@@ -36,6 +36,108 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // No style mapping needed for Google-only path
 
+// --- Helpers for robust long-text TTS ---
+// Split text into safe chunks for Google TTS: by sentence boundaries first, then hard-wrap long sentences.
+function splitIntoChunks(text: string, maxChars: number = 350): string[] {
+  try {
+    if (!text) return [];
+    // Normalize whitespace
+    let t = String(text).replace(/\s+/g, ' ').trim();
+    if (!t) return [];
+
+    // First pass: split into sentences, keeping end punctuation (., !, ?, Arabic ؟)
+    const sentences = t.match(/[^.!?؟]+[.!?؟]?/g) || [t];
+
+    const chunks: string[] = [];
+    for (const sRaw of sentences) {
+      const s = sRaw.trim();
+      if (!s) continue;
+      if (s.length <= maxChars) {
+        chunks.push(s);
+        continue;
+      }
+      // Second pass: break long sentence on commas / Arabic comma / semicolons
+      const parts = s.split(/[,؛،;]/g).map(p => p.trim()).filter(Boolean);
+      if (parts.length === 0) {
+        // Fallback: hard wrap by words
+        chunks.push(...hardWrap(s, maxChars));
+        continue;
+      }
+      // Accumulate parts into <= maxChars segments
+      let buf = '';
+      for (const p of parts) {
+        const candidate = buf ? (buf + ', ' + p) : p;
+        if (candidate.length <= maxChars) {
+          buf = candidate;
+        } else {
+          if (buf) chunks.push(buf);
+          if (p.length <= maxChars) {
+            buf = p;
+          } else {
+            chunks.push(...hardWrap(p, maxChars));
+            buf = '';
+          }
+        }
+      }
+      if (buf) chunks.push(buf);
+    }
+
+    // Merge tiny trailing chunks with previous to reduce over-splitting
+    const merged: string[] = [];
+    for (const c of chunks) {
+      if (merged.length > 0 && (c.length < 60)) {
+        const last = merged.pop() as string;
+        const combined = last + ' ' + c;
+        if (combined.length <= maxChars + 40) {
+          merged.push(combined);
+        } else {
+          merged.push(last, c);
+        }
+      } else {
+        merged.push(c);
+      }
+    }
+    return merged;
+  } catch {
+    return [text];
+  }
+}
+
+function hardWrap(s: string, maxChars: number): string[] {
+  const out: string[] = [];
+  let current = '';
+  for (const word of s.split(' ')) {
+    if (!word) continue;
+    const candidate = current ? (current + ' ' + word) : word;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      if (current) out.push(current);
+      // If single word longer than max, force split
+      if (word.length > maxChars) {
+        let w = word;
+        while (w.length > maxChars) {
+          out.push(w.slice(0, maxChars));
+          w = w.slice(maxChars);
+        }
+        current = w;
+      } else {
+        current = word;
+      }
+    }
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binaryString = atob(b64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+  return bytes;
+}
+
 serve(async (req: Request) => {
   console.log(`🎵 Request: ${req.method} ${req.url}`);
   
@@ -90,8 +192,8 @@ serve(async (req: Request) => {
     // NOTE: No voice quota enforcement here. This endpoint is reserved for Talk Back / Mini Speaker.
     // Quota checks and usage persistence are handled exclusively by the ElevenLabs endpoint `elevenlabs-tts`.
 
-    // Perform TTS call with Google only
-      console.log('🎵 Calling Google Cloud Text-to-Speech API...');
+    // Perform TTS call with Google only — now with server-side chunking and concatenation
+      console.log('🎵 Calling Google Cloud Text-to-Speech API (chunked)...');
       console.log('🎵 Request details:', { voiceName: voice_id, textLength: text.length });
 
       // Derive languageCode from the voice name (e.g., en-US-Chirp3-HD-Orus -> en-US)
@@ -104,7 +206,7 @@ serve(async (req: Request) => {
       };
       const languageCode = deriveLang(voice_id);
 
-      const synthesize = async (name: string) => {
+      const synthesize = async (name: string, t: string) => {
         const lang = deriveLang(name);
         const isChirp = /Chirp3/i.test(name);
         const apiBase = isChirp
@@ -114,7 +216,7 @@ serve(async (req: Request) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            input: { text },
+            input: { text: t },
             voice: { 
               name,
               languageCode: lang,
@@ -134,54 +236,52 @@ serve(async (req: Request) => {
         return resp;
       };
 
-      let googleResp = await synthesize(voice_id);
-      if (!googleResp.ok && (googleResp.status === 400 || googleResp.status === 404)) {
-        // One-time fallback to a safe voice based on language
-        const isArabic = /^ar/i.test(languageCode);
-        const fallbackVoice = isArabic ? 'ar-XA-Chirp3-HD-Schedar' : 'en-US-Chirp3-HD-Orus';
-        console.warn('🎵 Google TTS voice failed, retrying with fallback voice:', fallbackVoice);
-        googleResp = await synthesize(fallbackVoice);
-      }
+      // Split the input text into safe chunks
+      const chunks = splitIntoChunks(text);
+      if (!chunks.length) throw new Error('No text to synthesize');
 
-      if (!googleResp.ok) {
-        const errorText = await googleResp.text();
-        console.error('🎵 Google TTS API error:', {
-          status: googleResp.status,
-          statusText: googleResp.statusText,
-          error: errorText,
-          voiceName: voice_id,
-          languageCode,
-        });
-        if (googleResp.status === 401 || googleResp.status === 403) {
-          throw new Error('Google TTS authentication/authorization failed - check API key and quotas');
+      const audioSegments: Uint8Array[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const part = chunks[i];
+        console.log(`🎵 Synthesizing chunk ${i + 1}/${chunks.length} (len=${part.length})`);
+        let resp = await synthesize(voice_id, part);
+        if (!resp.ok && (resp.status === 400 || resp.status === 404)) {
+          const isArabic = /^ar/i.test(languageCode);
+          const fallbackVoice = isArabic ? 'ar-XA-Chirp3-HD-Schedar' : 'en-US-Chirp3-HD-Orus';
+          console.warn('🎵 Google TTS voice failed for chunk, retry with fallback:', fallbackVoice);
+          resp = await synthesize(fallbackVoice, part);
         }
-        throw new Error(`Google TTS API error: ${googleResp.status} - ${errorText}`);
+        if (!resp.ok) {
+          const errTxt = await resp.text();
+          console.error('🎵 Google TTS API error (chunk):', { status: resp.status, err: errTxt });
+          if (resp.status === 401 || resp.status === 403) {
+            throw new Error('Google TTS authentication/authorization failed - check API key and quotas');
+          }
+          throw new Error(`Google TTS API error: ${resp.status} - ${errTxt}`);
+        }
+        const json = await resp.json();
+        const b64 = json.audioContent as string | undefined;
+        if (!b64) throw new Error('Google TTS returned no audioContent for a chunk');
+        audioSegments.push(base64ToBytes(b64));
       }
 
-      const googleJson = await googleResp.json();
-      const b64 = googleJson.audioContent as string | undefined;
-      if (!b64) {
-        throw new Error('Google TTS returned no audioContent');
-      }
-      const binaryString = atob(b64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const audioBuffer = bytes.buffer as ArrayBuffer;
-      console.log('🎵 Google TTS audio generated successfully:', { audioSize: audioBuffer.byteLength });
-    
+      // Concatenate MP3 byte arrays – players can play concatenated MP3 frames sequentially
+      const total = audioSegments.reduce((sum, seg) => sum + seg.byteLength, 0);
+      const joined = new Uint8Array(total);
+      let offset = 0;
+      for (const seg of audioSegments) { joined.set(seg, offset); offset += seg.byteLength; }
+      const audioBuffer = joined.buffer as ArrayBuffer;
+      console.log('🎵 Google TTS audio generated successfully (concatenated):', { chunks: audioSegments.length, audioSize: audioBuffer.byteLength });
 
-    // NOTE: No voice quota mutation here. Persist usage only in `elevenlabs-tts`.
+      // NOTE: No voice quota mutation here. Persist usage only in `elevenlabs-tts`.
 
-    return new Response(audioBuffer, {
-      headers: { 
-        ...corsHeaders, 
-        "Content-Type": "audio/mpeg",
-        "Content-Length": audioBuffer.byteLength.toString()
-      }
-    });
+      return new Response(audioBuffer, {
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "audio/mpeg",
+          "Content-Length": audioBuffer.byteLength.toString()
+        }
+      });
 
   } catch (error: unknown) {
     const message = (error && typeof error === 'object' && 'message' in error) ? (error as { message: string }).message : 'TTS generation failed';

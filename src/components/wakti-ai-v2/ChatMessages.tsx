@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw } from 'lucide-react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
@@ -673,7 +673,8 @@ export function ChatMessages({
     if (message.intent === 'search') {
       const yt = (message as any)?.metadata?.youtube;
       const ytErr = (message as any)?.metadata?.youtubeError;
-      if (yt || ytErr) return 'YouTube';
+      const ytLoading = (message as any)?.metadata?.youtubeLoading;
+      if (yt || ytErr || ytLoading) return 'YouTube';
       return '🔍 Search';
     }
     if (message.intent === 'image') return '🎨 Image';
@@ -881,7 +882,8 @@ export function ChatMessages({
       case 'search': {
         const yt = (message as any)?.metadata?.youtube;
         const ytErr = (message as any)?.metadata?.youtubeError;
-        return (yt || ytErr) ? 'border-red-400' : 'border-green-400';
+        const ytLoading = (message as any)?.metadata?.youtubeLoading;
+        return (yt || ytErr || ytLoading) ? 'border-red-400' : 'border-green-400';
       }
       case 'image':
         return 'border-orange-400';
@@ -1008,6 +1010,32 @@ export function ChatMessages({
                                   <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                                   <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                                 </span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        // Show search indicators while waiting for first tokens
+                        const isSearchLoadingBase = message.role === 'assistant'
+                          && message.intent === 'search'
+                          && (message as any)?.metadata?.loading
+                          && !message.content;
+                        const isYouTubeLoading = isSearchLoadingBase && (message as any)?.metadata?.youtubeLoading;
+                        if (isSearchLoadingBase && isYouTubeLoading) {
+                          return (
+                            <div className="w-full">
+                              <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                                <Play className="h-4 w-4 animate-spin" />
+                                <span>{language === 'ar' ? 'وقتي يبحث في يوتيوب...' : 'Wakti AI is searching YouTube...'}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (isSearchLoadingBase) {
+                          return (
+                            <div className="w-full">
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Globe className="h-4 w-4 animate-spin" />
+                                <span>{language === 'ar' ? 'وقتي يبحث في الويب...' : 'Wakti AI is searching the web...'}</span>
                               </div>
                             </div>
                           );
