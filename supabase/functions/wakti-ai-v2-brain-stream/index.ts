@@ -204,20 +204,25 @@ async function streamClaude35Response(
           let imageData;
           if (file.url?.startsWith('data:')) {
             imageData = file.url.split(',')[1];
-            console.log('✅ STREAMING: Extracted base64 data');
+            console.log('✅ STREAMING: Extracted base64 data (from url)');
           } else if (file.content) {
             imageData = file.content;
             console.log('✅ STREAMING: Using file content');
+          } else if (file.data) {
+            imageData = file.data;
+            console.log('✅ STREAMING: Using file data');
           } else {
             console.error('❌ Invalid image data format');
             throw new Error('Invalid image data format');
           }
 
+          const mediaType = file.type === 'image/jpg' ? 'image/jpeg' : (file.type || 'image/jpeg');
+
           visionContent.push({
             type: 'image',
             source: {
               type: 'base64',
-              media_type: file.type,
+              media_type: mediaType,
               data: imageData
             }
           });
