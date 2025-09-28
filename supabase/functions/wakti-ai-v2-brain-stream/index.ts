@@ -19,7 +19,7 @@ const getCorsHeaders = (origin: string | null) => {
   
   return {
     'Access-Control-Allow-Origin': isAllowed ? origin : '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-name, x-auth-token, x-skip-auth, content-length',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, cache-control, x-request-id, x-mobile-request, x-app-name, x-auth-token, x-skip-auth, content-length',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '86400',
     'Access-Control-Allow-Credentials': 'false'
