@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
-const BASE = "https://api.prod.whoop.com/developer/v1";
+const BASE = "https://api.prod.whoop.com/developer/v2";
 const SLEEP_URL = `${BASE}/activity/sleep`;
 const WORKOUT_URL = `${BASE}/activity/workout`;
 const CYCLE_URL = `${BASE}/cycle`;
@@ -38,7 +38,7 @@ async function fetchCollection(url: string, accessToken: string, params: Record<
   do {
     const u = new URL(url);
     Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
-    if (nextToken) u.searchParams.set("nextToken", nextToken);
+    if (nextToken) u.searchParams.set("next_token", nextToken);
     // Log each page request with safe token prefix and parameters
     console.log("whoop-sync: requesting", {
       url: u.toString(),
@@ -135,6 +135,7 @@ serve(async (req: Request) => {
       users = rows || [];
     }
 
+    let totalCycles = 0, totalSleeps = 0, totalWorkouts = 0, totalRecoveries = 0;
     for (const u of users) {
       try {
         let accessToken = u.access_token;
@@ -169,7 +170,7 @@ serve(async (req: Request) => {
           });
         }
 
-        const start = startParam || (u.last_synced_at ? new Date(new Date(u.last_synced_at).getTime() - 7 * 86400000).toISOString() : isoDaysAgo(30));
+        const start = startParam || (u.last_synced_at ? new Date(new Date(u.last_synced_at).getTime() - 7 * 86400000).toISOString() : isoDaysAgo(180));
         const end = endParam || new Date().toISOString();
         const commonParams = { start, end } as Record<string, string>;
         console.log("whoop-sync: fetch ranges", {
@@ -190,6 +191,10 @@ serve(async (req: Request) => {
           fetchCollection(WORKOUT_URL, accessToken, { ...commonParams }),
           fetchCollection(RECOVERY_URL, accessToken, { ...commonParams }),
         ]);
+        totalCycles += cycles.length;
+        totalSleeps += sleeps.length;
+        totalWorkouts += workouts.length;
+        totalRecoveries += recoveries.length;
 
         // Upserts using admin client (bypass RLS)
         // Helper to safely extract optional fields
@@ -207,7 +212,8 @@ serve(async (req: Request) => {
             training_load: asNumber(item.training_load ?? item.score?.training_load),
             data: item,
           }));
-          await admin.from("whoop_cycles").upsert(rows, { onConflict: "id" });
+          const { error: errCycles } = await admin.from("whoop_cycles").upsert(rows, { onConflict: "id" });
+          if (errCycles) console.error("whoop-sync upsert cycles error", errCycles);
         }
 
         if (sleeps.length) {
@@ -220,7 +226,8 @@ serve(async (req: Request) => {
             performance_pct: asNumber(item.score?.sleep_performance_percentage ?? item.performance_pct),
             data: item,
           }));
-          await admin.from("whoop_sleep").upsert(rows, { onConflict: "id" });
+          const { error: errSleep } = await admin.from("whoop_sleep").upsert(rows, { onConflict: "id" });
+          if (errSleep) console.error("whoop-sync upsert sleep error", errSleep);
         }
 
         if (workouts.length) {
@@ -234,20 +241,23 @@ serve(async (req: Request) => {
             avg_hr_bpm: asNumber(item.score?.average_heart_rate ?? item.avg_hr_bpm),
             data: item,
           }));
-          await admin.from("whoop_workouts").upsert(rows, { onConflict: "id" });
+          const { error: errWork } = await admin.from("whoop_workouts").upsert(rows, { onConflict: "id" });
+          if (errWork) console.error("whoop-sync upsert workouts error", errWork);
         }
 
         if (recoveries.length) {
           const rows = recoveries.map((item: any) => ({
-            id: item.id,
+            sleep_id: item.sleep_id, // v2 UUID
+            cycle_id: typeof item.cycle_id === 'number' ? item.cycle_id : (item.cycle_id ? Number(item.cycle_id) : null),
             user_id: u.user_id,
-            date: item.sleep_id ? null : (item.date ? item.date : null),
-            score: asNumber(item.score?.recovery_score ?? item.score ?? item.recovery_score),
-            hrv_ms: asNumber(item.heart_rate_variability_rmssd_milli ?? item.hrv_ms ?? item.hrv),
-            rhr_bpm: asNumber(item.resting_heart_rate ?? item.rhr_bpm ?? item.rhr),
+            date: null,
+            score: asNumber(item.score?.recovery_score ?? item.recovery_score ?? item.score),
+            hrv_ms: asNumber(item.score?.hrv_rmssd_milli ?? item.hrv_rmssd_milli ?? item.heart_rate_variability_rmssd_milli),
+            rhr_bpm: asNumber(item.score?.resting_heart_rate ?? item.resting_heart_rate ?? item.rhr_bpm ?? item.rhr),
             data: item,
           }));
-          await admin.from("whoop_recovery").upsert(rows, { onConflict: "id" });
+          const { error: errRec } = await admin.from("whoop_recovery").upsert(rows, { onConflict: "sleep_id" });
+          if (errRec) console.error("whoop-sync upsert recovery error", errRec);
         }
 
         await admin.from("user_whoop_tokens").update({ last_synced_at: new Date().toISOString() }).eq("user_id", u.user_id);
@@ -256,7 +266,7 @@ serve(async (req: Request) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, users: users.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, users: users.length, counts: { cycles: totalCycles, sleeps: totalSleeps, workouts: totalWorkouts, recoveries: totalRecoveries } }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("whoop-sync error", e);
     return new Response(JSON.stringify({ error: "internal_error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
