@@ -14,6 +14,8 @@ export type SleepCardProps = {
   nap?: boolean | null;
   efficiencyPct?: number | null; // asleep / in-bed
   avgHours7d?: number | null;
+  miniHours?: number | null; // for week/day toggle
+  miniLabel?: string; // label for mini ring: 'avg' | 'today'
 };
 
 const colors = {
@@ -22,7 +24,7 @@ const colors = {
   light: "#a0aec0",
 };
 
-export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtime, waketime, nap, efficiencyPct, avgHours7d }: SleepCardProps) {
+export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtime, waketime, nap, efficiencyPct, avgHours7d, miniHours, miniLabel = 'avg' }: SleepCardProps) {
   const hrs = hours ?? 0;
   const pctOfGoal = Math.max(0, Math.min(100, Math.round(((hrs || 0) / goalHours) * 100)));
   const radial = [{ name: "sleep", value: pctOfGoal }];
@@ -59,7 +61,9 @@ export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtim
             <div className="text-3xl font-semibold leading-none">{hrs ? `${hrs.toFixed(1)}h` : "--"}</div>
             <div className="text-[11px] text-muted-foreground mt-1">{pctOfGoal}% of {goalHours}h</div>
           </div>
-          {typeof avgHours7d === 'number' ? <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round(((avgHours7d||0)/goalHours)*100)))} /> : null}
+          {typeof (miniHours ?? avgHours7d) === 'number' ? (
+            <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round((((miniHours ?? avgHours7d) || 0)/goalHours)*100)))} label={miniLabel} />
+          ) : null}
         </div>
         <div className="h-28">
           <ResponsiveContainer width="100%" height="100%">
@@ -85,7 +89,7 @@ export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtim
   );
 }
 
-function MiniAvgRing({ pct }: { pct: number }) {
+function MiniAvgRing({ pct, label = 'avg' }: { pct: number; label?: string }) {
   return (
     <div className="absolute -bottom-1 right-0 h-14 w-14">
       <ResponsiveContainer width="100%" height="100%">
@@ -100,7 +104,7 @@ function MiniAvgRing({ pct }: { pct: number }) {
           <RadialBar dataKey="value" cornerRadius={12} fill="url(#sleepAvgGrad)" background />
         </RadialBarChart>
       </ResponsiveContainer>
-      <div className="absolute inset-0 flex items-center justify-center text-[10px] font-medium">avg</div>
+      <div className="absolute inset-0 flex items-center justify-center text-[10px] font-medium">{label}</div>
     </div>
   );
 }

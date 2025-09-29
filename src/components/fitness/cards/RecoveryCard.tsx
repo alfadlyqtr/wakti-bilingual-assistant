@@ -29,7 +29,7 @@ export function RecoveryCard({ value, hrvMs, rhrBpm, avgPct7d }: { value?: numbe
         </div>
         {typeof avgPct7d === 'number' ? <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round(avgPct7d)))} gradId="recAvgGrad" from="#bbf7d0" to="#a7f3d0" label="avg" /> : null}
       </div>
-      <div className="mt-2 flex items-center gap-2 text-[11px]">
+      <div className="mt-2 flex items-center gap-2 text-xs">
         <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1"><Activity className="h-3 w-3" />HRV {hrvMs != null ? Math.round(hrvMs) : "--"} ms</span>
         <span className="px-2 py-[2px] rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20 flex items-center gap-1"><HeartPulse className="h-3 w-3" />RHR {rhrBpm != null ? Math.round(rhrBpm) : "--"} bpm</span>
       </div>

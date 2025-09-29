@@ -252,10 +252,11 @@ export default function FitnessHealth() {
                   waketime={metrics?.sleep?.end ?? null}
                   nap={metrics?.sleep?.data?.nap ?? null}
                   efficiencyPct={sleepEfficiency}
+                  avgHours7d={avgSleep7d}
                 />
-                <RecoveryCard value={metrics?.recovery?.score ?? null} hrvMs={metrics?.recovery?.hrv_ms ?? null} rhrBpm={metrics?.recovery?.rhr_bpm ?? null} />
+                <RecoveryCard value={metrics?.recovery?.score ?? null} hrvMs={metrics?.recovery?.hrv_ms ?? null} rhrBpm={metrics?.recovery?.rhr_bpm ?? null} avgPct7d={avgRecovery7d} />
                 <HRVRHRMini data={hrHistory} />
-                <StrainCard value={metrics?.cycle?.day_strain ?? null} trainingLoad={metrics?.cycle?.training_load ?? null} avgHrBpm={metrics?.cycle?.avg_hr_bpm ?? null} />
+                <StrainCard value={metrics?.cycle?.day_strain ?? null} trainingLoad={metrics?.cycle?.training_load ?? null} avgHrBpm={metrics?.cycle?.avg_hr_bpm ?? null} avg7d={avgStrain7d} />
               </div>
               <div className="grid grid-cols-1 gap-4">
                 <WorkoutCard workout={metrics?.workout} />
