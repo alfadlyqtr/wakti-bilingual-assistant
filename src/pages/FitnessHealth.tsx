@@ -28,6 +28,7 @@ export default function FitnessHealth() {
   const [autoSync, setAutoSync] = useState<boolean>(() => {
     try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
   });
+  const [tab, setTab] = useState<'overview'|'ai'>('overview');
 
   useEffect(() => {
     (async () => {
@@ -152,6 +153,32 @@ export default function FitnessHealth() {
     return null;
   }, [metrics]);
 
+  const sleepEfficiency = useMemo(() => {
+    const st = metrics?.sleep?.data?.score?.stage_summary;
+    if (!st) return null as number | null;
+    const asleep = (st.deep_sleep_milli??0)+(st.rem_sleep_milli??0)+(st.light_sleep_milli??0);
+    const inBed = st.total_in_bed_milli ?? 0;
+    if (!inBed) return null;
+    return Math.round((asleep / inBed) * 100);
+  }, [metrics]);
+
+  const todayStats = useMemo(() => {
+    const rec = metrics?.recovery;
+    const cyc = metrics?.cycle;
+    const w = metrics?.workout;
+    const kcal = w?.data?.score?.kilojoule ? Math.round((w.data.score.kilojoule||0)/4.184) : null;
+    const wAvgHr = w?.data?.score?.average_heart_rate ?? null;
+    return {
+      recovery: rec?.score ?? null,
+      hrv: rec?.hrv_ms ?? null,
+      rhr: rec?.rhr_bpm ?? null,
+      strain: cyc?.day_strain ?? null,
+      load: cyc?.training_load ?? null,
+      avgHr: cyc?.avg_hr_bpm ?? wAvgHr ?? null,
+      kcal,
+    };
+  }, [metrics]);
+
   return (
     <PageContainer>
       <div className="max-w-6xl mx-auto p-4 space-y-6">
@@ -174,21 +201,35 @@ export default function FitnessHealth() {
         {loading ? (
           <div className="text-sm text-muted-foreground">{language === 'ar' ? 'جار التحميل...' : 'Loading...'}</div>
         ) : connected ? (
-          <Tabs defaultValue="overview">
+          <Tabs value={tab} onValueChange={(v)=>{ setTab(v as any); setTimeout(()=>window.dispatchEvent(new Event('resize')), 60); setTimeout(()=>window.dispatchEvent(new Event('resize')), 500); }}>
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="ai">AI Insights</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="space-y-6 mt-4">
+              {/* Today Stats strip */}
+              <div className="flex flex-wrap gap-2 text-[11px]">
+                <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Recovery {todayStats.recovery != null ? Math.round(todayStats.recovery) : '--'}%</span>
+                <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">HRV {todayStats.hrv != null ? Math.round(todayStats.hrv) : '--'} ms</span>
+                <span className="px-2 py-[2px] rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20">RHR {todayStats.rhr != null ? Math.round(todayStats.rhr) : '--'} bpm</span>
+                <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Strain {todayStats.strain != null ? todayStats.strain.toFixed(1) : '--'}</span>
+                <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Load {todayStats.load != null ? Math.round(todayStats.load*10)/10 : '--'}</span>
+                <span className="px-2 py-[2px] rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">Avg HR {todayStats.avgHr != null ? Math.round(todayStats.avgHr) : '--'} bpm</span>
+                <span className="px-2 py-[2px] rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Calories {todayStats.kcal != null ? todayStats.kcal : '--'}</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <SleepCard
                   hours={sleepHours}
                   performancePct={metrics?.sleep?.performance_pct ?? null}
                   stages={sleepStages}
+                  bedtime={metrics?.sleep?.start ?? null}
+                  waketime={metrics?.sleep?.end ?? null}
+                  nap={metrics?.sleep?.data?.nap ?? null}
+                  efficiencyPct={sleepEfficiency}
                 />
-                <RecoveryCard value={metrics?.recovery?.score ?? null} />
+                <RecoveryCard value={metrics?.recovery?.score ?? null} hrvMs={metrics?.recovery?.hrv_ms ?? null} rhrBpm={metrics?.recovery?.rhr_bpm ?? null} />
                 <HRVRHRMini data={hrHistory} />
-                <StrainCard value={metrics?.cycle?.day_strain ?? null} />
+                <StrainCard value={metrics?.cycle?.day_strain ?? null} trainingLoad={metrics?.cycle?.training_load ?? null} avgHrBpm={metrics?.cycle?.avg_hr_bpm ?? null} />
               </div>
               <div className="grid grid-cols-1 gap-4">
                 <WorkoutCard workout={metrics?.workout} />

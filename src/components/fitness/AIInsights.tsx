@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
-import { buildInsightsAggregate, generateAiInsights } from "@/services/whoopService";
+import { buildInsightsAggregate, generateAiInsights, pingAiInsights } from "@/services/whoopService";
 import { Copy, Download, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LineChart, Line, CartesianGrid } from "recharts";
@@ -15,6 +15,7 @@ export function AIInsights() {
   const [agg, setAgg] = useState<any>(null);
   const [ai, setAi] = useState<{ daily_summary?: string; weekly_summary?: string; tips?: string[]; motivations?: string[]; long_summary?: string }>({});
   const printableRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<"idle"|"checking"|"contacting"|"analyzing"|"ready"|"error">("idle");
 
   useEffect(() => {
     (async () => {
@@ -59,8 +60,13 @@ export function AIInsights() {
   const onGenerate = async () => {
     try {
       setAiLoading(true);
+      setPhase('checking');
+      await pingAiInsights();
+      setPhase('contacting');
       const resp = await generateAiInsights(language as 'en'|'ar');
+      setPhase('analyzing');
       setAi(resp || {});
+      setPhase('ready');
       toast.success(language === 'ar' ? 'تم إنشاء الرؤى' : 'Insights generated');
     } catch (e:any) {
       console.error("ai error", e);
@@ -71,6 +77,7 @@ export function AIInsights() {
       } else {
         toast.error(language === 'ar' ? 'تعذر إنشاء الرؤى' : 'Failed to generate insights');
       }
+      setPhase('error');
     } finally {
       setAiLoading(false);
     }
@@ -112,6 +119,14 @@ export function AIInsights() {
         </div>
         <div className="text-xs text-muted-foreground mt-1">
           {language==='ar' ? 'مدعوم من WAKTI AI — نستخدم بيانات موجزة ومجهولة لإنتاج ملخصات ونصائح داعمة.' : 'Powered by WAKTI AI — we use a compact, anonymized dataset to generate supportive summaries and tips.'}
+        </div>
+        <div className="text-[11px] text-muted-foreground mt-1">
+          {phase === 'idle' && (language==='ar' ? 'جاهز.' : 'Ready.')}
+          {phase === 'checking' && (language==='ar' ? 'التحقق من الخدمة...' : 'Checking service...')}
+          {phase === 'contacting' && (language==='ar' ? 'جار الاتصال بـ WAKTI AI...' : 'Contacting WAKTI AI...')}
+          {phase === 'analyzing' && (language==='ar' ? 'جاري التحليل...' : 'Analyzing...')}
+          {phase === 'ready' && (language==='ar' ? 'تم التحضير.' : 'Prepared.')}
+          {phase === 'error' && (language==='ar' ? 'حدث خطأ. حاول مرة أخرى.' : 'Error occurred. Try again.')}
         </div>
       </Card>
 

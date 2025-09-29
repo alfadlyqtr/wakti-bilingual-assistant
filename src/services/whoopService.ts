@@ -14,6 +14,17 @@ function getRedirectUri(): string {
   return redirectUri;
 }
 
+export async function pingAiInsights() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  const { data, error } = await supabase.functions.invoke('whoop-ai-insights', {
+    body: { ping: true },
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function buildInsightsAggregate() {
   const [compact, sleep7, rec7, cyc30, w14] = await Promise.all([
     fetchCompactMetrics(),
@@ -96,8 +107,15 @@ export async function buildInsightsAggregate() {
   };
 }
 
-export async function generateAiInsights(language: 'en'|'ar' = 'en', timeoutMs = 30000) {
-  const data = await buildInsightsAggregate();
+export async function generateAiInsights(language: 'en'|'ar' = 'en', timeoutMs = 15000) {
+  const dataFull = await buildInsightsAggregate();
+  // Send a compact payload to AI (exclude heavy raw details)
+  const data = {
+    today: dataFull.today,
+    last7Days: dataFull.last7Days,
+    workouts: (dataFull.workouts || []).slice(-20),
+    weekly: dataFull.weekly,
+  };
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   const req = supabase.functions.invoke('whoop-ai-insights', {

@@ -18,6 +18,9 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json().catch(() => ({}));
+    if (body?.ping) {
+      return new Response(JSON.stringify({ ok: true, service: "whoop-ai-insights" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const payload = body?.data ?? {};
     const language = body?.language ?? "en";
 
@@ -25,7 +28,7 @@ serve(async (req: Request) => {
       ? "أنت مدرب صحة ولياقة بدنية معتمد. كن إيجابيًا وداعمًا، وقدّم نصائح عملية قصيرة. لخص يوميًا وأسبوعيًا بناءً على البيانات المقدّمة. تجنّب الادعاءات الطبية."
       : "You are a certified health and fitness coach. Be positive, supportive, and actionable. Provide daily and weekly summaries based on the provided data. Avoid medical claims.";
 
-    const userPrompt = `Analyze the following WHOOP aggregates and respond with JSON having keys: daily_summary, weekly_summary, tips (array of 3-5), motivations (array of 2-3), long_summary. Keep it concise and helpful.\n\nDATA:\n${JSON.stringify(payload)}`;
+    const userPrompt = `Analyze the following WHOOP aggregates and respond with JSON having keys: daily_summary, weekly_summary, tips (array of 3-5), motivations (array of 2-3), long_summary. Keep it concise, supportive, and actionable.\n\nDATA:\n${JSON.stringify(payload)}`;
 
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

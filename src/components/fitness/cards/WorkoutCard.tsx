@@ -15,6 +15,9 @@ export function WorkoutCard({ workout }: { workout?: Workout | null }) {
   const end = w.end ? new Date(w.end) : null;
   const durMin = start && end ? Math.round((end.getTime() - start.getTime()) / 60000) : null;
   const kcal = w?.data?.score?.kilojoule ? Math.round((w.data.score.kilojoule || 0) / 4.184) : null;
+  const avgHr = w?.data?.score?.average_heart_rate ?? null;
+  const maxHr = w?.data?.score?.max_heart_rate ?? null;
+  const distM = w?.data?.score?.distance_meter ?? null;
 
   const zones = w?.data?.score?.zone_durations || null; // map of zone->milliseconds
   const zoneKeys = zones ? Object.keys(zones) : [];
@@ -28,6 +31,11 @@ export function WorkoutCard({ workout }: { workout?: Workout | null }) {
           <div className="text-lg font-semibold">{w.sport_name || 'Workout'}</div>
           <div className="text-xs text-muted-foreground">
             {durMin != null ? `${durMin} min` : '--'} • Strain {w.strain != null ? w.strain.toFixed(1) : '--'} • {kcal != null ? `${kcal} kcal` : '--'}
+          </div>
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <span className="px-2 py-[2px] rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">Avg HR {avgHr != null ? Math.round(avgHr) : '--'} bpm</span>
+            <span className="px-2 py-[2px] rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">Max HR {maxHr != null ? Math.round(maxHr) : '--'} bpm</span>
+            <span className="px-2 py-[2px] rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Distance {distM != null ? Math.round(distM/100)/10 : '--'} km</span>
           </div>
           {zones && totalZone > 0 && (
             <div className="mt-2 h-2 w-full rounded-full bg-white/10 overflow-hidden flex">
