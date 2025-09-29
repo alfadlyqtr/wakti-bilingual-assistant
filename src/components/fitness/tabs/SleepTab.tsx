@@ -123,21 +123,24 @@ export function SleepTab({
   return (
     <div className="space-y-6">
       {/* Mini-tabs for time range */}
-      <Card className="rounded-2xl p-4 bg-white/5 border-white/10">
-        <Tabs value={timeRange} onValueChange={(value) => onTimeRangeChange(value as TimeRange)}>
-          <TabsList className="grid w-full grid-cols-6 bg-white/10">
-            <TabsTrigger value="1d" className="text-xs">1D</TabsTrigger>
-            <TabsTrigger value="1w" className="text-xs">1W</TabsTrigger>
-            <TabsTrigger value="2w" className="text-xs">2W</TabsTrigger>
-            <TabsTrigger value="1m" className="text-xs">1M</TabsTrigger>
-            <TabsTrigger value="3m" className="text-xs">3M</TabsTrigger>
-            <TabsTrigger value="6m" className="text-xs">6M</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </Card>
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+          <button
+            key={range}
+            onClick={() => onTimeRangeChange(range)}
+            className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+              timeRange === range
+                ? 'bg-indigo-500 text-white shadow-md'
+                : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+            }`}
+          >
+            {range.toUpperCase()}
+          </button>
+        ))}
+      </div>
 
       {/* Main Sleep Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Multi-Ring Sleep Donut */}
         <Card className="rounded-2xl p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
           <div className="flex items-center gap-3 mb-6">
@@ -152,7 +155,7 @@ export function SleepTab({
             </div>
           </div>
 
-          <div className="relative h-64 mb-6">
+          <div className="relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6">
             {/* Outer ring - Total hours vs goal */}
             <div className="absolute inset-0">
               <CircularProgressbar
@@ -166,16 +169,16 @@ export function SleepTab({
             </div>
             
             {/* Inner ring - Stage distribution */}
-            <div className="absolute inset-8">
+            <div className="absolute inset-4">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={stageData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={40}
-                    outerRadius={70}
-                    paddingAngle={2}
+                    innerRadius={20}
+                    outerRadius={30}
+                    paddingAngle={1}
                     dataKey="value"
                   >
                     {stageData.map((entry, index) => (
@@ -189,50 +192,44 @@ export function SleepTab({
 
             {/* Center text */}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-2xl font-bold">{mockSleepData.hours.toFixed(1)}h</div>
-              <div className="text-sm text-muted-foreground">
-                {Math.round(hoursProgress)}% of {mockSleepData.goalHours}h
+              <div className="text-lg font-bold">{mockSleepData.hours.toFixed(1)}h</div>
+              <div className="text-xs text-muted-foreground">
+                {Math.round(hoursProgress)}%
               </div>
             </div>
           </div>
 
-          {/* Sleep timing */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="flex items-center gap-2">
-              <Bed className="h-4 w-4 text-blue-400" />
-              <div>
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'وقت النوم' : 'Bedtime'}
-                </div>
-                <div className="font-semibold">{mockSleepData.bedtime}</div>
+          {/* Sleep metrics in one row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">
+                {language === 'ar' ? 'وقت النوم' : 'Bedtime'}
+              </div>
+              <div className="text-sm sm:text-base font-bold text-blue-400">
+                {mockSleepData.bedtime}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <AlarmClock className="h-4 w-4 text-orange-400" />
-              <div>
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'وقت الاستيقاظ' : 'Wake Time'}
-                </div>
-                <div className="font-semibold">{mockSleepData.waketime}</div>
+            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">
+                {language === 'ar' ? 'وقت الاستيقاظ' : 'Wake Time'}
+              </div>
+              <div className="text-sm sm:text-base font-bold text-orange-400">
+                {mockSleepData.waketime}
               </div>
             </div>
-          </div>
-
-          {/* Performance metrics */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/5 rounded-xl p-3">
-              <div className="text-sm text-muted-foreground mb-1">
+            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">
                 {language === 'ar' ? 'الأداء' : 'Performance'}
               </div>
-              <div className="text-xl font-bold text-blue-400">
+              <div className="text-sm sm:text-base font-bold text-purple-400">
                 {mockSleepData.performancePct}%
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-3">
-              <div className="text-sm text-muted-foreground mb-1">
+            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">
                 {language === 'ar' ? 'الكفاءة' : 'Efficiency'}
               </div>
-              <div className="text-xl font-bold text-emerald-400">
+              <div className="text-sm sm:text-base font-bold text-emerald-400">
                 {mockSleepData.efficiency}%
               </div>
             </div>

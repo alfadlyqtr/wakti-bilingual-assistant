@@ -100,28 +100,35 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
   };
 
   return (
-    <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+    <Card className="rounded-2xl p-6 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border-indigo-500/20 shadow-xl">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center">
-          <Heart className="h-4 w-4 text-white" />
+        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500 flex items-center justify-center shadow-lg">
+          <Heart className="h-5 w-5 text-white" />
         </div>
-        <h3 className="text-lg font-semibold">
-          {language === 'ar' ? 'تفاصيل WHOOP' : 'WHOOP Details'}
-        </h3>
+        <div>
+          <h3 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+            {language === 'ar' ? 'تفاصيل WHOOP' : 'WHOOP Details'}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {language === 'ar' ? 'تحليل شامل لبياناتك الصحية' : 'Comprehensive health data analysis'}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Sleep Details */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-3">
-            <Moon className="h-5 w-5 text-blue-400" />
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center">
+              <Moon className="h-3 w-3 text-white" />
+            </div>
             <h4 className="font-semibold text-blue-400">
               {language === 'ar' ? 'النوم' : 'Sleep'}
             </h4>
           </div>
           <div className="space-y-3">
-            <div className="bg-white/5 rounded-xl p-3">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+            <div className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-500/20 rounded-xl p-4 shadow-lg">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
                 <div className="text-muted-foreground">
                   {language === 'ar' ? 'وقت النوم' : 'Bedtime'}
                 </div>
@@ -176,14 +183,16 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
         {/* Recovery Details */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-3">
-            <Heart className="h-5 w-5 text-emerald-400" />
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-emerald-400 to-green-400 flex items-center justify-center">
+              <Heart className="h-3 w-3 text-white" />
+            </div>
             <h4 className="font-semibold text-emerald-400">
               {language === 'ar' ? 'التعافي' : 'Recovery'}
             </h4>
           </div>
           <div className="space-y-3">
-            <div className="bg-white/5 rounded-xl p-3">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+            <div className="bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/20 rounded-xl p-4 shadow-lg">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
                 <div className="text-muted-foreground">
                   {language === 'ar' ? 'نقاط التعافي' : 'Recovery Score'}
                 </div>
@@ -221,14 +230,16 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
         {/* Strain Details */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-3">
-            <Zap className="h-5 w-5 text-yellow-400" />
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-yellow-400 to-orange-400 flex items-center justify-center">
+              <Zap className="h-3 w-3 text-white" />
+            </div>
             <h4 className="font-semibold text-yellow-400">
               {language === 'ar' ? 'الإجهاد' : 'Strain'}
             </h4>
           </div>
           <div className="space-y-3">
-            <div className="bg-white/5 rounded-xl p-3">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+            <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl p-4 shadow-lg">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
                 <div className="text-muted-foreground">
                   {language === 'ar' ? 'إجهاد اليوم' : 'Day Strain'}
                 </div>
@@ -273,14 +284,16 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
         {/* Workout Details */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-3">
-            <Dumbbell className="h-5 w-5 text-orange-400" />
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-orange-400 to-red-400 flex items-center justify-center">
+              <Dumbbell className="h-3 w-3 text-white" />
+            </div>
             <h4 className="font-semibold text-orange-400">
               {language === 'ar' ? 'التمرين' : 'Workout'}
             </h4>
           </div>
           <div className="space-y-3">
-            <div className="bg-white/5 rounded-xl p-3">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+            <div className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-xl p-4 shadow-lg">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
                 <div className="text-muted-foreground">
                   {language === 'ar' ? 'نوع التمرين' : 'Activity Type'}
                 </div>
@@ -336,9 +349,9 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
       </div>
 
       {/* Last Updated */}
-      <div className="mt-6 pt-4 border-t border-white/10">
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <Calendar className="h-3 w-3" />
+      <div className="mt-8 pt-6 border-t border-gradient-to-r from-purple-500/20 via-indigo-500/20 to-blue-500/20">
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground bg-white/5 rounded-full px-4 py-2 mx-auto w-fit">
+          <Calendar className="h-3 w-3 text-indigo-400" />
           <span>
             {language === 'ar' 
               ? `آخر تحديث: ${new Date().toLocaleString('ar-SA')}`

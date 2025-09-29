@@ -87,18 +87,21 @@ export function RecoveryTab({
   return (
     <div className="space-y-6">
       {/* Mini-tabs for time range */}
-      <Card className="rounded-2xl p-4 bg-white/5 border-white/10">
-        <Tabs value={timeRange} onValueChange={(value) => onTimeRangeChange(value as TimeRange)}>
-          <TabsList className="grid w-full grid-cols-6 bg-white/10">
-            <TabsTrigger value="1d" className="text-xs">1D</TabsTrigger>
-            <TabsTrigger value="1w" className="text-xs">1W</TabsTrigger>
-            <TabsTrigger value="2w" className="text-xs">2W</TabsTrigger>
-            <TabsTrigger value="1m" className="text-xs">1M</TabsTrigger>
-            <TabsTrigger value="3m" className="text-xs">3M</TabsTrigger>
-            <TabsTrigger value="6m" className="text-xs">6M</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </Card>
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+          <button
+            key={range}
+            onClick={() => onTimeRangeChange(range)}
+            className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+              timeRange === range
+                ? 'bg-indigo-500 text-white shadow-md'
+                : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+            }`}
+          >
+            {range.toUpperCase()}
+          </button>
+        ))}
+      </div>
 
       {/* Main Recovery Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -116,7 +119,7 @@ export function RecoveryTab({
             </div>
           </div>
 
-          <div className="relative h-48 mb-6">
+          <div className="relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6">
             <CircularProgressbar
               value={mockRecoveryData.score}
               text={`${mockRecoveryData.score}%`}
@@ -162,44 +165,38 @@ export function RecoveryTab({
             {language === 'ar' ? 'إحصائيات التعافي' : 'Recovery Stats'}
           </h3>
 
-          <div className="space-y-4">
-            {/* Today */}
-            <div className="bg-white/5 rounded-xl p-4">
-              <div className="text-sm text-muted-foreground mb-2">
-                {language === 'ar' ? 'اليوم' : 'Today'}
+          {/* Recovery metrics in one row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">
+                {language === 'ar' ? 'النتيجة' : 'Score'}
               </div>
-              <div className={`text-2xl font-bold ${recoveryColor.text}`}>
+              <div className={`text-sm sm:text-base font-bold ${recoveryColor.text}`}>
                 {mockRecoveryData.score}%
               </div>
             </div>
-
-            {/* Best this week */}
-            <div className="bg-white/5 rounded-xl p-4">
-              <div className="text-sm text-muted-foreground mb-2">
-                {language === 'ar' ? 'أفضل هذا الأسبوع' : 'Best This Week'}
+            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">
+                {language === 'ar' ? 'تقلب القلب' : 'HRV'}
               </div>
-              <div className="text-2xl font-bold text-emerald-400">
-                {bestThisWeek}%
+              <div className="text-sm sm:text-base font-bold text-teal-400">
+                {mockRecoveryData.hrv}ms
               </div>
             </div>
-
-            {/* 7-day average */}
-            <div className="bg-white/5 rounded-xl p-4">
-              <div className="text-sm text-muted-foreground mb-2">
-                {language === 'ar' ? 'متوسط 7 أيام' : '7-Day Average'}
+            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">
+                {language === 'ar' ? 'نبضات الراحة' : 'RHR'}
               </div>
-              <div className="text-2xl font-bold text-blue-400">
+              <div className="text-sm sm:text-base font-bold text-purple-400">
+                {mockRecoveryData.rhr} bpm
+              </div>
+            </div>
+            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">
+                {language === 'ar' ? 'متوسط 7د' : '7d Avg'}
+              </div>
+              <div className="text-sm sm:text-base font-bold text-blue-400">
                 {avg7d}%
-              </div>
-            </div>
-
-            {/* Delta vs last week */}
-            <div className="bg-white/5 rounded-xl p-4">
-              <div className="text-sm text-muted-foreground mb-2">
-                {language === 'ar' ? 'التغيير vs الأسبوع الماضي' : 'Change vs Last Week'}
-              </div>
-              <div className={`text-2xl font-bold ${deltaVsLastWeek >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {deltaVsLastWeek >= 0 ? '+' : ''}{deltaVsLastWeek.toFixed(1)}%
               </div>
             </div>
           </div>
