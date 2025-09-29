@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { TranslationKey } from "@/utils/translationTypes";
 import { toast } from "sonner";
@@ -16,15 +15,16 @@ type WidgetType = {
 export const useWidgetManager = (
   language: "en" | "ar"
 ) => {
-  const { user } = useAuth();
-  const [widgets, setWidgets] = useState<WidgetType[]>([]);
-  const [widgetSettings, setWidgetSettings] = useState({
-    showCalendarWidget: true,
-    showTasksWidget: true,
-    showTRWidget: true,
-    showMaw3dWidget: true,
-    showQuoteWidget: true,
-  });
+    const { user } = useAuth();
+    const [widgets, setWidgets] = useState<WidgetType[]>([]);
+    const [widgetSettings, setWidgetSettings] = useState({
+      showCalendarWidget: true,
+      showTasksWidget: true,
+      showTRWidget: true,
+      showMaw3dWidget: true,
+      showQuoteWidget: true,
+      showWhoopWidget: true,
+    });
 
   // Load widget settings from database - optimized with error handling
   const loadWidgetSettings = async () => {
@@ -45,6 +45,7 @@ export const useWidgetManager = (
           showTRWidget: dbSettings.showTRWidget !== false,
           showMaw3dWidget: dbSettings.showMaw3dWidget !== false,
           showQuoteWidget: dbSettings.showQuoteWidget !== false,
+          showWhoopWidget: dbSettings.showWhoopWidget !== false,
         });
       }
     } catch (error) {
@@ -64,7 +65,7 @@ export const useWidgetManager = (
       const currentOrder = getWidgetOrder();
       
       // Import components - using dynamic imports for better performance
-      const { CalendarWidget, TRWidget, Maw3dWidget } = await import(
+      const { CalendarWidget, TRWidget, Maw3dWidget, WhoopWidget } = await import(
         "@/components/dashboard/widgets"
       );
       const { QuoteWidget } = await import(
@@ -89,6 +90,14 @@ export const useWidgetManager = (
           component: React.createElement(TRWidget, { 
             language,
             key: `tr-${language}` // Add key for proper re-rendering
+          }),
+        },
+        whoop: {
+          id: "whoop",
+          title: "dashboard" as TranslationKey,
+          visible: widgetSettings.showWhoopWidget,
+          component: React.createElement(WhoopWidget, {
+            key: `whoop-${language}`
           }),
         },
         maw3d: {
@@ -120,7 +129,7 @@ export const useWidgetManager = (
     };
 
     initializeWidgets();
-  }, [language, user, widgetSettings.showCalendarWidget, widgetSettings.showTasksWidget, widgetSettings.showTRWidget, widgetSettings.showMaw3dWidget, widgetSettings.showQuoteWidget]);
+  }, [language, user, widgetSettings.showCalendarWidget, widgetSettings.showTasksWidget, widgetSettings.showTRWidget, widgetSettings.showMaw3dWidget, widgetSettings.showQuoteWidget, widgetSettings.showWhoopWidget]);
 
   // Load widget settings on mount and user change - debounced
   useEffect(() => {
@@ -137,9 +146,9 @@ export const useWidgetManager = (
   const getWidgetOrder = () => {
     try {
       const stored = localStorage.getItem('widgetOrder');
-      return stored ? JSON.parse(stored) : ['calendar', 'tr', 'maw3d', 'quote'];
+      return stored ? JSON.parse(stored) : ['calendar', 'tr', 'whoop', 'maw3d', 'quote'];
     } catch {
-      return ['calendar', 'tr', 'maw3d', 'quote'];
+      return ['calendar', 'tr', 'whoop', 'maw3d', 'quote'];
     }
   };
 

@@ -54,6 +54,8 @@ import VoiceTTS from "./pages/VoiceTTS";
 import VoiceStudio from "./pages/VoiceStudio";
 import TextGenerator from "./pages/TextGenerator";
 import GameMode from "./pages/GameMode";
+import FitnessHealth from "./pages/FitnessHealth";
+import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
 
 import "./App.css";
 
@@ -92,6 +94,21 @@ function App() {
                 <Route path="/help" element={
                   <GiftNotificationProvider>
                     <Help />
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/fitness" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><FitnessHealth /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/fitness/callback" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><FitnessWhoopCallback /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/whoop/callback" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><FitnessWhoopCallback /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />

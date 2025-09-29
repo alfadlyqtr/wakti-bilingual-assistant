@@ -398,6 +398,18 @@ export default function Settings() {
                     onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
                   />
                 </div>
+
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "ويدجت WHOOP للوحة التحكم" : "WHOOP Dashboard Widget"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={(widgetSettings as any).showWhoopWidget ?? true}
+                    onCheckedChange={(checked) => updateWidgetSetting('showWhoopWidget' as any, checked)}
+                  />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

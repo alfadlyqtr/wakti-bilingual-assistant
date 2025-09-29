@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2 } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
 import { motion } from "framer-motion";
@@ -104,6 +104,12 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'nav-icon-ai',
     },
     {
+      name: language === 'ar' ? 'الصحة واللياقة' : 'Fitness & Health',
+      path: '/fitness',
+      icon: 'heart-pulse',
+      colorClass: 'text-rose-500',
+    },
+    {
       name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
       path: '/tasjeel', 
       icon: 'mic',
@@ -142,6 +148,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     mic: Mic,
     pen: PenTool,
     gamepad: Gamepad2,
+    'heart-pulse': HeartPulse,
   };
 
   const handleNavigation = (path: string, badgeType?: string) => {
