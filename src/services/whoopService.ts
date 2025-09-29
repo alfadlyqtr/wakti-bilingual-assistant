@@ -3,6 +3,21 @@ import { supabase } from "@/integrations/supabase/client";
 const STATE_KEY = "whoop_oauth_state";
 const REDIRECT_URI_KEY = "whoop_redirect_uri";
 
+type TimeRange = '1d' | '1w' | '2w' | '1m' | '3m' | '6m';
+
+// Convert time range to number of days
+export function timeRangeToDays(timeRange: TimeRange): number {
+  switch (timeRange) {
+    case '1d': return 1;
+    case '1w': return 7;
+    case '2w': return 14;
+    case '1m': return 30;
+    case '3m': return 90;
+    case '6m': return 180;
+    default: return 7;
+  }
+}
+
 // Determine redirect URI based on environment
 function getRedirectUri(): string {
   const hostname = window.location.hostname;
@@ -363,7 +378,7 @@ export async function fetchWorkoutsHistory(days = 14) {
   if (!userId) return [];
   const { data, error } = await supabase
     .from('whoop_workouts')
-    .select('start,end,strain,avg_hr_bpm,data')
+    .select('start,end,strain,avg_hr_bpm,sport_name,data')
     .eq('user_id', userId)
     .order('start', { ascending: false })
     .limit(1000);
@@ -374,6 +389,7 @@ export async function fetchWorkoutsHistory(days = 14) {
     .map((w: any) => ({
       start: w.start,
       end: w.end,
+      sport: w.sport_name || 'Workout',
       strain: w.strain ?? (w?.data?.score?.strain ?? null),
       kcal: w?.data?.score?.kilojoule ? Math.round((w.data.score.kilojoule || 0) / 4.184) : null,
       avg_hr_bpm: w.avg_hr_bpm ?? (w?.data?.score?.average_heart_rate ?? null),
@@ -381,3 +397,21 @@ export async function fetchWorkoutsHistory(days = 14) {
     .sort((a: any, b: any) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
 
+// Fetch all historical data for a specific time range
+export async function fetchHistoricalData(timeRange: TimeRange) {
+  const days = timeRangeToDays(timeRange);
+  
+  const [recovery, sleep, cycles, workouts] = await Promise.all([
+    fetchRecoveryHistory(days),
+    fetchSleepHistory(days),
+    fetchCycleHistory(days),
+    fetchWorkoutsHistory(days)
+  ]);
+
+  return {
+    recovery,
+    sleep,
+    cycles,
+    workouts
+  };
+}

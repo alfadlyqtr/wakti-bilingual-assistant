@@ -17,12 +17,21 @@ interface WorkoutsTabProps {
     maxHr: number;
     zones?: { [key: string]: number };
   };
+  workoutHistory?: Array<{
+    date: string;
+    sport: string;
+    duration: number;
+    strain: number;
+    calories: number;
+    avgHr: number;
+  }>;
 }
 
 export function WorkoutsTab({ 
   timeRange, 
   onTimeRangeChange, 
-  latestWorkout
+  latestWorkout,
+  workoutHistory = []
 }: WorkoutsTabProps) {
   const { language } = useTheme();
 

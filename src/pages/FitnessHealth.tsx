@@ -12,7 +12,9 @@ import {
   fetchCycleHistory, 
   fetchWorkoutsHistory,
   generateAiInsights,
-  buildInsightsAggregate
+  buildInsightsAggregate,
+  fetchHistoricalData,
+  timeRangeToDays
 } from "@/services/whoopService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -64,7 +66,7 @@ export default function FitnessHealth() {
     try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
   });
   const [activeTab, setActiveTab] = useState<MainTab>('ai-insights');
-  const [timeRange, setTimeRange] = useState<TimeRange>('1w');
+  const [timeRange, setTimeRange] = useState<TimeRange>('1d');
 
   useEffect(() => {
     (async () => {
@@ -74,10 +76,10 @@ export default function FitnessHealth() {
       if (st.connected) {
         const [m, rec, sl, cyc, wks] = await Promise.all([
           fetchCompactMetrics(),
-          fetchRecoveryHistory(7),
-          fetchSleepHistory(7),
-          fetchCycleHistory(7),
-          fetchWorkoutsHistory(14),
+          fetchRecoveryHistory(timeRangeToDays('1d')),
+          fetchSleepHistory(timeRangeToDays('1d')),
+          fetchCycleHistory(timeRangeToDays('1d')),
+          fetchWorkoutsHistory(timeRangeToDays('1d')),
         ]);
         setMetrics(m);
         setHrHistory(rec);
@@ -92,7 +94,7 @@ export default function FitnessHealth() {
               setSyncing(true);
               const res = await triggerUserSync();
               toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
-              const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(7), fetchSleepHistory(7), fetchCycleHistory(7), fetchWorkoutsHistory(14)]);
+              const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(timeRangeToDays(timeRange)), fetchSleepHistory(timeRangeToDays(timeRange)), fetchCycleHistory(timeRangeToDays(timeRange)), fetchWorkoutsHistory(timeRangeToDays(timeRange))]);
               setMetrics(m2);
               setHrHistory(rec2);
               setSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours })));
@@ -110,6 +112,34 @@ export default function FitnessHealth() {
       setLoading(false);
     })();
   }, [autoSync]);
+
+  // Re-fetch historical data when time range changes
+  useEffect(() => {
+    if (!connected) return;
+    
+    (async () => {
+      try {
+        const historicalData = await fetchHistoricalData(timeRange);
+        setHrHistory(historicalData.recovery);
+        setSleepHist(historicalData.sleep.map((x: any) => ({ 
+          start: x.start, 
+          end: x.end, 
+          hours: x.hours 
+        })));
+        setCycleHist(historicalData.cycles);
+        setWorkoutsHist(historicalData.workouts.map((w: any) => ({ 
+          start: w.start,
+          end: w.end,
+          sport: w.sport || 'Workout',
+          strain: w.strain ?? null, 
+          kcal: w.kcal ?? null,
+          avg_hr_bpm: w.avg_hr_bpm ?? null
+        })));
+      } catch (e) {
+        console.error('Error fetching historical data for time range:', e);
+      }
+    })();
+  }, [timeRange, connected]);
 
   const onConnect = async () => {
     try {
@@ -376,6 +406,14 @@ export default function FitnessHealth() {
                   sleepCycleCount: metrics.sleep.sleep_cycle_count || 0,
                   sleepDebt: metrics.sleep.sleep_debt_ms ? Math.round(metrics.sleep.sleep_debt_ms / 60000) : 0 // Convert to minutes
                 } : undefined}
+                weeklyData={sleepHist.map((s: any) => ({
+                  date: s.start,
+                  hours: s.hours || 0,
+                  deep: Math.round((s.stages?.deep || 0) / 60000),
+                  rem: Math.round((s.stages?.rem || 0) / 60000),
+                  light: Math.round((s.stages?.light || 0) / 60000),
+                  awake: Math.round((s.stages?.awake || 0) / 60000)
+                }))}
               />
             </TabsContent>
 
@@ -391,6 +429,12 @@ export default function FitnessHealth() {
                   spo2: metrics.recovery.spo2_percentage || 0,
                   skinTemp: metrics.recovery.skin_temp_celsius || 0
                 } : undefined}
+                weeklyData={hrHistory.map((h: any) => ({
+                  date: h.date,
+                  recovery: h.recovery || 0,
+                  hrv: h.hrv || 0,
+                  rhr: h.rhr || 0
+                }))}
               />
             </TabsContent>
 
@@ -402,6 +446,11 @@ export default function FitnessHealth() {
                   hrv: metrics.recovery.hrv_ms || 0,
                   rhr: metrics.recovery.rhr_bpm || 0
                 } : undefined}
+                weeklyData={hrHistory.map((h: any) => ({
+                  date: h.date,
+                  hrv: h.hrv || 0,
+                  rhr: h.rhr || 0
+                }))}
               />
             </TabsContent>
 
@@ -415,6 +464,12 @@ export default function FitnessHealth() {
                   avgHr: metrics.cycle.avg_hr_bpm || 0,
                   maxHr: metrics.cycle.max_hr_bpm || 0
                 } : undefined}
+                weeklyData={cycleHist.map((c: any) => ({
+                  date: c.start,
+                  strain: c.day_strain || 0,
+                  avgHr: c.avg_hr_bpm || 0,
+                  trainingLoad: c.training_load || 0
+                }))}
               />
             </TabsContent>
 
@@ -431,6 +486,14 @@ export default function FitnessHealth() {
                   avgHr: metrics.workout.data?.score?.average_heart_rate || 0,
                   maxHr: metrics.workout.data?.score?.max_heart_rate || 0
                 } : undefined}
+                workoutHistory={workoutsHist.map((w: any) => ({
+                  date: w.start,
+                  sport: w.sport || 'Workout',
+                  duration: w.start && w.end ? Math.round((new Date(w.end).getTime() - new Date(w.start).getTime()) / 60000) : 0,
+                  strain: w.strain || 0,
+                  calories: w.kcal || 0,
+                  avgHr: w.avg_hr_bpm || 0
+                }))}
               />
             </TabsContent>
           </Tabs>
