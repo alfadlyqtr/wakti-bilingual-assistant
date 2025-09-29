@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
-import { isWhoopConnected, startWhoopAuth, triggerUserSync, fetchCompactMetrics, disconnectWhoop, getWhoopStatus, fetchRecoveryHistory } from "@/services/whoopService";
+import { isWhoopConnected, startWhoopAuth, triggerUserSync, fetchCompactMetrics, disconnectWhoop, getWhoopStatus, fetchRecoveryHistory, fetchSleepHistory, fetchCycleHistory } from "@/services/whoopService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { StatusHeader } from "@/components/fitness/StatusHeader";
@@ -24,7 +24,9 @@ export default function FitnessHealth() {
   const [disconnecting, setDisconnecting] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<any>(null);
   const [status, setStatus] = useState<{ connected: boolean; lastSyncedAt: string | null }>({ connected: false, lastSyncedAt: null });
-  const [hrHistory, setHrHistory] = useState<{ date: string; hrv?: number | null; rhr?: number | null }[]>([]);
+  const [hrHistory, setHrHistory] = useState<{ date: string; recovery?: number | null; hrv?: number | null; rhr?: number | null }[]>([]);
+  const [sleepHist, setSleepHist] = useState<{ start: string; end: string; hours: number | null }[]>([]);
+  const [cycleHist, setCycleHist] = useState<{ start: string; day_strain?: number | null; avg_hr_bpm?: number | null; training_load?: number | null }[]>([]);
   const [autoSync, setAutoSync] = useState<boolean>(() => {
     try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
   });
@@ -36,12 +38,16 @@ export default function FitnessHealth() {
       setStatus(st);
       setConnected(st.connected);
       if (st.connected) {
-        const [m, rec] = await Promise.all([
+        const [m, rec, sl, cyc] = await Promise.all([
           fetchCompactMetrics(),
-          fetchRecoveryHistory(7)
+          fetchRecoveryHistory(7),
+          fetchSleepHistory(7),
+          fetchCycleHistory(7),
         ]);
         setMetrics(m);
         setHrHistory(rec);
+        setSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours })));
+        setCycleHist(cyc);
         // Auto-sync if older than 1 hour and toggle enabled
         if (st.lastSyncedAt && autoSync) {
           const ageMs = Date.now() - new Date(st.lastSyncedAt).getTime();
@@ -50,9 +56,11 @@ export default function FitnessHealth() {
               setSyncing(true);
               const res = await triggerUserSync();
               toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
-              const [m2, rec2] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(7)]);
+              const [m2, rec2, sl2, cyc2] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(7), fetchSleepHistory(7), fetchCycleHistory(7)]);
               setMetrics(m2);
               setHrHistory(rec2);
+              setSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours })));
+              setCycleHist(cyc2);
               setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
             } catch (e) {
               console.error('auto sync error', e);
@@ -136,6 +144,24 @@ export default function FitnessHealth() {
       total: (s.deep_sleep_milli ?? 0) + (s.rem_sleep_milli ?? 0) + (s.light_sleep_milli ?? 0),
     };
   }, [metrics]);
+
+  const avgSleep7d = useMemo(() => {
+    const vals = (sleepHist || []).map(x=>x.hours).filter((x): x is number => typeof x === 'number');
+    if (!vals.length) return null as number | null;
+    return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
+  }, [sleepHist]);
+
+  const avgRecovery7d = useMemo(() => {
+    const vals = (hrHistory || []).map(x=>x.recovery).filter((x): x is number => typeof x === 'number');
+    if (!vals.length) return null as number | null;
+    return Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+  }, [hrHistory]);
+
+  const avgStrain7d = useMemo(() => {
+    const vals = (cycleHist || []).map((c:any)=>c.day_strain).filter((x): x is number => typeof x === 'number');
+    if (!vals.length) return null as number | null;
+    return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
+  }, [cycleHist]);
 
   const sleepHours = useMemo(() => {
     const s = metrics?.sleep;
