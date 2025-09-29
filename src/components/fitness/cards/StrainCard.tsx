@@ -3,14 +3,19 @@ import { Card } from "@/components/ui/card";
 import { Gauge, Flame } from "lucide-react";
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from "recharts";
 
-export function StrainCard({ value, trainingLoad, avgHrBpm, avg7d }: { value?: number | null; trainingLoad?: number | null; avgHrBpm?: number | null; avg7d?: number | null }) {
+export function StrainCard({ value, trainingLoad, avgHrBpm, avg7d, miniLabel = 'avg' }: { value?: number | null; trainingLoad?: number | null; avgHrBpm?: number | null; avg7d?: number | null; miniLabel?: string }) {
   const v = typeof value === 'number' ? Math.max(0, Math.min(21, value)) : null;
   const pct = v != null ? Math.round((v / 21) * 100) : 0;
   const data = [{ name: 'strain', value: pct }];
+  const badgeMainLabel = miniLabel === 'avg' ? 'today' : 'avg';
   return (
     <Card className="rounded-2xl p-4 border border-white/10 bg-white/5 backdrop-blur-md shadow-[0_10px_30px_-10px_rgba(0,0,0,0.25)]">
       <div className="text-xs text-muted-foreground mb-2">Day Strain</div>
       <div className="h-36 relative min-w-0">
+        {/* soft radial glow */}
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full blur-2xl" style={{ background: 'radial-gradient(ellipse at center, rgba(99,102,241,0.18), rgba(139,92,246,0.06) 60%, transparent 70%)' }} />
+        </div>
         <ResponsiveContainer width="100%" height="100%">
           <RadialBarChart data={data} innerRadius="72%" outerRadius="92%" startAngle={90} endAngle={-270}>
             <defs>
@@ -27,7 +32,14 @@ export function StrainCard({ value, trainingLoad, avgHrBpm, avg7d }: { value?: n
           <div className="text-3xl font-semibold">{v != null ? v.toFixed(1) : "--"}</div>
           <div className="text-xs text-muted-foreground">0–21 scale</div>
         </div>
-        {typeof avg7d === 'number' ? <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round(((avg7d||0)/21)*100)))} /> : null}
+        {typeof avg7d === 'number' ? <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round(((avg7d||0)/21)*100)))} label={miniLabel} /> : null}
+        {/* value badges */}
+        <div className="absolute -top-1 left-0 flex gap-2 text-[11px]">
+          <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">{badgeMainLabel} {v != null ? v.toFixed(1) : '--'}</span>
+          {typeof avg7d === 'number' ? (
+            <span className="px-2 py-[2px] rounded-full bg-violet-500/10 text-violet-500 border border-violet-500/20">{miniLabel} {avg7d.toFixed(1)}</span>
+          ) : null}
+        </div>
       </div>
       <div className="mt-2 flex items-center gap-2 text-xs">
         <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1"><Gauge className="h-3 w-3" />Load {typeof trainingLoad==='number' ? Math.round(trainingLoad*10)/10 : "--"}</span>
@@ -37,7 +49,7 @@ export function StrainCard({ value, trainingLoad, avgHrBpm, avg7d }: { value?: n
   );
 }
 
-function MiniAvgRing({ pct }: { pct: number }) {
+function MiniAvgRing({ pct, label = 'avg' }: { pct: number; label?: string }) {
   return (
     <div className="absolute -bottom-1 right-0 h-14 w-14">
       <ResponsiveContainer width="100%" height="100%">
@@ -52,7 +64,7 @@ function MiniAvgRing({ pct }: { pct: number }) {
           <RadialBar dataKey="value" cornerRadius={12} fill="url(#strainAvgGrad)" background />
         </RadialBarChart>
       </ResponsiveContainer>
-      <div className="absolute inset-0 flex items-center justify-center text-[10px] font-medium">avg</div>
+      <div className="absolute inset-0 flex items-center justify-center text-[10px] font-medium">{label}</div>
     </div>
   );
 }

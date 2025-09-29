@@ -36,6 +36,8 @@ export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtim
   const bedStr = bedtime ? new Date(bedtime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   const wakeStr = waketime ? new Date(waketime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   const effStr = typeof efficiencyPct === 'number' ? `${Math.round(efficiencyPct)}%` : null;
+  const mainBadgeLabel = miniLabel === 'avg' ? 'today' : 'avg';
+  const miniValueH = (miniHours ?? avgHours7d) ?? null;
 
   return (
     <Card className="rounded-2xl p-4 border border-white/10 bg-white/5 backdrop-blur-md shadow-[0_10px_30px_-10px_rgba(0,0,0,0.25)]">
@@ -45,6 +47,10 @@ export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtim
       </div>
       <div className="grid grid-cols-2 gap-3 items-center min-w-0">
         <div className="h-36 relative min-w-0">
+          {/* soft radial glow */}
+          <div className="pointer-events-none absolute inset-0 -z-10">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full blur-2xl" style={{ background: 'radial-gradient(ellipse at center, rgba(124,58,237,0.20), rgba(99,102,241,0.05) 60%, transparent 70%)' }} />
+          </div>
           <ResponsiveContainer width="100%" height="100%">
             <RadialBarChart data={radial} innerRadius="72%" outerRadius="92%" startAngle={90} endAngle={-270}>
               <defs>
@@ -64,6 +70,13 @@ export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtim
           {typeof (miniHours ?? avgHours7d) === 'number' ? (
             <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round((((miniHours ?? avgHours7d) || 0)/goalHours)*100)))} label={miniLabel} />
           ) : null}
+          {/* value badges */}
+          <div className="absolute -top-1 left-0 flex gap-2 text-[11px]">
+            <span className="px-2 py-[2px] rounded-full bg-violet-500/10 text-violet-500 border border-violet-500/20">{mainBadgeLabel} {hrs ? `${hrs.toFixed(1)}h` : '--'}</span>
+            {miniValueH != null ? (
+              <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">{miniLabel} {miniValueH.toFixed(1)}h</span>
+            ) : null}
+          </div>
         </div>
         <div className="h-28">
           <ResponsiveContainer width="100%" height="100%">
