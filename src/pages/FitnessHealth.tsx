@@ -299,6 +299,7 @@ export default function FitnessHealth() {
                   trainingLoad={metrics?.cycle?.training_load ?? null}
                   avgHrBpm={metrics?.cycle?.avg_hr_bpm ?? null}
                   avg7d={avgStrain7d}
+                  miniLabel={range==='day' ? 'avg' : 'today'}
                 />
               </div>
               <div className="grid grid-cols-1 gap-4">

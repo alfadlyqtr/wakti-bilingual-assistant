@@ -5,7 +5,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { buildInsightsAggregate, generateAiInsights, pingAiInsights } from "@/services/whoopService";
 import { Copy, Download, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LineChart, Line, CartesianGrid } from "recharts";
+// Charts for insights have been moved to the Overview tab. Keep recharts imports out of this file to avoid bundle weight.
 import { generatePDF } from "@/utils/pdfUtils";
 
 export function AIInsights() {
@@ -36,26 +36,7 @@ export function AIInsights() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [language]);
 
-  const sleepBars = useMemo(() => (
-    (agg?.last7Days?.sleepHours || []).map((h:number, i:number) => ({ name: `D${i+1}`, Hours: h }))
-  ), [agg]);
-
-  const recLines = useMemo(() => (
-    (agg?.last7Days?.recoveryPct || []).map((r:number, i:number) => ({
-      name: `D${i+1}`,
-      Recovery: r ?? null,
-      HRV: agg?.last7Days?.hrvMs?.[i] != null ? Math.round((agg?.last7Days?.hrvMs?.[i] as number)) : null,
-      RHR: agg?.last7Days?.rhrBpm?.[i] != null ? Math.round((agg?.last7Days?.rhrBpm?.[i] as number)) : null,
-    }))
-  ), [agg]);
-
-  const workoutsLines = useMemo(() => (
-    (agg?.workouts || []).map((w:any) => ({
-      name: new Date(w.start).toLocaleDateString(undefined,{month:'short',day:'numeric'}),
-      Strain: w.strain ?? null,
-      Calories: w.kcal ?? null,
-    }))
-  ), [agg]);
+  // Charts moved to Overview; no local chart data here.
 
   const onGenerate = async () => {
     try {
@@ -130,59 +111,9 @@ export function AIInsights() {
         </div>
       </Card>
 
-      {/* Charts & Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
-          <div className="text-xs text-muted-foreground mb-2">Sleep hours (7d)</div>
-          <div className="h-52">
-            <ResponsiveContainer width="99%" height="100%">
-              <BarChart data={sleepBars}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="Hours" fill="#7c3aed" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-        <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
-          <div className="text-xs text-muted-foreground mb-2">Recovery / HRV / RHR (7d)</div>
-          <div className="h-52">
-            <ResponsiveContainer width="99%" height="100%">
-              <LineChart data={recLines} margin={{ top: 5, right: 12, left: 12, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="Recovery" stroke="#10b981" dot={false} />
-                <Line type="monotone" dataKey="HRV" stroke="#22c55e" dot={false} />
-                <Line type="monotone" dataKey="RHR" stroke="#ef4444" dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-        <Card className="rounded-2xl p-4 shadow-sm bg-white/5 lg:col-span-2">
-          <div className="text-xs text-muted-foreground mb-2">Workouts (strain & calories)</div>
-          <div className="h-52">
-            <ResponsiveContainer width="99%" height="100%">
-              <LineChart data={workoutsLines} margin={{ top: 5, right: 12, left: 12, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="Strain" stroke="#6366f1" dot={false} />
-                <Line type="monotone" dataKey="Calories" stroke="#f59e0b" dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* AI Output */}
-        <Card ref={printableRef} className="rounded-2xl p-4 shadow-sm bg-white/5 lg:col-span-2">
+      {/* AI Output only (charts moved to Overview) */}
+      <div className="grid grid-cols-1 gap-6">
+        <Card ref={printableRef} className="rounded-2xl p-4 shadow-sm bg-white/5">
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-medium">Coach Insights</div>
             <div className="flex gap-2">
@@ -210,16 +141,6 @@ export function AIInsights() {
           )}
         </Card>
 
-        {/* Raw WHOOP Details */}
-        <Card className="rounded-2xl p-4 shadow-sm bg-white/5 lg:col-span-2">
-          <div className="text-sm font-medium mb-3">{language==='ar'?'تفاصيل WHOOP':'WHOOP Details'}</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <KVTable title="Cycle" rows={cycleRows(agg?.details?.cycle)} />
-            <KVTable title="Sleep" rows={sleepRows(agg?.details?.sleep)} />
-            <KVTable title="Recovery" rows={recoveryRows(agg?.details?.recovery)} />
-            <KVTable title="Workout" rows={workoutRows(agg?.details?.workout)} />
-          </div>
-        </Card>
       </div>
     </div>
   );

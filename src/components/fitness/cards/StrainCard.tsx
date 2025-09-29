@@ -1,6 +1,7 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Gauge, Flame } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from "recharts";
 
 export function StrainCard({ value, trainingLoad, avgHrBpm, avg7d, miniLabel = 'avg' }: { value?: number | null; trainingLoad?: number | null; avgHrBpm?: number | null; avg7d?: number | null; miniLabel?: string }) {
@@ -44,6 +45,21 @@ export function StrainCard({ value, trainingLoad, avgHrBpm, avg7d, miniLabel = '
       <div className="mt-2 flex items-center gap-2 text-xs">
         <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1"><Gauge className="h-3 w-3" />Load {typeof trainingLoad==='number' ? Math.round(trainingLoad*10)/10 : "--"}</span>
         <span className="px-2 py-[2px] rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1"><Flame className="h-3 w-3" />Avg HR {typeof avgHrBpm==='number' ? Math.round(avgHrBpm) : "--"} bpm</span>
+      </div>
+      <div className="pt-2">
+        <Accordion type="single" collapsible>
+          <AccordionItem value="details">
+            <AccordionTrigger className="text-xs">Details</AccordionTrigger>
+            <AccordionContent>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                <div className="text-muted-foreground">strain_today</div><div className="font-medium">{v != null ? v.toFixed(1) : '--'}</div>
+                <div className="text-muted-foreground">avg_7d</div><div className="font-medium">{typeof avg7d==='number' ? avg7d.toFixed(1) : '--'}</div>
+                <div className="text-muted-foreground">training_load</div><div className="font-medium">{typeof trainingLoad==='number' ? Math.round(trainingLoad*10)/10 : '--'}</div>
+                <div className="text-muted-foreground">avg_hr</div><div className="font-medium">{typeof avgHrBpm==='number' ? Math.round(avgHrBpm) : '--'}</div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </Card>
   );
