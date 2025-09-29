@@ -23,12 +23,72 @@ serve(async (req: Request) => {
     }
     const payload = body?.data ?? {};
     const language = body?.language ?? "en";
+    const timeOfDay = body?.time_of_day ?? "general";
+    const userTimezone = body?.user_timezone ?? "UTC";
 
+    // Enhanced system prompt with time-based coaching
     const system = language === 'ar'
-      ? "أنت مدرب صحة ولياقة بدنية معتمد. كن إيجابيًا وداعمًا، وقدّم نصائح عملية قصيرة. لخص يوميًا وأسبوعيًا بناءً على البيانات المقدّمة. تجنّب الادعاءات الطبية."
-      : "You are a certified health and fitness coach. Be positive, supportive, and actionable. Provide daily and weekly summaries based on the provided data. Avoid medical claims.";
+      ? `أنت WAKTI AI - مدرب صحة ولياقة بدنية معتمد متخصص في تحليل بيانات WHOOP.
 
-    const userPrompt = `Analyze the following WHOOP aggregates and respond with JSON having keys: daily_summary, weekly_summary, tips (array of 3-5), motivations (array of 2-3), long_summary. Keep it concise, supportive, and actionable.\n\nDATA:\n${JSON.stringify(payload)}`;
+السياق: ${timeOfDay} - ${userTimezone}
+البيانات: أحدث مقاييس النوم والتعافي والإجهاد والتمارين
+
+التعليمات:
+- الصباح (5-8 صباحًا): ركز على الاستعداد ومستويات الطاقة وتخطيط التمارين
+- منتصف النهار (12-3 مساءً): قيّم الإجهاد الحالي والوتيرة وتذكيرات الترطيب
+- المساء (5-8 مساءً): استراتيجيات التعافي وإعداد النوم والتأمل
+
+النبرة: داعمة ومحفزة وقابلة للتطبيق. استخدم اسم المستخدم عند توفره.
+التنسيق: أرجع JSON صالح فقط بدون markdown أو نص إضافي.
+القيود: لا تشخيص طبي. ركز على تحسين الأداء.`
+      : `You are WAKTI AI, a certified health and fitness coach specializing in WHOOP data analysis.
+
+Context: ${timeOfDay} - ${userTimezone}
+Data: Latest sleep, recovery, strain, and workout metrics
+
+Instructions:
+- Morning (5-8am): Focus on readiness, energy levels, workout planning
+- Midday (12-3pm): Assess current strain, pacing, hydration reminders  
+- Evening (5-8pm): Recovery strategies, sleep preparation, reflection
+
+Tone: Supportive, motivational, actionable. Use user's name when available.
+Format: Return ONLY valid JSON with no markdown or extra text.
+Constraints: No medical diagnoses. Focus on performance optimization.`;
+
+    const userPrompt = `Analyze the following WHOOP data and respond with strict JSON format:
+
+REQUIRED STRUCTURE:
+{
+  "daily_summary": "Brief daily overview with coaching tone",
+  "weekly_summary": "Weekly progress and trends analysis", 
+  "tips": ["actionable tip 1", "tip 2", "tip 3"],
+  "motivations": ["motivational message 1", "message 2"],
+  "visuals": [
+    {
+      "title": "Sleep Quality",
+      "type": "donut", 
+      "data_keys": ["sleep_hours", "goal_hours"],
+      "colors": ["#10B981", "#EF4444"],
+      "center_text": "85%"
+    },
+    {
+      "title": "Recovery Trend (7d)",
+      "type": "line",
+      "data_keys": ["recovery_scores_7d"],
+      "gradient": true,
+      "color": "#8B5CF6"
+    },
+    {
+      "title": "Today's Strain",
+      "type": "gauge",
+      "data_keys": ["strain_today", "optimal_strain"],
+      "zones": [{"min": 0, "max": 8, "color": "#10B981"}, {"min": 8, "max": 15, "color": "#F59E0B"}, {"min": 15, "max": 21, "color": "#EF4444"}]
+    }
+  ]
+}
+
+DATA:
+${JSON.stringify(payload)}`;
 
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

@@ -122,8 +122,16 @@ export async function buildInsightsAggregate() {
   };
 }
 
-export async function generateAiInsights(language: 'en'|'ar' = 'en', timeoutMs = 15000) {
-  const dataFull = await buildInsightsAggregate();
+export async function generateAiInsights(
+  language: 'en'|'ar' = 'en', 
+  options?: {
+    time_of_day?: string;
+    user_timezone?: string;
+    data?: any;
+  },
+  timeoutMs = 15000
+) {
+  const dataFull = options?.data || await buildInsightsAggregate();
   // Send a compact payload to AI (exclude heavy raw details)
   const data = {
     today: dataFull.today,
@@ -131,10 +139,16 @@ export async function generateAiInsights(language: 'en'|'ar' = 'en', timeoutMs =
     workouts: (dataFull.workouts || []).slice(-20),
     weekly: dataFull.weekly,
   };
+  
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   const req = supabase.functions.invoke('whoop-ai-insights', {
-    body: { data, language },
+    body: { 
+      data, 
+      language,
+      time_of_day: options?.time_of_day || 'general',
+      user_timezone: options?.user_timezone || 'UTC'
+    },
     headers: { Authorization: `Bearer ${accessToken}` }
   });
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('ai_timeout')), timeoutMs));
