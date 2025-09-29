@@ -59,7 +59,7 @@ export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtim
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="text-3xl font-semibold leading-none">{hrs ? `${hrs.toFixed(1)}h` : "--"}</div>
-            <div className="text-[11px] text-muted-foreground mt-1">{pctOfGoal}% of {goalHours}h</div>
+            <div className="text-xs text-muted-foreground mt-1">{pctOfGoal}% of {goalHours}h</div>
           </div>
           {typeof (miniHours ?? avgHours7d) === 'number' ? (
             <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round((((miniHours ?? avgHours7d) || 0)/goalHours)*100)))} label={miniLabel} />
@@ -78,11 +78,11 @@ export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtim
               <Bar dataKey="value" radius={[6, 6, 6, 6]} />
             </BarChart>
           </ResponsiveContainer>
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
             <div className="truncate flex items-center gap-1">{bedStr ? (<><Bed className="h-3 w-3" />{bedStr}</>) : ""}</div>
             <div className="truncate flex items-center gap-1">{wakeStr ? (<><AlarmClock className="h-3 w-3" />{wakeStr}</>) : ""}</div>
           </div>
-          <div className="text-[11px] text-muted-foreground text-right flex items-center justify-end gap-1">{effStr ? (<><Sparkles className="h-3 w-3" />{`Efficiency ${effStr}`}</>) : (performancePct ? `${Math.round(performancePct)}% perf.` : "")}</div>
+          <div className="text-xs text-muted-foreground text-right flex items-center justify-end gap-1">{effStr ? (<><Sparkles className="h-3 w-3" />{`Efficiency ${effStr}`}</>) : (performancePct ? `${Math.round(performancePct)}% perf.` : "")}</div>
         </div>
       </div>
     </Card>

@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Activity, HeartPulse } from "lucide-react";
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from "recharts";
 
-export function RecoveryCard({ value, hrvMs, rhrBpm, avgPct7d }: { value?: number | null; hrvMs?: number | null; rhrBpm?: number | null; avgPct7d?: number | null }) {
+export function RecoveryCard({ value, hrvMs, rhrBpm, avgPct7d, miniPct, miniLabel = 'avg' }: { value?: number | null; hrvMs?: number | null; rhrBpm?: number | null; avgPct7d?: number | null; miniPct?: number | null; miniLabel?: string }) {
   const pct = Math.max(0, Math.min(100, Math.round(value ?? 0)));
   const color = pct >= 67 ? "#10b981" : pct >= 34 ? "#f59e0b" : "#ef4444";
   const data = [{ name: "recovery", value: pct }];
@@ -27,7 +27,7 @@ export function RecoveryCard({ value, hrvMs, rhrBpm, avgPct7d }: { value?: numbe
           <div className="text-3xl font-semibold">{isNaN(pct) ? "--" : `${pct}%`}</div>
           <div className="text-[11px] text-muted-foreground">readiness</div>
         </div>
-        {typeof avgPct7d === 'number' ? <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round(avgPct7d)))} gradId="recAvgGrad" from="#bbf7d0" to="#a7f3d0" label="avg" /> : null}
+        {typeof (miniPct ?? avgPct7d) === 'number' ? <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round((miniPct ?? avgPct7d)!)))} gradId="recAvgGrad" from="#bbf7d0" to="#a7f3d0" label={miniLabel} /> : null}
       </div>
       <div className="mt-2 flex items-center gap-2 text-xs">
         <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1"><Activity className="h-3 w-3" />HRV {hrvMs != null ? Math.round(hrvMs) : "--"} ms</span>

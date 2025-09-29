@@ -12,7 +12,9 @@ import { HRVRHRMini } from "@/components/fitness/cards/HRVRHRMini";
 import { StrainCard } from "@/components/fitness/cards/StrainCard";
 import { WorkoutCard } from "@/components/fitness/cards/WorkoutCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AIInsights } from "@/components/fitness/AIInsights";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 
 export default function FitnessHealth() {
   const { language } = useTheme();
@@ -31,6 +33,7 @@ export default function FitnessHealth() {
     try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
   });
   const [tab, setTab] = useState<'overview'|'ai'>('overview');
+  const [range, setRange] = useState<'day'|'week'>('day');
 
   useEffect(() => {
     (async () => {
@@ -145,6 +148,10 @@ export default function FitnessHealth() {
     };
   }, [metrics]);
 
+  const sleepBars = useMemo(() => (
+    (sleepHist || []).map((s, i) => ({ name: `D${i+1}`, Hours: s.hours ?? null }))
+  ), [sleepHist]);
+
   const avgSleep7d = useMemo(() => {
     const vals = (sleepHist || []).map(x=>x.hours).filter((x): x is number => typeof x === 'number');
     if (!vals.length) return null as number | null;
@@ -233,6 +240,13 @@ export default function FitnessHealth() {
               <TabsTrigger value="ai">AI Insights</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="space-y-6 mt-4">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-muted-foreground">View</div>
+                <ToggleGroup type="single" value={range} onValueChange={(v)=>{ if(v) setRange(v as any); setTimeout(()=>window.dispatchEvent(new Event('resize')), 80); }} className="bg-white/40 rounded-xl p-1 border">
+                  <ToggleGroupItem value="day" className="text-xs px-3 py-1">Day</ToggleGroupItem>
+                  <ToggleGroupItem value="week" className="text-xs px-3 py-1">Week</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
               {/* Today Stats strip */}
               <div className="flex flex-wrap gap-2 text-[11px]">
                 <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Recovery {todayStats.recovery != null ? Math.round(todayStats.recovery) : '--'}%</span>
@@ -245,7 +259,7 @@ export default function FitnessHealth() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <SleepCard
-                  hours={sleepHours}
+                  hours={range==='day' ? sleepHours : avgSleep7d}
                   performancePct={metrics?.sleep?.performance_pct ?? null}
                   stages={sleepStages}
                   bedtime={metrics?.sleep?.start ?? null}
@@ -253,13 +267,89 @@ export default function FitnessHealth() {
                   nap={metrics?.sleep?.data?.nap ?? null}
                   efficiencyPct={sleepEfficiency}
                   avgHours7d={avgSleep7d}
+                  miniHours={range==='day' ? avgSleep7d : sleepHours}
+                  miniLabel={range==='day' ? 'avg' : 'today'}
                 />
-                <RecoveryCard value={metrics?.recovery?.score ?? null} hrvMs={metrics?.recovery?.hrv_ms ?? null} rhrBpm={metrics?.recovery?.rhr_bpm ?? null} avgPct7d={avgRecovery7d} />
-                <HRVRHRMini data={hrHistory} />
-                <StrainCard value={metrics?.cycle?.day_strain ?? null} trainingLoad={metrics?.cycle?.training_load ?? null} avgHrBpm={metrics?.cycle?.avg_hr_bpm ?? null} avg7d={avgStrain7d} />
+                <RecoveryCard
+                  value={range==='day' ? (metrics?.recovery?.score ?? null) : (avgRecovery7d ?? null)}
+                  hrvMs={metrics?.recovery?.hrv_ms ?? null}
+                  rhrBpm={metrics?.recovery?.rhr_bpm ?? null}
+                  avgPct7d={avgRecovery7d}
+                  miniPct={range==='day' ? (avgRecovery7d ?? null) : (metrics?.recovery?.score ?? null)}
+                  miniLabel={range==='day' ? 'avg' : 'today'}
+                />
+                {range==='week' ? (
+                  <HRVRHRMini data={hrHistory} />
+                ) : (
+                  <div className="rounded-2xl p-4 border border-white/10 bg-white/5 backdrop-blur-md shadow-[0_10px_30px_-10px_rgba(0,0,0,0.25)]">
+                    <div className="text-xs text-muted-foreground mb-2">HRV / RHR (Today)</div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">HRV {metrics?.recovery?.hrv_ms != null ? Math.round(metrics?.recovery?.hrv_ms) : '--'} ms</span>
+                      <span className="px-2 py-[2px] rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20">RHR {metrics?.recovery?.rhr_bpm != null ? Math.round(metrics?.recovery?.rhr_bpm) : '--'} bpm</span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-2">Hourly curve coming soon.</div>
+                  </div>
+                )}
+                <StrainCard
+                  value={range==='day' ? (metrics?.cycle?.day_strain ?? null) : (avgStrain7d ?? null)}
+                  trainingLoad={metrics?.cycle?.training_load ?? null}
+                  avgHrBpm={metrics?.cycle?.avg_hr_bpm ?? null}
+                  avg7d={avgStrain7d}
+                />
               </div>
               <div className="grid grid-cols-1 gap-4">
                 <WorkoutCard workout={metrics?.workout} />
+              </div>
+              {/* Sleep hours (7d) chart moved to Overview */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="rounded-2xl p-4 border bg-white/5">
+                  <div className="text-xs text-muted-foreground mb-2">Sleep hours (7d)</div>
+                  <div className="h-44 min-w-0">
+                    <ResponsiveContainer width="99%" height="100%">
+                      <BarChart data={sleepBars}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="Hours" fill="#7c3aed" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+              {/* WHOOP details lightweight block */}
+              <div className="rounded-2xl border bg-white/5 p-4">
+                <div className="text-sm font-medium mb-2">WHOOP Details</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl border p-3 bg-white/5">
+                    <div className="text-xs text-muted-foreground mb-2">Cycle</div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <div className="text-muted-foreground">strain</div><div className="font-medium">{metrics?.cycle?.data?.score?.strain ?? '--'}</div>
+                      <div className="text-muted-foreground">avg_hr</div><div className="font-medium">{metrics?.cycle?.avg_hr_bpm ?? metrics?.cycle?.data?.score?.average_heart_rate ?? '--'}</div>
+                      <div className="text-muted-foreground">training_load</div><div className="font-medium">{metrics?.cycle?.training_load ?? '--'}</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border p-3 bg-white/5">
+                    <div className="text-xs text-muted-foreground mb-2">Sleep</div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <div className="text-muted-foreground">performance_%</div><div className="font-medium">{metrics?.sleep?.data?.score?.sleep_performance_percentage ?? metrics?.sleep?.performance_pct ?? '--'}</div>
+                      <div className="text-muted-foreground">nap</div><div className="font-medium">{metrics?.sleep?.data?.nap === false ? 'false' : (metrics?.sleep?.data?.nap ? 'true' : '--')}</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border p-3 bg-white/5">
+                    <div className="text-xs text-muted-foreground mb-2">Recovery</div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <div className="text-muted-foreground">recovery_%</div><div className="font-medium">{metrics?.recovery?.score ?? '--'}</div>
+                      <div className="text-muted-foreground">hrv_ms</div><div className="font-medium">{metrics?.recovery?.hrv_ms ?? '--'}</div>
+                      <div className="text-muted-foreground">rhr_bpm</div><div className="font-medium">{metrics?.recovery?.rhr_bpm ?? '--'}</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border p-3 bg-white/5">
+                    <div className="text-xs text-muted-foreground mb-2">Workout</div>
+                    <div className="text-xs text-muted-foreground">{metrics?.workout ? `${metrics?.workout?.sport} — ${metrics?.workout?.durationMin ?? '--'} min, ${metrics?.workout?.kcal ?? '--'} kcal` : '--'}</div>
+                  </div>
+                </div>
               </div>
             </TabsContent>
             <TabsContent value="ai" className="mt-4">

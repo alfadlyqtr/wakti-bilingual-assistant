@@ -25,11 +25,11 @@ export function StrainCard({ value, trainingLoad, avgHrBpm, avg7d }: { value?: n
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="text-3xl font-semibold">{v != null ? v.toFixed(1) : "--"}</div>
-          <div className="text-[11px] text-muted-foreground">0–21 scale</div>
+          <div className="text-xs text-muted-foreground">0–21 scale</div>
         </div>
         {typeof avg7d === 'number' ? <MiniAvgRing pct={Math.max(0, Math.min(100, Math.round(((avg7d||0)/21)*100)))} /> : null}
       </div>
-      <div className="mt-2 flex items-center gap-2 text-[11px]">
+      <div className="mt-2 flex items-center gap-2 text-xs">
         <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1"><Gauge className="h-3 w-3" />Load {typeof trainingLoad==='number' ? Math.round(trainingLoad*10)/10 : "--"}</span>
         <span className="px-2 py-[2px] rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1"><Flame className="h-3 w-3" />Avg HR {typeof avgHrBpm==='number' ? Math.round(avgHrBpm) : "--"} bpm</span>
       </div>
