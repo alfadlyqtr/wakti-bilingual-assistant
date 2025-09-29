@@ -3,7 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const WHOOP_AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
 
-function randomState(len = 12) {
+// WHOOP requires state to be exactly 8 characters
+function randomState(len = 8) {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let s = "";
   for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
@@ -21,12 +22,11 @@ serve(async (req: Request) => {
     if (req.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
     }
-    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
 
-    const origin = req.headers.get("origin") || "";
     const clientId = Deno.env.get("WHOOP_CLIENT_ID");
     if (!clientId) {
-      console.error("whoop-auth-start: WHOOP_CLIENT_ID missing", { origin });
+      console.error("whoop-auth-start: WHOOP_CLIENT_ID missing");
       return new Response(JSON.stringify({ error: "missing_client_id" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -35,7 +35,7 @@ serve(async (req: Request) => {
     const envRedirect = Deno.env.get("WHOOP_REDIRECT_URI");
     const redirectUri = requestedRedirect || envRedirect;
     if (!redirectUri) {
-      console.error("whoop-auth-start: redirect_uri missing", { origin, requestedRedirectPresent: !!requestedRedirect, envRedirectPresent: !!envRedirect });
+      console.error("whoop-auth-start: redirect_uri missing");
       return new Response(JSON.stringify({ error: "missing_redirect_uri", detail: "Pass redirect_uri in body or set WHOOP_REDIRECT_URI" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -46,9 +46,10 @@ serve(async (req: Request) => {
       "read:workout",
       "read:cycles",
       "read:profile",
+      "read:body_measurement",
     ];
 
-    const state = randomState(12);
+    const state = randomState(8);
     const url = new URL(WHOOP_AUTH_URL);
     url.searchParams.set("client_id", clientId);
     url.searchParams.set("response_type", "code");
@@ -60,8 +61,7 @@ serve(async (req: Request) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    const origin = "origin" in (e?.request || {}) ? (e.request.origin as string) : undefined;
-    console.error("whoop-auth-start error", { message: e?.message || String(e), origin });
+    console.error("whoop-auth-start error", e?.message || String(e));
     return new Response(JSON.stringify({ error: "internal_error", detail: e?.message || String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

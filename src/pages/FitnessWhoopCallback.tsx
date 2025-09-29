@@ -14,8 +14,6 @@ export default function FitnessWhoopCallback() {
       const params = new URLSearchParams(location.search);
       const code = params.get("code");
       const state = params.get("state");
-      // Use the actual current callback path to match the registered redirect URI
-      const redirectUri = `${window.location.origin}${window.location.pathname}`;
       if (!code) {
         setMessage("Missing code parameter.");
         return;
@@ -28,7 +26,7 @@ export default function FitnessWhoopCallback() {
           if (data?.session?.access_token) break;
           await new Promise((r) => setTimeout(r, 100));
         }
-        await completeWhoopCallback(code, state, redirectUri);
+        await completeWhoopCallback(code, state);
         setMessage("Connected! Redirecting...");
         setTimeout(() => navigate("/fitness"), 800);
       } catch (e: any) {

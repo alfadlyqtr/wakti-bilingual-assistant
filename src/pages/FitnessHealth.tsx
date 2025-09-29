@@ -37,13 +37,8 @@ export default function FitnessHealth() {
         window.location.href = `/login?redirect=/fitness`;
         return;
       }
-      // Canonical callback path: /whoop/callback (Option A)
-      // In dev, WHOOP only accepts http://localhost:8080/whoop/callback
-      const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const redirect = isLocalDev
-        ? 'http://localhost:8080/whoop/callback'
-        : `${window.location.origin}/whoop/callback`;
-      await startWhoopAuth(redirect);
+      // New service computes and stores the redirect URI internally
+      await startWhoopAuth();
     } catch (e) {
       console.error('whoop connect error', e);
       toast.error(language === 'ar' ? 'تعذر بدء الاتصال بـ WHOOP' : 'Failed to start WHOOP connect');

@@ -1,6 +1,18 @@
-import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 const STATE_KEY = "whoop_oauth_state";
+const REDIRECT_URI_KEY = "whoop_redirect_uri";
+
+// Determine redirect URI based on environment
+function getRedirectUri(): string {
+  const hostname = window.location.hostname;
+  const isDev = hostname === 'localhost' || hostname === '127.0.0.1';
+  const redirectUri = isDev
+    ? 'http://localhost:8080/whoop/callback'
+    : 'https://www.wakti.qa/whoop/callback';
+  console.log('getRedirectUri:', { hostname, isDev, redirectUri });
+  return redirectUri;
+}
 
 export async function getCurrentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
@@ -19,54 +31,80 @@ export async function isWhoopConnected(): Promise<boolean> {
   return !!data;
 }
 
-export async function startWhoopAuth(redirectUri: string): Promise<void> {
+export async function startWhoopAuth(): Promise<void> {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error("You must be logged in to connect WHOOP");
+
+  const redirectUri = getRedirectUri();
+  localStorage.setItem(REDIRECT_URI_KEY, redirectUri);
+  console.log('Starting WHOOP auth:', { redirectUri, hasToken: !!accessToken });
+
   const { data, error } = await supabase.functions.invoke("whoop-auth-start", {
     body: { redirect_uri: redirectUri },
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (error) throw error;
+  if (error) {
+    console.error('whoop-auth-start error:', error);
+    throw error;
+  }
   const { authorize_url, state } = data || {};
-  if (state) localStorage.setItem(STATE_KEY, state);
   if (!authorize_url) throw new Error("Missing authorize_url");
+  console.log('Redirecting to WHOOP authorization...');
   window.location.href = authorize_url;
 }
 
-export async function completeWhoopCallback(code: string, state: string | null, redirectUri: string) {
-  const saved = localStorage.getItem(STATE_KEY);
-  // simple check; we still forward even if missing
+export async function completeWhoopCallback(code: string, state: string | null) {
+  const savedState = localStorage.getItem(STATE_KEY);
+  const savedRedirectUri = localStorage.getItem(REDIRECT_URI_KEY);
+  const redirectUri = savedRedirectUri || getRedirectUri();
+
+  console.log('Completing callback:', {
+    code: code.substring(0, 10) + '...',
+    state,
+    savedState,
+    redirectUri,
+    stateMatch: state === savedState
+  });
+
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
-    if (!accessToken) throw new Error("No auth token");
+    if (!accessToken) throw new Error("No auth token - please log in again");
 
-    // Use supabase.functions.invoke so auth is handled consistently
     const { data, error } = await supabase.functions.invoke('whoop-callback', {
-      body: { code, state: state || saved, redirect_uri: redirectUri, user_token: accessToken },
+      body: { code, state: state || savedState, redirect_uri: redirectUri },
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'x-supabase-authorization': `Bearer ${accessToken}`,
       },
     });
     if (error) {
-      // Mirror previous error shape for UI
-      throw new Error(`whoop-callback ${error.status ?? 'error'}: ${typeof error.message === 'string' ? error.message : JSON.stringify(error)}`);
+      console.error('whoop-callback error:', error);
+      throw new Error(`WHOOP connection failed: ${error.message || JSON.stringify(error)}`);
     }
+    console.log('WHOOP connected successfully:', data);
     return data;
   } finally {
     localStorage.removeItem(STATE_KEY);
+    localStorage.removeItem(REDIRECT_URI_KEY);
   }
 }
 
 export async function triggerUserSync() {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error("You must be logged in to sync WHOOP data");
+  console.log('Triggering WHOOP sync...');
   const { data, error } = await supabase.functions.invoke("whoop-sync", {
     body: { mode: "user" },
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (error) throw error;
+  if (error) {
+    console.error('whoop-sync error:', error);
+    throw error;
+  }
+  console.log('WHOOP sync complete:', data);
   return data;
 }
 
