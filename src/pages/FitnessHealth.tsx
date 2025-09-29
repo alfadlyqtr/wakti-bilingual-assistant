@@ -11,6 +11,8 @@ import { RecoveryCard } from "@/components/fitness/cards/RecoveryCard";
 import { HRVRHRMini } from "@/components/fitness/cards/HRVRHRMini";
 import { StrainCard } from "@/components/fitness/cards/StrainCard";
 import { WorkoutCard } from "@/components/fitness/cards/WorkoutCard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AIInsights } from "@/components/fitness/AIInsights";
 
 export default function FitnessHealth() {
   const { language } = useTheme();
@@ -23,6 +25,9 @@ export default function FitnessHealth() {
   const [metrics, setMetrics] = useState<any>(null);
   const [status, setStatus] = useState<{ connected: boolean; lastSyncedAt: string | null }>({ connected: false, lastSyncedAt: null });
   const [hrHistory, setHrHistory] = useState<{ date: string; hrv?: number | null; rhr?: number | null }[]>([]);
+  const [autoSync, setAutoSync] = useState<boolean>(() => {
+    try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
+  });
 
   useEffect(() => {
     (async () => {
@@ -36,8 +41,8 @@ export default function FitnessHealth() {
         ]);
         setMetrics(m);
         setHrHistory(rec);
-        // Auto-sync if older than 1 hour
-        if (st.lastSyncedAt) {
+        // Auto-sync if older than 1 hour and toggle enabled
+        if (st.lastSyncedAt && autoSync) {
           const ageMs = Date.now() - new Date(st.lastSyncedAt).getTime();
           if (ageMs > 3600_000) {
             try {
@@ -58,7 +63,7 @@ export default function FitnessHealth() {
       }
       setLoading(false);
     })();
-  }, []);
+  }, [autoSync]);
 
   const onConnect = async () => {
     try {
@@ -131,6 +136,18 @@ export default function FitnessHealth() {
     };
   }, [metrics]);
 
+  const sleepHours = useMemo(() => {
+    const s = metrics?.sleep;
+    if (!s) return null as number | null;
+    if (typeof s.duration_sec === 'number' && s.duration_sec > 0) return Math.round((s.duration_sec/360))/10;
+    const st = metrics?.sleep?.data?.score?.stage_summary;
+    if (st) {
+      const total = (st.deep_sleep_milli??0)+(st.rem_sleep_milli??0)+(st.light_sleep_milli??0);
+      if (total > 0) return Math.round((total/360000))/10;
+    }
+    return null;
+  }, [metrics]);
+
   return (
     <PageContainer>
       <div className="max-w-6xl mx-auto p-4 space-y-6">
@@ -146,28 +163,37 @@ export default function FitnessHealth() {
           onConnect={onConnect}
           onSync={onSync}
           onDisconnect={onDisconnect}
+          autoSyncEnabled={autoSync}
+          onToggleAutoSync={(v)=>{ setAutoSync(v); try { localStorage.setItem('whoop_autosync', v ? '1' : '0'); } catch {} }}
         />
 
         {loading ? (
           <div className="text-sm text-muted-foreground">{language === 'ar' ? 'جار التحميل...' : 'Loading...'}</div>
         ) : connected ? (
-          <>
-            {/* Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              <SleepCard
-                hours={metrics?.sleep ? Math.round(((metrics.sleep.duration_sec ?? 0) / 360)) / 10 : null}
-                performancePct={metrics?.sleep?.performance_pct ?? null}
-                stages={sleepStages}
-              />
-              <RecoveryCard value={metrics?.recovery?.score ?? null} />
-              <HRVRHRMini data={hrHistory} />
-              <StrainCard value={metrics?.cycle?.day_strain ?? null} />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              <WorkoutCard workout={metrics?.workout} />
-            </div>
-          </>
+          <Tabs defaultValue="overview">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="ai">AI Insights</TabsTrigger>
+            </TabsList>
+            <TabsContent value="overview" className="space-y-6 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <SleepCard
+                  hours={sleepHours}
+                  performancePct={metrics?.sleep?.performance_pct ?? null}
+                  stages={sleepStages}
+                />
+                <RecoveryCard value={metrics?.recovery?.score ?? null} />
+                <HRVRHRMini data={hrHistory} />
+                <StrainCard value={metrics?.cycle?.day_strain ?? null} />
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <WorkoutCard workout={metrics?.workout} />
+              </div>
+            </TabsContent>
+            <TabsContent value="ai" className="mt-4">
+              <AIInsights />
+            </TabsContent>
+          </Tabs>
         ) : (
           <div className="rounded-2xl p-6 border bg-white/5 text-sm text-muted-foreground">
             {language === 'ar' ? 'قم بتوصيل حسابك في WHOOP لبدء المزامنة.' : 'Connect your WHOOP account to start syncing.'}

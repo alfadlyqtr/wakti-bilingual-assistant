@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, PlugZap, RefreshCcw, Power } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export type StatusHeaderProps = {
   connected: boolean;
@@ -10,9 +11,11 @@ export type StatusHeaderProps = {
   onConnect?: () => void;
   onSync?: () => void;
   onDisconnect?: () => void;
+  autoSyncEnabled?: boolean;
+  onToggleAutoSync?: (v: boolean) => void;
 };
 
-export function StatusHeader({ connected, lastSyncedAt, syncing, onConnect, onSync, onDisconnect }: StatusHeaderProps) {
+export function StatusHeader({ connected, lastSyncedAt, syncing, onConnect, onSync, onDisconnect, autoSyncEnabled, onToggleAutoSync }: StatusHeaderProps) {
   const last = lastSyncedAt ? new Date(lastSyncedAt) : null;
   const lastStr = last ? `${last.toLocaleDateString()} ${last.toLocaleTimeString()}` : "--";
 
@@ -32,7 +35,11 @@ export function StatusHeader({ connected, lastSyncedAt, syncing, onConnect, onSy
             <div className="text-sm text-muted-foreground">Last sync: {lastStr}</div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Switch checked={!!autoSyncEnabled} onCheckedChange={(v)=>onToggleAutoSync?.(!!v)} />
+            <span>Auto-sync</span>
+          </div>
           {!connected ? (
             <Button onClick={onConnect} disabled={syncing}>
               <PlugZap className="mr-2 h-4 w-4" /> Connect WHOOP

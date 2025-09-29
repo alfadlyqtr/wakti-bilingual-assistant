@@ -14,6 +14,102 @@ function getRedirectUri(): string {
   return redirectUri;
 }
 
+export async function buildInsightsAggregate() {
+  const [compact, sleep7, rec7, cyc30, w14] = await Promise.all([
+    fetchCompactMetrics(),
+    fetchSleepHistory(7),
+    fetchRecoveryHistory(7),
+    fetchCycleHistory(30),
+    fetchWorkoutsHistory(14),
+  ]);
+
+  const latestSleepHours = (() => {
+    const s = compact?.sleep;
+    if (!s) return null;
+    if (typeof s.duration_sec === 'number') return Math.round((s.duration_sec/360))/10;
+    const st = s?.data?.score?.stage_summary;
+    if (st) {
+      const total = (st.deep_sleep_milli??0)+(st.rem_sleep_milli??0)+(st.light_sleep_milli??0);
+      return total ? Math.round((total/360000))/10 : null;
+    }
+    return null;
+  })();
+
+  const latestWorkout = (() => {
+    const w = compact?.workout;
+    if (!w) return null;
+    const start = w.start ? new Date(w.start) : null;
+    const end = w.end ? new Date(w.end) : null;
+    const durationMin = start && end ? Math.round((end.getTime()-start.getTime())/60000) : null;
+    const kcal = w?.data?.score?.kilojoule ? Math.round((w.data.score.kilojoule||0)/4.184) : null;
+    return {
+      sport: w.sport_name ?? 'workout',
+      durationMin,
+      strain: w.strain ?? (w?.data?.score?.strain ?? null),
+      kcal,
+    };
+  })();
+
+  const weekly = (() => {
+    // reduce cycles into ISO Week buckets
+    const byWeek = new Map<string, { load: number; hr: number[] }>();
+    for (const c of cyc30) {
+      const dt = new Date(c.start);
+      const key = `${dt.getFullYear()}-W${weekOfYear(dt)}`;
+      const prev = byWeek.get(key) || { load: 0, hr: [] };
+      prev.load += (typeof c.training_load === 'number' ? c.training_load : (typeof c.day_strain === 'number' ? c.day_strain : 0));
+      if (typeof c.avg_hr_bpm === 'number') prev.hr.push(c.avg_hr_bpm);
+      byWeek.set(key, prev);
+    }
+    const keys = Array.from(byWeek.keys()).sort();
+    return keys.map((k) => ({
+      label: k,
+      load: Math.round(byWeek.get(k)!.load*10)/10,
+      avgHr: avg(byWeek.get(k)!.hr) ?? null,
+    }));
+  })();
+
+  return {
+    today: {
+      sleepHours: latestSleepHours,
+      sleepPerformancePct: compact?.sleep?.performance_pct ?? null,
+      recoveryPct: compact?.recovery?.score ?? null,
+      hrvMs: compact?.recovery?.hrv_ms ?? null,
+      rhrBpm: compact?.recovery?.rhr_bpm ?? null,
+      dayStrain: compact?.cycle?.day_strain ?? null,
+      latestWorkout,
+    },
+    last7Days: {
+      sleepHours: sleep7.map((s:any)=>s.hours ?? null),
+      recoveryPct: rec7.map((r:any)=>r.recovery ?? null),
+      hrvMs: rec7.map((r:any)=>r.hrv ?? null),
+      rhrBpm: rec7.map((r:any)=>r.rhr ?? null),
+    },
+    workouts: w14,
+    weekly: { weeks: weekly }
+  };
+}
+
+export async function generateAiInsights(language: 'en'|'ar' = 'en') {
+  const data = await buildInsightsAggregate();
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  const { data: resp, error } = await supabase.functions.invoke('whoop-ai-insights', {
+    body: { data, language },
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (error) throw error;
+  return resp;
+}
+
+function avg(arr: number[]) { if (!arr || arr.length===0) return null as any; return Math.round(arr.reduce((a,b)=>a+b,0)/arr.length); }
+function weekOfYear(d: Date) {
+  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = dt.getUTCDay() || 7; dt.setUTCDate(dt.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(dt.getUTCFullYear(),0,1));
+  return Math.ceil((((dt as any)- (yearStart as any)) / 86400000 + 1)/7);
+}
+
 export async function getWhoopStatus(): Promise<{ connected: boolean; lastSyncedAt: string | null; }>{
   const userId = await getCurrentUserId();
   if (!userId) return { connected: false, lastSyncedAt: null };
